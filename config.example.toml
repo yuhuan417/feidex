@@ -1,0 +1,22 @@
+data_dir = ".feidex-data"
+
+[feishu]
+app_id = "cli_xxx"
+app_secret = "sec_xxx"
+allow_from = []
+group_at_only = true
+card_enabled = true
+reply_in_thread = true
+
+[codex]
+command = "codex"
+experimental_api = true
+service_name = "feidex"
+
+[[workspace]]
+id = "default"
+name = "Default"
+cwd = "."
+model = "gpt-5.4"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"

@@ -1,0 +1,8 @@
+/.codex
+/.feidex-data
+/config.toml
+/run.sh
+/feidex
+/feidex-bin
+/tmp/
+*.log
