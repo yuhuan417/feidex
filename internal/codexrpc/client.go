@@ -24,7 +24,7 @@ type Client struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
-	wsConn *websocket.Conn
+	wsConn websocketConn
 
 	nextID    atomic.Int64
 	writeMu   sync.Mutex
@@ -33,6 +33,20 @@ type Client struct {
 
 	onNotification func(string, json.RawMessage)
 	onRequest      func(RequestEnvelope)
+}
+
+type websocketConn interface {
+	ReadMessage() (messageType int, p []byte, err error)
+	WriteMessage(messageType int, data []byte) error
+	Close() error
+}
+
+var websocketDial = func(ctx context.Context, url string, headers http.Header) (websocketConn, error) {
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, headers)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 type responseEnvelope struct {
@@ -224,7 +238,7 @@ func (c *Client) startWebSocket(ctx context.Context) error {
 	if token := strings.TrimSpace(c.cfg.WSBearerToken); token != "" {
 		headers.Set("Authorization", "Bearer "+token)
 	}
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, headers)
+	conn, err := websocketDial(ctx, url, headers)
 	if err != nil {
 		return err
 	}

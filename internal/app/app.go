@@ -23,8 +23,8 @@ type App struct {
 	cfg     *config.Config
 	cfgPath string
 	store   *state.Store
-	codex   *codexrpc.Client
-	feishu  *feishu.Adapter
+	codex   codexClient
+	feishu  feishuClient
 	started time.Time
 
 	turnStreamsMu sync.Mutex
@@ -46,13 +46,13 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	codexClient := codexrpc.New(cfg.Codex)
+	codexClient := newCodexClient(cfg.Codex)
 	app := &App{
 		cfg:           cfg,
 		cfgPath:       cfgPath,
 		store:         store,
 		codex:         codexClient,
-		feishu:        feishu.New(cfg.Feishu),
+		feishu:        newFeishuClient(cfg.Feishu),
 		started:       time.Now(),
 		turnStreams:   map[string]*turnStream{},
 		liveThreads:   map[string]string{},

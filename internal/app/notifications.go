@@ -142,7 +142,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			RequestID json.RawMessage `json:"requestId"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			reqID := string(p.RequestID)
+			reqID := requestIDKey(p.RequestID)
 			_ = a.store.UpdatePending(reqID, func(req *state.PendingRequest) { req.Status = "resolved" })
 			pending := a.store.PendingByID(reqID)
 			a.resumeSubmissionAfterRequest(pending)
@@ -635,7 +635,7 @@ func submissionStatusPlaceholder(status string) string {
 	case "interrupted":
 		return "任务已中断。"
 	default:
-		return "任务失败。"
+		return "任务状态未知。"
 	}
 }
 
@@ -653,7 +653,7 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for approval")
 		return
 	}
-	requestKey := string(requestID)
+	requestKey := requestIDKey(requestID)
 	buttons := approvalButtons(kind, requestKey)
 	card := a.feishu.SimpleStatusCard("等待审批", "orange", body, buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
@@ -698,7 +698,7 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for permissions approval")
 		return
 	}
-	requestKey := string(requestID)
+	requestKey := requestIDKey(requestID)
 	card := a.feishu.SimpleStatusCard("权限请求", "orange", body, []feishu.Button{
 		{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
 		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
@@ -741,7 +741,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 			Type: "default",
 			Value: map[string]any{
 				"action":      "user_input.answer",
-				"request_id":  string(requestID),
+				"request_id":  requestIDKey(requestID),
 				"question_id": q.ID,
 				"answer":      opt.Label,
 			},
@@ -750,9 +750,10 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", q.Question, buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
-		a.recordMessageLink(msgID, "user_input_card", sub, string(requestID))
+		requestKey := requestIDKey(requestID)
+		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          string(requestID),
+			ID:          requestKey,
 			Kind:        "tool_request_user_input",
 			SessionKey:  sessionKey,
 			ThreadID:    payload.ThreadID,

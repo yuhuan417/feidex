@@ -690,7 +690,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		case "approval.command.cancel", "approval.command.decline":
 			resp["decision"] = "decline"
 		}
-		_ = a.codex.Reply(json.RawMessage(requestID), resp)
+		_ = a.codex.Reply(requestIDRaw(requestID), resp)
 	case "file":
 		resp := map[string]any{"decision": "decline"}
 		switch actionName {
@@ -701,7 +701,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		case "approval.file.cancel", "approval.file.decline":
 			resp["decision"] = "decline"
 		}
-		_ = a.codex.Reply(json.RawMessage(requestID), resp)
+		_ = a.codex.Reply(requestIDRaw(requestID), resp)
 	case "permissions":
 		var payload struct {
 			Permissions map[string]any `json:"permissions"`
@@ -711,7 +711,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		if actionName == "approval.permissions.accept_session" {
 			scope = "session"
 		}
-		_ = a.codex.Reply(json.RawMessage(requestID), map[string]any{
+		_ = a.codex.Reply(requestIDRaw(requestID), map[string]any{
 			"permissions": payload.Permissions,
 			"scope":       scope,
 		})
@@ -746,7 +746,7 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 			},
 		},
 	}
-	_ = a.codex.Reply(json.RawMessage(requestID), payload)
+	_ = a.codex.Reply(requestIDRaw(requestID), payload)
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	return &callback.CardActionTriggerResponse{

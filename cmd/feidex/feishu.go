@@ -9,6 +9,8 @@ import (
 	"feidex/internal/config"
 )
 
+var setupFeishu = config.SetupFeishu
+
 func runFeishu(args []string) int {
 	if len(args) == 0 {
 		printFeishuUsage()
@@ -42,7 +44,7 @@ func runFeishuSetup(mode config.FeishuSetupMode, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
-	if err := config.SetupFeishu(mode, config.FeishuSetupOptions{
+	if err := setupFeishu(mode, config.FeishuSetupOptions{
 		ConfigPath: *configPath,
 		Workspace:  *workspace,
 		AppPair:    *appPair,

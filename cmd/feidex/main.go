@@ -15,6 +15,17 @@ import (
 	"feidex/internal/config"
 )
 
+type appService interface {
+	Start(context.Context) error
+	Stop(context.Context) error
+}
+
+var (
+	loadConfig = config.Load
+	newApp     = func(cfg *config.Config, cfgPath string) (appService, error) { return app.New(cfg, cfgPath) }
+	notifyCtx  = signal.NotifyContext
+)
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -49,7 +60,7 @@ func runServe(args []string) int {
 		return 1
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		return 1
@@ -67,13 +78,13 @@ func runServe(args []string) int {
 	slog.SetDefault(logger)
 	slog.Info("service starting", "config_path", *configPath, "data_dir", cfg.DataDir, "log_level", cfg.Log.Level)
 
-	svc, err := app.New(cfg, *configPath)
+	svc, err := newApp(cfg, *configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init service: %v\n", err)
 		return 1
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := notifyCtx(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	if err := svc.Start(ctx); err != nil {

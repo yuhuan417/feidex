@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"feidex/internal/config"
 	"feidex/internal/daemon"
+)
+
+var (
+	resolveDaemonConfig = daemon.Resolve
+	enableLingerUser    = daemon.EnableLingerCurrentUser
+	newDaemonManager    = daemon.NewManager
 )
 
 func runDaemon(args []string) int {
@@ -48,23 +53,23 @@ func daemonInstall(args []string) int {
 		return 1
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		return 1
 	}
 	daemonCfg := daemon.Config{ConfigPath: *configPath}
-	if err := daemon.Resolve(&daemonCfg); err != nil {
+	if err := resolveDaemonConfig(&daemonCfg); err != nil {
 		fmt.Fprintf(os.Stderr, "resolve daemon config: %v\n", err)
 		return 1
 	}
 	if *enableLinger {
-		if err := daemon.EnableLingerCurrentUser(); err != nil {
+		if err := enableLingerUser(); err != nil {
 			fmt.Fprintf(os.Stderr, "enable linger failed: %v\n", err)
 			return 1
 		}
 	}
-	mgr, err := daemon.NewManager()
+	mgr, err := newDaemonManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1
@@ -109,7 +114,7 @@ func daemonInstall(args []string) int {
 }
 
 func daemonEnableLinger() int {
-	if err := daemon.EnableLingerCurrentUser(); err != nil {
+	if err := enableLingerUser(); err != nil {
 		fmt.Fprintf(os.Stderr, "enable linger failed: %v\n", err)
 		return 1
 	}
@@ -118,7 +123,7 @@ func daemonEnableLinger() int {
 }
 
 func daemonUninstall() int {
-	mgr, err := daemon.NewManager()
+	mgr, err := newDaemonManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1
@@ -132,7 +137,7 @@ func daemonUninstall() int {
 }
 
 func daemonStart() int {
-	mgr, err := daemon.NewManager()
+	mgr, err := newDaemonManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1
@@ -150,7 +155,7 @@ func daemonStart() int {
 }
 
 func daemonStop() int {
-	mgr, err := daemon.NewManager()
+	mgr, err := newDaemonManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1
@@ -168,7 +173,7 @@ func daemonStop() int {
 }
 
 func daemonRestart() int {
-	mgr, err := daemon.NewManager()
+	mgr, err := newDaemonManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1
@@ -186,7 +191,7 @@ func daemonRestart() int {
 }
 
 func daemonStatus() int {
-	mgr, err := daemon.NewManager()
+	mgr, err := newDaemonManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1

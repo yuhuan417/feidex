@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
 func TestRenderSubmissionCardShowsFullContentInCard(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := &App{cfg: cfg, feishu: feishu.New(cfg.Feishu)}
 
 	reply := strings.Repeat("hello ", 120)
 	command := strings.Repeat("output\n", 80)

@@ -93,7 +93,7 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Workspaces = append(cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	a := &App{store: store, cfg: cfg}
+	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",

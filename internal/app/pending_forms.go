@@ -117,7 +117,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
 		return
 	}
-	requestKey := string(requestID)
+	requestKey := requestIDKey(requestID)
 	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", renderToolUserInputBody(payload), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
@@ -160,9 +160,9 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已取消", "grey", "本次追加已取消。", nil))
 		}
 	case "tool_request_user_input_form":
-		_ = a.codex.ReplyError(json.RawMessage(requestID), -32800, "cancelled by user")
+		_ = a.codex.ReplyError(requestIDRaw(requestID), -32800, "cancelled by user")
 	case "mcp_elicitation_form":
-		_ = a.codex.Reply(json.RawMessage(requestID), map[string]any{"action": "cancel"})
+		_ = a.codex.Reply(requestIDRaw(requestID), map[string]any{"action": "cancel"})
 	}
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
@@ -233,7 +233,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err != nil {
 		return err
 	}
-	if err := a.codex.Reply(json.RawMessage(pending.ID), response); err != nil {
+	if err := a.codex.Reply(requestIDRaw(pending.ID), response); err != nil {
 		return err
 	}
 	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -250,7 +250,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for elicitation")
 		return
 	}
-	requestKey := string(requestID)
+	requestKey := requestIDKey(requestID)
 	card := a.feishu.SimpleStatusCard("需要补充表单", "orange", renderElicitationFormBody(payload), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
@@ -283,7 +283,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for elicitation")
 		return
 	}
-	requestKey := string(requestID)
+	requestKey := requestIDKey(requestID)
 	body := payload.Message
 	if strings.TrimSpace(payload.URL) != "" {
 		body += "\n\n打开链接：<" + payload.URL + ">"
@@ -332,7 +332,7 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 	case "elicitation_url.decline":
 		decision = "decline"
 	}
-	_ = a.codex.Reply(json.RawMessage(requestID), map[string]any{"action": decision})
+	_ = a.codex.Reply(requestIDRaw(requestID), map[string]any{"action": decision})
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	return &callback.CardActionTriggerResponse{
@@ -350,7 +350,7 @@ func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *s
 	if err != nil {
 		return err
 	}
-	if err := a.codex.Reply(json.RawMessage(pending.ID), map[string]any{
+	if err := a.codex.Reply(requestIDRaw(pending.ID), map[string]any{
 		"action":  "accept",
 		"content": content,
 	}); err != nil {
