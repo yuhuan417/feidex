@@ -19,10 +19,7 @@ import (
 const attachmentsDirName = ".feidex-attachments"
 
 var (
-	markdownPathLinkRe = regexp.MustCompile(`\[[^\]]+\]\(([^)\n]+)\)`)
 	markdownLinkFullRe = regexp.MustCompile(`\[([^\]]+)\]\(([^)\n]+)\)`)
-	inlineCodePathRe   = regexp.MustCompile("`([^`\\n]+)`")
-	plainPathTokenRe   = regexp.MustCompile(`(?:^|[\s(])((?:/|(?:\./)|(?:\.\./)|(?:[A-Za-z0-9_.-]+/))[^\s\)` + "`" + `\"']+)`)
 	lineSuffixRe       = regexp.MustCompile(`^(.*?)(?::\d+(?::\d+)?)?$`)
 )
 
@@ -150,32 +147,6 @@ func attachmentPreview(attachment state.SubmissionAttachment) string {
 	default:
 		return "[" + strings.TrimSpace(attachment.Kind) + "] " + name
 	}
-}
-
-func collectReplyFiles(outputText, workspaceCwd string) []string {
-	if strings.TrimSpace(outputText) == "" || strings.TrimSpace(workspaceCwd) == "" {
-		return nil
-	}
-	seen := map[string]struct{}{}
-	var paths []string
-	addMatches := func(matches [][]string) {
-		for _, match := range matches {
-			if len(match) < 2 {
-				continue
-			}
-			if path, ok := normalizeReferencedPath(match[1], workspaceCwd); ok {
-				if _, exists := seen[path]; exists {
-					continue
-				}
-				seen[path] = struct{}{}
-				paths = append(paths, path)
-			}
-		}
-	}
-	addMatches(markdownPathLinkRe.FindAllStringSubmatch(outputText, -1))
-	addMatches(inlineCodePathRe.FindAllStringSubmatch(outputText, -1))
-	addMatches(plainPathTokenRe.FindAllStringSubmatch(outputText, -1))
-	return paths
 }
 
 func normalizeReferencedPath(raw, workspaceCwd string) (string, bool) {

@@ -147,6 +147,14 @@ func (a *Adapter) Start(ctx context.Context) error {
 						cardAction.MessageID = event.Event.Context.OpenMessageID
 					}
 				}
+				slog.Info("feishu card action",
+					"name", cardAction.Name,
+					"message_id", cardAction.MessageID,
+					"chat_id", cardAction.ChatID,
+					"user_id", cardAction.UserID,
+					"action_value", fmt.Sprintf("%v", cardAction.ActionValue),
+					"form_value", fmt.Sprintf("%v", cardAction.FormValue),
+				)
 				return a.onCardAction(cardAction)
 			}).
 			OnP2BotMenuV6(func(ctx context.Context, event *larkapplication.P2BotMenuV6) error {
@@ -188,17 +196,29 @@ func (a *Adapter) Stop() {
 
 func (a *Adapter) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
 	content, _ := json.Marshal(map[string]string{"text": text})
+	slog.Info("feishu outbound", "op", "reply", "msg_type", "text", "reply_to", messageID, "in_thread", inThread, "preview", truncateForLog(text, 160), "text_len", len(text))
 	_, err := a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
+	if err != nil {
+		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "text", "reply_to", messageID, "error", err)
+	}
 	return err
 }
 
 func (a *Adapter) ReplyTextWithID(ctx context.Context, messageID, text string, inThread bool) (string, error) {
 	content, _ := json.Marshal(map[string]string{"text": text})
-	return a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
+	slog.Info("feishu outbound", "op", "reply", "msg_type", "text", "reply_to", messageID, "in_thread", inThread, "preview", truncateForLog(text, 160), "text_len", len(text))
+	id, err := a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
+	if err != nil {
+		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "text", "reply_to", messageID, "error", err)
+		return "", err
+	}
+	slog.Info("feishu outbound sent", "op", "reply", "msg_type", "text", "reply_to", messageID, "message_id", id)
+	return id, nil
 }
 
 func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 	content, _ := json.Marshal(map[string]string{"text": text})
+	slog.Info("feishu outbound", "op", "send", "msg_type", "text", "chat_id", chatID, "preview", truncateForLog(text, 160), "text_len", len(text))
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
@@ -209,11 +229,18 @@ func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 		Build()
 	resp, err := a.client.Im.Message.Create(ctx, req)
 	if err != nil {
+		slog.Error("feishu outbound failed", "op", "send", "msg_type", "text", "chat_id", chatID, "error", err)
 		return err
 	}
 	if !resp.Success() {
+		slog.Error("feishu outbound failed", "op", "send", "msg_type", "text", "chat_id", chatID, "code", resp.Code, "msg", resp.Msg)
 		return fmt.Errorf("feishu send failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
+	messageID := ""
+	if resp.Data != nil && resp.Data.MessageId != nil {
+		messageID = *resp.Data.MessageId
+	}
+	slog.Info("feishu outbound sent", "op", "send", "msg_type", "text", "chat_id", chatID, "message_id", messageID)
 	return nil
 }
 
@@ -236,6 +263,8 @@ func (a *Adapter) ReplyLocalFile(ctx context.Context, messageID, path string, in
 
 func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
 	contentBytes, _ := json.Marshal(card)
+	title, preview, buttonCount := summarizeCardForLog(card)
+	slog.Info("feishu outbound", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "in_thread", inThread, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
 	req := larkim.NewReplyMessageReqBuilder().
 		MessageId(messageID).
 		Body(larkim.NewReplyMessageReqBodyBuilder().
@@ -246,19 +275,25 @@ func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[stri
 		Build()
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
+		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "error", err)
 		return "", err
 	}
 	if !resp.Success() {
+		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "code", resp.Code, "msg", resp.Msg, "card_title", title)
 		return "", fmt.Errorf("feishu reply card failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
+		slog.Info("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", "")
 		return "", nil
 	}
+	slog.Info("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", *resp.Data.MessageId, "card_title", title)
 	return *resp.Data.MessageId, nil
 }
 
 func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
 	contentBytes, _ := json.Marshal(card)
+	title, preview, buttonCount := summarizeCardForLog(card)
+	slog.Info("feishu outbound", "op", "send", "msg_type", "interactive", "chat_id", chatID, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
@@ -269,19 +304,25 @@ func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]a
 		Build()
 	resp, err := a.client.Im.Message.Create(ctx, req)
 	if err != nil {
+		slog.Error("feishu outbound failed", "op", "send", "msg_type", "interactive", "chat_id", chatID, "error", err)
 		return "", err
 	}
 	if !resp.Success() {
+		slog.Error("feishu outbound failed", "op", "send", "msg_type", "interactive", "chat_id", chatID, "code", resp.Code, "msg", resp.Msg, "card_title", title)
 		return "", fmt.Errorf("feishu send card failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
+		slog.Info("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", "", "card_title", title)
 		return "", nil
 	}
+	slog.Info("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", *resp.Data.MessageId, "card_title", title)
 	return *resp.Data.MessageId, nil
 }
 
 func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
 	contentBytes, _ := json.Marshal(card)
+	title, preview, buttonCount := summarizeCardForLog(card)
+	slog.Info("feishu outbound", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
 	req := larkim.NewPatchMessageReqBuilder().
 		MessageId(messageID).
 		Body(larkim.NewPatchMessageReqBodyBuilder().
@@ -290,11 +331,14 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 		Build()
 	resp, err := a.client.Im.Message.Patch(ctx, req)
 	if err != nil {
+		slog.Error("feishu outbound failed", "op", "patch", "msg_type", "interactive", "message_id", messageID, "error", err)
 		return err
 	}
 	if !resp.Success() {
+		slog.Error("feishu outbound failed", "op", "patch", "msg_type", "interactive", "message_id", messageID, "code", resp.Code, "msg", resp.Msg, "card_title", title)
 		return fmt.Errorf("feishu patch failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
+	slog.Info("feishu outbound sent", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title)
 	return nil
 }
 
@@ -347,6 +391,7 @@ func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path st
 }
 
 func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, content string, inThread bool) (string, error) {
+	slog.Info("feishu outbound raw", "op", "reply", "msg_type", msgType, "reply_to", messageID, "in_thread", inThread, "content_preview", truncateForLog(content, 200), "content_size", len(content))
 	req := larkim.NewReplyMessageReqBuilder().
 		MessageId(messageID).
 		Body(larkim.NewReplyMessageReqBodyBuilder().
@@ -357,14 +402,18 @@ func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, 
 		Build()
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
+		slog.Error("feishu outbound failed", "op", "reply", "msg_type", msgType, "reply_to", messageID, "error", err)
 		return "", err
 	}
 	if !resp.Success() {
+		slog.Error("feishu outbound failed", "op", "reply", "msg_type", msgType, "reply_to", messageID, "code", resp.Code, "msg", resp.Msg)
 		return "", fmt.Errorf("feishu reply failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
+		slog.Info("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", "")
 		return "", nil
 	}
+	slog.Info("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", *resp.Data.MessageId)
 	return *resp.Data.MessageId, nil
 }
 
@@ -434,12 +483,16 @@ func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) 
 	if len(buttons) > 0 {
 		actions := make([]map[string]any, 0, len(buttons))
 		for _, btn := range buttons {
-			actions = append(actions, map[string]any{
+			action := map[string]any{
 				"tag":   "button",
 				"type":  btn.Type,
 				"text":  map[string]any{"tag": "plain_text", "content": btn.Text},
 				"value": btn.Value,
-			})
+			}
+			if strings.TrimSpace(btn.Name) != "" {
+				action["name"] = btn.Name
+			}
+			actions = append(actions, action)
 		}
 		card["elements"] = append(card["elements"].([]map[string]any), map[string]any{
 			"tag":     "action",
@@ -452,6 +505,7 @@ func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) 
 type Button struct {
 	Text  string
 	Type  string
+	Name  string
 	Value map[string]any
 }
 
@@ -695,6 +749,60 @@ func resolveDownloadedFileName(resp *larkim.GetMessageResourceResp, attachment A
 		}
 	}
 	return fmt.Sprintf("%s-%s%s", attachment.Kind, sanitizeAttachmentKey(attachment.ResourceKey), ext)
+}
+
+func truncateForLog(text string, limit int) string {
+	text = strings.TrimSpace(text)
+	if limit <= 0 || len(text) <= limit {
+		return text
+	}
+	return text[:limit] + "..."
+}
+
+func summarizeCardForLog(card map[string]any) (title string, preview string, buttonCount int) {
+	if card == nil {
+		return "", "", 0
+	}
+	if header, ok := card["header"].(map[string]any); ok {
+		if titleObj, ok := header["title"].(map[string]any); ok {
+			if content, ok := titleObj["content"].(string); ok {
+				title = strings.TrimSpace(content)
+			}
+		}
+	}
+	if elements, ok := card["elements"].([]map[string]any); ok {
+		for _, elem := range elements {
+			tag, _ := elem["tag"].(string)
+			switch tag {
+			case "markdown":
+				if content, ok := elem["content"].(string); ok && strings.TrimSpace(preview) == "" {
+					preview = truncateForLog(content, 160)
+				}
+			case "action":
+				if actions, ok := elem["actions"].([]map[string]any); ok {
+					buttonCount += len(actions)
+				}
+			}
+		}
+	}
+	if body, ok := card["body"].(map[string]any); ok {
+		if elements, ok := body["elements"].([]map[string]any); ok {
+			for _, elem := range elements {
+				tag, _ := elem["tag"].(string)
+				switch tag {
+				case "markdown":
+					if content, ok := elem["content"].(string); ok && strings.TrimSpace(preview) == "" {
+						preview = truncateForLog(content, 160)
+					}
+				case "action":
+					if actions, ok := elem["actions"].([]map[string]any); ok {
+						buttonCount += len(actions)
+					}
+				}
+			}
+		}
+	}
+	return strings.TrimSpace(title), strings.TrimSpace(preview), buttonCount
 }
 
 func sanitizeDownloadedFileName(name string) string {
