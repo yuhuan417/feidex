@@ -4,8 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,13 +37,25 @@ type InboundMessage struct {
 	Text          string
 	RootMessageID string
 	ThreadID      string
+	Attachments   []Attachment
+	CreatedAt     int64
+}
+
+type Attachment struct {
+	Kind        string
+	ResourceKey string
 }
 
 type CardAction struct {
 	ActionValue map[string]any
+	FormValue   map[string]any
 	UserID      string
 	ChatID      string
 	MessageID   string
+	Name        string
+	InputValue  string
+	Options     []string
+	Checked     bool
 }
 
 type BotMenuClick struct {
@@ -110,9 +128,17 @@ func (a *Adapter) Start(ctx context.Context) error {
 				}
 				cardAction := &CardAction{
 					ActionValue: map[string]any{},
+					FormValue:   map[string]any{},
 				}
 				if event.Event != nil {
-					cardAction.ActionValue = event.Event.Action.Value
+					if event.Event.Action != nil {
+						cardAction.ActionValue = event.Event.Action.Value
+						cardAction.FormValue = event.Event.Action.FormValue
+						cardAction.Name = event.Event.Action.Name
+						cardAction.InputValue = event.Event.Action.InputValue
+						cardAction.Options = append([]string(nil), event.Event.Action.Options...)
+						cardAction.Checked = event.Event.Action.Checked
+					}
 					if event.Event.Operator != nil {
 						cardAction.UserID = event.Event.Operator.OpenID
 					}
@@ -162,22 +188,13 @@ func (a *Adapter) Stop() {
 
 func (a *Adapter) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
 	content, _ := json.Marshal(map[string]string{"text": text})
-	req := larkim.NewReplyMessageReqBuilder().
-		MessageId(messageID).
-		Body(larkim.NewReplyMessageReqBodyBuilder().
-			MsgType("text").
-			Content(string(content)).
-			ReplyInThread(inThread).
-			Build()).
-		Build()
-	resp, err := a.client.Im.Message.Reply(ctx, req)
-	if err != nil {
-		return err
-	}
-	if !resp.Success() {
-		return fmt.Errorf("feishu reply failed code=%d msg=%s", resp.Code, resp.Msg)
-	}
-	return nil
+	_, err := a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
+	return err
+}
+
+func (a *Adapter) ReplyTextWithID(ctx context.Context, messageID, text string, inThread bool) (string, error) {
+	content, _ := json.Marshal(map[string]string{"text": text})
+	return a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
 }
 
 func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
@@ -198,6 +215,23 @@ func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 		return fmt.Errorf("feishu send failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	return nil
+}
+
+func (a *Adapter) ReplyLocalFile(ctx context.Context, messageID, path string, inThread bool) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("path %q is not a regular file", path)
+	}
+	if info.Size() <= 0 {
+		return fmt.Errorf("path %q is empty", path)
+	}
+	if isSupportedReplyImage(path, info) {
+		return a.replyLocalImage(ctx, messageID, path, inThread)
+	}
+	return a.replyLocalUploadedFile(ctx, messageID, path, info, inThread)
 }
 
 func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
@@ -264,6 +298,122 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 	return nil
 }
 
+func (a *Adapter) replyLocalImage(ctx context.Context, messageID, path string, inThread bool) error {
+	body, err := larkim.NewCreateImagePathReqBodyBuilder().
+		ImageType("message").
+		ImagePath(path).
+		Build()
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Im.Image.Create(ctx, larkim.NewCreateImageReqBuilder().
+		Body(body).
+		Build())
+	if err != nil {
+		return err
+	}
+	if !resp.Success() || resp.Data == nil || resp.Data.ImageKey == nil || strings.TrimSpace(*resp.Data.ImageKey) == "" {
+		return fmt.Errorf("feishu image upload failed code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	content, _ := (&larkim.MessageImage{ImageKey: *resp.Data.ImageKey}).String()
+	_, err = a.replyMessageDetailed(ctx, messageID, "image", content, inThread)
+	return err
+}
+
+func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path string, info fs.FileInfo, inThread bool) error {
+	if info.Size() > 30*1024*1024 {
+		return fmt.Errorf("path %q exceeds Feishu 30MB file upload limit", path)
+	}
+	body, err := larkim.NewCreateFilePathReqBodyBuilder().
+		FileType(detectUploadFileType(path)).
+		FileName(filepath.Base(path)).
+		FilePath(path).
+		Build()
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Im.File.Create(ctx, larkim.NewCreateFileReqBuilder().
+		Body(body).
+		Build())
+	if err != nil {
+		return err
+	}
+	if !resp.Success() || resp.Data == nil || resp.Data.FileKey == nil || strings.TrimSpace(*resp.Data.FileKey) == "" {
+		return fmt.Errorf("feishu file upload failed code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	content, _ := (&larkim.MessageFile{FileKey: *resp.Data.FileKey}).String()
+	_, err = a.replyMessageDetailed(ctx, messageID, "file", content, inThread)
+	return err
+}
+
+func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, content string, inThread bool) (string, error) {
+	req := larkim.NewReplyMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewReplyMessageReqBodyBuilder().
+			MsgType(msgType).
+			Content(content).
+			ReplyInThread(inThread).
+			Build()).
+		Build()
+	resp, err := a.client.Im.Message.Reply(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	if !resp.Success() {
+		return "", fmt.Errorf("feishu reply failed code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	if resp.Data == nil || resp.Data.MessageId == nil {
+		return "", nil
+	}
+	return *resp.Data.MessageId, nil
+}
+
+func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string, attachment Attachment, dir string) (string, string, error) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return "", "", fmt.Errorf("missing message id for message resource download")
+	}
+	kind := strings.TrimSpace(attachment.Kind)
+	if kind != "image" && kind != "file" && kind != "audio" {
+		return "", "", fmt.Errorf("unsupported attachment kind %q", attachment.Kind)
+	}
+	resourceKey := strings.TrimSpace(attachment.ResourceKey)
+	if resourceKey == "" {
+		return "", "", fmt.Errorf("missing resource key for message resource download")
+	}
+
+	req := larkim.NewGetMessageResourceReqBuilder().
+		MessageId(messageID).
+		FileKey(resourceKey).
+		Type(resourceTypeForAttachment(kind)).
+		Build()
+	resp, err := a.client.Im.MessageResource.Get(ctx, req)
+	if err != nil {
+		return "", "", err
+	}
+	if resp == nil || resp.File == nil {
+		if resp != nil {
+			return "", "", fmt.Errorf("feishu resource download failed code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		return "", "", fmt.Errorf("feishu resource download returned empty response")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", err
+	}
+
+	fileName := resolveDownloadedFileName(resp, attachment)
+	path := uniqueDownloadPath(dir, fileName)
+	f, err := os.Create(path)
+	if err != nil {
+		return "", "", err
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, resp.File); err != nil {
+		return "", "", err
+	}
+	return path, filepath.Base(path), nil
+}
+
 func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) map[string]any {
 	card := map[string]any{
 		"config": map[string]any{
@@ -311,9 +461,10 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	}
 	msg := event.Event.Message
 	sender := event.Event.Sender
-	if msg.MessageType == nil || *msg.MessageType != "text" {
+	if msg.MessageType == nil {
 		return nil
 	}
+	messageType := strings.TrimSpace(*msg.MessageType)
 	userID := ""
 	if sender.SenderId != nil && sender.SenderId.OpenId != nil {
 		userID = *sender.SenderId.OpenId
@@ -322,18 +473,48 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		return nil
 	}
 	if msg.ChatType != nil && *msg.ChatType == "group" && a.cfg.GroupAtOnly && a.botOpenID != "" {
-		if !mentioned(msg.Mentions, a.botOpenID) {
+		if !mentioned(msg.Mentions, a.botOpenID) && !(a.cfg.RespondToAtEveryone && mentionedEveryone(msg.Mentions)) {
 			return nil
 		}
 	}
-	text := extractText(msg.Content)
-	text = stripBotMention(text, msg.Mentions, a.botOpenID)
-	if strings.TrimSpace(text) == "" {
+	var (
+		text        string
+		attachments []Attachment
+	)
+	switch messageType {
+	case "text":
+		text = stripBotMention(extractText(msg.Content), msg.Mentions, a.botOpenID)
+	case "image":
+		attachment, ok := extractImageAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu image message missing image key")
+			return nil
+		}
+		attachments = append(attachments, attachment)
+	case "file":
+		attachment, ok := extractFileAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu file message missing file key")
+			return nil
+		}
+		attachments = append(attachments, attachment)
+	case "audio":
+		attachment, ok := extractAudioAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu audio message missing file key")
+			return nil
+		}
+		attachments = append(attachments, attachment)
+	default:
+		return nil
+	}
+	if strings.TrimSpace(text) == "" && len(attachments) == 0 {
 		return nil
 	}
 	out := &InboundMessage{
-		UserID: userID,
-		Text:   text,
+		UserID:      userID,
+		Text:        text,
+		Attachments: attachments,
 	}
 	if msg.MessageId != nil {
 		out.MessageID = *msg.MessageId
@@ -356,6 +537,9 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	}
 	if msg.ThreadId != nil {
 		out.ThreadID = *msg.ThreadId
+	}
+	if msg.CreateTime != nil {
+		out.CreatedAt = parseUnixMillis(*msg.CreateTime)
 	}
 	return out
 }
@@ -397,6 +581,60 @@ func extractText(raw *string) string {
 	return body.Text
 }
 
+func parseUnixMillis(raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return v / 1000
+}
+
+func extractImageAttachment(raw *string) (Attachment, bool) {
+	if raw == nil {
+		return Attachment{}, false
+	}
+	var body larkim.MessageImage
+	if err := json.Unmarshal([]byte(*raw), &body); err != nil {
+		return Attachment{}, false
+	}
+	if strings.TrimSpace(body.ImageKey) == "" {
+		return Attachment{}, false
+	}
+	return Attachment{Kind: "image", ResourceKey: strings.TrimSpace(body.ImageKey)}, true
+}
+
+func extractFileAttachment(raw *string) (Attachment, bool) {
+	if raw == nil {
+		return Attachment{}, false
+	}
+	var body larkim.MessageFile
+	if err := json.Unmarshal([]byte(*raw), &body); err != nil {
+		return Attachment{}, false
+	}
+	if strings.TrimSpace(body.FileKey) == "" {
+		return Attachment{}, false
+	}
+	return Attachment{Kind: "file", ResourceKey: strings.TrimSpace(body.FileKey)}, true
+}
+
+func extractAudioAttachment(raw *string) (Attachment, bool) {
+	if raw == nil {
+		return Attachment{}, false
+	}
+	var body larkim.MessageAudio
+	if err := json.Unmarshal([]byte(*raw), &body); err != nil {
+		return Attachment{}, false
+	}
+	if strings.TrimSpace(body.FileKey) == "" {
+		return Attachment{}, false
+	}
+	return Attachment{Kind: "audio", ResourceKey: strings.TrimSpace(body.FileKey)}, true
+}
+
 func stripBotMention(text string, mentions []*larkim.MentionEvent, botOpenID string) string {
 	for _, mention := range mentions {
 		if mention == nil || mention.Key == nil {
@@ -419,6 +657,154 @@ func mentioned(mentions []*larkim.MentionEvent, botOpenID string) bool {
 		}
 	}
 	return false
+}
+
+func mentionedEveryone(mentions []*larkim.MentionEvent) bool {
+	for _, mention := range mentions {
+		if mention == nil {
+			continue
+		}
+		if mention.Key != nil {
+			key := strings.ToLower(strings.TrimSpace(*mention.Key))
+			if key == "@all" || strings.Contains(key, "所有人") || strings.Contains(key, "everyone") {
+				return true
+			}
+		}
+		if mention.Name != nil {
+			name := strings.ToLower(strings.TrimSpace(*mention.Name))
+			if name == "all" || strings.Contains(name, "所有人") || strings.Contains(name, "everyone") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func resolveDownloadedFileName(resp *larkim.GetMessageResourceResp, attachment Attachment) string {
+	if resp != nil {
+		if fileName := sanitizeDownloadedFileName(resp.FileName); fileName != "" {
+			return fileName
+		}
+	}
+	ext := defaultAttachmentExt(attachment.Kind)
+	if resp != nil && resp.ApiResp != nil {
+		if contentType := strings.TrimSpace(resp.Header.Get("Content-Type")); contentType != "" {
+			if exts, err := mime.ExtensionsByType(contentType); err == nil && len(exts) > 0 {
+				ext = exts[0]
+			}
+		}
+	}
+	return fmt.Sprintf("%s-%s%s", attachment.Kind, sanitizeAttachmentKey(attachment.ResourceKey), ext)
+}
+
+func sanitizeDownloadedFileName(name string) string {
+	name = strings.TrimSpace(strings.ReplaceAll(name, "\x00", ""))
+	if name == "" {
+		return ""
+	}
+	name = filepath.Base(name)
+	if name == "." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
+}
+
+func uniqueDownloadPath(dir, fileName string) string {
+	fileName = sanitizeDownloadedFileName(fileName)
+	if fileName == "" {
+		fileName = "attachment.bin"
+	}
+	path := filepath.Join(dir, fileName)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+	ext := filepath.Ext(fileName)
+	base := strings.TrimSuffix(fileName, ext)
+	if base == "" {
+		base = "attachment"
+	}
+	for i := 2; ; i++ {
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, i, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+}
+
+func defaultAttachmentExt(kind string) string {
+	if kind == "image" {
+		return ".png"
+	}
+	if kind == "audio" {
+		return ".opus"
+	}
+	return ".bin"
+}
+
+func resourceTypeForAttachment(kind string) string {
+	if kind == "image" {
+		return "image"
+	}
+	return "file"
+}
+
+func isSupportedReplyImage(path string, info os.FileInfo) bool {
+	if info == nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 10*1024*1024 {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".tiff", ".tif", ".bmp", ".ico":
+		return true
+	default:
+		return false
+	}
+}
+
+func detectUploadFileType(path string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
+	switch ext {
+	case "opus":
+		return "opus"
+	case "mp4":
+		return "mp4"
+	case "pdf":
+		return "pdf"
+	case "doc", "docx":
+		return "doc"
+	case "xls", "xlsx":
+		return "xls"
+	case "ppt", "pptx":
+		return "ppt"
+	default:
+		return "stream"
+	}
+}
+
+func sanitizeAttachmentKey(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "attachment"
+	}
+	var b strings.Builder
+	b.Grow(len(key))
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "attachment"
+	}
+	return b.String()
 }
 
 func (a *Adapter) fetchBotOpenID() string {

@@ -7,17 +7,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
+
+	"feidex/internal/config"
+
+	"github.com/gorilla/websocket"
 )
 
 type Client struct {
-	cmdPath string
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  io.ReadCloser
+	cfg    config.CodexConfig
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	wsConn *websocket.Conn
 
 	nextID    atomic.Int64
 	writeMu   sync.Mutex
@@ -50,12 +57,12 @@ type notificationEnvelope struct {
 	Params json.RawMessage `json:"params"`
 }
 
-func New(cmdPath string) *Client {
-	if cmdPath == "" {
-		cmdPath = "codex"
+func New(cfg config.CodexConfig) *Client {
+	if cfg.Command == "" {
+		cfg.Command = "codex"
 	}
 	return &Client{
-		cmdPath: cmdPath,
+		cfg:     cfg,
 		pending: map[int64]chan responseEnvelope{},
 	}
 }
@@ -66,22 +73,16 @@ func (c *Client) SetHandlers(onNotification func(string, json.RawMessage), onReq
 }
 
 func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
-	c.cmd = exec.CommandContext(ctx, c.cmdPath, "app-server")
-	stdin, err := c.cmd.StdinPipe()
-	if err != nil {
-		return err
+	switch codexTransportMode(c.cfg) {
+	case "ws":
+		if err := c.startWebSocket(ctx); err != nil {
+			return err
+		}
+	default:
+		if err := c.startStdio(ctx); err != nil {
+			return err
+		}
 	}
-	stdout, err := c.cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	c.cmd.Stderr = os.Stderr
-	c.stdin = stdin
-	c.stdout = stdout
-	if err := c.cmd.Start(); err != nil {
-		return err
-	}
-	go c.readLoop()
 
 	var initResp struct {
 		UserAgent      string `json:"userAgent"`
@@ -109,6 +110,9 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 }
 
 func (c *Client) Close() error {
+	if c.wsConn != nil {
+		return c.wsConn.Close()
+	}
 	if c.stdin != nil {
 		_ = c.stdin.Close()
 	}
@@ -168,6 +172,9 @@ func (c *Client) send(v any) error {
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	if c.wsConn != nil {
+		return c.wsConn.WriteMessage(websocket.TextMessage, b)
+	}
 	if c.stdin == nil {
 		return errors.New("client not started")
 	}
@@ -176,41 +183,103 @@ func (c *Client) send(v any) error {
 }
 
 func (c *Client) readLoop() {
+	if c.wsConn != nil {
+		c.readWebSocketLoop()
+		return
+	}
 	scanner := bufio.NewScanner(c.stdout)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 8*1024*1024)
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		var obj map[string]json.RawMessage
-		if err := json.Unmarshal(line, &obj); err != nil {
-			continue
-		}
-		if rawID, ok := obj["id"]; ok {
-			if _, hasMethod := obj["method"]; hasMethod {
-				var req RequestEnvelope
-				if err := json.Unmarshal(line, &req); err == nil && c.onRequest != nil {
-					go c.onRequest(req)
-				}
-				continue
-			}
-			var id int64
-			if err := json.Unmarshal(rawID, &id); err == nil {
-				var resp responseEnvelope
-				if err := json.Unmarshal(line, &resp); err == nil {
-					c.pendingMu.Lock()
-					ch := c.pending[id]
-					delete(c.pending, id)
-					c.pendingMu.Unlock()
-					if ch != nil {
-						ch <- resp
-					}
-				}
-			}
-			continue
-		}
-		var notif notificationEnvelope
-		if err := json.Unmarshal(line, &notif); err == nil && notif.Method != "" && c.onNotification != nil {
-			go c.onNotification(notif.Method, notif.Params)
-		}
+		c.handleIncoming(scanner.Bytes())
 	}
+}
+
+func (c *Client) startStdio(ctx context.Context) error {
+	c.cmd = exec.CommandContext(ctx, c.cfg.Command, "app-server")
+	stdin, err := c.cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	stdout, err := c.cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	c.cmd.Stderr = os.Stderr
+	c.stdin = stdin
+	c.stdout = stdout
+	if err := c.cmd.Start(); err != nil {
+		return err
+	}
+	go c.readLoop()
+	return nil
+}
+
+func (c *Client) startWebSocket(ctx context.Context) error {
+	url := strings.TrimSpace(c.cfg.WSURL)
+	if url == "" {
+		return fmt.Errorf("codex ws_url is required when transport=ws")
+	}
+	headers := http.Header{}
+	if token := strings.TrimSpace(c.cfg.WSBearerToken); token != "" {
+		headers.Set("Authorization", "Bearer "+token)
+	}
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, headers)
+	if err != nil {
+		return err
+	}
+	c.wsConn = conn
+	go c.readLoop()
+	return nil
+}
+
+func (c *Client) readWebSocketLoop() {
+	for {
+		_, message, err := c.wsConn.ReadMessage()
+		if err != nil {
+			return
+		}
+		c.handleIncoming(message)
+	}
+}
+
+func (c *Client) handleIncoming(line []byte) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(line, &obj); err != nil {
+		return
+	}
+	if rawID, ok := obj["id"]; ok {
+		if _, hasMethod := obj["method"]; hasMethod {
+			var req RequestEnvelope
+			if err := json.Unmarshal(line, &req); err == nil && c.onRequest != nil {
+				c.onRequest(req)
+			}
+			return
+		}
+		var id int64
+		if err := json.Unmarshal(rawID, &id); err == nil {
+			var resp responseEnvelope
+			if err := json.Unmarshal(line, &resp); err == nil {
+				c.pendingMu.Lock()
+				ch := c.pending[id]
+				delete(c.pending, id)
+				c.pendingMu.Unlock()
+				if ch != nil {
+					ch <- resp
+				}
+			}
+		}
+		return
+	}
+	var notif notificationEnvelope
+	if err := json.Unmarshal(line, &notif); err == nil && notif.Method != "" && c.onNotification != nil {
+		c.onNotification(notif.Method, notif.Params)
+	}
+}
+
+func codexTransportMode(cfg config.CodexConfig) string {
+	if strings.EqualFold(strings.TrimSpace(cfg.Transport), "ws") || strings.TrimSpace(cfg.WSURL) != "" {
+		return "ws"
+	}
+	return "stdio"
 }

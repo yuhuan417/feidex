@@ -21,16 +21,20 @@ type Config struct {
 }
 
 type FeishuConfig struct {
-	AppID         string   `toml:"app_id"`
-	AppSecret     string   `toml:"app_secret"`
-	AllowFrom     []string `toml:"allow_from"`
-	GroupAtOnly   bool     `toml:"group_at_only"`
-	CardEnabled   bool     `toml:"card_enabled"`
-	ReplyInThread bool     `toml:"reply_in_thread"`
+	AppID               string   `toml:"app_id"`
+	AppSecret           string   `toml:"app_secret"`
+	AllowFrom           []string `toml:"allow_from"`
+	GroupAtOnly         bool     `toml:"group_at_only"`
+	RespondToAtEveryone bool     `toml:"respond_to_at_everyone"`
+	CardEnabled         bool     `toml:"card_enabled"`
+	ReplyInThread       bool     `toml:"reply_in_thread"`
 }
 
 type CodexConfig struct {
 	Command         string `toml:"command"`
+	Transport       string `toml:"transport"`
+	WSURL           string `toml:"ws_url"`
+	WSBearerToken   string `toml:"ws_bearer_token"`
 	ExperimentalAPI bool   `toml:"experimental_api"`
 	ServiceName     string `toml:"service_name"`
 }
@@ -54,6 +58,7 @@ func Default() *Config {
 		},
 		Codex: CodexConfig{
 			Command:         "codex",
+			Transport:       "stdio",
 			ExperimentalAPI: true,
 			ServiceName:     "feidex",
 		},
@@ -87,6 +92,13 @@ func Load(path string) (*Config, error) {
 func (c *Config) Normalize(baseDir string) error {
 	if c.Codex.Command == "" {
 		c.Codex.Command = "codex"
+	}
+	if strings.TrimSpace(c.Codex.Transport) == "" {
+		if strings.TrimSpace(c.Codex.WSURL) != "" {
+			c.Codex.Transport = "ws"
+		} else {
+			c.Codex.Transport = "stdio"
+		}
 	}
 	if len(c.Workspaces) == 0 {
 		return errors.New("at least one [[workspace]] is required")

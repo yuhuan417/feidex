@@ -5,11 +5,15 @@ app_id = "cli_xxx"
 app_secret = "sec_xxx"
 allow_from = []
 group_at_only = true
+respond_to_at_everyone = false
 card_enabled = true
 reply_in_thread = true
 
 [codex]
 command = "codex"
+transport = "stdio"
+# ws_url = "ws://127.0.0.1:4500"
+# ws_bearer_token = ""
 experimental_api = true
 service_name = "feidex"
 

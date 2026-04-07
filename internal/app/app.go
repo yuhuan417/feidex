@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/codexrpc"
@@ -22,6 +23,15 @@ type App struct {
 	store   *state.Store
 	codex   *codexrpc.Client
 	feishu  *feishu.Adapter
+	started time.Time
+
+	turnStreamsMu sync.Mutex
+	turnStreams   map[string]*turnStream
+
+	statusFlushOnce    sync.Once
+	statusFlushMu      sync.Mutex
+	statusFlushPending map[string]struct{}
+	statusFlushCh      chan struct{}
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {
@@ -32,13 +42,16 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	codexClient := codexrpc.New(cfg.Codex.Command)
+	codexClient := codexrpc.New(cfg.Codex)
 	app := &App{
-		cfg:     cfg,
-		cfgPath: cfgPath,
-		store:   store,
-		codex:   codexClient,
-		feishu:  feishu.New(cfg.Feishu),
+		cfg:           cfg,
+		cfgPath:       cfgPath,
+		store:         store,
+		codex:         codexClient,
+		feishu:        feishu.New(cfg.Feishu),
+		started:       time.Now(),
+		turnStreams:   map[string]*turnStream{},
+		statusFlushCh: make(chan struct{}, 1),
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu)
@@ -49,6 +62,7 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
 		return err
 	}
+	a.startStatusRefreshLoop(ctx)
 	a.recoverRuntimeState()
 	return a.feishu.Start(ctx)
 }
@@ -91,11 +105,29 @@ func (a *App) recoverRuntimeState() {
 	if cleared > 0 {
 		slog.Info("runtime session state recovery complete", "cleared_sessions", cleared)
 	}
+	a.expirePendingRequestsOnStartup()
+	_ = a.store.CleanupInboundSeen(time.Now().Add(-24 * time.Hour).Unix())
+	a.cleanupExpiredAttachments()
 }
 
 func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 	if msg == nil {
 		return
+	}
+	if a.isStaleInboundMessage(msg) {
+		slog.Info("feishu stale message ignored", "message_id", msg.MessageID, "created_at", msg.CreatedAt)
+		return
+	}
+	if duplicate, err := a.store.MarkInboundSeen(msg.MessageID, nonZero(msg.CreatedAt, time.Now().Unix())); err == nil && duplicate {
+		slog.Info("feishu duplicate message ignored by persistent store", "message_id", msg.MessageID)
+		return
+	} else if err != nil {
+		slog.Error("mark inbound seen", "message_id", msg.MessageID, "error", err)
+	}
+	sessionKey := a.makeSessionKey(msg)
+	logText := truncate(msg.Text, 160)
+	if a.shouldRedactInboundText(sessionKey, msg.UserID) {
+		logText = "[redacted pending input]"
 	}
 	slog.Info("feishu inbound",
 		"message_id", msg.MessageID,
@@ -103,8 +135,15 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 		"chat_type", msg.ChatType,
 		"user_id", msg.UserID,
 		"root_message_id", msg.RootMessageID,
-		"text", truncate(msg.Text, 160),
+		"text", logText,
+		"attachment_count", len(msg.Attachments),
 	)
+	if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
+		if err := a.handlePendingTextResponse(msg, pending); err != nil {
+			_ = a.replyError(msg, err)
+		}
+		return
+	}
 	if strings.TrimSpace(msg.Text) == "/" {
 		if err := a.sendCommandMenu(msg); err != nil {
 			slog.Error("send command menu", "error", err)
@@ -117,9 +156,28 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 		}
 		return
 	}
+	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
+		return
+	}
 	if err := a.enqueueSubmission(msg); err != nil {
 		_ = a.replyError(msg, err)
 	}
+}
+
+func (a *App) isStaleInboundMessage(msg *feishu.InboundMessage) bool {
+	if msg == nil || msg.CreatedAt == 0 {
+		return false
+	}
+	return msg.CreatedAt < a.started.Add(-30*time.Second).Unix()
+}
+
+func nonZero(values ...int64) int64 {
+	for _, value := range values {
+		if value != 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func (a *App) handleBotMenu(click *feishu.BotMenuClick) {
@@ -159,6 +217,10 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
+	attachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	if err != nil {
+		return err
+	}
 	if sess.ActiveTurnID != "" {
 		sess.Status = "queued"
 	}
@@ -183,6 +245,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		ChatName:         msg.ChatName,
 		TriggerMessageID: msg.MessageID,
 		InputText:        msg.Text,
+		Attachments:      attachments,
 		Status:           "queued",
 	}
 	id, err := a.store.CreateSubmission(sub)
@@ -199,9 +262,6 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		"active_thread_id", sess.ActiveThreadID,
 		"active_turn_id", sess.ActiveTurnID,
 	)
-	if err := a.sendStatusCardForSubmission(sub, msg, "queued"); err != nil {
-		slog.Error("send queued status card", "error", err, "submission", id)
-	}
 	if sess.ActiveTurnID == "" {
 		slog.Info("submission starting immediately",
 			"submission_id", id,
@@ -209,6 +269,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		)
 		return a.startNextSubmission(sessionKey)
 	}
+	a.sendSubmissionQueuedNotice(context.Background(), sub)
 	return nil
 }
 
@@ -267,16 +328,22 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	threadID := sess.ActiveThreadID
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	effectiveModel := firstNonEmpty(sess.ModelOverride, ws.Model, a.defaultModel())
 	if threadID != "" {
-		var resumeResp codexrpc.ThreadStartResult
-		if err := a.codex.Call(ctx, "thread/resume", map[string]any{
+		resumeParams := map[string]any{
 			"threadId":               threadID,
 			"persistExtendedHistory": true,
-		}, &resumeResp); err != nil {
+		}
+		if strings.TrimSpace(effectiveModel) != "" {
+			resumeParams["model"] = effectiveModel
+		}
+		var resumeResp codexrpc.ThreadStartResult
+		if err := a.codex.Call(ctx, "thread/resume", resumeParams, &resumeResp); err != nil {
 			slog.Warn("thread/resume failed; starting fresh thread",
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
 				"thread_id", threadID,
+				"model", effectiveModel,
 				"error", err,
 			)
 			threadID = ""
@@ -286,7 +353,14 @@ func (a *App) startNextSubmission(sessionKey string) error {
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
 				"thread_id", threadID,
+				"model", effectiveModel,
 			)
+			if strings.TrimSpace(resumeResp.Thread.Name) != "" {
+				sess.ActiveThreadName = resumeResp.Thread.Name
+			}
+			if strings.TrimSpace(resumeResp.Thread.Preview) != "" {
+				sess.ActiveThreadPreview = resumeResp.Thread.Preview
+			}
 		}
 	}
 	if threadID == "" {
@@ -298,8 +372,8 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"experimentalRawEvents":  false,
 			"persistExtendedHistory": true,
 		}
-		if strings.TrimSpace(ws.Model) != "" {
-			threadParams["model"] = ws.Model
+		if strings.TrimSpace(effectiveModel) != "" {
+			threadParams["model"] = effectiveModel
 		}
 		var threadResp codexrpc.ThreadStartResult
 		if err := a.codex.Call(ctx, "thread/start", threadParams, &threadResp); err != nil {
@@ -316,19 +390,64 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"thread_id", threadID,
+			"model", effectiveModel,
 		)
+		sess.ActiveThreadName = threadResp.Thread.Name
+		sess.ActiveThreadPreview = threadResp.Thread.Preview
+	}
+	turnID, err := a.startSubmissionTurn(ctx, sessionKey, threadID, sub, ws.Cwd, ws.ApprovalPolicy, effectiveModel)
+	if err != nil {
+		return err
+	}
+	slog.Info("turn started",
+		"session_key", sessionKey,
+		"submission_id", sub.ID,
+		"thread_id", threadID,
+		"turn_id", turnID,
+	)
+	sess.ActiveSubmissionID = sub.ID
+	sess.ActiveTurnID = turnID
+	sess.Status = "turn_in_progress"
+	sub.ThreadID = threadID
+	sub.TurnID = turnID
+	sub.Status = "running"
+	if err := a.store.UpsertSession(sess); err != nil {
+		return err
+	}
+	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
+		m.ThreadID = threadID
+		m.TurnID = turnID
+		m.Status = "running"
+	}); err != nil {
+		return err
+	}
+	a.noteTurnStarted(sessionKey, sub)
+	a.sendSubmissionStartedNotice(context.Background(), sub)
+	return nil
+}
+
+func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, model string) (string, error) {
+	if sub == nil {
+		return "", fmt.Errorf("nil submission")
 	}
 	turnParams := map[string]any{
-		"threadId": threadID,
-		"input": []map[string]any{
-			{"type": "text", "text": sub.InputText, "text_elements": []any{}},
-		},
-		"cwd":            ws.Cwd,
-		"approvalPolicy": ws.ApprovalPolicy,
+		"threadId":       threadID,
+		"input":          buildTurnInputs(sub),
+		"cwd":            cwd,
+		"approvalPolicy": approvalPolicy,
 	}
-	if model := firstNonEmpty(sess.ModelOverride, ws.Model, a.defaultModel()); strings.TrimSpace(model) != "" {
+	if len(turnParams["input"].([]map[string]any)) == 0 {
+		return "", fmt.Errorf("submission %q has no input", sub.ID)
+	}
+	if strings.TrimSpace(model) != "" {
 		turnParams["model"] = model
 	}
+	slog.Info("turn start request",
+		"session_key", sessionKey,
+		"submission_id", sub.ID,
+		"thread_id", threadID,
+		"model", model,
+	)
 	var turnResp codexrpc.TurnStartResult
 	if err := a.codex.Call(ctx, "turn/start", turnParams, &turnResp); err != nil {
 		slog.Error("turn/start failed",
@@ -337,31 +456,9 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"thread_id", threadID,
 			"error", err,
 		)
-		return err
+		return "", err
 	}
-	slog.Info("turn started",
-		"session_key", sessionKey,
-		"submission_id", sub.ID,
-		"thread_id", threadID,
-		"turn_id", turnResp.Turn.ID,
-	)
-	sess.ActiveSubmissionID = sub.ID
-	sess.ActiveTurnID = turnResp.Turn.ID
-	sess.Status = "turn_in_progress"
-	sub.ThreadID = threadID
-	sub.TurnID = turnResp.Turn.ID
-	sub.Status = "running"
-	if err := a.store.UpsertSession(sess); err != nil {
-		return err
-	}
-	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
-		m.ThreadID = threadID
-		m.TurnID = turnResp.Turn.ID
-		m.Status = "running"
-	}); err != nil {
-		return err
-	}
-	return a.refreshStatusCard(sub.ID)
+	return turnResp.Turn.ID, nil
 }
 
 func (a *App) makeSessionKey(msg *feishu.InboundMessage) string {

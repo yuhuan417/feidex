@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -20,35 +21,54 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 		var p struct {
 			ThreadID string `json:"threadId"`
 			TurnID   string `json:"turnId"`
+			ItemID   string `json:"itemId"`
 			Delta    string `json:"delta"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
-				sub.OutputText += p.Delta
-			})
+			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "agent_message", p.Delta)
 		}
 	case "item/reasoning/summaryTextDelta":
 		var p struct {
 			ThreadID string `json:"threadId"`
 			TurnID   string `json:"turnId"`
+			ItemID   string `json:"itemId"`
 			Delta    string `json:"delta"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
-				sub.SummaryText += p.Delta
-			})
+			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "reasoning", p.Delta)
 		}
 	case "item/commandExecution/outputDelta":
 		var p struct {
 			ThreadID string `json:"threadId"`
 			TurnID   string `json:"turnId"`
+			ItemID   string `json:"itemId"`
 			Delta    string `json:"delta"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
-				sub.CommandText += p.Delta
-				sub.CommandText = lastN(sub.CommandText, 1200)
-			})
+			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "command_execution", p.Delta)
+		}
+	case "item/fileChange/outputDelta":
+		var p struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+			ItemID   string `json:"itemId"`
+			Delta    string `json:"delta"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "file_change", p.Delta)
+		}
+	case "item/completed":
+		var p struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+			ItemID   string         `json:"itemId"`
+			Item     map[string]any `json:"item"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			if p.ItemID == "" {
+				p.ItemID = strings.TrimSpace(stringValue(p.Item["id"]))
+			}
+			a.completeTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, p.Item)
 		}
 	case "turn/plan/updated":
 		var p struct {
@@ -63,9 +83,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			for _, item := range p.Plan {
 				plan = append(plan, fmt.Sprintf("- [%s] %s", item.Status, item.Step))
 			}
-			a.updateSubmissionByTurn("", p.TurnID, func(sub *state.Submission) {
-				sub.PlanText = strings.Join(plan, "\n")
-			})
+			a.updatePendingPlan(p.TurnID, strings.Join(plan, "\n"))
 		}
 	case "turn/completed":
 		var p struct {
@@ -97,13 +115,23 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 				"turn_id", p.TurnID,
 				"message", p.Error.Message,
 			)
+			a.recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
 			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
 				sub.Status = "failed"
 				sub.SummaryText = p.Error.Message
 			})
 		}
 	case "serverRequest/resolved":
-		// no-op for MVP
+		var p struct {
+			ThreadID  string          `json:"threadId"`
+			RequestID json.RawMessage `json:"requestId"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			reqID := string(p.RequestID)
+			_ = a.store.UpdatePending(reqID, func(req *state.PendingRequest) { req.Status = "resolved" })
+			pending := a.store.PendingByID(reqID)
+			a.resumeSubmissionAfterRequest(pending)
+		}
 	}
 }
 
@@ -114,8 +142,12 @@ func (a *App) handleServerRequest(req codexrpc.RequestEnvelope) {
 		a.onCommandApproval(req)
 	case "item/fileChange/requestApproval":
 		a.onFileApproval(req)
+	case "item/permissions/requestApproval":
+		a.onPermissionsApproval(req)
 	case "item/tool/requestUserInput":
 		a.onToolUserInput(req)
+	case "mcpServer/elicitation/request":
+		a.onMcpElicitationRequest(req)
 	default:
 		_ = a.codex.ReplyError(req.ID, -32601, "unsupported server request")
 	}
@@ -151,19 +183,28 @@ func (a *App) onFileApproval(req codexrpc.RequestEnvelope) {
 	a.sendApprovalCard("file", req.ID, p.ThreadID, p.TurnID, p.ItemID, "文件变更审批\n"+p.Reason)
 }
 
-func (a *App) onToolUserInput(req codexrpc.RequestEnvelope) {
+func (a *App) onPermissionsApproval(req codexrpc.RequestEnvelope) {
 	var p struct {
-		ThreadID  string `json:"threadId"`
-		TurnID    string `json:"turnId"`
-		ItemID    string `json:"itemId"`
-		Questions []struct {
-			ID       string `json:"id"`
-			Question string `json:"question"`
-			Options  []struct {
-				Label string `json:"label"`
-			} `json:"options"`
-		} `json:"questions"`
+		ThreadID    string         `json:"threadId"`
+		TurnID      string         `json:"turnId"`
+		ItemID      string         `json:"itemId"`
+		Reason      string         `json:"reason"`
+		Permissions map[string]any `json:"permissions"`
 	}
+	if err := json.Unmarshal(req.Params, &p); err != nil {
+		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
+		return
+	}
+	body := "权限审批"
+	if strings.TrimSpace(p.Reason) != "" {
+		body += "\n" + p.Reason
+	}
+	body += "\n" + truncate(mustJSON(p.Permissions), 300)
+	a.sendPermissionsCard(req.ID, p.ThreadID, p.TurnID, p.ItemID, body, p.Permissions)
+}
+
+func (a *App) onToolUserInput(req codexrpc.RequestEnvelope) {
+	var p toolUserInputPayload
 	if err := json.Unmarshal(req.Params, &p); err != nil {
 		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
 		return
@@ -172,7 +213,40 @@ func (a *App) onToolUserInput(req codexrpc.RequestEnvelope) {
 		a.sendUserInputCard(req.ID, p)
 		return
 	}
-	_ = a.codex.ReplyError(req.ID, -32601, "complex request_user_input is not yet supported in this build")
+	a.sendUserInputFormCard(req.ID, p)
+}
+
+func (a *App) onMcpElicitationRequest(req codexrpc.RequestEnvelope) {
+	var header struct {
+		ServerName string `json:"serverName"`
+		ThreadID   string `json:"threadId"`
+		TurnID     string `json:"turnId"`
+		Mode       string `json:"mode"`
+		Message    string `json:"message"`
+		URL        string `json:"url"`
+	}
+	if err := json.Unmarshal(req.Params, &header); err != nil {
+		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
+		return
+	}
+	switch header.Mode {
+	case "url":
+		var payload elicitationURLPayload
+		if err := json.Unmarshal(req.Params, &payload); err != nil {
+			_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
+			return
+		}
+		a.sendElicitationURLCard(req.ID, payload)
+	case "form":
+		var payload elicitationFormPayload
+		if err := json.Unmarshal(req.Params, &payload); err != nil {
+			_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
+			return
+		}
+		a.sendElicitationFormCard(req.ID, payload)
+	default:
+		_ = a.codex.ReplyError(req.ID, -32601, "unsupported elicitation mode")
+	}
 }
 
 func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state.Submission)) {
@@ -181,7 +255,6 @@ func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state
 		return
 	}
 	_ = a.store.UpdateSubmission(sub.ID, mutate)
-	_ = a.refreshStatusCard(sub.ID)
 }
 
 func (a *App) finishTurn(threadID, turnID, status string) {
@@ -202,6 +275,9 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 		)
 		return
 	}
+
+	flush := a.flushTurnStream(context.Background(), threadID, turnID)
+
 	switch status {
 	case "completed":
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
@@ -230,15 +306,28 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 		)
 		finalText := strings.TrimSpace(sub.OutputText)
 		if finalText == "" {
-			finalText = "任务已结束。"
+			finalText = strings.TrimSpace(flush.LastError)
 		}
-		inThread := false
-		sess := a.store.GetSession(sessionKey)
-		if sess != nil && sess.ChatType == "group" {
-			inThread = a.cfg.Feishu.ReplyInThread
+		if finalText == "" {
+			switch sub.Status {
+			case "interrupted":
+				finalText = "任务已中断。"
+			case "failed":
+				finalText = "任务失败。"
+			default:
+				finalText = "任务已结束。"
+			}
 		}
-		_ = a.feishu.ReplyText(context.Background(), sub.TriggerMessageID, finalText, inThread)
-		_ = a.refreshStatusCard(sub.ID)
+		if !flush.SentOutput && strings.TrimSpace(sub.OutputText) != "" {
+			a.sendFinalMessages(context.Background(), sub, sub.OutputText, a.replyInThreadForSubmission(sub))
+			flush.SentOutput = true
+		} else if !flush.SentOutput && sub.Status != "completed" {
+			a.sendTurnEventMessages(context.Background(), sub, finalText, a.replyInThreadForSubmission(sub), "turn_terminal")
+		}
+		ctx := context.Background()
+		if err := a.sendOutboundFilesConfirmation(ctx, sub, finalText); err != nil {
+			slog.Error("send outbound files confirmation", "submission_id", sub.ID, "error", err)
+		}
 	}
 	sess := a.store.GetSession(sessionKey)
 	if sess != nil {
@@ -272,6 +361,7 @@ func (a *App) sendStatusCardForSubmission(sub *state.Submission, msg *feishu.Inb
 	id, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	if err == nil && id != "" {
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.StatusCardID = id })
+		a.recordMessageLink(id, "status_card", sub, "")
 	}
 	return err
 }
@@ -307,21 +397,94 @@ func (a *App) renderSubmissionCard(sub *state.Submission, status string) map[str
 		title = "已中断"
 		color = "grey"
 	}
-	body := fmt.Sprintf(
-		"输入: %s\n\n摘要: %s\n\n调试:\n- submission: `%s`\n- session: `%s`\n- thread: `%s`\n- turn: `%s`\n- finalized: `%t`",
-		truncate(sub.InputText, 120),
-		truncate(nonEmpty(sub.SummaryText, sub.CommandText, sub.PlanText, sub.OutputText), 400),
-		sub.ID,
-		sub.SessionKey,
-		firstNonEmpty(sub.ThreadID, "-"),
-		firstNonEmpty(sub.TurnID, "-"),
-		sub.Finalized,
-	)
-	buttons := []feishu.Button{
-		{Text: "中断", Type: "danger", Value: map[string]any{"action": "menu.interrupt", "session_key": sub.SessionKey}},
-		{Text: "线程列表", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sub.SessionKey}},
+	body := a.renderSubmissionCardBody(sub)
+	buttons := []feishu.Button{{Text: "线程列表", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sub.SessionKey}}}
+	switch status {
+	case "queued", "running", "turn_in_progress", "waiting_approval", "waiting_user_input":
+		buttons = append([]feishu.Button{{Text: "中断", Type: "danger", Value: map[string]any{"action": "menu.interrupt", "session_key": sub.SessionKey}}}, buttons...)
 	}
 	return a.feishu.SimpleStatusCard(title, color, body, buttons)
+}
+
+func (a *App) renderSubmissionCardBody(sub *state.Submission) string {
+	parts := make([]string, 0, 2)
+	if input := strings.TrimSpace(submissionInputPreview(sub)); input != "" && input != "-" {
+		parts = append(parts, "输入:\n"+a.prepareSubmissionCardMarkdown(sub, input))
+	}
+	if content := strings.TrimSpace(a.renderSubmissionLiveContent(sub)); content != "" {
+		parts = append(parts, "内容:\n"+content)
+	} else {
+		parts = append(parts, "内容:\n"+submissionStatusPlaceholder(sub.Status))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func (a *App) renderSubmissionLiveContent(sub *state.Submission) string {
+	parts := make([]string, 0, 4)
+	if plan := strings.TrimSpace(sub.PlanText); plan != "" {
+		parts = append(parts, "计划:\n"+a.prepareSubmissionCardMarkdown(sub, plan))
+	}
+	if summary := strings.TrimSpace(sub.SummaryText); summary != "" {
+		parts = append(parts, "摘要:\n"+a.prepareSubmissionCardMarkdown(sub, summary))
+	}
+	if command := strings.TrimSpace(sub.CommandText); command != "" {
+		parts = append(parts, "命令输出:\n"+a.prepareSubmissionCardMarkdown(sub, command))
+	}
+	if output := strings.TrimSpace(sub.OutputText); output != "" {
+		parts = append(parts, "回复:\n"+a.prepareSubmissionCardMarkdown(sub, output))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func (a *App) prepareSubmissionCardMarkdown(sub *state.Submission, text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+		text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
+	}
+	return normalizeCardMarkdown(text)
+}
+
+func normalizeCardMarkdown(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	fenceOpen := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			lines[i] = "```"
+			fenceOpen = !fenceOpen
+		}
+	}
+	text = strings.Join(lines, "\n")
+	if fenceOpen {
+		text += "\n```"
+	}
+	return text
+}
+
+func submissionStatusPlaceholder(status string) string {
+	switch status {
+	case "queued":
+		return "排队中..."
+	case "running", "turn_in_progress":
+		return "运行中..."
+	case "waiting_approval":
+		return "等待审批..."
+	case "waiting_user_input":
+		return "等待输入..."
+	case "completed":
+		return "任务已结束。"
+	case "interrupted":
+		return "任务已中断。"
+	default:
+		return "任务失败。"
+	}
 }
 
 func truncate(s string, n int) string {
@@ -332,22 +495,6 @@ func truncate(s string, n int) string {
 	return s[:n] + "..."
 }
 
-func nonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
-}
-
-func lastN(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[len(s)-n:]
-}
-
 func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string) {
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
@@ -355,12 +502,20 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 		return
 	}
 	requestKey := string(requestID)
-	card := a.feishu.SimpleStatusCard("等待审批", "orange", body, []feishu.Button{
-		{Text: "允许", Type: "primary", Value: map[string]any{"action": "approval." + kind + ".accept", "request_id": requestKey}},
+	buttons := []feishu.Button{
+		{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval." + kind + ".accept", "request_id": requestKey}},
+		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval." + kind + ".accept_session", "request_id": requestKey}},
 		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval." + kind + ".decline", "request_id": requestKey}},
-	})
+		{Text: "取消", Type: "default", Value: map[string]any{"action": "approval." + kind + ".cancel", "request_id": requestKey}},
+	}
+	card := a.feishu.SimpleStatusCard("等待审批", "orange", body, buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
+		a.recordMessageLink(msgID, "approval_card", sub, requestKey)
+		payload := map[string]any{}
+		if kind == "command" || kind == "file" {
+			payload = map[string]any{"body": body}
+		}
 		_ = a.store.UpsertPending(&state.PendingRequest{
 			ID:          requestKey,
 			Kind:        kind,
@@ -370,6 +525,7 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 			ItemID:      itemID,
 			OwnerUserID: sub.UserID,
 			FeishuMsgID: msgID,
+			PayloadJSON: mustJSON(payload),
 			Status:      "pending",
 			CreatedAt:   time.Now().Unix(),
 			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
@@ -381,18 +537,42 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
 }
 
-func (a *App) sendUserInputCard(requestID json.RawMessage, payload struct {
-	ThreadID  string `json:"threadId"`
-	TurnID    string `json:"turnId"`
-	ItemID    string `json:"itemId"`
-	Questions []struct {
-		ID       string `json:"id"`
-		Question string `json:"question"`
-		Options  []struct {
-			Label string `json:"label"`
-		} `json:"options"`
-	} `json:"questions"`
-}) {
+func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any) {
+	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		_ = a.codex.ReplyError(requestID, -32602, "no active session for permissions approval")
+		return
+	}
+	requestKey := string(requestID)
+	card := a.feishu.SimpleStatusCard("权限请求", "orange", body, []feishu.Button{
+		{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
+		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
+	})
+	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
+	if err == nil {
+		a.recordMessageLink(msgID, "permissions_card", sub, requestKey)
+		_ = a.store.UpsertPending(&state.PendingRequest{
+			ID:          requestKey,
+			Kind:        "permissions",
+			SessionKey:  sessionKey,
+			ThreadID:    threadID,
+			TurnID:      turnID,
+			ItemID:      itemID,
+			OwnerUserID: sub.UserID,
+			FeishuMsgID: msgID,
+			PayloadJSON: mustJSON(map[string]any{"permissions": permissions}),
+			Status:      "pending",
+			CreatedAt:   time.Now().Unix(),
+			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+		})
+		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_approval" })
+		_ = a.refreshStatusCard(sub.ID)
+		return
+	}
+	_ = a.codex.ReplyError(requestID, -32603, err.Error())
+}
+
+func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil || len(payload.Questions) == 0 {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
@@ -415,6 +595,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload struct {
 	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", q.Question, buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
+		a.recordMessageLink(msgID, "user_input_card", sub, string(requestID))
 		_ = a.store.UpsertPending(&state.PendingRequest{
 			ID:          string(requestID),
 			Kind:        "tool_request_user_input",

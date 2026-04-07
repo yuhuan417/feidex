@@ -1,5 +1,6 @@
 /.codex
 /.feidex-data
+/.feidex-attachments
 /config.toml
 /run.sh
 /feidex

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -21,50 +22,63 @@ type Snapshot struct {
 	Sessions        map[string]*Session        `json:"sessions"`
 	Submissions     map[string]*Submission     `json:"submissions"`
 	PendingRequests map[string]*PendingRequest `json:"pending_requests"`
+	MessageLinks    map[string]*MessageLink    `json:"message_links"`
+	InboundDedup    map[string]int64           `json:"inbound_dedup"`
 	Counters        Counters                   `json:"counters"`
 }
 
 type Counters struct {
 	NextSubmission int64 `json:"next_submission"`
+	NextLocalID    int64 `json:"next_local_id"`
 }
 
 type Session struct {
-	Key                string   `json:"key"`
-	WorkspaceID        string   `json:"workspace_id"`
-	ActiveThreadID     string   `json:"active_thread_id"`
-	ActiveTurnID       string   `json:"active_turn_id"`
-	ActiveSubmissionID string   `json:"active_submission_id"`
-	OwnerUserID        string   `json:"owner_user_id"`
-	ChatID             string   `json:"chat_id"`
-	ChatType           string   `json:"chat_type"`
-	RootMessageID      string   `json:"root_message_id"`
-	ModelOverride      string   `json:"model_override"`
-	Status             string   `json:"status"`
-	Queue              []string `json:"queue"`
-	UpdatedAt          int64    `json:"updated_at"`
+	Key                 string   `json:"key"`
+	WorkspaceID         string   `json:"workspace_id"`
+	ActiveThreadID      string   `json:"active_thread_id"`
+	ActiveThreadName    string   `json:"active_thread_name"`
+	ActiveThreadPreview string   `json:"active_thread_preview"`
+	ActiveTurnID        string   `json:"active_turn_id"`
+	ActiveSubmissionID  string   `json:"active_submission_id"`
+	OwnerUserID         string   `json:"owner_user_id"`
+	ChatID              string   `json:"chat_id"`
+	ChatType            string   `json:"chat_type"`
+	RootMessageID       string   `json:"root_message_id"`
+	ModelOverride       string   `json:"model_override"`
+	Status              string   `json:"status"`
+	Queue               []string `json:"queue"`
+	UpdatedAt           int64    `json:"updated_at"`
+}
+
+type SubmissionAttachment struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	LocalPath string `json:"local_path"`
 }
 
 type Submission struct {
-	ID               string `json:"id"`
-	SessionKey       string `json:"session_key"`
-	WorkspaceID      string `json:"workspace_id"`
-	ThreadID         string `json:"thread_id"`
-	TurnID           string `json:"turn_id"`
-	UserID           string `json:"user_id"`
-	UserName         string `json:"user_name"`
-	ChatID           string `json:"chat_id"`
-	ChatName         string `json:"chat_name"`
-	TriggerMessageID string `json:"trigger_message_id"`
-	StatusCardID     string `json:"status_card_id"`
-	InputText        string `json:"input_text"`
-	Status           string `json:"status"`
-	OutputText       string `json:"output_text"`
-	SummaryText      string `json:"summary_text"`
-	CommandText      string `json:"command_text"`
-	PlanText         string `json:"plan_text"`
-	Finalized        bool   `json:"finalized"`
-	CreatedAt        int64  `json:"created_at"`
-	UpdatedAt        int64  `json:"updated_at"`
+	ID               string                 `json:"id"`
+	SessionKey       string                 `json:"session_key"`
+	WorkspaceID      string                 `json:"workspace_id"`
+	ThreadID         string                 `json:"thread_id"`
+	TurnID           string                 `json:"turn_id"`
+	UserID           string                 `json:"user_id"`
+	UserName         string                 `json:"user_name"`
+	ChatID           string                 `json:"chat_id"`
+	ChatName         string                 `json:"chat_name"`
+	TriggerMessageID string                 `json:"trigger_message_id"`
+	StatusCardID     string                 `json:"status_card_id"`
+	InputText        string                 `json:"input_text"`
+	Attachments      []SubmissionAttachment `json:"attachments,omitempty"`
+	Status           string                 `json:"status"`
+	OutputText       string                 `json:"output_text"`
+	SummaryText      string                 `json:"summary_text"`
+	CommandText      string                 `json:"command_text"`
+	PlanText         string                 `json:"plan_text"`
+	FinalMessageIDs  []string               `json:"final_message_ids,omitempty"`
+	Finalized        bool                   `json:"finalized"`
+	CreatedAt        int64                  `json:"created_at"`
+	UpdatedAt        int64                  `json:"updated_at"`
 }
 
 type PendingRequest struct {
@@ -82,6 +96,17 @@ type PendingRequest struct {
 	ExpiresAt   int64  `json:"expires_at"`
 }
 
+type MessageLink struct {
+	MessageID    string `json:"message_id"`
+	Kind         string `json:"kind"`
+	SessionKey   string `json:"session_key,omitempty"`
+	SubmissionID string `json:"submission_id,omitempty"`
+	RequestID    string `json:"request_id,omitempty"`
+	ThreadID     string `json:"thread_id,omitempty"`
+	TurnID       string `json:"turn_id,omitempty"`
+	CreatedAt    int64  `json:"created_at"`
+}
+
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
@@ -92,7 +117,9 @@ func Open(path string) (*Store, error) {
 			Sessions:        map[string]*Session{},
 			Submissions:     map[string]*Submission{},
 			PendingRequests: map[string]*PendingRequest{},
-			Counters:        Counters{NextSubmission: 1},
+			MessageLinks:    map[string]*MessageLink{},
+			InboundDedup:    map[string]int64{},
+			Counters:        Counters{NextSubmission: 1, NextLocalID: 1},
 		},
 	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
@@ -117,8 +144,17 @@ func Open(path string) (*Store, error) {
 	if s.data.PendingRequests == nil {
 		s.data.PendingRequests = map[string]*PendingRequest{}
 	}
+	if s.data.MessageLinks == nil {
+		s.data.MessageLinks = map[string]*MessageLink{}
+	}
+	if s.data.InboundDedup == nil {
+		s.data.InboundDedup = map[string]int64{}
+	}
 	if s.data.Counters.NextSubmission <= 0 {
 		s.data.Counters.NextSubmission = 1
+	}
+	if s.data.Counters.NextLocalID <= 0 {
+		s.data.Counters.NextLocalID = 1
 	}
 	return s, nil
 }
@@ -160,6 +196,8 @@ func (s *Store) CreateSubmission(sub *Submission) (string, error) {
 	cp.ID = id
 	cp.CreatedAt = now
 	cp.UpdatedAt = now
+	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
+	cp.FinalMessageIDs = append([]string(nil), sub.FinalMessageIDs...)
 	s.data.Submissions[id] = &cp
 	return id, s.saveLocked()
 }
@@ -172,6 +210,8 @@ func (s *Store) GetSubmission(id string) *Submission {
 		return nil
 	}
 	cp := *sub
+	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
+	cp.FinalMessageIDs = append([]string(nil), sub.FinalMessageIDs...)
 	return &cp
 }
 
@@ -251,6 +291,75 @@ func (s *Store) AllSessions() []*Session {
 		out = append(out, &cp)
 	}
 	return out
+}
+
+func (s *Store) AllPendingRequests() []*PendingRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*PendingRequest, 0, len(s.data.PendingRequests))
+	for _, req := range s.data.PendingRequests {
+		cp := *req
+		out = append(out, &cp)
+	}
+	return out
+}
+
+func (s *Store) NextLocalID(prefix string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := strings.TrimSpace(prefix)
+	if id == "" {
+		id = "local"
+	}
+	value := fmt.Sprintf("%s-%s", id, formatID(s.data.Counters.NextLocalID))
+	s.data.Counters.NextLocalID++
+	return value, s.saveLocked()
+}
+
+func (s *Store) UpsertMessageLink(link *MessageLink) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if link == nil || link.MessageID == "" {
+		return nil
+	}
+	cp := *link
+	if cp.CreatedAt == 0 {
+		cp.CreatedAt = time.Now().Unix()
+	}
+	s.data.MessageLinks[cp.MessageID] = &cp
+	return s.saveLocked()
+}
+
+func (s *Store) MarkInboundSeen(messageID string, seenAt int64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(messageID) == "" {
+		return false, nil
+	}
+	if _, exists := s.data.InboundDedup[messageID]; exists {
+		return true, nil
+	}
+	if seenAt == 0 {
+		seenAt = time.Now().Unix()
+	}
+	s.data.InboundDedup[messageID] = seenAt
+	return false, s.saveLocked()
+}
+
+func (s *Store) CleanupInboundSeen(before int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for id, ts := range s.data.InboundDedup {
+		if ts < before {
+			delete(s.data.InboundDedup, id)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return s.saveLocked()
 }
 
 func (s *Store) ensureSessionLocked(key string) *Session {
