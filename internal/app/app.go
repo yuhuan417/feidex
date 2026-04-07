@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -27,6 +28,8 @@ type App struct {
 
 	turnStreamsMu sync.Mutex
 	turnStreams   map[string]*turnStream
+	liveThreadMu  sync.Mutex
+	liveThreads   map[string]string
 
 	statusFlushOnce    sync.Once
 	statusFlushMu      sync.Mutex
@@ -51,6 +54,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		feishu:        feishu.New(cfg.Feishu),
 		started:       time.Now(),
 		turnStreams:   map[string]*turnStream{},
+		liveThreads:   map[string]string{},
 		statusFlushCh: make(chan struct{}, 1),
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
@@ -227,7 +231,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	if sess.ActiveTurnID != "" {
+	if sessionHasInFlightSubmission(sess) {
 		sess.Status = "queued"
 	}
 	slog.Info("submission enqueue begin",
@@ -242,6 +246,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	if err := a.store.UpsertSession(sess); err != nil {
 		return err
 	}
+	logSessionState("submission enqueue session persisted", sessionKey, a.store.GetSession(sessionKey))
 	sub := &state.Submission{
 		SessionKey:       sessionKey,
 		WorkspaceID:      sess.WorkspaceID,
@@ -268,7 +273,8 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		"active_thread_id", sess.ActiveThreadID,
 		"active_turn_id", sess.ActiveTurnID,
 	)
-	if sess.ActiveTurnID == "" {
+	logSessionState("submission queued session snapshot", sessionKey, a.store.GetSession(sessionKey))
+	if !sessionHasInFlightSubmission(sess) {
 		slog.Info("submission starting immediately",
 			"submission_id", id,
 			"session_key", sessionKey,
@@ -281,7 +287,8 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 
 func (a *App) startNextSubmission(sessionKey string) error {
 	sess := a.store.GetSession(sessionKey)
-	if sess == nil || sess.ActiveTurnID != "" {
+	logSessionState("startNextSubmission entry", sessionKey, sess)
+	if sess == nil || sessionHasInFlightSubmission(sess) {
 		slog.Info("startNextSubmission skipped",
 			"session_key", sessionKey,
 			"has_session", sess != nil,
@@ -300,8 +307,10 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"session_key", sessionKey,
 			"error", err,
 		)
+		logSessionState("startNextSubmission empty-after-dequeue", sessionKey, a.store.GetSession(sessionKey))
 		return err
 	}
+	logSessionState("startNextSubmission after dequeue", sessionKey, a.store.GetSession(sessionKey))
 	sub := a.store.GetSubmission(subID)
 	if sub == nil {
 		slog.Warn("queued submission missing",
@@ -345,10 +354,17 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		threadID = ""
 		clearSessionThreadContext(sess)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 	effectiveModel := firstNonEmpty(sess.ModelOverride, ws.Model, a.defaultModel())
-	if threadID != "" {
+	threadIsLive := a.sessionHasLiveThread(sessionKey, threadID)
+	if threadID != "" && threadIsLive {
+		slog.Info("using live thread without resume",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"thread_id", threadID,
+			"workspace_id", sub.WorkspaceID,
+		)
+	}
+	if threadID != "" && !threadIsLive {
 		resumeParams := map[string]any{
 			"threadId":               threadID,
 			"persistExtendedHistory": true,
@@ -357,7 +373,16 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			resumeParams["model"] = effectiveModel
 		}
 		var resumeResp codexrpc.ThreadStartResult
-		if err := a.codex.Call(ctx, "thread/resume", resumeParams, &resumeResp); err != nil {
+		slog.Info("thread resume request",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"thread_id", threadID,
+			"model", effectiveModel,
+		)
+		resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := a.codex.Call(resumeCtx, "thread/resume", resumeParams, &resumeResp)
+		resumeCancel()
+		if err != nil {
 			slog.Warn("thread/resume failed; starting fresh thread",
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
@@ -395,12 +420,25 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			threadParams["model"] = effectiveModel
 		}
 		var threadResp codexrpc.ThreadStartResult
-		if err := a.codex.Call(ctx, "thread/start", threadParams, &threadResp); err != nil {
+		slog.Info("thread start request",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"workspace_id", sub.WorkspaceID,
+			"cwd", ws.Cwd,
+			"model", effectiveModel,
+		)
+		threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := a.codex.Call(threadCtx, "thread/start", threadParams, &threadResp)
+		threadCancel()
+		if err != nil {
 			slog.Error("thread/start failed",
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
+				"workspace_id", sub.WorkspaceID,
+				"cwd", ws.Cwd,
 				"error", err,
 			)
+			logSessionState("startNextSubmission thread-start-failed", sessionKey, a.store.GetSession(sessionKey))
 			return err
 		}
 		threadID = threadResp.Thread.ID
@@ -411,12 +449,50 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"model", effectiveModel,
 		)
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, threadResp.Thread.Name, threadResp.Thread.Preview)
+		a.markSessionThreadLive(sessionKey, threadID)
 	}
 	if threadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	}
-	turnID, err := a.startSubmissionTurn(ctx, sessionKey, threadID, sub, ws.Cwd, ws.ApprovalPolicy, effectiveModel)
+	if threadID != "" {
+		a.markSessionThreadLive(sessionKey, threadID)
+	}
+	sess.ActiveSubmissionID = sub.ID
+	sess.Status = "turn_starting"
+	sub.ThreadID = threadID
+	sub.Status = "running"
+	if err := a.store.UpsertSession(sess); err != nil {
+		return err
+	}
+	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
+		m.ThreadID = threadID
+		m.Status = "running"
+	}); err != nil {
+		return err
+	}
+	logSessionState("startNextSubmission session starting", sessionKey, a.store.GetSession(sessionKey))
+	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, ws.ApprovalPolicy, effectiveModel)
+	turnCancel()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Warn("turn start timed out; waiting for delayed notification",
+				"session_key", sessionKey,
+				"submission_id", sub.ID,
+				"thread_id", threadID,
+				"workspace_id", sub.WorkspaceID,
+			)
+			logSessionState("startNextSubmission awaiting turn-start-notification", sessionKey, a.store.GetSession(sessionKey))
+			return nil
+		}
+		slog.Error("turn start chain failed",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"thread_id", threadID,
+			"workspace_id", sub.WorkspaceID,
+			"error", err,
+		)
+		logSessionState("startNextSubmission turn-start-failed", sessionKey, a.store.GetSession(sessionKey))
 		return err
 	}
 	slog.Info("turn started",
@@ -434,6 +510,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	if err := a.store.UpsertSession(sess); err != nil {
 		return err
 	}
+	logSessionState("startNextSubmission session activated", sessionKey, a.store.GetSession(sessionKey))
 	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
 		m.ThreadID = threadID
 		m.TurnID = turnID
@@ -442,6 +519,12 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		return err
 	}
 	a.noteTurnStarted(sessionKey, sub)
+	slog.Info("startNextSubmission completed",
+		"session_key", sessionKey,
+		"submission_id", sub.ID,
+		"thread_id", threadID,
+		"turn_id", turnID,
+	)
 	return nil
 }
 

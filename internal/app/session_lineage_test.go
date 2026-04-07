@@ -68,3 +68,30 @@ func TestSessionCanResumeThreadForSubmissionRequiresMatchingWorkspace(t *testing
 		t.Fatal("expected missing thread workspace lineage to block resume")
 	}
 }
+
+func TestSessionLiveThreadMarkers(t *testing.T) {
+	a := &App{}
+	if a.sessionHasLiveThread("sess-1", "thread-1") {
+		t.Fatal("expected empty live-thread map to return false")
+	}
+	a.markSessionThreadLive("sess-1", "thread-1")
+	if !a.sessionHasLiveThread("sess-1", "thread-1") {
+		t.Fatal("expected live-thread marker to be stored")
+	}
+	a.clearSessionLiveThread("sess-1")
+	if a.sessionHasLiveThread("sess-1", "thread-1") {
+		t.Fatal("expected live-thread marker to be cleared")
+	}
+}
+
+func TestSessionHasInFlightSubmission(t *testing.T) {
+	if sessionHasInFlightSubmission(&state.Session{}) {
+		t.Fatal("expected empty session to be idle")
+	}
+	if !sessionHasInFlightSubmission(&state.Session{ActiveSubmissionID: "sub-1"}) {
+		t.Fatal("expected active submission to count as in-flight")
+	}
+	if !sessionHasInFlightSubmission(&state.Session{ActiveTurnID: "turn-1"}) {
+		t.Fatal("expected active turn to count as in-flight")
+	}
+}

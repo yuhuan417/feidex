@@ -806,7 +806,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 		LinkKind:      snapshot.LinkKind,
 		IsFinalAnswer: snapshot.IsFinalAnswer,
 	}
-	card := a.renderTurnItemCard(sub, payload, false, includeActions, "")
+	card := a.renderTurnItemCard(sub, payload, false, false, "")
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
@@ -828,11 +828,7 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 	if body == "" {
 		return ""
 	}
-	var buttons []feishu.Button
-	if includeActions {
-		buttons = turnActionButtons(sub, itemID)
-	}
-	card := a.renderCompactMarkdownCard(sub, title, color, "", body, buttons)
+	card := a.renderCompactMarkdownCard(sub, title, color, "", body, nil)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		a.sendTurnEventMessages(ctx, sub, body, a.replyInThreadForSubmission(sub), kind)
@@ -844,16 +840,13 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 
 func (a *App) renderTurnItemCard(sub *state.Submission, payload turnItemCardPayload, expanded bool, includeActions bool, requestID string) map[string]any {
 	_ = expanded
+	_ = includeActions
 	_ = requestID
-	buttons := make([]feishu.Button, 0, 3)
-	if includeActions && !payload.IsFinalAnswer {
-		buttons = append(buttons, turnActionButtons(sub, payload.ItemID)...)
-	}
 	if isReplyTurnItem(payload.ItemType) {
-		return a.renderReplyMarkdownCard(sub, replyTurnItemCardTitle(payload), payload.Color, replyTurnItemCardBody(payload), buttons)
+		return a.renderReplyMarkdownCard(sub, replyTurnItemCardTitle(payload), payload.Color, replyTurnItemCardBody(payload), nil)
 	}
 	meta, body := compactTurnItemCardContent(payload)
-	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, buttons)
+	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
 }
 
 func isReplyTurnItem(itemType string) bool {

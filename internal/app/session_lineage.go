@@ -6,6 +6,43 @@ import (
 	"feidex/internal/state"
 )
 
+func (a *App) markSessionThreadLive(sessionKey, threadID string) {
+	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
+		return
+	}
+	a.liveThreadMu.Lock()
+	defer a.liveThreadMu.Unlock()
+	if a.liveThreads == nil {
+		a.liveThreads = map[string]string{}
+	}
+	a.liveThreads[strings.TrimSpace(sessionKey)] = strings.TrimSpace(threadID)
+}
+
+func (a *App) sessionHasLiveThread(sessionKey, threadID string) bool {
+	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
+		return false
+	}
+	a.liveThreadMu.Lock()
+	defer a.liveThreadMu.Unlock()
+	return a.liveThreads[strings.TrimSpace(sessionKey)] == strings.TrimSpace(threadID)
+}
+
+func (a *App) clearSessionLiveThread(sessionKey string) {
+	if a == nil || strings.TrimSpace(sessionKey) == "" {
+		return
+	}
+	a.liveThreadMu.Lock()
+	defer a.liveThreadMu.Unlock()
+	delete(a.liveThreads, strings.TrimSpace(sessionKey))
+}
+
+func sessionHasInFlightSubmission(sess *state.Session) bool {
+	if sess == nil {
+		return false
+	}
+	return strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != ""
+}
+
 func clearSessionThreadContext(sess *state.Session) {
 	if sess == nil {
 		return

@@ -85,6 +85,21 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			}
 			a.updatePendingPlan(p.TurnID, strings.Join(plan, "\n"))
 		}
+	case "turn/started":
+		var p struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+			Turn     struct {
+				ID     string `json:"id"`
+				Status string `json:"status"`
+			} `json:"turn"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			turnID := strings.TrimSpace(firstNonEmpty(p.Turn.ID, p.TurnID))
+			if turnID != "" {
+				a.onTurnStartedNotification(p.ThreadID, turnID)
+			}
+		}
 	case "turn/completed":
 		var p struct {
 			ThreadID string `json:"threadId"`
@@ -133,6 +148,87 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			a.resumeSubmissionAfterRequest(pending)
 		}
 	}
+}
+
+func (a *App) onTurnStartedNotification(threadID, turnID string) {
+	threadID = strings.TrimSpace(threadID)
+	turnID = strings.TrimSpace(turnID)
+	if threadID == "" || turnID == "" {
+		return
+	}
+	sessionKey := ""
+	for _, candidate := range a.store.AllSessions() {
+		if candidate == nil {
+			continue
+		}
+		if strings.TrimSpace(candidate.ActiveThreadID) != threadID {
+			continue
+		}
+		if strings.TrimSpace(candidate.ActiveTurnID) == turnID {
+			return
+		}
+		if strings.TrimSpace(candidate.ActiveTurnID) != "" {
+			continue
+		}
+		if strings.TrimSpace(candidate.ActiveSubmissionID) == "" {
+			continue
+		}
+		sessionKey = candidate.Key
+		break
+	}
+	if sessionKey == "" {
+		return
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil {
+		slog.Warn("turn started notification missing session",
+			"session_key", sessionKey,
+			"thread_id", threadID,
+			"turn_id", turnID,
+		)
+		return
+	}
+	sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+	if sub == nil {
+		slog.Warn("turn started notification missing submission",
+			"session_key", sessionKey,
+			"submission_id", sess.ActiveSubmissionID,
+			"thread_id", threadID,
+			"turn_id", turnID,
+		)
+		return
+	}
+	sess.ActiveSubmissionID = sub.ID
+	sess.ActiveTurnID = turnID
+	sess.Status = "turn_in_progress"
+	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+	if err := a.store.UpsertSession(sess); err != nil {
+		slog.Error("turn started notification session bind failed",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"error", err,
+		)
+		return
+	}
+	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+		s.ThreadID = threadID
+		s.TurnID = turnID
+		s.Status = "running"
+	})
+	sub.ThreadID = threadID
+	sub.TurnID = turnID
+	sub.Status = "running"
+	a.noteTurnStarted(sessionKey, sub)
+	a.markSessionThreadLive(sessionKey, threadID)
+	slog.Info("turn started notification rebound pending submission",
+		"session_key", sessionKey,
+		"submission_id", sub.ID,
+		"thread_id", threadID,
+		"turn_id", turnID,
+	)
+	logSessionState("turn started notification session snapshot", sessionKey, a.store.GetSession(sessionKey))
 }
 
 func (a *App) handleServerRequest(req codexrpc.RequestEnvelope) {
@@ -315,15 +411,31 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 	}
 	sess := a.store.GetSession(sessionKey)
 	if sess != nil {
+		logSessionState("finishTurn before session clear", sessionKey, sess)
 		sess.ActiveTurnID = ""
 		sess.ActiveSubmissionID = ""
 		sess.Status = "idle"
 		_ = a.store.UpsertSession(sess)
-		slog.Info("session cleared active turn",
+		logSessionState("finishTurn after session clear", sessionKey, a.store.GetSession(sessionKey))
+		slog.Info("finishTurn scheduling next submission asynchronously",
 			"session_key", sessionKey,
 			"thread_id", sess.ActiveThreadID,
 		)
-		_ = a.startNextSubmission(sessionKey)
+		go a.startNextSubmissionAsync(sessionKey, "finishTurn")
+	}
+}
+
+func (a *App) startNextSubmissionAsync(sessionKey, source string) {
+	if strings.TrimSpace(sessionKey) == "" {
+		return
+	}
+	if err := a.startNextSubmission(sessionKey); err != nil {
+		slog.Error("async startNextSubmission failed",
+			"session_key", sessionKey,
+			"source", source,
+			"error", err,
+		)
+		logSessionState("async startNextSubmission failed snapshot", sessionKey, a.store.GetSession(sessionKey))
 	}
 }
 
@@ -363,6 +475,26 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 	// MVP: linear scan is acceptable.
 	for _, sess := range a.store.AllSessions() {
 		if turnID != "" && sess.ActiveTurnID == turnID {
+			sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+			if sub != nil {
+				return sess.Key, sub
+			}
+		}
+	}
+	if strings.TrimSpace(threadID) != "" {
+		for _, sess := range a.store.AllSessions() {
+			if sess == nil {
+				continue
+			}
+			if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
+				continue
+			}
+			if strings.TrimSpace(sess.ActiveSubmissionID) == "" {
+				continue
+			}
+			if strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(turnID) != "" && sess.ActiveTurnID != turnID {
+				continue
+			}
 			sub := a.store.GetSubmission(sess.ActiveSubmissionID)
 			if sub != nil {
 				return sess.Key, sub

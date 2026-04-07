@@ -55,6 +55,7 @@ func (a *App) commandNew(msg *feishu.InboundMessage) error {
 		return fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
 	clearSessionThreadContext(sess)
+	a.clearSessionLiveThread(sessionKey)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"

@@ -94,3 +94,77 @@ func TestTurnCompletionMessagesKeepsCompletedSilent(t *testing.T) {
 		t.Fatalf("expected no terminal notice for completed turn, got %q", terminalText)
 	}
 }
+
+func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	a := &App{store: store, turnStreams: map[string]*turnStream{}}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-1",
+		WorkspaceID:             "default",
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: "default",
+		ActiveSubmissionID:      "sub-1",
+		Status:                  "turn_starting",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+	_, err = a.store.CreateSubmission(&state.Submission{
+		ID:          "sub-1",
+		SessionKey:  "sess-1",
+		WorkspaceID: "default",
+		Status:      "queued",
+	})
+	if err != nil {
+		t.Fatalf("create submission: %v", err)
+	}
+
+	a.onTurnStartedNotification("thread-1", "turn-1")
+
+	sess := a.store.GetSession("sess-1")
+	if sess == nil {
+		t.Fatal("expected session")
+	}
+	if sess.ActiveTurnID != "turn-1" || sess.Status != "turn_in_progress" {
+		t.Fatalf("unexpected rebound session: %#v", sess)
+	}
+	sub := a.store.GetSubmission("sub-1")
+	if sub == nil {
+		t.Fatal("expected submission")
+	}
+	if sub.TurnID != "turn-1" || sub.ThreadID != "thread-1" || sub.Status != "running" {
+		t.Fatalf("unexpected rebound submission: %#v", sub)
+	}
+}
+
+func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	a := &App{store: store}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                "sess-1",
+		WorkspaceID:        "default",
+		ActiveThreadID:     "thread-1",
+		ActiveSubmissionID: "sub-1",
+		Status:             "turn_starting",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+	_, err = a.store.CreateSubmission(&state.Submission{
+		ID:          "sub-1",
+		SessionKey:  "sess-1",
+		WorkspaceID: "default",
+		Status:      "queued",
+	})
+	if err != nil {
+		t.Fatalf("create submission: %v", err)
+	}
+	sessionKey, sub := a.findSubmissionByTurn("thread-1", "turn-1")
+	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-1" {
+		t.Fatalf("unexpected fallback result: session=%q sub=%#v", sessionKey, sub)
+	}
+}

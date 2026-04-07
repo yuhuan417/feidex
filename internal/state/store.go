@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -236,6 +237,14 @@ func (s *Store) QueueSubmission(sessionKey, submissionID string) error {
 		sess.Queue = append(sess.Queue, submissionID)
 	}
 	sess.UpdatedAt = time.Now().Unix()
+	slog.Info("store queue submission",
+		"session_key", sessionKey,
+		"submission_id", submissionID,
+		"queue_len", len(sess.Queue),
+		"queue", sess.Queue,
+		"active_turn_id", sess.ActiveTurnID,
+		"active_submission_id", sess.ActiveSubmissionID,
+	)
 	return s.saveLocked()
 }
 
@@ -249,6 +258,14 @@ func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
 	next := sess.Queue[0]
 	sess.Queue = append([]string(nil), sess.Queue[1:]...)
 	sess.UpdatedAt = time.Now().Unix()
+	slog.Info("store dequeue submission",
+		"session_key", sessionKey,
+		"submission_id", next,
+		"queue_len", len(sess.Queue),
+		"queue", sess.Queue,
+		"active_turn_id", sess.ActiveTurnID,
+		"active_submission_id", sess.ActiveSubmissionID,
+	)
 	return next, s.saveLocked()
 }
 

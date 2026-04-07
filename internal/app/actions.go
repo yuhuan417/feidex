@@ -96,6 +96,7 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 		}, nil
 	}
 	clearSessionThreadContext(sess)
+	a.clearSessionLiveThread(sessionKey)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
@@ -310,6 +311,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	setSessionThreadContext(sess, workspaceID, threadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
+	a.markSessionThreadLive(sessionKey, threadID)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
