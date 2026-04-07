@@ -70,7 +70,7 @@ func outboundMessageCardMeta(kind string) (title, color string, replyClass bool)
 	case "final_message":
 		return "最终答复", "green", true
 	case "turn_output":
-		return "回复", "green", true
+		return "", "green", true
 	case "turn_reasoning":
 		return "思考", "grey", false
 	case "turn_command_execution":

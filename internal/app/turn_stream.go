@@ -441,7 +441,7 @@ func formatTurnCommandEvent(command, output, status string, exitCode *int, parti
 }
 
 func summarizeCommandExecution(command, output, status string, exitCode *int) string {
-	lines := []string{"命令执行:"}
+	lines := []string{}
 	if strings.TrimSpace(command) != "" {
 		lines = append(lines, markdownCodeBlock(strings.TrimSpace(command)))
 	}
@@ -850,7 +850,7 @@ func (a *App) renderTurnItemCard(sub *state.Submission, payload turnItemCardPayl
 		buttons = append(buttons, turnActionButtons(sub, payload.ItemID)...)
 	}
 	if isReplyTurnItem(payload.ItemType) {
-		return a.renderReplyMarkdownCard(sub, payload.Title, payload.Color, replyTurnItemCardBody(payload), buttons)
+		return a.renderReplyMarkdownCard(sub, replyTurnItemCardTitle(payload), payload.Color, replyTurnItemCardBody(payload), buttons)
 	}
 	meta, body := compactTurnItemCardContent(payload)
 	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, buttons)
@@ -866,6 +866,13 @@ func replyTurnItemCardBody(payload turnItemCardPayload) string {
 		body = stripTurnItemCardHeading(payload.DetailText, payload.Title, payload.ItemType)
 	}
 	return body
+}
+
+func replyTurnItemCardTitle(payload turnItemCardPayload) string {
+	if payload.IsFinalAnswer {
+		return payload.Title
+	}
+	return ""
 }
 
 func compactTurnItemCardContent(payload turnItemCardPayload) (string, string) {

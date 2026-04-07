@@ -27,7 +27,7 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	case "/threads":
 		all := len(fields) > 1 && fields[1] == "all"
 		return a.commandThreads(msg, all)
-	case "/interrupt":
+	case "/interrupt", "/stop":
 		return a.commandInterrupt(msg)
 	case "/status":
 		return a.commandStatus(msg)

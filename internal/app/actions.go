@@ -344,9 +344,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			resp["decision"] = "accept"
 		case "approval.command.accept_session":
 			resp["decision"] = "acceptForSession"
-		case "approval.command.cancel":
-			resp["decision"] = "cancel"
-		case "approval.command.decline":
+		case "approval.command.cancel", "approval.command.decline":
 			resp["decision"] = "decline"
 		}
 		_ = a.codex.Reply(json.RawMessage(requestID), resp)
@@ -357,9 +355,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			resp["decision"] = "accept"
 		case "approval.file.accept_session":
 			resp["decision"] = "acceptForSession"
-		case "approval.file.cancel":
-			resp["decision"] = "cancel"
-		case "approval.file.decline":
+		case "approval.file.cancel", "approval.file.decline":
 			resp["decision"] = "decline"
 		}
 		_ = a.codex.Reply(json.RawMessage(requestID), resp)
@@ -429,8 +425,6 @@ func (a *App) approvalDecisionText(action string) string {
 		return "已授权本次权限请求"
 	case "approval.permissions.accept_session":
 		return "已授权本会话权限请求"
-	case "approval.command.cancel", "approval.file.cancel":
-		return "已取消"
 	default:
 		return "已拒绝"
 	}

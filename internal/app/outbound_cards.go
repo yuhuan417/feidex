@@ -11,23 +11,26 @@ func newMarkdownBodyCard(title, color string) map[string]any {
 	if strings.TrimSpace(color) == "" {
 		color = "blue"
 	}
-	return map[string]any{
+	card := map[string]any{
 		"schema": "2.0",
 		"config": map[string]any{
 			"wide_screen_mode": true,
 			"update_multi":     true,
 		},
-		"header": map[string]any{
+		"body": map[string]any{
+			"elements": []map[string]any{},
+		},
+	}
+	if strings.TrimSpace(title) != "" {
+		card["header"] = map[string]any{
 			"title": map[string]any{
 				"tag":     "plain_text",
 				"content": strings.TrimSpace(title),
 			},
 			"template": color,
-		},
-		"body": map[string]any{
-			"elements": []map[string]any{},
-		},
+		}
 	}
+	return card
 }
 
 func appendMarkdownBodyCardElement(card map[string]any, elem map[string]any) {

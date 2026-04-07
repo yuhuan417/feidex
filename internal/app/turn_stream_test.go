@@ -110,7 +110,7 @@ func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	if got.StoreText != "/tmp/work" {
 		t.Fatalf("unexpected store text: %q", got.StoreText)
 	}
-	want := "命令执行:\n```\npwd\n```\nstatus=completed exit_code=0"
+	want := "```\npwd\n```\nstatus=completed exit_code=0"
 	if got.SendText != want {
 		t.Fatalf("unexpected send text:\nwant: %q\ngot:  %q", want, got.SendText)
 	}
@@ -217,6 +217,9 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		t.Fatalf("unexpected compact meta text: %q", got)
 	}
 	body, _ := elements[1]["content"].(string)
+	if strings.Contains(body, "命令执行:") {
+		t.Fatalf("expected redundant command title to be stripped, got: %q", body)
+	}
 	if !strings.Contains(body, "```\npwd\n```") {
 		t.Fatalf("expected command block in compact body, got: %q", body)
 	}
@@ -244,6 +247,9 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 	}
 
 	card := a.renderTurnItemCard(sub, payload, false, false, "")
+	if _, ok := card["header"]; ok {
+		t.Fatalf("expected normal reply card to omit header, got: %#v", card["header"])
+	}
 	elements := cardBodyElements(t, card)
 	if len(elements) != 1 {
 		t.Fatalf("expected single markdown element for reply, got %d", len(elements))
@@ -268,15 +274,24 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 	}
 	longText := strings.Repeat("hello ", 200)
 	payload := turnItemCardPayload{
-		SessionKey:  sub.SessionKey,
-		TurnID:      sub.TurnID,
-		ItemType:    "agent_message",
-		Title:       "最终答复",
-		Color:       "green",
-		SummaryText: longText,
+		SessionKey:    sub.SessionKey,
+		TurnID:        sub.TurnID,
+		ItemType:      "agent_message",
+		Title:         "最终答复",
+		Color:         "green",
+		SummaryText:   longText,
+		IsFinalAnswer: true,
 	}
 
 	card := a.renderTurnItemCard(sub, payload, false, false, "")
+	header, ok := card["header"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected final answer header, got: %#v", card["header"])
+	}
+	title, _ := header["title"].(map[string]any)
+	if got, _ := title["content"].(string); got != "最终答复" {
+		t.Fatalf("unexpected final answer title: %q", got)
+	}
 	elements := cardBodyElements(t, card)
 	if len(elements) != 1 {
 		t.Fatalf("unexpected reply elements: %#v", elements)

@@ -59,8 +59,8 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 		}
 	case "item/completed":
 		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
+			ThreadID string         `json:"threadId"`
+			TurnID   string         `json:"turnId"`
 			ItemID   string         `json:"itemId"`
 			Item     map[string]any `json:"item"`
 		}
@@ -304,29 +304,13 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 			"turn_id", turnID,
 			"status", sub.Status,
 		)
-		finalText := strings.TrimSpace(sub.OutputText)
-		if finalText == "" {
-			finalText = strings.TrimSpace(flush.LastError)
-		}
-		if finalText == "" {
-			switch sub.Status {
-			case "interrupted":
-				finalText = "任务已中断。"
-			case "failed":
-				finalText = "任务失败。"
-			default:
-				finalText = "任务已结束。"
-			}
-		}
-		if !flush.SentOutput && strings.TrimSpace(sub.OutputText) != "" {
-			a.sendFinalMessages(context.Background(), sub, sub.OutputText, a.replyInThreadForSubmission(sub))
+		replyText, terminalText := turnCompletionMessages(sub.Status, sub.OutputText, flush.LastError, flush.SentOutput)
+		if replyText != "" {
+			a.sendFinalMessages(context.Background(), sub, replyText, a.replyInThreadForSubmission(sub))
 			flush.SentOutput = true
-		} else if !flush.SentOutput && sub.Status != "completed" {
-			a.sendTurnEventMessages(context.Background(), sub, finalText, a.replyInThreadForSubmission(sub), "turn_terminal")
 		}
-		ctx := context.Background()
-		if err := a.sendOutboundFilesConfirmation(ctx, sub, finalText); err != nil {
-			slog.Error("send outbound files confirmation", "submission_id", sub.ID, "error", err)
+		if terminalText != "" {
+			a.sendTurnEventMessages(context.Background(), sub, terminalText, a.replyInThreadForSubmission(sub), "turn_terminal")
 		}
 	}
 	sess := a.store.GetSession(sessionKey)
@@ -341,6 +325,38 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 		)
 		_ = a.startNextSubmission(sessionKey)
 	}
+}
+
+func turnCompletionMessages(status, outputText, lastError string, sentOutput bool) (replyText, terminalText string) {
+	outputText = strings.TrimSpace(outputText)
+	lastError = strings.TrimSpace(lastError)
+	if !sentOutput && outputText != "" {
+		replyText = outputText
+	}
+
+	fallback := lastError
+	if fallback == "" {
+		switch status {
+		case "interrupted":
+			fallback = "任务已中断。"
+		case "failed":
+			fallback = "任务失败。"
+		default:
+			fallback = "任务已结束。"
+		}
+	}
+
+	switch status {
+	case "interrupted":
+		terminalText = "任务已中断。"
+	case "completed":
+		terminalText = ""
+	default:
+		if replyText == "" {
+			terminalText = fallback
+		}
+	}
+	return replyText, terminalText
 }
 
 func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
@@ -502,12 +518,7 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 		return
 	}
 	requestKey := string(requestID)
-	buttons := []feishu.Button{
-		{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval." + kind + ".accept", "request_id": requestKey}},
-		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval." + kind + ".accept_session", "request_id": requestKey}},
-		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval." + kind + ".decline", "request_id": requestKey}},
-		{Text: "取消", Type: "default", Value: map[string]any{"action": "approval." + kind + ".cancel", "request_id": requestKey}},
-	}
+	buttons := approvalButtons(kind, requestKey)
 	card := a.feishu.SimpleStatusCard("等待审批", "orange", body, buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
@@ -535,6 +546,14 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
+}
+
+func approvalButtons(kind, requestKey string) []feishu.Button {
+	return []feishu.Button{
+		{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval." + kind + ".accept", "request_id": requestKey}},
+		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval." + kind + ".accept_session", "request_id": requestKey}},
+		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval." + kind + ".decline", "request_id": requestKey}},
+	}
 }
 
 func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any) {

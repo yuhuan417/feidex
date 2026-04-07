@@ -54,3 +54,43 @@ func TestNormalizeCardMarkdownNormalizesFenceSyntax(t *testing.T) {
 		t.Fatalf("unexpected normalized markdown:\nwant: %q\ngot:  %q", want, got)
 	}
 }
+
+func TestApprovalButtonsOmitCancel(t *testing.T) {
+	buttons := approvalButtons("command", "req-1")
+	if len(buttons) != 3 {
+		t.Fatalf("expected 3 approval buttons, got %d", len(buttons))
+	}
+	for _, btn := range buttons {
+		if btn.Text == "取消" {
+			t.Fatalf("expected cancel button to be omitted, got %#v", buttons)
+		}
+	}
+}
+
+func TestTurnCompletionMessagesAlwaysNotifyInterrupted(t *testing.T) {
+	replyText, terminalText := turnCompletionMessages("interrupted", "partial answer", "", false)
+	if replyText != "partial answer" {
+		t.Fatalf("unexpected reply text: %q", replyText)
+	}
+	if terminalText != "任务已中断。" {
+		t.Fatalf("unexpected interrupted terminal text: %q", terminalText)
+	}
+
+	replyText, terminalText = turnCompletionMessages("interrupted", "partial answer", "", true)
+	if replyText != "" {
+		t.Fatalf("expected no reply resend after output already sent, got %q", replyText)
+	}
+	if terminalText != "任务已中断。" {
+		t.Fatalf("expected interrupted notification even after output sent, got %q", terminalText)
+	}
+}
+
+func TestTurnCompletionMessagesKeepsCompletedSilent(t *testing.T) {
+	replyText, terminalText := turnCompletionMessages("completed", "final answer", "", false)
+	if replyText != "final answer" {
+		t.Fatalf("unexpected completed reply text: %q", replyText)
+	}
+	if terminalText != "" {
+		t.Fatalf("expected no terminal notice for completed turn, got %q", terminalText)
+	}
+}
