@@ -792,6 +792,9 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
+	if a.quietModeEnabled() && !shouldDeliverTurnSnapshotInQuiet(snapshot) {
+		return ""
+	}
 	title, color := turnSnapshotCardMeta(snapshot)
 	payload := turnItemCardPayload{
 		SubmissionID:  sub.ID,
@@ -822,6 +825,9 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 
 func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind string, includeActions bool, itemID string) string {
 	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return ""
+	}
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(kind) {
 		return ""
 	}
 	body = strings.TrimSpace(body)

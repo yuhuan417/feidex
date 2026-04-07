@@ -8,6 +8,7 @@ group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
 reply_in_thread = true
+quiet = false
 
 [codex]
 command = "codex"
@@ -16,6 +17,8 @@ transport = "stdio"
 # ws_bearer_token = ""
 experimental_api = true
 service_name = "feidex"
+# model = "gpt-5.4"
+# reasoning_effort = "medium"
 
 [[workspace]]
 id = "default"

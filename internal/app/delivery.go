@@ -22,6 +22,9 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(kind) {
+		return nil
+	}
 	if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 		text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
 	}

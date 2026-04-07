@@ -15,6 +15,11 @@ import (
 	"feidex/internal/state"
 )
 
+type workspaceSettingOption struct {
+	Value string
+	Label string
+}
+
 func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	raw = strings.TrimSpace(raw)
 	fields := strings.Fields(raw)
@@ -22,30 +27,61 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return nil
 	}
 	switch fields[0] {
+	case "/menu":
+		return a.sendCommandMenu(msg)
+	case "/model":
+		return a.commandModel(msg)
+	case "/quiet":
+		return a.commandQuiet(msg, fields[1:])
 	case "/new":
 		return a.commandNew(msg)
 	case "/threads":
+		if len(fields) > 1 {
+			switch fields[1] {
+			case "new":
+				return a.commandThreadsNew(msg)
+			case "sandbox":
+				return a.showThreadSandboxMenu(msg)
+			case "policy":
+				return a.showThreadPolicyMenu(msg)
+			}
+		}
 		all := len(fields) > 1 && fields[1] == "all"
 		return a.commandThreads(msg, all)
 	case "/interrupt", "/stop":
 		return a.commandInterrupt(msg)
 	case "/status":
 		return a.commandStatus(msg)
-	case "/append":
-		if len(fields) < 2 {
-			return fmt.Errorf("usage: /append TEXT")
-		}
-		return a.commandAppend(msg, strings.TrimSpace(strings.TrimPrefix(raw, "/append")))
-	case "/workspace":
+	case "/workspace", "/cd":
 		return a.commandWorkspace(msg, fields[1:])
-	case "/model":
-		return a.commandModel(msg, fields[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
 }
 
+func isLocalCommand(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return false
+	}
+	switch fields[0] {
+	case "/model":
+		return len(fields) == 1
+	case "/quiet":
+		return true
+	case "/menu", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd":
+		return true
+	default:
+		return false
+	}
+}
+
 func (a *App) commandNew(msg *feishu.InboundMessage) error {
+	return a.commandThreadsNew(msg)
+}
+
+func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
 	sessionKey := a.makeSessionKey(msg)
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
@@ -131,6 +167,13 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 	}
 	lines := make([]string, 0, len(result.Data)+2)
 	lines = append(lines, "当前线程: "+currentLabel, "", "最近线程：")
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
+		lines = append(lines,
+			"当前 thread sandbox: "+renderThreadSettingValue(sess.ActiveThreadSandboxMode, workspace.SandboxMode),
+			"当前 thread policy: "+renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, workspace.ApprovalPolicy),
+			"",
+		)
+	}
 	buttons := make([]feishu.Button, 0, len(result.Data))
 	for idx, item := range result.Data {
 		label := renderThreadButtonLabel(item.Name, item.Preview, item.ID)
@@ -154,10 +197,42 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 			},
 		})
 	}
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
+		buttons = append(buttons,
+			feishu.Button{
+				Text: "配置 Thread Sandbox",
+				Type: "default",
+				Value: map[string]any{
+					"action":      "thread.sandbox.menu",
+					"session_key": sessionKey,
+				},
+			},
+			feishu.Button{
+				Text: "配置 Thread Policy",
+				Type: "default",
+				Value: map[string]any{
+					"action":      "thread.policy.menu",
+					"session_key": sessionKey,
+				},
+			},
+		)
+	}
 	body := strings.Join(lines, "\n")
 	card := a.feishu.SimpleStatusCard("线程列表", "blue", body, buttons)
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
+}
+
+func renderThreadSettingValue(override, fallback string) string {
+	override = strings.TrimSpace(override)
+	fallback = strings.TrimSpace(fallback)
+	if override != "" {
+		return "`" + override + "`"
+	}
+	if fallback != "" {
+		return "`" + fallback + "` (follow workspace)"
+	}
+	return "-"
 }
 
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
@@ -175,17 +250,6 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 		return err
 	}
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求中断当前任务。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-}
-
-func (a *App) commandStatus(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
-	sess := a.store.GetSession(sessionKey)
-	if sess == nil {
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前会话还没有任务。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID,
-		fmt.Sprintf("状态: %s\n工作区: %s\n线程: %s\n线程ID: %s\n排队: %d", sess.Status, firstNonEmpty(sess.WorkspaceID, a.defaultWorkspaceID()), currentThreadLabel(sess), firstNonEmpty(sess.ActiveThreadID, "-"), len(sess.Queue)),
-		msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }
 
 func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
@@ -219,6 +283,12 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 	if args[0] == "new" {
 		return a.beginWorkspaceNew(msg)
 	}
+	if args[0] == "sandbox" {
+		return a.showWorkspaceSandboxMenu(msg)
+	}
+	if args[0] == "policy" {
+		return a.showWorkspacePolicyMenu(msg)
+	}
 	if len(args) >= 2 && args[0] == "use" {
 		ws := config.FindWorkspace(a.cfg, args[1])
 		if ws == nil {
@@ -239,40 +309,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		}
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
-	return fmt.Errorf("usage: /workspace | /workspace list | /workspace new | /workspace use ID")
-}
-
-func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
-	sessionKey := a.makeSessionKey(msg)
-	sess := a.store.GetSession(sessionKey)
-	if sess == nil {
-		sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID, WorkspaceID: a.cfg.Workspaces[0].ID}
-	}
-	if len(args) == 0 || args[0] == "list" {
-		var result struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		if err := a.codex.Call(ctx, "model/list", map[string]any{"limit": 20, "includeHidden": false}, &result); err != nil {
-			return err
-		}
-		names := make([]string, 0, len(result.Data))
-		for _, item := range result.Data {
-			names = append(names, "- "+item.ID)
-		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, strings.Join(names, "\n"), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	}
-	if args[0] == "set" && len(args) >= 2 {
-		sess.ModelOverride = args[1]
-		if err := a.store.UpsertSession(sess); err != nil {
-			return err
-		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已设置模型为 "+args[1], msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	}
-	return fmt.Errorf("usage: /model list | /model set ID")
+	return fmt.Errorf("usage: /workspace | /workspace list | /workspace new | /workspace use ID | /workspace sandbox | /workspace policy")
 }
 
 func currentThreadLabel(sess *state.Session) string {
@@ -322,8 +359,13 @@ func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = sess.WorkspaceID
 	}
+	currentWS := config.FindWorkspace(a.cfg, currentID)
 	body := "选择工作区：\n\n当前工作区: `" + currentID + "`"
-	buttons := make([]feishu.Button, 0, len(a.cfg.Workspaces)+1)
+	if currentWS != nil {
+		body += "\n默认 sandbox: `" + currentWS.SandboxMode + "`"
+		body += "\n默认 policy: `" + currentWS.ApprovalPolicy + "`"
+	}
+	buttons := make([]feishu.Button, 0, len(a.cfg.Workspaces)+3)
 	for _, ws := range a.cfg.Workspaces {
 		label := ws.ID
 		btnType := "default"
@@ -349,8 +391,180 @@ func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
 			"session_key": sessionKey,
 		},
 	})
+	buttons = append(buttons, feishu.Button{
+		Text: "配置 Sandbox",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "workspace.sandbox.menu",
+			"session_key": sessionKey,
+		},
+	})
+	buttons = append(buttons, feishu.Button{
+		Text: "配置 Policy",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "workspace.policy.menu",
+			"session_key": sessionKey,
+		},
+	})
 	card := a.feishu.SimpleStatusCard("工作区", "blue", body, buttons)
 	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func workspaceSandboxOptions() []workspaceSettingOption {
+	return []workspaceSettingOption{
+		{Value: "read-only", Label: "read-only"},
+		{Value: "workspace-write", Label: "workspace-write"},
+		{Value: "danger-full-access", Label: "danger-full-access"},
+	}
+}
+
+func workspaceApprovalPolicyOptions() []workspaceSettingOption {
+	return []workspaceSettingOption{
+		{Value: "untrusted", Label: "untrusted"},
+		{Value: "on-request", Label: "on-request"},
+		{Value: "never", Label: "never"},
+	}
+}
+
+func (a *App) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
+	sessionKey = a.makeSessionKey(msg)
+	sess = a.store.GetSession(sessionKey)
+	workspaceID := a.defaultWorkspaceID()
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
+	}
+	return sessionKey, sess, config.FindWorkspace(a.cfg, workspaceID)
+}
+
+func (a *App) currentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
+	sessionKey, sess, ws = a.currentWorkspaceForMessage(msg)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return sessionKey, sess, ws, "", fmt.Errorf("当前没有活动线程")
+	}
+	return sessionKey, sess, ws, strings.TrimSpace(sess.ActiveThreadID), nil
+}
+
+func (a *App) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
+	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	if ws == nil {
+		return fmt.Errorf("current workspace not found")
+	}
+	body := "配置当前工作区默认 sandbox。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.SandboxMode + "`"
+	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions()))
+	for _, opt := range workspaceSandboxOptions() {
+		btnType := "default"
+		label := opt.Label
+		if opt.Value == ws.SandboxMode {
+			btnType = "primary"
+			label = "当前 · " + label
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: map[string]any{
+				"action":       "workspace.sandbox.set",
+				"session_key":  sessionKey,
+				"workspace_id": ws.ID,
+				"sandbox_mode": opt.Value,
+			},
+		})
+	}
+	card := a.feishu.SimpleStatusCard("配置 Sandbox", "blue", body, buttons)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
+	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	if ws == nil {
+		return fmt.Errorf("current workspace not found")
+	}
+	body := "配置当前工作区默认 approval policy。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.ApprovalPolicy + "`"
+	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions()))
+	for _, opt := range workspaceApprovalPolicyOptions() {
+		btnType := "default"
+		label := opt.Label
+		if opt.Value == ws.ApprovalPolicy {
+			btnType = "primary"
+			label = "当前 · " + label
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: map[string]any{
+				"action":          "workspace.policy.set",
+				"session_key":     sessionKey,
+				"workspace_id":    ws.ID,
+				"approval_policy": opt.Value,
+			},
+		})
+	}
+	card := a.feishu.SimpleStatusCard("配置 Policy", "blue", body, buttons)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
+	sessionKey, sess, ws, threadID, err := a.currentThreadForMessage(msg)
+	if err != nil {
+		return err
+	}
+	current := effectiveThreadSandboxMode(sess, ws)
+	body := "配置当前 thread 默认 sandbox。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
+	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions()))
+	for _, opt := range workspaceSandboxOptions() {
+		btnType := "default"
+		label := opt.Label
+		if opt.Value == current {
+			btnType = "primary"
+			label = "当前 · " + label
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: map[string]any{
+				"action":       "thread.sandbox.set",
+				"session_key":  sessionKey,
+				"thread_id":    threadID,
+				"sandbox_mode": opt.Value,
+			},
+		})
+	}
+	card := a.feishu.SimpleStatusCard("配置 Thread Sandbox", "blue", body, buttons)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
+	sessionKey, sess, ws, threadID, err := a.currentThreadForMessage(msg)
+	if err != nil {
+		return err
+	}
+	current := effectiveThreadApprovalPolicy(sess, ws)
+	body := "配置当前 thread 默认 approval policy。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
+	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions()))
+	for _, opt := range workspaceApprovalPolicyOptions() {
+		btnType := "default"
+		label := opt.Label
+		if opt.Value == current {
+			btnType = "primary"
+			label = "当前 · " + label
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: map[string]any{
+				"action":          "thread.policy.set",
+				"session_key":     sessionKey,
+				"thread_id":       threadID,
+				"approval_policy": opt.Value,
+			},
+		})
+	}
+	card := a.feishu.SimpleStatusCard("配置 Thread Policy", "blue", body, buttons)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
 }
 
@@ -398,7 +612,7 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
-		Model:          a.defaultModel(),
+		Model:          "",
 		ApprovalPolicy: "on-request",
 		SandboxMode:    "workspace-write",
 	})

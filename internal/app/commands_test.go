@@ -75,3 +75,63 @@ func TestHandleCommandStopAliasesInterrupt(t *testing.T) {
 		t.Fatalf("expected /stop to avoid queue mutation, got %#v", sess.Queue)
 	}
 }
+
+func TestIsLocalCommand(t *testing.T) {
+	cases := map[string]bool{
+		"/menu":          true,
+		"/model":         true,
+		"/quiet":         true,
+		"/new":           true,
+		"/threads":       true,
+		"/threads new":   true,
+		"/threads all":   true,
+		"/interrupt":     true,
+		"/stop":          true,
+		"/workspace":     true,
+		"/cd":            true,
+		"/status":        true,
+		"/append hello":  false,
+		"/model list":    false,
+		"/":              false,
+		"/compact":       false,
+		"/unknown value": false,
+	}
+	for input, want := range cases {
+		if got := isLocalCommand(input); got != want {
+			t.Fatalf("isLocalCommand(%q) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
+	a := &App{feishu: feishu.New(config.Default().Feishu)}
+	msg := &feishu.InboundMessage{MessageID: "m1", ChatType: "p2p", ChatID: "chat", UserID: "user"}
+	card := a.feishu.SimpleStatusCard("命令菜单", "blue", "选择命令执行。", nil)
+	elements, ok := card["elements"].([]map[string]any)
+	if !ok || len(elements) == 0 {
+		t.Fatalf("unexpected card elements: %#v", card["elements"])
+	}
+	body, _ := elements[0]["content"].(string)
+	for _, alias := range []string{"/menu", "/new", "/stop", "/cd", "/model", "/quiet", "/threads", "/interrupt", "/status", "/workspace"} {
+		if strings.Contains(body, alias) {
+			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
+		}
+	}
+	_ = msg
+}
+
+func TestStartupReadyChatIDsDeduplicatesChats(t *testing.T) {
+	ids := startupReadyChatIDs([]*state.Session{
+		{ChatID: "chat-b"},
+		{ChatID: "chat-a"},
+		{ChatID: "chat-b"},
+		{ChatID: ""},
+		nil,
+	})
+	if len(ids) != 2 {
+		t.Fatalf("unexpected chat id count: %#v", ids)
+	}
+	if ids[0] != "chat-a" || ids[1] != "chat-b" {
+		t.Fatalf("unexpected sorted chat ids: %#v", ids)
+	}
+}

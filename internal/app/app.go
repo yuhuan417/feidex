@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -68,7 +69,11 @@ func (a *App) Start(ctx context.Context) error {
 	}
 	a.startStatusRefreshLoop(ctx)
 	a.recoverRuntimeState()
-	return a.feishu.Start(ctx)
+	if err := a.feishu.Start(ctx); err != nil {
+		return err
+	}
+	go a.sendStartupReadyNotifications()
+	return nil
 }
 
 func (a *App) Stop(ctx context.Context) error {
@@ -154,17 +159,13 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 		}
 		return
 	}
-	if strings.TrimSpace(msg.Text) == "/" {
-		if err := a.sendCommandMenu(msg); err != nil {
-			slog.Error("send command menu", "error", err)
-		}
-		return
-	}
 	if strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
-		if err := a.handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
-			_ = a.replyError(msg, err)
+		if isLocalCommand(strings.TrimSpace(msg.Text)) {
+			if err := a.handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
+				_ = a.replyError(msg, err)
+			}
+			return
 		}
-		return
 	}
 	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
 		return
@@ -354,7 +355,10 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		threadID = ""
 		clearSessionThreadContext(sess)
 	}
-	effectiveModel := firstNonEmpty(sess.ModelOverride, ws.Model, a.defaultModel())
+	effectiveModel := configuredGlobalModel(a.cfg)
+	effectiveReasoningEffort := configuredGlobalReasoningEffort(a.cfg)
+	effectiveApprovalPolicy := effectiveThreadApprovalPolicy(sess, ws)
+	effectiveSandboxMode := effectiveThreadSandboxMode(sess, ws)
 	threadIsLive := a.sessionHasLiveThread(sessionKey, threadID)
 	if threadID != "" && threadIsLive {
 		slog.Info("using live thread without resume",
@@ -410,8 +414,8 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	if threadID == "" {
 		threadParams := map[string]any{
 			"cwd":                    ws.Cwd,
-			"approvalPolicy":         ws.ApprovalPolicy,
-			"sandbox":                ws.SandboxMode,
+			"approvalPolicy":         effectiveApprovalPolicy,
+			"sandbox":                effectiveSandboxMode,
 			"serviceName":            a.cfg.Codex.ServiceName,
 			"experimentalRawEvents":  false,
 			"persistExtendedHistory": true,
@@ -472,7 +476,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	}
 	logSessionState("startNextSubmission session starting", sessionKey, a.store.GetSession(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, ws.ApprovalPolicy, effectiveModel)
+	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveModel, effectiveReasoningEffort)
 	turnCancel()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -528,7 +532,20 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	return nil
 }
 
-func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, model string) (string, error) {
+func buildTurnSandboxPolicy(mode string) map[string]any {
+	switch strings.TrimSpace(mode) {
+	case "read-only":
+		return map[string]any{"type": "readOnly"}
+	case "workspace-write":
+		return map[string]any{"type": "workspaceWrite"}
+	case "danger-full-access":
+		return map[string]any{"type": "dangerFullAccess"}
+	default:
+		return nil
+	}
+}
+
+func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, model, reasoningEffort string) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}
@@ -544,10 +561,19 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 	if strings.TrimSpace(model) != "" {
 		turnParams["model"] = model
 	}
+	if strings.TrimSpace(reasoningEffort) != "" {
+		turnParams["effort"] = reasoningEffort
+	}
+	if sandboxPolicy := buildTurnSandboxPolicy(sandboxMode); sandboxPolicy != nil {
+		turnParams["sandboxPolicy"] = sandboxPolicy
+	}
 	slog.Info("turn start request",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
 		"thread_id", threadID,
+		"approval_policy", approvalPolicy,
+		"sandbox_mode", sandboxMode,
+		"reasoning_effort", reasoningEffort,
 		"model", model,
 	)
 	var turnResp codexrpc.TurnStartResult
@@ -590,13 +616,47 @@ func (a *App) defaultWorkspaceID() string {
 	return a.cfg.Workspaces[0].ID
 }
 
-func (a *App) defaultModel() string {
-	for _, ws := range a.cfg.Workspaces {
-		if strings.TrimSpace(ws.Model) != "" {
-			return ws.Model
+func startupReadyChatIDs(sessions []*state.Session) []string {
+	seen := map[string]struct{}{}
+	chatIDs := make([]string, 0, len(sessions))
+	for _, sess := range sessions {
+		if sess == nil {
+			continue
 		}
+		chatID := strings.TrimSpace(sess.ChatID)
+		if chatID == "" {
+			continue
+		}
+		if _, ok := seen[chatID]; ok {
+			continue
+		}
+		seen[chatID] = struct{}{}
+		chatIDs = append(chatIDs, chatID)
 	}
-	return "gpt-5.4"
+	sort.Strings(chatIDs)
+	return chatIDs
+}
+
+func (a *App) sendStartupReadyNotifications() {
+	if a == nil || a.feishu == nil || a.store == nil {
+		return
+	}
+	chatIDs := startupReadyChatIDs(a.store.AllSessions())
+	if len(chatIDs) == 0 {
+		slog.Info("startup ready notification skipped", "reason", "no_known_chats")
+		return
+	}
+	const text = "feidex 已就绪，可继续发送消息。"
+	for _, chatID := range chatIDs {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := a.feishu.SendText(ctx, chatID, text)
+		cancel()
+		if err != nil {
+			slog.Error("startup ready notification failed", "chat_id", chatID, "error", err)
+			continue
+		}
+		slog.Info("startup ready notification sent", "chat_id", chatID)
+	}
 }
 
 func (a *App) replyError(msg *feishu.InboundMessage, err error) error {
@@ -611,11 +671,13 @@ func (a *App) replyError(msg *feishu.InboundMessage, err error) error {
 
 func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
 	buttons := []feishu.Button{
-		{Text: "新会话", Type: "primary", Value: map[string]any{"action": "menu.new", "session_key": a.makeSessionKey(msg)}},
-		{Text: "线程列表", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": a.makeSessionKey(msg)}},
-		{Text: "中断任务", Type: "danger", Value: map[string]any{"action": "menu.interrupt", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/status", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/model", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/quiet", Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/workspace", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/threads", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": a.makeSessionKey(msg)}},
 	}
-	card := a.feishu.SimpleStatusCard("命令菜单", "blue", "选择一个命令执行。", buttons)
+	card := a.feishu.SimpleStatusCard("命令菜单", "blue", "选择命令执行。", buttons)
 	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
 }

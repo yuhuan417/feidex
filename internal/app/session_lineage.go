@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
@@ -49,6 +50,8 @@ func clearSessionThreadContext(sess *state.Session) {
 	}
 	sess.ActiveThreadID = ""
 	sess.ActiveThreadWorkspaceID = ""
+	sess.ActiveThreadApprovalPolicy = ""
+	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveThreadName = ""
 	sess.ActiveThreadPreview = ""
 }
@@ -61,6 +64,34 @@ func setSessionThreadContext(sess *state.Session, workspaceID, threadID, name, p
 	sess.ActiveThreadWorkspaceID = strings.TrimSpace(workspaceID)
 	sess.ActiveThreadName = strings.TrimSpace(name)
 	sess.ActiveThreadPreview = strings.TrimSpace(preview)
+}
+
+func setSessionThreadDefaults(sess *state.Session, approvalPolicy, sandboxMode string) {
+	if sess == nil {
+		return
+	}
+	sess.ActiveThreadApprovalPolicy = strings.TrimSpace(approvalPolicy)
+	sess.ActiveThreadSandboxMode = strings.TrimSpace(sandboxMode)
+}
+
+func effectiveThreadApprovalPolicy(sess *state.Session, ws *config.Workspace) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
+		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
+	}
+	if ws != nil {
+		return strings.TrimSpace(ws.ApprovalPolicy)
+	}
+	return ""
+}
+
+func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
+		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
+	}
+	if ws != nil {
+		return strings.TrimSpace(ws.SandboxMode)
+	}
+	return ""
 }
 
 func switchSessionWorkspace(sess *state.Session, workspaceID string) {

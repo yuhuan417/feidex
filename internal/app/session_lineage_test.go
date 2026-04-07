@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
@@ -93,5 +94,22 @@ func TestSessionHasInFlightSubmission(t *testing.T) {
 	}
 	if !sessionHasInFlightSubmission(&state.Session{ActiveTurnID: "turn-1"}) {
 		t.Fatal("expected active turn to count as in-flight")
+	}
+}
+
+func TestEffectiveThreadDefaultsPreferThreadOverride(t *testing.T) {
+	ws := &config.Workspace{
+		ApprovalPolicy: "on-request",
+		SandboxMode:    "workspace-write",
+	}
+	sess := &state.Session{
+		ActiveThreadApprovalPolicy: "untrusted",
+		ActiveThreadSandboxMode:    "read-only",
+	}
+	if got := effectiveThreadApprovalPolicy(sess, ws); got != "untrusted" {
+		t.Fatalf("approval policy = %q, want untrusted", got)
+	}
+	if got := effectiveThreadSandboxMode(sess, ws); got != "read-only" {
+		t.Fatalf("sandbox mode = %q, want read-only", got)
 	}
 }

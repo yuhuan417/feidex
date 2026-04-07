@@ -28,6 +28,7 @@ type FeishuConfig struct {
 	RespondToAtEveryone bool     `toml:"respond_to_at_everyone"`
 	CardEnabled         bool     `toml:"card_enabled"`
 	ReplyInThread       bool     `toml:"reply_in_thread"`
+	Quiet               bool     `toml:"quiet"`
 }
 
 type CodexConfig struct {
@@ -37,6 +38,8 @@ type CodexConfig struct {
 	WSBearerToken   string `toml:"ws_bearer_token"`
 	ExperimentalAPI bool   `toml:"experimental_api"`
 	ServiceName     string `toml:"service_name"`
+	Model           string `toml:"model"`
+	ReasoningEffort string `toml:"reasoning_effort"`
 }
 
 type Workspace struct {
@@ -93,6 +96,8 @@ func (c *Config) Normalize(baseDir string) error {
 	if c.Codex.Command == "" {
 		c.Codex.Command = "codex"
 	}
+	c.Codex.Model = strings.TrimSpace(c.Codex.Model)
+	c.Codex.ReasoningEffort = strings.TrimSpace(c.Codex.ReasoningEffort)
 	if strings.TrimSpace(c.Codex.Transport) == "" {
 		if strings.TrimSpace(c.Codex.WSURL) != "" {
 			c.Codex.Transport = "ws"

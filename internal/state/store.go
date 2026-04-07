@@ -34,22 +34,24 @@ type Counters struct {
 }
 
 type Session struct {
-	Key                     string   `json:"key"`
-	WorkspaceID             string   `json:"workspace_id"`
-	ActiveThreadID          string   `json:"active_thread_id"`
-	ActiveThreadWorkspaceID string   `json:"active_thread_workspace_id"`
-	ActiveThreadName        string   `json:"active_thread_name"`
-	ActiveThreadPreview     string   `json:"active_thread_preview"`
-	ActiveTurnID            string   `json:"active_turn_id"`
-	ActiveSubmissionID      string   `json:"active_submission_id"`
-	OwnerUserID             string   `json:"owner_user_id"`
-	ChatID                  string   `json:"chat_id"`
-	ChatType                string   `json:"chat_type"`
-	RootMessageID           string   `json:"root_message_id"`
-	ModelOverride           string   `json:"model_override"`
-	Status                  string   `json:"status"`
-	Queue                   []string `json:"queue"`
-	UpdatedAt               int64    `json:"updated_at"`
+	Key                        string   `json:"key"`
+	WorkspaceID                string   `json:"workspace_id"`
+	ActiveThreadID             string   `json:"active_thread_id"`
+	ActiveThreadWorkspaceID    string   `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy string   `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode    string   `json:"active_thread_sandbox_mode"`
+	ActiveThreadName           string   `json:"active_thread_name"`
+	ActiveThreadPreview        string   `json:"active_thread_preview"`
+	ActiveTurnID               string   `json:"active_turn_id"`
+	ActiveSubmissionID         string   `json:"active_submission_id"`
+	OwnerUserID                string   `json:"owner_user_id"`
+	ChatID                     string   `json:"chat_id"`
+	ChatType                   string   `json:"chat_type"`
+	RootMessageID              string   `json:"root_message_id"`
+	ModelOverride              string   `json:"model_override"`
+	Status                     string   `json:"status"`
+	Queue                      []string `json:"queue"`
+	UpdatedAt                  int64    `json:"updated_at"`
 }
 
 type SubmissionAttachment struct {
