@@ -39,7 +39,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 	}
 }
 
-func TestHandleCommandStopAliasesInterrupt(t *testing.T) {
+func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 	store, err := state.Open(t.TempDir() + "/state.json")
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -54,6 +54,16 @@ func TestHandleCommandStopAliasesInterrupt(t *testing.T) {
 		Queue:          []string{"sub-queued"},
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-queued",
+		SessionKey:       "feishu:p2p:chat:user",
+		WorkspaceID:      "default",
+		TriggerMessageID: "msg-queued",
+		SourceMessageIDs: []string{"msg-queued"},
+		Status:           "queued",
+	}); err != nil {
+		t.Fatalf("create submission: %v", err)
 	}
 
 	err = a.handleCommand(&feishu.InboundMessage{
@@ -71,8 +81,8 @@ func TestHandleCommandStopAliasesInterrupt(t *testing.T) {
 	if sess == nil {
 		t.Fatal("expected session to remain")
 	}
-	if len(sess.Queue) != 1 || sess.Queue[0] != "sub-queued" {
-		t.Fatalf("expected /stop to avoid queue mutation, got %#v", sess.Queue)
+	if len(sess.Queue) != 0 {
+		t.Fatalf("expected /stop to clear queued inputs, got %#v", sess.Queue)
 	}
 }
 

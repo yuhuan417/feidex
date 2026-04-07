@@ -90,16 +90,26 @@ func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
 	if sess.ActiveTurnID != "" {
 		return fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
+	discarded := a.discardSessionPendingInputs(sessionKey)
+	sess = a.store.GetSession(sessionKey)
+	if sess == nil {
+		sess = &state.Session{Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
+	}
 	clearSessionThreadContext(sess)
 	a.clearSessionLiveThread(sessionKey)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
 	sess.Queue = nil
+	sess.StagedImages = nil
 	if err := a.store.UpsertSession(sess); err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已切换到新线程模式。下一条消息会创建新线程，当前工作区保持不变。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	reply := "已切换到新线程模式。下一条消息会创建新线程，当前工作区保持不变。"
+	if discarded > 0 {
+		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
+	}
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }
 
 func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
@@ -238,7 +248,11 @@ func renderThreadSettingValue(override, fallback string) string {
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := a.makeSessionKey(msg)
 	sess := a.store.GetSession(sessionKey)
+	discarded := a.discardSessionPendingInputs(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
+		if discarded > 0 {
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		}
 		return fmt.Errorf("当前没有运行中的任务")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -249,7 +263,11 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	}, nil); err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求中断当前任务。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	reply := "已请求中断当前任务。"
+	if discarded > 0 {
+		reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
+	}
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }
 
 func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {

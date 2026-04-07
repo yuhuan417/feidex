@@ -34,24 +34,32 @@ type Counters struct {
 }
 
 type Session struct {
-	Key                        string   `json:"key"`
-	WorkspaceID                string   `json:"workspace_id"`
-	ActiveThreadID             string   `json:"active_thread_id"`
-	ActiveThreadWorkspaceID    string   `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy string   `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode    string   `json:"active_thread_sandbox_mode"`
-	ActiveThreadName           string   `json:"active_thread_name"`
-	ActiveThreadPreview        string   `json:"active_thread_preview"`
-	ActiveTurnID               string   `json:"active_turn_id"`
-	ActiveSubmissionID         string   `json:"active_submission_id"`
-	OwnerUserID                string   `json:"owner_user_id"`
-	ChatID                     string   `json:"chat_id"`
-	ChatType                   string   `json:"chat_type"`
-	RootMessageID              string   `json:"root_message_id"`
-	ModelOverride              string   `json:"model_override"`
-	Status                     string   `json:"status"`
-	Queue                      []string `json:"queue"`
-	UpdatedAt                  int64    `json:"updated_at"`
+	Key                        string               `json:"key"`
+	WorkspaceID                string               `json:"workspace_id"`
+	ActiveThreadID             string               `json:"active_thread_id"`
+	ActiveThreadWorkspaceID    string               `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy string               `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode    string               `json:"active_thread_sandbox_mode"`
+	ActiveThreadName           string               `json:"active_thread_name"`
+	ActiveThreadPreview        string               `json:"active_thread_preview"`
+	ActiveTurnID               string               `json:"active_turn_id"`
+	ActiveSubmissionID         string               `json:"active_submission_id"`
+	OwnerUserID                string               `json:"owner_user_id"`
+	ChatID                     string               `json:"chat_id"`
+	ChatType                   string               `json:"chat_type"`
+	RootMessageID              string               `json:"root_message_id"`
+	ModelOverride              string               `json:"model_override"`
+	Status                     string               `json:"status"`
+	Queue                      []string             `json:"queue"`
+	StagedImages               []SessionStagedImage `json:"staged_images,omitempty"`
+	UpdatedAt                  int64                `json:"updated_at"`
+}
+
+type SessionStagedImage struct {
+	SourceMessageID string `json:"source_message_id"`
+	Name            string `json:"name"`
+	LocalPath       string `json:"local_path"`
+	CreatedAt       int64  `json:"created_at"`
 }
 
 type SubmissionAttachment struct {
@@ -71,6 +79,7 @@ type Submission struct {
 	ChatID           string                 `json:"chat_id"`
 	ChatName         string                 `json:"chat_name"`
 	TriggerMessageID string                 `json:"trigger_message_id"`
+	SourceMessageIDs []string               `json:"source_message_ids,omitempty"`
 	StatusCardID     string                 `json:"status_card_id"`
 	InputText        string                 `json:"input_text"`
 	Attachments      []SubmissionAttachment `json:"attachments,omitempty"`
@@ -167,9 +176,7 @@ func (s *Store) GetSession(key string) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess, ok := s.data.Sessions[key]; ok {
-		cp := *sess
-		cp.Queue = append([]string(nil), sess.Queue...)
-		return &cp
+		return cloneSession(sess)
 	}
 	return nil
 }
@@ -180,10 +187,12 @@ func (s *Store) UpsertSession(sess *Session) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cp := *sess
+	cp := cloneSession(sess)
+	if cp == nil {
+		return nil
+	}
 	cp.UpdatedAt = time.Now().Unix()
-	cp.Queue = append([]string(nil), sess.Queue...)
-	s.data.Sessions[sess.Key] = &cp
+	s.data.Sessions[sess.Key] = cp
 	return s.saveLocked()
 }
 
@@ -196,13 +205,14 @@ func (s *Store) CreateSubmission(sub *Submission) (string, error) {
 		s.data.Counters.NextSubmission++
 	}
 	now := time.Now().Unix()
-	cp := *sub
+	cp := cloneSubmission(sub)
+	if cp == nil {
+		return "", nil
+	}
 	cp.ID = id
 	cp.CreatedAt = now
 	cp.UpdatedAt = now
-	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
-	cp.FinalMessageIDs = append([]string(nil), sub.FinalMessageIDs...)
-	s.data.Submissions[id] = &cp
+	s.data.Submissions[id] = cp
 	return id, s.saveLocked()
 }
 
@@ -213,10 +223,7 @@ func (s *Store) GetSubmission(id string) *Submission {
 	if !ok {
 		return nil
 	}
-	cp := *sub
-	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
-	cp.FinalMessageIDs = append([]string(nil), sub.FinalMessageIDs...)
-	return &cp
+	return cloneSubmission(sub)
 }
 
 func (s *Store) UpdateSubmission(id string, mutate func(*Submission)) error {
@@ -306,11 +313,30 @@ func (s *Store) AllSessions() []*Session {
 	defer s.mu.Unlock()
 	out := make([]*Session, 0, len(s.data.Sessions))
 	for _, sess := range s.data.Sessions {
-		cp := *sess
-		cp.Queue = append([]string(nil), sess.Queue...)
-		out = append(out, &cp)
+		out = append(out, cloneSession(sess))
 	}
 	return out
+}
+
+func cloneSession(sess *Session) *Session {
+	if sess == nil {
+		return nil
+	}
+	cp := *sess
+	cp.Queue = append([]string(nil), sess.Queue...)
+	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
+	return &cp
+}
+
+func cloneSubmission(sub *Submission) *Submission {
+	if sub == nil {
+		return nil
+	}
+	cp := *sub
+	cp.SourceMessageIDs = append([]string(nil), sub.SourceMessageIDs...)
+	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
+	cp.FinalMessageIDs = append([]string(nil), sub.FinalMessageIDs...)
+	return &cp
 }
 
 func (s *Store) AllPendingRequests() []*PendingRequest {

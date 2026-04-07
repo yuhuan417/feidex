@@ -23,8 +23,11 @@ func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
 }
 
 func TestShouldDeliverTurnSnapshotInQuiet(t *testing.T) {
-	if !shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "agent_message"}) {
-		t.Fatal("expected agent_message snapshot to be allowed")
+	if shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "agent_message"}) {
+		t.Fatal("expected non-final agent_message snapshot to be blocked")
+	}
+	if !shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "agent_message", IsFinalAnswer: true}) {
+		t.Fatal("expected final agent_message snapshot to be allowed")
 	}
 	if !shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "plan"}) {
 		t.Fatal("expected plan snapshot to be allowed")

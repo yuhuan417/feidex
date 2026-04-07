@@ -59,7 +59,8 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		statusFlushCh: make(chan struct{}, 1),
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
-	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu)
+	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
+	app.feishu.ConfigureMarkdownPreview(filepath.Join(cfg.DataDir, "feishu-md-preview.json"), "")
 	return app, nil
 }
 
@@ -72,6 +73,7 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.feishu.Start(ctx); err != nil {
 		return err
 	}
+	a.startMarkdownPreviewGCLoop(ctx)
 	go a.sendStartupReadyNotifications()
 	return nil
 }
@@ -92,7 +94,7 @@ func (a *App) recoverRuntimeState() {
 				"workspace_id", sess.WorkspaceID,
 			)
 		}
-		if sess.ActiveTurnID == "" && sess.ActiveSubmissionID == "" && len(sess.Queue) == 0 && sess.Status == "idle" {
+		if sess.ActiveTurnID == "" && sess.ActiveSubmissionID == "" && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && sess.Status == "idle" {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 				clearSessionThreadContext(sess)
 			}
@@ -110,6 +112,7 @@ func (a *App) recoverRuntimeState() {
 		sess.ActiveTurnID = ""
 		sess.ActiveSubmissionID = ""
 		sess.Queue = nil
+		sess.StagedImages = nil
 		sess.Status = "idle"
 		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 			clearSessionThreadContext(sess)
@@ -167,11 +170,43 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 			return
 		}
 	}
+	if a.shouldStageInboundImages(msg) {
+		if err := a.stageInboundImages(msg); err != nil {
+			_ = a.replyError(msg, err)
+		}
+		return
+	}
 	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
 		return
 	}
 	if err := a.enqueueSubmission(msg); err != nil {
 		_ = a.replyError(msg, err)
+	}
+}
+
+func (a *App) handleFeishuRecall(recall *feishu.MessageRecall) {
+	if recall == nil || strings.TrimSpace(recall.MessageID) == "" {
+		return
+	}
+	if discarded := a.discardPendingInputByMessageID(recall.MessageID); discarded {
+		slog.Info("feishu recall discarded pending input", "message_id", recall.MessageID, "chat_id", recall.ChatID)
+	}
+}
+
+func (a *App) handleFeishuReaction(reaction *feishu.MessageReaction) {
+	if reaction == nil || strings.TrimSpace(reaction.MessageID) == "" {
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(reaction.EmojiType), discardReactionEmoji) {
+		return
+	}
+	if discarded := a.discardPendingInputByMessageID(reaction.MessageID); discarded {
+		slog.Info("feishu reaction discarded pending input",
+			"message_id", reaction.MessageID,
+			"chat_id", reaction.ChatID,
+			"user_id", reaction.UserID,
+			"emoji_type", reaction.EmojiType,
+		)
 	}
 }
 
@@ -228,10 +263,13 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
-	attachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return err
 	}
+	stagedImages := append([]state.SessionStagedImage(nil), sess.StagedImages...)
+	attachments := append(stagedImageAttachments(stagedImages), inboundAttachments...)
+	sourceMessageIDs := uniqueStrings(append([]string{msg.MessageID}, stagedImageSourceMessageIDs(stagedImages)...))
 	if sessionHasInFlightSubmission(sess) {
 		sess.Status = "queued"
 	}
@@ -256,6 +294,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		ChatID:           msg.ChatID,
 		ChatName:         msg.ChatName,
 		TriggerMessageID: msg.MessageID,
+		SourceMessageIDs: sourceMessageIDs,
 		InputText:        msg.Text,
 		Attachments:      attachments,
 		Status:           "queued",
@@ -268,6 +307,14 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		return err
 	}
 	sub.ID = id
+	if len(stagedImages) > 0 {
+		if fresh := a.store.GetSession(sessionKey); fresh != nil {
+			fresh.StagedImages = nil
+			if err := a.store.UpsertSession(fresh); err != nil {
+				return err
+			}
+		}
+	}
 	slog.Info("submission queued",
 		"submission_id", id,
 		"session_key", sessionKey,
@@ -282,6 +329,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 		)
 		return a.startNextSubmission(sessionKey)
 	}
+	a.markSubmissionQueuedReactions(sub)
 	a.sendSubmissionQueuedNotice(context.Background(), sub)
 	return nil
 }
@@ -474,6 +522,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	}); err != nil {
 		return err
 	}
+	a.markSubmissionRunningReactions(sub)
 	logSessionState("startNextSubmission session starting", sessionKey, a.store.GetSession(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveModel, effectiveReasoningEffort)
@@ -489,6 +538,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			logSessionState("startNextSubmission awaiting turn-start-notification", sessionKey, a.store.GetSession(sessionKey))
 			return nil
 		}
+		a.clearSubmissionProcessingReactions(sub)
 		slog.Error("turn start chain failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,

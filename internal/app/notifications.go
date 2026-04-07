@@ -393,6 +393,7 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 	}
 	sub = a.store.GetSubmission(sub.ID)
 	if sub != nil {
+		a.clearSubmissionProcessingReactions(sub)
 		slog.Info("submission finalized",
 			"submission_id", sub.ID,
 			"session_key", sessionKey,
@@ -505,6 +506,9 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 }
 
 func (a *App) sendStatusCardForSubmission(sub *state.Submission, msg *feishu.InboundMessage, status string) error {
+	if a == nil || a.feishu == nil {
+		return nil
+	}
 	card := a.renderSubmissionCard(sub, status)
 	id, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	if err == nil && id != "" {

@@ -41,6 +41,18 @@ type InboundMessage struct {
 	CreatedAt     int64
 }
 
+type MessageRecall struct {
+	MessageID string
+	ChatID    string
+}
+
+type MessageReaction struct {
+	MessageID string
+	ChatID    string
+	UserID    string
+	EmojiType string
+}
+
 type Attachment struct {
 	Kind        string
 	ResourceKey string
@@ -65,20 +77,29 @@ type BotMenuClick struct {
 }
 
 type Adapter struct {
-	cfg       config.FeishuConfig
-	client    *lark.Client
-	wsClient  *larkws.Client
-	botOpenID string
-	cancel    context.CancelFunc
-	allowSet  map[string]struct{}
-	allowAll  bool
-	startOnce sync.Once
-	seenMu    sync.Mutex
-	seen      map[string]time.Time
+	cfg        config.FeishuConfig
+	client     *lark.Client
+	wsClient   *larkws.Client
+	botOpenID  string
+	cancel     context.CancelFunc
+	allowSet   map[string]struct{}
+	allowAll   bool
+	startOnce  sync.Once
+	seenMu     sync.Mutex
+	seen       map[string]time.Time
+	reactionMu sync.Mutex
+	reactions  map[string]string
 
 	onMessage    func(*InboundMessage)
 	onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error)
 	onBotMenu    func(*BotMenuClick)
+	onRecall     func(*MessageRecall)
+	onReaction   func(*MessageReaction)
+
+	previewMu         sync.Mutex
+	previewStatePath  string
+	previewProcessCWD string
+	previewer         *DriveMarkdownPreviewer
 }
 
 func New(cfg config.FeishuConfig) *Adapter {
@@ -95,18 +116,21 @@ func New(cfg config.FeishuConfig) *Adapter {
 		allowSet[v] = struct{}{}
 	}
 	return &Adapter{
-		cfg:      cfg,
-		client:   lark.NewClient(cfg.AppID, cfg.AppSecret),
-		allowSet: allowSet,
-		allowAll: allowAll,
-		seen:     map[string]time.Time{},
+		cfg:       cfg,
+		client:    lark.NewClient(cfg.AppID, cfg.AppSecret),
+		allowSet:  allowSet,
+		allowAll:  allowAll,
+		seen:      map[string]time.Time{},
+		reactions: map[string]string{},
 	}
 }
 
-func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*BotMenuClick)) {
+func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*BotMenuClick), onRecall func(*MessageRecall), onReaction func(*MessageReaction)) {
 	a.onMessage = onMessage
 	a.onCardAction = onCardAction
 	a.onBotMenu = onBotMenu
+	a.onRecall = onRecall
+	a.onReaction = onReaction
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -118,6 +142,22 @@ func (a *Adapter) Start(ctx context.Context) error {
 				if a.onMessage != nil {
 					if msg := a.convertMessage(event); msg != nil {
 						go a.onMessage(msg)
+					}
+				}
+				return nil
+			}).
+			OnP2MessageRecalledV1(func(ctx context.Context, event *larkim.P2MessageRecalledV1) error {
+				if a.onRecall != nil {
+					if recall := a.convertMessageRecall(event); recall != nil {
+						go a.onRecall(recall)
+					}
+				}
+				return nil
+			}).
+			OnP2MessageReactionCreatedV1(func(ctx context.Context, event *larkim.P2MessageReactionCreatedV1) error {
+				if a.onReaction != nil {
+					if reaction := a.convertMessageReaction(event); reaction != nil {
+						go a.onReaction(reaction)
 					}
 				}
 				return nil
@@ -192,6 +232,78 @@ func (a *Adapter) Stop() {
 	if a.cancel != nil {
 		a.cancel()
 	}
+}
+
+func (a *Adapter) ConfigureMarkdownPreview(statePath, processCWD string) {
+	a.previewMu.Lock()
+	defer a.previewMu.Unlock()
+	a.previewStatePath = strings.TrimSpace(statePath)
+	a.previewProcessCWD = strings.TrimSpace(processCWD)
+	a.previewer = nil
+}
+
+func (a *Adapter) AddReaction(ctx context.Context, messageID, emojiType string) error {
+	messageID = strings.TrimSpace(messageID)
+	emojiType = strings.TrimSpace(emojiType)
+	if messageID == "" || emojiType == "" {
+		return nil
+	}
+	key := reactionKey(messageID, emojiType)
+	a.reactionMu.Lock()
+	if a.reactions[key] != "" {
+		a.reactionMu.Unlock()
+		return nil
+	}
+	a.reactionMu.Unlock()
+	resp, err := a.client.Im.MessageReaction.Create(ctx, larkim.NewCreateMessageReactionReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewCreateMessageReactionReqBodyBuilder().
+			ReactionType(larkim.NewEmojiBuilder().EmojiType(emojiType).Build()).
+			Build()).
+		Build())
+	if err != nil {
+		return err
+	}
+	if !resp.Success() {
+		return fmt.Errorf("feishu add reaction failed code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	reactionID := ""
+	if resp.Data != nil && resp.Data.ReactionId != nil {
+		reactionID = *resp.Data.ReactionId
+	}
+	a.reactionMu.Lock()
+	a.reactions[key] = reactionID
+	a.reactionMu.Unlock()
+	return nil
+}
+
+func (a *Adapter) RemoveReaction(ctx context.Context, messageID, emojiType string) error {
+	messageID = strings.TrimSpace(messageID)
+	emojiType = strings.TrimSpace(emojiType)
+	if messageID == "" || emojiType == "" {
+		return nil
+	}
+	key := reactionKey(messageID, emojiType)
+	a.reactionMu.Lock()
+	reactionID := a.reactions[key]
+	a.reactionMu.Unlock()
+	if reactionID == "" {
+		return nil
+	}
+	resp, err := a.client.Im.MessageReaction.Delete(ctx, larkim.NewDeleteMessageReactionReqBuilder().
+		MessageId(messageID).
+		ReactionId(reactionID).
+		Build())
+	if err != nil {
+		return err
+	}
+	if !resp.Success() {
+		return fmt.Errorf("feishu remove reaction failed code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	a.reactionMu.Lock()
+	delete(a.reactions, key)
+	a.reactionMu.Unlock()
+	return nil
 }
 
 func (a *Adapter) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
@@ -598,6 +710,45 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	return out
 }
 
+func (a *Adapter) convertMessageRecall(event *larkim.P2MessageRecalledV1) *MessageRecall {
+	if event == nil || event.Event == nil || event.Event.MessageId == nil {
+		return nil
+	}
+	messageID := strings.TrimSpace(*event.Event.MessageId)
+	if messageID == "" {
+		return nil
+	}
+	recall := &MessageRecall{MessageID: messageID}
+	if event.Event.ChatId != nil {
+		recall.ChatID = strings.TrimSpace(*event.Event.ChatId)
+	}
+	return recall
+}
+
+func (a *Adapter) convertMessageReaction(event *larkim.P2MessageReactionCreatedV1) *MessageReaction {
+	if event == nil || event.Event == nil || event.Event.MessageId == nil || event.Event.ReactionType == nil {
+		return nil
+	}
+	if event.Event.OperatorType != nil && strings.TrimSpace(*event.Event.OperatorType) != "" && !strings.EqualFold(strings.TrimSpace(*event.Event.OperatorType), "user") {
+		return nil
+	}
+	messageID := strings.TrimSpace(*event.Event.MessageId)
+	emojiType := ""
+	if event.Event.ReactionType.EmojiType != nil {
+		emojiType = strings.TrimSpace(*event.Event.ReactionType.EmojiType)
+	}
+	userID := parseReactionUserID(event.Event.UserId)
+	if messageID == "" || emojiType == "" {
+		return nil
+	}
+	reaction := &MessageReaction{
+		MessageID: messageID,
+		UserID:    userID,
+		EmojiType: emojiType,
+	}
+	return reaction
+}
+
 func (a *Adapter) allowed(userID string) bool {
 	if a.allowAll {
 		return true
@@ -732,6 +883,22 @@ func mentionedEveryone(mentions []*larkim.MentionEvent) bool {
 		}
 	}
 	return false
+}
+
+func parseReactionUserID(value *larkim.UserId) string {
+	if value == nil {
+		return ""
+	}
+	switch {
+	case value.OpenId != nil && strings.TrimSpace(*value.OpenId) != "":
+		return strings.TrimSpace(*value.OpenId)
+	case value.UserId != nil && strings.TrimSpace(*value.UserId) != "":
+		return strings.TrimSpace(*value.UserId)
+	case value.UnionId != nil && strings.TrimSpace(*value.UnionId) != "":
+		return strings.TrimSpace(*value.UnionId)
+	default:
+		return ""
+	}
 }
 
 func resolveDownloadedFileName(resp *larkim.GetMessageResourceResp, attachment Attachment) string {
@@ -913,6 +1080,10 @@ func sanitizeAttachmentKey(key string) string {
 		return "attachment"
 	}
 	return b.String()
+}
+
+func reactionKey(messageID, emojiType string) string {
+	return strings.TrimSpace(messageID) + ":" + strings.TrimSpace(emojiType)
 }
 
 func (a *Adapter) fetchBotOpenID() string {

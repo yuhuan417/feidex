@@ -148,15 +148,25 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
 		}, nil
 	}
+	discarded := a.discardSessionPendingInputs(sessionKey)
+	sess = a.store.GetSession(sessionKey)
+	if sess == nil {
+		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
+	}
 	clearSessionThreadContext(sess)
 	a.clearSessionLiveThread(sessionKey)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
 	sess.Queue = nil
+	sess.StagedImages = nil
 	_ = a.store.UpsertSession(sess)
+	content := "已切换到新会话"
+	if discarded > 0 {
+		content = fmt.Sprintf("已切换到新会话，并丢弃 %d 条排队或暂存输入", discarded)
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已切换到新会话"},
+		Toast: &callback.Toast{Type: "success", Content: content},
 	}, nil
 }
 
@@ -253,7 +263,12 @@ func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	sess := a.store.GetSession(sessionKey)
+	discarded := a.discardSessionPendingInputs(sessionKey)
+	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" {
+		if discarded > 0 {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: fmt.Sprintf("已清空 %d 条排队或暂存输入", discarded)}}, nil
+		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前没有运行中的任务"}}, nil
 	}
 	if strings.TrimSpace(targetTurnID) != "" && sess.ActiveTurnID != targetTurnID {
@@ -265,7 +280,11 @@ func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targe
 			"turnId":   sess.ActiveTurnID,
 		}, nil)
 	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已请求中断"}}, nil
+	content := "已请求中断"
+	if discarded > 0 {
+		content = fmt.Sprintf("已请求中断，并清空 %d 条排队或暂存输入", discarded)
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: content}}, nil
 }
 
 func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

@@ -19,13 +19,16 @@ func (a *App) sendTurnEventMessages(ctx context.Context, sub *state.Submission, 
 }
 
 func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
-	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(kind) {
 		return nil
 	}
-	if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+	enablePreview := strings.TrimSpace(kind) == "final_message"
+	if enablePreview {
+		text = a.rewriteMarkdownPreviewText(ctx, sub, text)
+	} else if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 		text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
 	}
 	chunks := splitFeishuText(strings.TrimSpace(text), feishuTextChunkLimit)
@@ -37,7 +40,7 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	for _, chunk := range chunks {
 		var card map[string]any
 		if replyClass {
-			card = a.renderReplyMarkdownCard(sub, title, color, chunk, nil)
+			card = a.renderReplyMarkdownCardWithOptions(ctx, sub, title, color, chunk, nil, enablePreview)
 		} else {
 			card = a.renderCompactMarkdownCard(sub, title, color, "", chunk, nil)
 		}

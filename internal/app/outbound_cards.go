@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 
 	"feidex/internal/feishu"
@@ -75,8 +76,12 @@ func (a *App) prepareCardMarkdown(sub *state.Submission, text string) string {
 }
 
 func (a *App) renderReplyMarkdownCard(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+	return a.renderReplyMarkdownCardWithOptions(context.Background(), sub, title, color, body, buttons, false)
+}
+
+func (a *App) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	card := newMarkdownBodyCard(title, color)
-	if content := a.prepareCardMarkdown(sub, body); content != "" {
+	if content := a.prepareReplyCardMarkdown(ctx, sub, body, enablePreview); content != "" {
 		appendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,

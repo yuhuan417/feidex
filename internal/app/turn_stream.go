@@ -789,7 +789,7 @@ type turnItemCardPayload struct {
 }
 
 func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot, includeActions bool) string {
-	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
 	if a.quietModeEnabled() && !shouldDeliverTurnSnapshotInQuiet(snapshot) {
@@ -809,14 +809,18 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 		LinkKind:      snapshot.LinkKind,
 		IsFinalAnswer: snapshot.IsFinalAnswer,
 	}
-	card := a.renderTurnItemCard(sub, payload, false, false, "")
+	card := a.renderTurnItemCardWithOptions(ctx, sub, payload, false, false, "", snapshot.IsFinalAnswer)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
 		if fallback == "" {
 			fallback = payload.DetailText
 		}
-		a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
+		if snapshot.IsFinalAnswer {
+			a.sendFinalMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub))
+		} else {
+			a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
+		}
 		return ""
 	}
 	a.recordMessageLink(id, snapshot.LinkKind, sub, snapshot.ItemID)
@@ -824,7 +828,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 }
 
 func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind string, includeActions bool, itemID string) string {
-	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(kind) {
@@ -845,11 +849,15 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 }
 
 func (a *App) renderTurnItemCard(sub *state.Submission, payload turnItemCardPayload, expanded bool, includeActions bool, requestID string) map[string]any {
+	return a.renderTurnItemCardWithOptions(context.Background(), sub, payload, expanded, includeActions, requestID, false)
+}
+
+func (a *App) renderTurnItemCardWithOptions(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, expanded bool, includeActions bool, requestID string, enablePreview bool) map[string]any {
 	_ = expanded
 	_ = includeActions
 	_ = requestID
 	if isReplyTurnItem(payload.ItemType) {
-		return a.renderReplyMarkdownCard(sub, replyTurnItemCardTitle(payload), payload.Color, replyTurnItemCardBody(payload), nil)
+		return a.renderReplyMarkdownCardWithOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, replyTurnItemCardBody(payload), nil, enablePreview)
 	}
 	meta, body := compactTurnItemCardContent(payload)
 	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
