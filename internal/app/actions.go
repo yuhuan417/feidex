@@ -640,7 +640,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	if strings.TrimSpace(effectiveModel) != "" {
 		params["model"] = effectiveModel
 	}
-	slog.Info("manual thread resume request",
+	slog.Debug("manual thread resume request",
 		"session_key", sessionKey,
 		"thread_id", threadID,
 		"model", effectiveModel,

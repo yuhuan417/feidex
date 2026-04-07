@@ -121,7 +121,7 @@ func (a *App) recoverRuntimeState() {
 		cleared++
 	}
 	if cleared > 0 {
-		slog.Info("runtime session state recovery complete", "cleared_sessions", cleared)
+		slog.Debug("runtime session state recovery complete", "cleared_sessions", cleared)
 	}
 	a.expirePendingRequestsOnStartup()
 	_ = a.store.CleanupInboundSeen(time.Now().Add(-24 * time.Hour).Unix())
@@ -133,11 +133,11 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 		return
 	}
 	if a.isStaleInboundMessage(msg) {
-		slog.Info("feishu stale message ignored", "message_id", msg.MessageID, "created_at", msg.CreatedAt)
+		slog.Debug("feishu stale message ignored", "message_id", msg.MessageID, "created_at", msg.CreatedAt)
 		return
 	}
 	if duplicate, err := a.store.MarkInboundSeen(msg.MessageID, nonZero(msg.CreatedAt, time.Now().Unix())); err == nil && duplicate {
-		slog.Info("feishu duplicate message ignored by persistent store", "message_id", msg.MessageID)
+		slog.Debug("feishu duplicate message ignored by persistent store", "message_id", msg.MessageID)
 		return
 	} else if err != nil {
 		slog.Error("mark inbound seen", "message_id", msg.MessageID, "error", err)
@@ -147,7 +147,7 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 	if a.shouldRedactInboundText(sessionKey, msg.UserID) {
 		logText = "[redacted pending input]"
 	}
-	slog.Info("feishu inbound",
+	slog.Debug("feishu inbound",
 		"message_id", msg.MessageID,
 		"chat_id", msg.ChatID,
 		"chat_type", msg.ChatType,
@@ -189,7 +189,7 @@ func (a *App) handleFeishuRecall(recall *feishu.MessageRecall) {
 		return
 	}
 	if discarded := a.discardPendingInputByMessageID(recall.MessageID); discarded {
-		slog.Info("feishu recall discarded pending input", "message_id", recall.MessageID, "chat_id", recall.ChatID)
+		slog.Debug("feishu recall discarded pending input", "message_id", recall.MessageID, "chat_id", recall.ChatID)
 	}
 }
 
@@ -201,7 +201,7 @@ func (a *App) handleFeishuReaction(reaction *feishu.MessageReaction) {
 		return
 	}
 	if discarded := a.discardPendingInputByMessageID(reaction.MessageID); discarded {
-		slog.Info("feishu reaction discarded pending input",
+		slog.Debug("feishu reaction discarded pending input",
 			"message_id", reaction.MessageID,
 			"chat_id", reaction.ChatID,
 			"user_id", reaction.UserID,
@@ -273,7 +273,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	if sessionHasInFlightSubmission(sess) {
 		sess.Status = "queued"
 	}
-	slog.Info("submission enqueue begin",
+	slog.Debug("submission enqueue begin",
 		"session_key", sessionKey,
 		"chat_id", msg.ChatID,
 		"user_id", msg.UserID,
@@ -315,7 +315,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 			}
 		}
 	}
-	slog.Info("submission queued",
+	slog.Debug("submission queued",
 		"submission_id", id,
 		"session_key", sessionKey,
 		"active_thread_id", sess.ActiveThreadID,
@@ -323,7 +323,7 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	)
 	logSessionState("submission queued session snapshot", sessionKey, a.store.GetSession(sessionKey))
 	if !sessionHasInFlightSubmission(sess) {
-		slog.Info("submission starting immediately",
+		slog.Debug("submission starting immediately",
 			"submission_id", id,
 			"session_key", sessionKey,
 		)
@@ -338,7 +338,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	sess := a.store.GetSession(sessionKey)
 	logSessionState("startNextSubmission entry", sessionKey, sess)
 	if sess == nil || sessionHasInFlightSubmission(sess) {
-		slog.Info("startNextSubmission skipped",
+		slog.Debug("startNextSubmission skipped",
 			"session_key", sessionKey,
 			"has_session", sess != nil,
 			"active_turn_id", func() string {
@@ -352,7 +352,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	}
 	subID, err := a.store.DequeueSubmission(sessionKey)
 	if err != nil || subID == "" {
-		slog.Info("startNextSubmission no queued item",
+		slog.Debug("startNextSubmission no queued item",
 			"session_key", sessionKey,
 			"error", err,
 		)
@@ -382,7 +382,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	if sess == nil {
 		return fmt.Errorf("session %q disappeared after dequeue", sessionKey)
 	}
-	slog.Info("startNextSubmission picked",
+	slog.Debug("startNextSubmission picked",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
 		"workspace_id", sub.WorkspaceID,
@@ -392,7 +392,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	threadID := sess.ActiveThreadID
 	if !sessionCanResumeThreadForSubmission(sess, sub) {
 		if strings.TrimSpace(sess.ActiveThreadID) != "" {
-			slog.Info("dropping session thread lineage for new submission",
+			slog.Debug("dropping session thread lineage for new submission",
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
 				"submission_workspace_id", sub.WorkspaceID,
@@ -409,7 +409,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	effectiveSandboxMode := effectiveThreadSandboxMode(sess, ws)
 	threadIsLive := a.sessionHasLiveThread(sessionKey, threadID)
 	if threadID != "" && threadIsLive {
-		slog.Info("using live thread without resume",
+		slog.Debug("using live thread without resume",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"thread_id", threadID,
@@ -425,7 +425,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			resumeParams["model"] = effectiveModel
 		}
 		var resumeResp codexrpc.ThreadStartResult
-		slog.Info("thread resume request",
+		slog.Debug("thread resume request",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"thread_id", threadID,
@@ -445,7 +445,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			threadID = ""
 			clearSessionThreadContext(sess)
 		} else {
-			slog.Info("thread resumed",
+			slog.Debug("thread resumed",
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
 				"thread_id", threadID,
@@ -472,7 +472,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			threadParams["model"] = effectiveModel
 		}
 		var threadResp codexrpc.ThreadStartResult
-		slog.Info("thread start request",
+		slog.Debug("thread start request",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"workspace_id", sub.WorkspaceID,
@@ -494,7 +494,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			return err
 		}
 		threadID = threadResp.Thread.ID
-		slog.Info("thread started",
+		slog.Debug("thread started",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"thread_id", threadID,
@@ -549,7 +549,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		logSessionState("startNextSubmission turn-start-failed", sessionKey, a.store.GetSession(sessionKey))
 		return err
 	}
-	slog.Info("turn started",
+	slog.Debug("turn started",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
 		"thread_id", threadID,
@@ -573,7 +573,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		return err
 	}
 	a.noteTurnStarted(sessionKey, sub)
-	slog.Info("startNextSubmission completed",
+	slog.Debug("startNextSubmission completed",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
 		"thread_id", threadID,
@@ -617,7 +617,7 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 	if sandboxPolicy := buildTurnSandboxPolicy(sandboxMode); sandboxPolicy != nil {
 		turnParams["sandboxPolicy"] = sandboxPolicy
 	}
-	slog.Info("turn start request",
+	slog.Debug("turn start request",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
 		"thread_id", threadID,
@@ -693,7 +693,7 @@ func (a *App) sendStartupReadyNotifications() {
 	}
 	chatIDs := startupReadyChatIDs(a.store.AllSessions())
 	if len(chatIDs) == 0 {
-		slog.Info("startup ready notification skipped", "reason", "no_known_chats")
+		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return
 	}
 	const text = "feidex 已就绪，可继续发送消息。"
@@ -705,7 +705,7 @@ func (a *App) sendStartupReadyNotifications() {
 			slog.Error("startup ready notification failed", "chat_id", chatID, "error", err)
 			continue
 		}
-		slog.Info("startup ready notification sent", "chat_id", chatID)
+		slog.Debug("startup ready notification sent", "chat_id", chatID)
 	}
 }
 

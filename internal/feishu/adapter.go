@@ -162,6 +162,12 @@ func (a *Adapter) Start(ctx context.Context) error {
 				}
 				return nil
 			}).
+			OnP2MessageReactionDeletedV1(func(ctx context.Context, event *larkim.P2MessageReactionDeletedV1) error {
+				// We don't currently need user reaction-deleted semantics, but
+				// registering a handler prevents the SDK from logging it as an
+				// unhandled callback event.
+				return nil
+			}).
 			OnP2CardActionTrigger(func(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
 				if a.onCardAction == nil {
 					return &callback.CardActionTriggerResponse{}, nil
@@ -187,7 +193,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 						cardAction.MessageID = event.Event.Context.OpenMessageID
 					}
 				}
-				slog.Info("feishu card action",
+				slog.Debug("feishu card action",
 					"name", cardAction.Name,
 					"message_id", cardAction.MessageID,
 					"chat_id", cardAction.ChatID,
@@ -242,6 +248,64 @@ func (a *Adapter) ConfigureMarkdownPreview(statePath, processCWD string) {
 	a.previewer = nil
 }
 
+func logWithLevel(level slog.Level, message string, attrs ...any) {
+	switch {
+	case level <= slog.LevelDebug:
+		slog.Debug(message, attrs...)
+	case level <= slog.LevelInfo:
+		slog.Info(message, attrs...)
+	case level <= slog.LevelWarn:
+		slog.Warn(message, attrs...)
+	default:
+		slog.Error(message, attrs...)
+	}
+}
+
+func logFeishuFailure(message string, err error, code int, apiMsg string, attrs ...any) {
+	level := slog.LevelDebug
+	if isFeishuAuthOrPermissionFailure(err, apiMsg) {
+		level = slog.LevelWarn
+	}
+	if err != nil {
+		attrs = append(attrs, "error", err)
+	} else {
+		attrs = append(attrs, "code", code, "msg", apiMsg)
+	}
+	logWithLevel(level, message, attrs...)
+}
+
+func isFeishuAuthOrPermissionFailure(err error, apiMsg string) bool {
+	text := strings.ToLower(strings.TrimSpace(apiMsg))
+	if err != nil {
+		if text != "" {
+			text += " "
+		}
+		text += strings.ToLower(err.Error())
+	}
+	if text == "" {
+		return false
+	}
+	keywords := []string{
+		"unauthorized",
+		"forbidden",
+		"permission",
+		"no permission",
+		"scope",
+		"access denied",
+		"auth",
+		"token",
+		"credential",
+		"tenant_access_token",
+		"app_access_token",
+	}
+	for _, keyword := range keywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *Adapter) AddReaction(ctx context.Context, messageID, emojiType string) error {
 	messageID = strings.TrimSpace(messageID)
 	emojiType = strings.TrimSpace(emojiType)
@@ -262,9 +326,11 @@ func (a *Adapter) AddReaction(ctx context.Context, messageID, emojiType string) 
 			Build()).
 		Build())
 	if err != nil {
+		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "add", "message_id", messageID, "emoji_type", emojiType)
 		return err
 	}
 	if !resp.Success() {
+		logFeishuFailure("feishu reaction failed", nil, resp.Code, resp.Msg, "op", "add", "message_id", messageID, "emoji_type", emojiType)
 		return fmt.Errorf("feishu add reaction failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	reactionID := ""
@@ -295,9 +361,11 @@ func (a *Adapter) RemoveReaction(ctx context.Context, messageID, emojiType strin
 		ReactionId(reactionID).
 		Build())
 	if err != nil {
+		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "remove", "message_id", messageID, "emoji_type", emojiType)
 		return err
 	}
 	if !resp.Success() {
+		logFeishuFailure("feishu reaction failed", nil, resp.Code, resp.Msg, "op", "remove", "message_id", messageID, "emoji_type", emojiType)
 		return fmt.Errorf("feishu remove reaction failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	a.reactionMu.Lock()
@@ -308,29 +376,29 @@ func (a *Adapter) RemoveReaction(ctx context.Context, messageID, emojiType strin
 
 func (a *Adapter) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
 	content, _ := json.Marshal(map[string]string{"text": text})
-	slog.Info("feishu outbound", "op", "reply", "msg_type", "text", "reply_to", messageID, "in_thread", inThread, "preview", truncateForLog(text, 160), "text_len", len(text))
+	slog.Debug("feishu outbound", "op", "reply", "msg_type", "text", "reply_to", messageID, "in_thread", inThread, "preview", truncateForLog(text, 160), "text_len", len(text))
 	_, err := a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "text", "reply_to", messageID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", "text", "reply_to", messageID)
 	}
 	return err
 }
 
 func (a *Adapter) ReplyTextWithID(ctx context.Context, messageID, text string, inThread bool) (string, error) {
 	content, _ := json.Marshal(map[string]string{"text": text})
-	slog.Info("feishu outbound", "op", "reply", "msg_type", "text", "reply_to", messageID, "in_thread", inThread, "preview", truncateForLog(text, 160), "text_len", len(text))
+	slog.Debug("feishu outbound", "op", "reply", "msg_type", "text", "reply_to", messageID, "in_thread", inThread, "preview", truncateForLog(text, 160), "text_len", len(text))
 	id, err := a.replyMessageDetailed(ctx, messageID, "text", string(content), inThread)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "text", "reply_to", messageID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", "text", "reply_to", messageID)
 		return "", err
 	}
-	slog.Info("feishu outbound sent", "op", "reply", "msg_type", "text", "reply_to", messageID, "message_id", id)
+	slog.Debug("feishu outbound sent", "op", "reply", "msg_type", "text", "reply_to", messageID, "message_id", id)
 	return id, nil
 }
 
 func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 	content, _ := json.Marshal(map[string]string{"text": text})
-	slog.Info("feishu outbound", "op", "send", "msg_type", "text", "chat_id", chatID, "preview", truncateForLog(text, 160), "text_len", len(text))
+	slog.Debug("feishu outbound", "op", "send", "msg_type", "text", "chat_id", chatID, "preview", truncateForLog(text, 160), "text_len", len(text))
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
@@ -341,18 +409,18 @@ func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 		Build()
 	resp, err := a.client.Im.Message.Create(ctx, req)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "send", "msg_type", "text", "chat_id", chatID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "send", "msg_type", "text", "chat_id", chatID)
 		return err
 	}
 	if !resp.Success() {
-		slog.Error("feishu outbound failed", "op", "send", "msg_type", "text", "chat_id", chatID, "code", resp.Code, "msg", resp.Msg)
+		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "send", "msg_type", "text", "chat_id", chatID)
 		return fmt.Errorf("feishu send failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	messageID := ""
 	if resp.Data != nil && resp.Data.MessageId != nil {
 		messageID = *resp.Data.MessageId
 	}
-	slog.Info("feishu outbound sent", "op", "send", "msg_type", "text", "chat_id", chatID, "message_id", messageID)
+	slog.Debug("feishu outbound sent", "op", "send", "msg_type", "text", "chat_id", chatID, "message_id", messageID)
 	return nil
 }
 
@@ -376,7 +444,7 @@ func (a *Adapter) ReplyLocalFile(ctx context.Context, messageID, path string, in
 func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
 	contentBytes, _ := json.Marshal(card)
 	title, preview, buttonCount := summarizeCardForLog(card)
-	slog.Info("feishu outbound", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "in_thread", inThread, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
+	slog.Debug("feishu outbound", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "in_thread", inThread, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
 	req := larkim.NewReplyMessageReqBuilder().
 		MessageId(messageID).
 		Body(larkim.NewReplyMessageReqBodyBuilder().
@@ -387,25 +455,25 @@ func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[stri
 		Build()
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", "interactive", "reply_to", messageID)
 		return "", err
 	}
 	if !resp.Success() {
-		slog.Error("feishu outbound failed", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "code", resp.Code, "msg", resp.Msg, "card_title", title)
+		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "reply", "msg_type", "interactive", "reply_to", messageID, "card_title", title)
 		return "", fmt.Errorf("feishu reply card failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
-		slog.Info("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", "")
+		slog.Debug("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", "")
 		return "", nil
 	}
-	slog.Info("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", *resp.Data.MessageId, "card_title", title)
+	slog.Debug("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", *resp.Data.MessageId, "card_title", title)
 	return *resp.Data.MessageId, nil
 }
 
 func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
 	contentBytes, _ := json.Marshal(card)
 	title, preview, buttonCount := summarizeCardForLog(card)
-	slog.Info("feishu outbound", "op", "send", "msg_type", "interactive", "chat_id", chatID, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
+	slog.Debug("feishu outbound", "op", "send", "msg_type", "interactive", "chat_id", chatID, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
@@ -416,25 +484,25 @@ func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]a
 		Build()
 	resp, err := a.client.Im.Message.Create(ctx, req)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "send", "msg_type", "interactive", "chat_id", chatID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "send", "msg_type", "interactive", "chat_id", chatID)
 		return "", err
 	}
 	if !resp.Success() {
-		slog.Error("feishu outbound failed", "op", "send", "msg_type", "interactive", "chat_id", chatID, "code", resp.Code, "msg", resp.Msg, "card_title", title)
+		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "send", "msg_type", "interactive", "chat_id", chatID, "card_title", title)
 		return "", fmt.Errorf("feishu send card failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
-		slog.Info("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", "", "card_title", title)
+		slog.Debug("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", "", "card_title", title)
 		return "", nil
 	}
-	slog.Info("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", *resp.Data.MessageId, "card_title", title)
+	slog.Debug("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", *resp.Data.MessageId, "card_title", title)
 	return *resp.Data.MessageId, nil
 }
 
 func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
 	contentBytes, _ := json.Marshal(card)
 	title, preview, buttonCount := summarizeCardForLog(card)
-	slog.Info("feishu outbound", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
+	slog.Debug("feishu outbound", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title, "card_preview", preview, "button_count", buttonCount, "card_size", len(contentBytes))
 	req := larkim.NewPatchMessageReqBuilder().
 		MessageId(messageID).
 		Body(larkim.NewPatchMessageReqBodyBuilder().
@@ -443,14 +511,14 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 		Build()
 	resp, err := a.client.Im.Message.Patch(ctx, req)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "patch", "msg_type", "interactive", "message_id", messageID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "patch", "msg_type", "interactive", "message_id", messageID)
 		return err
 	}
 	if !resp.Success() {
-		slog.Error("feishu outbound failed", "op", "patch", "msg_type", "interactive", "message_id", messageID, "code", resp.Code, "msg", resp.Msg, "card_title", title)
+		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title)
 		return fmt.Errorf("feishu patch failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
-	slog.Info("feishu outbound sent", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title)
+	slog.Debug("feishu outbound sent", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title)
 	return nil
 }
 
@@ -503,7 +571,7 @@ func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path st
 }
 
 func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, content string, inThread bool) (string, error) {
-	slog.Info("feishu outbound raw", "op", "reply", "msg_type", msgType, "reply_to", messageID, "in_thread", inThread, "content_preview", truncateForLog(content, 200), "content_size", len(content))
+	slog.Debug("feishu outbound raw", "op", "reply", "msg_type", msgType, "reply_to", messageID, "in_thread", inThread, "content_preview", truncateForLog(content, 200), "content_size", len(content))
 	req := larkim.NewReplyMessageReqBuilder().
 		MessageId(messageID).
 		Body(larkim.NewReplyMessageReqBodyBuilder().
@@ -514,18 +582,18 @@ func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, 
 		Build()
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
-		slog.Error("feishu outbound failed", "op", "reply", "msg_type", msgType, "reply_to", messageID, "error", err)
+		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", msgType, "reply_to", messageID)
 		return "", err
 	}
 	if !resp.Success() {
-		slog.Error("feishu outbound failed", "op", "reply", "msg_type", msgType, "reply_to", messageID, "code", resp.Code, "msg", resp.Msg)
+		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "reply", "msg_type", msgType, "reply_to", messageID)
 		return "", fmt.Errorf("feishu reply failed code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
-		slog.Info("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", "")
+		slog.Debug("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", "")
 		return "", nil
 	}
-	slog.Info("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", *resp.Data.MessageId)
+	slog.Debug("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", *resp.Data.MessageId)
 	return *resp.Data.MessageId, nil
 }
 
@@ -686,7 +754,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		out.MessageID = *msg.MessageId
 	}
 	if out.MessageID != "" && a.duplicate(out.MessageID) {
-		slog.Info("feishu duplicate message ignored", "message_id", out.MessageID)
+		slog.Debug("feishu duplicate message ignored", "message_id", out.MessageID)
 		return nil
 	}
 	if msg.ChatId != nil {

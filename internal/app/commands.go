@@ -148,7 +148,7 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 	var result codexrpc.ThreadListResult
 	var err error
 	for idx, params := range queries {
-		slog.Info("thread list query",
+		slog.Debug("thread list query",
 			"attempt", idx+1,
 			"session_key", sessionKey,
 			"params", fmt.Sprintf("%v", params),
@@ -159,7 +159,7 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 			slog.Error("thread list query failed", "attempt", idx+1, "error", err)
 			continue
 		}
-		slog.Info("thread list query result", "attempt", idx+1, "count", len(result.Data))
+		slog.Debug("thread list query result", "attempt", idx+1, "count", len(result.Data))
 		if len(result.Data) > 0 {
 			break
 		}

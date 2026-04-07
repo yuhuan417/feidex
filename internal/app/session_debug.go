@@ -8,13 +8,13 @@ import (
 
 func logSessionState(event, sessionKey string, sess *state.Session) {
 	if sess == nil {
-		slog.Info(event,
+		slog.Debug(event,
 			"session_key", sessionKey,
 			"session_missing", true,
 		)
 		return
 	}
-	slog.Info(event,
+	slog.Debug(event,
 		"session_key", sessionKey,
 		"workspace_id", sess.WorkspaceID,
 		"active_thread_id", sess.ActiveThreadID,

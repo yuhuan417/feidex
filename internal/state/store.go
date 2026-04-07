@@ -246,7 +246,7 @@ func (s *Store) QueueSubmission(sessionKey, submissionID string) error {
 		sess.Queue = append(sess.Queue, submissionID)
 	}
 	sess.UpdatedAt = time.Now().Unix()
-	slog.Info("store queue submission",
+	slog.Debug("store queue submission",
 		"session_key", sessionKey,
 		"submission_id", submissionID,
 		"queue_len", len(sess.Queue),
@@ -267,7 +267,7 @@ func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
 	next := sess.Queue[0]
 	sess.Queue = append([]string(nil), sess.Queue[1:]...)
 	sess.UpdatedAt = time.Now().Unix()
-	slog.Info("store dequeue submission",
+	slog.Debug("store dequeue submission",
 		"session_key", sessionKey,
 		"submission_id", next,
 		"queue_len", len(sess.Queue),

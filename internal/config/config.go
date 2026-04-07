@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,9 +16,14 @@ const DefaultShutdownTimeout = 10 * time.Second
 
 type Config struct {
 	DataDir    string       `toml:"data_dir"`
+	Log        LogConfig    `toml:"log"`
 	Feishu     FeishuConfig `toml:"feishu"`
 	Codex      CodexConfig  `toml:"codex"`
 	Workspaces []Workspace  `toml:"workspace"`
+}
+
+type LogConfig struct {
+	Level string `toml:"level"`
 }
 
 type FeishuConfig struct {
@@ -54,6 +60,9 @@ type Workspace struct {
 func Default() *Config {
 	return &Config{
 		DataDir: ".feidex-data",
+		Log: LogConfig{
+			Level: "info",
+		},
 		Feishu: FeishuConfig{
 			GroupAtOnly:   true,
 			CardEnabled:   true,
@@ -98,6 +107,11 @@ func (c *Config) Normalize(baseDir string) error {
 	}
 	c.Codex.Model = strings.TrimSpace(c.Codex.Model)
 	c.Codex.ReasoningEffort = strings.TrimSpace(c.Codex.ReasoningEffort)
+	level, err := NormalizeLogLevel(c.Log.Level)
+	if err != nil {
+		return err
+	}
+	c.Log.Level = level
 	if strings.TrimSpace(c.Codex.Transport) == "" {
 		if strings.TrimSpace(c.Codex.WSURL) != "" {
 			c.Codex.Transport = "ws"
@@ -141,6 +155,39 @@ func (c *Config) Normalize(baseDir string) error {
 		c.DataDir = filepath.Clean(filepath.Join(baseDir, c.DataDir))
 	}
 	return nil
+}
+
+func NormalizeLogLevel(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "":
+		return "info", nil
+	case "debug", "info", "warn", "error":
+		return value, nil
+	case "warning":
+		return "warn", nil
+	default:
+		return "", fmt.Errorf("unsupported log.level %q", value)
+	}
+}
+
+func ParseLogLevel(value string) (slog.Level, error) {
+	normalized, err := NormalizeLogLevel(value)
+	if err != nil {
+		return slog.LevelInfo, err
+	}
+	switch normalized {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "warn":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return slog.LevelInfo, nil
+	}
 }
 
 func Save(path string, cfg *Config) error {

@@ -1,5 +1,8 @@
 data_dir = ".feidex-data"
 
+[log]
+level = "info"
+
 [feishu]
 app_id = "cli_xxx"
 app_secret = "sec_xxx"

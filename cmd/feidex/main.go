@@ -26,6 +26,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "serve", "run":
 		return runServe(args[1:])
+	case "daemon":
+		return runDaemon(args[1:])
 	case "feishu":
 		return runFeishu(args[1:])
 	case "version", "--version", "-v":
@@ -56,8 +58,14 @@ func runServe(args []string) int {
 	if cfg.DataDir == "" {
 		cfg.DataDir = filepath.Join(filepath.Dir(*configPath), ".feidex-data")
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logLevel, err := config.ParseLogLevel(cfg.Log.Level)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid log level: %v\n", err)
+		return 1
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 	slog.SetDefault(logger)
+	slog.Info("service starting", "config_path", *configPath, "data_dir", cfg.DataDir, "log_level", cfg.Log.Level)
 
 	svc, err := app.New(cfg, *configPath)
 	if err != nil {
@@ -72,19 +80,23 @@ func runServe(args []string) int {
 		fmt.Fprintf(os.Stderr, "start service: %v\n", err)
 		return 1
 	}
+	slog.Info("service started")
 	<-ctx.Done()
+	slog.Info("service stopping")
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), config.DefaultShutdownTimeout)
 	defer shutdownCancel()
 	if err := svc.Stop(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintf(os.Stderr, "stop service: %v\n", err)
 		return 1
 	}
+	slog.Info("service stopped")
 	return 0
 }
 
 func printUsage() {
 	fmt.Println(`Usage:
   feidex serve [--config config.toml]
+  feidex daemon <install|uninstall|start|stop|restart|status>
   feidex feishu setup [options]
   feidex feishu new [options]
   feidex feishu bind [options]

@@ -15,7 +15,7 @@ import (
 )
 
 func (a *App) handleNotification(method string, params json.RawMessage) {
-	slog.Info("codex notification", "method", method)
+	slog.Debug("codex notification", "method", method)
 	switch method {
 	case "item/agentMessage/delta":
 		var p struct {
@@ -109,7 +109,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			} `json:"turn"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			slog.Info("turn completed",
+			slog.Debug("turn completed",
 				"thread_id", p.ThreadID,
 				"turn_id", p.Turn.ID,
 				"status", p.Turn.Status,
@@ -222,7 +222,7 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 	sub.Status = "running"
 	a.noteTurnStarted(sessionKey, sub)
 	a.markSessionThreadLive(sessionKey, threadID)
-	slog.Info("turn started notification rebound pending submission",
+	slog.Debug("turn started notification rebound pending submission",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
 		"thread_id", threadID,
@@ -232,7 +232,7 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 }
 
 func (a *App) handleServerRequest(req codexrpc.RequestEnvelope) {
-	slog.Info("codex server request", "method", req.Method)
+	slog.Debug("codex server request", "method", req.Method)
 	switch req.Method {
 	case "item/commandExecution/requestApproval":
 		a.onCommandApproval(req)
@@ -364,7 +364,7 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 		return
 	}
 	if sub.Finalized {
-		slog.Info("finishTurn ignored finalized submission",
+		slog.Debug("finishTurn ignored finalized submission",
 			"submission_id", sub.ID,
 			"thread_id", threadID,
 			"turn_id", turnID,
@@ -394,7 +394,7 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 	sub = a.store.GetSubmission(sub.ID)
 	if sub != nil {
 		a.clearSubmissionProcessingReactions(sub)
-		slog.Info("submission finalized",
+		slog.Debug("submission finalized",
 			"submission_id", sub.ID,
 			"session_key", sessionKey,
 			"thread_id", threadID,
@@ -418,7 +418,7 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 		sess.Status = "idle"
 		_ = a.store.UpsertSession(sess)
 		logSessionState("finishTurn after session clear", sessionKey, a.store.GetSession(sessionKey))
-		slog.Info("finishTurn scheduling next submission asynchronously",
+		slog.Debug("finishTurn scheduling next submission asynchronously",
 			"session_key", sessionKey,
 			"thread_id", sess.ActiveThreadID,
 		)

@@ -95,7 +95,7 @@ func (a *App) runMarkdownPreviewGC(source string) {
 	if result.DeletedFileCount == 0 {
 		return
 	}
-	slog.Info("markdown preview gc complete",
+	slog.Debug("markdown preview gc complete",
 		"source", source,
 		"deleted_file_count", result.DeletedFileCount,
 		"deleted_estimated_bytes", result.DeletedEstimatedBytes,
