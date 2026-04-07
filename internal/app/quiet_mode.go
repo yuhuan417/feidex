@@ -41,7 +41,7 @@ func shouldDeliverTurnSnapshotInQuiet(snapshot turnItemSnapshot) bool {
 
 func (a *App) renderQuietModeCard() map[string]any {
 	enabled := a.quietModeEnabled()
-	body := "当前状态: `" + quietModeStatusText(enabled) + "`\n\n开启后，只发送 agent message 和 approval 请求；工具调用、计划、排队等 turn 过程消息不再发到飞书。"
+	body := "当前状态: `" + quietModeStatusText(enabled) + "`\n\n开启后，会静默工具调用类消息（例如 command execution、file change、web search、其它 tool/event），但仍保留 agent message、plan、排队/终态状态消息，以及 approval 请求。"
 	buttons := []feishu.Button{
 		{
 			Text: func() string {
