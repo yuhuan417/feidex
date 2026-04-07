@@ -29,9 +29,19 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	if len(chunks) == 0 {
 		chunks = []string{"任务已结束。"}
 	}
+	title, color, replyClass := outboundMessageCardMeta(kind)
 	var ids []string
 	for _, chunk := range chunks {
-		id, err := a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, chunk, inThread)
+		var card map[string]any
+		if replyClass {
+			card = a.renderReplyMarkdownCard(sub, title, color, chunk, nil)
+		} else {
+			card = a.renderCompactMarkdownCard(sub, title, color, "", chunk, nil)
+		}
+		id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+		if err != nil {
+			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, chunk, inThread)
+		}
 		if err != nil {
 			continue
 		}
@@ -53,6 +63,29 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 		})
 	}
 	return ids
+}
+
+func outboundMessageCardMeta(kind string) (title, color string, replyClass bool) {
+	switch strings.TrimSpace(kind) {
+	case "final_message":
+		return "最终答复", "green", true
+	case "turn_output":
+		return "回复", "green", true
+	case "turn_reasoning":
+		return "思考", "grey", false
+	case "turn_command_execution":
+		return "命令执行", "blue", false
+	case "turn_file_change":
+		return "文件改动", "orange", false
+	case "turn_plan":
+		return "计划更新", "blue", false
+	case "turn_queued":
+		return "排队中", "grey", false
+	case "turn_terminal":
+		return "任务状态", "grey", false
+	default:
+		return "状态更新", "blue", false
+	}
 }
 
 func splitFeishuText(text string, limit int) []string {

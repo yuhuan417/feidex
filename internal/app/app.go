@@ -84,6 +84,9 @@ func (a *App) recoverRuntimeState() {
 			)
 		}
 		if sess.ActiveTurnID == "" && sess.ActiveSubmissionID == "" && len(sess.Queue) == 0 && sess.Status == "idle" {
+			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
+				clearSessionThreadContext(sess)
+			}
 			_ = a.store.UpsertSession(sess)
 			continue
 		}
@@ -99,6 +102,9 @@ func (a *App) recoverRuntimeState() {
 		sess.ActiveSubmissionID = ""
 		sess.Queue = nil
 		sess.Status = "idle"
+		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
+			clearSessionThreadContext(sess)
+		}
 		_ = a.store.UpsertSession(sess)
 		cleared++
 	}
@@ -326,6 +332,19 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		"thread_id", sess.ActiveThreadID,
 	)
 	threadID := sess.ActiveThreadID
+	if !sessionCanResumeThreadForSubmission(sess, sub) {
+		if strings.TrimSpace(sess.ActiveThreadID) != "" {
+			slog.Info("dropping session thread lineage for new submission",
+				"session_key", sessionKey,
+				"submission_id", sub.ID,
+				"submission_workspace_id", sub.WorkspaceID,
+				"active_thread_id", sess.ActiveThreadID,
+				"active_thread_workspace_id", sess.ActiveThreadWorkspaceID,
+			)
+		}
+		threadID = ""
+		clearSessionThreadContext(sess)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	effectiveModel := firstNonEmpty(sess.ModelOverride, ws.Model, a.defaultModel())
@@ -347,7 +366,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 				"error", err,
 			)
 			threadID = ""
-			sess.ActiveThreadID = ""
+			clearSessionThreadContext(sess)
 		} else {
 			slog.Info("thread resumed",
 				"session_key", sessionKey,
@@ -385,15 +404,16 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			return err
 		}
 		threadID = threadResp.Thread.ID
-		sess.ActiveThreadID = threadID
 		slog.Info("thread started",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"thread_id", threadID,
 			"model", effectiveModel,
 		)
-		sess.ActiveThreadName = threadResp.Thread.Name
-		sess.ActiveThreadPreview = threadResp.Thread.Preview
+		setSessionThreadContext(sess, sub.WorkspaceID, threadID, threadResp.Thread.Name, threadResp.Thread.Preview)
+	}
+	if threadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
+		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	}
 	turnID, err := a.startSubmissionTurn(ctx, sessionKey, threadID, sub, ws.Cwd, ws.ApprovalPolicy, effectiveModel)
 	if err != nil {
@@ -422,7 +442,6 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		return err
 	}
 	a.noteTurnStarted(sessionKey, sub)
-	a.sendSubmissionStartedNotice(context.Background(), sub)
 	return nil
 }
 

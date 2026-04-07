@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -20,6 +21,15 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		return &callback.CardActionTriggerResponse{}, nil
 	}
 	name, _ := action.ActionValue["action"].(string)
+	if strings.TrimSpace(name) == "" {
+		if alt := strings.TrimSpace(action.Name); alt != "" {
+			if strings.HasPrefix(alt, "turn.item.toggle:") {
+				name = "turn.item.toggle"
+			} else {
+				name = alt
+			}
+		}
+	}
 	switch name {
 	case "menu.new":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
@@ -47,6 +57,8 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		turnID, _ := action.ActionValue["turn_id"].(string)
 		itemID, _ := action.ActionValue["item_id"].(string)
 		return a.completeTurnAppend(action, sessionKey, turnID, itemID)
+	case "turn.item.toggle":
+		return a.completeTurnItemToggle(action)
 	case "user_input.answer":
 		return a.completeUserInputAnswer(action)
 	case "approval.command.accept", "approval.command.accept_session", "approval.command.decline", "approval.command.cancel",
@@ -57,9 +69,16 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		return a.completePendingFormCancel(action)
 	case "elicitation_url.accept", "elicitation_url.decline", "elicitation_url.cancel":
 		return a.completeElicitationURLAction(action, name)
-	case "outbound_files.send", "outbound_files.cancel":
-		return a.completeOutboundFilesAction(action, name)
 	default:
+		slog.Warn("unknown feishu card action",
+			"name", name,
+			"raw_name", action.Name,
+			"message_id", action.MessageID,
+			"chat_id", action.ChatID,
+			"user_id", action.UserID,
+			"action_value", fmt.Sprintf("%v", action.ActionValue),
+			"form_value", fmt.Sprintf("%v", action.FormValue),
+		)
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "未知操作"},
 		}, nil
@@ -71,10 +90,16 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
-	sess.ActiveThreadID = ""
+	if sess.ActiveTurnID != "" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
+		}, nil
+	}
+	clearSessionThreadContext(sess)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
+	sess.Queue = nil
 	_ = a.store.UpsertSession(sess)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已切换到新会话"},
@@ -148,6 +173,63 @@ func (a *App) completeTurnAppend(action *feishu.CardAction, sessionKey, targetTu
 	}, nil
 }
 
+func (a *App) completeTurnItemToggle(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	if strings.TrimSpace(requestID) == "" {
+		if parsedID, _, ok := parseTurnItemToggleName(action.Name); ok {
+			requestID = parsedID
+		}
+	}
+	pending := a.store.PendingByID(requestID)
+	if pending == nil || pending.Kind != "turn_item_card" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "详情卡已失效"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限操作这张卡片"}}, nil
+	}
+	var payload turnItemCardPayload
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "详情卡数据损坏"}}, nil
+	}
+	expanded, _ := action.ActionValue["expanded"].(bool)
+	if !expanded {
+		if _, parsedExpanded, ok := parseTurnItemToggleName(action.Name); ok {
+			expanded = parsedExpanded
+		}
+	}
+	sub := a.store.GetSubmission(payload.SubmissionID)
+	includeActions := false
+	if sess := a.store.GetSession(payload.SessionKey); sess != nil && sess.ActiveTurnID == payload.TurnID {
+		includeActions = true
+	}
+	card := a.renderTurnItemCard(sub, payload, !expanded, includeActions, requestID)
+	return &callback.CardActionTriggerResponse{
+		Card: rawCard(card),
+	}, nil
+}
+
+func parseTurnItemToggleName(name string) (requestID string, expanded bool, ok bool) {
+	const prefix = "turn.item.toggle:"
+	name = strings.TrimSpace(name)
+	if !strings.HasPrefix(name, prefix) {
+		return "", false, false
+	}
+	parts := strings.Split(strings.TrimPrefix(name, prefix), ":")
+	if len(parts) != 2 {
+		return "", false, false
+	}
+	requestID = strings.TrimSpace(parts[0])
+	state := strings.TrimSpace(parts[1])
+	switch state {
+	case "expanded":
+		return requestID, true, requestID != ""
+	case "collapsed":
+		return requestID, false, requestID != ""
+	default:
+		return "", false, false
+	}
+}
+
 func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
@@ -157,9 +239,12 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
-	sess.WorkspaceID = workspaceID
+	switchSessionWorkspace(sess, workspaceID)
 	_ = a.store.UpsertSession(sess)
 	body := "当前工作区: `" + workspaceID + "`\n\ncwd: `" + ws.Cwd + "`"
+	if sess.ActiveTurnID != "" {
+		body += "\n\n当前运行中的任务仍归属原线程；后续新任务会使用这个工作区。"
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已切换工作区"},
 		Card: &callback.Card{
@@ -186,6 +271,11 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
+	}
+	if sess.ActiveTurnID != "" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
+		}, nil
 	}
 	if strings.TrimSpace(sess.OwnerUserID) == "" {
 		sess.OwnerUserID = action.UserID
@@ -219,9 +309,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	if err := a.codex.Call(context.Background(), "thread/resume", params, &result); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	sess.ActiveThreadID = threadID
-	sess.ActiveThreadName = strings.TrimSpace(firstNonEmpty(selectedName, result.Thread.Name))
-	sess.ActiveThreadPreview = strings.TrimSpace(firstNonEmpty(selectedPreview, result.Thread.Preview))
+	setSessionThreadContext(sess, workspaceID, threadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"

@@ -51,9 +51,10 @@ func (a *App) commandNew(msg *feishu.InboundMessage) error {
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 	}
-	sess.ActiveThreadID = ""
-	sess.ActiveThreadName = ""
-	sess.ActiveThreadPreview = ""
+	if sess.ActiveTurnID != "" {
+		return fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
+	}
+	clearSessionThreadContext(sess)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
@@ -227,11 +228,15 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		if sess == nil {
 			sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
-		sess.WorkspaceID = ws.ID
+		switchSessionWorkspace(sess, ws.ID)
 		if err := a.store.UpsertSession(sess); err != nil {
 			return err
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已切换工作区到 "+ws.ID, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		reply := "已切换工作区到 " + ws.ID
+		if sess.ActiveTurnID != "" {
+			reply += "。当前运行中的任务仍归属原线程；后续新任务会使用新工作区。"
+		}
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
 	return fmt.Errorf("usage: /workspace | /workspace list | /workspace new | /workspace use ID")
 }
@@ -410,7 +415,7 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 	}
-	sess.WorkspaceID = id
+	switchSessionWorkspace(sess, id)
 	if err := a.store.UpsertSession(sess); err != nil {
 		return err
 	}

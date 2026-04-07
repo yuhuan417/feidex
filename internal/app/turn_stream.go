@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,11 +13,11 @@ import (
 )
 
 type turnStream struct {
-	TurnID      string
-	ThreadID    string
+	TurnID       string
+	ThreadID     string
 	SubmissionID string
-	SessionKey  string
-	WorkspaceID string
+	SessionKey   string
+	WorkspaceID  string
 
 	PendingPlan  string
 	LastSentPlan string
@@ -36,12 +37,15 @@ type turnItemBuffer struct {
 }
 
 type turnItemSnapshot struct {
-	ItemID    string
-	ItemType  string
-	StoreText string
-	SendText  string
-	LinkKind  string
-	IsOutput  bool
+	ItemID        string
+	ItemType      string
+	StoreText     string
+	SendText      string
+	DetailText    string
+	LinkKind      string
+	IsOutput      bool
+	Expandable    bool
+	IsFinalAnswer bool
 }
 
 type turnStreamFlushResult struct {
@@ -185,11 +189,10 @@ func (a *App) deliverTurnItemSnapshot(ctx context.Context, sub *state.Submission
 		return false
 	}
 	a.storeTurnItemSnapshot(sub.ID, snapshot)
-	if strings.TrimSpace(snapshot.SendText) == "" {
+	if strings.TrimSpace(snapshot.SendText) == "" && strings.TrimSpace(snapshot.DetailText) == "" {
 		return false
 	}
-	title, color := turnSnapshotCardMeta(snapshot)
-	id := a.sendTurnEventCard(ctx, sub, title, color, snapshot.SendText, snapshot.LinkKind, includeActions, snapshot.ItemID)
+	id := a.sendTurnSnapshotCard(ctx, sub, snapshot, includeActions)
 	ids := []string{}
 	if strings.TrimSpace(id) != "" {
 		ids = append(ids, id)
@@ -293,8 +296,22 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 	}
 
 	switch itemType {
+	case "user_message":
+		return turnItemSnapshot{}
+	case "plan":
+		text := firstNonEmpty(stringValue(item["text"]), strings.TrimSpace(deltaText(buf)))
+		return turnItemSnapshot{
+			ItemID:    itemIDValue(buf, item),
+			ItemType:  itemType,
+			StoreText: strings.TrimSpace(text),
+			SendText:  buildLabeledTurnEventText("计划", text, partial),
+			LinkKind:  "turn_plan",
+		}
 	case "reasoning":
 		text := firstNonEmpty(extractTurnItemText(item, "summary", "summary_text"), strings.TrimSpace(deltaText(buf)), stringValue(item["text"]))
+		if strings.TrimSpace(text) == "" {
+			return turnItemSnapshot{}
+		}
 		return turnItemSnapshot{
 			ItemID:    itemIDValue(buf, item),
 			ItemType:  itemType,
@@ -304,6 +321,8 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		}
 	case "agent_message":
 		text := firstNonEmpty(extractTurnItemText(item, "content", "output_text"), strings.TrimSpace(deltaText(buf)), stringValue(item["text"]))
+		phase := strings.TrimSpace(stringValue(item["phase"]))
+		isFinal := phase == "final_answer"
 		label := ""
 		if partial {
 			label = "回复（未完成）"
@@ -313,12 +332,13 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 			sendText = buildLabeledTurnEventText(label, text, false)
 		}
 		return turnItemSnapshot{
-			ItemID:    itemIDValue(buf, item),
-			ItemType:  itemType,
-			StoreText: strings.TrimSpace(text),
-			SendText:  sendText,
-			LinkKind:  "turn_output",
-			IsOutput:  true,
+			ItemID:        itemIDValue(buf, item),
+			ItemType:      itemType,
+			StoreText:     strings.TrimSpace(text),
+			SendText:      sendText,
+			LinkKind:      "turn_output",
+			IsOutput:      true,
+			IsFinalAnswer: isFinal,
 		}
 	case "command_execution":
 		command := firstNonEmpty(stringValue(item["command"]), stringValue(item["commandLine"]), commandValue(buf))
@@ -334,46 +354,45 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		if !hasExitCode {
 			exitCode, hasExitCode = intValue(item["exitCode"])
 		}
+		summary := summarizeCommandExecution(command, output, status, optionalIntPointer(exitCode, hasExitCode))
+		detail := formatTurnCommandOutput(output)
 		return turnItemSnapshot{
-			ItemID:    itemIDValue(buf, item),
-			ItemType:  itemType,
-			StoreText: strings.TrimSpace(firstNonEmpty(output, formatTurnCommandEvent(command, output, status, nil, partial))),
-			SendText:  formatTurnCommandEvent(command, output, status, optionalIntPointer(exitCode, hasExitCode), partial),
-			LinkKind:  "turn_command_execution",
+			ItemID:     itemIDValue(buf, item),
+			ItemType:   itemType,
+			StoreText:  strings.TrimSpace(firstNonEmpty(output, formatTurnCommandEvent(command, output, status, nil, partial))),
+			SendText:   summary,
+			DetailText: detail,
+			LinkKind:   "turn_command_execution",
+			Expandable: strings.TrimSpace(detail) != "",
 		}
 	case "file_change":
-		text := firstNonEmpty(
-			stringValue(item["aggregated_output"]),
-			stringValue(item["aggregatedOutput"]),
-			stringValue(item["output"]),
-			extractTurnItemText(item, "content", "output_text"),
-			extractTurnItemText(item, "summary", "summary_text"),
-			strings.TrimSpace(deltaText(buf)),
-		)
+		summary, detail := summarizeFileChangeItem(item)
 		return turnItemSnapshot{
-			ItemID:    itemIDValue(buf, item),
-			ItemType:  itemType,
-			StoreText: strings.TrimSpace(text),
-			SendText:  buildLabeledTurnEventText("文件改动", text, partial),
-			LinkKind:  "turn_file_change",
+			ItemID:     itemIDValue(buf, item),
+			ItemType:   itemType,
+			StoreText:  strings.TrimSpace(detail),
+			SendText:   summary,
+			DetailText: detail,
+			LinkKind:   "turn_file_change",
+			Expandable: strings.TrimSpace(detail) != "",
 		}
 	default:
-		text := firstNonEmpty(
-			stringValue(item["output"]),
-			extractTurnItemText(item, "content", "output_text"),
-			extractTurnItemText(item, "summary", "summary_text"),
-			stringValue(item["text"]),
-			strings.TrimSpace(deltaText(buf)),
-		)
-		if strings.TrimSpace(text) == "" {
+		summary, detail := summarizeGenericTurnItem(itemType, item, buf)
+		if strings.TrimSpace(summary) == "" && strings.TrimSpace(detail) == "" {
 			return turnItemSnapshot{}
 		}
+		storeText := strings.TrimSpace(detail)
+		if storeText == "" {
+			storeText = strings.TrimSpace(summary)
+		}
 		return turnItemSnapshot{
-			ItemID:    itemIDValue(buf, item),
-			ItemType:  itemType,
-			StoreText: strings.TrimSpace(text),
-			SendText:  buildLabeledTurnEventText(turnItemLabel(itemType), text, partial),
-			LinkKind:  "turn_item",
+			ItemID:     itemIDValue(buf, item),
+			ItemType:   itemType,
+			StoreText:  storeText,
+			SendText:   summary,
+			DetailText: detail,
+			LinkKind:   "turn_item",
+			Expandable: strings.TrimSpace(detail) != "",
 		}
 	}
 }
@@ -400,11 +419,13 @@ func formatTurnCommandEvent(command, output, status string, exitCode *int, parti
 	}
 	lines = append(lines, title+":")
 	if strings.TrimSpace(command) != "" {
-		lines = append(lines, "$ "+strings.TrimSpace(command))
+		lines = append(lines, "命令:")
+		lines = append(lines, markdownCodeBlock("$ "+strings.TrimSpace(command)))
 	}
 	output = strings.TrimSpace(output)
 	if output != "" {
-		lines = append(lines, output)
+		lines = append(lines, "输出:")
+		lines = append(lines, markdownCodeBlock(output))
 	}
 	meta := make([]string, 0, 2)
 	if strings.TrimSpace(status) != "" {
@@ -417,6 +438,165 @@ func formatTurnCommandEvent(command, output, status string, exitCode *int, parti
 		lines = append(lines, strings.Join(meta, " "))
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func summarizeCommandExecution(command, output, status string, exitCode *int) string {
+	lines := []string{"命令执行:"}
+	if strings.TrimSpace(command) != "" {
+		lines = append(lines, markdownCodeBlock(strings.TrimSpace(command)))
+	}
+	meta := make([]string, 0, 2)
+	if strings.TrimSpace(status) != "" {
+		meta = append(meta, "status="+strings.TrimSpace(status))
+	}
+	if exitCode != nil {
+		meta = append(meta, "exit_code="+strconv.Itoa(*exitCode))
+	}
+	if len(meta) > 0 {
+		lines = append(lines, strings.Join(meta, " "))
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func formatTurnCommandOutput(output string) string {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return ""
+	}
+	return "输出:\n" + markdownCodeBlock(output)
+}
+
+func summarizeFileChangeItem(item map[string]any) (string, string) {
+	changes, _ := item["changes"].([]any)
+	status := strings.TrimSpace(firstNonEmpty(stringValue(item["status"]), stringValue(item["state"])))
+	summaryBlock := make([]string, 0, 2+len(changes))
+	if len(changes) > 0 {
+		summaryBlock = append(summaryBlock, fmt.Sprintf("changed=%d", len(changes)))
+	}
+	if status != "" {
+		summaryBlock = append(summaryBlock, "status="+status)
+	}
+	for _, raw := range changes {
+		change, _ := raw.(map[string]any)
+		path := strings.TrimSpace(stringValue(change["path"]))
+		kind := strings.TrimSpace(stringValue(change["kind"]))
+		entry := path
+		if kind != "" {
+			entry = fmt.Sprintf("%s (%s)", path, kind)
+		}
+		if strings.TrimSpace(entry) != "" {
+			summaryBlock = append(summaryBlock, entry)
+		}
+	}
+	summaryLines := []string{"文件改动:"}
+	if len(summaryBlock) > 0 {
+		summaryLines = append(summaryLines, markdownCodeBlock(strings.Join(summaryBlock, "\n")))
+	}
+	detailLines := []string{}
+	for _, raw := range changes {
+		change, _ := raw.(map[string]any)
+		path := strings.TrimSpace(stringValue(change["path"]))
+		kind := strings.TrimSpace(stringValue(change["kind"]))
+		diff := strings.TrimSpace(stringValue(change["diff"]))
+		header := path
+		if kind != "" {
+			header = fmt.Sprintf("%s (%s)", path, kind)
+		}
+		if header != "" {
+			detailLines = append(detailLines, "", markdownCodeBlock(header))
+		}
+		if diff != "" {
+			detailLines = append(detailLines, "```diff\n"+diff+"\n```")
+			continue
+		}
+		if changeDetail := strings.TrimSpace(prettyJSON(change)); changeDetail != "" {
+			detailLines = append(detailLines, markdownCodeBlock(changeDetail))
+		}
+	}
+	detail := strings.TrimSpace(strings.Join(detailLines, "\n"))
+	if len(changes) == 0 {
+		raw := strings.TrimSpace(prettyJSON(item))
+		if raw != "" {
+			detail = markdownCodeBlock(raw)
+		}
+	}
+	return strings.TrimSpace(strings.Join(summaryLines, "\n")), detail
+}
+
+func summarizeGenericTurnItem(itemType string, item map[string]any, buf *turnItemBuffer) (string, string) {
+	title := turnItemLabel(itemType)
+	summaryLines := []string{title + ":"}
+	switch normalizeTurnItemType(itemType) {
+	case "mcp_tool_call":
+		server := strings.TrimSpace(stringValue(item["server"]))
+		tool := strings.TrimSpace(stringValue(item["tool"]))
+		status := strings.TrimSpace(stringValue(item["status"]))
+		if server != "" || tool != "" {
+			summaryLines = append(summaryLines, markdownCodeBlock(strings.TrimSpace(server+"/"+tool)))
+		}
+		if status != "" {
+			summaryLines = append(summaryLines, "status="+status)
+		}
+	case "dynamic_tool_call":
+		tool := strings.TrimSpace(stringValue(item["tool"]))
+		status := strings.TrimSpace(stringValue(item["status"]))
+		if tool != "" {
+			summaryLines = append(summaryLines, markdownCodeBlock(tool))
+		}
+		if status != "" {
+			summaryLines = append(summaryLines, "status="+status)
+		}
+	case "web_search":
+		query := strings.TrimSpace(firstNonEmpty(stringValue(item["query"]), prettyJSON(item["action"])))
+		if query != "" {
+			summaryLines = append(summaryLines, markdownCodeBlock(query))
+		}
+	case "collab_agent_tool_call":
+		tool := strings.TrimSpace(stringValue(item["tool"]))
+		status := strings.TrimSpace(stringValue(item["status"]))
+		if tool != "" {
+			summaryLines = append(summaryLines, markdownCodeBlock(tool))
+		}
+		if status != "" {
+			summaryLines = append(summaryLines, "status="+status)
+		}
+	default:
+		summary := strings.TrimSpace(firstNonEmpty(
+			stringValue(item["text"]),
+			stringValue(item["output"]),
+			extractTurnItemText(item, "summary", ""),
+			strings.TrimSpace(deltaText(buf)),
+			prettyJSON(item),
+		))
+		if summary != "" {
+			summaryLines = append(summaryLines, summary)
+		}
+	}
+	detail := strings.TrimSpace(firstNonEmpty(
+		stringValue(item["text"]),
+		stringValue(item["output"]),
+		extractTurnItemText(item, "content", ""),
+		extractTurnItemText(item, "summary", ""),
+		prettyJSON(item),
+	))
+	if detail == "" {
+		detail = strings.TrimSpace(deltaText(buf))
+	}
+	if isCodeStyledTurnItem(itemType) && detail != "" {
+		detail = turnItemLabel(itemType) + ":\n" + markdownCodeBlock(detail)
+	}
+	return strings.TrimSpace(strings.Join(summaryLines, "\n")), detail
+}
+
+func prettyJSON(v any) string {
+	if v == nil {
+		return ""
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func turnItemLabel(itemType string) string {
@@ -450,9 +630,11 @@ func turnItemKey(itemID, itemType string) string {
 
 func normalizeTurnItemType(itemType string) string {
 	itemType = strings.TrimSpace(itemType)
+	itemType = strings.ReplaceAll(itemType, "UserMessage", "user_message")
 	itemType = strings.ReplaceAll(itemType, "AgentMessage", "agent_message")
 	itemType = strings.ReplaceAll(itemType, "CommandExecution", "command_execution")
 	itemType = strings.ReplaceAll(itemType, "FileChange", "file_change")
+	itemType = strings.ReplaceAll(itemType, "userMessage", "user_message")
 	itemType = strings.ReplaceAll(itemType, "agentMessage", "agent_message")
 	itemType = strings.ReplaceAll(itemType, "commandExecution", "command_execution")
 	itemType = strings.ReplaceAll(itemType, "fileChange", "file_change")
@@ -488,6 +670,28 @@ func extractTurnItemText(item map[string]any, arrayField, elementType string) st
 func stringValue(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func markdownCodeBlock(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	s = strings.ReplaceAll(s, "```", "'''")
+	return "```\n" + s + "\n```"
+}
+
+func inlineCodeText(s string) string {
+	return strings.ReplaceAll(strings.TrimSpace(s), "`", "'")
+}
+
+func isCodeStyledTurnItem(itemType string) bool {
+	switch normalizeTurnItemType(itemType) {
+	case "command_execution", "mcp_tool_call", "dynamic_tool_call", "web_search", "collab_agent_tool_call":
+		return true
+	default:
+		return false
+	}
 }
 
 func intValue(v any) (int, bool) {
@@ -559,42 +763,6 @@ func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
 	return sess != nil && sess.ChatType == "group" && a.cfg.Feishu.ReplyInThread
 }
 
-func (a *App) sendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
-	if sub == nil {
-		return
-	}
-	body := "任务已开始，可在此卡片上中断。\n\n"
-	if preview := strings.TrimSpace(submissionInputPreview(sub)); preview != "" && preview != "-" {
-		body += "输入:\n" + preview + "\n\n"
-	}
-	body += "turn: `" + strings.TrimSpace(sub.TurnID) + "`"
-	card := a.feishu.SimpleStatusCard("任务已开始", "blue", body, []feishu.Button{
-		{
-			Text: "中断",
-			Type: "danger",
-			Value: map[string]any{
-				"action":      "menu.interrupt",
-				"session_key": sub.SessionKey,
-				"turn_id":     sub.TurnID,
-			},
-		},
-		{
-			Text: "线程列表",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.threads",
-				"session_key": sub.SessionKey,
-			},
-		},
-	})
-	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
-	if err != nil || strings.TrimSpace(id) == "" {
-		a.sendTurnEventMessages(ctx, sub, "开始处理。", a.replyInThreadForSubmission(sub), "turn_started")
-		return
-	}
-	a.recordMessageLink(id, "turn_entry_card", sub, "")
-}
-
 func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {
 	if sub == nil {
 		return
@@ -606,6 +774,52 @@ func (a *App) sendPlanCard(ctx context.Context, sub *state.Submission, planText 
 	return a.sendTurnEventCard(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", includeActions, "")
 }
 
+type turnItemCardPayload struct {
+	SubmissionID  string `json:"submission_id"`
+	SessionKey    string `json:"session_key"`
+	TurnID        string `json:"turn_id"`
+	ItemID        string `json:"item_id"`
+	ItemType      string `json:"item_type"`
+	Title         string `json:"title"`
+	Color         string `json:"color"`
+	SummaryText   string `json:"summary_text"`
+	DetailText    string `json:"detail_text"`
+	LinkKind      string `json:"link_kind"`
+	IsFinalAnswer bool   `json:"is_final_answer"`
+}
+
+func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot, includeActions bool) string {
+	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return ""
+	}
+	title, color := turnSnapshotCardMeta(snapshot)
+	payload := turnItemCardPayload{
+		SubmissionID:  sub.ID,
+		SessionKey:    sub.SessionKey,
+		TurnID:        sub.TurnID,
+		ItemID:        snapshot.ItemID,
+		ItemType:      snapshot.ItemType,
+		Title:         title,
+		Color:         color,
+		SummaryText:   strings.TrimSpace(snapshot.SendText),
+		DetailText:    strings.TrimSpace(snapshot.DetailText),
+		LinkKind:      snapshot.LinkKind,
+		IsFinalAnswer: snapshot.IsFinalAnswer,
+	}
+	card := a.renderTurnItemCard(sub, payload, false, includeActions, "")
+	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
+	if err != nil || strings.TrimSpace(id) == "" {
+		fallback := payload.SummaryText
+		if fallback == "" {
+			fallback = payload.DetailText
+		}
+		a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
+		return ""
+	}
+	a.recordMessageLink(id, snapshot.LinkKind, sub, snapshot.ItemID)
+	return id
+}
+
 func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind string, includeActions bool, itemID string) string {
 	if sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
@@ -614,13 +828,11 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 	if body == "" {
 		return ""
 	}
-	body = truncate(body, 2600)
-	body = a.prepareSubmissionCardMarkdown(sub, body)
 	var buttons []feishu.Button
 	if includeActions {
 		buttons = turnActionButtons(sub, itemID)
 	}
-	card := a.feishu.SimpleStatusCard(title, color, body, buttons)
+	card := a.renderCompactMarkdownCard(sub, title, color, "", body, buttons)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		a.sendTurnEventMessages(ctx, sub, body, a.replyInThreadForSubmission(sub), kind)
@@ -628,6 +840,113 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 	}
 	a.recordMessageLink(id, kind, sub, itemID)
 	return id
+}
+
+func (a *App) renderTurnItemCard(sub *state.Submission, payload turnItemCardPayload, expanded bool, includeActions bool, requestID string) map[string]any {
+	_ = expanded
+	_ = requestID
+	buttons := make([]feishu.Button, 0, 3)
+	if includeActions && !payload.IsFinalAnswer {
+		buttons = append(buttons, turnActionButtons(sub, payload.ItemID)...)
+	}
+	if isReplyTurnItem(payload.ItemType) {
+		return a.renderReplyMarkdownCard(sub, payload.Title, payload.Color, replyTurnItemCardBody(payload), buttons)
+	}
+	meta, body := compactTurnItemCardContent(payload)
+	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, buttons)
+}
+
+func isReplyTurnItem(itemType string) bool {
+	return normalizeTurnItemType(itemType) == "agent_message"
+}
+
+func replyTurnItemCardBody(payload turnItemCardPayload) string {
+	body := stripTurnItemCardHeading(payload.SummaryText, payload.Title, payload.ItemType)
+	if body == "" {
+		body = stripTurnItemCardHeading(payload.DetailText, payload.Title, payload.ItemType)
+	}
+	return body
+}
+
+func compactTurnItemCardContent(payload turnItemCardPayload) (string, string) {
+	summary := stripTurnItemCardHeading(payload.SummaryText, payload.Title, payload.ItemType)
+	detail := stripTurnItemCardHeading(payload.DetailText, payload.Title, payload.ItemType)
+
+	switch normalizeTurnItemType(payload.ItemType) {
+	case "command_execution":
+		body, meta := splitCompactMetaLine(summary)
+		return meta, joinMarkdownSections(body, detail)
+	case "mcp_tool_call", "dynamic_tool_call", "collab_agent_tool_call":
+		body, meta := splitCompactMetaLine(summary)
+		if body == "" {
+			body = detail
+		}
+		return meta, body
+	default:
+		if summary != "" {
+			return "", summary
+		}
+		return "", detail
+	}
+}
+
+func stripTurnItemCardHeading(text, title, itemType string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	parts := strings.SplitN(text, "\n", 2)
+	if len(parts) != 2 {
+		return text
+	}
+	first := strings.TrimSpace(parts[0])
+	if !strings.HasSuffix(first, ":") {
+		return text
+	}
+	base := strings.TrimSuffix(first, ":")
+	labels := []string{strings.TrimSpace(title), turnItemLabel(itemType)}
+	for _, label := range labels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		if base == label || strings.HasPrefix(base, label+"（") {
+			return strings.TrimSpace(parts[1])
+		}
+	}
+	return text
+}
+
+func splitCompactMetaLine(text string) (string, string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", ""
+	}
+	lines := strings.Split(text, "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if last == "" || strings.HasPrefix(last, "```") {
+		return text, ""
+	}
+	if !strings.Contains(last, "status=") && !strings.Contains(last, "exit_code=") {
+		return text, ""
+	}
+	meta := strings.Join(strings.Fields(last), " · ")
+	if len(lines) == 1 {
+		return "", meta
+	}
+	return strings.TrimSpace(strings.Join(lines[:len(lines)-1], "\n")), meta
+}
+
+func joinMarkdownSections(parts ...string) string {
+	sections := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		sections = append(sections, part)
+	}
+	return strings.Join(sections, "\n\n")
 }
 
 func turnActionButtons(sub *state.Submission, itemID string) []feishu.Button {
@@ -649,6 +968,9 @@ func turnActionButtons(sub *state.Submission, itemID string) []feishu.Button {
 }
 
 func turnSnapshotCardMeta(snapshot turnItemSnapshot) (string, string) {
+	if snapshot.IsFinalAnswer {
+		return "最终答复", "green"
+	}
 	switch snapshot.ItemType {
 	case "reasoning":
 		return "思考", "grey"
