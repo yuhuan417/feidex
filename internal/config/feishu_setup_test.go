@@ -226,13 +226,20 @@ func TestRunRegistrationFlowErrorsAndSetupFeishu(t *testing.T) {
 		t.Fatalf("saved credentials = %+v, want bound values", cfg.Feishu)
 	}
 
-	if err := SetupFeishu(FeishuSetupNew, FeishuSetupOptions{AppID: "existing"}); err == nil {
+	if err := SetupFeishu(FeishuSetupNew, FeishuSetupOptions{
+		ConfigPath: filepath.Join(t.TempDir(), "config.toml"),
+		AppID:      "existing",
+	}); err == nil {
 		t.Fatal("expected new mode with existing credentials to fail")
 	}
-	if err := SetupFeishu(FeishuSetupBind, FeishuSetupOptions{}); err == nil {
+	if err := SetupFeishu(FeishuSetupBind, FeishuSetupOptions{
+		ConfigPath: filepath.Join(t.TempDir(), "config.toml"),
+	}); err == nil {
 		t.Fatal("expected bind mode without credentials to fail")
 	}
-	if err := SetupFeishu(FeishuSetupMode("bad"), FeishuSetupOptions{}); err == nil {
+	if err := SetupFeishu(FeishuSetupMode("bad"), FeishuSetupOptions{
+		ConfigPath: filepath.Join(t.TempDir(), "config.toml"),
+	}); err == nil {
 		t.Fatal("expected unsupported mode to fail")
 	}
 }
