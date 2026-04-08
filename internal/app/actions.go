@@ -65,6 +65,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.status":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuStatus(action, sessionKey)
+	case "menu.help":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuHelp(action, sessionKey)
 	case "menu.upgrade":
 		return a.completeMenuUpgrade(action)
 	case "quiet.set":
@@ -370,6 +373,13 @@ func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开状态面板"},
 		Card:  rawCard(a.renderStatusCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeMenuHelp(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开帮助说明"},
+		Card:  rawCard(a.renderHelpCard(sessionKey)),
 	}, nil
 }
 

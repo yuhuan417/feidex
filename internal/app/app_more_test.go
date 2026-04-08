@@ -760,6 +760,9 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.status": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuHelp(action, action.ActionValue["session_key"].(string))
+		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuWorkspace(action, action.ActionValue["session_key"].(string))
 		},
@@ -791,7 +794,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.group.session", "menu.group.context", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.group.session", "menu.group.context", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -1624,6 +1627,7 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	for _, raw := range []string{
 		"",
 		"/menu",
+		"/help",
 		"/status",
 		"/model",
 		"/quiet",
@@ -1676,6 +1680,24 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	updated = a.store.GetSession(sessionKey)
 	if len(updated.Queue) != 0 {
 		t.Fatalf("handleFeishuReaction() did not discard queued submission: %+v", updated.Queue)
+	}
+}
+
+func TestCommandHelpRendersHelpCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-help", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+
+	if err := a.commandHelp(msg, nil); err != nil {
+		t.Fatalf("commandHelp() error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected help card to be sent")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	for _, want := range []string{"/help", "/workspace use ID", "/threads all", "/upgrade"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("help body missing %q: %q", want, body)
+		}
 	}
 }
 

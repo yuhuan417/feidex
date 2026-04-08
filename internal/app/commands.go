@@ -29,6 +29,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	switch fields[0] {
 	case "/menu":
 		return a.sendCommandMenu(msg)
+	case "/help":
+		return a.commandHelp(msg, fields[1:])
 	case "/model":
 		return a.commandModel(msg)
 	case "/quiet":
@@ -74,11 +76,20 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false
 	}
+}
+
+func (a *App) commandHelp(msg *feishu.InboundMessage, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("usage: /help")
+	}
+	card := a.renderHelpCard(a.makeSessionKey(msg))
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
 }
 
 func (a *App) commandNew(msg *feishu.InboundMessage) error {
@@ -446,9 +457,74 @@ func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: "状态面板", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
 		{Text: "升级服务", Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": sessionKey}},
+		{Text: "帮助说明", Type: "default", Value: map[string]any{"action": "menu.help", "session_key": sessionKey}},
 		{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("服务管理", "blue", "查看服务状态，或执行服务升级。", buttons)
+	return a.feishu.SimpleStatusCard("服务管理", "blue", "查看服务状态、执行升级，或查阅命令帮助。", buttons)
+}
+
+func (a *App) renderHelpCard(sessionKey string) map[string]any {
+	body := strings.Join([]string{
+		"命令说明：",
+		"",
+		"`/menu`",
+		"打开命令菜单。",
+		"",
+		"`/help`",
+		"查看所有本地命令与说明。",
+		"",
+		"会话行为：",
+		"`/interrupt` 或 `/stop`",
+		"中断当前运行中的任务，并清空排队/暂存输入。",
+		"`/quiet`",
+		"切换 Quiet 模式。",
+		"`/quiet on`",
+		"开启 Quiet 模式。",
+		"`/quiet off`",
+		"关闭 Quiet 模式。",
+		"",
+		"会话管理：",
+		"`/new`",
+		"切换到新线程模式，下一条消息会新建线程。",
+		"`/threads`",
+		"查看当前工作区可恢复的线程。",
+		"`/threads all`",
+		"查看更多来源的线程。",
+		"`/threads new`",
+		"等价于 `/new`。",
+		"`/threads sandbox`",
+		"配置当前线程的 sandbox。",
+		"`/threads policy`",
+		"配置当前线程的 approval policy。",
+		"`/workspace` 或 `/cd`",
+		"打开工作区菜单。",
+		"`/workspace list`",
+		"列出所有工作区。",
+		"`/workspace new`",
+		"创建新工作区。",
+		"`/workspace use ID`",
+		"切换到指定工作区。",
+		"`/workspace sandbox`",
+		"配置当前工作区默认 sandbox。",
+		"`/workspace policy`",
+		"配置当前工作区默认 approval policy。",
+		"",
+		"模型能力：",
+		"`/model`",
+		"打开模型与推理强度配置。",
+		"`/fast`",
+		"切换当前线程的响应速度设置。",
+		"",
+		"服务管理：",
+		"`/status`",
+		"查看当前会话、线程、工作区与模型状态。",
+		"`/upgrade`",
+		"检查新版本并发起服务升级。",
+	}, "\n")
+	buttons := []feishu.Button{
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+	}
+	return a.feishu.SimpleStatusCard("帮助说明", "blue", body, buttons)
 }
 
 func filterThreadsByWorkspaceCWD(items []codexrpc.ThreadListEntry, workspaceCWD string) []codexrpc.ThreadListEntry {

@@ -89,6 +89,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 func TestIsLocalCommand(t *testing.T) {
 	cases := map[string]bool{
 		"/menu":          true,
+		"/help":          true,
 		"/model":         true,
 		"/quiet":         true,
 		"/new":           true,
@@ -123,7 +124,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 		t.Fatalf("unexpected card elements: %#v", card["elements"])
 	}
 	body, _ := elements[0]["content"].(string)
-	for _, alias := range []string{"/menu", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
+	for _, alias := range []string{"/menu", "/help", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
 		if strings.Contains(body, alias) {
 			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
 		}
