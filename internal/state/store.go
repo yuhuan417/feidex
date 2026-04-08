@@ -40,6 +40,7 @@ type Session struct {
 	ActiveThreadWorkspaceID    string               `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy string               `json:"active_thread_approval_policy"`
 	ActiveThreadSandboxMode    string               `json:"active_thread_sandbox_mode"`
+	ActiveThreadServiceTier    string               `json:"active_thread_service_tier"`
 	ActiveThreadName           string               `json:"active_thread_name"`
 	ActiveThreadPreview        string               `json:"active_thread_preview"`
 	ActiveTurnID               string               `json:"active_turn_id"`

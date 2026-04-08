@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 )
 
 func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
@@ -59,5 +60,21 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 	}
 	if !loaded.Feishu.Quiet {
 		t.Fatal("expected persisted quiet mode enabled")
+	}
+}
+
+func TestCommandQuietTogglesWithoutCard(t *testing.T) {
+	cfg := config.Default()
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: &fakeFeishuClient{}}
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p"}
+	if err := a.commandQuiet(msg, nil); err != nil {
+		t.Fatalf("commandQuiet() error = %v", err)
+	}
+	if !a.quietModeEnabled() {
+		t.Fatal("expected quiet mode to be enabled after toggle")
 	}
 }

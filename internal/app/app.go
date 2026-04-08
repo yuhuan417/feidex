@@ -407,6 +407,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	effectiveReasoningEffort := configuredGlobalReasoningEffort(a.cfg)
 	effectiveApprovalPolicy := effectiveThreadApprovalPolicy(sess, ws)
 	effectiveSandboxMode := effectiveThreadSandboxMode(sess, ws)
+	effectiveServiceTier := effectiveThreadServiceTier(sess)
 	threadIsLive := a.sessionHasLiveThread(sessionKey, threadID)
 	if threadID != "" && threadIsLive {
 		slog.Debug("using live thread without resume",
@@ -464,6 +465,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"cwd":                    ws.Cwd,
 			"approvalPolicy":         effectiveApprovalPolicy,
 			"sandbox":                effectiveSandboxMode,
+			"serviceTier":            effectiveServiceTier,
 			"serviceName":            a.cfg.Codex.ServiceName,
 			"experimentalRawEvents":  false,
 			"persistExtendedHistory": true,
@@ -525,7 +527,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	a.markSubmissionRunningReactions(sub)
 	logSessionState("startNextSubmission session starting", sessionKey, a.store.GetSession(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveModel, effectiveReasoningEffort)
+	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
 	turnCancel()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -595,7 +597,7 @@ func buildTurnSandboxPolicy(mode string) map[string]any {
 	}
 }
 
-func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, model, reasoningEffort string) (string, error) {
+func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}
@@ -616,6 +618,9 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 	}
 	if sandboxPolicy := buildTurnSandboxPolicy(sandboxMode); sandboxPolicy != nil {
 		turnParams["sandboxPolicy"] = sandboxPolicy
+	}
+	if strings.TrimSpace(serviceTier) != "" {
+		turnParams["serviceTier"] = strings.TrimSpace(serviceTier)
 	}
 	slog.Debug("turn start request",
 		"session_key", sessionKey,
@@ -723,7 +728,9 @@ func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
 	buttons := []feishu.Button{
 		{Text: "/status", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": a.makeSessionKey(msg)}},
 		{Text: "/model", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/fast", Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": a.makeSessionKey(msg)}},
 		{Text: "/quiet", Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": a.makeSessionKey(msg)}},
+		{Text: "/upgrade", Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": a.makeSessionKey(msg)}},
 		{Text: "/workspace", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": a.makeSessionKey(msg)}},
 		{Text: "/threads", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": a.makeSessionKey(msg)}},
 	}

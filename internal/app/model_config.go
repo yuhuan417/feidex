@@ -305,9 +305,11 @@ func (a *App) statusCardBody(sess *state.Session) string {
 	}
 	threadSandbox := renderThreadSettingValue("", "")
 	threadPolicy := renderThreadSettingValue("", "")
+	threadServiceTier := "`flex`"
 	if sess != nil {
 		threadSandbox = renderThreadSettingValue(sess.ActiveThreadSandboxMode, "")
 		threadPolicy = renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, "")
+		threadServiceTier = "`" + effectiveThreadServiceTier(sess) + "`"
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
@@ -322,6 +324,7 @@ func (a *App) statusCardBody(sess *state.Session) string {
 		"workspace policy: `" + workspacePolicy + "`",
 		"thread sandbox: " + threadSandbox,
 		"thread policy: " + threadPolicy,
+		"thread service tier: " + threadServiceTier,
 		"生效 sandbox: `" + effectiveSandbox + "`",
 		"生效 policy: `" + effectivePolicy + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",

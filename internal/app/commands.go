@@ -33,6 +33,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandModel(msg)
 	case "/quiet":
 		return a.commandQuiet(msg, fields[1:])
+	case "/fast":
+		return a.commandFast(msg, fields[1:])
 	case "/new":
 		return a.commandNew(msg)
 	case "/threads":
@@ -72,7 +74,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade":
+	case "/menu", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false

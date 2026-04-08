@@ -94,6 +94,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		"workspace policy: `on-request`",
 		"thread sandbox: `read-only`",
 		"thread policy: `untrusted`",
+		"thread service tier: `flex`",
 		"生效 sandbox: `read-only`",
 		"生效 policy: `untrusted`",
 	} {

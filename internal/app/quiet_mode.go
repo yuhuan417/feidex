@@ -91,21 +91,19 @@ func (a *App) updateQuietMode(enabled bool) error {
 }
 
 func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
+	enabled := !a.quietModeEnabled()
 	if len(args) > 0 {
 		switch strings.TrimSpace(args[0]) {
 		case "on":
-			if err := a.updateQuietMode(true); err != nil {
-				return err
-			}
+			enabled = true
 		case "off":
-			if err := a.updateQuietMode(false); err != nil {
-				return err
-			}
+			enabled = false
 		default:
 			return fmt.Errorf("usage: /quiet | /quiet on | /quiet off")
 		}
 	}
-	card := a.renderQuietModeCard()
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	return err
+	if err := a.updateQuietMode(enabled); err != nil {
+		return err
+	}
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(enabled)+"`。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }

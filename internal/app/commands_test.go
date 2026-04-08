@@ -123,7 +123,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 		t.Fatalf("unexpected card elements: %#v", card["elements"])
 	}
 	body, _ := elements[0]["content"].(string)
-	for _, alias := range []string{"/menu", "/new", "/stop", "/cd", "/model", "/quiet", "/threads", "/interrupt", "/status", "/workspace"} {
+	for _, alias := range []string{"/menu", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
 		if strings.Contains(body, alias) {
 			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
 		}
@@ -144,5 +144,36 @@ func TestStartupReadyChatIDsDeduplicatesChats(t *testing.T) {
 	}
 	if ids[0] != "chat-a" || ids[1] != "chat-b" {
 		t.Fatalf("unexpected sorted chat ids: %#v", ids)
+	}
+}
+
+func TestCommandFastTogglesThreadServiceTier(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	a := &App{store: store, feishu: &fakeFeishuClient{}}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "feishu:p2p:chat:user",
+		WorkspaceID:             "default",
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: "default",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := a.commandFast(msg, nil); err != nil {
+		t.Fatalf("commandFast(toggle to fast) error = %v", err)
+	}
+	sess := a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || sess.ActiveThreadServiceTier != "fast" {
+		t.Fatalf("expected service tier fast, got %#v", sess)
+	}
+	if err := a.commandFast(msg, nil); err != nil {
+		t.Fatalf("commandFast(toggle to flex) error = %v", err)
+	}
+	sess = a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || sess.ActiveThreadServiceTier != "flex" {
+		t.Fatalf("expected service tier flex, got %#v", sess)
 	}
 }

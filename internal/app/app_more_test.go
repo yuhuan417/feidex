@@ -756,8 +756,17 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 	} {
 		resp, err := fn()
-		if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		if err != nil || resp == nil || resp.Toast == nil {
 			t.Fatalf("%s = %#v, %v", name, resp, err)
+		}
+		if name == "menu.quiet" {
+			if resp.Toast.Type != "success" {
+				t.Fatalf("%s toast type = %q, want success", name, resp.Toast.Type)
+			}
+			continue
+		}
+		if resp.Toast.Type != "info" {
+			t.Fatalf("%s toast type = %q, want info", name, resp.Toast.Type)
 		}
 	}
 
@@ -1144,8 +1153,10 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	}
 
 	var calls []string
+	paramsSeen := map[string]any{}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		calls = append(calls, method)
+		paramsSeen[method] = params
 		switch method {
 		case "thread/start":
 			result := out.(*codexrpc.ThreadStartResult)
@@ -1175,10 +1186,10 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("buildTurnSandboxPolicy(bad) = %+v, want nil", got)
 	}
 
-	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", ""); err == nil {
+	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "flex", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
 	}
-	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", ""); err == nil {
+	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "flex", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
@@ -1187,6 +1198,9 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	}
 	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
 		t.Fatalf("codex calls = %+v, want thread/start then turn/start", calls)
+	}
+	if got, _ := paramsSeen["turn/start"].(map[string]any)["serviceTier"].(string); got != "flex" {
+		t.Fatalf("turn/start serviceTier = %q, want flex", got)
 	}
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "turn-1" || sess.Status != "turn_in_progress" {
@@ -1209,6 +1223,31 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	}
 	if len(ff.replyCards) == 0 && len(ff.replyTextWithIDs) == 0 {
 		t.Fatal("expected finishTurn to send final output")
+	}
+}
+
+func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	var gotParams map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/start" {
+			return nil
+		}
+		gotParams, _ = params.(map[string]any)
+		if result, ok := out.(*codexrpc.TurnStartResult); ok {
+			result.Turn.ID = "turn-fast"
+		}
+		return nil
+	}
+	sub := &state.Submission{ID: "sub-1", InputText: "hello"}
+	if _, err := a.startSubmissionTurn(context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", ""); err != nil {
+		t.Fatalf("startSubmissionTurn() error = %v", err)
+	}
+	if gotParams == nil {
+		t.Fatal("expected turn/start params to be captured")
+	}
+	if got, _ := gotParams["serviceTier"].(string); got != "fast" {
+		t.Fatalf("serviceTier = %q, want fast", got)
 	}
 }
 

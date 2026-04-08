@@ -40,9 +40,13 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.model":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuModel(action, sessionKey)
+	case "menu.fast":
+		return a.completeMenuFast(action)
 	case "menu.status":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuStatus(action, sessionKey)
+	case "menu.upgrade":
+		return a.completeMenuUpgrade(action)
 	case "quiet.set":
 		enabled, _ := action.ActionValue["enabled"].(bool)
 		return a.completeQuietSet(action, enabled)
@@ -214,10 +218,10 @@ func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reason
 
 func (a *App) completeMenuQuiet(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/quiet"}
-	go func() {
-		_ = a.commandQuiet(msg, nil)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开 quiet 配置"}}, nil
+	if err := a.commandQuiet(msg, nil); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已切换 quiet 开关"}}, nil
 }
 
 func (a *App) completeQuietSet(action *feishu.CardAction, enabled bool) (*callback.CardActionTriggerResponse, error) {
@@ -261,6 +265,22 @@ func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (
 		_ = a.commandStatus(msg)
 	}()
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开状态面板"}}, nil
+}
+
+func (a *App) completeMenuFast(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/fast"}
+	if err := a.commandFast(msg, nil); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已切换 service tier"}}, nil
+}
+
+func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/upgrade"}
+	if err := a.commandUpgrade(msg); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已发送升级确认"}}, nil
 }
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {

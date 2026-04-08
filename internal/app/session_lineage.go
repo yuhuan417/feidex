@@ -52,6 +52,7 @@ func clearSessionThreadContext(sess *state.Session) {
 	sess.ActiveThreadWorkspaceID = ""
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
+	sess.ActiveThreadServiceTier = ""
 	sess.ActiveThreadName = ""
 	sess.ActiveThreadPreview = ""
 }
@@ -92,6 +93,13 @@ func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) strin
 		return strings.TrimSpace(ws.SandboxMode)
 	}
 	return ""
+}
+
+func effectiveThreadServiceTier(sess *state.Session) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadServiceTier) != "" {
+		return strings.TrimSpace(sess.ActiveThreadServiceTier)
+	}
+	return "flex"
 }
 
 func switchSessionWorkspace(sess *state.Session, workspaceID string) {
