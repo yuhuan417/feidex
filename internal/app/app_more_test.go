@@ -868,18 +868,23 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	}
 	contextActions := contextCard["elements"].([]map[string]any)[1]["actions"].([]map[string]any)
 	indicatorByAction := map[string]bool{}
+	labelByAction := map[string]string{}
 	for _, action := range contextActions {
 		text, _ := action["text"].(map[string]any)
 		label, _ := text["content"].(string)
 		value, _ := action["value"].(map[string]any)
 		actionName, _ := value["action"].(string)
 		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
+		labelByAction[actionName] = label
 	}
 	if indicatorByAction["menu.workspace"] != true || indicatorByAction["menu.threads"] != true {
 		t.Fatalf("expected context submenu indicators, got %#v", indicatorByAction)
 	}
 	if indicatorByAction["menu.new"] {
 		t.Fatalf("new thread should not show submenu indicator, got %#v", indicatorByAction)
+	}
+	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") {
+		t.Fatalf("expected real command labels in context menu, got %#v", labelByAction)
 	}
 
 	helpCard := a.renderHelpCard(sessionKey)

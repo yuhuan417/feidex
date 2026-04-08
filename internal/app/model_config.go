@@ -291,7 +291,7 @@ func (a *App) renderStatusCard(sessionKey string) map[string]any {
 		sess = a.store.GetSession(sessionKey)
 	}
 	buttons := []feishu.Button{
-		{Text: "刷新", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
+		{Text: commandLabel("刷新", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBody("menu.status", a.statusCardBody(sess)), buttons)

@@ -70,3 +70,19 @@ func submenuLabel(label string) string {
 	}
 	return label + " ›"
 }
+
+func commandLabel(label, slash string) string {
+	label = strings.TrimSpace(label)
+	slash = strings.TrimSpace(slash)
+	if label == "" {
+		return slash
+	}
+	if slash == "" {
+		return label
+	}
+	return label + " " + slash
+}
+
+func submenuCommandLabel(label, slash string) string {
+	return submenuLabel(commandLabel(label, slash))
+}

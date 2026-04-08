@@ -195,7 +195,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	result.Data = filterThreadsByWorkspaceCWD(result.Data, workspace.Cwd)
 	if len(result.Data) == 0 {
 		buttons := []feishu.Button{
-			{Text: "新会话", Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.threads"}},
+			{Text: commandLabel("新会话", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.threads"}},
 			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.context", "session_key": sessionKey}},
 		}
 		return a.feishu.SimpleStatusCard("线程列表", "blue", menuCardBody("menu.threads", "没有可恢复的线程。"), buttons), nil
@@ -241,7 +241,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		buttons = append(buttons,
 			feishu.Button{
-				Text: submenuLabel("配置 Thread Sandbox"),
+				Text: submenuCommandLabel("配置 Thread Sandbox", "/threads sandbox"),
 				Type: "default",
 				Value: map[string]any{
 					"action":      "thread.sandbox.menu",
@@ -249,7 +249,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 				},
 			},
 			feishu.Button{
-				Text: submenuLabel("配置 Thread Policy"),
+				Text: submenuCommandLabel("配置 Thread Policy", "/threads policy"),
 				Type: "default",
 				Value: map[string]any{
 					"action":      "thread.policy.menu",
@@ -260,7 +260,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	}
 	buttons = append(buttons,
 		feishu.Button{
-			Text: submenuLabel("历史记录"),
+			Text: submenuCommandLabel("历史记录", "/history"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.history",
@@ -268,7 +268,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			},
 		},
 		feishu.Button{
-			Text: "新会话",
+			Text: commandLabel("新会话", "/new"),
 			Type: "default",
 			Value: map[string]any{
 				"action":        "menu.new",
@@ -277,7 +277,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			},
 		},
 		feishu.Button{
-			Text: "刷新列表",
+			Text: commandLabel("刷新列表", "/threads"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.threads",
@@ -436,8 +436,8 @@ func renderThreadListEntry(name, preview, id string) string {
 
 func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
-		{Text: "中断任务", Type: "default", Value: map[string]any{"action": "menu.interrupt", "session_key": sessionKey, "parent_action": "menu.group.session"}},
-		{Text: submenuLabel("Quiet 模式"), Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": sessionKey}},
+		{Text: commandLabel("中断任务", "/interrupt"), Type: "default", Value: map[string]any{"action": "menu.interrupt", "session_key": sessionKey, "parent_action": "menu.group.session"}},
+		{Text: submenuCommandLabel("Quiet 模式", "/quiet"), Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("会话行为", "blue", menuCardBody("menu.group.session", "控制当前会话的行为与输出方式。"), buttons)
@@ -445,9 +445,9 @@ func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
 
 func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
-		{Text: "新线程", Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.group.context"}},
-		{Text: submenuLabel("工作区管理"), Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
-		{Text: submenuLabel("线程管理"), Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
+		{Text: commandLabel("新线程", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.group.context"}},
+		{Text: submenuCommandLabel("工作区管理", "/workspace"), Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("线程管理", "/threads"), Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("会话管理", "blue", menuCardBody("menu.group.context", "管理线程与工作区上下文。"), buttons)
@@ -455,9 +455,9 @@ func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
 
 func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
-		{Text: submenuLabel("模型配置"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
 		{Text: submenuLabel("推理强度"), Type: "default", Value: map[string]any{"action": "menu.reasoning", "session_key": sessionKey}},
-		{Text: submenuLabel("响应速度"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("响应速度", "/fast"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("模型能力", "blue", menuCardBody("menu.group.model", "配置模型、推理强度与响应速度。"), buttons)
@@ -465,9 +465,9 @@ func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
 
 func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
-		{Text: submenuLabel("状态面板"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
-		{Text: submenuLabel("升级服务"), Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": sessionKey}},
-		{Text: submenuLabel("帮助说明"), Type: "default", Value: map[string]any{"action": "menu.help", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("状态面板", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("升级服务", "/upgrade"), Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("帮助说明", "/help"), Type: "default", Value: map[string]any{"action": "menu.help", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("服务管理", "blue", menuCardBody("menu.group.system", "查看服务状态、执行升级，或查阅命令帮助。"), buttons)
@@ -604,7 +604,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 	}
 	buttons = append(buttons,
 		feishu.Button{
-			Text: submenuLabel("新建工作区"),
+			Text: submenuCommandLabel("新建工作区", "/workspace new"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.new",
@@ -612,7 +612,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 		feishu.Button{
-			Text: submenuLabel("配置 Sandbox"),
+			Text: submenuCommandLabel("配置 Sandbox", "/workspace sandbox"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.sandbox.menu",
@@ -620,7 +620,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 		feishu.Button{
-			Text: submenuLabel("配置 Policy"),
+			Text: submenuCommandLabel("配置 Policy", "/workspace policy"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.policy.menu",
@@ -716,7 +716,7 @@ func (a *App) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any,
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回工作区",
+		Text: commandLabel("返回工作区", "/workspace"),
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.workspace",
@@ -769,7 +769,7 @@ func (a *App) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, 
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回工作区",
+		Text: commandLabel("返回工作区", "/workspace"),
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.workspace",
@@ -821,7 +821,7 @@ func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, er
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回线程列表",
+		Text: commandLabel("返回线程列表", "/threads"),
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.threads",
@@ -873,7 +873,7 @@ func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, err
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回线程列表",
+		Text: commandLabel("返回线程列表", "/threads"),
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.threads",
