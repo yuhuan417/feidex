@@ -230,9 +230,9 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey 
 	}
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, modelCardActionRow([]feishu.Button{{
-			Text:  "返回菜单",
+			Text:  "返回上一级",
 			Type:  "default",
-			Value: map[string]any{"action": "menu.root", "session_key": sessionKey},
+			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 		}}))
 	}
 
@@ -288,7 +288,7 @@ func (a *App) renderStatusCard(sessionKey string) map[string]any {
 	}
 	buttons := []feishu.Button{
 		{Text: "刷新", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
-		{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("Status", "blue", a.statusCardBody(sess), buttons)
 }

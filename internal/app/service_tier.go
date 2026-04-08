@@ -89,9 +89,9 @@ func (a *App) renderServiceTierMenuCard(sessionKey string) map[string]any {
 		)
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  "返回菜单",
+		Text:  "返回上一级",
 		Type:  "default",
-		Value: map[string]any{"action": "menu.root", "session_key": sessionKey},
+		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 	})
 	return a.feishu.SimpleStatusCard("Service Tier", "blue", body, buttons)
 }

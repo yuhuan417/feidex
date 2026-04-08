@@ -733,6 +733,18 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuRoot(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.group.session": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuGroupSession(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.group.context": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuGroupContext(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.group.model": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuGroupModel(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.group.system": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuGroupSystem(action, action.ActionValue["session_key"].(string))
+		},
 		"menu.quiet": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuQuiet(action, action.ActionValue["session_key"].(string))
 		},
@@ -779,7 +791,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.group.session", "menu.group.context", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -801,7 +813,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	foundBackToMenu := false
 	for _, action := range workspaceActions {
 		value, _ := action["value"].(map[string]any)
-		if value["action"] == "menu.root" {
+		if value["action"] == "menu.group.context" {
 			foundBackToMenu = true
 		}
 	}

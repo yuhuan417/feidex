@@ -35,6 +35,18 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.root":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuRoot(action, sessionKey)
+	case "menu.group.session":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuGroupSession(action, sessionKey)
+	case "menu.group.context":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuGroupContext(action, sessionKey)
+	case "menu.group.model":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuGroupModel(action, sessionKey)
+	case "menu.group.system":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuGroupSystem(action, sessionKey)
 	case "menu.new":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuNew(action, sessionKey)
@@ -44,6 +56,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.model":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuModel(action, sessionKey)
+	case "menu.reasoning":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuReasoning(action, sessionKey)
 	case "menu.fast":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuFast(action, sessionKey)
@@ -161,6 +176,51 @@ func (a *App) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*c
 	}, nil
 }
 
+func (a *App) completeMenuGroupSession(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开会话行为"},
+		Card:  rawCard(a.renderSessionMenuCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeMenuGroupContext(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开会话管理"},
+		Card:  rawCard(a.renderContextMenuCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeMenuGroupModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开模型能力"},
+		Card:  rawCard(a.renderModelMenuCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeMenuGroupSystem(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开服务管理"},
+		Card:  rawCard(a.renderSystemMenuCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
+	switch strings.TrimSpace(actionName) {
+	case "menu.root":
+		return a.renderCommandMenuCard(sessionKey), true
+	case "menu.group.session":
+		return a.renderSessionMenuCard(sessionKey), true
+	case "menu.group.context":
+		return a.renderContextMenuCard(sessionKey), true
+	case "menu.group.model":
+		return a.renderModelMenuCard(sessionKey), true
+	case "menu.group.system":
+		return a.renderSystemMenuCard(sessionKey), true
+	default:
+		return nil, false
+	}
+}
+
 func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	parentAction, _ := action.ActionValue["parent_action"].(string)
 	sess := a.store.GetSession(sessionKey)
@@ -197,6 +257,12 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 				Card:  rawCard(card),
 			}, nil
 		}
+	}
+	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: content},
+			Card:  rawCard(card),
+		}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: content},
@@ -287,6 +353,19 @@ func (a *App) completeMenuModel(action *feishu.CardAction, sessionKey string) (*
 	}, nil
 }
 
+func (a *App) completeMenuReasoning(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := a.fetchModelList(ctx)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开推理强度配置"},
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
+	}, nil
+}
+
 func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开状态面板"},
@@ -324,12 +403,28 @@ func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActi
 }
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
+	parentAction := ""
+	if action != nil {
+		parentAction, _ = action.ActionValue["parent_action"].(string)
+	}
 	sess := a.store.GetSession(sessionKey)
 	discarded := a.discardSessionPendingInputs(sessionKey)
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" {
 		if discarded > 0 {
+			if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+				return &callback.CardActionTriggerResponse{
+					Toast: &callback.Toast{Type: "success", Content: fmt.Sprintf("已清空 %d 条排队或暂存输入", discarded)},
+					Card:  rawCard(card),
+				}, nil
+			}
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: fmt.Sprintf("已清空 %d 条排队或暂存输入", discarded)}}, nil
+		}
+		if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: "当前没有运行中的任务"},
+				Card:  rawCard(card),
+			}, nil
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前没有运行中的任务"}}, nil
 	}
@@ -345,6 +440,12 @@ func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targe
 	content := "已请求中断"
 	if discarded > 0 {
 		content = fmt.Sprintf("已请求中断，并清空 %d 条排队或暂存输入", discarded)
+	}
+	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: content},
+			Card:  rawCard(card),
+		}, nil
 	}
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: content}}, nil
 }

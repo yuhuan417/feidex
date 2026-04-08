@@ -70,7 +70,7 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 
 	if cmp, err := release.CompareVersions(current, latest.Version); err == nil && cmp >= 0 {
 		return a.feishu.SimpleStatusCard("已是最新版本", "green", strings.Join(bodyLines, "\n"), []feishu.Button{
-			{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		}), nil
 	}
 
@@ -89,7 +89,7 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 	bodyLines = append(bodyLines, "", "确认后会下载新版本、重启 daemon；如果启动失败会自动回退到旧版本。")
 	card := a.feishu.SimpleStatusCard("升级确认", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
 		{Text: "升级到 " + latest.Version, Type: "primary", Value: map[string]any{"action": "upgrade.confirm", "request_id": requestID, "session_key": sessionKey}},
-		{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "upgrade.cancel", "request_id": requestID, "session_key": sessionKey}},
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "upgrade.cancel", "request_id": requestID, "session_key": sessionKey}},
 	})
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:           requestID,
@@ -133,7 +133,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-			Card:  rawCard(a.renderCommandMenuCard(sessionKey)),
+			Card:  rawCard(a.renderSystemMenuCard(sessionKey)),
 		}, nil
 	}
 
@@ -167,7 +167,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已开始升级"},
 		Card: rawCard(a.feishu.SimpleStatusCard("升级中", "orange", body, []feishu.Button{
-			{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})),
 	}, nil
 }

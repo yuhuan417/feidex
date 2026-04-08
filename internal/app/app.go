@@ -734,13 +734,10 @@ func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
 
 func (a *App) renderCommandMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
-		{Text: "/status", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
-		{Text: "/model", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-		{Text: "/fast", Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
-		{Text: "/quiet", Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": sessionKey}},
-		{Text: "/upgrade", Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": sessionKey}},
-		{Text: "/workspace", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
-		{Text: "/threads", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
+		{Text: "会话行为", Type: "default", Value: map[string]any{"action": "menu.group.session", "session_key": sessionKey}},
+		{Text: "会话管理", Type: "default", Value: map[string]any{"action": "menu.group.context", "session_key": sessionKey}},
+		{Text: "模型能力", Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
+		{Text: "服务管理", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("命令菜单", "blue", "选择命令执行。", buttons)
+	return a.feishu.SimpleStatusCard("命令菜单", "blue", "选择功能分组。", buttons)
 }
