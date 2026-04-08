@@ -31,11 +31,14 @@ func TestOpenCreatesDefaultSnapshotAndFile(t *testing.T) {
 	if store.path != path {
 		t.Fatalf("store.path = %q, want %q", store.path, path)
 	}
-	if store.data.Counters.NextSubmission != 1 || store.data.Counters.NextLocalID != 1 {
-		t.Fatalf("unexpected default counters: %+v", store.data.Counters)
+	if store.data.Version != currentSnapshotVersion {
+		t.Fatalf("store.data.Version = %d, want %d", store.data.Version, currentSnapshotVersion)
 	}
-	if len(store.data.Sessions) != 0 || len(store.data.Submissions) != 0 || len(store.data.PendingRequests) != 0 {
-		t.Fatalf("expected empty default snapshot, got %+v", store.data)
+	if len(store.data.Sessions) != 0 {
+		t.Fatalf("expected empty sessions snapshot, got %+v", store.data.Sessions)
+	}
+	if store.runtime.Counters.NextSubmission != 1 || store.runtime.Counters.NextLocalID != 1 {
+		t.Fatalf("unexpected default runtime counters: %+v", store.runtime.Counters)
 	}
 
 	content, err := os.ReadFile(path)
@@ -45,10 +48,16 @@ func TestOpenCreatesDefaultSnapshotAndFile(t *testing.T) {
 	if len(content) == 0 {
 		t.Fatal("expected store file to be created")
 	}
+	if strings.Contains(string(content), "submissions") {
+		t.Fatalf("persisted snapshot should not contain runtime fields:\n%s", string(content))
+	}
 
 	var snapshot Snapshot
 	if err := json.Unmarshal(content, &snapshot); err != nil {
 		t.Fatalf("persisted snapshot is invalid JSON: %v", err)
+	}
+	if snapshot.Version != currentSnapshotVersion {
+		t.Fatalf("persisted version = %d, want %d", snapshot.Version, currentSnapshotVersion)
 	}
 }
 
@@ -63,12 +72,26 @@ func TestOpenHandlesEmptyLegacyAndInvalidFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(empty) error = %v", err)
 	}
-	if emptyStore.data.Sessions == nil || emptyStore.data.Counters.NextSubmission != 1 {
+	if emptyStore.data.Sessions == nil || emptyStore.data.Version != currentSnapshotVersion {
 		t.Fatalf("unexpected defaults from empty file: %+v", emptyStore.data)
 	}
 
 	legacyPath := filepath.Join(dir, "legacy.json")
-	legacy := `{"sessions":null,"submissions":null,"pending_requests":null,"message_links":null,"inbound_dedup":null,"counters":{"next_submission":0,"next_local_id":0}}`
+	legacy := `{
+  "sessions": {
+    "session-1": {
+      "key": "session-1",
+      "active_thread_id": "thread-1",
+      "active_thread_service_tier": "flex",
+      "updated_at": 1
+    }
+  },
+  "submissions": {"sub-1": {"id": "sub-1"}},
+  "pending_requests": {"pending-1": {"id": "pending-1"}},
+  "message_links": {"msg-1": {"message_id": "msg-1"}},
+  "inbound_dedup": {"msg-2": 1},
+  "counters": {"next_submission": 99, "next_local_id": 42}
+}`
 	if err := os.WriteFile(legacyPath, []byte(legacy), 0o644); err != nil {
 		t.Fatalf("WriteFile(legacy) error = %v", err)
 	}
@@ -76,14 +99,26 @@ func TestOpenHandlesEmptyLegacyAndInvalidFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(legacy) error = %v", err)
 	}
-	if legacyStore.data.Sessions == nil || legacyStore.data.Submissions == nil || legacyStore.data.PendingRequests == nil {
-		t.Fatal("expected nil maps to be initialized")
+	sess := legacyStore.GetSession("session-1")
+	if sess == nil {
+		t.Fatal("expected legacy session to be loaded")
 	}
-	if legacyStore.data.MessageLinks == nil || legacyStore.data.InboundDedup == nil {
-		t.Fatal("expected message link and inbound maps to be initialized")
+	if sess.ActiveThreadServiceTier != "" {
+		t.Fatalf("service tier = %q, want repaired empty value", sess.ActiveThreadServiceTier)
 	}
-	if legacyStore.data.Counters.NextSubmission != 1 || legacyStore.data.Counters.NextLocalID != 1 {
-		t.Fatalf("expected counters to be repaired, got %+v", legacyStore.data.Counters)
+
+	content, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatalf("ReadFile(legacy) error = %v", err)
+	}
+	text := string(content)
+	for _, forbidden := range []string{"submissions", "pending_requests", "message_links", "inbound_dedup", "next_submission"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("persisted snapshot should drop legacy runtime field %q:\n%s", forbidden, text)
+		}
+	}
+	if !strings.Contains(text, `"version": 2`) {
+		t.Fatalf("persisted snapshot should be rewritten to current version:\n%s", text)
 	}
 
 	invalidPath := filepath.Join(dir, "invalid.json")
@@ -190,86 +225,12 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 	}
 }
 
-func TestSessionServiceTierOmittedWhenUnset(t *testing.T) {
-	store := openTestStore(t)
-
-	if err := store.UpsertSession(&Session{
-		Key:                     "session-1",
-		ActiveThreadID:          "thread-1",
-		ActiveThreadWorkspaceID: "default",
-		ActiveThreadServiceTier: "",
-	}); err != nil {
-		t.Fatalf("UpsertSession() error = %v", err)
-	}
-
-	content, err := os.ReadFile(store.path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-	if strings.Contains(string(content), "active_thread_service_tier") {
-		t.Fatalf("persisted snapshot should omit empty service tier:\n%s", string(content))
-	}
-}
-
-func TestSessionServiceTierRepairsLegacyValuesOnOpenAndSave(t *testing.T) {
+func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	legacy := `{
-  "sessions": {
-    "session-1": {
-      "key": "session-1",
-      "active_thread_id": "thread-1",
-      "active_thread_service_tier": "flex",
-      "updated_at": 1
-    }
-  },
-  "submissions": {},
-  "pending_requests": {},
-  "message_links": {},
-  "inbound_dedup": {},
-  "counters": {
-    "next_submission": 1,
-    "next_local_id": 1
-  }
-}`
-	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
 	store, err := Open(path)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	sess := store.GetSession("session-1")
-	if sess == nil {
-		t.Fatal("expected session to be loaded")
-	}
-	if sess.ActiveThreadServiceTier != "" {
-		t.Fatalf("service tier = %q, want empty after repair", sess.ActiveThreadServiceTier)
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-	if strings.Contains(string(content), "active_thread_service_tier") {
-		t.Fatalf("persisted snapshot should repair legacy service tier:\n%s", string(content))
-	}
-
-	if err := store.UpsertSession(&Session{
-		Key:                     "session-2",
-		ActiveThreadID:          "thread-2",
-		ActiveThreadServiceTier: " FAST ",
-	}); err != nil {
-		t.Fatalf("UpsertSession(normalize fast) error = %v", err)
-	}
-	sess = store.GetSession("session-2")
-	if sess == nil || sess.ActiveThreadServiceTier != "fast" {
-		t.Fatalf("normalized session = %+v, want fast", sess)
-	}
-}
-
-func TestSubmissionLifecycleAndHelpers(t *testing.T) {
-	store := openTestStore(t)
 
 	sub := &Submission{
 		SessionKey:       "session-1",
@@ -326,32 +287,6 @@ func TestSubmissionLifecycleAndHelpers(t *testing.T) {
 		t.Fatalf("GetSubmission(missing) = %+v, want nil", got)
 	}
 
-	local1, err := store.NextLocalID("")
-	if err != nil {
-		t.Fatalf("NextLocalID(empty) error = %v", err)
-	}
-	local2, err := store.NextLocalID(" chat ")
-	if err != nil {
-		t.Fatalf("NextLocalID(prefix) error = %v", err)
-	}
-	if !strings.HasPrefix(local1, "local-") || !strings.HasPrefix(local2, "chat-") || local1 == local2 {
-		t.Fatalf("unexpected local ids: %q %q", local1, local2)
-	}
-
-	if cloneSubmission(nil) != nil {
-		t.Fatal("cloneSubmission(nil) should return nil")
-	}
-	if got := strconvFormat(42); got != "000042" {
-		t.Fatalf("strconvFormat(42) = %q, want 000042", got)
-	}
-	if got := formatID(7); !strings.HasSuffix(got, "-000007") {
-		t.Fatalf("formatID(7) = %q, want suffix -000007", got)
-	}
-}
-
-func TestPendingLinksAndInboundDedup(t *testing.T) {
-	store := openTestStore(t)
-
 	req := &PendingRequest{ID: "pending-1", Kind: "approval", Status: "open"}
 	if err := store.UpsertPending(req); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
@@ -359,13 +294,9 @@ func TestPendingLinksAndInboundDedup(t *testing.T) {
 	req.Status = "mutated"
 
 	savedReq := store.PendingByID("pending-1")
-	if savedReq == nil {
-		t.Fatal("PendingByID() returned nil")
+	if savedReq == nil || savedReq.Status != "open" {
+		t.Fatalf("PendingByID() = %+v, want open copy", savedReq)
 	}
-	if savedReq.Status != "open" {
-		t.Fatalf("stored pending request was mutated through caller struct: %+v", savedReq)
-	}
-
 	savedReq.Status = "changed"
 	if store.PendingByID("pending-1").Status != "open" {
 		t.Fatal("PendingByID() returned shared pointer")
@@ -382,62 +313,65 @@ func TestPendingLinksAndInboundDedup(t *testing.T) {
 	if err := store.UpdatePending("missing", func(*PendingRequest) {}); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("UpdatePending(missing) error = %v, want %v", err, os.ErrNotExist)
 	}
-
-	allPending := store.AllPendingRequests()
-	if len(allPending) != 1 {
-		t.Fatalf("AllPendingRequests() len = %d, want 1", len(allPending))
-	}
-	allPending[0].Status = "changed"
-	if store.PendingByID("pending-1").Status != "done" {
-		t.Fatal("AllPendingRequests() returned shared pointer")
-	}
-
-	if err := store.UpsertMessageLink(nil); err != nil {
-		t.Fatalf("UpsertMessageLink(nil) error = %v", err)
-	}
-	if err := store.UpsertMessageLink(&MessageLink{}); err != nil {
-		t.Fatalf("UpsertMessageLink(empty) error = %v", err)
+	store.DeletePendingRequests(func(p *PendingRequest) bool { return p != nil && p.Status == "done" })
+	if got := store.PendingByID("pending-1"); got != nil {
+		t.Fatalf("DeletePendingRequests() should remove request, got %+v", got)
 	}
 
 	link := &MessageLink{MessageID: "msg-1", Kind: "submission"}
 	if err := store.UpsertMessageLink(link); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
-	if savedLink := store.data.MessageLinks["msg-1"]; savedLink == nil || savedLink.CreatedAt == 0 {
-		t.Fatalf("expected message link timestamp to be populated, got %+v", savedLink)
+	savedLink := store.GetMessageLink("msg-1")
+	if savedLink == nil || savedLink.CreatedAt == 0 {
+		t.Fatalf("GetMessageLink() = %+v, want populated timestamp", savedLink)
+	}
+	store.DeleteMessageLinks(func(link *MessageLink) bool { return link != nil && link.Kind == "submission" })
+	if got := store.GetMessageLink("msg-1"); got != nil {
+		t.Fatalf("DeleteMessageLinks() should remove link, got %+v", got)
 	}
 
-	seen, err := store.MarkInboundSeen("", 0)
-	if err != nil || seen {
-		t.Fatalf("MarkInboundSeen(empty) = (%v, %v), want (false, nil)", seen, err)
-	}
-	seen, err = store.MarkInboundSeen("msg-1", 123)
+	local1, err := store.NextLocalID("")
 	if err != nil {
-		t.Fatalf("MarkInboundSeen(first) error = %v", err)
+		t.Fatalf("NextLocalID(empty) error = %v", err)
 	}
-	if seen {
-		t.Fatal("MarkInboundSeen(first) reported duplicate")
-	}
-	seen, err = store.MarkInboundSeen("msg-1", 456)
+	local2, err := store.NextLocalID(" chat ")
 	if err != nil {
-		t.Fatalf("MarkInboundSeen(second) error = %v", err)
+		t.Fatalf("NextLocalID(prefix) error = %v", err)
 	}
-	if !seen {
-		t.Fatal("MarkInboundSeen(second) did not report duplicate")
+	if !strings.HasPrefix(local1, "local-") || !strings.HasPrefix(local2, "chat-") || local1 == local2 {
+		t.Fatalf("unexpected local ids: %q %q", local1, local2)
 	}
 
-	store.data.InboundDedup["old"] = 1
-	store.data.InboundDedup["new"] = 100
-	if err := store.CleanupInboundSeen(10); err != nil {
-		t.Fatalf("CleanupInboundSeen() error = %v", err)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
 	}
-	if _, ok := store.data.InboundDedup["old"]; ok {
-		t.Fatal("CleanupInboundSeen() did not remove old entry")
+	if strings.Contains(string(content), id) || strings.Contains(string(content), "pending-1") || strings.Contains(string(content), "msg-1") {
+		t.Fatalf("runtime-only data should not be persisted:\n%s", string(content))
 	}
-	if _, ok := store.data.InboundDedup["new"]; !ok {
-		t.Fatal("CleanupInboundSeen() removed fresh entry")
+
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
 	}
-	if err := store.CleanupInboundSeen(10); err != nil {
-		t.Fatalf("CleanupInboundSeen(no-op) error = %v", err)
+	if got := reopened.GetSubmission(id); got != nil {
+		t.Fatalf("submission should not survive reopen, got %+v", got)
+	}
+	if got := reopened.PendingByID("pending-1"); got != nil {
+		t.Fatalf("pending request should not survive reopen, got %+v", got)
+	}
+	if got := reopened.GetMessageLink("msg-1"); got != nil {
+		t.Fatalf("message link should not survive reopen, got %+v", got)
+	}
+
+	if cloneSubmission(nil) != nil {
+		t.Fatal("cloneSubmission(nil) should return nil")
+	}
+	if got := strconvFormat(42); got != "000042" {
+		t.Fatalf("strconvFormat(42) = %q, want 000042", got)
+	}
+	if got := formatID(7); !strings.HasSuffix(got, "-000007") {
+		t.Fatalf("formatID(7) = %q, want suffix -000007", got)
 	}
 }

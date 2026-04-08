@@ -426,6 +426,7 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 		)
 		go a.startNextSubmissionAsync(sessionKey, "finishTurn")
 	}
+	a.cleanupSubmissionRuntimeState(sub)
 }
 
 func (a *App) startNextSubmissionAsync(sessionKey, source string) {

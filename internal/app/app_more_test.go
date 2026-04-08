@@ -1352,8 +1352,8 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	a.finishTurn("thread-1", "turn-1", "completed")
 	time.Sleep(20 * time.Millisecond)
 	sub = a.store.GetSubmission(subID)
-	if sub == nil || !sub.Finalized || sub.Status != "completed" {
-		t.Fatalf("submission after finishTurn = %+v", sub)
+	if sub != nil {
+		t.Fatalf("submission after finishTurn should be released from runtime store, got %+v", sub)
 	}
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {

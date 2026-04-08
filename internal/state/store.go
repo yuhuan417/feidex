@@ -13,19 +13,25 @@ import (
 	"time"
 )
 
+const currentSnapshotVersion = 2
+
 type Store struct {
-	path string
-	mu   sync.Mutex
-	data Snapshot
+	path    string
+	mu      sync.Mutex
+	data    Snapshot
+	runtime runtimeState
 }
 
 type Snapshot struct {
-	Sessions        map[string]*Session        `json:"sessions"`
-	Submissions     map[string]*Submission     `json:"submissions"`
-	PendingRequests map[string]*PendingRequest `json:"pending_requests"`
-	MessageLinks    map[string]*MessageLink    `json:"message_links"`
-	InboundDedup    map[string]int64           `json:"inbound_dedup"`
-	Counters        Counters                   `json:"counters"`
+	Version  int                 `json:"version"`
+	Sessions map[string]*Session `json:"sessions"`
+}
+
+type runtimeState struct {
+	Submissions     map[string]*Submission
+	PendingRequests map[string]*PendingRequest
+	MessageLinks    map[string]*MessageLink
+	Counters        Counters
 }
 
 type Counters struct {
@@ -131,11 +137,13 @@ func Open(path string) (*Store, error) {
 	s := &Store{
 		path: path,
 		data: Snapshot{
-			Sessions:        map[string]*Session{},
+			Version:  currentSnapshotVersion,
+			Sessions: map[string]*Session{},
+		},
+		runtime: runtimeState{
 			Submissions:     map[string]*Submission{},
 			PendingRequests: map[string]*PendingRequest{},
 			MessageLinks:    map[string]*MessageLink{},
-			InboundDedup:    map[string]int64{},
 			Counters:        Counters{NextSubmission: 1, NextLocalID: 1},
 		},
 	}
@@ -147,7 +155,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	if len(b) == 0 {
-		return s, nil
+		return s, s.saveLocked()
 	}
 	if err := json.Unmarshal(b, &s.data); err != nil {
 		return nil, err
@@ -155,31 +163,14 @@ func Open(path string) (*Store, error) {
 	if s.data.Sessions == nil {
 		s.data.Sessions = map[string]*Session{}
 	}
-	if s.data.Submissions == nil {
-		s.data.Submissions = map[string]*Submission{}
-	}
-	if s.data.PendingRequests == nil {
-		s.data.PendingRequests = map[string]*PendingRequest{}
-	}
-	if s.data.MessageLinks == nil {
-		s.data.MessageLinks = map[string]*MessageLink{}
-	}
-	if s.data.InboundDedup == nil {
-		s.data.InboundDedup = map[string]int64{}
-	}
-	if s.data.Counters.NextSubmission <= 0 {
-		s.data.Counters.NextSubmission = 1
-	}
-	if s.data.Counters.NextLocalID <= 0 {
-		s.data.Counters.NextLocalID = 1
-	}
-	repaired := false
+	rewrite := s.data.Version != currentSnapshotVersion
+	s.data.Version = currentSnapshotVersion
 	for _, sess := range s.data.Sessions {
 		if normalizeSessionForStorage(sess) {
-			repaired = true
+			rewrite = true
 		}
 	}
-	if repaired {
+	if rewrite {
 		if err := s.saveLocked(); err != nil {
 			return nil, err
 		}
@@ -215,10 +206,10 @@ func (s *Store) UpsertSession(sess *Session) error {
 func (s *Store) CreateSubmission(sub *Submission) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id := sub.ID
+	id := strings.TrimSpace(sub.ID)
 	if id == "" {
-		id = "sub-" + formatID(s.data.Counters.NextSubmission)
-		s.data.Counters.NextSubmission++
+		id = "sub-" + formatID(s.runtime.Counters.NextSubmission)
+		s.runtime.Counters.NextSubmission++
 	}
 	now := time.Now().Unix()
 	cp := cloneSubmission(sub)
@@ -228,14 +219,14 @@ func (s *Store) CreateSubmission(sub *Submission) (string, error) {
 	cp.ID = id
 	cp.CreatedAt = now
 	cp.UpdatedAt = now
-	s.data.Submissions[id] = cp
-	return id, s.saveLocked()
+	s.runtime.Submissions[id] = cp
+	return id, nil
 }
 
 func (s *Store) GetSubmission(id string) *Submission {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sub, ok := s.data.Submissions[id]
+	sub, ok := s.runtime.Submissions[id]
 	if !ok {
 		return nil
 	}
@@ -245,13 +236,19 @@ func (s *Store) GetSubmission(id string) *Submission {
 func (s *Store) UpdateSubmission(id string, mutate func(*Submission)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sub, ok := s.data.Submissions[id]
+	sub, ok := s.runtime.Submissions[id]
 	if !ok {
 		return os.ErrNotExist
 	}
 	mutate(sub)
 	sub.UpdatedAt = time.Now().Unix()
-	return s.saveLocked()
+	return nil
+}
+
+func (s *Store) DeleteSubmission(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.runtime.Submissions, strings.TrimSpace(id))
 }
 
 func (s *Store) QueueSubmission(sessionKey, submissionID string) error {
@@ -297,7 +294,7 @@ func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
 func (s *Store) PendingByID(id string) *PendingRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	req, ok := s.data.PendingRequests[id]
+	req, ok := s.runtime.PendingRequests[id]
 	if !ok {
 		return nil
 	}
@@ -306,22 +303,44 @@ func (s *Store) PendingByID(id string) *PendingRequest {
 }
 
 func (s *Store) UpsertPending(req *PendingRequest) error {
+	if req == nil || strings.TrimSpace(req.ID) == "" {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *req
-	s.data.PendingRequests[req.ID] = &cp
-	return s.saveLocked()
+	s.runtime.PendingRequests[req.ID] = &cp
+	return nil
 }
 
 func (s *Store) UpdatePending(id string, mutate func(*PendingRequest)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	req, ok := s.data.PendingRequests[id]
+	req, ok := s.runtime.PendingRequests[id]
 	if !ok {
 		return os.ErrNotExist
 	}
 	mutate(req)
-	return s.saveLocked()
+	return nil
+}
+
+func (s *Store) DeletePending(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.runtime.PendingRequests, strings.TrimSpace(id))
+}
+
+func (s *Store) DeletePendingRequests(match func(*PendingRequest) bool) {
+	if match == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, req := range s.runtime.PendingRequests {
+		if req != nil && match(req) {
+			delete(s.runtime.PendingRequests, id)
+		}
+	}
 }
 
 func (s *Store) AllSessions() []*Session {
@@ -379,8 +398,8 @@ func cloneSubmission(sub *Submission) *Submission {
 func (s *Store) AllPendingRequests() []*PendingRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]*PendingRequest, 0, len(s.data.PendingRequests))
-	for _, req := range s.data.PendingRequests {
+	out := make([]*PendingRequest, 0, len(s.runtime.PendingRequests))
+	for _, req := range s.runtime.PendingRequests {
 		cp := *req
 		out = append(out, &cp)
 	}
@@ -394,23 +413,23 @@ func (s *Store) NextLocalID(prefix string) (string, error) {
 	if id == "" {
 		id = "local"
 	}
-	value := fmt.Sprintf("%s-%s", id, formatID(s.data.Counters.NextLocalID))
-	s.data.Counters.NextLocalID++
-	return value, s.saveLocked()
+	value := fmt.Sprintf("%s-%s", id, formatID(s.runtime.Counters.NextLocalID))
+	s.runtime.Counters.NextLocalID++
+	return value, nil
 }
 
 func (s *Store) UpsertMessageLink(link *MessageLink) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if link == nil || link.MessageID == "" {
+	if link == nil || strings.TrimSpace(link.MessageID) == "" {
 		return nil
 	}
 	cp := *link
 	if cp.CreatedAt == 0 {
 		cp.CreatedAt = time.Now().Unix()
 	}
-	s.data.MessageLinks[cp.MessageID] = &cp
-	return s.saveLocked()
+	s.runtime.MessageLinks[cp.MessageID] = &cp
+	return nil
 }
 
 func (s *Store) GetMessageLink(messageID string) *MessageLink {
@@ -420,43 +439,24 @@ func (s *Store) GetMessageLink(messageID string) *MessageLink {
 	if messageID == "" {
 		return nil
 	}
-	if link, ok := s.data.MessageLinks[messageID]; ok {
+	if link, ok := s.runtime.MessageLinks[messageID]; ok {
 		cp := *link
 		return &cp
 	}
 	return nil
 }
 
-func (s *Store) MarkInboundSeen(messageID string, seenAt int64) (bool, error) {
+func (s *Store) DeleteMessageLinks(match func(*MessageLink) bool) {
+	if match == nil {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if strings.TrimSpace(messageID) == "" {
-		return false, nil
-	}
-	if _, exists := s.data.InboundDedup[messageID]; exists {
-		return true, nil
-	}
-	if seenAt == 0 {
-		seenAt = time.Now().Unix()
-	}
-	s.data.InboundDedup[messageID] = seenAt
-	return false, s.saveLocked()
-}
-
-func (s *Store) CleanupInboundSeen(before int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	changed := false
-	for id, ts := range s.data.InboundDedup {
-		if ts < before {
-			delete(s.data.InboundDedup, id)
-			changed = true
+	for id, link := range s.runtime.MessageLinks {
+		if link != nil && match(link) {
+			delete(s.runtime.MessageLinks, id)
 		}
 	}
-	if !changed {
-		return nil
-	}
-	return s.saveLocked()
 }
 
 func (s *Store) ensureSessionLocked(key string) *Session {
@@ -469,6 +469,7 @@ func (s *Store) ensureSessionLocked(key string) *Session {
 }
 
 func (s *Store) saveLocked() error {
+	s.data.Version = currentSnapshotVersion
 	tmp := s.path + ".tmp"
 	b, err := json.MarshalIndent(&s.data, "", "  ")
 	if err != nil {

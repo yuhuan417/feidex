@@ -135,7 +135,7 @@ func TestDiscardPendingInputByMessageIDCancelsStagedAndQueuedInputs(t *testing.T
 		t.Fatalf("expected session to become idle, got %#v", sess)
 	}
 	sub := a.store.GetSubmission("sub-1")
-	if sub == nil || sub.Status != "discarded" || !sub.Finalized {
-		t.Fatalf("expected queued submission to be discarded, got %#v", sub)
+	if sub != nil {
+		t.Fatalf("expected queued submission to be released from runtime store, got %#v", sub)
 	}
 }

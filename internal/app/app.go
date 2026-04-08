@@ -26,6 +26,7 @@ type App struct {
 	codex   codexClient
 	feishu  feishuClient
 	started time.Time
+	deduper *inboundDeduper
 
 	turnStreamsMu sync.Mutex
 	turnStreams   map[string]*turnStream
@@ -54,6 +55,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		codex:         codexClient,
 		feishu:        newFeishuClient(cfg.Feishu),
 		started:       time.Now(),
+		deduper:       newInboundDeduper(),
 		turnStreams:   map[string]*turnStream{},
 		liveThreads:   map[string]string{},
 		statusFlushCh: make(chan struct{}, 1),
@@ -69,6 +71,7 @@ func (a *App) Start(ctx context.Context) error {
 		return err
 	}
 	a.startStatusRefreshLoop(ctx)
+	a.startInboundDeduperLoop(ctx)
 	a.recoverRuntimeState()
 	if err := a.feishu.Start(ctx); err != nil {
 		return err
@@ -124,7 +127,6 @@ func (a *App) recoverRuntimeState() {
 		slog.Debug("runtime session state recovery complete", "cleared_sessions", cleared)
 	}
 	a.expirePendingRequestsOnStartup()
-	_ = a.store.CleanupInboundSeen(time.Now().Add(-24 * time.Hour).Unix())
 	a.cleanupExpiredAttachments()
 }
 
@@ -136,11 +138,21 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 		slog.Debug("feishu stale message ignored", "message_id", msg.MessageID, "created_at", msg.CreatedAt)
 		return
 	}
-	if duplicate, err := a.store.MarkInboundSeen(msg.MessageID, nonZero(msg.CreatedAt, time.Now().Unix())); err == nil && duplicate {
-		slog.Debug("feishu duplicate message ignored by persistent store", "message_id", msg.MessageID)
+	if a.deduper != nil && !a.deduper.Claim(msg.MessageID) {
+		slog.Debug("feishu duplicate message ignored by inbound deduper", "message_id", msg.MessageID)
 		return
-	} else if err != nil {
-		slog.Error("mark inbound seen", "message_id", msg.MessageID, "error", err)
+	}
+	releaseClaim := true
+	defer func() {
+		if releaseClaim && a.deduper != nil {
+			a.deduper.Release(msg.MessageID)
+		}
+	}()
+	markHandled := func() {
+		if a.deduper != nil {
+			a.deduper.MarkDone(msg.MessageID)
+		}
+		releaseClaim = false
 	}
 	sessionKey := a.makeSessionKey(msg)
 	logText := truncate(msg.Text, 160)
@@ -159,14 +171,18 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 	if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
 		if err := a.handlePendingTextResponse(msg, pending); err != nil {
 			_ = a.replyError(msg, err)
+			return
 		}
+		markHandled()
 		return
 	}
 	if strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
 		if isLocalCommand(strings.TrimSpace(msg.Text)) {
 			if err := a.handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
 				_ = a.replyError(msg, err)
+				return
 			}
+			markHandled()
 			return
 		}
 	}
@@ -174,14 +190,18 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 	if a.shouldStageInboundImages(msg) {
 		if err := a.stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
 			_ = a.replyError(msg, err)
+			return
 		}
+		markHandled()
 		return
 	}
 	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
+		markHandled()
 		return
 	}
 	if replyLink != nil {
 		if steered, err := a.trySteerInboundReply(msg, replyLink); err == nil && steered {
+			markHandled()
 			return
 		} else if err != nil {
 			slog.Warn("reply steer failed; falling back to queue",
@@ -195,7 +215,9 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 	}
 	if err := a.enqueueSubmissionWithSessionKey(msg, a.makeSessionKey(msg), replyLink != nil); err != nil {
 		_ = a.replyError(msg, err)
+		return
 	}
+	markHandled()
 }
 
 func (a *App) handleFeishuRecall(recall *feishu.MessageRecall) {

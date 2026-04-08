@@ -161,6 +161,7 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 				return false
 			}
 			a.markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
+			a.cleanupSubmissionRuntimeState(sub)
 			return true
 		}
 	}
@@ -189,6 +190,7 @@ func (a *App) discardSessionPendingInputs(sessionKey string) int {
 			continue
 		}
 		discarded++
+		a.cleanupSubmissionRuntimeState(sub)
 	}
 	sess.Queue = nil
 	sess.StagedImages = nil

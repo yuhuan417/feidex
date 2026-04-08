@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"feidex/internal/state"
@@ -59,6 +60,34 @@ func (a *App) cleanupAttachmentDir(root string) {
 		if info.ModTime().Before(threshold) {
 			_ = os.RemoveAll(path)
 		}
+	}
+}
+
+func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
+	if a == nil || a.store == nil || sub == nil {
+		return
+	}
+	submissionID := strings.TrimSpace(sub.ID)
+	turnID := strings.TrimSpace(sub.TurnID)
+	a.store.DeleteMessageLinks(func(link *state.MessageLink) bool {
+		if link == nil {
+			return false
+		}
+		if submissionID != "" && strings.TrimSpace(link.SubmissionID) == submissionID {
+			return true
+		}
+		if turnID != "" && strings.TrimSpace(link.TurnID) == turnID {
+			return true
+		}
+		return false
+	})
+	if turnID != "" {
+		a.store.DeletePendingRequests(func(req *state.PendingRequest) bool {
+			return req != nil && strings.TrimSpace(req.TurnID) == turnID
+		})
+	}
+	if submissionID != "" {
+		a.store.DeleteSubmission(submissionID)
 	}
 }
 
