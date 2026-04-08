@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -167,7 +168,12 @@ func (c *GitHubClient) fetchChecksums(ctx context.Context, url string) (map[stri
 			continue
 		}
 		name := strings.TrimPrefix(strings.TrimSpace(fields[len(fields)-1]), "*")
-		values[name] = strings.TrimSpace(fields[0])
+		sum := strings.TrimSpace(fields[0])
+		if name == "" || sum == "" {
+			continue
+		}
+		values[name] = sum
+		values[filepath.Base(name)] = sum
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err

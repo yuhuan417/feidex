@@ -24,7 +24,7 @@ func TestLatestLinuxAMD64(t *testing.T) {
 		_, _ = w.Write([]byte(strings.ReplaceAll(payload, "__SERVER_URL__", server.URL)))
 	})
 	mux.HandleFunc("/download/sums", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("abc123  feidex-linux-amd64\n"))
+		_, _ = w.Write([]byte("abc123  dist/feidex-linux-amd64\n"))
 	})
 	server = httptest.NewServer(mux)
 	defer server.Close()
