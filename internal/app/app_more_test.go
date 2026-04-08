@@ -1293,3 +1293,100 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		t.Fatal("expected thread list card to be sent")
 	}
 }
+
+func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
+	sessionKey := a.makeSessionKey(msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	attempts := 0
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		attempts++
+		result := out.(*codexrpc.ThreadListResult)
+		if attempts < 3 {
+			result.Data = nil
+			return nil
+		}
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "thread-default", Name: "Default Thread", Preview: "Default Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "thread-alt", Name: "Alt Thread", Preview: "Alt Preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[1].Cwd},
+		}
+		return nil
+	}
+
+	if err := a.commandThreads(msg, false); err != nil {
+		t.Fatalf("commandThreads(filter) error = %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("thread/list attempts = %d, want 3", attempts)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected thread list card to be sent")
+	}
+	elements := ff.replyCards[0]["elements"].([]map[string]any)
+	body := elements[0]["content"].(string)
+	if !strings.Contains(body, "Default Thread") {
+		t.Fatalf("thread list body missing current workspace thread: %q", body)
+	}
+	if strings.Contains(body, "Alt Thread") {
+		t.Fatalf("thread list body should exclude other workspace thread: %q", body)
+	}
+	actions := elements[1]["actions"].([]map[string]any)
+	if len(actions) != 1 {
+		t.Fatalf("thread list button count = %d, want 1", len(actions))
+	}
+	value := actions[0]["value"].(map[string]any)
+	if got, _ := value["thread_cwd"].(string); got != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("thread_cwd = %q, want %q", got, a.cfg.Workspaces[0].Cwd)
+	}
+}
+
+func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		OwnerUserID: "user-1",
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		t.Fatalf("unexpected method: %s", method)
+		return nil
+	}
+
+	resp, err := a.completeThreadResume(&feishu.CardAction{
+		UserID: "user-1",
+		ChatID: "chat-1",
+		ActionValue: map[string]any{
+			"thread_name":    "Alt Thread",
+			"thread_preview": "Alt Preview",
+			"thread_cwd":     a.cfg.Workspaces[1].Cwd,
+		},
+	}, sessionKey, "thread-alt")
+	if err != nil {
+		t.Fatalf("completeThreadResume() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("expected warning toast, got %#v", resp)
+	}
+	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "" {
+		t.Fatalf("session after rejected resume = %+v, want no active thread", got)
+	}
+}

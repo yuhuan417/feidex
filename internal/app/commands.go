@@ -167,6 +167,7 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 	if err != nil && len(result.Data) == 0 {
 		return err
 	}
+	result.Data = filterThreadsByWorkspaceCWD(result.Data, workspace.Cwd)
 	if len(result.Data) == 0 {
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, "没有可恢复的线程。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
@@ -203,6 +204,7 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 				"thread_id":      item.ID,
 				"thread_name":    item.Name,
 				"thread_preview": item.Preview,
+				"thread_cwd":     item.Cwd,
 				"session_key":    sessionKey,
 			},
 		})
@@ -368,6 +370,29 @@ func renderThreadListEntry(name, preview, id string) string {
 	default:
 		return truncate(id, 48)
 	}
+}
+
+func filterThreadsByWorkspaceCWD(items []codexrpc.ThreadListEntry, workspaceCWD string) []codexrpc.ThreadListEntry {
+	workspaceCWD = strings.TrimSpace(workspaceCWD)
+	if workspaceCWD == "" || len(items) == 0 {
+		return items
+	}
+	filtered := make([]codexrpc.ThreadListEntry, 0, len(items))
+	for _, item := range items {
+		if sameWorkspaceCWD(item.Cwd, workspaceCWD) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func sameWorkspaceCWD(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {

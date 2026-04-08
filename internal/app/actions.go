@@ -628,9 +628,15 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	}
 	selectedName, _ := action.ActionValue["thread_name"].(string)
 	selectedPreview, _ := action.ActionValue["thread_preview"].(string)
+	selectedCWD, _ := action.ActionValue["thread_cwd"].(string)
 	workspaceID := sess.WorkspaceID
 	if strings.TrimSpace(workspaceID) == "" {
 		workspaceID = a.defaultWorkspaceID()
+	}
+	if ws := config.FindWorkspace(a.cfg, workspaceID); ws != nil && strings.TrimSpace(selectedCWD) != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "该线程不属于当前工作区，请先切换 workspace"},
+		}, nil
 	}
 	effectiveModel := configuredGlobalModel(a.cfg)
 	params := map[string]any{
