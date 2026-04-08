@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -22,8 +23,9 @@ const (
 	DefaultRepoOwner = "yuhuan417"
 	DefaultRepoName  = "feidex"
 
-	linuxAMD64AssetName = "feidex-linux-amd64"
-	sha256AssetName     = "sha256sums.txt"
+	linuxAMD64AssetName   = "feidex-linux-amd64"
+	linuxAARCH64AssetName = "feidex-linux-aarch64"
+	sha256AssetName       = "sha256sums.txt"
 )
 
 type ReleaseInfo struct {
@@ -36,7 +38,7 @@ type ReleaseInfo struct {
 }
 
 type Client interface {
-	LatestLinuxAMD64(ctx context.Context) (*ReleaseInfo, error)
+	LatestLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error)
 }
 
 type GitHubClient struct {
@@ -72,9 +74,26 @@ func NewGitHubClient(owner, repo string, httpClient *http.Client) *GitHubClient 
 	}
 }
 
-func (c *GitHubClient) LatestLinuxAMD64(ctx context.Context) (*ReleaseInfo, error) {
+func CurrentLinuxAssetName(goarch string) (string, error) {
+	switch strings.TrimSpace(goarch) {
+	case "":
+		return CurrentLinuxAssetName(runtime.GOARCH)
+	case "amd64":
+		return linuxAMD64AssetName, nil
+	case "arm64":
+		return linuxAARCH64AssetName, nil
+	default:
+		return "", fmt.Errorf("unsupported linux architecture %q", goarch)
+	}
+}
+
+func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error) {
 	if c == nil {
 		return nil, fmt.Errorf("nil release client")
+	}
+	assetName, err := CurrentLinuxAssetName(goarch)
+	if err != nil {
+		return nil, err
 	}
 	release, err := c.fetchLatestRelease(ctx)
 	if err != nil {
@@ -92,7 +111,7 @@ func (c *GitHubClient) LatestLinuxAMD64(ctx context.Context) (*ReleaseInfo, erro
 	checksumsURL := ""
 	for _, asset := range release.Assets {
 		switch strings.TrimSpace(asset.Name) {
-		case linuxAMD64AssetName:
+		case assetName:
 			info.BinaryName = strings.TrimSpace(asset.Name)
 			info.BinaryURL = strings.TrimSpace(asset.BrowserDownloadURL)
 		case sha256AssetName:
@@ -103,7 +122,7 @@ func (c *GitHubClient) LatestLinuxAMD64(ctx context.Context) (*ReleaseInfo, erro
 		return nil, fmt.Errorf("latest release is missing tag_name")
 	}
 	if info.BinaryURL == "" || info.BinaryName == "" {
-		return nil, fmt.Errorf("latest release %s is missing asset %s", info.Version, linuxAMD64AssetName)
+		return nil, fmt.Errorf("latest release %s is missing asset %s", info.Version, assetName)
 	}
 	if checksumsURL == "" {
 		return nil, fmt.Errorf("latest release %s is missing asset %s", info.Version, sha256AssetName)

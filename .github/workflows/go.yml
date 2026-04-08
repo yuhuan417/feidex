@@ -30,7 +30,7 @@ jobs:
       - name: Test
         run: go test -v ./...
 
-  release-linux-amd64:
+  release-linux:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
@@ -45,19 +45,28 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
-      - name: Build Linux x86_64 binary
+      - name: Build Linux release binaries
         run: |
           mkdir -p dist
           VERSION="${GITHUB_REF_NAME}"
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
-            -o dist/feidex-linux-amd64 \
-            ./cmd/feidex
+          for target in "amd64:feidex-linux-amd64" "arm64:feidex-linux-aarch64"; do
+            IFS=':' read -r GOARCH ASSET <<<"${target}"
+            CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" \
+              go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
+              -o "dist/${ASSET}" \
+              ./cmd/feidex
+          done
 
       - name: Package release assets
         run: |
           tar -C dist -czf dist/feidex-linux-amd64.tar.gz feidex-linux-amd64
-          sha256sum dist/feidex-linux-amd64 dist/feidex-linux-amd64.tar.gz > dist/sha256sums.txt
+          tar -C dist -czf dist/feidex-linux-aarch64.tar.gz feidex-linux-aarch64
+          sha256sum \
+            dist/feidex-linux-amd64 \
+            dist/feidex-linux-amd64.tar.gz \
+            dist/feidex-linux-aarch64 \
+            dist/feidex-linux-aarch64.tar.gz \
+            > dist/sha256sums.txt
 
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
@@ -66,4 +75,6 @@ jobs:
           files: |
             dist/feidex-linux-amd64
             dist/feidex-linux-amd64.tar.gz
+            dist/feidex-linux-aarch64
+            dist/feidex-linux-aarch64.tar.gz
             dist/sha256sums.txt

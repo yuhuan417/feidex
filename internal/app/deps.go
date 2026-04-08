@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"time"
 
 	"feidex/internal/buildinfo"
@@ -44,7 +45,7 @@ type feishuClient interface {
 }
 
 type releaseClient interface {
-	LatestLinuxAMD64(context.Context) (*release.ReleaseInfo, error)
+	LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error)
 }
 
 var (
@@ -56,4 +57,5 @@ var (
 	}
 	startDaemonUpgrade = daemon.StartBackgroundUpgrade
 	currentVersion     = buildinfo.CurrentVersion
+	currentGOARCH      = func() string { return runtime.GOARCH }
 )

@@ -7,10 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,18 +69,18 @@ func TestRunUpgradeWithManagerRollsBackOnStartFailure(t *testing.T) {
 		t.Fatalf("WriteFile(old) error = %v", err)
 	}
 	newContent := []byte("new-binary")
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write(newContent)
-	}))
-	defer server.Close()
 	origClient := upgradeHTTPClient
-	upgradeHTTPClient = server.Client()
+	upgradeHTTPClient = &http.Client{Transport: daemonStubTransport{
+		responses: map[string][]byte{
+			"https://download.test/bin": newContent,
+		},
+	}}
 	defer func() { upgradeHTTPClient = origClient }()
 	manager := &fakeUpgradeManager{running: true, pid: 99, startErr: errors.New("boom")}
 	err := runUpgradeWithManager(context.Background(), manager, UpgradeSpec{
 		Version:        "v0.2.0",
 		BinaryPath:     binaryPath,
-		DownloadURL:    server.URL,
+		DownloadURL:    "https://download.test/bin",
 		ExpectedSHA256: mustSHA256(newContent),
 	})
 	if err == nil {
@@ -109,4 +110,26 @@ func TestWaitForServiceHealthy(t *testing.T) {
 	if err := waitForServiceHealthy(context.Background(), manager, time.Second); err != nil {
 		t.Fatalf("waitForServiceHealthy() error = %v", err)
 	}
+}
+
+type daemonStubTransport struct {
+	responses map[string][]byte
+}
+
+func (t daemonStubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	body, ok := t.responses[req.URL.String()]
+	if !ok {
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       io.NopCloser(strings.NewReader("not found")),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(string(body))),
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
 }

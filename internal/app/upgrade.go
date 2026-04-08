@@ -53,15 +53,21 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	latest, err := newReleaseClient().LatestLinuxAMD64(ctx)
+	latest, err := newReleaseClient().LatestLinuxBinary(ctx, currentGOARCH())
 	if err != nil {
 		return nil, fmt.Errorf("查询最新版本失败: %w", err)
+	}
+	assetName, err := release.CurrentLinuxAssetName(currentGOARCH())
+	if err != nil {
+		return nil, fmt.Errorf("当前架构不支持自动升级: %w", err)
 	}
 
 	current := currentVersion()
 	bodyLines := []string{
 		"当前版本: `" + current + "`",
 		"最新版本: `" + latest.Version + "`",
+		"目标架构: `" + currentGOARCH() + "`",
+		"目标包: `" + assetName + "`",
 		"二进制: `" + exePath + "`",
 	}
 	if strings.TrimSpace(latest.HTMLURL) != "" {

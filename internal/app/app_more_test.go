@@ -46,7 +46,7 @@ type fakeReleaseClient struct {
 	err  error
 }
 
-func (f *fakeReleaseClient) LatestLinuxAMD64(context.Context) (*release.ReleaseInfo, error) {
+func (f *fakeReleaseClient) LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -1082,10 +1082,12 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	origRelease := newReleaseClient
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOARCH := currentGOARCH
 	defer func() {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOARCH = origGOARCH
 	}()
 
 	a, ff, _ := newTestApp(t)
@@ -1093,7 +1095,8 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{
 			Version:        "v0.2.0",
 			HTMLURL:        "https://example.test/releases/v0.2.0",
-			BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+			BinaryName:     "feidex-linux-aarch64",
+			BinaryURL:      "https://github.com/example/feidex-linux-aarch64",
 			ExpectedSHA256: "abc123",
 		}}
 	}
@@ -1101,6 +1104,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "0.1.0" }
+	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := a.commandUpgrade(msg); err != nil {
@@ -1110,7 +1114,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
 	}
 	body := cardMarkdownContent(t, ff.replyCards[0])
-	if !strings.Contains(body, "当前版本: `0.1.0`") || !strings.Contains(body, "最新版本: `v0.2.0`") {
+	if !strings.Contains(body, "当前版本: `0.1.0`") || !strings.Contains(body, "最新版本: `v0.2.0`") || !strings.Contains(body, "目标架构: `arm64`") || !strings.Contains(body, "目标包: `feidex-linux-aarch64`") {
 		t.Fatalf("upgrade card body = %q", body)
 	}
 	var pending *state.PendingRequest
