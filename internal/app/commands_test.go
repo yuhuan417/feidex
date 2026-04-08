@@ -100,6 +100,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/workspace":     true,
 		"/cd":            true,
 		"/status":        true,
+		"/upgrade":       true,
 		"/append hello":  false,
 		"/model list":    false,
 		"/":              false,

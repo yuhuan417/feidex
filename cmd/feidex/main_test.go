@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"feidex/internal/app"
+	"feidex/internal/buildinfo"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 )
@@ -139,6 +140,7 @@ func resetMainStubs() {
 	enableLingerUser = daemon.EnableLingerCurrentUser
 	newDaemonManager = daemon.NewManager
 	setupFeishu = config.SetupFeishu
+	runDaemonUpgrade = daemon.RunUpgradeRunner
 }
 
 func signalNotifyContext(parent context.Context, _ ...os.Signal) (context.Context, context.CancelFunc) {
@@ -154,7 +156,7 @@ func TestRunUsageAndVersionCommands(t *testing.T) {
 			t.Fatalf("run(version) = %d, want 0", got)
 		}
 	})
-	if !strings.Contains(stdout, "feidex 0.1.0") {
+	if !strings.Contains(stdout, "feidex "+buildinfo.CurrentVersion()) {
 		t.Fatalf("version output = %q, want version string", stdout)
 	}
 
@@ -359,6 +361,11 @@ func TestRunDaemonCommandsAndRequireInstalled(t *testing.T) {
 	}
 	if err := requireInstalled(&fakeManager{statusResp: &daemon.Status{Installed: true}}); err != nil {
 		t.Fatalf("requireInstalled(installed) error = %v", err)
+	}
+
+	runDaemonUpgrade = func(context.Context, daemon.UpgradeSpec) error { return nil }
+	if got := runDaemon([]string{"upgrade-runner", "--binary-path", "/tmp/feidex", "--version", "v0.2.0", "--download-url", "https://example.test/feidex", "--expected-sha256", "abc"}); got != 0 {
+		t.Fatalf("runDaemon(upgrade-runner) = %d, want 0", got)
 	}
 }
 

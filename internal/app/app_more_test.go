@@ -12,7 +12,9 @@ import (
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/daemon"
 	"feidex/internal/feishu"
+	"feidex/internal/release"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -38,6 +40,37 @@ type fakeCodexClient struct {
 	onNotification func(string, json.RawMessage)
 	onRequest      func(codexrpc.RequestEnvelope)
 }
+
+type fakeReleaseClient struct {
+	info *release.ReleaseInfo
+	err  error
+}
+
+func (f *fakeReleaseClient) LatestLinuxAMD64(context.Context) (*release.ReleaseInfo, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.info == nil {
+		return nil, errors.New("missing release info")
+	}
+	cp := *f.info
+	return &cp, nil
+}
+
+type fakeDaemonManagerForApp struct {
+	status *daemon.Status
+	err    error
+}
+
+func (f *fakeDaemonManagerForApp) Install(daemon.Config) error { return nil }
+func (f *fakeDaemonManagerForApp) Uninstall() error            { return nil }
+func (f *fakeDaemonManagerForApp) Start() error                { return nil }
+func (f *fakeDaemonManagerForApp) Stop() error                 { return nil }
+func (f *fakeDaemonManagerForApp) Restart() error              { return nil }
+func (f *fakeDaemonManagerForApp) Status() (*daemon.Status, error) {
+	return f.status, f.err
+}
+func (f *fakeDaemonManagerForApp) Platform() string { return "test" }
 
 func (f *fakeCodexClient) SetHandlers(onNotification func(string, json.RawMessage), onRequest func(codexrpc.RequestEnvelope)) {
 	f.onNotification = onNotification
@@ -902,6 +935,99 @@ func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	}
 	if sub := a.store.GetSubmission("sub-1"); sub == nil || sub.Status != "waiting_approval" {
 		t.Fatalf("submission after failed reply = %+v, want waiting_approval", sub)
+	}
+}
+
+func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+	}()
+
+	a, ff, _ := newTestApp(t)
+	newReleaseClient = func() releaseClient {
+		return &fakeReleaseClient{info: &release.ReleaseInfo{
+			Version:        "v0.2.0",
+			HTMLURL:        "https://example.test/releases/v0.2.0",
+			BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "abc123",
+		}}
+	}
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "0.1.0" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandUpgrade(msg); err != nil {
+		t.Fatalf("commandUpgrade() error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "当前版本: `0.1.0`") || !strings.Contains(body, "最新版本: `v0.2.0`") {
+		t.Fatalf("upgrade card body = %q", body)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == "upgrade_release" {
+			pending = req
+			break
+		}
+	}
+	if pending == nil {
+		t.Fatal("expected upgrade pending request to be created")
+	}
+}
+
+func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
+	origUpgrade := startDaemonUpgrade
+	defer func() { startDaemonUpgrade = origUpgrade }()
+
+	a, _, _ := newTestApp(t)
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "upgrade-1",
+		Kind:        "upgrade_release",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(upgradePendingPayload{
+			TargetVersion:  "v0.2.0",
+			BinaryPath:     "/tmp/feidex",
+			DownloadURL:    "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "abc123",
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+	started := false
+	startDaemonUpgrade = func(spec daemon.UpgradeSpec) (string, error) {
+		started = true
+		if spec.Version != "v0.2.0" || spec.BinaryPath != "/tmp/feidex" {
+			t.Fatalf("unexpected upgrade spec: %+v", spec)
+		}
+		return "feidex-upgrade-1", nil
+	}
+
+	resp, err := a.completeUpgradeAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "upgrade-1"},
+	}, "upgrade.confirm")
+	if err != nil {
+		t.Fatalf("completeUpgradeAction() error = %v", err)
+	}
+	if !started {
+		t.Fatal("expected background upgrade to start")
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeUpgradeAction() = %#v, want success", resp)
+	}
+	if pending := a.store.PendingByID("upgrade-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("upgrade pending = %+v, want resolved", pending)
 	}
 }
 

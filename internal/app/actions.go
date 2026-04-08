@@ -114,6 +114,8 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		return a.completeTurnItemToggle(action)
 	case "user_input.answer":
 		return a.completeUserInputAnswer(action)
+	case "upgrade.confirm", "upgrade.cancel":
+		return a.completeUpgradeAction(action, name)
 	case "approval.command.accept", "approval.command.accept_session", "approval.command.decline", "approval.command.cancel",
 		"approval.file.accept", "approval.file.accept_session", "approval.file.decline", "approval.file.cancel",
 		"approval.permissions.accept_turn", "approval.permissions.accept_session":

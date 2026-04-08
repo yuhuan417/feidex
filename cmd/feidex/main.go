@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"feidex/internal/app"
+	"feidex/internal/buildinfo"
 	"feidex/internal/config"
 )
 
@@ -42,7 +43,7 @@ func run(args []string) int {
 	case "feishu":
 		return runFeishu(args[1:])
 	case "version", "--version", "-v":
-		fmt.Println("feidex 0.1.0")
+		fmt.Println("feidex " + buildinfo.CurrentVersion())
 		return 0
 	case "help", "--help", "-h":
 		printUsage()

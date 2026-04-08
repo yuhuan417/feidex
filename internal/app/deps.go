@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"time"
 
+	"feidex/internal/buildinfo"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/daemon"
 	"feidex/internal/feishu"
+	"feidex/internal/release"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -40,7 +43,17 @@ type feishuClient interface {
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 
+type releaseClient interface {
+	LatestLinuxAMD64(context.Context) (*release.ReleaseInfo, error)
+}
+
 var (
-	newCodexClient  = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
-	newFeishuClient = func(cfg config.FeishuConfig) feishuClient { return feishu.New(cfg) }
+	newCodexClient   = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
+	newFeishuClient  = func(cfg config.FeishuConfig) feishuClient { return feishu.New(cfg) }
+	newDaemonManager = daemon.NewManager
+	newReleaseClient = func() releaseClient {
+		return release.NewGitHubClient(release.DefaultRepoOwner, release.DefaultRepoName, nil)
+	}
+	startDaemonUpgrade = daemon.StartBackgroundUpgrade
+	currentVersion     = buildinfo.CurrentVersion
 )

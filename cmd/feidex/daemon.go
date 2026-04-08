@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ var (
 	resolveDaemonConfig = daemon.Resolve
 	enableLingerUser    = daemon.EnableLingerCurrentUser
 	newDaemonManager    = daemon.NewManager
+	runDaemonUpgrade    = daemon.RunUpgradeRunner
 )
 
 func runDaemon(args []string) int {
@@ -34,6 +36,8 @@ func runDaemon(args []string) int {
 		return daemonRestart()
 	case "status":
 		return daemonStatus()
+	case "upgrade-runner":
+		return daemonUpgradeRunner(args[1:])
 	case "help", "--help", "-h":
 		printDaemonUsage()
 		return 0
@@ -220,6 +224,27 @@ func daemonStatus() int {
 	fmt.Printf("  Unit:        %s\n", st.UnitPath)
 	if st.PID > 0 {
 		fmt.Printf("  PID:         %d\n", st.PID)
+	}
+	return 0
+}
+
+func daemonUpgradeRunner(args []string) int {
+	fs := flag.NewFlagSet("daemon upgrade-runner", flag.ContinueOnError)
+	binaryPath := fs.String("binary-path", "", "installed daemon binary path")
+	version := fs.String("version", "", "target version")
+	downloadURL := fs.String("download-url", "", "binary download URL")
+	expectedSHA256 := fs.String("expected-sha256", "", "expected SHA256 of the downloaded binary")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+	if err := runDaemonUpgrade(context.Background(), daemon.UpgradeSpec{
+		Version:        *version,
+		BinaryPath:     *binaryPath,
+		DownloadURL:    *downloadURL,
+		ExpectedSHA256: *expectedSHA256,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "daemon upgrade runner failed: %v\n", err)
+		return 1
 	}
 	return 0
 }

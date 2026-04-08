@@ -48,8 +48,9 @@ jobs:
       - name: Build Linux x86_64 binary
         run: |
           mkdir -p dist
+          VERSION="${GITHUB_REF_NAME}"
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -trimpath -ldflags="-s -w" \
+            go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
             -o dist/feidex-linux-amd64 \
             ./cmd/feidex
 
