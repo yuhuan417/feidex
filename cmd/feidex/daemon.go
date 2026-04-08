@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"feidex/internal/buildinfo"
 	"feidex/internal/daemon"
 )
 
@@ -207,6 +208,7 @@ func daemonStatus() int {
 	}
 	fmt.Println("feidex daemon status")
 	fmt.Println()
+	fmt.Printf("  Version:     %s\n", buildinfo.CurrentVersion())
 	if !st.Installed {
 		fmt.Println("  Status:      Not installed")
 		fmt.Printf("  Platform:    %s\n", st.Platform)

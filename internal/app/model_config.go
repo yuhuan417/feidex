@@ -311,6 +311,7 @@ func (a *App) statusCardBody(sess *state.Session) string {
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
+		"版本: `" + currentVersion() + "`",
 		"工作区: `" + workspaceID + "`",
 		"线程: " + threadLabel,
 		"thread_id: `" + threadID + "`",

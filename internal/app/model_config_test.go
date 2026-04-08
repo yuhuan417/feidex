@@ -89,6 +89,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 	a := &App{cfg: cfg}
 	body := a.statusCardBody(sess)
 	for _, want := range []string{
+		"版本: `0.1.0`",
 		"workspace sandbox: `workspace-write`",
 		"workspace policy: `on-request`",
 		"thread sandbox: `read-only`",

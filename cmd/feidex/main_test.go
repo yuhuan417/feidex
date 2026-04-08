@@ -434,14 +434,24 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: false, Platform: "linux", UnitPath: "/tmp/feidex.service"}}
 	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
-	if got := daemonStatus(); got != 0 {
-		t.Fatalf("daemonStatus(not installed) = %d, want 0", got)
+	stdout, _ := withCapturedOutput(t, func() {
+		if got := daemonStatus(); got != 0 {
+			t.Fatalf("daemonStatus(not installed) = %d, want 0", got)
+		}
+	})
+	if !strings.Contains(stdout, "Version:     "+buildinfo.CurrentVersion()) {
+		t.Fatalf("daemonStatus(not installed) output = %q, want version", stdout)
 	}
 
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: true, Running: true, Platform: "linux", UnitPath: "/tmp/feidex.service", PID: 99}}
 	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
-	if got := daemonStatus(); got != 0 {
-		t.Fatalf("daemonStatus(running) = %d, want 0", got)
+	stdout, _ = withCapturedOutput(t, func() {
+		if got := daemonStatus(); got != 0 {
+			t.Fatalf("daemonStatus(running) = %d, want 0", got)
+		}
+	})
+	if !strings.Contains(stdout, "Version:     "+buildinfo.CurrentVersion()) {
+		t.Fatalf("daemonStatus(running) output = %q, want version", stdout)
 	}
 
 	mgr = &fakeManager{}
