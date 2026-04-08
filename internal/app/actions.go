@@ -32,16 +32,21 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		}
 	}
 	switch name {
+	case "menu.root":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuRoot(action, sessionKey)
 	case "menu.new":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuNew(action, sessionKey)
 	case "menu.quiet":
-		return a.completeMenuQuiet(action)
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuQuiet(action, sessionKey)
 	case "menu.model":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuModel(action, sessionKey)
 	case "menu.fast":
-		return a.completeMenuFast(action)
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuFast(action, sessionKey)
 	case "menu.status":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuStatus(action, sessionKey)
@@ -50,6 +55,11 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "quiet.set":
 		enabled, _ := action.ActionValue["enabled"].(bool)
 		return a.completeQuietSet(action, enabled)
+	case "service_tier.set":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		threadID, _ := action.ActionValue["thread_id"].(string)
+		serviceTier, _ := action.ActionValue["service_tier"].(string)
+		return a.completeServiceTierSet(action, sessionKey, threadID, serviceTier)
 	case "model.config.set_model":
 		modelID, _ := action.ActionValue["model_id"].(string)
 		return a.completeGlobalModelSet(action, modelID)
@@ -144,7 +154,15 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	}
 }
 
+func (a *App) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
+		Card:  rawCard(a.renderCommandMenuCard(sessionKey)),
+	}, nil
+}
+
 func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	parentAction, _ := action.ActionValue["parent_action"].(string)
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
@@ -171,12 +189,22 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 	if discarded > 0 {
 		content = fmt.Sprintf("已切换到新会话，并丢弃 %d 条排队或暂存输入", discarded)
 	}
+	if parentAction == "menu.threads" {
+		card, err := a.renderThreadsCard(sessionKey, false)
+		if err == nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "success", Content: content},
+				Card:  rawCard(card),
+			}, nil
+		}
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: content},
 	}, nil
 }
 
 func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey, _ := action.ActionValue["session_key"].(string)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	result, err := a.fetchModelList(ctx)
@@ -190,11 +218,12 @@ func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) 
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局模型"},
-		Card:  rawCard(a.renderModelConfigCard(result)),
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
 	}, nil
 }
 
 func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey, _ := action.ActionValue["session_key"].(string)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	result, err := a.fetchModelList(ctx)
@@ -212,75 +241,86 @@ func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reason
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局推理强度"},
-		Card:  rawCard(a.renderModelConfigCard(result)),
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
 	}, nil
 }
 
-func (a *App) completeMenuQuiet(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/quiet"}
-	if err := a.commandQuiet(msg, nil); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已切换 quiet 开关"}}, nil
+func (a *App) completeMenuQuiet(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 quiet 配置"},
+		Card:  rawCard(a.renderQuietModeMenuCard(sessionKey)),
+	}, nil
 }
 
 func (a *App) completeQuietSet(action *feishu.CardAction, enabled bool) (*callback.CardActionTriggerResponse, error) {
+	sessionKey, _ := action.ActionValue["session_key"].(string)
 	if err := a.updateQuietMode(enabled); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 开关"},
-		Card:  rawCard(a.renderQuietModeCard()),
+		Card:  rawCard(a.renderQuietModeMenuCard(sessionKey)),
 	}, nil
 }
 
 func (a *App) completeMenuThreads(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/threads"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	card, err := a.renderThreadsCard(sessionKey, false)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.commandThreads(msg, false)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在获取线程列表"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开线程列表"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/model"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := a.fetchModelList(ctx)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.commandModel(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开模型配置"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开模型配置"},
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
+	}, nil
 }
 
 func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/status"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
-	}
-	go func() {
-		_ = a.commandStatus(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开状态面板"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开状态面板"},
+		Card:  rawCard(a.renderStatusCard(sessionKey)),
+	}, nil
 }
 
-func (a *App) completeMenuFast(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/fast"}
-	if err := a.commandFast(msg, nil); err != nil {
+func (a *App) completeMenuFast(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 service tier 配置"},
+		Card:  rawCard(a.renderServiceTierMenuCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeServiceTierSet(action *feishu.CardAction, sessionKey, threadID, serviceTier string) (*callback.CardActionTriggerResponse, error) {
+	if _, err := a.setThreadServiceTier(sessionKey, threadID, serviceTier); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已切换 service tier"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已更新 service tier"},
+		Card:  rawCard(a.renderServiceTierMenuCard(sessionKey)),
+	}, nil
 }
 
 func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/upgrade"}
-	if err := a.commandUpgrade(msg); err != nil {
+	sessionKey, _ := action.ActionValue["session_key"].(string)
+	card, err := a.renderUpgradeCard(sessionKey, action.UserID)
+	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已发送升级确认"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开升级面板"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
@@ -310,14 +350,10 @@ func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targe
 }
 
 func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/workspace"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
-	}
-	go func() {
-		_ = a.showWorkspaceMenu(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开工作区菜单"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已切换到工作区菜单"},
+		Card:  rawCard(a.renderWorkspaceMenuCard(sessionKey)),
+	}, nil
 }
 
 func (a *App) completeTurnAppend(action *feishu.CardAction, sessionKey, targetTurnID, itemID string) (*callback.CardActionTriggerResponse, error) {
@@ -427,74 +463,78 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 	}
 	switchSessionWorkspace(sess, workspaceID)
 	_ = a.store.UpsertSession(sess)
-	body := "当前工作区: `" + workspaceID + "`\n\ncwd: `" + ws.Cwd + "`"
-	if sess.ActiveTurnID != "" {
-		body += "\n\n当前运行中的任务仍归属原线程；后续新任务会使用这个工作区。"
-	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已切换工作区"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("已切换工作区", "green", body, []feishu.Button{
-				{Text: "查看工作区", Type: "default", Value: map[string]any{"action": "workspace.new", "session_key": sessionKey}},
-			}),
-		},
+		Card:  rawCard(a.renderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
 func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/workspace new"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	requestID, err := a.store.NextLocalID("workspace")
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.beginWorkspaceNew(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "请按提示发送工作区信息"}}, nil
+	_ = a.store.UpsertPending(&state.PendingRequest{
+		ID:          requestID,
+		Kind:        "workspace_new",
+		SessionKey:  sessionKey,
+		OwnerUserID: action.UserID,
+		FeishuMsgID: action.MessageID,
+		Status:      "pending",
+		CreatedAt:   time.Now().Unix(),
+		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
+	})
+	card := a.feishu.SimpleStatusCard("新建工作区", "orange", "请直接发送一行文本来创建工作区。\n\n格式：\n`workspace_id cwd`\n或\n`workspace_id cwd name`\n\n说明：\n- `name` 是可选的，不用输入方括号\n- 如果不填 name，就默认用 workspace_id 作为显示名\n\n示例：\n`op /home/yuhuan/obfs-sniproxy`\n`op /home/yuhuan/obfs-sniproxy ObfsSniproxy`\n\n发送 `/` 或其它命令前，可先完成本次创建。", []feishu.Button{
+		{Text: "返回工作区", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID}},
+	})
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "请按提示发送工作区信息"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) completeWorkspaceSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/workspace sandbox"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	card, err := a.renderWorkspaceSandboxMenuCard(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.showWorkspaceSandboxMenu(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开 sandbox 配置"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 sandbox 配置"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) completeWorkspacePolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/workspace policy"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	card, err := a.renderWorkspacePolicyMenuCard(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.showWorkspacePolicyMenu(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开 policy 配置"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 policy 配置"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/threads sandbox"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	card, err := a.renderThreadSandboxMenuCard(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.showThreadSandboxMenu(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开 thread sandbox 配置"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 thread sandbox 配置"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := &feishu.InboundMessage{MessageID: action.MessageID, ChatID: action.ChatID, UserID: action.UserID, ChatType: "p2p", Text: "/threads policy"}
-	if strings.Contains(sessionKey, ":group:") {
-		msg.ChatType = "group"
+	card, err := a.renderThreadPolicyMenuCard(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	go func() {
-		_ = a.showThreadPolicyMenu(msg)
-	}()
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在打开 thread policy 配置"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 thread policy 配置"},
+		Card:  rawCard(card),
+	}, nil
 }
 
 func (a *App) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
@@ -529,15 +569,14 @@ func (a *App) completeWorkspaceSandboxSet(action *feishu.CardAction, sessionKey,
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	body := "工作区: `" + ws.ID + "`\n默认 sandbox: `" + ws.SandboxMode + "`\n默认 policy: `" + ws.ApprovalPolicy + "`"
+	_ = ws
+	card, renderErr := a.renderWorkspaceSandboxMenuCard(sessionKey)
+	if renderErr != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 sandbox"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("Sandbox 已更新", "green", body, []feishu.Button{
-				{Text: "配置 Policy", Type: "default", Value: map[string]any{"action": "workspace.policy.menu", "session_key": sessionKey}},
-			}),
-		},
+		Card:  rawCard(card),
 	}, nil
 }
 
@@ -558,15 +597,14 @@ func (a *App) completeWorkspacePolicySet(action *feishu.CardAction, sessionKey, 
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	body := "工作区: `" + ws.ID + "`\n默认 sandbox: `" + ws.SandboxMode + "`\n默认 policy: `" + ws.ApprovalPolicy + "`"
+	_ = ws
+	card, renderErr := a.renderWorkspacePolicyMenuCard(sessionKey)
+	if renderErr != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 policy"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("Policy 已更新", "green", body, []feishu.Button{
-				{Text: "配置 Sandbox", Type: "default", Value: map[string]any{"action": "workspace.sandbox.menu", "session_key": sessionKey}},
-			}),
-		},
+		Card:  rawCard(card),
 	}, nil
 }
 
@@ -589,15 +627,13 @@ func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, th
 	if err := a.store.UpsertSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	body := "thread: `" + threadID + "`\n默认 sandbox: `" + sandboxMode + "`\n默认 policy: `" + effectiveThreadApprovalPolicy(sess, config.FindWorkspace(a.cfg, sess.WorkspaceID)) + "`"
+	card, err := a.renderThreadSandboxMenuCard(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 thread sandbox"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("Thread Sandbox 已更新", "green", body, []feishu.Button{
-				{Text: "配置 Thread Policy", Type: "default", Value: map[string]any{"action": "thread.policy.menu", "session_key": sessionKey}},
-			}),
-		},
+		Card:  rawCard(card),
 	}, nil
 }
 
@@ -620,15 +656,13 @@ func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, thr
 	if err := a.store.UpsertSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	body := "thread: `" + threadID + "`\n默认 sandbox: `" + effectiveThreadSandboxMode(sess, config.FindWorkspace(a.cfg, sess.WorkspaceID)) + "`\n默认 policy: `" + approvalPolicy + "`"
+	card, err := a.renderThreadPolicyMenuCard(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 thread policy"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("Thread Policy 已更新", "green", body, []feishu.Button{
-				{Text: "配置 Thread Sandbox", Type: "default", Value: map[string]any{"action": "thread.sandbox.menu", "session_key": sessionKey}},
-			}),
-		},
+		Card:  rawCard(card),
 	}, nil
 }
 
@@ -685,16 +719,13 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
 	_ = a.store.UpsertSession(sess)
-	body := "后续消息会继续写入这个线程。\n\n当前线程: " + currentThreadLabel(sess) + "\nthread: `" + threadID + "`"
+	card, err := a.renderThreadsCard(sessionKey, false)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复线程"}}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已恢复线程"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("已切换线程", "green", body, []feishu.Button{
-				{Text: "新会话", Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey}},
-				{Text: "线程列表", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
-			}),
-		},
+		Card:  rawCard(card),
 	}, nil
 }
 

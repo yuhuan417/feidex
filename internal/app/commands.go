@@ -117,7 +117,15 @@ func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
-	sessionKey := a.makeSessionKey(msg)
+	card, err := a.renderThreadsCard(a.makeSessionKey(msg), includeAll)
+	if err != nil {
+		return err
+	}
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
 	sess := a.store.GetSession(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
@@ -169,11 +177,15 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 		}
 	}
 	if err != nil && len(result.Data) == 0 {
-		return err
+		return nil, err
 	}
 	result.Data = filterThreadsByWorkspaceCWD(result.Data, workspace.Cwd)
 	if len(result.Data) == 0 {
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "没有可恢复的线程。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		buttons := []feishu.Button{
+			{Text: "新会话", Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.threads"}},
+			{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+		}
+		return a.feishu.SimpleStatusCard("线程列表", "blue", "没有可恢复的线程。", buttons), nil
 	}
 	sort.Slice(result.Data, func(i, j int) bool { return result.Data[i].UpdatedAt > result.Data[j].UpdatedAt })
 	currentLabel := "-"
@@ -233,10 +245,35 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 			},
 		)
 	}
+	buttons = append(buttons,
+		feishu.Button{
+			Text: "新会话",
+			Type: "default",
+			Value: map[string]any{
+				"action":        "menu.new",
+				"session_key":   sessionKey,
+				"parent_action": "menu.threads",
+			},
+		},
+		feishu.Button{
+			Text: "刷新列表",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.threads",
+				"session_key": sessionKey,
+			},
+		},
+		feishu.Button{
+			Text: "返回菜单",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.root",
+				"session_key": sessionKey,
+			},
+		},
+	)
 	body := strings.Join(lines, "\n")
-	card := a.feishu.SimpleStatusCard("线程列表", "blue", body, buttons)
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	return err
+	return a.feishu.SimpleStatusCard("线程列表", "blue", body, buttons), nil
 }
 
 func renderThreadSettingValue(override, fallback string) string {
@@ -400,8 +437,17 @@ func sameWorkspaceCWD(a, b string) bool {
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
-	sess := a.store.GetSession(sessionKey)
+	card := a.renderWorkspaceMenuCard(a.makeSessionKey(msg))
+	var err error
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
+	var sess *state.Session
+	if a.store != nil {
+		sess = a.store.GetSession(sessionKey)
+	}
 	currentID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = sess.WorkspaceID
@@ -412,7 +458,7 @@ func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
 		body += "\n默认 sandbox: `" + currentWS.SandboxMode + "`"
 		body += "\n默认 policy: `" + currentWS.ApprovalPolicy + "`"
 	}
-	buttons := make([]feishu.Button, 0, len(a.cfg.Workspaces)+3)
+	buttons := make([]feishu.Button, 0, len(a.cfg.Workspaces)+4)
 	for _, ws := range a.cfg.Workspaces {
 		label := ws.ID
 		btnType := "default"
@@ -430,33 +476,41 @@ func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
 			},
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: "新建工作区",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "workspace.new",
-			"session_key": sessionKey,
+	buttons = append(buttons,
+		feishu.Button{
+			Text: "新建工作区",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "workspace.new",
+				"session_key": sessionKey,
+			},
 		},
-	})
-	buttons = append(buttons, feishu.Button{
-		Text: "配置 Sandbox",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "workspace.sandbox.menu",
-			"session_key": sessionKey,
+		feishu.Button{
+			Text: "配置 Sandbox",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "workspace.sandbox.menu",
+				"session_key": sessionKey,
+			},
 		},
-	})
-	buttons = append(buttons, feishu.Button{
-		Text: "配置 Policy",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "workspace.policy.menu",
-			"session_key": sessionKey,
+		feishu.Button{
+			Text: "配置 Policy",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "workspace.policy.menu",
+				"session_key": sessionKey,
+			},
 		},
-	})
-	card := a.feishu.SimpleStatusCard("工作区", "blue", body, buttons)
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	return err
+		feishu.Button{
+			Text: "返回菜单",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.root",
+				"session_key": sessionKey,
+			},
+		},
+	)
+	return a.feishu.SimpleStatusCard("工作区", "blue", body, buttons)
 }
 
 func workspaceSandboxOptions() []workspaceSettingOption {
@@ -494,12 +548,29 @@ func (a *App) currentThreadForMessage(msg *feishu.InboundMessage) (sessionKey st
 }
 
 func (a *App) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	card, err := a.renderWorkspaceSandboxMenuCard(a.makeSessionKey(msg))
+	if err != nil {
+		return err
+	}
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
+	var sess *state.Session
+	if a.store != nil {
+		sess = a.store.GetSession(sessionKey)
+	}
+	workspaceID := a.defaultWorkspaceID()
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
+	}
+	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
-		return fmt.Errorf("current workspace not found")
+		return nil, fmt.Errorf("current workspace not found")
 	}
 	body := "配置当前工作区默认 sandbox。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.SandboxMode + "`"
-	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions()))
+	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions())+1)
 	for _, opt := range workspaceSandboxOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -518,18 +589,41 @@ func (a *App) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("配置 Sandbox", "blue", body, buttons)
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	return err
+	buttons = append(buttons, feishu.Button{
+		Text: "返回工作区",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.workspace",
+			"session_key": sessionKey,
+		},
+	})
+	return a.feishu.SimpleStatusCard("配置 Sandbox", "blue", body, buttons), nil
 }
 
 func (a *App) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	card, err := a.renderWorkspacePolicyMenuCard(a.makeSessionKey(msg))
+	if err != nil {
+		return err
+	}
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
+	var sess *state.Session
+	if a.store != nil {
+		sess = a.store.GetSession(sessionKey)
+	}
+	workspaceID := a.defaultWorkspaceID()
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
+	}
+	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
-		return fmt.Errorf("current workspace not found")
+		return nil, fmt.Errorf("current workspace not found")
 	}
 	body := "配置当前工作区默认 approval policy。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.ApprovalPolicy + "`"
-	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions()))
+	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions())+1)
 	for _, opt := range workspaceApprovalPolicyOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -548,19 +642,40 @@ func (a *App) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("配置 Policy", "blue", body, buttons)
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	return err
+	buttons = append(buttons, feishu.Button{
+		Text: "返回工作区",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.workspace",
+			"session_key": sessionKey,
+		},
+	})
+	return a.feishu.SimpleStatusCard("配置 Policy", "blue", body, buttons), nil
 }
 
 func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
-	sessionKey, sess, ws, threadID, err := a.currentThreadForMessage(msg)
+	card, err := a.renderThreadSandboxMenuCard(a.makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return err
+}
+
+func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
+	sess := a.store.GetSession(sessionKey)
+	workspaceID := a.defaultWorkspaceID()
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
+	}
+	ws := config.FindWorkspace(a.cfg, workspaceID)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return nil, fmt.Errorf("当前没有活动线程")
+	}
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	current := effectiveThreadSandboxMode(sess, ws)
 	body := "配置当前 thread 默认 sandbox。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions()))
+	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions())+1)
 	for _, opt := range workspaceSandboxOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -579,19 +694,40 @@ func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("配置 Thread Sandbox", "blue", body, buttons)
+	buttons = append(buttons, feishu.Button{
+		Text: "返回线程列表",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.threads",
+			"session_key": sessionKey,
+		},
+	})
+	return a.feishu.SimpleStatusCard("配置 Thread Sandbox", "blue", body, buttons), nil
+}
+
+func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
+	card, err := a.renderThreadPolicyMenuCard(a.makeSessionKey(msg))
+	if err != nil {
+		return err
+	}
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
 }
 
-func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
-	sessionKey, sess, ws, threadID, err := a.currentThreadForMessage(msg)
-	if err != nil {
-		return err
+func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
+	sess := a.store.GetSession(sessionKey)
+	workspaceID := a.defaultWorkspaceID()
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
 	}
+	ws := config.FindWorkspace(a.cfg, workspaceID)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return nil, fmt.Errorf("当前没有活动线程")
+	}
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	current := effectiveThreadApprovalPolicy(sess, ws)
 	body := "配置当前 thread 默认 approval policy。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions()))
+	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions())+1)
 	for _, opt := range workspaceApprovalPolicyOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -610,9 +746,15 @@ func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("配置 Thread Policy", "blue", body, buttons)
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-	return err
+	buttons = append(buttons, feishu.Button{
+		Text: "返回线程列表",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.threads",
+			"session_key": sessionKey,
+		},
+	})
+	return a.feishu.SimpleStatusCard("配置 Thread Policy", "blue", body, buttons), nil
 }
 
 func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {

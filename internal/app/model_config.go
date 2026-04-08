@@ -120,7 +120,7 @@ func chunkButtons(buttons []feishu.Button, size int) [][]feishu.Button {
 	return rows
 }
 
-func (a *App) renderModelConfigCard(result codexrpc.ModelListResult) map[string]any {
+func (a *App) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey string) map[string]any {
 	selectedModel, selectedEffort := effectiveConfiguredModelAndEffort(a.cfg, result)
 	modelName := "(default)"
 	modelDescription := ""
@@ -171,6 +171,9 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult) map[string]
 		}(),
 		Value: map[string]any{"action": "model.config.set_model", "model_id": ""},
 	}}
+	if strings.TrimSpace(sessionKey) != "" {
+		modelButtons[0].Value["session_key"] = sessionKey
+	}
 	for _, item := range result.Data {
 		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
 		btnType := "default"
@@ -181,7 +184,7 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult) map[string]
 		modelButtons = append(modelButtons, feishu.Button{
 			Text:  label,
 			Type:  btnType,
-			Value: map[string]any{"action": "model.config.set_model", "model_id": item.ID},
+			Value: map[string]any{"action": "model.config.set_model", "model_id": item.ID, "session_key": sessionKey},
 		})
 	}
 	for _, row := range chunkButtons(modelButtons, 3) {
@@ -204,6 +207,9 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult) map[string]
 		}(),
 		Value: map[string]any{"action": "model.config.set_effort", "reasoning_effort": ""},
 	}}
+	if strings.TrimSpace(sessionKey) != "" {
+		effortButtons[0].Value["session_key"] = sessionKey
+	}
 	if selectedModel != nil {
 		for _, item := range selectedModel.SupportedReasoningEfforts {
 			label := item.ReasoningEffort
@@ -215,12 +221,19 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult) map[string]
 			effortButtons = append(effortButtons, feishu.Button{
 				Text:  label,
 				Type:  btnType,
-				Value: map[string]any{"action": "model.config.set_effort", "reasoning_effort": item.ReasoningEffort},
+				Value: map[string]any{"action": "model.config.set_effort", "reasoning_effort": item.ReasoningEffort, "session_key": sessionKey},
 			})
 		}
 	}
 	for _, row := range chunkButtons(effortButtons, 3) {
 		elements = append(elements, modelCardActionRow(row))
+	}
+	if strings.TrimSpace(sessionKey) != "" {
+		elements = append(elements, modelCardActionRow([]feishu.Button{{
+			Text:  "返回菜单",
+			Type:  "default",
+			Value: map[string]any{"action": "menu.root", "session_key": sessionKey},
+		}}))
 	}
 
 	return map[string]any{
@@ -263,9 +276,21 @@ func (a *App) commandModel(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	card := a.renderModelConfigCard(result)
+	card := a.renderModelConfigCard(result, a.makeSessionKey(msg))
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
+}
+
+func (a *App) renderStatusCard(sessionKey string) map[string]any {
+	var sess *state.Session
+	if strings.TrimSpace(sessionKey) != "" {
+		sess = a.store.GetSession(sessionKey)
+	}
+	buttons := []feishu.Button{
+		{Text: "刷新", Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
+		{Text: "返回菜单", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+	}
+	return a.feishu.SimpleStatusCard("Status", "blue", a.statusCardBody(sess), buttons)
 }
 
 func (a *App) statusCardBody(sess *state.Session) string {
@@ -332,11 +357,7 @@ func (a *App) statusCardBody(sess *state.Session) string {
 }
 
 func (a *App) commandStatus(msg *feishu.InboundMessage) error {
-	var sess *state.Session
-	if msg != nil {
-		sess = a.store.GetSession(a.makeSessionKey(msg))
-	}
-	card := a.feishu.SimpleStatusCard("Status", "blue", a.statusCardBody(sess), nil)
+	card := a.renderStatusCard(a.makeSessionKey(msg))
 	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 )
 
 const (
@@ -42,6 +43,72 @@ func renderServiceTierReplyValue(value string) string {
 		return "未设置"
 	}
 	return "`" + value + "`"
+}
+
+func (a *App) renderServiceTierMenuCard(sessionKey string) map[string]any {
+	sess := a.store.GetSession(sessionKey)
+	body := "配置当前 thread 的 service tier。"
+	buttons := []feishu.Button{}
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		body += "\n\n当前没有活动线程。"
+	} else {
+		current := normalizeServiceTier(sess.ActiveThreadServiceTier)
+		body += "\n\n当前线程: " + currentThreadLabel(sess)
+		body += "\n当前值: " + renderServiceTierValue(current)
+		buttons = append(buttons,
+			feishu.Button{
+				Text: func() string {
+					if current == "" {
+						return "当前 · 默认"
+					}
+					return "默认"
+				}(),
+				Type: func() string {
+					if current == "" {
+						return "primary"
+					}
+					return "default"
+				}(),
+				Value: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "thread_id": sess.ActiveThreadID, "service_tier": ""},
+			},
+			feishu.Button{
+				Text: func() string {
+					if current == serviceTierFast {
+						return "当前 · fast"
+					}
+					return "fast"
+				}(),
+				Type: func() string {
+					if current == serviceTierFast {
+						return "primary"
+					}
+					return "default"
+				}(),
+				Value: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "thread_id": sess.ActiveThreadID, "service_tier": serviceTierFast},
+			},
+		)
+	}
+	buttons = append(buttons, feishu.Button{
+		Text:  "返回菜单",
+		Type:  "default",
+		Value: map[string]any{"action": "menu.root", "session_key": sessionKey},
+	})
+	return a.feishu.SimpleStatusCard("Service Tier", "blue", body, buttons)
+}
+
+func (a *App) setThreadServiceTier(sessionKey, threadID, serviceTier string) (*state.Session, error) {
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return nil, fmt.Errorf("当前没有活动线程，无法切换 service tier")
+	}
+	if strings.TrimSpace(threadID) != "" && strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
+		return nil, fmt.Errorf("当前 thread 已失效")
+	}
+	sess.ActiveThreadServiceTier = normalizeServiceTier(serviceTier)
+	if err := a.store.UpsertSession(sess); err != nil {
+		return nil, err
+	}
+	return sess, nil
 }
 
 func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {

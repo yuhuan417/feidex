@@ -543,11 +543,15 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 		return nil
 	}
 	ff.replyTexts = nil
+	ff.replyCards = nil
 	if err := a.commandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(empty) error = %v", err)
 	}
-	if len(ff.replyTexts) == 0 || ff.replyTexts[len(ff.replyTexts)-1] != "没有可恢复的线程。" {
-		t.Fatalf("commandThreads(empty) reply = %+v", ff.replyTexts)
+	if len(ff.replyCards) == 0 {
+		t.Fatalf("commandThreads(empty) card = %+v", ff.replyCards)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "没有可恢复的线程。") {
+		t.Fatalf("commandThreads(empty) body = %q", body)
 	}
 }
 
@@ -708,7 +712,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 }
 
 func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
-	a, ff, _ := newTestApp(t)
+	a, _, _ := newTestApp(t)
 	action := &feishu.CardAction{
 		UserID:    "user-1",
 		ChatID:    "chat-1",
@@ -726,7 +730,15 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	}
 
 	for name, fn := range map[string]func() (*callback.CardActionTriggerResponse, error){
-		"menu.quiet": func() (*callback.CardActionTriggerResponse, error) { return a.completeMenuQuiet(action) },
+		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuRoot(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.quiet": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuQuiet(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.fast": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuFast(action, action.ActionValue["session_key"].(string))
+		},
 		"menu.threads": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuThreads(action, action.ActionValue["session_key"].(string))
 		},
@@ -759,20 +771,59 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		if err != nil || resp == nil || resp.Toast == nil {
 			t.Fatalf("%s = %#v, %v", name, resp, err)
 		}
-		if name == "menu.quiet" {
-			if resp.Toast.Type != "success" {
-				t.Fatalf("%s toast type = %q, want success", name, resp.Toast.Type)
-			}
-			continue
+		wantToastType := "info"
+		if name == "thread.sandbox.menu" || name == "thread.policy.menu" {
+			wantToastType = "warning"
 		}
-		if resp.Toast.Type != "info" {
-			t.Fatalf("%s toast type = %q, want info", name, resp.Toast.Type)
+		if resp.Toast.Type != wantToastType {
+			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
+		}
+		switch name {
+		case "menu.root", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+			if resp.Card == nil {
+				t.Fatalf("%s should update current card", name)
+			}
 		}
 	}
+}
 
-	time.Sleep(10 * time.Millisecond)
-	if len(ff.replyCards) == 0 {
-		t.Fatal("expected action wrappers to trigger background card rendering")
+func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	workspaceCard := a.renderWorkspaceMenuCard(sessionKey)
+	workspaceElements := workspaceCard["elements"].([]map[string]any)
+	workspaceActions := workspaceElements[1]["actions"].([]map[string]any)
+	foundBackToMenu := false
+	for _, action := range workspaceActions {
+		value, _ := action["value"].(map[string]any)
+		if value["action"] == "menu.root" {
+			foundBackToMenu = true
+		}
+	}
+	if !foundBackToMenu {
+		t.Fatalf("workspace menu missing back button: %+v", workspaceActions)
+	}
+
+	sandboxCard, err := a.renderWorkspaceSandboxMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderWorkspaceSandboxMenuCard() error = %v", err)
+	}
+	sandboxElements := sandboxCard["elements"].([]map[string]any)
+	sandboxActions := sandboxElements[1]["actions"].([]map[string]any)
+	foundBackToWorkspace := false
+	for _, action := range sandboxActions {
+		value, _ := action["value"].(map[string]any)
+		if value["action"] == "menu.workspace" {
+			foundBackToWorkspace = true
+		}
+	}
+	if !foundBackToWorkspace {
+		t.Fatalf("workspace sandbox menu missing back button: %+v", sandboxActions)
 	}
 }
 
@@ -1713,10 +1764,17 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 		t.Fatalf("thread list body should exclude other workspace thread: %q", body)
 	}
 	actions := elements[1]["actions"].([]map[string]any)
-	if len(actions) != 1 {
-		t.Fatalf("thread list button count = %d, want 1", len(actions))
+	resumeCount := 0
+	var value map[string]any
+	for _, action := range actions {
+		if got, _ := action["value"].(map[string]any); got["action"] == "thread.resume" {
+			resumeCount++
+			value = got
+		}
 	}
-	value := actions[0]["value"].(map[string]any)
+	if resumeCount != 1 {
+		t.Fatalf("thread list resume button count = %d, want 1", resumeCount)
+	}
 	if got, _ := value["thread_cwd"].(string); got != a.cfg.Workspaces[0].Cwd {
 		t.Fatalf("thread_cwd = %q, want %q", got, a.cfg.Workspaces[0].Cwd)
 	}

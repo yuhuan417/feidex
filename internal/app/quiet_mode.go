@@ -42,6 +42,10 @@ func shouldDeliverTurnSnapshotInQuiet(snapshot turnItemSnapshot) bool {
 }
 
 func (a *App) renderQuietModeCard() map[string]any {
+	return a.renderQuietModeMenuCard("")
+}
+
+func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
 	enabled := a.quietModeEnabled()
 	body := "当前状态: `" + quietModeStatusText(enabled) + "`\n\n开启后，会静默工具调用类消息和过程回复（例如 command execution、file change、web search、其它 tool/event、非最终 agent message），但仍保留 final answer、plan、排队/终态状态消息，以及 approval 请求。"
 	buttons := []feishu.Button{
@@ -58,7 +62,7 @@ func (a *App) renderQuietModeCard() map[string]any {
 				}
 				return "default"
 			}(),
-			Value: map[string]any{"action": "quiet.set", "enabled": true},
+			Value: map[string]any{"action": "quiet.set", "enabled": true, "session_key": sessionKey},
 		},
 		{
 			Text: func() string {
@@ -73,8 +77,15 @@ func (a *App) renderQuietModeCard() map[string]any {
 				}
 				return "default"
 			}(),
-			Value: map[string]any{"action": "quiet.set", "enabled": false},
+			Value: map[string]any{"action": "quiet.set", "enabled": false, "session_key": sessionKey},
 		},
+	}
+	if strings.TrimSpace(sessionKey) != "" {
+		buttons = append(buttons, feishu.Button{
+			Text:  "返回菜单",
+			Type:  "default",
+			Value: map[string]any{"action": "menu.root", "session_key": sessionKey},
+		})
 	}
 	return a.feishu.SimpleStatusCard("Quiet Mode", "blue", body, buttons)
 }
