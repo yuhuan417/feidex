@@ -96,10 +96,10 @@ func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) strin
 }
 
 func effectiveThreadServiceTier(sess *state.Session) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadServiceTier) != "" {
-		return strings.TrimSpace(sess.ActiveThreadServiceTier)
+	if sess != nil {
+		return normalizeServiceTier(sess.ActiveThreadServiceTier)
 	}
-	return "flex"
+	return ""
 }
 
 func switchSessionWorkspace(sess *state.Session, workspaceID string) {

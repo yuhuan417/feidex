@@ -305,11 +305,11 @@ func (a *App) statusCardBody(sess *state.Session) string {
 	}
 	threadSandbox := renderThreadSettingValue("", "")
 	threadPolicy := renderThreadSettingValue("", "")
-	threadServiceTier := "`flex`"
+	threadServiceTier := "-"
 	if sess != nil {
 		threadSandbox = renderThreadSettingValue(sess.ActiveThreadSandboxMode, "")
 		threadPolicy = renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, "")
-		threadServiceTier = "`" + effectiveThreadServiceTier(sess) + "`"
+		threadServiceTier = renderServiceTierValue(sess.ActiveThreadServiceTier)
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",

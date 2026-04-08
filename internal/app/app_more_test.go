@@ -1186,10 +1186,10 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("buildTurnSandboxPolicy(bad) = %+v, want nil", got)
 	}
 
-	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "flex", "", ""); err == nil {
+	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
 	}
-	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "flex", "", ""); err == nil {
+	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
@@ -1199,8 +1199,11 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
 		t.Fatalf("codex calls = %+v, want thread/start then turn/start", calls)
 	}
-	if got, _ := paramsSeen["turn/start"].(map[string]any)["serviceTier"].(string); got != "flex" {
-		t.Fatalf("turn/start serviceTier = %q, want flex", got)
+	if _, ok := paramsSeen["thread/start"].(map[string]any)["serviceTier"]; ok {
+		t.Fatalf("thread/start serviceTier should be omitted when unset: %+v", paramsSeen["thread/start"])
+	}
+	if _, ok := paramsSeen["turn/start"].(map[string]any)["serviceTier"]; ok {
+		t.Fatalf("turn/start serviceTier should be omitted when unset: %+v", paramsSeen["turn/start"])
 	}
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "turn-1" || sess.Status != "turn_in_progress" {

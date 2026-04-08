@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	serviceTierFlex = "flex"
 	serviceTierFast = "fast"
 )
 
@@ -18,15 +17,31 @@ func normalizeServiceTier(value string) string {
 	case serviceTierFast:
 		return serviceTierFast
 	default:
-		return serviceTierFlex
+		return ""
 	}
 }
 
 func toggleServiceTier(value string) string {
 	if normalizeServiceTier(value) == serviceTierFast {
-		return serviceTierFlex
+		return ""
 	}
 	return serviceTierFast
+}
+
+func renderServiceTierValue(value string) string {
+	value = normalizeServiceTier(value)
+	if value == "" {
+		return "-"
+	}
+	return "`" + value + "`"
+}
+
+func renderServiceTierReplyValue(value string) string {
+	value = normalizeServiceTier(value)
+	if value == "" {
+		return "未设置"
+	}
+	return "`" + value + "`"
 }
 
 func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
@@ -46,5 +61,5 @@ func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
 	if err := a.store.UpsertSession(sess); err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 `"+next+"`。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }

@@ -40,7 +40,7 @@ type Session struct {
 	ActiveThreadWorkspaceID    string               `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy string               `json:"active_thread_approval_policy"`
 	ActiveThreadSandboxMode    string               `json:"active_thread_sandbox_mode"`
-	ActiveThreadServiceTier    string               `json:"active_thread_service_tier"`
+	ActiveThreadServiceTier    string               `json:"active_thread_service_tier,omitempty"`
 	ActiveThreadName           string               `json:"active_thread_name"`
 	ActiveThreadPreview        string               `json:"active_thread_preview"`
 	ActiveTurnID               string               `json:"active_turn_id"`
@@ -171,6 +171,17 @@ func Open(path string) (*Store, error) {
 	if s.data.Counters.NextLocalID <= 0 {
 		s.data.Counters.NextLocalID = 1
 	}
+	repaired := false
+	for _, sess := range s.data.Sessions {
+		if normalizeSessionForStorage(sess) {
+			repaired = true
+		}
+	}
+	if repaired {
+		if err := s.saveLocked(); err != nil {
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
@@ -193,6 +204,7 @@ func (s *Store) UpsertSession(sess *Session) error {
 	if cp == nil {
 		return nil
 	}
+	normalizeSessionForStorage(cp)
 	cp.UpdatedAt = time.Now().Unix()
 	s.data.Sessions[sess.Key] = cp
 	return s.saveLocked()
@@ -325,9 +337,29 @@ func cloneSession(sess *Session) *Session {
 		return nil
 	}
 	cp := *sess
+	normalizeSessionForStorage(&cp)
 	cp.Queue = append([]string(nil), sess.Queue...)
 	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
 	return &cp
+}
+
+func normalizeSessionForStorage(sess *Session) bool {
+	if sess == nil {
+		return false
+	}
+	normalizedServiceTier := normalizeStoredServiceTier(sess.ActiveThreadServiceTier)
+	if sess.ActiveThreadServiceTier == normalizedServiceTier {
+		return false
+	}
+	sess.ActiveThreadServiceTier = normalizedServiceTier
+	return true
+}
+
+func normalizeStoredServiceTier(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "fast") {
+		return "fast"
+	}
+	return ""
 }
 
 func cloneSubmission(sub *Submission) *Submission {

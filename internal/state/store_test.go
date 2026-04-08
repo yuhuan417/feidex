@@ -190,6 +190,84 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 	}
 }
 
+func TestSessionServiceTierOmittedWhenUnset(t *testing.T) {
+	store := openTestStore(t)
+
+	if err := store.UpsertSession(&Session{
+		Key:                     "session-1",
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: "default",
+		ActiveThreadServiceTier: "",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	content, err := os.ReadFile(store.path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(content), "active_thread_service_tier") {
+		t.Fatalf("persisted snapshot should omit empty service tier:\n%s", string(content))
+	}
+}
+
+func TestSessionServiceTierRepairsLegacyValuesOnOpenAndSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	legacy := `{
+  "sessions": {
+    "session-1": {
+      "key": "session-1",
+      "active_thread_id": "thread-1",
+      "active_thread_service_tier": "flex",
+      "updated_at": 1
+    }
+  },
+  "submissions": {},
+  "pending_requests": {},
+  "message_links": {},
+  "inbound_dedup": {},
+  "counters": {
+    "next_submission": 1,
+    "next_local_id": 1
+  }
+}`
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	sess := store.GetSession("session-1")
+	if sess == nil {
+		t.Fatal("expected session to be loaded")
+	}
+	if sess.ActiveThreadServiceTier != "" {
+		t.Fatalf("service tier = %q, want empty after repair", sess.ActiveThreadServiceTier)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(content), "active_thread_service_tier") {
+		t.Fatalf("persisted snapshot should repair legacy service tier:\n%s", string(content))
+	}
+
+	if err := store.UpsertSession(&Session{
+		Key:                     "session-2",
+		ActiveThreadID:          "thread-2",
+		ActiveThreadServiceTier: " FAST ",
+	}); err != nil {
+		t.Fatalf("UpsertSession(normalize fast) error = %v", err)
+	}
+	sess = store.GetSession("session-2")
+	if sess == nil || sess.ActiveThreadServiceTier != "fast" {
+		t.Fatalf("normalized session = %+v, want fast", sess)
+	}
+}
+
 func TestSubmissionLifecycleAndHelpers(t *testing.T) {
 	store := openTestStore(t)
 

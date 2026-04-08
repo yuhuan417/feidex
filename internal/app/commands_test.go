@@ -170,10 +170,10 @@ func TestCommandFastTogglesThreadServiceTier(t *testing.T) {
 		t.Fatalf("expected service tier fast, got %#v", sess)
 	}
 	if err := a.commandFast(msg, nil); err != nil {
-		t.Fatalf("commandFast(toggle to flex) error = %v", err)
+		t.Fatalf("commandFast(toggle to unset) error = %v", err)
 	}
 	sess = a.store.GetSession("feishu:p2p:chat:user")
-	if sess == nil || sess.ActiveThreadServiceTier != "flex" {
-		t.Fatalf("expected service tier flex, got %#v", sess)
+	if sess == nil || sess.ActiveThreadServiceTier != "" {
+		t.Fatalf("expected service tier unset, got %#v", sess)
 	}
 }

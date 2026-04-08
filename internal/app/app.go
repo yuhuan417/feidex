@@ -465,10 +465,12 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			"cwd":                    ws.Cwd,
 			"approvalPolicy":         effectiveApprovalPolicy,
 			"sandbox":                effectiveSandboxMode,
-			"serviceTier":            effectiveServiceTier,
 			"serviceName":            a.cfg.Codex.ServiceName,
 			"experimentalRawEvents":  false,
 			"persistExtendedHistory": true,
+		}
+		if strings.TrimSpace(effectiveServiceTier) != "" {
+			threadParams["serviceTier"] = strings.TrimSpace(effectiveServiceTier)
 		}
 		if strings.TrimSpace(effectiveModel) != "" {
 			threadParams["model"] = effectiveModel
