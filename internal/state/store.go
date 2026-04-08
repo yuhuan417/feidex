@@ -58,6 +58,7 @@ type Session struct {
 
 type SessionStagedImage struct {
 	SourceMessageID string `json:"source_message_id"`
+	RootMessageID   string `json:"root_message_id,omitempty"`
 	Name            string `json:"name"`
 	LocalPath       string `json:"local_path"`
 	CreatedAt       int64  `json:"created_at"`
@@ -70,29 +71,30 @@ type SubmissionAttachment struct {
 }
 
 type Submission struct {
-	ID               string                 `json:"id"`
-	SessionKey       string                 `json:"session_key"`
-	WorkspaceID      string                 `json:"workspace_id"`
-	ThreadID         string                 `json:"thread_id"`
-	TurnID           string                 `json:"turn_id"`
-	UserID           string                 `json:"user_id"`
-	UserName         string                 `json:"user_name"`
-	ChatID           string                 `json:"chat_id"`
-	ChatName         string                 `json:"chat_name"`
-	TriggerMessageID string                 `json:"trigger_message_id"`
-	SourceMessageIDs []string               `json:"source_message_ids,omitempty"`
-	StatusCardID     string                 `json:"status_card_id"`
-	InputText        string                 `json:"input_text"`
-	Attachments      []SubmissionAttachment `json:"attachments,omitempty"`
-	Status           string                 `json:"status"`
-	OutputText       string                 `json:"output_text"`
-	SummaryText      string                 `json:"summary_text"`
-	CommandText      string                 `json:"command_text"`
-	PlanText         string                 `json:"plan_text"`
-	FinalMessageIDs  []string               `json:"final_message_ids,omitempty"`
-	Finalized        bool                   `json:"finalized"`
-	CreatedAt        int64                  `json:"created_at"`
-	UpdatedAt        int64                  `json:"updated_at"`
+	ID                   string                 `json:"id"`
+	SessionKey           string                 `json:"session_key"`
+	WorkspaceID          string                 `json:"workspace_id"`
+	ThreadID             string                 `json:"thread_id"`
+	TurnID               string                 `json:"turn_id"`
+	UserID               string                 `json:"user_id"`
+	UserName             string                 `json:"user_name"`
+	ChatID               string                 `json:"chat_id"`
+	ChatName             string                 `json:"chat_name"`
+	TriggerMessageID     string                 `json:"trigger_message_id"`
+	SourceMessageIDs     []string               `json:"source_message_ids,omitempty"`
+	SourceRootMessageIDs []string               `json:"source_root_message_ids,omitempty"`
+	StatusCardID         string                 `json:"status_card_id"`
+	InputText            string                 `json:"input_text"`
+	Attachments          []SubmissionAttachment `json:"attachments,omitempty"`
+	Status               string                 `json:"status"`
+	OutputText           string                 `json:"output_text"`
+	SummaryText          string                 `json:"summary_text"`
+	CommandText          string                 `json:"command_text"`
+	PlanText             string                 `json:"plan_text"`
+	FinalMessageIDs      []string               `json:"final_message_ids,omitempty"`
+	Finalized            bool                   `json:"finalized"`
+	CreatedAt            int64                  `json:"created_at"`
+	UpdatedAt            int64                  `json:"updated_at"`
 }
 
 type PendingRequest struct {
@@ -368,6 +370,7 @@ func cloneSubmission(sub *Submission) *Submission {
 	}
 	cp := *sub
 	cp.SourceMessageIDs = append([]string(nil), sub.SourceMessageIDs...)
+	cp.SourceRootMessageIDs = append([]string(nil), sub.SourceRootMessageIDs...)
 	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
 	cp.FinalMessageIDs = append([]string(nil), sub.FinalMessageIDs...)
 	return &cp
@@ -408,6 +411,20 @@ func (s *Store) UpsertMessageLink(link *MessageLink) error {
 	}
 	s.data.MessageLinks[cp.MessageID] = &cp
 	return s.saveLocked()
+}
+
+func (s *Store) GetMessageLink(messageID string) *MessageLink {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	if link, ok := s.data.MessageLinks[messageID]; ok {
+		cp := *link
+		return &cp
+	}
+	return nil
 }
 
 func (s *Store) MarkInboundSeen(messageID string, seenAt int64) (bool, error) {

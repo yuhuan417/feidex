@@ -170,8 +170,9 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 			return
 		}
 	}
+	replyLink := a.replyRootTurnLink(msg)
 	if a.shouldStageInboundImages(msg) {
-		if err := a.stageInboundImages(msg); err != nil {
+		if err := a.stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
 			_ = a.replyError(msg, err)
 		}
 		return
@@ -179,7 +180,20 @@ func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
 	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
 		return
 	}
-	if err := a.enqueueSubmission(msg); err != nil {
+	if replyLink != nil {
+		if steered, err := a.trySteerInboundReply(msg, replyLink); err == nil && steered {
+			return
+		} else if err != nil {
+			slog.Warn("reply steer failed; falling back to queue",
+				"message_id", msg.MessageID,
+				"parent_message_id", msg.ParentMessageID,
+				"thread_id", firstNonEmpty(replyLink.ThreadID, ""),
+				"turn_id", firstNonEmpty(replyLink.TurnID, ""),
+				"error", err,
+			)
+		}
+	}
+	if err := a.enqueueSubmissionWithSessionKey(msg, a.makeSessionKey(msg), replyLink != nil); err != nil {
 		_ = a.replyError(msg, err)
 	}
 }
@@ -247,7 +261,10 @@ func (a *App) handleCardAction(action *feishu.CardAction) (*callback.CardActionT
 }
 
 func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
+	return a.enqueueSubmissionWithSessionKey(msg, a.makeSessionKey(msg), false)
+}
+
+func (a *App) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
@@ -267,9 +284,15 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	stagedImages := append([]state.SessionStagedImage(nil), sess.StagedImages...)
+	bucketSessionKey := a.pendingInputSessionKey(msg)
+	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
 	attachments := append(stagedImageAttachments(stagedImages), inboundAttachments...)
 	sourceMessageIDs := uniqueStrings(append([]string{msg.MessageID}, stagedImageSourceMessageIDs(stagedImages)...))
+	currentRootMessageID := firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))
+	sourceRootMessageIDs := []string{currentRootMessageID}
+	if !bindOnlyCurrentRoot {
+		sourceRootMessageIDs = uniqueStrings(append(sourceRootMessageIDs, stagedImageRootMessageIDs(stagedImages)...))
+	}
 	if sessionHasInFlightSubmission(sess) {
 		sess.Status = "queued"
 	}
@@ -287,32 +310,31 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 	}
 	logSessionState("submission enqueue session persisted", sessionKey, a.store.GetSession(sessionKey))
 	sub := &state.Submission{
-		SessionKey:       sessionKey,
-		WorkspaceID:      sess.WorkspaceID,
-		UserID:           msg.UserID,
-		UserName:         msg.UserName,
-		ChatID:           msg.ChatID,
-		ChatName:         msg.ChatName,
-		TriggerMessageID: msg.MessageID,
-		SourceMessageIDs: sourceMessageIDs,
-		InputText:        msg.Text,
-		Attachments:      attachments,
-		Status:           "queued",
+		SessionKey:           sessionKey,
+		WorkspaceID:          sess.WorkspaceID,
+		UserID:               msg.UserID,
+		UserName:             msg.UserName,
+		ChatID:               msg.ChatID,
+		ChatName:             msg.ChatName,
+		TriggerMessageID:     msg.MessageID,
+		SourceMessageIDs:     sourceMessageIDs,
+		SourceRootMessageIDs: sourceRootMessageIDs,
+		InputText:            msg.Text,
+		Attachments:          attachments,
+		Status:               "queued",
 	}
 	id, err := a.store.CreateSubmission(sub)
 	if err != nil {
 		return err
 	}
+	a.recordInboundSubmissionSourceLink(msg.MessageID, sessionKey, id)
 	if err := a.store.QueueSubmission(sessionKey, id); err != nil {
 		return err
 	}
 	sub.ID = id
 	if len(stagedImages) > 0 {
-		if fresh := a.store.GetSession(sessionKey); fresh != nil {
-			fresh.StagedImages = nil
-			if err := a.store.UpsertSession(fresh); err != nil {
-				return err
-			}
+		if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
+			return err
 		}
 	}
 	slog.Debug("submission queued",
@@ -576,6 +598,8 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	}); err != nil {
 		return err
 	}
+	a.recordSubmissionSourceLinks(sub)
+	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	a.noteTurnStarted(sessionKey, sub)
 	slog.Debug("startNextSubmission completed",
 		"session_key", sessionKey,

@@ -28,17 +28,18 @@ import (
 )
 
 type InboundMessage struct {
-	MessageID     string
-	ChatID        string
-	ChatType      string
-	UserID        string
-	UserName      string
-	ChatName      string
-	Text          string
-	RootMessageID string
-	ThreadID      string
-	Attachments   []Attachment
-	CreatedAt     int64
+	MessageID       string
+	ChatID          string
+	ChatType        string
+	UserID          string
+	UserName        string
+	ChatName        string
+	Text            string
+	RootMessageID   string
+	ParentMessageID string
+	ThreadID        string
+	Attachments     []Attachment
+	CreatedAt       int64
 }
 
 type MessageRecall struct {
@@ -765,6 +766,9 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	}
 	if msg.RootId != nil {
 		out.RootMessageID = *msg.RootId
+	}
+	if msg.ParentId != nil {
+		out.ParentMessageID = *msg.ParentId
 	}
 	if out.RootMessageID == "" && out.MessageID != "" && out.ChatType == "group" {
 		out.RootMessageID = out.MessageID

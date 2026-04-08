@@ -29,10 +29,13 @@ func (a *App) shouldStageInboundImages(msg *feishu.InboundMessage) bool {
 }
 
 func (a *App) stageInboundImages(msg *feishu.InboundMessage) error {
+	return a.stageInboundImagesForSession(msg, a.pendingInputSessionKey(msg))
+}
+
+func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey := a.makeSessionKey(msg)
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
@@ -56,6 +59,7 @@ func (a *App) stageInboundImages(msg *feishu.InboundMessage) error {
 	for _, attachment := range attachments {
 		sess.StagedImages = append(sess.StagedImages, state.SessionStagedImage{
 			SourceMessageID: msg.MessageID,
+			RootMessageID:   firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID)),
 			Name:            attachment.Name,
 			LocalPath:       attachment.LocalPath,
 			CreatedAt:       now,
@@ -96,6 +100,21 @@ func stagedImageSourceMessageIDs(images []state.SessionStagedImage) []string {
 	ids := make([]string, 0, len(images))
 	for _, image := range images {
 		ids = append(ids, image.SourceMessageID)
+	}
+	return uniqueStrings(ids)
+}
+
+func stagedImageRootMessageIDs(images []state.SessionStagedImage) []string {
+	if len(images) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(images))
+	for _, image := range images {
+		rootID := firstNonEmpty(strings.TrimSpace(image.RootMessageID), strings.TrimSpace(image.SourceMessageID))
+		if rootID == "" {
+			continue
+		}
+		ids = append(ids, rootID)
 	}
 	return uniqueStrings(ids)
 }

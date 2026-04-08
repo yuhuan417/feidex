@@ -102,6 +102,8 @@ func TestConvertMessageTextFlow(t *testing.T) {
 	chatType := "group"
 	content := `{"text":"@bot hello"}`
 	messageID := "msg-1"
+	rootID := "root-1"
+	parentID := "parent-1"
 	chatID := "chat-1"
 	threadID := "thread-1"
 	createTime := "1700000123456"
@@ -115,6 +117,8 @@ func TestConvertMessageTextFlow(t *testing.T) {
 			},
 			Message: &larkim.EventMessage{
 				MessageId:   &messageID,
+				RootId:      &rootID,
+				ParentId:    &parentID,
 				ChatId:      &chatID,
 				ThreadId:    &threadID,
 				ChatType:    &chatType,
@@ -132,8 +136,8 @@ func TestConvertMessageTextFlow(t *testing.T) {
 	if got == nil {
 		t.Fatal("convertMessage(text) returned nil")
 	}
-	if got.Text != "hello" || got.MessageID != "msg-1" || got.RootMessageID != "msg-1" {
-		t.Fatalf("convertMessage(text) = %+v, want stripped text and default root id", got)
+	if got.Text != "hello" || got.MessageID != "msg-1" || got.RootMessageID != "root-1" || got.ParentMessageID != "parent-1" {
+		t.Fatalf("convertMessage(text) = %+v, want stripped text and root/parent ids", got)
 	}
 	if got.ThreadID != "thread-1" || got.CreatedAt != 1700000123 {
 		t.Fatalf("convertMessage(text) missing thread or createdAt: %+v", got)

@@ -1454,6 +1454,300 @@ func TestNotificationAndStatusHelpers(t *testing.T) {
 	}
 }
 
+func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            targetSessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerUserID:    "user-1",
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-1",
+		Status:         "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(target) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "root-msg",
+		Kind:       "root_turn",
+		SessionKey: targetSessionKey,
+		ThreadID:   "thread-1",
+		TurnID:     "turn-1",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+
+	steered := false
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/steer" {
+			return nil
+		}
+		steered = true
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-1" || got["expectedTurnId"] != "turn-1" {
+			t.Fatalf("turn/steer params = %+v", got)
+		}
+		return nil
+	}
+
+	a.handleFeishuMessage(&feishu.InboundMessage{
+		MessageID:       "reply-1",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "follow up",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "target-msg",
+	})
+
+	if !steered {
+		t.Fatal("expected reply message to steer")
+	}
+	if sess := a.store.GetSession(targetSessionKey); sess == nil || len(sess.Queue) != 0 {
+		t.Fatalf("target session queue = %+v, want no queued submissions", sess)
+	}
+	if link := a.store.GetMessageLink("root-msg"); link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+		t.Fatalf("root message link = %+v, want root turn binding", link)
+	}
+}
+
+func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            targetSessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerUserID:    "user-1",
+		ActiveThreadID: "thread-current",
+		ActiveTurnID:   "turn-current",
+		Status:         "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(target) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "root-msg",
+		Kind:       "root_turn",
+		SessionKey: targetSessionKey,
+		ThreadID:   "thread-old",
+		TurnID:     "turn-old",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+
+	steerAttempts := 0
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method == "turn/steer" {
+			steerAttempts++
+			return errors.New("no active turn to steer")
+		}
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:       "reply-2",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "fallback to queue",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "target-msg",
+	}
+	a.handleFeishuMessage(msg)
+
+	if steerAttempts != 1 {
+		t.Fatalf("steer attempts = %d, want 1", steerAttempts)
+	}
+	targetSess := a.store.GetSession(targetSessionKey)
+	if targetSess == nil || len(targetSess.Queue) != 1 {
+		t.Fatalf("target session after fallback = %+v, want one queued submission", targetSess)
+	}
+}
+
+func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{
+		MessageID:     "root-msg",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "hello",
+		RootMessageID: "root-msg",
+	}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-1"
+			return nil
+		default:
+			return nil
+		}
+	}
+	if err := a.enqueueSubmission(msg); err != nil {
+		t.Fatalf("enqueueSubmission() error = %v", err)
+	}
+	if link := a.store.GetMessageLink("root-msg"); link == nil || link.Kind != "root_turn" || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+		t.Fatalf("root turn binding = %+v, want current turn", link)
+	}
+}
+
+func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := a.pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		StagedImages: []state.SessionStagedImage{
+			{SourceMessageID: "a", RootMessageID: "a", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
+			{SourceMessageID: "b", RootMessageID: "b", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
+	}
+
+	var seenInputs []map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			got, _ := params.(map[string]any)
+			if items, ok := got["input"].([]map[string]any); ok {
+				seenInputs = items
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-1"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:     "c",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "describe images",
+		RootMessageID: "c",
+	}
+	if err := a.enqueueSubmission(msg); err != nil {
+		t.Fatalf("enqueueSubmission() error = %v", err)
+	}
+	if len(seenInputs) != 3 || seenInputs[0]["type"] != "text" || seenInputs[1]["type"] != "localImage" || seenInputs[2]["type"] != "localImage" {
+		t.Fatalf("thread/start inputs = %+v, want text + 2 images", seenInputs)
+	}
+	for _, rootID := range []string{"a", "b", "c"} {
+		link := a.store.GetMessageLink(rootID)
+		if link == nil || link.Kind != "root_turn" || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+			t.Fatalf("root %s binding = %+v, want thread-1/turn-1", rootID, link)
+		}
+	}
+	if bucket := a.store.GetSession(sessionKey); bucket == nil || len(bucket.StagedImages) != 0 {
+		t.Fatalf("staged bucket after consume = %+v, want empty", bucket)
+	}
+}
+
+func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	replySessionKey := "feishu:group:chat-1:root:reply-root"
+	bucketSessionKey := a.pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         replySessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession(reply session) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         bucketSessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		StagedImages: []state.SessionStagedImage{
+			{SourceMessageID: "a", RootMessageID: "a", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
+			{SourceMessageID: "b", RootMessageID: "b", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "reply-root",
+		Kind:       "root_turn",
+		SessionKey: replySessionKey,
+		ThreadID:   "thread-old",
+		TurnID:     "turn-old",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(root binding) error = %v", err)
+	}
+
+	steerAttempts := 0
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "turn/steer":
+			steerAttempts++
+			return errors.New("no active turn to steer")
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			return nil
+		case "turn/start":
+			got, _ := params.(map[string]any)
+			items, _ := got["input"].([]map[string]any)
+			if len(items) != 3 {
+				t.Fatalf("fallback turn/start inputs = %+v, want text + 2 images", items)
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-new"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:       "reply-msg",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "follow up after closed turn",
+		RootMessageID:   "reply-root",
+		ParentMessageID: "some-parent",
+	}
+	a.handleFeishuMessage(msg)
+
+	if steerAttempts != 1 {
+		t.Fatalf("steer attempts = %d, want 1", steerAttempts)
+	}
+	if link := a.store.GetMessageLink("reply-root"); link == nil || link.ThreadID != "thread-new" || link.TurnID != "turn-new" {
+		t.Fatalf("reply root binding = %+v, want new turn binding", link)
+	}
+	for _, stagedRoot := range []string{"a", "b"} {
+		if link := a.store.GetMessageLink(stagedRoot); link != nil {
+			t.Fatalf("staged root %s should not be rebound on fallback, got %+v", stagedRoot, link)
+		}
+	}
+}
+
 func TestAdditionalCommandHelpers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := a.makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1"})

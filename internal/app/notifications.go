@@ -220,6 +220,8 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"
+	a.recordSubmissionSourceLinks(sub)
+	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	a.noteTurnStarted(sessionKey, sub)
 	a.markSessionThreadLive(sessionKey, threadID)
 	slog.Debug("turn started notification rebound pending submission",
