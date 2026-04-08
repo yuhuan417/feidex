@@ -1483,8 +1483,8 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		}
 		result := out.(*codexrpc.ThreadListResult)
 		result.Data = []codexrpc.ThreadListEntry{
-			{ID: "thread-current", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20},
-			{ID: "thread-older", Name: "Older", Preview: "Older Preview", UpdatedAt: 10},
+			{ID: "thread-current", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "thread-older", Name: "Older", Preview: "Older Preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[0].Cwd},
 		}
 		return nil
 	}
