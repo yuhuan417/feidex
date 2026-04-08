@@ -125,18 +125,19 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 	if err == nil {
 		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          requestKey,
-			Kind:        "tool_request_user_input_form",
-			SessionKey:  sessionKey,
-			ThreadID:    payload.ThreadID,
-			TurnID:      payload.TurnID,
-			ItemID:      payload.ItemID,
-			OwnerUserID: sub.UserID,
-			FeishuMsgID: msgID,
-			PayloadJSON: mustJSON(payload),
-			Status:      "pending",
-			CreatedAt:   time.Now().Unix(),
-			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+			ID:           requestKey,
+			RequestIDRaw: requestIDStored(requestID),
+			Kind:         "tool_request_user_input_form",
+			SessionKey:   sessionKey,
+			ThreadID:     payload.ThreadID,
+			TurnID:       payload.TurnID,
+			ItemID:       payload.ItemID,
+			OwnerUserID:  sub.UserID,
+			FeishuMsgID:  msgID,
+			PayloadJSON:  mustJSON(payload),
+			Status:       "pending",
+			CreatedAt:    time.Now().Unix(),
+			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
 		_ = a.refreshStatusCard(sub.ID)
@@ -160,9 +161,9 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已取消", "grey", "本次追加已取消。", nil))
 		}
 	case "tool_request_user_input_form":
-		_ = a.codex.ReplyError(requestIDRaw(requestID), -32800, "cancelled by user")
+		_ = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
 	case "mcp_elicitation_form":
-		_ = a.codex.Reply(requestIDRaw(requestID), map[string]any{"action": "cancel"})
+		_ = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
 	}
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
@@ -233,7 +234,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err != nil {
 		return err
 	}
-	if err := a.codex.Reply(requestIDRaw(pending.ID), response); err != nil {
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), response); err != nil {
 		return err
 	}
 	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -258,17 +259,18 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 	if err == nil {
 		a.recordMessageLink(msgID, "elicitation_form_card", sub, requestKey)
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          requestKey,
-			Kind:        "mcp_elicitation_form",
-			SessionKey:  sessionKey,
-			ThreadID:    payload.ThreadID,
-			TurnID:      payload.TurnID,
-			OwnerUserID: sub.UserID,
-			FeishuMsgID: msgID,
-			PayloadJSON: mustJSON(payload),
-			Status:      "pending",
-			CreatedAt:   time.Now().Unix(),
-			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+			ID:           requestKey,
+			RequestIDRaw: requestIDStored(requestID),
+			Kind:         "mcp_elicitation_form",
+			SessionKey:   sessionKey,
+			ThreadID:     payload.ThreadID,
+			TurnID:       payload.TurnID,
+			OwnerUserID:  sub.UserID,
+			FeishuMsgID:  msgID,
+			PayloadJSON:  mustJSON(payload),
+			Status:       "pending",
+			CreatedAt:    time.Now().Unix(),
+			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
 		_ = a.refreshStatusCard(sub.ID)
@@ -297,17 +299,18 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 	if err == nil {
 		a.recordMessageLink(msgID, "elicitation_url_card", sub, requestKey)
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          requestKey,
-			Kind:        "mcp_elicitation_url",
-			SessionKey:  sessionKey,
-			ThreadID:    payload.ThreadID,
-			TurnID:      payload.TurnID,
-			OwnerUserID: sub.UserID,
-			FeishuMsgID: msgID,
-			PayloadJSON: mustJSON(payload),
-			Status:      "pending",
-			CreatedAt:   time.Now().Unix(),
-			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+			ID:           requestKey,
+			RequestIDRaw: requestIDStored(requestID),
+			Kind:         "mcp_elicitation_url",
+			SessionKey:   sessionKey,
+			ThreadID:     payload.ThreadID,
+			TurnID:       payload.TurnID,
+			OwnerUserID:  sub.UserID,
+			FeishuMsgID:  msgID,
+			PayloadJSON:  mustJSON(payload),
+			Status:       "pending",
+			CreatedAt:    time.Now().Unix(),
+			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
 		_ = a.refreshStatusCard(sub.ID)
@@ -332,7 +335,7 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 	case "elicitation_url.decline":
 		decision = "decline"
 	}
-	_ = a.codex.Reply(requestIDRaw(requestID), map[string]any{"action": decision})
+	_ = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	return &callback.CardActionTriggerResponse{
@@ -350,7 +353,7 @@ func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *s
 	if err != nil {
 		return err
 	}
-	if err := a.codex.Reply(requestIDRaw(pending.ID), map[string]any{
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{
 		"action":  "accept",
 		"content": content,
 	}); err != nil {

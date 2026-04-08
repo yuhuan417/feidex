@@ -35,12 +35,12 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	if len(chunks) == 0 {
 		chunks = []string{"任务已结束。"}
 	}
-	title, color, replyClass := outboundMessageCardMeta(kind)
+	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
 	var ids []string
 	for _, chunk := range chunks {
 		var card map[string]any
 		if replyClass {
-			card = a.renderReplyMarkdownCardWithOptions(ctx, sub, title, color, chunk, nil, enablePreview)
+			card = a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, chunk, nil, enablePreview)
 		} else {
 			card = a.renderCompactMarkdownCard(sub, title, color, "", chunk, nil)
 		}
@@ -71,26 +71,26 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	return ids
 }
 
-func outboundMessageCardMeta(kind string) (title, color string, replyClass bool) {
+func outboundMessageCardMeta(kind string) (title, color string, replyClass bool, showHeader bool) {
 	switch strings.TrimSpace(kind) {
 	case "final_message":
-		return "最终答复", "green", true
+		return "最终答复", "green", true, true
 	case "turn_output":
-		return "", "green", true
+		return "", "green", true, false
 	case "turn_reasoning":
-		return "思考", "grey", false
+		return "思考", "grey", false, true
 	case "turn_command_execution":
-		return "命令执行", "blue", false
+		return "命令执行", "blue", false, true
 	case "turn_file_change":
-		return "文件改动", "orange", false
+		return "文件改动", "orange", false, true
 	case "turn_plan":
-		return "计划更新", "blue", false
+		return "计划更新", "blue", false, true
 	case "turn_queued":
-		return "排队中", "grey", false
+		return "排队中", "grey", false, true
 	case "turn_terminal":
-		return "任务状态", "grey", false
+		return "任务状态", "grey", false, true
 	default:
-		return "状态更新", "blue", false
+		return "状态更新", "blue", false, true
 	}
 }
 

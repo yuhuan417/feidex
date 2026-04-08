@@ -440,11 +440,11 @@ func TestAttachmentHelpers(t *testing.T) {
 }
 
 func TestDeliveryHelpers(t *testing.T) {
-	if title, color, replyClass := outboundMessageCardMeta("turn_command_execution"); title != "命令执行" || color != "blue" || replyClass {
-		t.Fatalf("outboundMessageCardMeta(turn_command_execution) = %q, %q, %v", title, color, replyClass)
+	if title, color, replyClass, showHeader := outboundMessageCardMeta("turn_command_execution"); title != "命令执行" || color != "blue" || replyClass || !showHeader {
+		t.Fatalf("outboundMessageCardMeta(turn_command_execution) = %q, %q, %v, %v", title, color, replyClass, showHeader)
 	}
-	if title, color, replyClass := outboundMessageCardMeta("final_message"); title != "最终答复" || color != "green" || !replyClass {
-		t.Fatalf("outboundMessageCardMeta(final_message) = %q, %q, %v", title, color, replyClass)
+	if title, color, replyClass, showHeader := outboundMessageCardMeta("final_message"); title != "最终答复" || color != "green" || !replyClass || !showHeader {
+		t.Fatalf("outboundMessageCardMeta(final_message) = %q, %q, %v, %v", title, color, replyClass, showHeader)
 	}
 
 	sections := splitSections("alpha\n\n```go\nfmt.Println(1)\n```\n\nbeta")

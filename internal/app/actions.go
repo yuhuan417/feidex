@@ -685,6 +685,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个审批"}}, nil
 	}
+	var replyPayload any
 	switch pending.Kind {
 	case "command":
 		resp := map[string]any{"decision": "decline"}
@@ -696,7 +697,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		case "approval.command.cancel", "approval.command.decline":
 			resp["decision"] = "decline"
 		}
-		_ = a.codex.Reply(requestIDRaw(requestID), resp)
+		replyPayload = resp
 	case "file":
 		resp := map[string]any{"decision": "decline"}
 		switch actionName {
@@ -707,7 +708,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		case "approval.file.cancel", "approval.file.decline":
 			resp["decision"] = "decline"
 		}
-		_ = a.codex.Reply(requestIDRaw(requestID), resp)
+		replyPayload = resp
 	case "permissions":
 		var payload struct {
 			Permissions map[string]any `json:"permissions"`
@@ -717,10 +718,24 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		if actionName == "approval.permissions.accept_session" {
 			scope = "session"
 		}
-		_ = a.codex.Reply(requestIDRaw(requestID), map[string]any{
+		replyPayload = map[string]any{
 			"permissions": payload.Permissions,
 			"scope":       scope,
-		})
+		}
+	default:
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "不支持的审批类型"}}, nil
+	}
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
+		slog.Error("approval reply to codex failed",
+			"request_id", requestID,
+			"pending_kind", pending.Kind,
+			"action", actionName,
+			"user_id", action.UserID,
+			"error", err,
+		)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
+		}, nil
 	}
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
@@ -752,7 +767,7 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 			},
 		},
 	}
-	_ = a.codex.Reply(requestIDRaw(requestID), payload)
+	_ = a.codex.Reply(pendingRequestIDRaw(pending), payload)
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	return &callback.CardActionTriggerResponse{

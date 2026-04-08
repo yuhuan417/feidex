@@ -22,6 +22,7 @@ type fakeCodexClient struct {
 	startErr error
 	closeErr error
 	callErr  error
+	replyErr error
 	started  bool
 	closed   bool
 	replies  []struct {
@@ -61,6 +62,9 @@ func (f *fakeCodexClient) Call(ctx context.Context, method string, params any, o
 }
 
 func (f *fakeCodexClient) Reply(id json.RawMessage, result any) error {
+	if f.replyErr != nil {
+		return f.replyErr
+	}
 	f.replies = append(f.replies, struct {
 		id     json.RawMessage
 		result any
@@ -174,6 +178,31 @@ func (f *fakeFeishuClient) DownloadMessageResource(context.Context, string, feis
 
 func (f *fakeFeishuClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
 	return (&feishu.Adapter{}).SimpleStatusCard(title, color, body, buttons)
+}
+
+func cardMarkdownContent(t *testing.T, card map[string]any) string {
+	t.Helper()
+	elements, ok := card["elements"].([]map[string]any)
+	if !ok {
+		body, _ := card["body"].(map[string]any)
+		elements, _ = body["elements"].([]map[string]any)
+	}
+	if len(elements) == 0 {
+		t.Fatalf("unexpected card elements: %#v", card)
+	}
+	var parts []string
+	for _, elem := range elements {
+		if content, ok := elem["content"].(string); ok {
+			parts = append(parts, content)
+			continue
+		}
+		if text, ok := elem["text"].(map[string]any); ok {
+			if content, ok := text["content"].(string); ok {
+				parts = append(parts, content)
+			}
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
@@ -513,10 +542,20 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	sessionKey := a.makeSessionKey(msg)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 	ff.sendCards = nil
+	ff.replyTexts = nil
 	fc.replyErrors = nil
 	a.onCommandApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"ls","reason":"need approval"}`)})
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected command approval to send a card")
+	}
+	if _, ok := ff.sendCards[0]["schema"]; ok {
+		t.Fatalf("approval card should use legacy layout, got schema=%#v", ff.sendCards[0]["schema"])
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "命令审批") {
+		t.Fatalf("command approval card body = %q", got)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("command approval should not send extra text, got replies=%+v", ff.replyTexts)
 	}
 	if pending := a.store.PendingByID("cmd-1"); pending == nil || pending.Kind != "command" {
 		t.Fatalf("command approval pending = %+v, want command request", pending)
@@ -529,6 +568,15 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	a.onPermissionsApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"sandbox","permissions":{"mode":"write"}}`)})
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected permissions approval to send a card")
+	}
+	if _, ok := ff.sendCards[0]["schema"]; ok {
+		t.Fatalf("permissions card should use legacy layout, got schema=%#v", ff.sendCards[0]["schema"])
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "权限审批") {
+		t.Fatalf("permissions approval card body = %q", got)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("permissions approval should not send extra text, got replies=%+v", ff.replyTexts)
 	}
 
 	ff.sendCards = nil
@@ -577,6 +625,53 @@ func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
 
 	a.handleFeishuRecall(nil)
 	a.handleFeishuReaction(&feishu.MessageReaction{EmojiType: "smile"})
+}
+
+func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sessionKey := "sess-p2p"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-p2p",
+		ActiveTurnID:       "turn-p2p",
+		ActiveSubmissionID: "sub-p2p",
+		OwnerUserID:        "user-1",
+		ChatID:             "chat-p2p",
+		ChatType:           "p2p",
+		Status:             "running",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	subID, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-p2p",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "thread-p2p",
+		TurnID:           "turn-p2p",
+		UserID:           "user-1",
+		ChatID:           "chat-p2p",
+		TriggerMessageID: "trigger-p2p",
+		Status:           "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+
+	a.sendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
+
+	if len(ff.sendCards) != 1 {
+		t.Fatalf("approval card count = %d, want 1", len(ff.sendCards))
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "命令审批") || strings.Contains(got, `<at `) {
+		t.Fatalf("approval card in p2p body = %q", got)
+	}
+	if pending := a.store.PendingByID("req-p2p"); pending == nil || pending.FeishuMsgID == "" {
+		t.Fatalf("pending approval = %+v", pending)
+	}
+	if got := a.store.GetSubmission(subID); got == nil || got.Status != "waiting_approval" {
+		t.Fatalf("submission status = %+v, want waiting_approval", got)
+	}
 }
 
 func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
@@ -666,6 +761,9 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	if pending := a.store.PendingByID("command-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("command pending = %+v, want resolved", pending)
 	}
+	if got := string(fc.replies[0].id); got != `"command-1"` {
+		t.Fatalf("codex reply id = %s, want %q", got, `"command-1"`)
+	}
 
 	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
@@ -699,6 +797,111 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}
 	if got := a.approvalDecisionText("other"); got != "已拒绝" {
 		t.Fatalf("approvalDecisionText(default) = %q", got)
+	}
+}
+
+func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-1",
+		ActiveTurnID:       "turn-1",
+		ActiveSubmissionID: "sub-1",
+		Status:             "waiting_approval",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:          "sub-1",
+		SessionKey:  sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		Status:      "waiting_approval",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "0",
+		RequestIDRaw: "0",
+		Kind:         "command",
+		SessionKey:   sessionKey,
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		Status:       "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	resp, err := a.completeApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "0"},
+	}, "approval.command.accept")
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction() = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 1 {
+		t.Fatalf("reply count = %d, want 1", len(fc.replies))
+	}
+	if got := string(fc.replies[0].id); got != "0" {
+		t.Fatalf("codex reply id = %s, want numeric 0", got)
+	}
+}
+
+func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-1",
+		ActiveTurnID:       "turn-1",
+		ActiveSubmissionID: "sub-1",
+		Status:             "waiting_approval",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:          "sub-1",
+		SessionKey:  sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		Status:      "waiting_approval",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "command-1",
+		Kind:        "command",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+	fc.replyErr = errors.New("write failed")
+
+	resp, err := a.completeApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "command-1"},
+	}, "approval.command.accept")
+	if err != nil {
+		t.Fatalf("completeApprovalAction() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("completeApprovalAction() = %#v, want warning toast", resp)
+	}
+	if pending := a.store.PendingByID("command-1"); pending == nil || pending.Status != "pending" {
+		t.Fatalf("pending after failed reply = %+v, want pending", pending)
+	}
+	if sub := a.store.GetSubmission("sub-1"); sub == nil || sub.Status != "waiting_approval" {
+		t.Fatalf("submission after failed reply = %+v, want waiting_approval", sub)
 	}
 }
 

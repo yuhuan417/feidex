@@ -857,7 +857,7 @@ func (a *App) renderTurnItemCardWithOptions(ctx context.Context, sub *state.Subm
 	_ = includeActions
 	_ = requestID
 	if isReplyTurnItem(payload.ItemType) {
-		return a.renderReplyMarkdownCardWithOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, replyTurnItemCardBody(payload), nil, enablePreview)
+		return a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
 	}
 	meta, body := compactTurnItemCardContent(payload)
 	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)

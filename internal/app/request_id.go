@@ -3,6 +3,8 @@ package app
 import (
 	"encoding/json"
 	"strings"
+
+	"feidex/internal/state"
 )
 
 func requestIDKey(raw json.RawMessage) string {
@@ -27,4 +29,18 @@ func requestIDRaw(key string) json.RawMessage {
 		return nil
 	}
 	return json.RawMessage(b)
+}
+
+func requestIDStored(raw json.RawMessage) string {
+	return strings.TrimSpace(string(raw))
+}
+
+func pendingRequestIDRaw(pending *state.PendingRequest) json.RawMessage {
+	if pending != nil {
+		if raw := strings.TrimSpace(pending.RequestIDRaw); raw != "" {
+			return json.RawMessage(raw)
+		}
+		return requestIDRaw(pending.ID)
+	}
+	return nil
 }

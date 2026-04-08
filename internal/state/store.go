@@ -95,18 +95,19 @@ type Submission struct {
 }
 
 type PendingRequest struct {
-	ID          string `json:"id"`
-	Kind        string `json:"kind"`
-	SessionKey  string `json:"session_key"`
-	ThreadID    string `json:"thread_id"`
-	TurnID      string `json:"turn_id"`
-	ItemID      string `json:"item_id"`
-	OwnerUserID string `json:"owner_user_id"`
-	FeishuMsgID string `json:"feishu_msg_id"`
-	PayloadJSON string `json:"payload_json"`
-	Status      string `json:"status"`
-	CreatedAt   int64  `json:"created_at"`
-	ExpiresAt   int64  `json:"expires_at"`
+	ID           string `json:"id"`
+	RequestIDRaw string `json:"request_id_raw,omitempty"`
+	Kind         string `json:"kind"`
+	SessionKey   string `json:"session_key"`
+	ThreadID     string `json:"thread_id"`
+	TurnID       string `json:"turn_id"`
+	ItemID       string `json:"item_id"`
+	OwnerUserID  string `json:"owner_user_id"`
+	FeishuMsgID  string `json:"feishu_msg_id"`
+	PayloadJSON  string `json:"payload_json"`
+	Status       string `json:"status"`
+	CreatedAt    int64  `json:"created_at"`
+	ExpiresAt    int64  `json:"expires_at"`
 }
 
 type MessageLink struct {

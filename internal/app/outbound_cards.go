@@ -9,6 +9,10 @@ import (
 )
 
 func newMarkdownBodyCard(title, color string) map[string]any {
+	return newMarkdownBodyCardWithHeader(title, color, strings.TrimSpace(title) != "")
+}
+
+func newMarkdownBodyCardWithHeader(title, color string, showHeader bool) map[string]any {
 	if strings.TrimSpace(color) == "" {
 		color = "blue"
 	}
@@ -22,14 +26,17 @@ func newMarkdownBodyCard(title, color string) map[string]any {
 			"elements": []map[string]any{},
 		},
 	}
-	if strings.TrimSpace(title) != "" {
-		card["header"] = map[string]any{
-			"title": map[string]any{
-				"tag":     "plain_text",
-				"content": strings.TrimSpace(title),
-			},
-			"template": color,
+	if showHeader {
+		headerTitle := strings.TrimSpace(title)
+		if headerTitle == "" {
+			headerTitle = " "
 		}
+		header := map[string]any{"template": color}
+		header["title"] = map[string]any{
+			"tag":     "plain_text",
+			"content": headerTitle,
+		}
+		card["header"] = header
 	}
 	return card
 }
@@ -80,7 +87,11 @@ func (a *App) renderReplyMarkdownCard(sub *state.Submission, title, color, body 
 }
 
 func (a *App) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
-	card := newMarkdownBodyCard(title, color)
+	return a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, strings.TrimSpace(title) != "", body, buttons, enablePreview)
+}
+
+func (a *App) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
+	card := newMarkdownBodyCardWithHeader(title, color, showHeader)
 	if content := a.prepareReplyCardMarkdown(ctx, sub, body, enablePreview); content != "" {
 		appendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",

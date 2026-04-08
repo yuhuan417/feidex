@@ -655,7 +655,7 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 	}
 	requestKey := requestIDKey(requestID)
 	buttons := approvalButtons(kind, requestKey)
-	card := a.feishu.SimpleStatusCard("等待审批", "orange", body, buttons)
+	card := a.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
 		a.recordMessageLink(msgID, "approval_card", sub, requestKey)
@@ -664,18 +664,19 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 			payload = map[string]any{"body": body}
 		}
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          requestKey,
-			Kind:        kind,
-			SessionKey:  sessionKey,
-			ThreadID:    threadID,
-			TurnID:      turnID,
-			ItemID:      itemID,
-			OwnerUserID: sub.UserID,
-			FeishuMsgID: msgID,
-			PayloadJSON: mustJSON(payload),
-			Status:      "pending",
-			CreatedAt:   time.Now().Unix(),
-			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+			ID:           requestKey,
+			RequestIDRaw: requestIDStored(requestID),
+			Kind:         kind,
+			SessionKey:   sessionKey,
+			ThreadID:     threadID,
+			TurnID:       turnID,
+			ItemID:       itemID,
+			OwnerUserID:  sub.UserID,
+			FeishuMsgID:  msgID,
+			PayloadJSON:  mustJSON(payload),
+			Status:       "pending",
+			CreatedAt:    time.Now().Unix(),
+			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_approval" })
 		_ = a.refreshStatusCard(sub.ID)
@@ -699,7 +700,7 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	card := a.feishu.SimpleStatusCard("权限请求", "orange", body, []feishu.Button{
+	card := a.renderApprovalCard(sessionKey, sub, "权限请求", "orange", strings.TrimSpace(body), []feishu.Button{
 		{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
 		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
 	})
@@ -707,24 +708,29 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 	if err == nil {
 		a.recordMessageLink(msgID, "permissions_card", sub, requestKey)
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          requestKey,
-			Kind:        "permissions",
-			SessionKey:  sessionKey,
-			ThreadID:    threadID,
-			TurnID:      turnID,
-			ItemID:      itemID,
-			OwnerUserID: sub.UserID,
-			FeishuMsgID: msgID,
-			PayloadJSON: mustJSON(map[string]any{"permissions": permissions}),
-			Status:      "pending",
-			CreatedAt:   time.Now().Unix(),
-			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+			ID:           requestKey,
+			RequestIDRaw: requestIDStored(requestID),
+			Kind:         "permissions",
+			SessionKey:   sessionKey,
+			ThreadID:     threadID,
+			TurnID:       turnID,
+			ItemID:       itemID,
+			OwnerUserID:  sub.UserID,
+			FeishuMsgID:  msgID,
+			PayloadJSON:  mustJSON(map[string]any{"permissions": permissions}),
+			Status:       "pending",
+			CreatedAt:    time.Now().Unix(),
+			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_approval" })
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
+}
+
+func (a *App) renderApprovalCard(_ string, _ *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+	return a.feishu.SimpleStatusCard(title, color, strings.TrimSpace(body), buttons)
 }
 
 func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
@@ -753,18 +759,19 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 		requestKey := requestIDKey(requestID)
 		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
 		_ = a.store.UpsertPending(&state.PendingRequest{
-			ID:          requestKey,
-			Kind:        "tool_request_user_input",
-			SessionKey:  sessionKey,
-			ThreadID:    payload.ThreadID,
-			TurnID:      payload.TurnID,
-			ItemID:      payload.ItemID,
-			OwnerUserID: sub.UserID,
-			FeishuMsgID: msgID,
-			PayloadJSON: mustJSON(payload),
-			Status:      "pending",
-			CreatedAt:   time.Now().Unix(),
-			ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
+			ID:           requestKey,
+			RequestIDRaw: requestIDStored(requestID),
+			Kind:         "tool_request_user_input",
+			SessionKey:   sessionKey,
+			ThreadID:     payload.ThreadID,
+			TurnID:       payload.TurnID,
+			ItemID:       payload.ItemID,
+			OwnerUserID:  sub.UserID,
+			FeishuMsgID:  msgID,
+			PayloadJSON:  mustJSON(payload),
+			Status:       "pending",
+			CreatedAt:    time.Now().Unix(),
+			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
 		_ = a.refreshStatusCard(sub.ID)
