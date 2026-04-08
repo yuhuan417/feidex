@@ -274,6 +274,10 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 
 func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
+	menuAction, _ := action.ActionValue["menu_action"].(string)
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	result, err := a.fetchModelList(ctx)
@@ -287,12 +291,16 @@ func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) 
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局模型"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 
 func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
+	menuAction, _ := action.ActionValue["menu_action"].(string)
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	result, err := a.fetchModelList(ctx)
@@ -310,7 +318,7 @@ func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reason
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局推理强度"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 
@@ -352,7 +360,7 @@ func (a *App) completeMenuModel(action *feishu.CardAction, sessionKey string) (*
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开模型配置"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, "menu.model")),
 	}, nil
 }
 
@@ -365,7 +373,7 @@ func (a *App) completeMenuReasoning(action *feishu.CardAction, sessionKey string
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开推理强度配置"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey)),
+		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, "menu.reasoning")),
 	}, nil
 }
 
@@ -595,9 +603,7 @@ func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string)
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	})
-	card := a.feishu.SimpleStatusCard("新建工作区", "orange", "请直接发送一行文本来创建工作区。\n\n格式：\n`workspace_id cwd`\n或\n`workspace_id cwd name`\n\n说明：\n- `name` 是可选的，不用输入方括号\n- 如果不填 name，就默认用 workspace_id 作为显示名\n\n示例：\n`op /home/yuhuan/obfs-sniproxy`\n`op /home/yuhuan/obfs-sniproxy ObfsSniproxy`\n\n发送 `/` 或其它命令前，可先完成本次创建。", []feishu.Button{
-		{Text: "返回工作区", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID}},
-	})
+	card := a.renderWorkspaceNewCard(sessionKey, requestID)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "请按提示发送工作区信息"},
 		Card:  rawCard(card),

@@ -93,7 +93,7 @@ func (a *App) renderServiceTierMenuCard(sessionKey string) map[string]any {
 		Type:  "default",
 		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 	})
-	return a.feishu.SimpleStatusCard("Service Tier", "blue", body, buttons)
+	return a.feishu.SimpleStatusCard("Service Tier", "blue", menuCardBody("menu.fast", body), buttons)
 }
 
 func (a *App) setThreadServiceTier(sessionKey, threadID, serviceTier string) (*state.Session, error) {

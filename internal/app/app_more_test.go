@@ -842,6 +842,49 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	}
 }
 
+func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sessionKey := "feishu:p2p:chat:user"
+
+	rootCard := a.renderCommandMenuCard(sessionKey)
+	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：命令菜单") {
+		t.Fatalf("root menu missing breadcrumb: %q", body)
+	}
+	rootActions := rootCard["elements"].([]map[string]any)[1]["actions"].([]map[string]any)
+	for _, action := range rootActions {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		if !strings.HasSuffix(label, "›") {
+			t.Fatalf("root submenu label missing indicator: %q", label)
+		}
+	}
+
+	contextCard := a.renderContextMenuCard(sessionKey)
+	if body := cardMarkdownContent(t, contextCard); !strings.Contains(body, "当前位置：命令菜单 / 会话管理") {
+		t.Fatalf("context menu missing breadcrumb: %q", body)
+	}
+	contextActions := contextCard["elements"].([]map[string]any)[1]["actions"].([]map[string]any)
+	indicatorByAction := map[string]bool{}
+	for _, action := range contextActions {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		value, _ := action["value"].(map[string]any)
+		actionName, _ := value["action"].(string)
+		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
+	}
+	if indicatorByAction["menu.workspace"] != true || indicatorByAction["menu.threads"] != true {
+		t.Fatalf("expected context submenu indicators, got %#v", indicatorByAction)
+	}
+	if indicatorByAction["menu.new"] {
+		t.Fatalf("new thread should not show submenu indicator, got %#v", indicatorByAction)
+	}
+
+	helpCard := a.renderHelpCard(sessionKey)
+	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：命令菜单 / 服务管理 / 帮助说明") {
+		t.Fatalf("help card missing breadcrumb: %q", body)
+	}
+}
+
 func TestApprovalAndUserInputActions(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
