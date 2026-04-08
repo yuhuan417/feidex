@@ -763,6 +763,9 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuHelp(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.history": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuHistory(action, action.ActionValue["session_key"].(string))
+		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuWorkspace(action, action.ActionValue["session_key"].(string))
 		},
@@ -787,7 +790,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s = %#v, %v", name, resp, err)
 		}
 		wantToastType := "info"
-		if name == "thread.sandbox.menu" || name == "thread.policy.menu" {
+		if name == "thread.sandbox.menu" || name == "thread.policy.menu" || name == "menu.history" {
 			wantToastType = "warning"
 		}
 		if resp.Toast.Type != wantToastType {
@@ -891,9 +894,9 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 
 	for _, req := range []*state.PendingRequest{
-		{ID: "command-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending"},
-		{ID: "file-1", Kind: "file", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending"},
-		{ID: "perm-1", Kind: "permissions", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"permissions": map[string]any{"mode": "write"}})},
+		{ID: "command-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "命令审批\n`ls`\nneed approval"})},
+		{ID: "file-1", Kind: "file", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"})},
+		{ID: "perm-1", Kind: "permissions", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "权限审批\n需要写权限", "permissions": map[string]any{"mode": "write"}})},
 		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending"},
 	} {
 		if err := a.store.UpsertPending(req); err != nil {
@@ -915,10 +918,24 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	if got := string(fc.replies[0].id); got != `"command-1"` {
 		t.Fatalf("codex reply id = %s, want %q", got, `"command-1"`)
 	}
+	if resp.Card == nil {
+		t.Fatal("expected command approval response card")
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已允许本会话执行") || !strings.Contains(got, "命令审批") || !strings.Contains(got, "`ls`") {
+		t.Fatalf("command approval resolved card = %q", got)
+	}
 
 	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected file approval response card")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已拒绝") || !strings.Contains(got, "文件变更审批") {
+		t.Fatalf("file approval resolved card = %q", got)
 	}
 
 	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
@@ -1737,9 +1754,109 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/workspace use ID", "/threads all", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/workspace use ID", "/threads all", "/upgrade"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
+		}
+	}
+}
+
+func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-history", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := a.makeSessionKey(msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            sessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-2",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/read" {
+			return nil
+		}
+		result := out.(*codexrpc.ThreadReadResult)
+		name := "Demo Thread"
+		result.Thread.ID = "thread-1"
+		result.Thread.Name = &name
+		result.Thread.Preview = "preview"
+		result.Thread.Cwd = a.cfg.Workspaces[0].Cwd
+		result.Thread.Turns = []codexrpc.ThreadReadTurn{
+			{
+				ID:     "turn-1",
+				Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", ID: "item-u1", Content: json.RawMessage(`[{"type":"text","text":"first input","text_elements":[]}]`)},
+					{Type: "agentMessage", ID: "item-a1", Text: "first answer"},
+				},
+			},
+			{
+				ID:     "turn-2",
+				Status: "running",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", ID: "item-u2", Content: json.RawMessage(`[{"type":"text","text":"second input","text_elements":[]}]`)},
+				},
+			},
+		}
+		return nil
+	}
+
+	if err := a.commandHistory(msg, nil); err != nil {
+		t.Fatalf("commandHistory() error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected history card to be sent")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	for _, want := range []string{"历史记录", "Turn #2", "second input", "Turn #1", "first input"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("history body missing %q: %q", want, body)
+		}
+	}
+}
+
+func TestCompleteHistoryDetailShowsInputs(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            sessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadID: "thread-1",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/read" {
+			return nil
+		}
+		result := out.(*codexrpc.ThreadReadResult)
+		result.Thread.ID = "thread-1"
+		result.Thread.Turns = []codexrpc.ThreadReadTurn{
+			{
+				ID:     "turn-1",
+				Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", ID: "u1", Content: json.RawMessage(`[{"type":"text","text":"hello","text_elements":[]},{"type":"image","url":"https://example.test/a.png"}]`)},
+					{Type: "agentMessage", ID: "a1", Text: "world"},
+				},
+			},
+		}
+		return nil
+	}
+
+	resp, err := a.completeHistoryDetail(&feishu.CardAction{}, sessionKey, 0)
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeHistoryDetail() = %#v, %v", resp, err)
+	}
+	card, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, card)
+	for _, want := range []string{"输入：", "hello", "[image] https://example.test/a.png", "回复：", "world"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("history detail missing %q: %q", want, body)
 		}
 	}
 }

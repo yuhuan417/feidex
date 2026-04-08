@@ -31,6 +31,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.sendCommandMenu(msg)
 	case "/help":
 		return a.commandHelp(msg, fields[1:])
+	case "/history":
+		return a.commandHistory(msg, fields[1:])
 	case "/model":
 		return a.commandModel(msg)
 	case "/quiet":
@@ -76,7 +78,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/help", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/history", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false
@@ -257,6 +259,14 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		)
 	}
 	buttons = append(buttons,
+		feishu.Button{
+			Text: submenuLabel("历史记录"),
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.history",
+				"session_key": sessionKey,
+			},
+		},
 		feishu.Button{
 			Text: "新会话",
 			Type: "default",
@@ -496,6 +506,8 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"配置当前线程的 sandbox。",
 		"`/threads policy`",
 		"配置当前线程的 approval policy。",
+		"`/history`",
+		"查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。",
 		"`/workspace` 或 `/cd`",
 		"打开工作区菜单。",
 		"`/workspace list`",

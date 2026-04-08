@@ -19,6 +19,8 @@ var menuNodes = map[string]menuNode{
 	"workspace.sandbox.menu": {Label: "配置 Sandbox", Parent: "menu.workspace"},
 	"workspace.policy.menu":  {Label: "配置 Policy", Parent: "menu.workspace"},
 	"menu.threads":           {Label: "线程管理", Parent: "menu.group.context"},
+	"menu.history":           {Label: "历史记录", Parent: "menu.threads"},
+	"history.detail":         {Label: "Turn 详情", Parent: "menu.history"},
 	"thread.sandbox.menu":    {Label: "配置 Thread Sandbox", Parent: "menu.threads"},
 	"thread.policy.menu":     {Label: "配置 Thread Policy", Parent: "menu.threads"},
 	"menu.model":             {Label: "模型配置", Parent: "menu.group.model"},

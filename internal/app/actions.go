@@ -68,6 +68,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.help":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuHelp(action, sessionKey)
+	case "menu.history":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuHistory(action, sessionKey)
 	case "menu.upgrade":
 		return a.completeMenuUpgrade(action)
 	case "quiet.set":
@@ -137,6 +140,14 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		threadID, _ := action.ActionValue["thread_id"].(string)
 		return a.completeThreadResume(action, sessionKey, threadID)
+	case "history.page":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		page, _ := action.ActionValue["page"].(float64)
+		return a.completeHistoryPage(action, sessionKey, int(page))
+	case "history.detail":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		index, _ := action.ActionValue["index"].(float64)
+		return a.completeHistoryDetail(action, sessionKey, int(index))
 	case "turn.append":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		turnID, _ := action.ActionValue["turn_id"].(string)
@@ -388,6 +399,37 @@ func (a *App) completeMenuHelp(action *feishu.CardAction, sessionKey string) (*c
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开帮助说明"},
 		Card:  rawCard(a.renderHelpCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeMenuHistory(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	card, err := a.renderHistoryCard(sessionKey, 0)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开历史记录"},
+		Card:  rawCard(card),
+	}, nil
+}
+
+func (a *App) completeHistoryPage(action *feishu.CardAction, sessionKey string, page int) (*callback.CardActionTriggerResponse, error) {
+	card, err := a.renderHistoryCard(sessionKey, page)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Card: rawCard(card),
+	}, nil
+}
+
+func (a *App) completeHistoryDetail(action *feishu.CardAction, sessionKey string, index int) (*callback.CardActionTriggerResponse, error) {
+	card, err := a.renderHistoryDetailCard(sessionKey, index)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Card: rawCard(card),
 	}, nil
 }
 
@@ -909,7 +951,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 	}
 	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
-	card := a.feishu.SimpleStatusCard("审批已处理", "green", a.approvalDecisionText(actionName), nil)
+	card := a.renderResolvedApprovalCard(pending, actionName)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "审批已提交"},
 		Card: &callback.Card{
@@ -917,6 +959,51 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			Data: card,
 		},
 	}, nil
+}
+
+func (a *App) renderResolvedApprovalCard(pending *state.PendingRequest, action string) map[string]any {
+	decision := a.approvalDecisionText(action)
+	body := strings.TrimSpace(a.approvalBodyText(pending))
+	lines := []string{"处理结果: " + decision}
+	if body != "" {
+		lines = append(lines, "", body)
+	}
+	color := "green"
+	if decision == "已拒绝" {
+		color = "grey"
+	}
+	return a.feishu.SimpleStatusCard("审批已处理", color, strings.Join(lines, "\n"), nil)
+}
+
+func (a *App) approvalBodyText(pending *state.PendingRequest) string {
+	if pending == nil {
+		return ""
+	}
+	var payload map[string]any
+	if strings.TrimSpace(pending.PayloadJSON) != "" {
+		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err == nil {
+			if body := strings.TrimSpace(stringValue(payload["body"])); body != "" {
+				return body
+			}
+			if pending.Kind == "permissions" {
+				if permissions, ok := payload["permissions"]; ok {
+					if rendered := strings.TrimSpace(prettyJSON(permissions)); rendered != "" {
+						return "权限审批\n" + rendered
+					}
+				}
+			}
+		}
+	}
+	switch pending.Kind {
+	case "command":
+		return "命令审批"
+	case "file":
+		return "文件变更审批"
+	case "permissions":
+		return "权限审批"
+	default:
+		return ""
+	}
 }
 
 func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

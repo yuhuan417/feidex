@@ -717,7 +717,7 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 			ItemID:       itemID,
 			OwnerUserID:  sub.UserID,
 			FeishuMsgID:  msgID,
-			PayloadJSON:  mustJSON(map[string]any{"permissions": permissions}),
+			PayloadJSON:  mustJSON(map[string]any{"permissions": permissions, "body": body}),
 			Status:       "pending",
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
