@@ -35,7 +35,7 @@ func shouldDeliverTurnSnapshotInQuiet(snapshot turnItemSnapshot) bool {
 	case "plan":
 		return true
 	case "agent_message":
-		return snapshot.IsFinalAnswer
+		return true
 	default:
 		return false
 	}
@@ -47,7 +47,7 @@ func (a *App) renderQuietModeCard() map[string]any {
 
 func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
 	enabled := a.quietModeEnabled()
-	body := "当前状态: `" + quietModeStatusText(enabled) + "`\n\n开启后，会静默工具调用类消息和过程回复（例如 command execution、file change、web search、其它 tool/event、非最终 agent message），但仍保留 final answer、plan、排队/终态状态消息，以及 approval 请求。"
+	body := "当前状态: `" + quietModeStatusText(enabled) + "`\n\n开启后，会静默工具调用类消息和过程回复（例如 command execution、file change、web search、其它 tool/event），但仍保留 agent message、final answer、plan、排队/终态状态消息，以及 approval 请求。"
 	buttons := []feishu.Button{
 		{
 			Text: func() string {
