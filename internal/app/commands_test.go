@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -93,6 +94,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/history":       true,
 		"/model":         true,
 		"/quiet":         true,
+		"/compact":       true,
 		"/new":           true,
 		"/threads":       true,
 		"/threads new":   true,
@@ -106,7 +108,6 @@ func TestIsLocalCommand(t *testing.T) {
 		"/append hello":  false,
 		"/model list":    false,
 		"/":              false,
-		"/compact":       false,
 		"/unknown value": false,
 	}
 	for input, want := range cases {
@@ -125,7 +126,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 		t.Fatalf("unexpected card elements: %#v", card["elements"])
 	}
 	body, _ := elements[0]["content"].(string)
-	for _, alias := range []string{"/menu", "/help", "/history", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
+	for _, alias := range []string{"/menu", "/help", "/history", "/compact", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
 		if strings.Contains(body, alias) {
 			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
 		}
@@ -177,5 +178,46 @@ func TestCommandFastTogglesThreadServiceTier(t *testing.T) {
 	sess = a.store.GetSession("feishu:p2p:chat:user")
 	if sess == nil || sess.ActiveThreadServiceTier != "" {
 		t.Fatalf("expected service tier unset, got %#v", sess)
+	}
+}
+
+func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	fc := &fakeCodexClient{}
+	ff := &fakeFeishuClient{}
+	a := &App{store: store, codex: fc, feishu: ff, cfg: config.Default()}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            "feishu:p2p:chat:user",
+		WorkspaceID:    "default",
+		ActiveThreadID: "thread-1",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	var gotMethod string
+	var gotThreadID string
+	fc.callHook = func(_ context.Context, method string, params any, _ any) error {
+		gotMethod = method
+		raw, _ := params.(map[string]any)
+		gotThreadID, _ = raw["threadId"].(string)
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := a.commandCompact(msg, nil); err != nil {
+		t.Fatalf("commandCompact() error = %v", err)
+	}
+	if gotMethod != "thread/compact/start" || gotThreadID != "thread-1" {
+		t.Fatalf("compact call = %q %q, want thread/compact/start thread-1", gotMethod, gotThreadID)
+	}
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "压缩当前线程上下文") {
+		t.Fatalf("compact reply = %#v, want success text", ff.replyTexts)
+	}
+	sess := a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || sess.Status != sessionStatusCompacting {
+		t.Fatalf("session after /compact = %+v, want compacting", sess)
 	}
 }

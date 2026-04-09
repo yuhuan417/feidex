@@ -84,6 +84,31 @@ func TestFinishTurnAndSubmissionCardStatuses(t *testing.T) {
 	}
 }
 
+func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-compact",
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-compact",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  sessionStatusCompacting,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
+	sess := a.store.GetSession("sess-compact")
+	if sess == nil || sess.ActiveTurnID != "turn-compact" || sess.Status != sessionStatusCompacting {
+		t.Fatalf("session after thread/compacted = %+v", sess)
+	}
+
+	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
+	sess = a.store.GetSession("sess-compact")
+	if sess == nil || sess.ActiveTurnID != "" || sess.Status != "idle" {
+		t.Fatalf("session after compact completion = %+v", sess)
+	}
+}
+
 func TestNotificationHelperWrappers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")

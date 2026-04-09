@@ -117,6 +117,14 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			)
 			a.finishTurn(p.ThreadID, p.Turn.ID, p.Turn.Status)
 		}
+	case "thread/compacted":
+		var p struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			a.bindStandaloneCompactTurn(p.ThreadID, p.TurnID)
+		}
 	case "thread/tokenUsage/updated":
 		var p codexrpc.ThreadTokenUsageUpdatedNotification
 		if json.Unmarshal(params, &p) == nil {
@@ -195,6 +203,9 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 		a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 		a.noteTurnStarted(sessionKey, sub)
 		a.markSessionThreadLive(sessionKey, threadID)
+		return
+	}
+	if a.bindStandaloneCompactTurn(threadID, turnID) {
 		return
 	}
 
@@ -389,6 +400,9 @@ func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state
 func (a *App) finishTurn(threadID, turnID, status string) {
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
+		if a.finishStandaloneCompactTurn(threadID, turnID) {
+			return
+		}
 		slog.Warn("finishTurn missing submission",
 			"thread_id", threadID,
 			"turn_id", turnID,

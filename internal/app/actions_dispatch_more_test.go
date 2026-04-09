@@ -56,6 +56,19 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-2",
+		WorkspaceID:             "default",
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		OwnerUserID:             "user-1",
+		ActiveThreadID:          "thread-2",
+		ActiveThreadName:        "Thread 2",
+		ActiveThreadPreview:     "preview",
+		ActiveThreadWorkspaceID: "default",
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-2) error = %v", err)
+	}
 	subID, err := a.store.CreateSubmission(&state.Submission{
 		ID:               "sub-1",
 		SessionKey:       "sess-1",
@@ -165,6 +178,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "menu.root", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.session", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.context", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "menu.compact", "session_key": "sess-2", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.model", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.system", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.new", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},

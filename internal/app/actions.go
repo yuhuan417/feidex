@@ -53,6 +53,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.quiet":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuQuiet(action, sessionKey)
+	case "menu.compact":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuCompact(action, sessionKey)
 	case "menu.usage":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuUsage(action, sessionKey)
@@ -244,7 +247,7 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
-	if sess.ActiveTurnID != "" {
+	if sessionHasActiveWork(sess) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
 		}, nil
@@ -283,6 +286,33 @@ func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*ca
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: content},
+	}, nil
+}
+
+func (a *App) completeMenuCompact(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	parentAction := "menu.group.context"
+	if action != nil {
+		if value, ok := action.ActionValue["parent_action"].(string); ok && strings.TrimSpace(value) != "" {
+			parentAction = value
+		}
+	}
+	if _, err := a.startThreadCompaction(sessionKey); err != nil {
+		if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+				Card:  rawCard(card),
+			}, nil
+		}
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "已请求压缩当前线程上下文"},
+			Card:  rawCard(card),
+		}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已请求压缩当前线程上下文"},
 	}, nil
 }
 

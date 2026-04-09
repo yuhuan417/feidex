@@ -107,6 +107,9 @@ func TestActionHelperBranches(t *testing.T) {
 	if resp, err := a.completeServiceTierSet(&feishu.CardAction{}, "sess-1", "thread-1", serviceTierFast); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeServiceTierSet() = %#v, %v", resp, err)
 	}
+	if resp, err := a.completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.group.context"}}, "sess-1"); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeMenuCompact() = %#v, %v", resp, err)
+	}
 	if resp, err := a.completeMenuUpgrade(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"session_key": "sess-1"}}); err != nil || resp.Toast == nil || resp.Toast.Type != "info" {
 		t.Fatalf("completeMenuUpgrade() = %#v, %v", resp, err)
 	}

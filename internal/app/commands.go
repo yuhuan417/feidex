@@ -41,6 +41,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandQuiet(msg, fields[1:])
 	case "/fast":
 		return a.commandFast(msg, fields[1:])
+	case "/compact":
+		return a.commandCompact(msg, fields[1:])
 	case "/new":
 		return a.commandNew(msg)
 	case "/threads":
@@ -80,7 +82,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/help", "/history", "/usage", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/history", "/usage", "/compact", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false
@@ -106,7 +108,7 @@ func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 	}
-	if sess.ActiveTurnID != "" {
+	if sessionHasActiveWork(sess) {
 		return fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
 	discarded := a.discardSessionPendingInputs(sessionKey)
@@ -449,11 +451,12 @@ func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
 func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: commandLabel("新线程", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.group.context"}},
+		{Text: commandLabel("压缩上下文", "/compact"), Type: "default", Value: map[string]any{"action": "menu.compact", "session_key": sessionKey, "parent_action": "menu.group.context"}},
 		{Text: submenuCommandLabel("工作区管理", "/workspace"), Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
 		{Text: submenuCommandLabel("线程管理", "/threads"), Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("会话管理", "blue", menuCardBody("menu.group.context", "管理线程与工作区上下文。"), buttons)
+	return a.feishu.SimpleStatusCard("会话管理", "blue", menuCardBody("menu.group.context", "管理线程、上下文压缩与工作区上下文。"), buttons)
 }
 
 func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
@@ -499,6 +502,8 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"会话管理：",
 		"`/new`",
 		"切换到新线程模式，下一条消息会新建线程。",
+		"`/compact`",
+		"压缩当前线程的上下文，减少上下文占用。",
 		"`/threads`",
 		"查看当前工作区可恢复的线程。",
 		"`/threads all`",

@@ -741,6 +741,21 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.group.context": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuGroupContext(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
+			const compactSessionKey = "feishu:group:chat-1:root:compact-root"
+			if err := a.store.UpsertSession(&state.Session{
+				Key:                     compactSessionKey,
+				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ActiveThreadID:          "thread-1",
+				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+			}); err != nil {
+				t.Fatalf("UpsertSession(compact) error = %v", err)
+			}
+			return a.completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{
+				"session_key":   compactSessionKey,
+				"parent_action": "menu.group.context",
+			}}, compactSessionKey)
+		},
 		"menu.group.model": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuGroupModel(action, action.ActionValue["session_key"].(string))
 		},
@@ -795,11 +810,14 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		if name == "thread.sandbox.menu" || name == "thread.policy.menu" || name == "menu.history" {
 			wantToastType = "warning"
 		}
+		if name == "menu.compact" {
+			wantToastType = "success"
+		}
 		if resp.Toast.Type != wantToastType {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.group.session", "menu.group.context", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.group.session", "menu.group.context", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -882,10 +900,10 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	if indicatorByAction["menu.workspace"] != true || indicatorByAction["menu.threads"] != true {
 		t.Fatalf("expected context submenu indicators, got %#v", indicatorByAction)
 	}
-	if indicatorByAction["menu.new"] {
-		t.Fatalf("new thread should not show submenu indicator, got %#v", indicatorByAction)
+	if indicatorByAction["menu.new"] || indicatorByAction["menu.compact"] {
+		t.Fatalf("direct context commands should not show submenu indicator, got %#v", indicatorByAction)
 	}
-	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") {
+	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
 		t.Fatalf("expected real command labels in context menu, got %#v", labelByAction)
 	}
 
@@ -2233,7 +2251,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/workspace use ID", "/threads all", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/compact", "/workspace use ID", "/threads all", "/upgrade"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}
