@@ -36,8 +36,6 @@ type App struct {
 	turnBindings  map[string]turnBinding
 	pendingTurns  map[string]turnBinding
 	threadUsage   map[string]codexrpc.ThreadTokenUsage
-	configReadMu  sync.Mutex
-	autoCompact   map[string]*int64
 
 	statusFlushOnce    sync.Once
 	statusFlushMu      sync.Mutex
@@ -77,7 +75,6 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		turnBindings:  map[string]turnBinding{},
 		pendingTurns:  map[string]turnBinding{},
 		threadUsage:   map[string]codexrpc.ThreadTokenUsage{},
-		autoCompact:   map[string]*int64{},
 		statusFlushCh: make(chan struct{}, 1),
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
@@ -522,7 +519,6 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			if strings.TrimSpace(resumeResp.Thread.Preview) != "" {
 				sess.ActiveThreadPreview = resumeResp.Thread.Preview
 			}
-			a.primeThreadAutoCompactLimit(threadID, sub.WorkspaceID)
 		}
 	}
 	if threadID == "" {
@@ -571,7 +567,6 @@ func (a *App) startNextSubmission(sessionKey string) error {
 		)
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, threadResp.Thread.Name, threadResp.Thread.Preview)
 		a.markSessionThreadLive(sessionKey, threadID)
-		a.primeThreadAutoCompactLimit(threadID, sub.WorkspaceID)
 	}
 	if threadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)

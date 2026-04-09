@@ -16,11 +16,11 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	if got := formatUsageRatio(0, 0); got != "-" {
 		t.Fatalf("formatUsageRatio(0,0) = %q, want -", got)
 	}
-	if got := formatContextRemainingLine(0, 1000); got != "context remaining: 100.0%" {
-		t.Fatalf("formatContextRemainingLine(zero total) = %q", got)
+	if got := formatContextLeftLine(0, 1000); got != "context left: 100.0%" {
+		t.Fatalf("formatContextLeftLine(zero total) = %q", got)
 	}
-	if got := formatContextRemainingLine(750, 1000); got != "context remaining: 25.0%" {
-		t.Fatalf("formatContextRemainingLine(750/1000) = %q", got)
+	if got := formatContextLeftLine(750, 1000); got != "context left: 25.0%" {
+		t.Fatalf("formatContextLeftLine(750/1000) = %q", got)
 	}
 	if got := formatTurnUsageLine(codexrpc.TokenUsageBreakdown{
 		InputTokens:           150,
@@ -46,15 +46,6 @@ func TestUsageFormattingHelpers(t *testing.T) {
 
 func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.codex.(*fakeCodexClient).callHook = func(_ context.Context, method string, _ any, out any) error {
-		if method != "config/read" {
-			t.Fatalf("unexpected codex call: %s", method)
-		}
-		resp := out.(*codexrpc.ConfigReadResponse)
-		limit := int64(1000)
-		resp.Config.ModelAutoCompactTokenLimit = &limit
-		return nil
-	}
 	sessionKey := "sess-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
@@ -69,7 +60,8 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 		"turnId":"turn-1",
 		"tokenUsage":{
 			"last":{"totalTokens":200,"inputTokens":150,"cachedInputTokens":90,"outputTokens":50,"reasoningOutputTokens":20},
-			"total":{"totalTokens":500,"inputTokens":400,"cachedInputTokens":200,"outputTokens":100,"reasoningOutputTokens":40}
+			"total":{"totalTokens":500,"inputTokens":400,"cachedInputTokens":200,"outputTokens":100,"reasoningOutputTokens":40},
+			"modelContextWindow":1000
 		}
 	}`))
 	if len(ff.replyCards) != 0 {
@@ -82,7 +74,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 		"累计 token usage (`total`):",
 		"- cache ratio: `50.0%`",
 		"- total: `500`",
-		"context remaining: 50.0%",
+		"context left: 85.0%",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("renderUsageCard() missing %q:\n%s", want, body)
@@ -113,24 +105,17 @@ func TestCommandUsageAndMenuAction(t *testing.T) {
 
 func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.codex.(*fakeCodexClient).callHook = func(_ context.Context, method string, _ any, _ any) error {
-		t.Fatalf("unexpected codex call: %s", method)
-		return nil
-	}
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
-	limit := int64(1000)
-	a.autoCompact = map[string]*int64{
-		"thread-1": &limit,
-	}
 
 	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{
 			"last":{"totalTokens":200,"inputTokens":150,"cachedInputTokens":90,"outputTokens":50,"reasoningOutputTokens":20},
-			"total":{"totalTokens":500,"inputTokens":400,"cachedInputTokens":200,"outputTokens":100,"reasoningOutputTokens":40}
+			"total":{"totalTokens":500,"inputTokens":400,"cachedInputTokens":200,"outputTokens":100,"reasoningOutputTokens":40},
+			"modelContextWindow":1000
 		}
 	}`))
 	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
@@ -150,7 +135,7 @@ func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 		t.Fatalf("expected markdown plus compact footer element, got %#v", elements)
 	}
 	footerText := elements[len(elements)-1]["text"].(map[string]any)["content"].(string)
-	if !strings.Contains(footerText, "context remaining: 50.0%") {
+	if !strings.Contains(footerText, "context left: 85.0%") {
 		t.Fatalf("context footer = %q", footerText)
 	}
 	if !strings.Contains(footerText, "elapsed:") {

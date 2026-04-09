@@ -214,8 +214,8 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 	}
 	if ok {
 		if usage, found := a.currentThreadUsage(binding.ThreadID); found {
-			if limit := a.cachedThreadAutoCompactTokenLimit(binding.ThreadID); limit != nil {
-				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *limit)
+			if usage.ModelContextWindow != nil {
+				contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
 			}
 		}
 	}

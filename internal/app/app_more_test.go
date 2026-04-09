@@ -1396,11 +1396,6 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 			result := out.(*codexrpc.TurnStartResult)
 			result.Turn.ID = "turn-1"
 			return nil
-		case "config/read":
-			resp := out.(*codexrpc.ConfigReadResponse)
-			limit := int64(1000)
-			resp.Config.ModelAutoCompactTokenLimit = &limit
-			return nil
 		default:
 			return nil
 		}
@@ -1429,8 +1424,8 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	if err := a.startNextSubmission(sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
-	if len(calls) != 3 || calls[0] != "thread/start" || calls[1] != "config/read" || calls[2] != "turn/start" {
-		t.Fatalf("codex calls = %+v, want thread/start then config/read then turn/start", calls)
+	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
+		t.Fatalf("codex calls = %+v, want thread/start then turn/start", calls)
 	}
 	if _, ok := paramsSeen["thread/start"].(map[string]any)["serviceTier"]; ok {
 		t.Fatalf("thread/start serviceTier should be omitted when unset: %+v", paramsSeen["thread/start"])

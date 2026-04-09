@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"feidex/internal/codexrpc"
-	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
 
@@ -68,21 +67,21 @@ func formatTurnElapsedLine(d time.Duration) string {
 	return "elapsed: " + strings.Join(parts, "")
 }
 
-func formatContextRemainingLine(totalTokens, autoCompactLimit int64) string {
-	if autoCompactLimit <= 0 {
+func formatContextLeftLine(lastInputTokens, modelContextWindow int64) string {
+	if modelContextWindow <= 0 {
 		return ""
 	}
-	if totalTokens <= 0 {
-		return "context remaining: 100.0%"
+	if lastInputTokens <= 0 {
+		return "context left: 100.0%"
 	}
-	remaining := 100 * (1 - float64(totalTokens)/float64(autoCompactLimit))
-	if remaining < 0 {
-		remaining = 0
+	left := 100 * (1 - float64(lastInputTokens)/float64(modelContextWindow))
+	if left < 0 {
+		left = 0
 	}
-	if remaining > 100 {
-		remaining = 100
+	if left > 100 {
+		left = 100
 	}
-	return fmt.Sprintf("context remaining: %.1f%%", remaining)
+	return fmt.Sprintf("context left: %.1f%%", left)
 }
 
 func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.ThreadTokenUsage, contextLine string) string {
@@ -104,64 +103,6 @@ func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.Thre
 	return strings.Join(lines, "\n")
 }
 
-func (a *App) cachedThreadAutoCompactTokenLimit(threadID string) *int64 {
-	if a == nil {
-		return nil
-	}
-	threadID = strings.TrimSpace(threadID)
-	a.configReadMu.Lock()
-	defer a.configReadMu.Unlock()
-	if a.autoCompact == nil {
-		return nil
-	}
-	return a.autoCompact[threadID]
-}
-
-func (a *App) fetchThreadAutoCompactTokenLimit(ctx context.Context, threadID, cwd string) *int64 {
-	if a == nil || a.codex == nil {
-		return nil
-	}
-	threadID = strings.TrimSpace(threadID)
-	cwd = strings.TrimSpace(cwd)
-	if threadID != "" {
-		if value := a.cachedThreadAutoCompactTokenLimit(threadID); value != nil {
-			return value
-		}
-	}
-
-	params := codexrpc.ConfigReadParams{IncludeLayers: true}
-	if cwd != "" {
-		params.CWD = &cwd
-	}
-	var resp codexrpc.ConfigReadResponse
-	if err := a.codex.Call(ctx, "config/read", params, &resp); err != nil {
-		return nil
-	}
-
-	a.configReadMu.Lock()
-	defer a.configReadMu.Unlock()
-	if a.autoCompact == nil {
-		a.autoCompact = map[string]*int64{}
-	}
-	if threadID != "" {
-		a.autoCompact[threadID] = resp.Config.ModelAutoCompactTokenLimit
-	}
-	return resp.Config.ModelAutoCompactTokenLimit
-}
-
-func (a *App) primeThreadAutoCompactLimit(threadID, workspaceID string) {
-	if a == nil {
-		return
-	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
-	if ws == nil || strings.TrimSpace(ws.Cwd) == "" {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = a.fetchThreadAutoCompactTokenLimit(ctx, threadID, ws.Cwd)
-}
-
 func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /usage")
@@ -178,12 +119,8 @@ func (a *App) renderUsageCard(sessionKey string) map[string]any {
 		body = "当前线程暂无 token usage 数据。"
 		if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
 			contextLine := ""
-			cwd := ""
-			if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {
-				cwd = ws.Cwd
-			}
-			if limit := a.fetchThreadAutoCompactTokenLimit(context.Background(), sess.ActiveThreadID, cwd); limit != nil {
-				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *limit)
+			if usage.ModelContextWindow != nil {
+				contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
 			}
 			body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
 		}
