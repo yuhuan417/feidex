@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"strings"
 	"time"
 
@@ -215,9 +214,8 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 	}
 	if ok {
 		if usage, found := a.currentThreadUsage(binding.ThreadID); found {
-			limit := a.fetchAutoCompactTokenLimit(context.Background(), "")
-			if limit != nil {
-				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *limit)
+			if usage.ModelContextWindow != nil {
+				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *usage.ModelContextWindow)
 			}
 		}
 	}

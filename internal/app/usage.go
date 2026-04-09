@@ -79,36 +79,6 @@ func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.Thre
 	return strings.Join(lines, "\n")
 }
 
-func (a *App) fetchAutoCompactTokenLimit(ctx context.Context, cwd string) *int64 {
-	if a == nil || a.codex == nil {
-		return nil
-	}
-	cwd = strings.TrimSpace(cwd)
-	a.configReadMu.Lock()
-	if a.autoCompact == nil {
-		a.autoCompact = map[string]*int64{}
-	}
-	if value, ok := a.autoCompact[cwd]; ok {
-		a.configReadMu.Unlock()
-		return value
-	}
-	a.configReadMu.Unlock()
-
-	params := codexrpc.ConfigReadParams{IncludeLayers: true}
-	if cwd != "" {
-		params.CWD = &cwd
-	}
-	var resp codexrpc.ConfigReadResponse
-	if err := a.codex.Call(ctx, "config/read", params, &resp); err != nil {
-		return nil
-	}
-
-	a.configReadMu.Lock()
-	defer a.configReadMu.Unlock()
-	a.autoCompact[cwd] = resp.Config.ModelAutoCompactTokenLimit
-	return resp.Config.ModelAutoCompactTokenLimit
-}
-
 func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /usage")
@@ -125,8 +95,8 @@ func (a *App) renderUsageCard(sessionKey string) map[string]any {
 		body = "当前线程暂无 token usage 数据。"
 		if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
 			contextLine := ""
-			if limit := a.fetchAutoCompactTokenLimit(context.Background(), ""); limit != nil {
-				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *limit)
+			if usage.ModelContextWindow != nil {
+				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *usage.ModelContextWindow)
 			}
 			body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
 		}
