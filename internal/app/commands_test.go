@@ -221,3 +221,29 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 		t.Fatalf("session after /compact = %+v, want compacting", sess)
 	}
 }
+
+func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	fc := &fakeCodexClient{callErr: context.DeadlineExceeded}
+	a := &App{store: store, codex: fc, feishu: &fakeFeishuClient{}, cfg: config.Default()}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            "feishu:p2p:chat:user",
+		WorkspaceID:    "default",
+		ActiveThreadID: "thread-1",
+		Status:         "idle",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := a.commandCompact(msg, nil); err == nil {
+		t.Fatal("expected commandCompact() to fail")
+	}
+	sess := a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
+		t.Fatalf("session after failed /compact = %+v, want idle without turn", sess)
+	}
+}

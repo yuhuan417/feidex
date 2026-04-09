@@ -51,18 +51,21 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	if sessionHasActiveWork(sess) {
 		return nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := a.codex.Call(ctx, "thread/compact/start", map[string]any{
-		"threadId": strings.TrimSpace(sess.ActiveThreadID),
-	}, nil); err != nil {
-		return nil, err
-	}
+	previousStatus := strings.TrimSpace(sess.Status)
 	sess.Status = sessionStatusCompacting
 	if err := a.store.UpsertSession(sess); err != nil {
 		return nil, err
 	}
-	return sess, nil
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
+	if err := a.codex.Call(ctx, "thread/compact/start", map[string]any{
+		"threadId": threadID,
+	}, nil); err != nil {
+		a.restoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
+		return nil, err
+	}
+	return a.store.GetSession(sessionKey), nil
 }
 
 func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
@@ -97,7 +100,7 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 	return false
 }
 
-func (a *App) finishStandaloneCompactTurn(threadID, turnID string) bool {
+func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
@@ -118,7 +121,75 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID string) bool {
 		}
 		sess.ActiveTurnID = ""
 		sess.Status = "idle"
-		return a.store.UpsertSession(sess) == nil
+		if err := a.store.UpsertSession(sess); err != nil {
+			return false
+		}
+		a.sendStandaloneCompactResult(sess, status)
+		return true
 	}
 	return false
+}
+
+func (a *App) restoreStandaloneCompactSession(sessionKey, threadID, previousStatus string) {
+	if a == nil || a.store == nil {
+		return
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil {
+		return
+	}
+	if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
+		return
+	}
+	if strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+		return
+	}
+	if strings.TrimSpace(sess.Status) != sessionStatusCompacting {
+		return
+	}
+	sess.Status = strings.TrimSpace(previousStatus)
+	if sess.Status == "" {
+		sess.Status = "idle"
+	}
+	_ = a.store.UpsertSession(sess)
+}
+
+func (a *App) sendStandaloneCompactResult(sess *state.Session, status string) {
+	text := standaloneCompactResultText(status)
+	if text == "" {
+		return
+	}
+	a.sendSessionTextNotice(sess, text)
+}
+
+func standaloneCompactResultText(status string) string {
+	switch strings.TrimSpace(status) {
+	case "completed":
+		return "当前线程上下文已压缩完成。"
+	case "interrupted":
+		return "当前线程上下文压缩已中断。"
+	case "failed":
+		return "当前线程上下文压缩失败。"
+	default:
+		return ""
+	}
+}
+
+func (a *App) sendSessionTextNotice(sess *state.Session, text string) {
+	if a == nil || a.feishu == nil || sess == nil {
+		return
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if strings.TrimSpace(sess.ChatType) == "group" && a.cfg.Feishu.ReplyInThread && strings.TrimSpace(sess.RootMessageID) != "" {
+		_ = a.feishu.ReplyText(ctx, sess.RootMessageID, text, true)
+		return
+	}
+	if chatID := strings.TrimSpace(sess.ChatID); chatID != "" {
+		_ = a.feishu.SendText(ctx, chatID, text)
+	}
 }

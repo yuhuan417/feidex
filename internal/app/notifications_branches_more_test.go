@@ -1,11 +1,13 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"feidex/internal/codexrpc"
+	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
@@ -85,12 +87,14 @@ func TestFinishTurnAndSubmissionCardStatuses(t *testing.T) {
 }
 
 func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {
-	a, _, _ := newTestApp(t)
+	a, ff, _ := newTestApp(t)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-compact",
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-compact",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-compact",
+		ChatType:                "p2p",
 		Status:                  sessionStatusCompacting,
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
@@ -106,6 +110,46 @@ func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {
 	sess = a.store.GetSession("sess-compact")
 	if sess == nil || sess.ActiveTurnID != "" || sess.Status != "idle" {
 		t.Fatalf("session after compact completion = %+v", sess)
+	}
+	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
+		t.Fatalf("compact completion notice = %#v, want visible completion text", ff.sentTexts)
+	}
+}
+
+func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-compact", ChatID: "chat-compact", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := a.makeSessionKey(msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-compact",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:                  msg.ChatID,
+		ChatType:                msg.ChatType,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
+		if method != "thread/compact/start" {
+			return nil
+		}
+		a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
+		a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
+		return nil
+	}
+
+	if err := a.commandCompact(msg, nil); err != nil {
+		t.Fatalf("commandCompact() error = %v", err)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
+		t.Fatalf("session after raced compact notifications = %+v", sess)
+	}
+	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
+		t.Fatalf("raced compact completion notice = %#v, want visible completion text", ff.sentTexts)
 	}
 }
 

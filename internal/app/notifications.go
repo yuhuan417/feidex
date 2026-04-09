@@ -400,7 +400,7 @@ func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state
 func (a *App) finishTurn(threadID, turnID, status string) {
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		if a.finishStandaloneCompactTurn(threadID, turnID) {
+		if a.finishStandaloneCompactTurn(threadID, turnID, status) {
 			return
 		}
 		slog.Warn("finishTurn missing submission",
