@@ -62,7 +62,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
-	app.feishu.ConfigureMarkdownPreview(filepath.Join(cfg.DataDir, "feishu-md-preview.json"), "")
+	app.feishu.ConfigureMarkdownPreview("", "")
 	return app, nil
 }
 

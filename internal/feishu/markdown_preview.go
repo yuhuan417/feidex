@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +24,9 @@ const (
 	previewFileType              = "file"
 	previewFolderType            = "folder"
 	previewPermissionView        = "view"
+	previewManagedFilePrefix     = "fxmd-v2-"
+	previewTimestampFormat       = "20060102T150405Z"
+	previewListPageSize          = 200
 )
 
 var markdownPreviewLinkRe = regexp.MustCompile(`\[[^\]]+\]\(([^)\n]+)\)`)
@@ -60,6 +62,7 @@ type DriveMarkdownPreviewer struct {
 
 type previewDriveAPI interface {
 	CreateFolder(context.Context, string, string) (previewRemoteNode, error)
+	ListFiles(context.Context, string) ([]previewRemoteNode, error)
 	UploadFile(context.Context, string, string, []byte) (string, error)
 	QueryMetaURL(context.Context, string, string) (string, error)
 	GrantPermission(context.Context, string, string, previewPrincipal) error
@@ -70,6 +73,7 @@ type previewRemoteNode struct {
 	Token string
 	URL   string
 	Type  string
+	Name  string
 }
 
 type previewPrincipal struct {
@@ -80,24 +84,12 @@ type previewPrincipal struct {
 }
 
 type previewState struct {
-	Root  *previewFolderRecord          `json:"root,omitempty"`
-	Files map[string]*previewFileRecord `json:"files,omitempty"`
+	Root *previewFolderRecord
 }
 
 type previewFolderRecord struct {
-	Token string `json:"token,omitempty"`
-	URL   string `json:"url,omitempty"`
-}
-
-type previewFileRecord struct {
-	Path       string          `json:"path,omitempty"`
-	SHA256     string          `json:"sha256,omitempty"`
-	Token      string          `json:"token,omitempty"`
-	URL        string          `json:"url,omitempty"`
-	Shared     map[string]bool `json:"shared,omitempty"`
-	SizeBytes  int64           `json:"size_bytes,omitempty"`
-	CreatedAt  time.Time       `json:"created_at,omitempty"`
-	LastUsedAt time.Time       `json:"last_used_at,omitempty"`
+	Token string
+	URL   string
 }
 
 type driveAPIError struct {
@@ -152,14 +144,13 @@ func (a *Adapter) CleanupMarkdownPreviewsBefore(ctx context.Context, cutoff time
 func (a *Adapter) ensureMarkdownPreviewer() *DriveMarkdownPreviewer {
 	a.previewMu.Lock()
 	defer a.previewMu.Unlock()
-	if strings.TrimSpace(a.previewStatePath) == "" {
+	if a.client == nil {
 		return nil
 	}
 	if a.previewer != nil {
 		return a.previewer
 	}
 	a.previewer = NewDriveMarkdownPreviewer(NewLarkDrivePreviewAPI(a.client), MarkdownPreviewConfig{
-		StatePath:      a.previewStatePath,
 		ProcessCWD:     a.previewProcessCWD,
 		RootFolderName: defaultPreviewRootFolderName,
 	})
@@ -179,7 +170,6 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	state := p.loadStateLocked()
 	matches := markdownPreviewLinkRe.FindAllStringSubmatchIndex(req.Text, -1)
 	if len(matches) == 0 {
 		return req.Text, nil
@@ -205,7 +195,7 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 				changed = true
 			}
 		} else {
-			url, ok, err := p.materializeMarkdownTargetLocked(ctx, state, rawTarget, req, principals)
+			url, ok, err := p.materializeMarkdownTargetLocked(ctx, rawTarget, req, principals)
 			switch {
 			case err != nil:
 				errs = append(errs, err.Error())
@@ -221,10 +211,8 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 		last = targetEnd
 	}
 	builder.WriteString(req.Text[last:])
-	if changed {
-		if err := p.saveStateLocked(); err != nil {
-			errs = append(errs, err.Error())
-		}
+	if !changed {
+		return req.Text, nil
 	}
 	if len(errs) > 0 {
 		return builder.String(), fmt.Errorf("%s", strings.Join(errs, "; "))
@@ -242,38 +230,39 @@ func (p *DriveMarkdownPreviewer) CleanupBefore(ctx context.Context, cutoff time.
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	state := p.loadStateLocked()
-	result := PreviewDriveCleanupResult{}
-	keys := make([]string, 0, len(state.Files))
-	for key := range state.Files {
-		keys = append(keys, key)
+	roots, err := p.listRootFoldersLocked(ctx)
+	if err != nil {
+		return PreviewDriveCleanupResult{}, err
 	}
-	sort.Strings(keys)
-	changed := false
-	for _, key := range keys {
-		record := state.Files[key]
-		if record == nil || record.LastUsedAt.IsZero() || !record.LastUsedAt.Before(cutoff) {
+	result := PreviewDriveCleanupResult{}
+	for _, root := range roots {
+		if root == nil || strings.TrimSpace(root.Token) == "" {
 			continue
 		}
-		if strings.TrimSpace(record.Token) != "" {
-			if err := p.api.DeleteFile(ctx, record.Token, previewFileType); err != nil {
-				return result, err
-			}
-		}
-		result.DeletedFileCount++
-		result.DeletedEstimatedBytes += record.SizeBytes
-		delete(state.Files, key)
-		changed = true
-	}
-	if changed {
-		if err := p.saveStateLocked(); err != nil {
+		nodes, err := p.api.ListFiles(ctx, root.Token)
+		if err != nil {
 			return result, err
+		}
+		for _, node := range nodes {
+			if !strings.EqualFold(strings.TrimSpace(node.Type), previewFileType) {
+				continue
+			}
+			createdAt, ok := previewManagedFileTime(node.Name)
+			if !ok || !createdAt.Before(cutoff) {
+				continue
+			}
+			if strings.TrimSpace(node.Token) != "" {
+				if err := p.api.DeleteFile(ctx, node.Token, previewFileType); err != nil {
+					return result, err
+				}
+			}
+			result.DeletedFileCount++
 		}
 	}
 	return result, nil
 }
 
-func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Context, state *previewState, rawTarget string, req MarkdownPreviewRequest, principals []previewPrincipal) (string, bool, error) {
+func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Context, rawTarget string, req MarkdownPreviewRequest, principals []previewPrincipal) (string, bool, error) {
 	resolvedPath, ok, err := p.resolveMarkdownPath(rawTarget, req)
 	if err != nil || !ok {
 		return "", ok, err
@@ -289,65 +278,76 @@ func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Con
 		return "", true, fmt.Errorf("markdown preview source exceeds %d bytes: %s", p.config.MaxFileBytes, resolvedPath)
 	}
 
-	root, err := p.ensureRootFolderLocked(ctx, state)
+	root, err := p.ensureRootFolderLocked(ctx)
 	if err != nil {
 		return "", true, err
 	}
 
 	sum := sha256.Sum256(content)
 	contentSHA := hex.EncodeToString(sum[:])
-	fileKey := previewFileKey(resolvedPath, contentSHA)
-	record := state.Files[fileKey]
-	if record == nil {
-		record = &previewFileRecord{
-			Path:      resolvedPath,
-			SHA256:    contentSHA,
-			SizeBytes: int64(len(content)),
-			CreatedAt: time.Now().UTC(),
-		}
-		state.Files[fileKey] = record
+	token, err := p.api.UploadFile(ctx, root.Token, previewFileName(resolvedPath, contentSHA, time.Now().UTC()), content)
+	if err != nil {
+		return "", true, fmt.Errorf("upload markdown preview for %s: %w", resolvedPath, err)
 	}
-	record.Path = resolvedPath
-	record.SHA256 = contentSHA
-	record.SizeBytes = int64(len(content))
-	record.LastUsedAt = time.Now().UTC()
-	if record.Shared == nil {
-		record.Shared = map[string]bool{}
+	url, err := p.api.QueryMetaURL(ctx, token, previewFileType)
+	if err != nil {
+		return "", true, fmt.Errorf("query markdown preview url for %s: %w", resolvedPath, err)
 	}
-	if strings.TrimSpace(record.Token) == "" {
-		token, err := p.api.UploadFile(ctx, root.Token, previewFileName(resolvedPath, contentSHA), content)
-		if err != nil {
-			return "", true, fmt.Errorf("upload markdown preview for %s: %w", resolvedPath, err)
-		}
-		record.Token = token
-	}
-	if strings.TrimSpace(record.URL) == "" {
-		url, err := p.api.QueryMetaURL(ctx, record.Token, previewFileType)
-		if err != nil {
-			return "", true, fmt.Errorf("query markdown preview url for %s: %w", resolvedPath, err)
-		}
-		record.URL = url
-	}
-	if err := ensurePreviewPermissions(ctx, p.api, record.Token, previewFileType, record.Shared, principals); err != nil {
+	if err := ensurePreviewPermissions(ctx, p.api, token, previewFileType, map[string]bool{}, principals); err != nil {
 		return "", true, fmt.Errorf("authorize markdown preview for %s: %w", resolvedPath, err)
 	}
-	return record.URL, true, nil
+	return url, true, nil
 }
 
-func (p *DriveMarkdownPreviewer) ensureRootFolderLocked(ctx context.Context, state *previewState) (*previewFolderRecord, error) {
-	if state.Root == nil {
-		state.Root = &previewFolderRecord{}
+func (p *DriveMarkdownPreviewer) ensureRootFolderLocked(ctx context.Context) (*previewFolderRecord, error) {
+	state := p.loadStateLocked()
+	if state.Root != nil && strings.TrimSpace(state.Root.Token) != "" {
+		return state.Root, nil
 	}
-	if strings.TrimSpace(state.Root.Token) != "" {
+	roots, err := p.listRootFoldersLocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(roots) > 0 {
+		state.Root = roots[0]
 		return state.Root, nil
 	}
 	node, err := p.api.CreateFolder(ctx, p.config.RootFolderName, "")
 	if err != nil {
 		return nil, fmt.Errorf("create markdown preview root folder: %w", err)
 	}
-	state.Root.Token = node.Token
-	state.Root.URL = node.URL
+	state.Root = &previewFolderRecord{
+		Token: node.Token,
+		URL:   node.URL,
+	}
 	return state.Root, nil
+}
+
+func (p *DriveMarkdownPreviewer) listRootFoldersLocked(ctx context.Context) ([]*previewFolderRecord, error) {
+	if p == nil || p.api == nil {
+		return nil, nil
+	}
+	nodes, err := p.api.ListFiles(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*previewFolderRecord, 0, len(nodes))
+	for _, node := range nodes {
+		if !strings.EqualFold(strings.TrimSpace(node.Type), previewFolderType) {
+			continue
+		}
+		if strings.TrimSpace(node.Name) != strings.TrimSpace(p.config.RootFolderName) {
+			continue
+		}
+		out = append(out, &previewFolderRecord{
+			Token: node.Token,
+			URL:   node.URL,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Token < out[j].Token
+	})
+	return out, nil
 }
 
 func (p *DriveMarkdownPreviewer) resolveMarkdownPath(rawTarget string, req MarkdownPreviewRequest) (string, bool, error) {
@@ -394,57 +394,8 @@ func (p *DriveMarkdownPreviewer) loadStateLocked() *previewState {
 		return p.state
 	}
 	p.loaded = true
-	p.state = &previewState{Files: map[string]*previewFileRecord{}}
-	if strings.TrimSpace(p.config.StatePath) == "" {
-		return p.state
-	}
-	data, err := os.ReadFile(p.config.StatePath)
-	if err != nil {
-		return p.state
-	}
-	var loaded previewState
-	if err := json.Unmarshal(data, &loaded); err != nil {
-		return p.state
-	}
-	p.state = normalizePreviewState(&loaded)
+	p.state = &previewState{}
 	return p.state
-}
-
-func (p *DriveMarkdownPreviewer) saveStateLocked() error {
-	if strings.TrimSpace(p.config.StatePath) == "" {
-		return nil
-	}
-	state := normalizePreviewState(p.state)
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(p.config.StatePath), 0o755); err != nil {
-		return err
-	}
-	tmp := p.config.StatePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, p.config.StatePath)
-}
-
-func normalizePreviewState(state *previewState) *previewState {
-	if state == nil {
-		return &previewState{Files: map[string]*previewFileRecord{}}
-	}
-	if state.Files == nil {
-		state.Files = map[string]*previewFileRecord{}
-	}
-	for _, record := range state.Files {
-		if record == nil {
-			continue
-		}
-		if record.Shared == nil {
-			record.Shared = map[string]bool{}
-		}
-	}
-	return state
 }
 
 func ensurePreviewPermissions(ctx context.Context, api previewDriveAPI, token, docType string, shared map[string]bool, principals []previewPrincipal) error {
@@ -572,11 +523,7 @@ func previewPathWithinRoot(path, root string) bool {
 	return strings.HasPrefix(path, root+string(filepath.Separator))
 }
 
-func previewFileKey(resolvedPath, contentSHA string) string {
-	return resolvedPath + "|" + contentSHA
-}
-
-func previewFileName(resolvedPath, contentSHA string) string {
+func previewFileName(resolvedPath, contentSHA string, now time.Time) string {
 	base := strings.TrimSpace(filepath.Base(resolvedPath))
 	ext := filepath.Ext(base)
 	name := strings.TrimSuffix(base, ext)
@@ -588,7 +535,22 @@ func previewFileName(resolvedPath, contentSHA string) string {
 	if len(shortSHA) > 12 {
 		shortSHA = shortSHA[:12]
 	}
-	return name + "-" + shortSHA + ".md"
+	return previewManagedFilePrefix + now.UTC().Format(previewTimestampFormat) + "-" + name + "-" + shortSHA + ".md"
+}
+
+func previewManagedFileTime(name string) (time.Time, bool) {
+	if !strings.HasPrefix(strings.TrimSpace(name), previewManagedFilePrefix) {
+		return time.Time{}, false
+	}
+	rest := strings.TrimPrefix(strings.TrimSpace(name), previewManagedFilePrefix)
+	if len(rest) < len(previewTimestampFormat)+1 || rest[len(previewTimestampFormat)] != '-' {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse(previewTimestampFormat, rest[:len(previewTimestampFormat)])
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed.UTC(), true
 }
 
 func sanitizePreviewFileComponent(value string) string {
@@ -645,7 +607,42 @@ func (a *larkDrivePreviewAPI) CreateFolder(ctx context.Context, name, parentToke
 		Token: stringPtrValue(resp.Data.Token),
 		URL:   stringPtrValue(resp.Data.Url),
 		Type:  previewFolderType,
+		Name:  name,
 	}, nil
+}
+
+func (a *larkDrivePreviewAPI) ListFiles(ctx context.Context, folderToken string) ([]previewRemoteNode, error) {
+	builder := larkdrive.NewListFileReqBuilder().
+		PageSize(previewListPageSize).
+		OrderBy(larkdrive.OrderByCreatedTime).
+		Direction("DESC")
+	if strings.TrimSpace(folderToken) != "" {
+		builder.FolderToken(folderToken)
+	}
+	iterator, err := a.client.Drive.V1.File.ListByIterator(ctx, builder.Build())
+	if err != nil {
+		return nil, err
+	}
+	out := []previewRemoteNode{}
+	for {
+		ok, item, err := iterator.Next()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			break
+		}
+		if item == nil {
+			continue
+		}
+		out = append(out, previewRemoteNode{
+			Token: stringPtrValue(item.Token),
+			URL:   stringPtrValue(item.Url),
+			Type:  stringPtrValue(item.Type),
+			Name:  stringPtrValue(item.Name),
+		})
+	}
+	return out, nil
 }
 
 func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileName string, content []byte) (string, error) {

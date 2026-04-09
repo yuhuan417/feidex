@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"strconv"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,20 +12,52 @@ import (
 
 type fakePreviewAPI struct {
 	createFolderCalls int
+	listCalls         []string
 	uploadCalls       int
 	queryCalls        int
 	grantCalls        []previewPrincipal
 	deleteCalls       []string
+	root              *previewRemoteNode
+	files             []previewRemoteNode
 }
 
-func (f *fakePreviewAPI) CreateFolder(_ context.Context, _ string, _ string) (previewRemoteNode, error) {
+func (f *fakePreviewAPI) CreateFolder(_ context.Context, name, _ string) (previewRemoteNode, error) {
 	f.createFolderCalls++
-	return previewRemoteNode{Token: "folder-1", URL: "https://drive.example/folder-1", Type: previewFolderType}, nil
+	node := previewRemoteNode{
+		Token: "folder-1",
+		URL:   "https://drive.example/folder-1",
+		Type:  previewFolderType,
+		Name:  name,
+	}
+	f.root = &node
+	return node, nil
 }
 
-func (f *fakePreviewAPI) UploadFile(_ context.Context, _ string, _ string, _ []byte) (string, error) {
+func (f *fakePreviewAPI) ListFiles(_ context.Context, folderToken string) ([]previewRemoteNode, error) {
+	f.listCalls = append(f.listCalls, folderToken)
+	switch strings.TrimSpace(folderToken) {
+	case "":
+		if f.root == nil {
+			return nil, nil
+		}
+		return []previewRemoteNode{*f.root}, nil
+	case "folder-1":
+		return append([]previewRemoteNode(nil), f.files...), nil
+	default:
+		return nil, nil
+	}
+}
+
+func (f *fakePreviewAPI) UploadFile(_ context.Context, _ string, fileName string, _ []byte) (string, error) {
 	f.uploadCalls++
-	return "file-1", nil
+	token := "file-" + strconv.Itoa(f.uploadCalls)
+	f.files = append(f.files, previewRemoteNode{
+		Token: token,
+		URL:   "https://drive.example/" + token,
+		Type:  previewFileType,
+		Name:  fileName,
+	})
+	return token, nil
 }
 
 func (f *fakePreviewAPI) QueryMetaURL(_ context.Context, token, _ string) (string, error) {
@@ -39,6 +72,14 @@ func (f *fakePreviewAPI) GrantPermission(_ context.Context, _ string, _ string, 
 
 func (f *fakePreviewAPI) DeleteFile(_ context.Context, token, _ string) error {
 	f.deleteCalls = append(f.deleteCalls, token)
+	next := make([]previewRemoteNode, 0, len(f.files))
+	for _, node := range f.files {
+		if node.Token == token {
+			continue
+		}
+		next = append(next, node)
+	}
+	f.files = next
 	return nil
 }
 
@@ -49,12 +90,11 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 	}
 	api := &fakePreviewAPI{}
 	previewer := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{
-		StatePath:  filepath.Join(root, "preview-state.json"),
 		ProcessCWD: root,
 	})
 
 	got, err := previewer.RewriteText(context.Background(), MarkdownPreviewRequest{
-		Text:         "请看 [README](README.md)",
+		Text:         "请看 [README](README.md) 和 [README2](README.md)",
 		WorkspaceCWD: root,
 		ChatID:       "oc_123",
 		UserID:       "ou_123",
@@ -81,11 +121,11 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 	if err != nil {
 		t.Fatalf("RewriteText second call returned error: %v", err)
 	}
-	if gotAgain != got {
-		t.Fatalf("expected stable rewritten output, got %q", gotAgain)
+	if !strings.Contains(gotAgain, "https://drive.example/file-2") {
+		t.Fatalf("expected fresh upload on second rewrite, got %q", gotAgain)
 	}
-	if api.uploadCalls != 1 {
-		t.Fatalf("expected cached preview file reuse, upload calls=%d", api.uploadCalls)
+	if api.uploadCalls != 2 {
+		t.Fatalf("expected one upload per rewrite call, upload calls=%d", api.uploadCalls)
 	}
 }
 
@@ -96,7 +136,6 @@ func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 	}
 	api := &fakePreviewAPI{}
 	previewer := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{
-		StatePath:  filepath.Join(root, "preview-state.json"),
 		ProcessCWD: root,
 	})
 
@@ -109,15 +148,10 @@ func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 		t.Fatalf("RewriteText returned error: %v", err)
 	}
 
-	previewer.mu.Lock()
-	for _, record := range previewer.state.Files {
-		record.LastUsedAt = time.Now().Add(-8 * 24 * time.Hour)
+	if len(api.files) != 1 {
+		t.Fatalf("expected one uploaded preview file, got %#v", api.files)
 	}
-	if err := previewer.saveStateLocked(); err != nil {
-		previewer.mu.Unlock()
-		t.Fatalf("saveStateLocked: %v", err)
-	}
-	previewer.mu.Unlock()
+	api.files[0].Name = previewFileName(filepath.Join(root, "README.md"), strings.Repeat("a", 64), time.Now().Add(-8*24*time.Hour))
 
 	result, err := previewer.CleanupBefore(context.Background(), time.Now().Add(-7*24*time.Hour))
 	if err != nil {
@@ -129,10 +163,7 @@ func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 	if len(api.deleteCalls) != 1 || api.deleteCalls[0] != "file-1" {
 		t.Fatalf("unexpected delete calls: %#v", api.deleteCalls)
 	}
-
-	previewer.mu.Lock()
-	defer previewer.mu.Unlock()
-	if len(previewer.state.Files) != 0 {
-		t.Fatalf("expected preview state to be empty after cleanup, got %#v", previewer.state.Files)
+	if len(api.files) != 0 {
+		t.Fatalf("expected remote preview listing to be empty after cleanup, got %#v", api.files)
 	}
 }

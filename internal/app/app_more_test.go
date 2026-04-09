@@ -328,8 +328,8 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if ff.onMessage == nil {
 		t.Fatal("expected feishu handlers to be configured")
 	}
-	if !strings.HasSuffix(ff.previewStatePath, "feishu-md-preview.json") {
-		t.Fatalf("preview state path = %q, want markdown preview state file", ff.previewStatePath)
+	if ff.previewStatePath != "" {
+		t.Fatalf("preview state path = %q, want empty for stateless preview management", ff.previewStatePath)
 	}
 }
 
