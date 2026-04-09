@@ -223,6 +223,29 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 	if cloneSession(nil) != nil {
 		t.Fatal("cloneSession(nil) should return nil")
 	}
+
+	content, err := os.ReadFile(store.path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	text := string(content)
+	for _, forbidden := range []string{`"queue"`, `"staged_images"`, `"active_turn_id"`, `"active_submission_id"`} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("persisted session should omit runtime field %s:\n%s", forbidden, text)
+		}
+	}
+
+	reopened, err := Open(store.path)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
+	}
+	reopenedSession := reopened.GetSession("session-1")
+	if reopenedSession == nil {
+		t.Fatal("expected reopened session")
+	}
+	if reopenedSession.Status != "idle" || reopenedSession.ActiveTurnID != "" || reopenedSession.ActiveSubmissionID != "" || len(reopenedSession.Queue) != 0 || len(reopenedSession.StagedImages) != 0 {
+		t.Fatalf("reopened session should only contain persistent state, got %+v", reopenedSession)
+	}
 }
 
 func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {

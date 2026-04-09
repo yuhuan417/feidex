@@ -1604,6 +1604,82 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 	}
 }
 
+func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	bucketSessionKey := a.pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            targetSessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerUserID:    "user-1",
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-1",
+		Status:         "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(target) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         bucketSessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		StagedImages: []state.SessionStagedImage{
+			{SourceMessageID: "img-1", RootMessageID: "img-1", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
+			{SourceMessageID: "img-2", RootMessageID: "img-2", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "root-msg",
+		Kind:       "root_turn",
+		SessionKey: targetSessionKey,
+		ThreadID:   "thread-1",
+		TurnID:     "turn-1",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+
+	var seenInputs []map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/steer" {
+			return nil
+		}
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-1" || got["expectedTurnId"] != "turn-1" {
+			t.Fatalf("turn/steer params = %+v", got)
+		}
+		if items, ok := got["input"].([]map[string]any); ok {
+			seenInputs = items
+		}
+		return nil
+	}
+
+	a.handleFeishuMessage(&feishu.InboundMessage{
+		MessageID:       "reply-1",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "follow up",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "target-msg",
+	})
+
+	if len(seenInputs) != 3 {
+		t.Fatalf("turn/steer inputs = %+v, want text + 2 images", seenInputs)
+	}
+	if seenInputs[0]["type"] != "text" || seenInputs[1]["type"] != "localImage" || seenInputs[2]["type"] != "localImage" {
+		t.Fatalf("turn/steer input types = %+v, want text + 2 localImage", seenInputs)
+	}
+	if bucket := a.store.GetSession(bucketSessionKey); bucket == nil || len(bucket.StagedImages) != 0 {
+		t.Fatalf("staged bucket after steer = %+v, want empty", bucket)
+	}
+}
+
 func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:group:chat-1:root:root-msg"

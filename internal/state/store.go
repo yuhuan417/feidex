@@ -23,11 +23,12 @@ type Store struct {
 }
 
 type Snapshot struct {
-	Version  int                 `json:"version"`
-	Sessions map[string]*Session `json:"sessions"`
+	Version  int                        `json:"version"`
+	Sessions map[string]*storedSession  `json:"sessions"`
 }
 
 type runtimeState struct {
+	Sessions        map[string]*Session
 	Submissions     map[string]*Submission
 	PendingRequests map[string]*PendingRequest
 	MessageLinks    map[string]*MessageLink
@@ -37,6 +38,24 @@ type runtimeState struct {
 type Counters struct {
 	NextSubmission int64 `json:"next_submission"`
 	NextLocalID    int64 `json:"next_local_id"`
+}
+
+type storedSession struct {
+	Key                        string `json:"key"`
+	WorkspaceID                string `json:"workspace_id"`
+	ActiveThreadID             string `json:"active_thread_id"`
+	ActiveThreadWorkspaceID    string `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy string `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode    string `json:"active_thread_sandbox_mode"`
+	ActiveThreadServiceTier    string `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadName           string `json:"active_thread_name"`
+	ActiveThreadPreview        string `json:"active_thread_preview"`
+	OwnerUserID                string `json:"owner_user_id"`
+	ChatID                     string `json:"chat_id"`
+	ChatType                   string `json:"chat_type"`
+	RootMessageID              string `json:"root_message_id"`
+	ModelOverride              string `json:"model_override"`
+	UpdatedAt                  int64  `json:"updated_at"`
 }
 
 type Session struct {
@@ -138,9 +157,10 @@ func Open(path string) (*Store, error) {
 		path: path,
 		data: Snapshot{
 			Version:  currentSnapshotVersion,
-			Sessions: map[string]*Session{},
+			Sessions: map[string]*storedSession{},
 		},
 		runtime: runtimeState{
+			Sessions:        map[string]*Session{},
 			Submissions:     map[string]*Submission{},
 			PendingRequests: map[string]*PendingRequest{},
 			MessageLinks:    map[string]*MessageLink{},
@@ -161,14 +181,17 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	if s.data.Sessions == nil {
-		s.data.Sessions = map[string]*Session{}
+		s.data.Sessions = map[string]*storedSession{}
 	}
 	rewrite := s.data.Version != currentSnapshotVersion
 	s.data.Version = currentSnapshotVersion
-	for _, sess := range s.data.Sessions {
-		if normalizeSessionForStorage(sess) {
+	for key, sess := range s.data.Sessions {
+		persisted := normalizeStoredSession(sess)
+		if !storedSessionsEqual(sess, persisted) {
 			rewrite = true
 		}
+		s.data.Sessions[key] = persisted
+		s.runtime.Sessions[key] = sessionFromStored(persisted)
 	}
 	if rewrite {
 		if err := s.saveLocked(); err != nil {
@@ -181,7 +204,7 @@ func Open(path string) (*Store, error) {
 func (s *Store) GetSession(key string) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if sess, ok := s.data.Sessions[key]; ok {
+	if sess, ok := s.runtime.Sessions[key]; ok {
 		return cloneSession(sess)
 	}
 	return nil
@@ -197,9 +220,9 @@ func (s *Store) UpsertSession(sess *Session) error {
 	if cp == nil {
 		return nil
 	}
-	normalizeSessionForStorage(cp)
 	cp.UpdatedAt = time.Now().Unix()
-	s.data.Sessions[sess.Key] = cp
+	s.runtime.Sessions[sess.Key] = cp
+	s.syncPersistentSessionLocked(cp)
 	return s.saveLocked()
 }
 
@@ -267,6 +290,7 @@ func (s *Store) QueueSubmission(sessionKey, submissionID string) error {
 		"active_turn_id", sess.ActiveTurnID,
 		"active_submission_id", sess.ActiveSubmissionID,
 	)
+	s.syncPersistentSessionLocked(sess)
 	return s.saveLocked()
 }
 
@@ -288,6 +312,7 @@ func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
 		"active_turn_id", sess.ActiveTurnID,
 		"active_submission_id", sess.ActiveSubmissionID,
 	)
+	s.syncPersistentSessionLocked(sess)
 	return next, s.saveLocked()
 }
 
@@ -346,8 +371,8 @@ func (s *Store) DeletePendingRequests(match func(*PendingRequest) bool) {
 func (s *Store) AllSessions() []*Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]*Session, 0, len(s.data.Sessions))
-	for _, sess := range s.data.Sessions {
+	out := make([]*Session, 0, len(s.runtime.Sessions))
+	for _, sess := range s.runtime.Sessions {
 		out = append(out, cloneSession(sess))
 	}
 	return out
@@ -358,13 +383,13 @@ func cloneSession(sess *Session) *Session {
 		return nil
 	}
 	cp := *sess
-	normalizeSessionForStorage(&cp)
+	normalizeSessionValues(&cp)
 	cp.Queue = append([]string(nil), sess.Queue...)
 	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
 	return &cp
 }
 
-func normalizeSessionForStorage(sess *Session) bool {
+func normalizeSessionValues(sess *Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -374,6 +399,81 @@ func normalizeSessionForStorage(sess *Session) bool {
 	}
 	sess.ActiveThreadServiceTier = normalizedServiceTier
 	return true
+}
+
+func storedSessionFromSession(sess *Session) *storedSession {
+	if sess == nil {
+		return nil
+	}
+	cp := cloneSession(sess)
+	if cp == nil {
+		return nil
+	}
+	normalizeSessionValues(cp)
+	return &storedSession{
+		Key:                        cp.Key,
+		WorkspaceID:                cp.WorkspaceID,
+		ActiveThreadID:             cp.ActiveThreadID,
+		ActiveThreadWorkspaceID:    cp.ActiveThreadWorkspaceID,
+		ActiveThreadApprovalPolicy: cp.ActiveThreadApprovalPolicy,
+		ActiveThreadSandboxMode:    cp.ActiveThreadSandboxMode,
+		ActiveThreadServiceTier:    cp.ActiveThreadServiceTier,
+		ActiveThreadName:           cp.ActiveThreadName,
+		ActiveThreadPreview:        cp.ActiveThreadPreview,
+		OwnerUserID:                cp.OwnerUserID,
+		ChatID:                     cp.ChatID,
+		ChatType:                   cp.ChatType,
+		RootMessageID:              cp.RootMessageID,
+		ModelOverride:              cp.ModelOverride,
+		UpdatedAt:                  cp.UpdatedAt,
+	}
+}
+
+func sessionFromStored(sess *storedSession) *Session {
+	if sess == nil {
+		return nil
+	}
+	cp := &Session{
+		Key:                        sess.Key,
+		WorkspaceID:                sess.WorkspaceID,
+		ActiveThreadID:             sess.ActiveThreadID,
+		ActiveThreadWorkspaceID:    sess.ActiveThreadWorkspaceID,
+		ActiveThreadApprovalPolicy: sess.ActiveThreadApprovalPolicy,
+		ActiveThreadSandboxMode:    sess.ActiveThreadSandboxMode,
+		ActiveThreadServiceTier:    sess.ActiveThreadServiceTier,
+		ActiveThreadName:           sess.ActiveThreadName,
+		ActiveThreadPreview:        sess.ActiveThreadPreview,
+		OwnerUserID:                sess.OwnerUserID,
+		ChatID:                     sess.ChatID,
+		ChatType:                   sess.ChatType,
+		RootMessageID:              sess.RootMessageID,
+		ModelOverride:              sess.ModelOverride,
+		Status:                     "idle",
+		UpdatedAt:                  sess.UpdatedAt,
+	}
+	normalizeSessionValues(cp)
+	return cp
+}
+
+func normalizeStoredSession(sess *storedSession) *storedSession {
+	if sess == nil {
+		return nil
+	}
+	cp := *sess
+	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
+	return &cp
+}
+
+func storedSessionsEqual(a, b *storedSession) bool {
+	ab, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	bb, err := json.Marshal(b)
+	if err != nil {
+		return false
+	}
+	return string(ab) == string(bb)
 }
 
 func normalizeStoredServiceTier(value string) string {
@@ -460,12 +560,29 @@ func (s *Store) DeleteMessageLinks(match func(*MessageLink) bool) {
 }
 
 func (s *Store) ensureSessionLocked(key string) *Session {
-	if sess, ok := s.data.Sessions[key]; ok {
+	if sess, ok := s.runtime.Sessions[key]; ok {
+		return sess
+	}
+	if persisted, ok := s.data.Sessions[key]; ok {
+		sess := sessionFromStored(persisted)
+		s.runtime.Sessions[key] = sess
 		return sess
 	}
 	sess := &Session{Key: key, Status: "idle", UpdatedAt: time.Now().Unix()}
-	s.data.Sessions[key] = sess
+	s.runtime.Sessions[key] = sess
+	s.syncPersistentSessionLocked(sess)
 	return sess
+}
+
+func (s *Store) syncPersistentSessionLocked(sess *Session) {
+	if sess == nil || strings.TrimSpace(sess.Key) == "" {
+		return
+	}
+	persisted := storedSessionFromSession(sess)
+	if persisted == nil {
+		return
+	}
+	s.data.Sessions[sess.Key] = persisted
 }
 
 func (s *Store) saveLocked() error {
