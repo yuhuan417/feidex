@@ -35,6 +35,7 @@ type App struct {
 	turnBindMu    sync.Mutex
 	turnBindings  map[string]turnBinding
 	pendingTurns  map[string]turnBinding
+	threadUsage   map[string]codexrpc.ThreadTokenUsage
 
 	statusFlushOnce    sync.Once
 	statusFlushMu      sync.Mutex
@@ -46,6 +47,10 @@ type turnBinding struct {
 	SessionKey   string
 	SubmissionID string
 	ThreadID     string
+	StartedAt    time.Time
+	FirstFinal   string
+	LastUsage    codexrpc.TokenUsageBreakdown
+	HasLastUsage bool
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {
@@ -69,6 +74,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		liveThreads:   map[string]string{},
 		turnBindings:  map[string]turnBinding{},
 		pendingTurns:  map[string]turnBinding{},
+		threadUsage:   map[string]codexrpc.ThreadTokenUsage{},
 		statusFlushCh: make(chan struct{}, 1),
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
@@ -622,6 +628,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	sess.ActiveTurnID = turnID
 	sess.Status = "turn_in_progress"
 	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	a.markTurnStartedAt(turnID, time.Now())
 	a.clearPendingTurnBinding(threadID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID

@@ -53,6 +53,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.quiet":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuQuiet(action, sessionKey)
+	case "menu.usage":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuUsage(action, sessionKey)
 	case "menu.model":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuModel(action, sessionKey)
@@ -337,6 +340,13 @@ func (a *App) completeMenuQuiet(action *feishu.CardAction, sessionKey string) (*
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 quiet 配置"},
 		Card:  rawCard(a.renderQuietModeMenuCard(sessionKey)),
+	}, nil
+}
+
+func (a *App) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 token usage"},
+		Card:  rawCard(a.renderUsageCard(sessionKey)),
 	}, nil
 }
 

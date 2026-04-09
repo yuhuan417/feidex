@@ -2,7 +2,9 @@ package app
 
 import (
 	"strings"
+	"time"
 
+	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
 
@@ -73,11 +75,11 @@ func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID stri
 	if a.turnBindings == nil {
 		a.turnBindings = map[string]turnBinding{}
 	}
-	a.turnBindings[turnID] = turnBinding{
-		ThreadID:     strings.TrimSpace(threadID),
-		SessionKey:   strings.TrimSpace(sessionKey),
-		SubmissionID: strings.TrimSpace(submissionID),
-	}
+	binding := a.turnBindings[turnID]
+	binding.ThreadID = strings.TrimSpace(threadID)
+	binding.SessionKey = strings.TrimSpace(sessionKey)
+	binding.SubmissionID = strings.TrimSpace(submissionID)
+	a.turnBindings[turnID] = binding
 }
 
 func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) {
@@ -112,4 +114,120 @@ func (a *App) clearTurnBinding(turnID string) {
 	a.turnBindMu.Lock()
 	defer a.turnBindMu.Unlock()
 	delete(a.turnBindings, turnID)
+}
+
+func (a *App) markTurnStartedAt(turnID string, startedAt time.Time) {
+	if a == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	binding, ok := a.turnBindings[turnID]
+	if !ok {
+		return
+	}
+	if binding.StartedAt.IsZero() {
+		binding.StartedAt = startedAt
+		a.turnBindings[turnID] = binding
+	}
+}
+
+func (a *App) noteTurnFirstFinal(turnID, text string) bool {
+	if a == nil {
+		return false
+	}
+	turnID = strings.TrimSpace(turnID)
+	text = strings.TrimSpace(text)
+	if turnID == "" || text == "" {
+		return false
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	binding, ok := a.turnBindings[turnID]
+	if !ok {
+		return false
+	}
+	if strings.TrimSpace(binding.FirstFinal) != "" {
+		return false
+	}
+	binding.FirstFinal = text
+	a.turnBindings[turnID] = binding
+	return true
+}
+
+func (a *App) turnFinalText(turnID string) string {
+	if a == nil {
+		return ""
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return ""
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	return strings.TrimSpace(a.turnBindings[turnID].FirstFinal)
+}
+
+func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
+	if a == nil {
+		return
+	}
+	threadID = strings.TrimSpace(threadID)
+	turnID = strings.TrimSpace(turnID)
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	if a.threadUsage == nil {
+		a.threadUsage = map[string]codexrpc.ThreadTokenUsage{}
+	}
+	if threadID != "" {
+		a.threadUsage[threadID] = usage
+	}
+	if turnID == "" {
+		return
+	}
+	binding, ok := a.turnBindings[turnID]
+	if !ok {
+		return
+	}
+	binding.LastUsage = usage.Last
+	binding.HasLastUsage = true
+	a.turnBindings[turnID] = binding
+}
+
+func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, elapsedLine string) {
+	if a == nil {
+		return "", ""
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return "", ""
+	}
+	a.turnBindMu.Lock()
+	binding, ok := a.turnBindings[turnID]
+	a.turnBindMu.Unlock()
+	if ok && binding.HasLastUsage {
+		usageLine = formatTurnUsageLine(binding.LastUsage)
+	}
+	if ok && !binding.StartedAt.IsZero() && !completedAt.IsZero() {
+		elapsedLine = formatTurnElapsedLine(completedAt.Sub(binding.StartedAt))
+	}
+	return usageLine, elapsedLine
+}
+
+func (a *App) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
+	if a == nil {
+		return codexrpc.ThreadTokenUsage{}, false
+	}
+	threadID = strings.TrimSpace(threadID)
+	if threadID == "" {
+		return codexrpc.ThreadTokenUsage{}, false
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	usage, ok := a.threadUsage[threadID]
+	return usage, ok
 }

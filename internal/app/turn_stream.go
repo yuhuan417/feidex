@@ -146,6 +146,11 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		a.storePlanSnapshot(sub.ID, planText)
 		a.sendPlanCard(ctx, sub, planText, true)
 	}
+	if snapshot.IsFinalAnswer {
+		a.storeTurnItemSnapshot(sub.ID, snapshot)
+		_ = a.noteTurnFirstFinal(turnID, snapshot.StoreText)
+		return
+	}
 	a.deliverTurnItemSnapshot(ctx, sub, snapshot, true)
 }
 

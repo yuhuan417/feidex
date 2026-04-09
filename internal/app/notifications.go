@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"sort"
 	"strings"
 	"time"
@@ -158,54 +157,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 }
 
 func (a *App) onThreadTokenUsageUpdated(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
-	_, sub := a.findSubmissionByTurn(threadID, turnID)
-	if sub == nil {
-		return
-	}
-	body := renderThreadTokenUsageBody(turnID, usage)
-	if strings.TrimSpace(body) == "" {
-		return
-	}
-	_ = a.sendTurnEventCard(context.Background(), sub, "Token Usage", "blue", body, "turn_token_usage", false, turnID)
-}
-
-func renderThreadTokenUsageBody(turnID string, usage codexrpc.ThreadTokenUsage) string {
-	lines := []string{}
-	if strings.TrimSpace(turnID) != "" {
-		lines = append(lines, "turn: `"+strings.TrimSpace(turnID)+"`", "")
-	}
-	lines = append(lines,
-		"本次 turn (`last`):",
-		"- total: `"+formatUsageInt(usage.Last.TotalTokens)+"`",
-		"- input: `"+formatUsageInt(usage.Last.InputTokens)+"`",
-		"- cached input: `"+formatUsageInt(usage.Last.CachedInputTokens)+"`",
-		"- cache ratio: `"+formatUsageRatio(usage.Last.CachedInputTokens, usage.Last.InputTokens)+"`",
-		"- output: `"+formatUsageInt(usage.Last.OutputTokens)+"`",
-		"- reasoning output: `"+formatUsageInt(usage.Last.ReasoningOutputTokens)+"`",
-		"",
-		"当前 thread (`total`):",
-		"- total: `"+formatUsageInt(usage.Total.TotalTokens)+"`",
-		"- input: `"+formatUsageInt(usage.Total.InputTokens)+"`",
-		"- cached input: `"+formatUsageInt(usage.Total.CachedInputTokens)+"`",
-		"- output: `"+formatUsageInt(usage.Total.OutputTokens)+"`",
-		"- reasoning output: `"+formatUsageInt(usage.Total.ReasoningOutputTokens)+"`",
-	)
-	if usage.ModelContextWindow != nil && *usage.ModelContextWindow > 0 {
-		lines = append(lines, "- context window: `"+formatUsageInt(*usage.ModelContextWindow)+"`")
-		lines = append(lines, "- context usage: `"+formatUsageRatio(usage.Total.TotalTokens, *usage.ModelContextWindow)+"`")
-	}
-	return strings.Join(lines, "\n")
-}
-
-func formatUsageInt(value int64) string {
-	return strconv.FormatInt(value, 10)
-}
-
-func formatUsageRatio(part, whole int64) string {
-	if whole <= 0 {
-		return "-"
-	}
-	return fmt.Sprintf("%.1f%%", float64(part)*100/float64(whole))
+	a.recordTurnTokenUsage(threadID, turnID, usage)
 }
 
 func (a *App) onTurnStartedNotification(threadID, turnID string) {
@@ -217,6 +169,7 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 
 	if sessionKey, sub := a.pendingSubmissionForThread(threadID); sub != nil {
 		a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+		a.markTurnStartedAt(turnID, time.Now())
 		a.clearPendingTurnBinding(threadID)
 
 		sess := a.store.GetSession(sessionKey)
@@ -310,6 +263,7 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 	sub.TurnID = turnID
 	sub.Status = "running"
 	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	a.markTurnStartedAt(turnID, time.Now())
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	a.noteTurnStarted(sessionKey, sub)
@@ -481,12 +435,17 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 			"status", sub.Status,
 		)
 		replyText, terminalText := turnCompletionMessages(sub.Status, sub.OutputText, flush.LastError, flush.SentOutput)
+		if sub.Status == "completed" && flush.SawFinal {
+			replyText = a.turnFinalText(turnID)
+		}
 		if replyText != "" {
-			a.sendFinalMessages(context.Background(), sub, replyText, a.replyInThreadForSubmission(sub))
+			usageLine, elapsedLine := a.turnFinalMetadata(turnID, time.Now())
+			a.sendFinalMessagesWithFooter(context.Background(), sub, replyText, []string{usageLine, elapsedLine}, a.replyInThreadForSubmission(sub))
 			flush.SentOutput = true
 		}
 		if sub.Status == "completed" && !flush.SawFinal {
-			a.sendEmptyFinalCard(context.Background(), sub)
+			usageLine, elapsedLine := a.turnFinalMetadata(turnID, time.Now())
+			a.sendEmptyFinalCard(context.Background(), sub, []string{usageLine, elapsedLine})
 		}
 		if terminalText != "" {
 			a.sendTurnEventMessages(context.Background(), sub, terminalText, a.replyInThreadForSubmission(sub), "turn_terminal")
@@ -526,7 +485,10 @@ func (a *App) startNextSubmissionAsync(sessionKey, source string) {
 func turnCompletionMessages(status, outputText, lastError string, sentOutput bool) (replyText, terminalText string) {
 	outputText = strings.TrimSpace(outputText)
 	lastError = strings.TrimSpace(lastError)
-	if status != "completed" && !sentOutput && outputText != "" {
+	if status == "completed" {
+		return "", ""
+	}
+	if !sentOutput && outputText != "" {
 		replyText = outputText
 	}
 
@@ -545,8 +507,6 @@ func turnCompletionMessages(status, outputText, lastError string, sentOutput boo
 	switch status {
 	case "interrupted":
 		terminalText = "任务已中断。"
-	case "completed":
-		terminalText = ""
 	default:
 		if replyText == "" {
 			terminalText = fallback

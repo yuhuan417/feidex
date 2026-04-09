@@ -33,6 +33,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandHelp(msg, fields[1:])
 	case "/history":
 		return a.commandHistory(msg, fields[1:])
+	case "/usage":
+		return a.commandUsage(msg, fields[1:])
 	case "/model":
 		return a.commandModel(msg)
 	case "/quiet":
@@ -78,7 +80,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/help", "/history", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/history", "/usage", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false
@@ -438,6 +440,7 @@ func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: commandLabel("中断任务", "/interrupt"), Type: "default", Value: map[string]any{"action": "menu.interrupt", "session_key": sessionKey, "parent_action": "menu.group.session"}},
 		{Text: submenuCommandLabel("Quiet 模式", "/quiet"), Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("Token Usage", "/usage"), Type: "default", Value: map[string]any{"action": "menu.usage", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("会话行为", "blue", menuCardBody("menu.group.session", "控制当前会话的行为与输出方式。"), buttons)
@@ -508,6 +511,8 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"配置当前线程的 approval policy。",
 		"`/history`",
 		"查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。",
+		"`/usage`",
+		"查看当前 thread 的累计 token usage。",
 		"`/workspace` 或 `/cd`",
 		"打开工作区菜单。",
 		"`/workspace list`",

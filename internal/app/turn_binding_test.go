@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"testing"
+	"time"
 
 	"feidex/internal/state"
 )
@@ -61,6 +62,8 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 func TestDuplicateFinalAnswerIsDroppedBeforeTurnCompleted(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.markTurnStartedAt("turn-1", time.Now())
 	a.noteTurnStarted("sess-1", sub)
 
 	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
@@ -74,7 +77,11 @@ func TestDuplicateFinalAnswerIsDroppedBeforeTurnCompleted(t *testing.T) {
 		"phase": "final_answer",
 	})
 
+	if len(ff.replyCards) != 0 {
+		t.Fatalf("expected no final card before completion, got %d", len(ff.replyCards))
+	}
+	a.finishTurn("thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != 1 {
-		t.Fatalf("expected only first final card to be sent, got %d", len(ff.replyCards))
+		t.Fatalf("expected exactly one final card after completion, got %d", len(ff.replyCards))
 	}
 }

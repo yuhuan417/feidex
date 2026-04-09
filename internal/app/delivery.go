@@ -11,10 +11,10 @@ import (
 const feishuTextChunkLimit = 2800
 
 func (a *App) sendFinalMessages(ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
-	return a.sendReplyMessages(ctx, sub, text, inThread, "final_message")
+	return a.sendFinalMessagesWithFooter(ctx, sub, text, nil, inThread)
 }
 
-func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission) string {
+func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission, footerLines []string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -22,6 +22,7 @@ func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission) str
 		return ""
 	}
 	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, "", nil, true)
+	appendReplyCardFooter(card, footerLines)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		return ""
@@ -31,6 +32,87 @@ func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission) str
 		s.FinalMessageIDs = append([]string(nil), id)
 	})
 	return id
+}
+
+func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return nil
+	}
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
+		return nil
+	}
+	text = a.rewriteMarkdownPreviewText(ctx, sub, text)
+	chunks := splitFeishuText(strings.TrimSpace(text), feishuTextChunkLimit)
+	if len(chunks) == 0 {
+		chunks = []string{""}
+	}
+	var ids []string
+	for idx, chunk := range chunks {
+		card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, chunk, nil, true)
+		if idx == len(chunks)-1 {
+			appendReplyCardFooter(card, footerLines)
+		}
+		id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+		if err != nil {
+			fallback := strings.TrimSpace(chunk)
+			if idx == len(chunks)-1 {
+				fallback = appendFooterText(fallback, footerLines)
+			}
+			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
+		}
+		if err != nil {
+			continue
+		}
+		if id != "" {
+			ids = append(ids, id)
+			_ = a.store.UpsertMessageLink(&state.MessageLink{
+				MessageID:    id,
+				Kind:         "final_message",
+				SessionKey:   sub.SessionKey,
+				SubmissionID: sub.ID,
+				ThreadID:     sub.ThreadID,
+				TurnID:       sub.TurnID,
+			})
+		}
+	}
+	if len(ids) > 0 {
+		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+			s.FinalMessageIDs = append([]string(nil), ids...)
+		})
+	}
+	return ids
+}
+
+func appendReplyCardFooter(card map[string]any, footerLines []string) {
+	for _, line := range footerLines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		appendMarkdownBodyCardElement(card, map[string]any{
+			"tag": "div",
+			"text": map[string]any{
+				"tag":        "plain_text",
+				"content":    line,
+				"text_size":  "notation",
+				"text_color": "grey",
+			},
+		})
+	}
+}
+
+func appendFooterText(body string, footerLines []string) string {
+	parts := []string{}
+	if strings.TrimSpace(body) != "" {
+		parts = append(parts, strings.TrimSpace(body))
+	}
+	for _, line := range footerLines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			parts = append(parts, line)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 func (a *App) sendTurnEventMessages(ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
