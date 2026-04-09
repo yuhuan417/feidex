@@ -25,9 +25,11 @@ func TestSystemdManagerLifecycleWithFakeSystemctl(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "systemctl.log")
 	writeExecutable(t, binDir, "systemctl", `
 printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
-if [ "${2:-}" = "show" ]; then
+case " $* " in
+  *" --user show feidex.service --no-page --property ActiveState,MainPID "*)
   printf 'ActiveState=active\nMainPID=123\n'
-fi
+  ;;
+esac
 `)
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", binDir)

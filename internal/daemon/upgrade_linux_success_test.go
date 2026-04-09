@@ -13,9 +13,11 @@ import (
 func TestRunUpgradeRunnerSuccess(t *testing.T) {
 	binDir := t.TempDir()
 	writeExecutable(t, binDir, "systemctl", `
-if [ "${2:-}" = "show" ]; then
+case " $* " in
+  *" --user show feidex.service --no-page --property ActiveState,MainPID "*)
   printf 'ActiveState=active\nMainPID=123\n'
-fi
+  ;;
+esac
 `)
 	t.Setenv("PATH", binDir)
 
