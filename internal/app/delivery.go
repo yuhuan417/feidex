@@ -14,6 +14,25 @@ func (a *App) sendFinalMessages(ctx context.Context, sub *state.Submission, text
 	return a.sendReplyMessages(ctx, sub, text, inThread, "final_message")
 }
 
+func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission) string {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return ""
+	}
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
+		return ""
+	}
+	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, "", nil, true)
+	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
+	if err != nil || strings.TrimSpace(id) == "" {
+		return ""
+	}
+	a.recordMessageLink(id, "final_message", sub, "")
+	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+		s.FinalMessageIDs = append([]string(nil), id)
+	})
+	return id
+}
+
 func (a *App) sendTurnEventMessages(ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
 	return a.sendReplyMessages(ctx, sub, text, inThread, kind)
 }

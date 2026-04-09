@@ -69,6 +69,7 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 	}
 	submissionID := strings.TrimSpace(sub.ID)
 	turnID := strings.TrimSpace(sub.TurnID)
+	threadID := strings.TrimSpace(sub.ThreadID)
 	a.store.DeleteMessageLinks(func(link *state.MessageLink) bool {
 		if link == nil {
 			return false
@@ -88,6 +89,12 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 	}
 	if submissionID != "" {
 		a.store.DeleteSubmission(submissionID)
+	}
+	if turnID != "" {
+		a.clearTurnBinding(turnID)
+	}
+	if threadID != "" {
+		a.clearPendingTurnBinding(threadID)
 	}
 }
 

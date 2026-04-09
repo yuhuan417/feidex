@@ -32,11 +32,20 @@ type App struct {
 	turnStreams   map[string]*turnStream
 	liveThreadMu  sync.Mutex
 	liveThreads   map[string]string
+	turnBindMu    sync.Mutex
+	turnBindings  map[string]turnBinding
+	pendingTurns  map[string]turnBinding
 
 	statusFlushOnce    sync.Once
 	statusFlushMu      sync.Mutex
 	statusFlushPending map[string]struct{}
 	statusFlushCh      chan struct{}
+}
+
+type turnBinding struct {
+	SessionKey   string
+	SubmissionID string
+	ThreadID     string
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {
@@ -58,6 +67,8 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		deduper:       newInboundDeduper(),
 		turnStreams:   map[string]*turnStream{},
 		liveThreads:   map[string]string{},
+		turnBindings:  map[string]turnBinding{},
+		pendingTurns:  map[string]turnBinding{},
 		statusFlushCh: make(chan struct{}, 1),
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
@@ -561,13 +572,16 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	sess.Status = "turn_starting"
 	sub.ThreadID = threadID
 	sub.Status = "running"
+	a.notePendingTurnBinding(threadID, sessionKey, sub.ID)
 	if err := a.store.UpsertSession(sess); err != nil {
+		a.clearPendingTurnBinding(threadID)
 		return err
 	}
 	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
 		m.ThreadID = threadID
 		m.Status = "running"
 	}); err != nil {
+		a.clearPendingTurnBinding(threadID)
 		return err
 	}
 	a.markSubmissionRunningReactions(sub)
@@ -586,6 +600,7 @@ func (a *App) startNextSubmission(sessionKey string) error {
 			logSessionState("startNextSubmission awaiting turn-start-notification", sessionKey, a.store.GetSession(sessionKey))
 			return nil
 		}
+		a.clearPendingTurnBinding(threadID)
 		a.clearSubmissionProcessingReactions(sub)
 		slog.Error("turn start chain failed",
 			"session_key", sessionKey,
@@ -606,6 +621,8 @@ func (a *App) startNextSubmission(sessionKey string) error {
 	sess.ActiveSubmissionID = sub.ID
 	sess.ActiveTurnID = turnID
 	sess.Status = "turn_in_progress"
+	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	a.clearPendingTurnBinding(threadID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"

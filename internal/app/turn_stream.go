@@ -23,6 +23,7 @@ type turnStream struct {
 	LastSentPlan string
 	LastError    string
 	SentOutput   bool
+	SentFinal    bool
 	NextOrder    int
 	Items        map[string]*turnItemBuffer
 }
@@ -50,6 +51,7 @@ type turnItemSnapshot struct {
 
 type turnStreamFlushResult struct {
 	SentOutput bool
+	SawFinal   bool
 	LastError  string
 }
 
@@ -129,7 +131,15 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		buf.Command = command
 	}
 	snapshot = snapshotTurnItem(buf, item, false)
+	if snapshot.IsFinalAnswer && stream.SentFinal {
+		delete(stream.Items, key)
+		a.turnStreamsMu.Unlock()
+		return
+	}
 	delete(stream.Items, key)
+	if snapshot.IsFinalAnswer {
+		stream.SentFinal = true
+	}
 	a.turnStreamsMu.Unlock()
 
 	if planText != "" {
@@ -157,6 +167,7 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	a.turnStreamsMu.Lock()
 	stream := a.ensureTurnStreamLocked(sessionKey, sub)
 	result.SentOutput = stream.SentOutput
+	result.SawFinal = stream.SentFinal
 	result.LastError = stream.LastError
 	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
 		planText = text

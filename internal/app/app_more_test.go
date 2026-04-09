@@ -262,6 +262,8 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		started:       time.Now(),
 		turnStreams:   map[string]*turnStream{},
 		liveThreads:   map[string]string{},
+		turnBindings:  map[string]turnBinding{},
+		pendingTurns:  map[string]turnBinding{},
 		statusFlushCh: make(chan struct{}, 1),
 	}
 	return a, ff, fc

@@ -88,7 +88,7 @@ func TestTurnCompletionMessagesAlwaysNotifyInterrupted(t *testing.T) {
 
 func TestTurnCompletionMessagesKeepsCompletedSilent(t *testing.T) {
 	replyText, terminalText := turnCompletionMessages("completed", "final answer", "", false)
-	if replyText != "final answer" {
+	if replyText != "" {
 		t.Fatalf("unexpected completed reply text: %q", replyText)
 	}
 	if terminalText != "" {
@@ -164,7 +164,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create submission: %v", err)
 	}
-	sessionKey, sub := a.findSubmissionByTurn("thread-1", "turn-1")
+	sessionKey, sub := a.findSubmissionByTurn("thread-1", "")
 	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-1" {
 		t.Fatalf("unexpected fallback result: session=%q sub=%#v", sessionKey, sub)
 	}

@@ -214,6 +214,37 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 	if threadID == "" || turnID == "" {
 		return
 	}
+
+	if sessionKey, sub := a.pendingSubmissionForThread(threadID); sub != nil {
+		a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+		a.clearPendingTurnBinding(threadID)
+
+		sess := a.store.GetSession(sessionKey)
+		if sess == nil {
+			return
+		}
+		sess.ActiveSubmissionID = sub.ID
+		sess.ActiveTurnID = turnID
+		sess.Status = "turn_in_progress"
+		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+		if err := a.store.UpsertSession(sess); err != nil {
+			return
+		}
+		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+			s.ThreadID = threadID
+			s.TurnID = turnID
+			s.Status = "running"
+		})
+		sub.ThreadID = threadID
+		sub.TurnID = turnID
+		sub.Status = "running"
+		a.recordSubmissionSourceLinks(sub)
+		a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+		a.noteTurnStarted(sessionKey, sub)
+		a.markSessionThreadLive(sessionKey, threadID)
+		return
+	}
+
 	sessionKey := ""
 	for _, candidate := range a.store.AllSessions() {
 		if candidate == nil {
@@ -278,6 +309,7 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"
+	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	a.noteTurnStarted(sessionKey, sub)
@@ -453,6 +485,9 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 			a.sendFinalMessages(context.Background(), sub, replyText, a.replyInThreadForSubmission(sub))
 			flush.SentOutput = true
 		}
+		if sub.Status == "completed" && !flush.SawFinal {
+			a.sendEmptyFinalCard(context.Background(), sub)
+		}
 		if terminalText != "" {
 			a.sendTurnEventMessages(context.Background(), sub, terminalText, a.replyInThreadForSubmission(sub), "turn_terminal")
 		}
@@ -491,7 +526,7 @@ func (a *App) startNextSubmissionAsync(sessionKey, source string) {
 func turnCompletionMessages(status, outputText, lastError string, sentOutput bool) (replyText, terminalText string) {
 	outputText = strings.TrimSpace(outputText)
 	lastError = strings.TrimSpace(lastError)
-	if !sentOutput && outputText != "" {
+	if status != "completed" && !sentOutput && outputText != "" {
 		replyText = outputText
 	}
 
@@ -521,14 +556,19 @@ func turnCompletionMessages(status, outputText, lastError string, sentOutput boo
 }
 
 func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
-	// MVP: linear scan is acceptable.
-	for _, sess := range a.store.AllSessions() {
-		if turnID != "" && sess.ActiveTurnID == turnID {
-			sub := a.store.GetSubmission(sess.ActiveSubmissionID)
-			if sub != nil {
-				return sess.Key, sub
+	if strings.TrimSpace(turnID) != "" {
+		if sessionKey, sub := a.boundSubmissionForTurn(turnID); sub != nil {
+			return sessionKey, sub
+		}
+		for _, sess := range a.store.AllSessions() {
+			if turnID != "" && sess.ActiveTurnID == turnID {
+				sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+				if sub != nil {
+					return sess.Key, sub
+				}
 			}
 		}
+		return "", nil
 	}
 	if strings.TrimSpace(threadID) != "" {
 		for _, sess := range a.store.AllSessions() {
