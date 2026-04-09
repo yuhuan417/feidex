@@ -123,7 +123,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 			TurnID   string `json:"turnId"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			a.bindStandaloneCompactTurn(p.ThreadID, p.TurnID)
+			a.completeStandaloneCompactTurn(p.ThreadID, p.TurnID)
 		}
 	case "thread/tokenUsage/updated":
 		var p codexrpc.ThreadTokenUsageUpdatedNotification
@@ -144,6 +144,9 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 				"turn_id", p.TurnID,
 				"message", p.Error.Message,
 			)
+			if a.failStandaloneCompactTurn(p.ThreadID, p.TurnID, p.Error.Message) {
+				return
+			}
 			a.recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
 			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
 				sub.Status = "failed"

@@ -102,14 +102,8 @@ func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {
 
 	a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
 	sess := a.store.GetSession("sess-compact")
-	if sess == nil || sess.ActiveTurnID != "turn-compact" || sess.Status != sessionStatusCompacting {
-		t.Fatalf("session after thread/compacted = %+v", sess)
-	}
-
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
-	sess = a.store.GetSession("sess-compact")
 	if sess == nil || sess.ActiveTurnID != "" || sess.Status != "idle" {
-		t.Fatalf("session after compact completion = %+v", sess)
+		t.Fatalf("session after thread/compacted = %+v", sess)
 	}
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
 		t.Fatalf("compact completion notice = %#v, want visible completion text", ff.sentTexts)
@@ -150,6 +144,53 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 	}
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
 		t.Fatalf("raced compact completion notice = %#v, want visible completion text", ff.sentTexts)
+	}
+}
+
+func TestStandaloneCompactSuccessIgnoresLaterFailedCompletion(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-compact",
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-compact",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-compact",
+		ChatType:                "p2p",
+		Status:                  sessionStatusCompacting,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
+	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"failed"}}`))
+
+	if len(ff.sentTexts) != 1 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
+		t.Fatalf("compact notifications should only report success once, got %#v", ff.sentTexts)
+	}
+}
+
+func TestStandaloneCompactErrorReportsRealMessage(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-compact",
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-compact",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-compact",
+		ChatType:                "p2p",
+		Status:                  sessionStatusCompacting,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	a.handleNotification("error", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","error":{"message":"context window not eligible"}}`))
+
+	sess := a.store.GetSession("sess-compact")
+	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
+		t.Fatalf("session after compact error = %+v", sess)
+	}
+	if len(ff.sentTexts) != 1 || !strings.Contains(ff.sentTexts[0], "context window not eligible") {
+		t.Fatalf("compact error notice = %#v, want real error message", ff.sentTexts)
 	}
 }
 

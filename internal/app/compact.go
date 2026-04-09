@@ -100,6 +100,39 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 	return false
 }
 
+func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
+	threadID = strings.TrimSpace(threadID)
+	turnID = strings.TrimSpace(turnID)
+	if a == nil || a.store == nil || threadID == "" {
+		return false
+	}
+	for _, sess := range a.store.AllSessions() {
+		if sess == nil {
+			continue
+		}
+		if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+			continue
+		}
+		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
+			continue
+		}
+		if currentTurnID := strings.TrimSpace(sess.ActiveTurnID); currentTurnID != "" && turnID != "" && currentTurnID != turnID {
+			continue
+		}
+		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && strings.TrimSpace(sess.ActiveTurnID) == "" {
+			continue
+		}
+		sess.ActiveTurnID = ""
+		sess.Status = "idle"
+		if err := a.store.UpsertSession(sess); err != nil {
+			return false
+		}
+		a.sendStandaloneCompactResult(sess, "completed")
+		return true
+	}
+	return false
+}
+
 func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
@@ -125,6 +158,44 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool 
 			return false
 		}
 		a.sendStandaloneCompactResult(sess, status)
+		return true
+	}
+	return false
+}
+
+func (a *App) failStandaloneCompactTurn(threadID, turnID, message string) bool {
+	threadID = strings.TrimSpace(threadID)
+	turnID = strings.TrimSpace(turnID)
+	message = strings.TrimSpace(message)
+	if a == nil || a.store == nil || threadID == "" {
+		return false
+	}
+	for _, sess := range a.store.AllSessions() {
+		if sess == nil {
+			continue
+		}
+		if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+			continue
+		}
+		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
+			continue
+		}
+		if currentTurnID := strings.TrimSpace(sess.ActiveTurnID); currentTurnID != "" && turnID != "" && currentTurnID != turnID {
+			continue
+		}
+		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && strings.TrimSpace(sess.ActiveTurnID) == "" {
+			continue
+		}
+		sess.ActiveTurnID = ""
+		sess.Status = "idle"
+		if err := a.store.UpsertSession(sess); err != nil {
+			return false
+		}
+		text := "当前线程上下文压缩失败。"
+		if message != "" {
+			text = "当前线程上下文压缩失败：" + message
+		}
+		a.sendSessionTextNotice(sess, text)
 		return true
 	}
 	return false
