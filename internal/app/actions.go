@@ -884,6 +884,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	sess.ActiveThreadSandboxMode = ""
 	setSessionThreadContext(sess, workspaceID, threadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	a.markSessionThreadLive(sessionKey, threadID)
+	a.primeThreadAutoCompactLimit(threadID, workspaceID)
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
