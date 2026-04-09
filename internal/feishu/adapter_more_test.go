@@ -163,6 +163,21 @@ func TestConvertMessageTextFlow(t *testing.T) {
 		t.Fatalf("expected group message without bot mention to be ignored, got %+v", got)
 	}
 
+	noBotID := New(config.FeishuConfig{GroupAtOnly: true})
+	if got := noBotID.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   strPtr("msg-2b"),
+				ChatType:    &chatType,
+				MessageType: &msgType,
+				Content:     &content,
+			},
+		},
+	}); got != nil {
+		t.Fatalf("expected GroupAtOnly to fail closed without bot open id, got %+v", got)
+	}
+
 	everyoneKey := "@all"
 	everyoneName := "所有人"
 	allAdapter := New(config.FeishuConfig{GroupAtOnly: true, RespondToAtEveryone: true})

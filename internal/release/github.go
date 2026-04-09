@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -264,11 +265,65 @@ func compareSuffix(a, b string) int {
 		return 1
 	case b == "":
 		return -1
-	case a < b:
-		return -1
-	default:
-		return 1
 	}
+
+	partsA := splitPrerelease(a)
+	partsB := splitPrerelease(b)
+	limit := min(len(partsA), len(partsB))
+	for i := 0; i < limit; i++ {
+		partA := partsA[i]
+		partB := partsB[i]
+		intA, okA := parseNumericPrerelease(partA)
+		intB, okB := parseNumericPrerelease(partB)
+		switch {
+		case okA && okB:
+			if intA < intB {
+				return -1
+			}
+			if intA > intB {
+				return 1
+			}
+		case okA && !okB:
+			return -1
+		case !okA && okB:
+			return 1
+		case partA < partB:
+			return -1
+		case partA > partB:
+			return 1
+		}
+	}
+	switch {
+	case len(partsA) < len(partsB):
+		return -1
+	case len(partsA) > len(partsB):
+		return 1
+	default:
+		return 0
+	}
+}
+
+func splitPrerelease(value string) []string {
+	value = strings.TrimSpace(strings.TrimLeft(value, ".-"))
+	if value == "" {
+		return nil
+	}
+	return slices.DeleteFunc(strings.FieldsFunc(value, func(r rune) bool { return r == '.' || r == '-' }), func(part string) bool {
+		return strings.TrimSpace(part) == ""
+	})
+}
+
+func parseNumericPrerelease(value string) (int, bool) {
+	if value == "" {
+		return 0, false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+	}
+	v, err := strconv.Atoi(value)
+	return v, err == nil
 }
 
 func VerifySHA256(content []byte, expected string) error {

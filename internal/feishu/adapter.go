@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 	"feidex/internal/config"
 
+	gws "github.com/gorilla/websocket"
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
@@ -101,6 +103,16 @@ type Adapter struct {
 	previewStatePath  string
 	previewProcessCWD string
 	previewer         *DriveMarkdownPreviewer
+
+	startErr error
+}
+
+var wsDialContext = func(ctx context.Context, urlStr string, header http.Header) (*gws.Conn, *http.Response, error) {
+	return gws.DefaultDialer.DialContext(ctx, urlStr, header)
+}
+
+var wsClientRunner = func(client *larkws.Client, ctx context.Context) {
+	_ = client.Start(ctx)
 }
 
 func New(cfg config.FeishuConfig) *Adapter {
@@ -135,7 +147,6 @@ func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
-	var err error
 	a.startOnce.Do(func() {
 		a.botOpenID = a.fetchBotOpenID()
 		dispatcher := dispatcher.NewEventDispatcher("", "").
@@ -226,13 +237,80 @@ func (a *Adapter) Start(ctx context.Context) error {
 			larkws.WithEventHandler(dispatcher),
 			larkws.WithLogLevel(larkcore.LogLevelInfo),
 		)
+		preflightCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := a.validateWSStartup(preflightCtx); err != nil {
+			a.startErr = err
+			a.wsClient = nil
+			return
+		}
 		var runCtx context.Context
 		runCtx, a.cancel = context.WithCancel(ctx)
 		go func() {
-			_ = a.wsClient.Start(runCtx)
+			wsClientRunner(a.wsClient, runCtx)
 		}()
 	})
-	return err
+	return a.startErr
+}
+
+func (a *Adapter) validateWSStartup(ctx context.Context) error {
+	endpointURL, err := a.fetchWSEndpointURL(ctx)
+	if err != nil {
+		return err
+	}
+	conn, resp, err := wsDialContext(ctx, endpointURL, nil)
+	if err != nil {
+		if resp != nil {
+			return fmt.Errorf("feishu websocket connect failed: status=%d: %w", resp.StatusCode, err)
+		}
+		return fmt.Errorf("feishu websocket connect failed: %w", err)
+	}
+	if conn != nil {
+		_ = conn.Close()
+	}
+	return nil
+}
+
+func (a *Adapter) fetchWSEndpointURL(ctx context.Context) (string, error) {
+	body, err := json.Marshal(map[string]string{
+		"AppID":     a.cfg.AppID,
+		"AppSecret": a.cfg.AppSecret,
+	})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, lark.FeishuBaseUrl+larkws.GenEndpointUri, bytes.NewBuffer(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("locale", "zh")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("feishu websocket endpoint request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
+	var endpointResp larkws.EndpointResp
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&endpointResp); err != nil {
+		return "", err
+	}
+	switch endpointResp.Code {
+	case larkws.OK:
+	case larkws.SystemBusy:
+		return "", fmt.Errorf("feishu websocket endpoint busy")
+	case larkws.InternalError:
+		return "", fmt.Errorf("feishu websocket endpoint error: %s", strings.TrimSpace(endpointResp.Msg))
+	default:
+		return "", fmt.Errorf("feishu websocket auth failed: %s", strings.TrimSpace(endpointResp.Msg))
+	}
+	if endpointResp.Data == nil || strings.TrimSpace(endpointResp.Data.Url) == "" {
+		return "", fmt.Errorf("feishu websocket endpoint returned empty URL")
+	}
+	return strings.TrimSpace(endpointResp.Data.Url), nil
 }
 
 func (a *Adapter) Stop() {
@@ -707,8 +785,12 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	if !a.allowed(userID) {
 		return nil
 	}
-	if msg.ChatType != nil && *msg.ChatType == "group" && a.cfg.GroupAtOnly && a.botOpenID != "" {
-		if !mentioned(msg.Mentions, a.botOpenID) && !(a.cfg.RespondToAtEveryone && mentionedEveryone(msg.Mentions)) {
+	if msg.ChatType != nil && *msg.ChatType == "group" && a.cfg.GroupAtOnly {
+		allowedGroupTrigger := a.cfg.RespondToAtEveryone && mentionedEveryone(msg.Mentions)
+		if a.botOpenID != "" {
+			allowedGroupTrigger = allowedGroupTrigger || mentioned(msg.Mentions, a.botOpenID)
+		}
+		if !allowedGroupTrigger {
 			return nil
 		}
 	}

@@ -233,6 +233,14 @@ func runRegistrationFlow(timeout time.Duration, qrImagePath string) (string, str
 				return "", "", fmt.Errorf("%s: %s", pollResp.Error, pollResp.ErrorDescription)
 			}
 		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		if interval > remaining {
+			time.Sleep(remaining)
+			break
+		}
 		time.Sleep(interval)
 	}
 	return "", "", errors.New("timed out waiting for Feishu onboarding result")
@@ -254,6 +262,10 @@ func registrationCall(client *http.Client, action string, params map[string]stri
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("registration request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
 }
 
