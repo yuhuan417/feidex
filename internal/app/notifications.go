@@ -439,13 +439,13 @@ func (a *App) finishTurn(threadID, turnID, status string) {
 			replyText = a.turnFinalText(turnID)
 		}
 		if replyText != "" {
-			usageLine, contextLine, elapsedLine := a.turnFinalMetadata(turnID, time.Now())
-			a.sendFinalMessagesWithFooter(context.Background(), sub, replyText, []string{usageLine, contextLine, elapsedLine}, a.replyInThreadForSubmission(sub))
+			_, contextLine, elapsedLine := a.turnFinalMetadata(turnID, time.Now())
+			a.sendFinalMessagesWithFooter(context.Background(), sub, replyText, []string{contextLine, elapsedLine}, a.replyInThreadForSubmission(sub))
 			flush.SentOutput = true
 		}
 		if sub.Status == "completed" && !flush.SawFinal {
-			usageLine, contextLine, elapsedLine := a.turnFinalMetadata(turnID, time.Now())
-			a.sendEmptyFinalCard(context.Background(), sub, []string{usageLine, contextLine, elapsedLine})
+			_, contextLine, elapsedLine := a.turnFinalMetadata(turnID, time.Now())
+			a.sendEmptyFinalCard(context.Background(), sub, []string{contextLine, elapsedLine})
 		}
 		if terminalText != "" {
 			a.sendTurnEventMessages(context.Background(), sub, terminalText, a.replyInThreadForSubmission(sub), "turn_terminal")

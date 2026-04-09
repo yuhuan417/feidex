@@ -39,9 +39,33 @@ func formatTurnElapsedLine(d time.Duration) string {
 		return "elapsed: -"
 	}
 	if d < time.Second {
-		return fmt.Sprintf("elapsed: %dms", d.Milliseconds())
+		return "elapsed: <1s"
 	}
-	return fmt.Sprintf("elapsed: %.1fs", d.Seconds())
+	totalSeconds := int64((d + 500*time.Millisecond) / time.Second)
+	days := totalSeconds / (24 * 60 * 60)
+	totalSeconds %= 24 * 60 * 60
+	hours := totalSeconds / (60 * 60)
+	totalSeconds %= 60 * 60
+	minutes := totalSeconds / 60
+	seconds := totalSeconds % 60
+
+	parts := make([]string, 0, 4)
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+	}
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	if minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", minutes))
+	}
+	if seconds > 0 {
+		parts = append(parts, fmt.Sprintf("%ds", seconds))
+	}
+	if len(parts) == 0 {
+		return "elapsed: <1s"
+	}
+	return "elapsed: " + strings.Join(parts, "")
 }
 
 func formatContextRemainingLine(totalTokens, autoCompactLimit int64) string {

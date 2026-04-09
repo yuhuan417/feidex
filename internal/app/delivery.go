@@ -65,21 +65,26 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 }
 
 func appendReplyCardFooter(card map[string]any, footerLines []string) {
+	lines := make([]string, 0, len(footerLines))
 	for _, line := range footerLines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		appendMarkdownBodyCardElement(card, map[string]any{
-			"tag": "div",
-			"text": map[string]any{
-				"tag":        "plain_text",
-				"content":    line,
-				"text_size":  "notation",
-				"text_color": "grey",
-			},
-		})
+		lines = append(lines, line)
 	}
+	if len(lines) == 0 {
+		return
+	}
+	appendMarkdownBodyCardElement(card, map[string]any{
+		"tag": "div",
+		"text": map[string]any{
+			"tag":        "plain_text",
+			"content":    strings.Join(lines, "\n"),
+			"text_size":  "notation",
+			"text_color": "grey",
+		},
+	})
 }
 
 func appendFooterText(body string, footerLines []string) string {

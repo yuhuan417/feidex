@@ -30,8 +30,17 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	}); !strings.Contains(got, "cache 90 (60.0%)") {
 		t.Fatalf("formatTurnUsageLine() = %q, want cache ratio", got)
 	}
-	if got := formatTurnElapsedLine(1500 * time.Millisecond); got != "elapsed: 1.5s" {
-		t.Fatalf("formatTurnElapsedLine() = %q, want seconds", got)
+	if got := formatTurnElapsedLine(400 * time.Millisecond); got != "elapsed: <1s" {
+		t.Fatalf("formatTurnElapsedLine(<1s) = %q", got)
+	}
+	if got := formatTurnElapsedLine(1500 * time.Millisecond); got != "elapsed: 2s" {
+		t.Fatalf("formatTurnElapsedLine(1500ms) = %q", got)
+	}
+	if got := formatTurnElapsedLine((2*time.Hour)+(3*time.Minute)+(4*time.Second)); got != "elapsed: 2h3m4s" {
+		t.Fatalf("formatTurnElapsedLine(2h3m4s) = %q", got)
+	}
+	if got := formatTurnElapsedLine((26*time.Hour)+(3*time.Minute)); got != "elapsed: 1d2h3m" {
+		t.Fatalf("formatTurnElapsedLine(26h3m) = %q", got)
 	}
 }
 
@@ -137,19 +146,17 @@ func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 	card := ff.replyCards[len(ff.replyCards)-1]
 	bodyMap := card["body"].(map[string]any)
 	elements := bodyMap["elements"].([]map[string]any)
-	if len(elements) < 4 {
-		t.Fatalf("expected markdown plus 3 footer elements, got %#v", elements)
+	if len(elements) < 2 {
+		t.Fatalf("expected markdown plus compact footer element, got %#v", elements)
 	}
-	lastText := elements[len(elements)-3]["text"].(map[string]any)["content"].(string)
-	if !strings.Contains(lastText, "token: input 150 | cache 90 (60.0%) | output 50 | reasoning 20") {
-		t.Fatalf("usage footer = %q", lastText)
+	footerText := elements[len(elements)-1]["text"].(map[string]any)["content"].(string)
+	if !strings.Contains(footerText, "context remaining: 50.0%") {
+		t.Fatalf("context footer = %q", footerText)
 	}
-	contextText := elements[len(elements)-2]["text"].(map[string]any)["content"].(string)
-	if !strings.Contains(contextText, "context remaining: 50.0%") {
-		t.Fatalf("context footer = %q", contextText)
+	if !strings.Contains(footerText, "elapsed:") {
+		t.Fatalf("elapsed footer = %q", footerText)
 	}
-	elapsedText := elements[len(elements)-1]["text"].(map[string]any)["content"].(string)
-	if !strings.Contains(elapsedText, "elapsed:") {
-		t.Fatalf("elapsed footer = %q", elapsedText)
+	if strings.Contains(footerText, "token: input") {
+		t.Fatalf("expected token footer line to be omitted, got %q", footerText)
 	}
 }
