@@ -16,6 +16,12 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	if got := formatUsageRatio(0, 0); got != "-" {
 		t.Fatalf("formatUsageRatio(0,0) = %q, want -", got)
 	}
+	if got := formatContextRemainingLine(0, 1000); got != "context remaining: 100.0%" {
+		t.Fatalf("formatContextRemainingLine(zero total) = %q", got)
+	}
+	if got := formatContextRemainingLine(750, 1000); got != "context remaining: 25.0%" {
+		t.Fatalf("formatContextRemainingLine(750/1000) = %q", got)
+	}
 	if got := formatTurnUsageLine(codexrpc.TokenUsageBreakdown{
 		InputTokens:           150,
 		CachedInputTokens:     90,
@@ -39,6 +45,16 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
+	fc := a.codex.(*fakeCodexClient)
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method == "config/read" {
+			resp := out.(*codexrpc.ConfigReadResponse)
+			limit := int64(1000)
+			resp.Config.ModelAutoCompactTokenLimit = &limit
+		}
+		_ = params
+		return nil
+	}
 
 	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
@@ -57,12 +73,15 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 	for _, want := range []string{
 		"累计 token usage (`total`):",
 		"- cache ratio: `50.0%`",
-		"最近一次 turn (`last`):",
-		"- total: `200`",
+		"- total: `500`",
+		"context remaining: 50.0%",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("renderUsageCard() missing %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "最近一次 turn (`last`)") {
+		t.Fatalf("renderUsageCard() should not include last usage section:\n%s", body)
 	}
 }
 
@@ -89,6 +108,16 @@ func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	fc := a.codex.(*fakeCodexClient)
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method == "config/read" {
+			resp := out.(*codexrpc.ConfigReadResponse)
+			limit := int64(1000)
+			resp.Config.ModelAutoCompactTokenLimit = &limit
+		}
+		_ = params
+		return nil
+	}
 
 	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
@@ -111,12 +140,16 @@ func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 	card := ff.replyCards[len(ff.replyCards)-1]
 	bodyMap := card["body"].(map[string]any)
 	elements := bodyMap["elements"].([]map[string]any)
-	if len(elements) < 3 {
-		t.Fatalf("expected markdown plus footer elements, got %#v", elements)
+	if len(elements) < 4 {
+		t.Fatalf("expected markdown plus 3 footer elements, got %#v", elements)
 	}
-	lastText := elements[len(elements)-2]["text"].(map[string]any)["content"].(string)
-	if !strings.Contains(lastText, "usage: in 150 | cache 90 (60.0%) | out 50 | reasoning 20") {
+	lastText := elements[len(elements)-3]["text"].(map[string]any)["content"].(string)
+	if !strings.Contains(lastText, "token: input 150 | cache 90 (60.0%) | output 50 | reasoning 20") {
 		t.Fatalf("usage footer = %q", lastText)
+	}
+	contextText := elements[len(elements)-2]["text"].(map[string]any)["content"].(string)
+	if !strings.Contains(contextText, "context remaining: 50.0%") {
+		t.Fatalf("context footer = %q", contextText)
 	}
 	elapsedText := elements[len(elements)-1]["text"].(map[string]any)["content"].(string)
 	if !strings.Contains(elapsedText, "elapsed:") {

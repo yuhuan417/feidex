@@ -8,8 +8,6 @@ import (
 	"feidex/internal/state"
 )
 
-const feishuTextChunkLimit = 2800
-
 func (a *App) sendFinalMessages(ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
 	return a.sendFinalMessagesWithFooter(ctx, sub, text, nil, inThread)
 }
@@ -42,45 +40,28 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 		return nil
 	}
 	text = a.rewriteMarkdownPreviewText(ctx, sub, text)
-	chunks := splitFeishuText(strings.TrimSpace(text), feishuTextChunkLimit)
-	if len(chunks) == 0 {
-		chunks = []string{""}
+	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, strings.TrimSpace(text), nil, true)
+	appendReplyCardFooter(card, footerLines)
+	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+	if err != nil {
+		fallback := appendFooterText(strings.TrimSpace(text), footerLines)
+		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
 	}
-	var ids []string
-	for idx, chunk := range chunks {
-		card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, chunk, nil, true)
-		if idx == len(chunks)-1 {
-			appendReplyCardFooter(card, footerLines)
-		}
-		id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
-		if err != nil {
-			fallback := strings.TrimSpace(chunk)
-			if idx == len(chunks)-1 {
-				fallback = appendFooterText(fallback, footerLines)
-			}
-			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
-		}
-		if err != nil {
-			continue
-		}
-		if id != "" {
-			ids = append(ids, id)
-			_ = a.store.UpsertMessageLink(&state.MessageLink{
-				MessageID:    id,
-				Kind:         "final_message",
-				SessionKey:   sub.SessionKey,
-				SubmissionID: sub.ID,
-				ThreadID:     sub.ThreadID,
-				TurnID:       sub.TurnID,
-			})
-		}
+	if err != nil || strings.TrimSpace(id) == "" {
+		return nil
 	}
-	if len(ids) > 0 {
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-			s.FinalMessageIDs = append([]string(nil), ids...)
-		})
-	}
-	return ids
+	_ = a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:    id,
+		Kind:         "final_message",
+		SessionKey:   sub.SessionKey,
+		SubmissionID: sub.ID,
+		ThreadID:     sub.ThreadID,
+		TurnID:       sub.TurnID,
+	})
+	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+		s.FinalMessageIDs = []string{id}
+	})
+	return []string{id}
 }
 
 func appendReplyCardFooter(card map[string]any, footerLines []string) {
@@ -132,44 +113,38 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	} else if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 		text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
 	}
-	chunks := splitFeishuText(strings.TrimSpace(text), feishuTextChunkLimit)
-	if len(chunks) == 0 {
-		chunks = []string{"任务已结束。"}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		text = "任务已结束。"
 	}
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
-	var ids []string
-	for _, chunk := range chunks {
-		var card map[string]any
-		if replyClass {
-			card = a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, chunk, nil, enablePreview)
-		} else {
-			card = a.renderCompactMarkdownCard(sub, title, color, "", chunk, nil)
-		}
-		id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
-		if err != nil {
-			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, chunk, inThread)
-		}
-		if err != nil {
-			continue
-		}
-		if id != "" {
-			ids = append(ids, id)
-			_ = a.store.UpsertMessageLink(&state.MessageLink{
-				MessageID:    id,
-				Kind:         kind,
-				SessionKey:   sub.SessionKey,
-				SubmissionID: sub.ID,
-				ThreadID:     sub.ThreadID,
-				TurnID:       sub.TurnID,
-			})
-		}
+	var card map[string]any
+	if replyClass {
+		card = a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, text, nil, enablePreview)
+	} else {
+		card = a.renderCompactMarkdownCard(sub, title, color, "", text, nil)
 	}
-	if len(ids) > 0 {
+	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+	if err != nil {
+		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, text, inThread)
+	}
+	if err != nil || strings.TrimSpace(id) == "" {
+		return nil
+	}
+	_ = a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:    id,
+		Kind:         kind,
+		SessionKey:   sub.SessionKey,
+		SubmissionID: sub.ID,
+		ThreadID:     sub.ThreadID,
+		TurnID:       sub.TurnID,
+	})
+	if strings.TrimSpace(kind) == "final_message" {
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-			s.FinalMessageIDs = append([]string(nil), ids...)
+			s.FinalMessageIDs = []string{id}
 		})
 	}
-	return ids
+	return []string{id}
 }
 
 func outboundMessageCardMeta(kind string) (title, color string, replyClass bool, showHeader bool) {
@@ -195,46 +170,6 @@ func outboundMessageCardMeta(kind string) (title, color string, replyClass bool,
 	}
 }
 
-func splitFeishuText(text string, limit int) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
-	}
-	sections := splitSections(text)
-	chunks := make([]string, 0, len(sections))
-	var current strings.Builder
-	appendCurrent := func() {
-		if current.Len() == 0 {
-			return
-		}
-		chunks = append(chunks, strings.TrimSpace(current.String()))
-		current.Reset()
-	}
-	for _, section := range sections {
-		parts := splitSection(section, limit)
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			if current.Len() == 0 {
-				current.WriteString(part)
-				continue
-			}
-			candidate := current.String() + "\n\n" + part
-			if len(candidate) > limit {
-				appendCurrent()
-				current.WriteString(part)
-				continue
-			}
-			current.WriteString("\n\n")
-			current.WriteString(part)
-		}
-	}
-	appendCurrent()
-	return chunks
-}
-
 func (a *App) recordMessageLink(messageID, kind string, sub *state.Submission, requestID string) {
 	if strings.TrimSpace(messageID) == "" {
 		return
@@ -251,149 +186,4 @@ func (a *App) recordMessageLink(messageID, kind string, sub *state.Submission, r
 		link.TurnID = sub.TurnID
 	}
 	_ = a.store.UpsertMessageLink(link)
-}
-
-func splitSections(text string) []string {
-	lines := strings.Split(text, "\n")
-	sections := []string{}
-	var current strings.Builder
-	inCode := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") {
-			if current.Len() > 0 && !inCode {
-				sections = append(sections, strings.TrimSpace(current.String()))
-				current.Reset()
-			}
-			if current.Len() > 0 {
-				current.WriteString("\n")
-			}
-			current.WriteString(line)
-			inCode = !inCode
-			if !inCode {
-				sections = append(sections, strings.TrimSpace(current.String()))
-				current.Reset()
-			}
-			continue
-		}
-		if !inCode && trimmed == "" {
-			if current.Len() > 0 {
-				sections = append(sections, strings.TrimSpace(current.String()))
-				current.Reset()
-			}
-			continue
-		}
-		if current.Len() > 0 {
-			current.WriteString("\n")
-		}
-		current.WriteString(line)
-	}
-	if current.Len() > 0 {
-		sections = append(sections, strings.TrimSpace(current.String()))
-	}
-	return sections
-}
-
-func splitSection(section string, limit int) []string {
-	if len(section) <= limit {
-		return []string{section}
-	}
-	if strings.HasPrefix(strings.TrimSpace(section), "```") {
-		return splitCodeBlock(section, limit)
-	}
-	return splitPlainText(section, limit)
-}
-
-func splitPlainText(section string, limit int) []string {
-	lines := strings.Split(section, "\n")
-	chunks := []string{}
-	var current strings.Builder
-	flush := func() {
-		if current.Len() == 0 {
-			return
-		}
-		chunks = append(chunks, strings.TrimSpace(current.String()))
-		current.Reset()
-	}
-	for _, line := range lines {
-		line = strings.TrimRight(line, " ")
-		if len(line) > limit {
-			flush()
-			for len(line) > limit {
-				chunks = append(chunks, strings.TrimSpace(line[:limit]))
-				line = line[limit:]
-			}
-			if strings.TrimSpace(line) != "" {
-				current.WriteString(line)
-			}
-			continue
-		}
-		if current.Len() == 0 {
-			current.WriteString(line)
-			continue
-		}
-		candidate := current.String() + "\n" + line
-		if len(candidate) > limit {
-			flush()
-			current.WriteString(line)
-			continue
-		}
-		current.WriteString("\n")
-		current.WriteString(line)
-	}
-	flush()
-	return chunks
-}
-
-func splitCodeBlock(section string, limit int) []string {
-	lines := strings.Split(section, "\n")
-	if len(lines) < 2 {
-		return splitPlainText(section, limit)
-	}
-	fence := lines[0]
-	trailer := "```"
-	content := lines[1:]
-	if strings.TrimSpace(content[len(content)-1]) == "```" {
-		content = content[:len(content)-1]
-	}
-	maxBody := limit - len(fence) - len(trailer) - 4
-	if maxBody <= 0 {
-		return splitPlainText(section, limit)
-	}
-	chunks := []string{}
-	var current strings.Builder
-	flush := func() {
-		if current.Len() == 0 {
-			return
-		}
-		chunks = append(chunks, fence+"\n"+current.String()+"\n"+trailer)
-		current.Reset()
-	}
-	for _, line := range content {
-		if len(line) > maxBody {
-			flush()
-			for len(line) > maxBody {
-				chunks = append(chunks, fence+"\n"+line[:maxBody]+"\n"+trailer)
-				line = line[maxBody:]
-			}
-			if line != "" {
-				current.WriteString(line)
-			}
-			continue
-		}
-		if current.Len() == 0 {
-			current.WriteString(line)
-			continue
-		}
-		candidate := current.String() + "\n" + line
-		if len(candidate) > maxBody {
-			flush()
-			current.WriteString(line)
-			continue
-		}
-		current.WriteString("\n")
-		current.WriteString(line)
-	}
-	flush()
-	return chunks
 }

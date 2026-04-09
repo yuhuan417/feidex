@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -75,11 +76,11 @@ func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID stri
 	if a.turnBindings == nil {
 		a.turnBindings = map[string]turnBinding{}
 	}
-	binding := a.turnBindings[turnID]
-	binding.ThreadID = strings.TrimSpace(threadID)
-	binding.SessionKey = strings.TrimSpace(sessionKey)
-	binding.SubmissionID = strings.TrimSpace(submissionID)
-	a.turnBindings[turnID] = binding
+	a.turnBindings[turnID] = turnBinding{
+		ThreadID:     strings.TrimSpace(threadID),
+		SessionKey:   strings.TrimSpace(sessionKey),
+		SubmissionID: strings.TrimSpace(submissionID),
+	}
 }
 
 func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) {
@@ -198,13 +199,13 @@ func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.Threa
 	a.turnBindings[turnID] = binding
 }
 
-func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, elapsedLine string) {
+func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, contextLine, elapsedLine string) {
 	if a == nil {
-		return "", ""
+		return "", "", ""
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
-		return "", ""
+		return "", "", ""
 	}
 	a.turnBindMu.Lock()
 	binding, ok := a.turnBindings[turnID]
@@ -212,10 +213,18 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 	if ok && binding.HasLastUsage {
 		usageLine = formatTurnUsageLine(binding.LastUsage)
 	}
+	if ok {
+		if usage, found := a.currentThreadUsage(binding.ThreadID); found {
+			limit := a.fetchAutoCompactTokenLimit(context.Background(), "")
+			if limit != nil {
+				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *limit)
+			}
+		}
+	}
 	if ok && !binding.StartedAt.IsZero() && !completedAt.IsZero() {
 		elapsedLine = formatTurnElapsedLine(completedAt.Sub(binding.StartedAt))
 	}
-	return usageLine, elapsedLine
+	return usageLine, contextLine, elapsedLine
 }
 
 func (a *App) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {

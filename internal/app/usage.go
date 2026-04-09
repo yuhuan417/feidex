@@ -24,7 +24,7 @@ func formatUsageRatio(part, whole int64) string {
 
 func formatTurnUsageLine(usage codexrpc.TokenUsageBreakdown) string {
 	return fmt.Sprintf(
-		"usage: in %s | cache %s (%s) | out %s | reasoning %s",
+		"token: input %s | cache %s (%s) | output %s | reasoning %s",
 		formatUsageInt(usage.InputTokens),
 		formatUsageInt(usage.CachedInputTokens),
 		formatUsageRatio(usage.CachedInputTokens, usage.InputTokens),
@@ -43,7 +43,24 @@ func formatTurnElapsedLine(d time.Duration) string {
 	return fmt.Sprintf("elapsed: %.1fs", d.Seconds())
 }
 
-func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.ThreadTokenUsage) string {
+func formatContextRemainingLine(totalTokens, autoCompactLimit int64) string {
+	if autoCompactLimit <= 0 {
+		return ""
+	}
+	if totalTokens <= 0 {
+		return "context remaining: 100.0%"
+	}
+	remaining := 100 * (1 - float64(totalTokens)/float64(autoCompactLimit))
+	if remaining < 0 {
+		remaining = 0
+	}
+	if remaining > 100 {
+		remaining = 100
+	}
+	return fmt.Sprintf("context remaining: %.1f%%", remaining)
+}
+
+func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.ThreadTokenUsage, contextLine string) string {
 	lines := []string{
 		"当前线程: " + firstNonEmpty(strings.TrimSpace(threadLabel), "-"),
 		"thread: `" + firstNonEmpty(strings.TrimSpace(threadID), "-") + "`",
@@ -55,16 +72,41 @@ func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.Thre
 		"- cache ratio: `" + formatUsageRatio(usage.Total.CachedInputTokens, usage.Total.InputTokens) + "`",
 		"- output: `" + formatUsageInt(usage.Total.OutputTokens) + "`",
 		"- reasoning output: `" + formatUsageInt(usage.Total.ReasoningOutputTokens) + "`",
-		"",
-		"最近一次 turn (`last`):",
-		"- total: `" + formatUsageInt(usage.Last.TotalTokens) + "`",
-		"- input: `" + formatUsageInt(usage.Last.InputTokens) + "`",
-		"- cached input: `" + formatUsageInt(usage.Last.CachedInputTokens) + "`",
-		"- cache ratio: `" + formatUsageRatio(usage.Last.CachedInputTokens, usage.Last.InputTokens) + "`",
-		"- output: `" + formatUsageInt(usage.Last.OutputTokens) + "`",
-		"- reasoning output: `" + formatUsageInt(usage.Last.ReasoningOutputTokens) + "`",
+	}
+	if contextLine = strings.TrimSpace(contextLine); contextLine != "" {
+		lines = append(lines, "", contextLine)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (a *App) fetchAutoCompactTokenLimit(ctx context.Context, cwd string) *int64 {
+	if a == nil || a.codex == nil {
+		return nil
+	}
+	cwd = strings.TrimSpace(cwd)
+	a.configReadMu.Lock()
+	if a.autoCompact == nil {
+		a.autoCompact = map[string]*int64{}
+	}
+	if value, ok := a.autoCompact[cwd]; ok {
+		a.configReadMu.Unlock()
+		return value
+	}
+	a.configReadMu.Unlock()
+
+	params := codexrpc.ConfigReadParams{IncludeLayers: true}
+	if cwd != "" {
+		params.CWD = &cwd
+	}
+	var resp codexrpc.ConfigReadResponse
+	if err := a.codex.Call(ctx, "config/read", params, &resp); err != nil {
+		return nil
+	}
+
+	a.configReadMu.Lock()
+	defer a.configReadMu.Unlock()
+	a.autoCompact[cwd] = resp.Config.ModelAutoCompactTokenLimit
+	return resp.Config.ModelAutoCompactTokenLimit
 }
 
 func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
@@ -82,7 +124,11 @@ func (a *App) renderUsageCard(sessionKey string) map[string]any {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		body = "当前线程暂无 token usage 数据。"
 		if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
-			body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage)
+			contextLine := ""
+			if limit := a.fetchAutoCompactTokenLimit(context.Background(), ""); limit != nil {
+				contextLine = formatContextRemainingLine(usage.Total.TotalTokens, *limit)
+			}
+			body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
 		}
 	}
 	return a.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{

@@ -447,31 +447,6 @@ func TestDeliveryHelpers(t *testing.T) {
 		t.Fatalf("outboundMessageCardMeta(final_message) = %q, %q, %v, %v", title, color, replyClass, showHeader)
 	}
 
-	sections := splitSections("alpha\n\n```go\nfmt.Println(1)\n```\n\nbeta")
-	if len(sections) != 3 || !strings.HasPrefix(sections[1], "```go") {
-		t.Fatalf("splitSections() = %+v, want paragraph + code block + paragraph", sections)
-	}
-
-	longLine := strings.Repeat("x", 15)
-	plain := splitPlainText("first line\n"+longLine, 10)
-	if len(plain) < 2 {
-		t.Fatalf("splitPlainText() = %+v, want multiple chunks", plain)
-	}
-
-	code := splitCodeBlock("```txt\n"+strings.Repeat("y", 40)+"\n```", 20)
-	if len(code) < 2 || !strings.HasPrefix(code[0], "```txt\n") {
-		t.Fatalf("splitCodeBlock() = %+v, want fenced chunks", code)
-	}
-
-	combined := splitFeishuText("part1\n\n"+strings.Repeat("z", 40)+"\n\n```txt\n"+strings.Repeat("q", 40)+"\n```", 25)
-	if len(combined) < 3 {
-		t.Fatalf("splitFeishuText() = %+v, want multiple chunks", combined)
-	}
-
-	if got := splitSection("short", 100); len(got) != 1 || got[0] != "short" {
-		t.Fatalf("splitSection(short) = %+v, want original section", got)
-	}
-
 	var a *App
 	if got := a.sendFinalMessages(nil, nil, "ignored", false); got != nil {
 		t.Fatalf("sendFinalMessages(nil app) = %+v, want nil", got)
