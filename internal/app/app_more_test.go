@@ -581,14 +581,14 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	ff.sendCards = nil
 	ff.replyTexts = nil
 	fc.replyErrors = nil
-	a.onCommandApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"ls","reason":"need approval"}`)})
+	a.onCommandApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"ls -la","cwd":"/repo","reason":"need approval"}`)})
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected command approval to send a card")
 	}
 	if _, ok := ff.sendCards[0]["schema"]; ok {
 		t.Fatalf("approval card should use legacy layout, got schema=%#v", ff.sendCards[0]["schema"])
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "命令审批") {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "命令审批") || !strings.Contains(got, "ls -la") || !strings.Contains(got, "/repo") {
 		t.Fatalf("command approval card body = %q", got)
 	}
 	if len(ff.replyTexts) != 0 {
@@ -602,14 +602,14 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	a.onPermissionsApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"sandbox","permissions":{"mode":"write"}}`)})
+	a.onPermissionsApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"sandbox","permissions":{"mode":"write","network":true,"sandbox":{"type":"workspace-write"},"writable_roots":["/repo","/tmp/work"]}}`)})
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected permissions approval to send a card")
 	}
 	if _, ok := ff.sendCards[0]["schema"]; ok {
 		t.Fatalf("permissions card should use legacy layout, got schema=%#v", ff.sendCards[0]["schema"])
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "权限审批") {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "权限审批") || !strings.Contains(got, "mode") || !strings.Contains(got, "network") || !strings.Contains(got, "/repo") {
 		t.Fatalf("permissions approval card body = %q", got)
 	}
 	if len(ff.replyTexts) != 0 {
@@ -931,6 +931,34 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("command approval resolved card = %q", got)
 	}
 
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "command-2",
+		Kind:        "command",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{"request": map[string]any{
+			"command": "git status --short",
+			"cwd":     "/home/yuhuan/feidex",
+			"reason":  "inspect working tree",
+		}}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(command-2) error = %v", err)
+	}
+	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(command-2) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected command approval response card from raw request payload")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "git status --short") || !strings.Contains(got, "/home/yuhuan/feidex") {
+		t.Fatalf("command approval resolved-from-request card = %q", got)
+	}
+
 	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file) = %#v, %v", resp, err)
@@ -943,12 +971,75 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("file approval resolved card = %q", got)
 	}
 
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "file-2",
+		Kind:        "file",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{"request": map[string]any{
+			"reason": "need review",
+			"changes": []map[string]any{
+				{"path": "internal/app/actions.go", "kind": "modified"},
+				{"path": "README.md", "kind": "added"},
+			},
+		}}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(file-2) error = %v", err)
+	}
+	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(file-2) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected file approval response card from raw request payload")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "internal/app/actions.go") || !strings.Contains(got, "README.md") {
+		t.Fatalf("file approval resolved-from-request card = %q", got)
+	}
+
 	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(permissions) = %#v, %v", resp, err)
 	}
 	if refreshed := a.store.GetSubmission(sub.ID); refreshed.Status != "running" {
 		t.Fatalf("submission status after resumeSubmissionAfterRequest = %q, want running", refreshed.Status)
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "perm-2",
+		Kind:        "permissions",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{
+			"request": map[string]any{
+				"reason": "need write access",
+				"permissions": map[string]any{
+					"mode":           "write",
+					"networkAccess":  false,
+					"writable_roots": []string{"/workspace"},
+				},
+			},
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(perm-2) error = %v", err)
+	}
+	resp, err = a.completeApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(perm-2) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected permissions response card from raw request payload")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "mode") || !strings.Contains(got, "/workspace") || !strings.Contains(got, "network") {
+		t.Fatalf("permissions resolved-from-request card = %q", got)
 	}
 
 	resp, err = a.completeUserInputAnswer(&feishu.CardAction{
@@ -1928,9 +2019,16 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 		t.Fatalf("completeTurnItemToggle() = %#v, %v", resp, err)
 	}
 
-	a.onFileApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-approval"`), Params: json.RawMessage(`{"threadId":"thread-9","turnId":"turn-1","itemId":"item-2","reason":"need review"}`)})
+	ff.sendCards = nil
+	a.onFileApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-approval"`), Params: json.RawMessage(`{"threadId":"thread-9","turnId":"turn-1","itemId":"item-2","reason":"need review","changes":[{"path":"internal/app/notifications.go","kind":"modified"},{"path":"README.md","kind":"added"}]}`)})
 	if pending := a.store.PendingByID("file-approval"); pending == nil || pending.Kind != "file" {
 		t.Fatalf("file approval pending = %+v, want file request", pending)
+	}
+	if len(ff.sendCards) == 0 {
+		t.Fatal("expected file approval to send a card")
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "2 个文件") || !strings.Contains(got, "internal/app/notifications.go") || !strings.Contains(got, "README.md") {
+		t.Fatalf("file approval card body = %q", got)
 	}
 
 	sess := a.store.GetSession(sessionKey)

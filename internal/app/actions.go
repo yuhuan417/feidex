@@ -985,7 +985,26 @@ func (a *App) approvalBodyText(pending *state.PendingRequest) string {
 			if body := strings.TrimSpace(stringValue(payload["body"])); body != "" {
 				return body
 			}
+			if pending.Kind == "command" {
+				if request, ok := payload["request"].(map[string]any); ok {
+					if body := strings.TrimSpace(renderCommandApprovalBody(request)); body != "" {
+						return body
+					}
+				}
+			}
+			if pending.Kind == "file" {
+				if request, ok := payload["request"].(map[string]any); ok {
+					if body := strings.TrimSpace(renderFileApprovalBody(request)); body != "" {
+						return body
+					}
+				}
+			}
 			if pending.Kind == "permissions" {
+				if request, ok := payload["request"].(map[string]any); ok {
+					if body := strings.TrimSpace(renderPermissionsApprovalBody(request)); body != "" {
+						return body
+					}
+				}
 				if permissions, ok := payload["permissions"]; ok {
 					if rendered := strings.TrimSpace(prettyJSON(permissions)); rendered != "" {
 						return "权限审批\n" + rendered
