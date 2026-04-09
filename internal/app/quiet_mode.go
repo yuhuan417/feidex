@@ -23,7 +23,7 @@ func quietModeStatusText(enabled bool) string {
 
 func shouldDeliverTurnKindInQuiet(kind string) bool {
 	switch strings.TrimSpace(kind) {
-	case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_terminal":
+	case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_terminal", "turn_token_usage":
 		return true
 	default:
 		return false
