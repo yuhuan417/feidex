@@ -229,7 +229,7 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	text := string(content)
-	for _, forbidden := range []string{`"queue"`, `"staged_images"`, `"active_turn_id"`, `"active_submission_id"`} {
+	for _, forbidden := range []string{`"queue"`, `"staged_images"`, `"active_turn_id"`, `"active_submission_id"`, `"chat_id"`, `"chat_type"`, `"root_message_id"`} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("persisted session should omit runtime field %s:\n%s", forbidden, text)
 		}
@@ -245,6 +245,63 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 	}
 	if reopenedSession.Status != "idle" || reopenedSession.ActiveTurnID != "" || reopenedSession.ActiveSubmissionID != "" || len(reopenedSession.Queue) != 0 || len(reopenedSession.StagedImages) != 0 {
 		t.Fatalf("reopened session should only contain persistent state, got %+v", reopenedSession)
+	}
+}
+
+func TestSessionContextIsRecoveredFromSessionKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	groupKey := "feishu:group:chat-1:root:root-1"
+	if err := store.UpsertSession(&Session{
+		Key:                      groupKey,
+		WorkspaceID:              "ws",
+		ActiveThreadID:           "thread-1",
+		ActiveThreadWorkspaceID:  "ws",
+		ActiveThreadPreview:      "preview",
+		ChatID:                   "chat-1",
+		ChatType:                 "group",
+		RootMessageID:            "root-1",
+		ActiveTurnID:             "turn-1",
+		ActiveSubmissionID:       "sub-1",
+		Status:                   "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(group) error = %v", err)
+	}
+
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
+	}
+	groupSess := reopened.GetSession(groupKey)
+	if groupSess == nil {
+		t.Fatal("expected reopened group session")
+	}
+	if groupSess.ChatID != "chat-1" || groupSess.ChatType != "group" || groupSess.RootMessageID != "root-1" {
+		t.Fatalf("reopened group session context = %+v, want chat/root reconstructed from key", groupSess)
+	}
+
+	p2pKey := "feishu:p2p:chat-2:user-9"
+	if err := reopened.UpsertSession(&Session{
+		Key:       p2pKey,
+		ChatID:    "chat-2",
+		ChatType:  "p2p",
+	}); err != nil {
+		t.Fatalf("UpsertSession(p2p) error = %v", err)
+	}
+	reopenedAgain, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open(reopen again) error = %v", err)
+	}
+	p2pSess := reopenedAgain.GetSession(p2pKey)
+	if p2pSess == nil {
+		t.Fatal("expected reopened p2p session")
+	}
+	if p2pSess.ChatID != "chat-2" || p2pSess.ChatType != "p2p" || p2pSess.RootMessageID != "" {
+		t.Fatalf("reopened p2p session context = %+v, want chat reconstructed and empty root", p2pSess)
 	}
 }
 

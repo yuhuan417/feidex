@@ -51,9 +51,6 @@ type storedSession struct {
 	ActiveThreadName           string `json:"active_thread_name"`
 	ActiveThreadPreview        string `json:"active_thread_preview"`
 	OwnerUserID                string `json:"owner_user_id"`
-	ChatID                     string `json:"chat_id"`
-	ChatType                   string `json:"chat_type"`
-	RootMessageID              string `json:"root_message_id"`
 	ModelOverride              string `json:"model_override"`
 	UpdatedAt                  int64  `json:"updated_at"`
 }
@@ -421,9 +418,6 @@ func storedSessionFromSession(sess *Session) *storedSession {
 		ActiveThreadName:           cp.ActiveThreadName,
 		ActiveThreadPreview:        cp.ActiveThreadPreview,
 		OwnerUserID:                cp.OwnerUserID,
-		ChatID:                     cp.ChatID,
-		ChatType:                   cp.ChatType,
-		RootMessageID:              cp.RootMessageID,
 		ModelOverride:              cp.ModelOverride,
 		UpdatedAt:                  cp.UpdatedAt,
 	}
@@ -444,12 +438,14 @@ func sessionFromStored(sess *storedSession) *Session {
 		ActiveThreadName:           sess.ActiveThreadName,
 		ActiveThreadPreview:        sess.ActiveThreadPreview,
 		OwnerUserID:                sess.OwnerUserID,
-		ChatID:                     sess.ChatID,
-		ChatType:                   sess.ChatType,
-		RootMessageID:              sess.RootMessageID,
 		ModelOverride:              sess.ModelOverride,
 		Status:                     "idle",
 		UpdatedAt:                  sess.UpdatedAt,
+	}
+	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
+		cp.ChatType = chatType
+		cp.ChatID = chatID
+		cp.RootMessageID = rootMessageID
 	}
 	normalizeSessionValues(cp)
 	return cp
@@ -474,6 +470,26 @@ func storedSessionsEqual(a, b *storedSession) bool {
 		return false
 	}
 	return string(ab) == string(bb)
+}
+
+func sessionContextFromKey(key string) (chatType, chatID, rootMessageID string, ok bool) {
+	key = strings.TrimSpace(key)
+	switch {
+	case strings.HasPrefix(key, "feishu:group:"):
+		parts := strings.SplitN(key, ":", 5)
+		if len(parts) != 5 || strings.TrimSpace(parts[2]) == "" || parts[3] != "root" {
+			return "", "", "", false
+		}
+		return "group", strings.TrimSpace(parts[2]), strings.TrimSpace(parts[4]), true
+	case strings.HasPrefix(key, "feishu:p2p:"):
+		parts := strings.SplitN(key, ":", 4)
+		if len(parts) != 4 || strings.TrimSpace(parts[2]) == "" {
+			return "", "", "", false
+		}
+		return "p2p", strings.TrimSpace(parts[2]), "", true
+	default:
+		return "", "", "", false
+	}
 }
 
 func normalizeStoredServiceTier(value string) string {
