@@ -412,6 +412,103 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 	}
 }
 
+func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-startup-resume"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var calls []string
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		calls = append(calls, method)
+		if method != "thread/resume" {
+			t.Fatalf("unexpected startup method: %s", method)
+		}
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-1" {
+			t.Fatalf("thread/resume params = %+v, want thread-1", got)
+		}
+		result := out.(*codexrpc.ThreadStartResult)
+		result.Thread.ID = "thread-1"
+		result.Thread.Name = "Recovered"
+		result.Thread.Preview = "preview"
+		return nil
+	}
+
+	a.recoverRuntimeState()
+
+	if len(calls) != 1 || calls[0] != "thread/resume" {
+		t.Fatalf("startup recovery calls = %+v, want thread/resume", calls)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveThreadName != "Recovered" || sess.ActiveThreadPreview != "preview" {
+		t.Fatalf("session after startup resume = %+v", sess)
+	}
+	if !a.sessionHasLiveThread(sessionKey, "thread-1") {
+		t.Fatal("expected resumed thread to be marked live")
+	}
+}
+
+func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-startup-fresh"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "thread-old",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadApprovalPolicy: "never",
+		ActiveThreadSandboxMode:    "read-only",
+		ActiveThreadServiceTier:    "fast",
+		Status:                     "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var calls []string
+	var startParams map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		calls = append(calls, method)
+		switch method {
+		case "thread/resume":
+			return errors.New("thread not found")
+		case "thread/start":
+			startParams, _ = params.(map[string]any)
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "Fresh"
+			result.Thread.Preview = "preview"
+			return nil
+		default:
+			t.Fatalf("unexpected startup method: %s", method)
+			return nil
+		}
+	}
+
+	a.recoverRuntimeState()
+
+	if len(calls) != 2 || calls[0] != "thread/resume" || calls[1] != "thread/start" {
+		t.Fatalf("startup recovery calls = %+v, want resume then start", calls)
+	}
+	if startParams["approvalPolicy"] != "never" || startParams["sandbox"] != "read-only" || startParams["serviceTier"] != "fast" || startParams["cwd"] != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("thread/start params = %+v, want session overrides and workspace cwd", startParams)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveThreadName != "Fresh" || sess.ActiveThreadPreview != "preview" {
+		t.Fatalf("session after startup fresh thread = %+v", sess)
+	}
+	if !a.sessionHasLiveThread(sessionKey, "thread-new") {
+		t.Fatal("expected fresh thread to be marked live")
+	}
+}
+
 func TestAppMiscMessageHelpers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -177,10 +176,10 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-1", SessionKey: sessionKey, WorkspaceID: "default", InputText: "hello", TriggerMessageID: "m-1", Status: "queued"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
 	}
+	var calls []string
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		calls = append(calls, method)
 		switch method {
-		case "thread/resume":
-			return errors.New("resume failed")
 		case "thread/start":
 			result := out.(*codexrpc.ThreadStartResult)
 			result.Thread.ID = "thread-new"
@@ -195,6 +194,9 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}
 	if err := a.startNextSubmission(sessionKey); err != nil {
 		t.Fatalf("startNextSubmission(resume fallback) error = %v", err)
+	}
+	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
+		t.Fatalf("startNextSubmission(non-live thread) calls = %+v, want thread/start then turn/start", calls)
 	}
 	if sess := a.store.GetSession(sessionKey); sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveTurnID != "turn-new" {
 		t.Fatalf("session after resume fallback = %+v", sess)
