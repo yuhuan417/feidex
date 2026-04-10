@@ -110,7 +110,6 @@ func (a *App) renderDebugLogsCard(sessionKey string) map[string]any {
 	}
 
 	buttons := []feishu.Button{
-		{Text: commandLabel("切换日志级别", "/debug"), Type: "default", Value: map[string]any{"action": "menu.debug", "session_key": sessionKey}},
 		{Text: commandLabel("刷新日志", "/debug logs"), Type: "default", Value: map[string]any{"action": "menu.debug.logs", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}

@@ -380,6 +380,10 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	if len(elements) < 2 || elements[0]["tag"] != "div" || elements[1]["tag"] != "div" {
 		t.Fatalf("debug logs card elements = %#v, want summary/log div blocks first", elements)
 	}
+	buttons := cardButtonsForTest(ff.replyCards[len(ff.replyCards)-1])
+	if len(buttons) != 2 {
+		t.Fatalf("debug logs card buttons = %#v, want refresh + back", buttons)
+	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
 	if !strings.Contains(body, "debug-log-test") || !strings.Contains(body, "key=value") {
 		t.Fatalf("debug logs card body = %q", body)
