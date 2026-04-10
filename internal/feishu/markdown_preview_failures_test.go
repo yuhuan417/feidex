@@ -45,7 +45,7 @@ func (failingPreviewAPI) CreateFolder(context.Context, string, string) (previewR
 func (failingPreviewAPI) ListFiles(context.Context, string) ([]previewRemoteNode, error) {
 	return nil, errors.New("list failed")
 }
-func (failingPreviewAPI) UploadFile(context.Context, string, string, []byte) (string, error) {
+func (failingPreviewAPI) UploadFile(context.Context, string, string, string) (string, error) {
 	return "", errors.New("upload failed")
 }
 func (failingPreviewAPI) QueryMetaURL(context.Context, string, string) (string, error) {

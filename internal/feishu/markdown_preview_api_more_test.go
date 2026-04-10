@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,7 +41,11 @@ func TestLarkDrivePreviewAPIMissingDataBranches(t *testing.T) {
 	if _, err := makeAPI("/open-apis/drive/v1/files/create_folder", `{"code":0}`).CreateFolder(context.Background(), "name", ""); err == nil {
 		t.Fatal("expected CreateFolder missing data to fail")
 	}
-	if _, err := makeAPI("/open-apis/drive/v1/files/upload_all", `{"code":0}`).UploadFile(context.Background(), "folder", "name.md", []byte("x")); err == nil {
+	localPath := filepath.Join(t.TempDir(), "name.md")
+	if err := os.WriteFile(localPath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(name.md) error = %v", err)
+	}
+	if _, err := makeAPI("/open-apis/drive/v1/files/upload_prepare", `{"code":0}`).UploadFile(context.Background(), "folder", "name.md", localPath); err == nil {
 		t.Fatal("expected UploadFile missing data to fail")
 	}
 	if _, err := makeAPI("/open-apis/drive/v1/metas/batch_query", `{"code":0,"data":{"metas":[]}}`).QueryMetaURL(context.Background(), "token", previewFileType); err == nil {

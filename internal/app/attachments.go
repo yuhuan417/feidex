@@ -226,6 +226,27 @@ func sanitizeLocalMarkdownLinks(text, workspaceCwd string) string {
 	})
 }
 
+func neutralizeLocalMarkdownLinks(text, workspaceCwd string) string {
+	if strings.TrimSpace(text) == "" {
+		return text
+	}
+	return markdownLinkFullRe.ReplaceAllStringFunc(text, func(match string) string {
+		parts := markdownLinkFullRe.FindStringSubmatch(match)
+		if len(parts) != 3 {
+			return match
+		}
+		label := strings.TrimSpace(parts[1])
+		href := strings.TrimSpace(parts[2])
+		if path, ok := normalizeReferencedPath(href, workspaceCwd); ok {
+			return "`" + filepath.Base(path) + "`"
+		}
+		if fixed := recoverFilenameFromMalformedLabel(label); fixed != "" {
+			return "`" + fixed + "`"
+		}
+		return match
+	})
+}
+
 func recoverFilenameFromMalformedLabel(label string) string {
 	label = strings.TrimSpace(label)
 	if !strings.HasPrefix(label, ".") {

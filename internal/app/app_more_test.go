@@ -146,40 +146,38 @@ func (f *fakeCodexClient) ReplyError(id json.RawMessage, code int, msg string) e
 }
 
 type fakeFeishuClient struct {
-	startErr            error
-	replyTextErr        error
-	sendTextErr         error
-	replyCardErr        error
-	sendCardErr         error
-	patchCardErr        error
-	rewritePreviewErr   error
-	addReactionErr      error
-	removeReactionErr   error
-	downloadErr         error
-	shareFileErr        error
-	cleanupResult       feishu.PreviewDriveCleanupResult
-	cleanupErr          error
-	sharedCleanupResult feishu.PreviewDriveCleanupResult
-	sharedCleanupErr    error
-	started             bool
-	stopped             bool
-	replyTexts          []string
-	sentTexts           []string
-	replyCards          []map[string]any
-	sendCards           []map[string]any
-	patchedCards        []map[string]any
-	replyCardInThread   []bool
-	replyTextWithIDs    []string
-	replyCardID         string
-	sendCardID          string
-	previewStatePath    string
-	previewProcessCWD   string
-	rewritePreviewOut   string
-	downloadPath        string
-	downloadName        string
-	sharedFileResult    feishu.SharedFileResult
-	sharedFileRequests  []feishu.SharedFileRequest
-	onMessage           func(*feishu.InboundMessage)
+	startErr           error
+	replyTextErr       error
+	sendTextErr        error
+	replyCardErr       error
+	sendCardErr        error
+	patchCardErr       error
+	rewritePreviewErr  error
+	addReactionErr     error
+	removeReactionErr  error
+	downloadErr        error
+	shareFileErr       error
+	cleanupResult      feishu.PreviewDriveCleanupResult
+	cleanupErr         error
+	started            bool
+	stopped            bool
+	replyTexts         []string
+	sentTexts          []string
+	replyCards         []map[string]any
+	sendCards          []map[string]any
+	patchedCards       []map[string]any
+	replyCardInThread  []bool
+	replyTextWithIDs   []string
+	replyCardID        string
+	sendCardID         string
+	previewStatePath   string
+	previewProcessCWD  string
+	rewritePreviewOut  string
+	downloadPath       string
+	downloadName       string
+	sharedFileResult   feishu.SharedFileResult
+	sharedFileRequests []feishu.SharedFileRequest
+	onMessage          func(*feishu.InboundMessage)
 }
 
 func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
@@ -204,12 +202,8 @@ func (f *fakeFeishuClient) RewriteMarkdownPreview(context.Context, feishu.Markdo
 	return f.rewritePreviewOut, f.rewritePreviewErr
 }
 
-func (f *fakeFeishuClient) CleanupMarkdownPreviewsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
+func (f *fakeFeishuClient) CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
 	return f.cleanupResult, f.cleanupErr
-}
-
-func (f *fakeFeishuClient) CleanupSharedFilesBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
-	return f.sharedCleanupResult, f.sharedCleanupErr
 }
 
 func (f *fakeFeishuClient) AddReaction(context.Context, string, string) error {

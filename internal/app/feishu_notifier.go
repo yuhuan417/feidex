@@ -62,12 +62,8 @@ func (n *notifyingFeishuClient) RewriteMarkdownPreview(ctx context.Context, req 
 	return text, err
 }
 
-func (n *notifyingFeishuClient) CleanupMarkdownPreviewsBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {
-	return n.base.CleanupMarkdownPreviewsBefore(ctx, cutoff)
-}
-
-func (n *notifyingFeishuClient) CleanupSharedFilesBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {
-	return n.base.CleanupSharedFilesBefore(ctx, cutoff)
+func (n *notifyingFeishuClient) CleanupArtifactsBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {
+	return n.base.CleanupArtifactsBefore(ctx, cutoff)
 }
 
 func (n *notifyingFeishuClient) AddReaction(ctx context.Context, messageID, emoji string) error {

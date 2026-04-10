@@ -21,8 +21,7 @@ func TestMarkdownPreviewAdditionalHelpers(t *testing.T) {
 
 	api := &fakePreviewAPI{}
 	p := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{})
-	p.loaded = true
-	p.state = &previewState{Root: &previewFolderRecord{Token: "folder-1", URL: "https://drive.example/folder-1"}}
+	p.store.root = &previewFolderRecord{Token: "folder-1", URL: "https://drive.example/folder-1"}
 	root, err := p.ensureRootFolderLocked(context.Background())
 	if err != nil || root.Token != "folder-1" {
 		t.Fatalf("ensureRootFolderLocked(existing) = %+v, %v", root, err)

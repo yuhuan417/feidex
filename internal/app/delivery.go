@@ -39,10 +39,13 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
 		return nil
 	}
-	text = a.rewriteMarkdownPreviewText(ctx, sub, text)
 	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, strings.TrimSpace(text), nil, true)
 	appendReplyCardFooter(card, footerLines)
+	cardID := ""
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+	if err == nil {
+		cardID = strings.TrimSpace(id)
+	}
 	if err != nil {
 		fallback := appendFooterText(strings.TrimSpace(text), footerLines)
 		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
@@ -61,6 +64,9 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
 		s.FinalMessageIDs = []string{id}
 	})
+	if cardID != "" {
+		a.scheduleMarkdownPreviewPatch(sub, cardID, "最终答复", "green", true, strings.TrimSpace(text), footerLines)
+	}
 	return []string{id}
 }
 
@@ -113,10 +119,10 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 		return nil
 	}
 	enablePreview := strings.TrimSpace(kind) == "final_message"
-	if enablePreview {
-		text = a.rewriteMarkdownPreviewText(ctx, sub, text)
-	} else if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-		text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
+	if !enablePreview {
+		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+			text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
+		}
 	}
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -129,7 +135,11 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	} else {
 		card = a.renderCompactMarkdownCard(sub, title, color, "", text, nil)
 	}
+	cardID := ""
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+	if err == nil {
+		cardID = strings.TrimSpace(id)
+	}
 	if err != nil {
 		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, text, inThread)
 	}
@@ -148,6 +158,9 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
 			s.FinalMessageIDs = []string{id}
 		})
+		if cardID != "" {
+			a.scheduleMarkdownPreviewPatch(sub, cardID, title, color, showHeader, text, nil)
+		}
 	}
 	return []string{id}
 }

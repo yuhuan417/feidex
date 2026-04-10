@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -45,13 +47,17 @@ func (m *driveAPIMock) RoundTrip(req *http.Request) (*http.Response, error) {
 			"code": 0,
 			"data": map[string]any{
 				"files": []map[string]any{
-					{"token": "folder-1", "url": "https://drive.example/folder-1", "type": "folder", "name": defaultPreviewRootFolderName},
-					{"token": "file-1", "url": "https://drive.example/file-1", "type": "file", "name": "preview.md"},
+					{"token": "folder-1", "url": "https://drive.example/folder-1", "type": "folder", "name": defaultArtifactRootFolderName, "created_time": "1700000000"},
+					{"token": "file-1", "url": "https://drive.example/file-1", "type": "file", "name": "preview.md", "created_time": "1700000001"},
 				},
 				"has_more": false,
 			},
 		})
-	case "/open-apis/drive/v1/files/upload_all":
+	case "/open-apis/drive/v1/files/upload_prepare":
+		return writeJSON(map[string]any{"code": 0, "data": map[string]any{"upload_id": "upload-1", "block_size": 4194304, "block_num": 1}})
+	case "/open-apis/drive/v1/files/upload_part":
+		return writeJSON(map[string]any{"code": 0})
+	case "/open-apis/drive/v1/files/upload_finish":
 		return writeJSON(map[string]any{"code": 0, "data": map[string]any{"file_token": "file-1"}})
 	case "/open-apis/drive/v1/metas/batch_query":
 		return writeJSON(map[string]any{"code": 0, "data": map[string]any{"metas": []map[string]any{{"url": "https://drive.example/file-1"}}}})
@@ -90,7 +96,11 @@ func TestLarkDrivePreviewAPIMethods(t *testing.T) {
 	if err != nil || len(nodes) != 2 {
 		t.Fatalf("ListFiles() = %+v, %v", nodes, err)
 	}
-	token, err := api.UploadFile(context.Background(), "folder-1", "preview.md", []byte("hello"))
+	localPath := filepath.Join(t.TempDir(), "preview.md")
+	if err := os.WriteFile(localPath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile(preview.md) error = %v", err)
+	}
+	token, err := api.UploadFile(context.Background(), "folder-1", "preview.md", localPath)
 	if err != nil || token != "file-1" {
 		t.Fatalf("UploadFile() = %q, %v", token, err)
 	}

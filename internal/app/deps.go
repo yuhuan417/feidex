@@ -31,8 +31,7 @@ type feishuClient interface {
 	Stop()
 	ConfigureMarkdownPreview(string, string)
 	RewriteMarkdownPreview(context.Context, feishu.MarkdownPreviewRequest) (string, error)
-	CleanupMarkdownPreviewsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
-	CleanupSharedFilesBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
+	CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
 	AddReaction(context.Context, string, string) error
 	RemoveReaction(context.Context, string, string) error
 	ReplyText(context.Context, string, string, bool) error

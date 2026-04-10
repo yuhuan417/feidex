@@ -3,13 +3,13 @@ package feishu
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	defaultPreviewRootFolderName = "Feidex Markdown Previews"
-	defaultPreviewMaxFileBytes   = 20 * 1024 * 1024
+	defaultPreviewRootFolderName = defaultArtifactRootFolderName
+	defaultPreviewMaxFileBytes   = 0
 	previewFileType              = "file"
 	previewFolderType            = "folder"
 	previewPermissionView        = "view"
@@ -52,28 +52,26 @@ type PreviewDriveCleanupResult struct {
 }
 
 type DriveMarkdownPreviewer struct {
-	api    previewDriveAPI
+	store  *DriveArtifactStore
 	config MarkdownPreviewConfig
-
 	mu     sync.Mutex
-	loaded bool
-	state  *previewState
 }
 
 type previewDriveAPI interface {
 	CreateFolder(context.Context, string, string) (previewRemoteNode, error)
 	ListFiles(context.Context, string) ([]previewRemoteNode, error)
-	UploadFile(context.Context, string, string, []byte) (string, error)
+	UploadFile(context.Context, string, string, string) (string, error)
 	QueryMetaURL(context.Context, string, string) (string, error)
 	GrantPermission(context.Context, string, string, previewPrincipal) error
 	DeleteFile(context.Context, string, string) error
 }
 
 type previewRemoteNode struct {
-	Token string
-	URL   string
-	Type  string
-	Name  string
+	Token       string
+	URL         string
+	Type        string
+	Name        string
+	CreatedTime time.Time
 }
 
 type previewPrincipal struct {
@@ -81,10 +79,6 @@ type previewPrincipal struct {
 	MemberType string
 	MemberID   string
 	Type       string
-}
-
-type previewState struct {
-	Root *previewFolderRecord
 }
 
 type previewFolderRecord struct {
@@ -119,7 +113,7 @@ func NewDriveMarkdownPreviewer(api previewDriveAPI, cfg MarkdownPreviewConfig) *
 	if cfg.RootFolderName == "" {
 		cfg.RootFolderName = defaultPreviewRootFolderName
 	}
-	if cfg.MaxFileBytes <= 0 {
+	if cfg.MaxFileBytes < 0 {
 		cfg.MaxFileBytes = defaultPreviewMaxFileBytes
 	}
 	if cfg.ProcessCWD == "" {
@@ -128,7 +122,10 @@ func NewDriveMarkdownPreviewer(api previewDriveAPI, cfg MarkdownPreviewConfig) *
 		}
 	}
 	return &DriveMarkdownPreviewer{
-		api:    api,
+		store: NewDriveArtifactStore(api, ArtifactStoreConfig{
+			RootFolderName: cfg.RootFolderName,
+			MaxFileBytes:   cfg.MaxFileBytes,
+		}),
 		config: cfg,
 	}
 }
@@ -167,7 +164,7 @@ func (a *Adapter) ensureMarkdownPreviewer() *DriveMarkdownPreviewer {
 
 func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPreviewRequest) (string, error) {
 	text := strings.TrimSpace(req.Text)
-	if p == nil || p.api == nil || strings.TrimSpace(text) == "" {
+	if p == nil || p.store == nil || strings.TrimSpace(text) == "" {
 		return req.Text, nil
 	}
 	principals := previewPrincipals(req.ChatID, req.UserID)
@@ -232,42 +229,10 @@ func (p *DriveMarkdownPreviewer) CleanupBefore(ctx context.Context, cutoff time.
 	if p == nil {
 		return PreviewDriveCleanupResult{}, nil
 	}
-	if p.api == nil {
+	if p.store == nil {
 		return PreviewDriveCleanupResult{}, fmt.Errorf("preview drive api is not available")
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	roots, err := p.listRootFoldersLocked(ctx)
-	if err != nil {
-		return PreviewDriveCleanupResult{}, err
-	}
-	result := PreviewDriveCleanupResult{}
-	for _, root := range roots {
-		if root == nil || strings.TrimSpace(root.Token) == "" {
-			continue
-		}
-		nodes, err := p.api.ListFiles(ctx, root.Token)
-		if err != nil {
-			return result, err
-		}
-		for _, node := range nodes {
-			if !strings.EqualFold(strings.TrimSpace(node.Type), previewFileType) {
-				continue
-			}
-			createdAt, ok := previewManagedFileTime(node.Name)
-			if !ok || !createdAt.Before(cutoff) {
-				continue
-			}
-			if strings.TrimSpace(node.Token) != "" {
-				if err := p.api.DeleteFile(ctx, node.Token, previewFileType); err != nil {
-					return result, err
-				}
-			}
-			result.DeletedFileCount++
-		}
-	}
-	return result, nil
+	return p.store.CleanupBefore(ctx, cutoff)
 }
 
 func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Context, rawTarget string, req MarkdownPreviewRequest, principals []previewPrincipal) (string, bool, error) {
@@ -275,87 +240,44 @@ func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Con
 	if err != nil || !ok {
 		return "", ok, err
 	}
-	content, err := os.ReadFile(resolvedPath)
+	info, err := os.Stat(resolvedPath)
 	if err != nil {
-		return "", true, fmt.Errorf("read markdown preview source %s: %w", resolvedPath, err)
+		return "", true, fmt.Errorf("stat markdown preview source %s: %w", resolvedPath, err)
 	}
-	if len(content) == 0 {
+	if info.Size() == 0 {
 		return "", true, fmt.Errorf("skip empty markdown preview source %s", resolvedPath)
 	}
-	if int64(len(content)) > p.config.MaxFileBytes {
+	if p.config.MaxFileBytes > 0 && info.Size() > p.config.MaxFileBytes {
 		return "", true, fmt.Errorf("markdown preview source exceeds %d bytes: %s", p.config.MaxFileBytes, resolvedPath)
 	}
-
-	root, err := p.ensureRootFolderLocked(ctx)
-	if err != nil {
-		return "", true, err
-	}
-
-	sum := sha256.Sum256(content)
-	contentSHA := hex.EncodeToString(sum[:])
-	token, err := p.api.UploadFile(ctx, root.Token, previewFileName(resolvedPath, contentSHA, time.Now().UTC()), content)
+	_ = principals
+	result, err := p.store.UploadLocalFile(ctx, ArtifactUploadRequest{
+		LocalPath: resolvedPath,
+		ChatID:    req.ChatID,
+		UserID:    req.UserID,
+	})
 	if err != nil {
 		return "", true, fmt.Errorf("upload markdown preview for %s: %w", resolvedPath, err)
 	}
-	url, err := p.api.QueryMetaURL(ctx, token, previewFileType)
-	if err != nil {
-		return "", true, fmt.Errorf("query markdown preview url for %s: %w", resolvedPath, err)
-	}
-	if err := ensurePreviewPermissions(ctx, p.api, token, previewFileType, map[string]bool{}, principals); err != nil {
-		return "", true, fmt.Errorf("authorize markdown preview for %s: %w", resolvedPath, err)
-	}
-	return url, true, nil
+	return result.URL, true, nil
 }
 
 func (p *DriveMarkdownPreviewer) ensureRootFolderLocked(ctx context.Context) (*previewFolderRecord, error) {
-	state := p.loadStateLocked()
-	if state.Root != nil && strings.TrimSpace(state.Root.Token) != "" {
-		return state.Root, nil
+	if p == nil || p.store == nil {
+		return nil, fmt.Errorf("preview drive api is not available")
 	}
-	roots, err := p.listRootFoldersLocked(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(roots) > 0 {
-		state.Root = roots[0]
-		return state.Root, nil
-	}
-	node, err := p.api.CreateFolder(ctx, p.config.RootFolderName, "")
-	if err != nil {
-		return nil, fmt.Errorf("create markdown preview root folder: %w", err)
-	}
-	state.Root = &previewFolderRecord{
-		Token: node.Token,
-		URL:   node.URL,
-	}
-	return state.Root, nil
+	p.store.mu.Lock()
+	defer p.store.mu.Unlock()
+	return p.store.ensureRootFolderLocked(ctx)
 }
 
 func (p *DriveMarkdownPreviewer) listRootFoldersLocked(ctx context.Context) ([]*previewFolderRecord, error) {
-	if p == nil || p.api == nil {
+	if p == nil || p.store == nil {
 		return nil, nil
 	}
-	nodes, err := p.api.ListFiles(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*previewFolderRecord, 0, len(nodes))
-	for _, node := range nodes {
-		if !strings.EqualFold(strings.TrimSpace(node.Type), previewFolderType) {
-			continue
-		}
-		if strings.TrimSpace(node.Name) != strings.TrimSpace(p.config.RootFolderName) {
-			continue
-		}
-		out = append(out, &previewFolderRecord{
-			Token: node.Token,
-			URL:   node.URL,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Token < out[j].Token
-	})
-	return out, nil
+	p.store.mu.Lock()
+	defer p.store.mu.Unlock()
+	return p.store.listRootFoldersLocked(ctx)
 }
 
 func (p *DriveMarkdownPreviewer) resolveMarkdownPath(rawTarget string, req MarkdownPreviewRequest) (string, bool, error) {
@@ -395,15 +317,6 @@ func (p *DriveMarkdownPreviewer) resolveMarkdownPath(rawTarget string, req Markd
 		return resolved, true, nil
 	}
 	return "", false, nil
-}
-
-func (p *DriveMarkdownPreviewer) loadStateLocked() *previewState {
-	if p.loaded {
-		return p.state
-	}
-	p.loaded = true
-	p.state = &previewState{}
-	return p.state
 }
 
 func ensurePreviewPermissions(ctx context.Context, api previewDriveAPI, token, docType string, shared map[string]bool, principals []previewPrincipal) error {
@@ -654,39 +567,131 @@ func (a *larkDrivePreviewAPI) ListFiles(ctx context.Context, folderToken string)
 			continue
 		}
 		out = append(out, previewRemoteNode{
-			Token: stringPtrValue(item.Token),
-			URL:   stringPtrValue(item.Url),
-			Type:  stringPtrValue(item.Type),
-			Name:  stringPtrValue(item.Name),
+			Token:       stringPtrValue(item.Token),
+			URL:         stringPtrValue(item.Url),
+			Type:        stringPtrValue(item.Type),
+			Name:        stringPtrValue(item.Name),
+			CreatedTime: parseDriveNodeCreatedTime(stringPtrValue(item.CreatedTime)),
 		})
 	}
 	return out, nil
 }
 
-func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileName string, content []byte) (string, error) {
-	resp, err := a.client.Drive.V1.File.UploadAll(ctx, larkdrive.NewUploadAllFileReqBuilder().
-		Body(larkdrive.NewUploadAllFileReqBodyBuilder().
+func parseDriveNodeCreatedTime(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	if unixSeconds, err := strconv.ParseInt(raw, 10, 64); err == nil && unixSeconds > 0 {
+		return time.Unix(unixSeconds, 0).UTC()
+	}
+	return time.Time{}
+}
+
+func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileName, localPath string) (string, error) {
+	info, err := os.Stat(localPath)
+	if err != nil {
+		return "", fmt.Errorf("stat local upload file %s: %w", localPath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("path %q is not a regular file", localPath)
+	}
+	if info.Size() <= 0 {
+		return "", fmt.Errorf("file is empty: %s", localPath)
+	}
+	if info.Size() > int64(^uint(0)>>1) {
+		return "", fmt.Errorf("file is too large: %s", localPath)
+	}
+
+	prepareResp, err := a.client.Drive.V1.File.UploadPrepare(ctx, larkdrive.NewUploadPrepareFileReqBuilder().
+		FileUploadInfo(larkdrive.NewFileUploadInfoBuilder().
 			FileName(fileName).
 			ParentType("explorer").
 			ParentNode(parentToken).
-			Size(len(content)).
-			File(bytes.NewReader(content)).
+			Size(int(info.Size())).
 			Build()).
 		Build())
 	if err != nil {
-		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_all", err))
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_prepare", err))
 	}
-	if !resp.Success() {
+	if !prepareResp.Success() {
 		return "", &driveAPIError{
-			Code:  resp.Code,
-			Msg:   resp.Msg,
-			Issue: permissionIssueFromCodeError("drive.file.upload_all", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+			Code:  prepareResp.Code,
+			Msg:   prepareResp.Msg,
+			Issue: permissionIssueFromCodeError("drive.file.upload_prepare", prepareResp.Code, prepareResp.Msg, &prepareResp.CodeError, prepareResp.ApiResp, nil),
 		}
 	}
-	if resp.Data == nil {
-		return "", fmt.Errorf("missing upload file response data")
+	if prepareResp.Data == nil || strings.TrimSpace(stringPtrValue(prepareResp.Data.UploadId)) == "" {
+		return "", fmt.Errorf("missing upload prepare response data")
 	}
-	return stringPtrValue(resp.Data.FileToken), nil
+	uploadID := stringPtrValue(prepareResp.Data.UploadId)
+	blockSize := intPtrValue(prepareResp.Data.BlockSize)
+	if blockSize <= 0 {
+		blockSize = 4 * 1024 * 1024
+	}
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		return "", fmt.Errorf("open local upload file %s: %w", localPath, err)
+	}
+	defer f.Close()
+
+	buf := make([]byte, blockSize)
+	uploadedBlocks := 0
+	for seq := 0; ; seq++ {
+		n, readErr := io.ReadFull(f, buf)
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil && readErr != io.ErrUnexpectedEOF {
+			return "", fmt.Errorf("read upload chunk %d for %s: %w", seq, localPath, readErr)
+		}
+		if n == 0 {
+			break
+		}
+		partResp, err := a.client.Drive.V1.File.UploadPart(ctx, larkdrive.NewUploadPartFileReqBuilder().
+			Body(larkdrive.NewUploadPartFileReqBodyBuilder().
+				UploadId(uploadID).
+				Seq(seq).
+				Size(n).
+				File(bytes.NewReader(buf[:n])).
+				Build()).
+			Build())
+		if err != nil {
+			return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_part", err))
+		}
+		if !partResp.Success() {
+			return "", &driveAPIError{
+				Code:  partResp.Code,
+				Msg:   partResp.Msg,
+				Issue: permissionIssueFromCodeError("drive.file.upload_part", partResp.Code, partResp.Msg, &partResp.CodeError, partResp.ApiResp, nil),
+			}
+		}
+		uploadedBlocks++
+		if readErr == io.ErrUnexpectedEOF {
+			break
+		}
+	}
+	finishResp, err := a.client.Drive.V1.File.UploadFinish(ctx, larkdrive.NewUploadFinishFileReqBuilder().
+		Body(larkdrive.NewUploadFinishFileReqBodyBuilder().
+			UploadId(uploadID).
+			BlockNum(uploadedBlocks).
+			Build()).
+		Build())
+	if err != nil {
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_finish", err))
+	}
+	if !finishResp.Success() {
+		return "", &driveAPIError{
+			Code:  finishResp.Code,
+			Msg:   finishResp.Msg,
+			Issue: permissionIssueFromCodeError("drive.file.upload_finish", finishResp.Code, finishResp.Msg, &finishResp.CodeError, finishResp.ApiResp, nil),
+		}
+	}
+	if finishResp.Data == nil {
+		return "", fmt.Errorf("missing upload finish response data")
+	}
+	return stringPtrValue(finishResp.Data.FileToken), nil
 }
 
 func (a *larkDrivePreviewAPI) QueryMetaURL(ctx context.Context, token, docType string) (string, error) {
@@ -764,4 +769,11 @@ func stringPtrValue(value *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*value)
+}
+
+func intPtrValue(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }

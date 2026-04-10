@@ -302,6 +302,18 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("download picker confirm = %#v, %v", resp, err)
 	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "正在生成文件下载链接") || !strings.Contains(body, "report.txt") {
+		t.Fatalf("download preparing card body = %q", body)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(ff.patchedCards) > 0 && len(ff.sharedFileRequests) == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if len(ff.sharedFileRequests) != 1 {
 		t.Fatalf("sharedFileRequests = %+v, want 1", ff.sharedFileRequests)
 	}
@@ -311,10 +323,12 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 	if got := ff.sharedFileRequests[0].ChatID; got != "chat-1" {
 		t.Fatalf("share chat id = %q, want chat-1", got)
 	}
-	cardData, _ := resp.Card.Data.(map[string]any)
-	body := cardMarkdownContent(t, cardData)
-	if !strings.Contains(body, "https://drive.example/file-1") || !strings.Contains(body, "report.txt") {
-		t.Fatalf("download result card body = %q", body)
+	if len(ff.patchedCards) == 0 {
+		t.Fatalf("patchedCards = %+v, want final download card", ff.patchedCards)
+	}
+	finalBody := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(finalBody, "https://drive.example/file-1") || !strings.Contains(finalBody, "report.txt") {
+		t.Fatalf("download result card body = %q", finalBody)
 	}
 	if got := a.store.PendingByID(requestID); got == nil || got.Status != "resolved" {
 		t.Fatalf("download pending after confirm = %+v", got)

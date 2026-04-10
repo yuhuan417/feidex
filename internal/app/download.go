@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -105,9 +106,16 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "下载请求已过期"}}, nil
 	}
+	if strings.TrimSpace(pending.Status) == "processing" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "正在生成下载链接，请稍候"},
+			Card:  rawCard(a.renderDownloadPreparingCard(selectedPath, payload.RootPath)),
+		}, nil
+	}
 	sess := a.store.GetSession(pending.SessionKey)
 	chatID := strings.TrimSpace(action.ChatID)
 	userID := strings.TrimSpace(action.UserID)
+	messageID := firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
 	workspaceCWD := strings.TrimSpace(payload.RootPath)
 	if sess != nil {
 		chatID = firstNonEmpty(chatID, sess.ChatID)
@@ -116,31 +124,87 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 			workspaceCWD = firstNonEmpty(workspaceCWD, strings.TrimSpace(ws.Cwd))
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	result, err := a.feishu.ShareLocalFile(ctx, feishu.SharedFileRequest{
+	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) {
+		req.Status = "processing"
+		req.PayloadJSON = mustJSON(payload)
+		if strings.TrimSpace(req.FeishuMsgID) == "" {
+			req.FeishuMsgID = messageID
+		}
+	})
+	go a.finishDownloadFileShare(pending.ID, messageID, payload, selectedPath, workspaceCWD, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    chatID,
 		UserID:    firstNonEmpty(userID, pending.OwnerUserID),
 	})
-	if err != nil {
-		card, renderErr := a.renderPathPickerCard(pending.ID, payload)
-		if renderErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(card),
-		}, nil
-	}
-	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) {
-		req.Status = "resolved"
-		req.PayloadJSON = mustJSON(payload)
-	})
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已生成下载链接"},
-		Card:  rawCard(a.renderDownloadReadyCard(selectedPath, workspaceCWD, result)),
+		Toast: &callback.Toast{Type: "info", Content: "正在生成下载链接"},
+		Card:  rawCard(a.renderDownloadPreparingCard(selectedPath, workspaceCWD)),
 	}, nil
+}
+
+func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	slog.Debug("download share started",
+		"request_id", requestID,
+		"message_id", messageID,
+		"path", selectedPath,
+	)
+	result, err := a.feishu.ShareLocalFile(ctx, req)
+	if err != nil {
+		slog.Warn("download share failed",
+			"request_id", requestID,
+			"message_id", messageID,
+			"path", selectedPath,
+			"error", err,
+		)
+		_ = a.store.UpdatePending(requestID, func(p *state.PendingRequest) {
+			p.Status = "pending"
+			p.PayloadJSON = mustJSON(payload)
+		})
+		if strings.TrimSpace(messageID) == "" {
+			return
+		}
+		card, renderErr := a.renderPathPickerCard(requestID, payload)
+		if renderErr != nil {
+			slog.Error("download failure card render failed",
+				"request_id", requestID,
+				"message_id", messageID,
+				"error", renderErr,
+			)
+			_ = a.feishu.PatchCard(context.Background(), messageID, a.renderDownloadFailedCard(selectedPath, workspaceCWD, err.Error()))
+			return
+		}
+		_ = a.feishu.PatchCard(context.Background(), messageID, card)
+		return
+	}
+	slog.Debug("download share completed",
+		"request_id", requestID,
+		"message_id", messageID,
+		"path", selectedPath,
+		"url", result.URL,
+	)
+	_ = a.store.UpdatePending(requestID, func(p *state.PendingRequest) {
+		p.Status = "resolved"
+		p.PayloadJSON = mustJSON(payload)
+	})
+	if strings.TrimSpace(messageID) == "" {
+		return
+	}
+	_ = a.feishu.PatchCard(context.Background(), messageID, a.renderDownloadReadyCard(selectedPath, workspaceCWD, result))
+}
+
+func (a *App) renderDownloadPreparingCard(selectedPath, workspaceCWD string) map[string]any {
+	displayPath := renderDownloadDisplayPath(selectedPath, workspaceCWD)
+	lines := []string{
+		"正在生成文件下载链接（飞书云盘中转）。",
+		"",
+		"文件: `" + filepath.Base(selectedPath) + "`",
+		"路径: `" + displayPath + "`",
+		"",
+		"请稍候，这张卡片会自动刷新。",
+	}
+	return a.feishu.SimpleStatusCard("文件下载", "blue", strings.Join(lines, "\n"), nil)
 }
 
 func (a *App) renderDownloadReadyCard(selectedPath, workspaceCWD string, result feishu.SharedFileResult) map[string]any {
@@ -158,6 +222,20 @@ func (a *App) renderDownloadReadyCard(selectedPath, workspaceCWD string, result 
 		lines = append(lines, "", "[点击下载]("+url+")", url)
 	}
 	return a.feishu.SimpleStatusCard("文件下载", "green", strings.Join(lines, "\n"), nil)
+}
+
+func (a *App) renderDownloadFailedCard(selectedPath, workspaceCWD, errText string) map[string]any {
+	displayPath := renderDownloadDisplayPath(selectedPath, workspaceCWD)
+	lines := []string{
+		"生成下载链接失败。",
+		"",
+		"文件: `" + filepath.Base(selectedPath) + "`",
+		"路径: `" + displayPath + "`",
+	}
+	if strings.TrimSpace(errText) != "" {
+		lines = append(lines, "", "错误: "+strings.TrimSpace(errText))
+	}
+	return a.feishu.SimpleStatusCard("文件下载", "orange", strings.Join(lines, "\n"), nil)
 }
 
 func renderDownloadDisplayPath(selectedPath, workspaceCWD string) string {

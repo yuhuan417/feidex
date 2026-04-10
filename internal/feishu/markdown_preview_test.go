@@ -2,9 +2,9 @@ package feishu
 
 import (
 	"context"
-	"strconv"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -18,18 +18,27 @@ type fakePreviewAPI struct {
 	grantCalls        []previewPrincipal
 	deleteCalls       []string
 	root              *previewRemoteNode
+	children          map[string][]previewRemoteNode
 	files             []previewRemoteNode
 }
 
-func (f *fakePreviewAPI) CreateFolder(_ context.Context, name, _ string) (previewRemoteNode, error) {
+func (f *fakePreviewAPI) CreateFolder(_ context.Context, name, parentToken string) (previewRemoteNode, error) {
 	f.createFolderCalls++
 	node := previewRemoteNode{
-		Token: "folder-1",
-		URL:   "https://drive.example/folder-1",
-		Type:  previewFolderType,
-		Name:  name,
+		Token:       "folder-" + strconv.Itoa(f.createFolderCalls),
+		URL:         "https://drive.example/folder-" + strconv.Itoa(f.createFolderCalls),
+		Type:        previewFolderType,
+		Name:        name,
+		CreatedTime: time.Now(),
 	}
-	f.root = &node
+	if f.children == nil {
+		f.children = map[string][]previewRemoteNode{}
+	}
+	if strings.TrimSpace(parentToken) == "" {
+		f.root = &node
+	} else {
+		f.children[parentToken] = append(f.children[parentToken], node)
+	}
 	return node, nil
 }
 
@@ -41,22 +50,26 @@ func (f *fakePreviewAPI) ListFiles(_ context.Context, folderToken string) ([]pre
 			return nil, nil
 		}
 		return []previewRemoteNode{*f.root}, nil
-	case "folder-1":
-		return append([]previewRemoteNode(nil), f.files...), nil
 	default:
-		return nil, nil
+		return append([]previewRemoteNode(nil), f.children[strings.TrimSpace(folderToken)]...), nil
 	}
 }
 
-func (f *fakePreviewAPI) UploadFile(_ context.Context, _ string, fileName string, _ []byte) (string, error) {
+func (f *fakePreviewAPI) UploadFile(_ context.Context, parentToken, fileName, _ string) (string, error) {
 	f.uploadCalls++
 	token := "file-" + strconv.Itoa(f.uploadCalls)
-	f.files = append(f.files, previewRemoteNode{
-		Token: token,
-		URL:   "https://drive.example/" + token,
-		Type:  previewFileType,
-		Name:  fileName,
-	})
+	node := previewRemoteNode{
+		Token:       token,
+		URL:         "https://drive.example/" + token,
+		Type:        previewFileType,
+		Name:        fileName,
+		CreatedTime: time.Now(),
+	}
+	f.files = append(f.files, node)
+	if f.children == nil {
+		f.children = map[string][]previewRemoteNode{}
+	}
+	f.children[strings.TrimSpace(parentToken)] = append(f.children[strings.TrimSpace(parentToken)], node)
 	return token, nil
 }
 
@@ -72,6 +85,21 @@ func (f *fakePreviewAPI) GrantPermission(_ context.Context, _ string, _ string, 
 
 func (f *fakePreviewAPI) DeleteFile(_ context.Context, token, _ string) error {
 	f.deleteCalls = append(f.deleteCalls, token)
+	if children, ok := f.children[token]; ok {
+		childTokens := map[string]struct{}{}
+		for _, node := range children {
+			childTokens[node.Token] = struct{}{}
+		}
+		delete(f.children, token)
+		nextFiles := make([]previewRemoteNode, 0, len(f.files))
+		for _, node := range f.files {
+			if _, exists := childTokens[node.Token]; exists {
+				continue
+			}
+			nextFiles = append(nextFiles, node)
+		}
+		f.files = nextFiles
+	}
 	next := make([]previewRemoteNode, 0, len(f.files))
 	for _, node := range f.files {
 		if node.Token == token {
@@ -80,6 +108,19 @@ func (f *fakePreviewAPI) DeleteFile(_ context.Context, token, _ string) error {
 		next = append(next, node)
 	}
 	f.files = next
+	for parent, nodes := range f.children {
+		filtered := nodes[:0]
+		for _, node := range nodes {
+			if node.Token == token {
+				continue
+			}
+			filtered = append(filtered, node)
+		}
+		f.children[parent] = append([]previewRemoteNode(nil), filtered...)
+	}
+	if f.root != nil && f.root.Token == token {
+		f.root = nil
+	}
 	return nil
 }
 
@@ -105,7 +146,7 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 	if !strings.Contains(got, "https://drive.example/file-1") {
 		t.Fatalf("expected rewritten preview url, got %q", got)
 	}
-	if api.createFolderCalls != 1 || api.uploadCalls != 1 || api.queryCalls != 1 {
+	if api.createFolderCalls != 2 || api.uploadCalls != 1 || api.queryCalls != 1 {
 		t.Fatalf("unexpected drive api usage: %#v", api)
 	}
 	if len(api.grantCalls) != 2 {
@@ -151,7 +192,12 @@ func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 	if len(api.files) != 1 {
 		t.Fatalf("expected one uploaded preview file, got %#v", api.files)
 	}
-	api.files[0].Name = previewFileName(filepath.Join(root, "README.md"), strings.Repeat("a", 64), time.Now().Add(-8*24*time.Hour))
+	children := api.children["folder-1"]
+	if len(children) != 1 || children[0].Type != previewFolderType {
+		t.Fatalf("expected one artifact folder under root, got %#v", children)
+	}
+	children[0].CreatedTime = time.Now().Add(-8 * 24 * time.Hour)
+	api.children["folder-1"] = children
 
 	result, err := previewer.CleanupBefore(context.Background(), time.Now().Add(-7*24*time.Hour))
 	if err != nil {
@@ -160,7 +206,7 @@ func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 	if result.DeletedFileCount != 1 {
 		t.Fatalf("expected one deleted preview file, got %#v", result)
 	}
-	if len(api.deleteCalls) != 1 || api.deleteCalls[0] != "file-1" {
+	if len(api.deleteCalls) != 1 || api.deleteCalls[0] != "folder-2" {
 		t.Fatalf("unexpected delete calls: %#v", api.deleteCalls)
 	}
 	if len(api.files) != 0 {

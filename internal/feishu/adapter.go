@@ -103,8 +103,8 @@ type Adapter struct {
 	previewMu         sync.Mutex
 	previewStatePath  string
 	previewProcessCWD string
+	artifactStore     *DriveArtifactStore
 	previewer         *DriveMarkdownPreviewer
-	fileSharer        *DriveFileSharer
 
 	startErr error
 }
@@ -327,6 +327,7 @@ func (a *Adapter) ConfigureMarkdownPreview(statePath, processCWD string) {
 	defer a.previewMu.Unlock()
 	a.previewStatePath = strings.TrimSpace(statePath)
 	a.previewProcessCWD = strings.TrimSpace(processCWD)
+	a.artifactStore = nil
 	a.previewer = nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -40,7 +41,40 @@ func (a *App) prepareReplyCardMarkdown(ctx context.Context, sub *state.Submissio
 		return ""
 	}
 	if enablePreview {
-		return normalizeCardMarkdown(a.rewriteMarkdownPreviewText(ctx, sub, text))
+		if sub != nil {
+			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+				text = neutralizeLocalMarkdownLinks(text, ws.Cwd)
+			}
+		}
+		return normalizeCardMarkdown(text)
 	}
 	return a.prepareCardMarkdown(sub, text)
+}
+
+func (a *App) scheduleMarkdownPreviewPatch(sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
+	messageID = strings.TrimSpace(messageID)
+	body = strings.TrimSpace(body)
+	if a == nil || a.feishu == nil || sub == nil || messageID == "" || body == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		rewritten := a.rewriteMarkdownPreviewText(ctx, sub, body)
+		if strings.TrimSpace(rewritten) == "" || strings.TrimSpace(rewritten) == body {
+			return
+		}
+		card := a.renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, rewritten, nil, true)
+		appendReplyCardFooter(card, footerLines)
+		patchCtx, patchCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer patchCancel()
+		if err := a.feishu.PatchCard(patchCtx, messageID, card); err != nil {
+			slog.Warn("markdown preview patch failed",
+				"submission_id", sub.ID,
+				"workspace_id", sub.WorkspaceID,
+				"message_id", messageID,
+				"error", err,
+			)
+		}
+	}()
 }
