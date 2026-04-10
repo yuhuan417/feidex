@@ -778,7 +778,7 @@ func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) 
 	if len(buttons) > 0 {
 		bodyMap, _ := card["body"].(map[string]any)
 		elements, _ := bodyMap["elements"].([]map[string]any)
-		for _, row := range buildV2ButtonRows(buttons, 2) {
+		for _, row := range buildV2ButtonRows(buttons, 1) {
 			elements = append(elements, row)
 		}
 		bodyMap["elements"] = elements

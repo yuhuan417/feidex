@@ -102,8 +102,14 @@ func TestSimpleStatusCardAndSummaries(t *testing.T) {
 		t.Fatalf("summarizeCardForLog() = %q, %q, %d", title, preview, buttonCount)
 	}
 	elements := card["body"].(map[string]any)["elements"].([]map[string]any)
-	if len(elements) != 2 {
-		t.Fatalf("SimpleStatusCard() elements = %+v, want markdown + button row", elements)
+	if len(elements) != 3 {
+		t.Fatalf("SimpleStatusCard() elements = %+v, want markdown + 2 button rows", elements)
+	}
+	for i, elem := range elements[1:] {
+		columns, _ := elem["columns"].([]map[string]any)
+		if len(columns) != 1 {
+			t.Fatalf("button row %d columns = %+v, want 1 column", i, columns)
+		}
 	}
 
 	bodyCard := map[string]any{

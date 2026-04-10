@@ -21,7 +21,7 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	title, preview, buttonCount := feishu.New(cfg.Feishu).SimpleStatusCard("tmp", "blue", "tmp", nil)["header"], cardElementsForTest(card), 0
 	_ = title
 	_ = preview
-	if elems := cardElementsForTest(card); len(elems) != 2 {
+	if elems := cardElementsForTest(card); len(elems) != 3 {
 		t.Fatalf("renderQuietModeCard() elements = %#v", elems)
 	}
 	if err := a.commandQuiet(&feishu.InboundMessage{}, []string{"bad"}); err == nil {
