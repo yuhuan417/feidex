@@ -2,12 +2,15 @@ package app
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/logcontrol"
 	"feidex/internal/state"
 )
 
@@ -94,6 +97,9 @@ func TestIsLocalCommand(t *testing.T) {
 		"/history":        true,
 		"/model":          true,
 		"/quiet":          true,
+		"/debug":          true,
+		"/debug on":       true,
+		"/debug logs":     true,
 		"/download":       true,
 		"/compact":        true,
 		"/fork":           true,
@@ -130,7 +136,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 		t.Fatalf("unexpected card elements: %#v", card)
 	}
 	body, _ := elements[0]["content"].(string)
-	for _, alias := range []string{"/menu", "/help", "/history", "/download", "/compact", "/fork", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
+	for _, alias := range []string{"/menu", "/help", "/history", "/download", "/compact", "/fork", "/new", "/stop", "/cd", "/model", "/quiet", "/debug", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
 		if strings.Contains(body, alias) {
 			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
 		}
@@ -314,5 +320,64 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前线程") {
 		t.Fatalf("fork reply = %#v, want success text", ff.replyTexts)
+	}
+}
+
+func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
+	ff := &fakeFeishuClient{}
+	a := &App{feishu: ff, cfg: config.Default()}
+	prev := runtimeLogLevelText()
+	t.Cleanup(func() {
+		_ = logcontrol.SetName(prev)
+		a.cfg.Log.Level = runtimeLogLevelText()
+	})
+
+	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	a.setRuntimeDebug(false)
+	if err := a.commandDebug(msg, nil); err != nil {
+		t.Fatalf("commandDebug(toggle on) error = %v", err)
+	}
+	if got := runtimeLogLevelText(); got != "debug" {
+		t.Fatalf("runtimeLogLevelText() = %q, want debug", got)
+	}
+	if err := a.commandDebug(msg, []string{"off"}); err != nil {
+		t.Fatalf("commandDebug(off) error = %v", err)
+	}
+	if got := runtimeLogLevelText(); got != "info" {
+		t.Fatalf("runtimeLogLevelText() = %q, want info", got)
+	}
+	if err := a.commandDebug(msg, []string{"bad"}); err == nil {
+		t.Fatal("expected invalid /debug arg to fail")
+	}
+	if len(ff.replyTexts) < 2 || !strings.Contains(ff.replyTexts[0], "`debug`") || !strings.Contains(ff.replyTexts[1], "`info`") {
+		t.Fatalf("debug replies = %#v", ff.replyTexts)
+	}
+}
+
+func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
+	ff := &fakeFeishuClient{}
+	a := &App{feishu: ff, cfg: config.Default()}
+	prevLevel := runtimeLogLevelText()
+	oldLogger := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+		_ = logcontrol.SetName(prevLevel)
+		a.cfg.Log.Level = runtimeLogLevelText()
+	})
+	_ = logcontrol.SetName("debug")
+	logger := slog.New(logcontrol.NewHandler(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: logcontrol.LevelVar()})))
+	slog.SetDefault(logger)
+	slog.Debug("debug-log-test", "key", "value")
+
+	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := a.commandDebug(msg, []string{"logs"}); err != nil {
+		t.Fatalf("commandDebug(logs) error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected debug logs card")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	if !strings.Contains(body, "debug-log-test") || !strings.Contains(body, "key=value") {
+		t.Fatalf("debug logs card body = %q", body)
 	}
 }

@@ -203,6 +203,8 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "menu.compact", "session_key": "sess-2", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.model", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.system", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "menu.debug", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "menu.debug.logs", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.new", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "model.config.set_model", "session_key": "sess-1", "model_id": "gpt-5"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "model.config.set_effort", "session_key": "sess-1", "reasoning_effort": "high"}, UserID: "user-1", ChatID: "chat-1"},

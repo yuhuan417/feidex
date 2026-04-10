@@ -77,6 +77,12 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.status":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuStatus(action, sessionKey)
+	case "menu.debug":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuDebug(action, sessionKey)
+	case "menu.debug.logs":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuDebugLogs(action, sessionKey)
 	case "menu.help":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuHelp(action, sessionKey)
@@ -248,6 +254,8 @@ func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any,
 		return a.renderModelMenuCard(sessionKey), true
 	case "menu.group.system":
 		return a.renderSystemMenuCard(sessionKey), true
+	case "menu.debug.logs":
+		return a.renderDebugLogsCard(sessionKey), true
 	default:
 		return nil, false
 	}

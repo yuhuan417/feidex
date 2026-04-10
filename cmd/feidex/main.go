@@ -14,6 +14,7 @@ import (
 	"feidex/internal/app"
 	"feidex/internal/buildinfo"
 	"feidex/internal/config"
+	"feidex/internal/logcontrol"
 )
 
 type appService interface {
@@ -75,7 +76,8 @@ func runServe(args []string) int {
 		fmt.Fprintf(os.Stderr, "invalid log level: %v\n", err)
 		return 1
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
+	logcontrol.Set(logLevel)
+	logger := slog.New(logcontrol.NewHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logcontrol.LevelVar()})))
 	slog.SetDefault(logger)
 	slog.Info("service starting", "config_path", *configPath, "data_dir", cfg.DataDir, "log_level", cfg.Log.Level)
 

@@ -42,6 +42,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandModel(msg)
 	case "/quiet":
 		return a.commandQuiet(msg, fields[1:])
+	case "/debug":
+		return a.commandDebug(msg, fields[1:])
 	case "/fast":
 		return a.commandFast(msg, fields[1:])
 	case "/download":
@@ -89,7 +91,7 @@ func isLocalCommand(raw string) bool {
 	switch fields[0] {
 	case "/model":
 		return len(fields) == 1
-	case "/quiet":
+	case "/quiet", "/debug":
 		return true
 	case "/menu", "/help", "/history", "/usage", "/download", "/compact", "/fork", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
@@ -493,11 +495,14 @@ func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
 func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("状态面板", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
+		{Text: commandLabel("调试日志", "/debug"), Type: "default", Value: map[string]any{"action": "menu.debug", "session_key": sessionKey}},
+		{Text: commandLabel("查看日志", "/debug logs"), Type: "default", Value: map[string]any{"action": "menu.debug.logs", "session_key": sessionKey}},
 		{Text: submenuCommandLabel("升级服务", "/upgrade"), Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": sessionKey}},
 		{Text: submenuCommandLabel("帮助说明", "/help"), Type: "default", Value: map[string]any{"action": "menu.help", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("服务管理", "blue", menuCardBody("menu.group.system", "查看服务状态、执行升级，或查阅命令帮助。"), buttons)
+	body := "查看服务状态、执行升级，或查阅命令帮助。\n\n当前 slog 日志级别: " + renderRuntimeLogLevelValue()
+	return a.feishu.SimpleStatusCard("服务管理", "blue", menuCardBody("menu.group.system", body), buttons)
 }
 
 func (a *App) renderHelpCard(sessionKey string) map[string]any {
@@ -519,6 +524,14 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"开启 Quiet 模式。",
 		"`/quiet off`",
 		"关闭 Quiet 模式。",
+		"`/debug`",
+		"切换服务端 slog 日志级别（debug/info）。",
+		"`/debug on`",
+		"切换到 debug 级别。",
+		"`/debug off`",
+		"切换到 info 级别。",
+		"`/debug logs`",
+		"查看最近一段服务端 slog 日志。",
 		"",
 		"会话管理：",
 		"`/new`",

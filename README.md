@@ -276,6 +276,7 @@ Feidex 会把这些状态写进去：
   - `响应速度 /fast`
 - 服务管理
   - `状态面板 /status`
+  - `调试日志 /debug`
   - `升级服务 /upgrade`
   - `帮助说明 /help`
 
@@ -299,6 +300,14 @@ Feidex 会把这些状态写进去：
   - 开启 Quiet 模式
 - `/quiet off`
   - 关闭 Quiet 模式
+- `/debug`
+  - 切换服务端 slog 日志级别（debug/info）
+- `/debug on`
+  - 切换到 debug 级别
+- `/debug off`
+  - 切换到 info 级别
+- `/debug logs`
+  - 查看最近一段服务端 slog 日志
 - `/threads`
   - 查看线程列表
 - `/threads all`

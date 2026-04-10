@@ -27,6 +27,7 @@ var menuNodes = map[string]menuNode{
 	"menu.reasoning":         {Label: "推理强度", Parent: "menu.group.model"},
 	"menu.fast":              {Label: "响应速度", Parent: "menu.group.model"},
 	"menu.status":            {Label: "状态面板", Parent: "menu.group.system"},
+	"menu.debug.logs":        {Label: "调试日志", Parent: "menu.group.system"},
 	"menu.upgrade":           {Label: "升级服务", Parent: "menu.group.system"},
 	"menu.help":              {Label: "帮助说明", Parent: "menu.group.system"},
 }

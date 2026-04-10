@@ -14,6 +14,7 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
+	"feidex/internal/logcontrol"
 	"feidex/internal/release"
 	"feidex/internal/state"
 
@@ -893,6 +894,13 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 
 func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	prevLevel := runtimeLogLevelText()
+	t.Cleanup(func() {
+		_ = logcontrol.SetName(prevLevel)
+		if a.cfg != nil {
+			a.cfg.Log.Level = runtimeLogLevelText()
+		}
+	})
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		if method == "thread/fork" {
 			result := out.(*codexrpc.ThreadStartResult)
@@ -994,6 +1002,12 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.status": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuDebug(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuHelp(action, action.ActionValue["session_key"].(string))
 		},
@@ -1027,14 +1041,17 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		if name == "thread.sandbox.menu" || name == "thread.policy.menu" || name == "menu.history" {
 			wantToastType = "warning"
 		}
-		if name == "menu.compact" || name == "menu.fork" {
+		if name == "menu.compact" || name == "menu.fork" || name == "menu.debug" {
 			wantToastType = "success"
+		}
+		if name == "menu.debug.logs" {
+			wantToastType = "info"
 		}
 		if resp.Toast.Type != wantToastType {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.group.session", "menu.group.context", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.group.session", "menu.group.context", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -2505,6 +2522,7 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/status",
 		"/model",
 		"/quiet",
+		"/debug",
 		"/download",
 		"/fork",
 		"/threads",
@@ -2571,7 +2589,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/download", "/fork", "/compact", "/workspace use ID", "/threads all", "/threads fork", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/threads all", "/threads fork", "/upgrade"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}
