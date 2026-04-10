@@ -275,7 +275,9 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		selectOptions,
 		initialOption,
 	))
-	appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
+		appendMarkdownBodyCardElement(card, row)
+	}
 	return card, nil
 }
 
@@ -663,7 +665,9 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 		selectOptions,
 		currentID,
 	))
-	appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
+		appendMarkdownBodyCardElement(card, row)
+	}
 	return card
 }
 
@@ -949,7 +953,7 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
 		"填写 `workspace_id` 和可选的 `name`，需要换目录时点“选目录”，最后点“确认”。"
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
-	buttonRow := buildMarkdownBodyCardActionElement([]feishu.Button{
+	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "选目录",
 			Type:  "default",
@@ -969,9 +973,16 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
 		},
 	})
-	buttonColumns := buttonRow["columns"].([]map[string]any)
-	buttonColumns[0]["elements"].([]map[string]any)[0]["form_action_type"] = "submit"
-	buttonColumns[1]["elements"].([]map[string]any)[0]["form_action_type"] = "submit"
+	for idx, row := range buttonRows {
+		columns := row["columns"].([]map[string]any)
+		if len(columns) == 0 {
+			continue
+		}
+		button := columns[0]["elements"].([]map[string]any)[0]
+		if idx < 2 {
+			button["form_action_type"] = "submit"
+		}
+	}
 	workspaceIDInput := map[string]any{
 		"tag":         "input",
 		"name":        "workspace_id",
@@ -996,11 +1007,10 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 		"direction":          "vertical",
 		"horizontal_spacing": "8px",
 		"vertical_spacing":   "8px",
-		"elements": []map[string]any{
+		"elements": append([]map[string]any{
 			workspaceIDInput,
 			workspaceNameInput,
-			buttonRow,
-		},
+		}, buttonRows...),
 	}
 	appendMarkdownBodyCardElement(card, form)
 	return card

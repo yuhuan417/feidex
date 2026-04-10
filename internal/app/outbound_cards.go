@@ -82,6 +82,17 @@ func buildMarkdownBodyCardActionElement(buttons []feishu.Button) map[string]any 
 	}
 }
 
+func buildMarkdownBodyCardActionElements(buttons []feishu.Button) []map[string]any {
+	if len(buttons) == 0 {
+		return nil
+	}
+	rows := make([]map[string]any, 0, len(buttons))
+	for _, btn := range buttons {
+		rows = append(rows, buildMarkdownBodyCardActionElement([]feishu.Button{btn}))
+	}
+	return rows
+}
+
 func (a *App) prepareCardMarkdown(sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -109,8 +120,8 @@ func (a *App) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub 
 			"content": content,
 		})
 	}
-	if len(buttons) > 0 {
-		appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
+		appendMarkdownBodyCardElement(card, row)
 	}
 	if bodyElements, _ := card["body"].(map[string]any)["elements"].([]map[string]any); len(bodyElements) == 0 {
 		appendMarkdownBodyCardElement(card, map[string]any{
@@ -141,8 +152,8 @@ func (a *App) renderCompactMarkdownCard(sub *state.Submission, title, color, met
 			"content": content,
 		})
 	}
-	if len(buttons) > 0 {
-		appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
+		appendMarkdownBodyCardElement(card, row)
 	}
 	if bodyElements, _ := card["body"].(map[string]any)["elements"].([]map[string]any); len(bodyElements) == 0 {
 		appendMarkdownBodyCardElement(card, map[string]any{
