@@ -376,8 +376,15 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected debug logs card")
 	}
+	elements := cardElementsForTest(ff.replyCards[len(ff.replyCards)-1])
+	if len(elements) < 2 || elements[0]["tag"] != "div" || elements[1]["tag"] != "div" {
+		t.Fatalf("debug logs card elements = %#v, want summary/log div blocks first", elements)
+	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
 	if !strings.Contains(body, "debug-log-test") || !strings.Contains(body, "key=value") {
 		t.Fatalf("debug logs card body = %q", body)
+	}
+	if strings.Contains(body, "```") {
+		t.Fatalf("debug logs card should use plain_text blocks, got %q", body)
 	}
 }
