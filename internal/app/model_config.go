@@ -13,6 +13,8 @@ import (
 	"feidex/internal/state"
 )
 
+const modelConfigDefaultOptionValue = "__default__"
+
 func configuredGlobalModel(cfg *config.Config) string {
 	if cfg == nil {
 		return ""
@@ -150,79 +152,70 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey,
 		},
 		{"tag": "markdown", "content": "选择全局模型"},
 	}
-
-	modelButtons := []feishu.Button{{
+	modelOptions := []selectStaticOption{{
 		Text: func() string {
 			if modelValue == "" {
 				return "当前 · 跟随默认"
 			}
 			return "跟随默认"
 		}(),
-		Type: func() string {
-			if modelValue == "" {
-				return "primary"
-			}
-			return "default"
-		}(),
-		Value: map[string]any{"action": "model.config.set_model", "model_id": "", "menu_action": menuAction},
+		Value: modelConfigDefaultOptionValue,
 	}}
-	if strings.TrimSpace(sessionKey) != "" {
-		modelButtons[0].Value["session_key"] = sessionKey
+	modelInitialOption := modelConfigDefaultOptionValue
+	if modelValue != "" && selectedModel != nil {
+		modelInitialOption = selectedModel.ID
 	}
 	for _, item := range result.Data {
 		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
-		btnType := "default"
 		if selectedModel != nil && item.ID == selectedModel.ID && modelValue != "" {
 			label = "当前 · " + label
-			btnType = "primary"
 		}
-		modelButtons = append(modelButtons, feishu.Button{
+		modelOptions = append(modelOptions, selectStaticOption{
 			Text:  label,
-			Type:  btnType,
-			Value: map[string]any{"action": "model.config.set_model", "model_id": item.ID, "session_key": sessionKey, "menu_action": menuAction},
+			Value: item.ID,
 		})
 	}
-	for _, row := range chunkButtons(modelButtons, 3) {
-		elements = append(elements, modelCardActionRow(row))
-	}
+	elements = append(elements, buildSelectStaticElement(
+		"model_config_select_model",
+		"选择全局模型",
+		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
+		modelOptions,
+		modelInitialOption,
+	))
 
 	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择全局推理强度"})
-	effortButtons := []feishu.Button{{
+	effortOptions := []selectStaticOption{{
 		Text: func() string {
 			if effortValue == "" {
 				return "当前 · 跟随默认"
 			}
 			return "跟随默认"
 		}(),
-		Type: func() string {
-			if effortValue == "" {
-				return "primary"
-			}
-			return "default"
-		}(),
-		Value: map[string]any{"action": "model.config.set_effort", "reasoning_effort": "", "menu_action": menuAction},
+		Value: modelConfigDefaultOptionValue,
 	}}
-	if strings.TrimSpace(sessionKey) != "" {
-		effortButtons[0].Value["session_key"] = sessionKey
+	effortInitialOption := modelConfigDefaultOptionValue
+	if effortValue != "" {
+		effortInitialOption = selectedEffort
 	}
 	if selectedModel != nil {
 		for _, item := range selectedModel.SupportedReasoningEfforts {
 			label := item.ReasoningEffort
-			btnType := "default"
 			if item.ReasoningEffort == selectedEffort && effortValue != "" {
 				label = "当前 · " + label
-				btnType = "primary"
 			}
-			effortButtons = append(effortButtons, feishu.Button{
+			effortOptions = append(effortOptions, selectStaticOption{
 				Text:  label,
-				Type:  btnType,
-				Value: map[string]any{"action": "model.config.set_effort", "reasoning_effort": item.ReasoningEffort, "session_key": sessionKey, "menu_action": menuAction},
+				Value: item.ReasoningEffort,
 			})
 		}
 	}
-	for _, row := range chunkButtons(effortButtons, 3) {
-		elements = append(elements, modelCardActionRow(row))
-	}
+	elements = append(elements, buildSelectStaticElement(
+		"model_config_select_effort",
+		"选择全局推理强度",
+		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
+		effortOptions,
+		effortInitialOption,
+	))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, modelCardActionRow([]feishu.Button{{
 			Text:  "返回上一级",

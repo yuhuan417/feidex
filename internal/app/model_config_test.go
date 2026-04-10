@@ -104,3 +104,25 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
+	cfg := config.Default()
+	a := &App{cfg: cfg}
+	card := a.renderModelConfigCard(codexrpc.ModelListResult{
+		Data: []codexrpc.ModelListEntry{
+			{
+				ID:                     "gpt-5",
+				DisplayName:            "GPT-5",
+				DefaultReasoningEffort: "medium",
+				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+					{ReasoningEffort: "low"},
+					{ReasoningEffort: "medium"},
+				},
+				IsDefault: true,
+			},
+		},
+	}, "sess-1", "menu.model")
+	if got := cardSelectStaticForTest(card); len(got) != 2 {
+		t.Fatalf("model config selects = %+v, want 2 select_static elements", got)
+	}
+}

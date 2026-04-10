@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,8 +103,20 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "model.config.set_model":
 		modelID, _ := action.ActionValue["model_id"].(string)
 		return a.completeGlobalModelSet(action, modelID)
+	case "model.config.select_model":
+		modelID := strings.TrimSpace(action.Option)
+		if modelID == modelConfigDefaultOptionValue {
+			modelID = ""
+		}
+		return a.completeGlobalModelSet(action, modelID)
 	case "model.config.set_effort":
 		reasoningEffort, _ := action.ActionValue["reasoning_effort"].(string)
+		return a.completeGlobalReasoningEffortSet(action, reasoningEffort)
+	case "model.config.select_effort":
+		reasoningEffort := strings.TrimSpace(action.Option)
+		if reasoningEffort == modelConfigDefaultOptionValue {
+			reasoningEffort = ""
+		}
 		return a.completeGlobalReasoningEffortSet(action, reasoningEffort)
 	case "menu.threads":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
@@ -119,6 +132,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		workspaceID, _ := action.ActionValue["workspace_id"].(string)
 		return a.completeWorkspaceUse(action, sessionKey, workspaceID)
+	case "workspace.use.select":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeWorkspaceUse(action, sessionKey, strings.TrimSpace(action.Option))
 	case "workspace.new":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeWorkspaceNew(action, sessionKey)
@@ -162,6 +178,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		threadID, _ := action.ActionValue["thread_id"].(string)
 		return a.completeThreadResume(action, sessionKey, threadID)
+	case "thread.resume.select":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeThreadResume(action, sessionKey, strings.TrimSpace(action.Option))
 	case "history.page":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		page, _ := action.ActionValue["page"].(float64)
@@ -170,6 +189,13 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		index, _ := action.ActionValue["index"].(float64)
 		return a.completeHistoryDetail(action, sessionKey, int(index))
+	case "history.detail.select":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		index, err := strconv.Atoi(strings.TrimSpace(action.Option))
+		if err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 turn 选项"}}, nil
+		}
+		return a.completeHistoryDetail(action, sessionKey, index)
 	case "turn.append":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		turnID, _ := action.ActionValue["turn_id"].(string)

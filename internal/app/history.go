@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,21 +88,19 @@ func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, er
 		}
 	}
 
-	buttons := make([]feishu.Button, 0, (end-start)+3)
+	buttons := make([]feishu.Button, 0, 3)
+	selectOptions := make([]selectStaticOption, 0, end-start)
+	initialOption := ""
 	for idx := start; idx < end; idx++ {
 		turn := turns[idx]
-		label := fmt.Sprintf("Turn #%d", turn.Ordinal)
+		label := fmt.Sprintf("Turn #%d | %s", turn.Ordinal, firstNonEmpty(turn.InputPreview, "-"))
 		if turn.IsCurrent {
 			label = "当前 · " + label
+			initialOption = strconv.Itoa(idx)
 		}
-		buttons = append(buttons, feishu.Button{
-			Text: submenuLabel(label),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "history.detail",
-				"session_key": sessionKey,
-				"index":       idx,
-			},
+		selectOptions = append(selectOptions, selectStaticOption{
+			Text:  label,
+			Value: strconv.Itoa(idx),
 		})
 	}
 	if page > 0 {
@@ -134,7 +133,19 @@ func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, er
 			"session_key": sessionKey,
 		},
 	})
-	return a.feishu.SimpleStatusCard("历史记录", "blue", menuCardBody("menu.history", strings.Join(bodyLines, "\n")), buttons), nil
+	card := newMarkdownBodyCard("历史记录", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
+	if len(selectOptions) > 0 {
+		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+			"history_detail_select",
+			"选择要查看的 turn",
+			map[string]any{"action": "history.detail.select", "session_key": sessionKey},
+			selectOptions,
+			initialOption,
+		))
+	}
+	appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	return card, nil
 }
 
 func (a *App) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {

@@ -319,6 +319,16 @@ func cardButtonsForTest(card map[string]any) []map[string]any {
 	return buttons
 }
 
+func cardSelectStaticForTest(card map[string]any) []map[string]any {
+	var selects []map[string]any
+	for _, elem := range cardElementsForTest(card) {
+		if tag, _ := elem["tag"].(string); tag == "select_static" {
+			selects = append(selects, elem)
+		}
+	}
+	return selects
+}
+
 func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	t.Helper()
 
@@ -689,6 +699,9 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("expected workspace menu card, got %d", len(ff.replyCards))
+	}
+	if got := cardSelectStaticForTest(ff.replyCards[0]); len(got) != 1 {
+		t.Fatalf("workspace menu selects = %+v, want 1 select", got)
 	}
 
 	ff.replyCards = nil
@@ -2743,6 +2756,9 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected thread list card to be sent")
 	}
+	if got := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1]); len(got) != 1 {
+		t.Fatalf("thread list selects = %+v, want 1 select", got)
+	}
 }
 
 func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
@@ -2792,26 +2808,16 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	if strings.Contains(body, "Alt Thread") {
 		t.Fatalf("thread list body should exclude other workspace thread: %q", body)
 	}
-	resumeCount := 0
-	var value map[string]any
-	for _, action := range cardButtonsForTest(ff.replyCards[0]) {
-		got, _ := action["value"].(map[string]any)
-		if len(got) == 0 {
-			behaviors, _ := action["behaviors"].([]map[string]any)
-			if len(behaviors) > 0 {
-				got, _ = behaviors[0]["value"].(map[string]any)
-			}
-		}
-		if got["action"] == "thread.resume" {
-			resumeCount++
-			value = got
-		}
+	selects := cardSelectStaticForTest(ff.replyCards[0])
+	if len(selects) != 1 {
+		t.Fatalf("thread list selects = %+v, want 1", selects)
 	}
-	if resumeCount != 1 {
-		t.Fatalf("thread list resume button count = %d, want 1", resumeCount)
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 1 {
+		t.Fatalf("thread list options = %+v, want 1 filtered option", options)
 	}
-	if got, _ := value["thread_cwd"].(string); got != a.cfg.Workspaces[0].Cwd {
-		t.Fatalf("thread_cwd = %q, want %q", got, a.cfg.Workspaces[0].Cwd)
+	if got, _ := options[0]["value"].(string); got != "thread-default" {
+		t.Fatalf("thread list option value = %q, want thread-default", got)
 	}
 }
 

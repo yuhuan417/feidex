@@ -230,28 +230,19 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			"",
 		)
 	}
-	buttons := make([]feishu.Button, 0, len(result.Data))
+	buttons := make([]feishu.Button, 0, 5)
+	selectOptions := make([]selectStaticOption, 0, len(result.Data))
+	initialOption := ""
 	for idx, item := range result.Data {
-		label := renderThreadButtonLabel(item.Name, item.Preview, item.ID)
-		btnType := "default"
 		entry := fmt.Sprintf("%d. %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
 		if sess != nil && item.ID == sess.ActiveThreadID {
-			label = "当前 · " + label
-			btnType = "primary"
 			entry = fmt.Sprintf("%d. [当前] %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
+			initialOption = item.ID
 		}
 		lines = append(lines, entry)
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":         "thread.resume",
-				"thread_id":      item.ID,
-				"thread_name":    item.Name,
-				"thread_preview": item.Preview,
-				"thread_cwd":     item.Cwd,
-				"session_key":    sessionKey,
-			},
+		selectOptions = append(selectOptions, selectStaticOption{
+			Text:  entry,
+			Value: item.ID,
 		})
 	}
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
@@ -319,7 +310,17 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		},
 	)
 	body := strings.Join(lines, "\n")
-	return a.feishu.SimpleStatusCard("线程列表", "blue", menuCardBody("menu.threads", body), buttons), nil
+	card := newMarkdownBodyCard("线程列表", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.threads", body)})
+	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+		"thread_resume_select",
+		"选择要恢复的线程",
+		map[string]any{"action": "thread.resume.select", "session_key": sessionKey},
+		selectOptions,
+		initialOption,
+	))
+	appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	return card, nil
 }
 
 func renderThreadSettingValue(override, fallback string) string {
@@ -634,22 +635,16 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 		body += "\n默认 sandbox: `" + currentWS.SandboxMode + "`"
 		body += "\n默认 policy: `" + currentWS.ApprovalPolicy + "`"
 	}
-	buttons := make([]feishu.Button, 0, len(a.cfg.Workspaces)+4)
+	buttons := make([]feishu.Button, 0, 4)
+	selectOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
 	for _, ws := range a.cfg.Workspaces {
 		label := ws.ID
-		btnType := "default"
 		if ws.ID == currentID {
 			label = "当前 · " + ws.ID
-			btnType = "primary"
 		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":       "workspace.use",
-				"workspace_id": ws.ID,
-				"session_key":  sessionKey,
-			},
+		selectOptions = append(selectOptions, selectStaticOption{
+			Text:  label,
+			Value: ws.ID,
 		})
 	}
 	buttons = append(buttons,
@@ -686,7 +681,17 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 	)
-	return a.feishu.SimpleStatusCard("工作区", "blue", menuCardBody("menu.workspace", body), buttons)
+	card := newMarkdownBodyCard("工作区", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.workspace", body)})
+	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+		"workspace_select",
+		"选择工作区",
+		map[string]any{"action": "workspace.use.select", "session_key": sessionKey},
+		selectOptions,
+		currentID,
+	))
+	appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	return card
 }
 
 func workspaceSandboxOptions() []workspaceSettingOption {

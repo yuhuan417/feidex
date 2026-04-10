@@ -49,7 +49,7 @@ func TestHistoryHelpersSummarizeTurnsAndInputs(t *testing.T) {
 	if got := historyInputPreview([]string{"one", "two"}); !strings.Contains(got, "等 2 条") {
 		t.Fatalf("historyInputPreview() = %q, want count suffix", got)
 	}
-	if got := historyUserMessageInputs(codexrpc.ThreadReadItem{Content: json.RawMessage(`bad`) }); got != nil {
+	if got := historyUserMessageInputs(codexrpc.ThreadReadItem{Content: json.RawMessage(`bad`)}); got != nil {
 		t.Fatalf("historyUserMessageInputs(invalid) = %+v, want nil", got)
 	}
 	if got := stringPtrValue(nil); got != "" {
@@ -100,6 +100,9 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 	body := cardMarkdownContent(t, card)
 	if !strings.Contains(body, "当前线程: thread-1") || !strings.Contains(body, "Turn #1") {
 		t.Fatalf("history card body = %q, want thread id and turn summary", body)
+	}
+	if got := cardSelectStaticForTest(card); len(got) != 1 {
+		t.Fatalf("history card selects = %+v, want 1 select", got)
 	}
 
 	detail, err := a.renderHistoryDetailCard(sessionKey, 0)
