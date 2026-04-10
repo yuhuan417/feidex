@@ -110,6 +110,10 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "workspace.new":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeWorkspaceNew(action, sessionKey)
+	case "workspace.new.pickdir":
+		return a.completeWorkspaceNewPickDir(action)
+	case "workspace.new.submit":
+		return a.completeWorkspaceNewSubmit(action)
 	case "workspace.sandbox.menu":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeWorkspaceSandboxMenu(action, sessionKey)
@@ -163,6 +167,8 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		return a.completeTurnItemToggle(action)
 	case "user_input.answer":
 		return a.completeUserInputAnswer(action)
+	case "path_picker.dropdown", "path_picker.up", "path_picker.open", "path_picker.select", "path_picker.confirm", "path_picker.cancel":
+		return a.completePathPickerAction(action, name)
 	case "upgrade.confirm", "upgrade.cancel":
 		return a.completeUpgradeAction(action, name)
 	case "approval.command.accept", "approval.command.accept_session", "approval.command.decline", "approval.command.cancel",
@@ -675,19 +681,34 @@ func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	wsID := a.defaultWorkspaceID()
+	if sess := a.store.GetSession(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		wsID = sess.WorkspaceID
+	}
+	ws := config.FindWorkspace(a.cfg, wsID)
+	payload := workspaceNewPayload{
+		RootPath: a.defaultWorkspaceNewRoot(ws),
+		SelectedCWD: firstNonEmpty(func() string {
+			if ws == nil {
+				return ""
+			}
+			return strings.TrimSpace(ws.Cwd)
+		}(), "/"),
+	}
 	_ = a.store.UpsertPending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        "workspace_new",
 		SessionKey:  sessionKey,
 		OwnerUserID: action.UserID,
 		FeishuMsgID: action.MessageID,
+		PayloadJSON: mustJSON(payload),
 		Status:      "pending",
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	})
-	card := a.renderWorkspaceNewCard(sessionKey, requestID)
+	card := a.renderWorkspaceNewCard(sessionKey, requestID, payload)
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "请按提示发送工作区信息"},
+		Toast: &callback.Toast{Type: "info", Content: "请填写工作区信息"},
 		Card:  rawCard(card),
 	}, nil
 }

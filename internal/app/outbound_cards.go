@@ -52,22 +52,33 @@ func appendMarkdownBodyCardElement(card map[string]any, elem map[string]any) {
 }
 
 func buildMarkdownBodyCardActionElement(buttons []feishu.Button) map[string]any {
-	actions := make([]map[string]any, 0, len(buttons))
+	columns := make([]map[string]any, 0, len(buttons))
 	for _, btn := range buttons {
-		action := map[string]any{
-			"tag":   "button",
-			"type":  btn.Type,
-			"text":  map[string]any{"tag": "plain_text", "content": btn.Text},
-			"value": btn.Value,
+		button := map[string]any{
+			"tag":  "button",
+			"type": firstNonEmpty(strings.TrimSpace(btn.Type), "default"),
+			"text": map[string]any{"tag": "plain_text", "content": btn.Text},
+			"behaviors": []map[string]any{{
+				"type":  "callback",
+				"value": btn.Value,
+			}},
 		}
 		if strings.TrimSpace(btn.Name) != "" {
-			action["name"] = btn.Name
+			button["name"] = btn.Name
 		}
-		actions = append(actions, action)
+		columns = append(columns, map[string]any{
+			"tag":    "column",
+			"width":  "weighted",
+			"weight": 1,
+			"elements": []map[string]any{
+				button,
+			},
+		})
 	}
 	return map[string]any{
-		"tag":     "action",
-		"actions": actions,
+		"tag":                "column_set",
+		"horizontal_spacing": "8px",
+		"columns":            columns,
 	}
 }
 

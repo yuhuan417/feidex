@@ -154,6 +154,21 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	if err := a.store.UpsertPending(&state.PendingRequest{ID: "approval-1", Kind: "command", OwnerUserID: "user-1", Status: "pending", RequestIDRaw: `"approval-1"`}); err != nil {
 		t.Fatalf("UpsertPending(approval) error = %v", err)
 	}
+	pathRoot := t.TempDir()
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "path-1",
+		Kind:        pathPickerKind,
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(pathPickerPayload{
+			Mode:        pathPickerModeDirectory,
+			Style:       pathPickerStyleDropdown,
+			RootPath:    pathRoot,
+			CurrentPath: pathRoot,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(path picker) error = %v", err)
+	}
 	if err := a.store.UpsertPending(&state.PendingRequest{ID: "upgrade-1", Kind: "upgrade_release", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(upgradePendingPayload{
 		TargetVersion:  "v9.9.9",
 		BinaryPath:     "/tmp/feidex",
@@ -197,6 +212,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "history.detail", "session_key": "sess-1", "index": float64(0)}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "turn.append", "session_key": "sess-1", "turn_id": "turn-1", "item_id": "item-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "user_input.answer", "request_id": "input-1", "question_id": "mode", "answer": "Fast"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "path_picker.cancel", "request_id": "path-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "upgrade.cancel", "request_id": "upgrade-1", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "approval.command.accept", "request_id": "approval-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "pending_form.cancel", "request_id": "missing"}, UserID: "user-1", ChatID: "chat-1"},

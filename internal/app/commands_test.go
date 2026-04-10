@@ -122,9 +122,9 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 	a := &App{feishu: feishu.New(config.Default().Feishu)}
 	msg := &feishu.InboundMessage{MessageID: "m1", ChatType: "p2p", ChatID: "chat", UserID: "user"}
 	card := a.feishu.SimpleStatusCard("命令菜单", "blue", "选择命令执行。", nil)
-	elements, ok := card["elements"].([]map[string]any)
-	if !ok || len(elements) == 0 {
-		t.Fatalf("unexpected card elements: %#v", card["elements"])
+	elements := cardElementsForTest(card)
+	if len(elements) == 0 {
+		t.Fatalf("unexpected card elements: %#v", card)
 	}
 	body, _ := elements[0]["content"].(string)
 	for _, alias := range []string{"/menu", "/help", "/history", "/compact", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {

@@ -89,16 +89,7 @@ func (a *App) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, err
 }
 
 func modelCardActionRow(buttons []feishu.Button) map[string]any {
-	actions := make([]map[string]any, 0, len(buttons))
-	for _, btn := range buttons {
-		actions = append(actions, map[string]any{
-			"tag":   "button",
-			"type":  btn.Type,
-			"text":  map[string]any{"tag": "plain_text", "content": btn.Text},
-			"value": btn.Value,
-		})
-	}
-	return map[string]any{"tag": "action", "actions": actions}
+	return buildMarkdownBodyCardActionElement(buttons)
 }
 
 func chunkButtons(buttons []feishu.Button, size int) [][]feishu.Button {
@@ -240,20 +231,12 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey,
 		}}))
 	}
 
-	return map[string]any{
-		"config": map[string]any{
-			"wide_screen_mode": true,
-			"update_multi":     true,
-		},
-		"header": map[string]any{
-			"title": map[string]any{
-				"tag":     "plain_text",
-				"content": "模型配置",
-			},
-			"template": "blue",
-		},
-		"elements": append([]map[string]any{{"tag": "markdown", "content": menuCardBody(menuAction, "")}}, elements...),
+	card := newMarkdownBodyCard("模型配置", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody(menuAction, "")})
+	for _, elem := range elements {
+		appendMarkdownBodyCardElement(card, elem)
 	}
+	return card
 }
 
 func (a *App) updateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {

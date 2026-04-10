@@ -72,9 +72,9 @@ func TestSimpleStatusCardAndSummaries(t *testing.T) {
 	if title != "Title" || preview != "Body text" || buttonCount != 2 {
 		t.Fatalf("summarizeCardForLog() = %q, %q, %d", title, preview, buttonCount)
 	}
-	elements := card["elements"].([]map[string]any)
+	elements := card["body"].(map[string]any)["elements"].([]map[string]any)
 	if len(elements) != 2 {
-		t.Fatalf("SimpleStatusCard() elements = %+v, want markdown + action", elements)
+		t.Fatalf("SimpleStatusCard() elements = %+v, want markdown + button row", elements)
 	}
 
 	bodyCard := map[string]any{
@@ -84,7 +84,7 @@ func TestSimpleStatusCardAndSummaries(t *testing.T) {
 		"body": map[string]any{
 			"elements": []map[string]any{
 				{"tag": "markdown", "content": "Nested body"},
-				{"tag": "action", "actions": []map[string]any{{"tag": "button"}}},
+				{"tag": "column_set", "columns": []map[string]any{{"tag": "column", "elements": []map[string]any{{"tag": "button"}}}}},
 			},
 		},
 	}

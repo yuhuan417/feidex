@@ -37,7 +37,7 @@ func TestServiceTierHelpersAndMenu(t *testing.T) {
 	a := &App{cfg: cfg, store: store, feishu: feishu.New(cfg.Feishu)}
 
 	card := a.renderServiceTierMenuCard("sess-1")
-	if body := card["elements"].([]map[string]any)[0]["content"].(string); !strings.Contains(body, "当前没有活动线程") {
+	if body := cardElementsForTest(card)[0]["content"].(string); !strings.Contains(body, "当前没有活动线程") {
 		t.Fatalf("renderServiceTierMenuCard(no thread) = %q", body)
 	}
 
@@ -51,9 +51,21 @@ func TestServiceTierHelpersAndMenu(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 	card = a.renderServiceTierMenuCard("sess-1")
-	actions := card["elements"].([]map[string]any)[1]["actions"].([]map[string]any)
-	if len(actions) != 3 || actions[1]["type"] != "primary" {
-		t.Fatalf("service tier actions = %#v, want selected fast button", actions)
+	rows := cardElementsForTest(card)
+	var primaryFound bool
+	for _, row := range rows[1:] {
+		columns, _ := row["columns"].([]map[string]any)
+		for _, column := range columns {
+			elements, _ := column["elements"].([]map[string]any)
+			for _, elem := range elements {
+				if tag, _ := elem["tag"].(string); tag == "button" && elem["type"] == "primary" {
+					primaryFound = true
+				}
+			}
+		}
+	}
+	if !primaryFound {
+		t.Fatalf("service tier rows = %#v, want selected primary button", rows)
 	}
 }
 

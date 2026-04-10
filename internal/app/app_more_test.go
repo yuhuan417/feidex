@@ -245,11 +245,7 @@ func (f *fakeFeishuClient) SimpleStatusCard(title, color, body string, buttons [
 
 func cardMarkdownContent(t *testing.T, card map[string]any) string {
 	t.Helper()
-	elements, ok := card["elements"].([]map[string]any)
-	if !ok {
-		body, _ := card["body"].(map[string]any)
-		elements, _ = body["elements"].([]map[string]any)
-	}
+	elements := cardElementsForTest(card)
 	if len(elements) == 0 {
 		t.Fatalf("unexpected card elements: %#v", card)
 	}
@@ -266,6 +262,35 @@ func cardMarkdownContent(t *testing.T, card map[string]any) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+func cardElementsForTest(card map[string]any) []map[string]any {
+	if elements, ok := card["elements"].([]map[string]any); ok {
+		return elements
+	}
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	return elements
+}
+
+func cardButtonsForTest(card map[string]any) []map[string]any {
+	var buttons []map[string]any
+	for _, elem := range cardElementsForTest(card) {
+		if actions, ok := elem["actions"].([]map[string]any); ok {
+			buttons = append(buttons, actions...)
+		}
+		if columns, ok := elem["columns"].([]map[string]any); ok {
+			for _, column := range columns {
+				columnElems, _ := column["elements"].([]map[string]any)
+				for _, child := range columnElems {
+					if tag, _ := child["tag"].(string); tag == "button" {
+						buttons = append(buttons, child)
+					}
+				}
+			}
+		}
+	}
+	return buttons
 }
 
 func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
@@ -714,8 +739,8 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected command approval to send a card")
 	}
-	if _, ok := ff.sendCards[0]["schema"]; ok {
-		t.Fatalf("approval card should use legacy layout, got schema=%#v", ff.sendCards[0]["schema"])
+	if got, _ := ff.sendCards[0]["schema"].(string); got != "2.0" {
+		t.Fatalf("approval card schema = %#v, want 2.0", ff.sendCards[0]["schema"])
 	}
 	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "命令审批") || !strings.Contains(got, "ls -la") || !strings.Contains(got, "/repo") {
 		t.Fatalf("command approval card body = %q", got)
@@ -735,8 +760,8 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected permissions approval to send a card")
 	}
-	if _, ok := ff.sendCards[0]["schema"]; ok {
-		t.Fatalf("permissions card should use legacy layout, got schema=%#v", ff.sendCards[0]["schema"])
+	if got, _ := ff.sendCards[0]["schema"].(string); got != "2.0" {
+		t.Fatalf("permissions card schema = %#v, want 2.0", ff.sendCards[0]["schema"])
 	}
 	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "权限审批") || !strings.Contains(got, "mode") || !strings.Contains(got, "network") || !strings.Contains(got, "/repo") {
 		t.Fatalf("permissions approval card body = %q", got)
@@ -961,11 +986,16 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	}
 
 	workspaceCard := a.renderWorkspaceMenuCard(sessionKey)
-	workspaceElements := workspaceCard["elements"].([]map[string]any)
-	workspaceActions := workspaceElements[1]["actions"].([]map[string]any)
+	workspaceActions := cardButtonsForTest(workspaceCard)
 	foundBackToMenu := false
 	for _, action := range workspaceActions {
 		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
 		if value["action"] == "menu.group.context" {
 			foundBackToMenu = true
 		}
@@ -978,11 +1008,16 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderWorkspaceSandboxMenuCard() error = %v", err)
 	}
-	sandboxElements := sandboxCard["elements"].([]map[string]any)
-	sandboxActions := sandboxElements[1]["actions"].([]map[string]any)
+	sandboxActions := cardButtonsForTest(sandboxCard)
 	foundBackToWorkspace := false
 	for _, action := range sandboxActions {
 		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
 		if value["action"] == "menu.workspace" {
 			foundBackToWorkspace = true
 		}
@@ -1000,7 +1035,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：命令菜单") {
 		t.Fatalf("root menu missing breadcrumb: %q", body)
 	}
-	rootActions := rootCard["elements"].([]map[string]any)[1]["actions"].([]map[string]any)
+	rootActions := cardButtonsForTest(rootCard)
 	for _, action := range rootActions {
 		text, _ := action["text"].(map[string]any)
 		label, _ := text["content"].(string)
@@ -1013,13 +1048,19 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	if body := cardMarkdownContent(t, contextCard); !strings.Contains(body, "当前位置：命令菜单 / 会话管理") {
 		t.Fatalf("context menu missing breadcrumb: %q", body)
 	}
-	contextActions := contextCard["elements"].([]map[string]any)[1]["actions"].([]map[string]any)
+	contextActions := cardButtonsForTest(contextCard)
 	indicatorByAction := map[string]bool{}
 	labelByAction := map[string]string{}
 	for _, action := range contextActions {
 		text, _ := action["text"].(map[string]any)
 		label, _ := text["content"].(string)
 		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
 		actionName, _ := value["action"].(string)
 		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
 		labelByAction[actionName] = label
@@ -2634,7 +2675,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected thread list card to be sent")
 	}
-	elements := ff.replyCards[0]["elements"].([]map[string]any)
+	elements := cardElementsForTest(ff.replyCards[0])
 	body := elements[0]["content"].(string)
 	if !strings.Contains(body, "Default Thread") {
 		t.Fatalf("thread list body missing current workspace thread: %q", body)
@@ -2642,11 +2683,17 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	if strings.Contains(body, "Alt Thread") {
 		t.Fatalf("thread list body should exclude other workspace thread: %q", body)
 	}
-	actions := elements[1]["actions"].([]map[string]any)
 	resumeCount := 0
 	var value map[string]any
-	for _, action := range actions {
-		if got, _ := action["value"].(map[string]any); got["action"] == "thread.resume" {
+	for _, action := range cardButtonsForTest(ff.replyCards[0]) {
+		got, _ := action["value"].(map[string]any)
+		if len(got) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				got, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if got["action"] == "thread.resume" {
 			resumeCount++
 			value = got
 		}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type workspaceSettingOption struct {
@@ -893,20 +896,117 @@ func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, err
 	return a.feishu.SimpleStatusCard("配置 Thread Policy", "blue", menuCardBody("thread.policy.menu", body), buttons), nil
 }
 
-func (a *App) renderWorkspaceNewCard(sessionKey, requestID string) map[string]any {
-	body := "请直接发送一行文本来创建工作区。\n\n格式：\n`workspace_id cwd`\n或\n`workspace_id cwd name`\n\n说明：\n- `name` 是可选的，不用输入方括号\n- 如果不填 name，就默认用 workspace_id 作为显示名\n\n示例：\n`op /home/yuhuan/obfs-sniproxy`\n`op /home/yuhuan/obfs-sniproxy ObfsSniproxy`\n\n发送 `/` 或其它命令前，可先完成本次创建。"
-	return a.feishu.SimpleStatusCard("新建工作区", "orange", menuCardBody("workspace.new", body), []feishu.Button{
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID}},
+type workspaceNewPayload struct {
+	RootPath    string             `json:"root_path"`
+	SelectedCWD string             `json:"selected_cwd"`
+	DraftID     string             `json:"draft_id,omitempty"`
+	DraftName   string             `json:"draft_name,omitempty"`
+	Picker      *pathPickerPayload `json:"picker,omitempty"`
+}
+
+func workspaceNewPayloadFromPending(pending *state.PendingRequest) workspaceNewPayload {
+	var payload workspaceNewPayload
+	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	}
+	return payload
+}
+
+func (a *App) defaultWorkspaceNewRoot(ws *config.Workspace) string {
+	return "/"
+}
+
+func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload workspaceNewPayload) map[string]any {
+	if payload.Picker != nil {
+		card, err := a.renderPathPickerCard(requestID, *payload.Picker)
+		if err == nil {
+			return card
+		}
+		payload.Picker = nil
+	}
+	selectedCWD := strings.TrimSpace(payload.SelectedCWD)
+	if selectedCWD == "" {
+		selectedCWD = payload.RootPath
+	}
+	card := newMarkdownBodyCard("新建工作区", "orange")
+	body := "当前位置：命令菜单 / 会话管理 / 工作区管理 / 新建工作区\n\n" +
+		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
+		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
+		"填写 `workspace_id` 和可选的 `name`，需要换目录时点“选目录”，最后点“确认”。"
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
+	buttonRow := buildMarkdownBodyCardActionElement([]feishu.Button{
+		{
+			Text:  "选目录",
+			Type:  "default",
+			Name:  "workspace_new_pickdir",
+			Value: map[string]any{"action": "workspace.new.pickdir", "request_id": requestID},
+		},
+		{
+			Text:  "确认",
+			Type:  "primary",
+			Name:  "workspace_new_submit",
+			Value: map[string]any{"action": "workspace.new.submit", "request_id": requestID},
+		},
+		{
+			Text:  "取消",
+			Type:  "default",
+			Name:  "workspace_new_cancel",
+			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
+		},
 	})
+	buttonColumns := buttonRow["columns"].([]map[string]any)
+	buttonColumns[0]["elements"].([]map[string]any)[0]["form_action_type"] = "submit"
+	buttonColumns[1]["elements"].([]map[string]any)[0]["form_action_type"] = "submit"
+	workspaceIDInput := map[string]any{
+		"tag":         "input",
+		"name":        "workspace_id",
+		"required":    true,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "workspace_id"},
+	}
+	if value := strings.TrimSpace(payload.DraftID); value != "" {
+		workspaceIDInput["default_value"] = value
+	}
+	workspaceNameInput := map[string]any{
+		"tag":         "input",
+		"name":        "workspace_name",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "name（可选）"},
+	}
+	if value := strings.TrimSpace(payload.DraftName); value != "" {
+		workspaceNameInput["default_value"] = value
+	}
+	form := map[string]any{
+		"tag":                "form",
+		"name":               "workspace_new_form",
+		"direction":          "vertical",
+		"horizontal_spacing": "8px",
+		"vertical_spacing":   "8px",
+		"elements": []map[string]any{
+			workspaceIDInput,
+			workspaceNameInput,
+			buttonRow,
+		},
+	}
+	appendMarkdownBodyCardElement(card, form)
+	return card
 }
 
 func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
 	requestID, err := a.store.NextLocalID("workspace")
 	if err != nil {
 		return err
 	}
-	card := a.renderWorkspaceNewCard(sessionKey, requestID)
+	payload := workspaceNewPayload{
+		RootPath: a.defaultWorkspaceNewRoot(ws),
+		SelectedCWD: firstNonEmpty(func() string {
+			if ws == nil {
+				return ""
+			}
+			return strings.TrimSpace(ws.Cwd)
+		}(), "/"),
+	}
+	card := a.renderWorkspaceNewCard(sessionKey, requestID, payload)
 	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	if err != nil {
 		return err
@@ -917,23 +1017,40 @@ func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
 		SessionKey:  sessionKey,
 		OwnerUserID: msg.UserID,
 		FeishuMsgID: msgID,
+		PayloadJSON: mustJSON(payload),
 		Status:      "pending",
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	})
 }
 
-func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	parts := strings.Fields(strings.TrimSpace(msg.Text))
-	if len(parts) < 2 {
-		return fmt.Errorf("格式错误，需发送: workspace_id cwd [name]")
+func formValueString(values map[string]any, key string) (string, bool) {
+	if len(values) == 0 {
+		return "", false
 	}
-	id := parts[0]
-	cwd := parts[1]
-	name := id
-	if len(parts) > 2 {
-		name = strings.Join(parts[2:], " ")
+	raw, ok := values[key]
+	if !ok {
+		return "", false
 	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v), true
+	default:
+		return strings.TrimSpace(fmt.Sprint(v)), true
+	}
+}
+
+func mergeWorkspaceNewFormValues(payload workspaceNewPayload, values map[string]any) workspaceNewPayload {
+	if value, ok := formValueString(values, "workspace_id"); ok && value != "" {
+		payload.DraftID = value
+	}
+	if value, ok := formValueString(values, "workspace_name"); ok {
+		payload.DraftName = value
+	}
+	return payload
+}
+
+func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
 	if config.FindWorkspace(a.cfg, id) != nil {
 		return fmt.Errorf("workspace %q 已存在", id)
 	}
@@ -946,7 +1063,6 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 		SandboxMode:    "workspace-write",
 	})
 	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
-		// rollback
 		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
 		return err
 	}
@@ -954,13 +1070,37 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
 		return err
 	}
-	sessionKey := a.makeSessionKey(msg)
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
-		sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
+		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
 	}
 	switchSessionWorkspace(sess, id)
-	if err := a.store.UpsertSession(sess); err != nil {
+	return a.store.UpsertSession(sess)
+}
+
+func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+	payload := workspaceNewPayloadFromPending(pending)
+	parts := strings.Fields(strings.TrimSpace(msg.Text))
+	if len(parts) < 1 {
+		return fmt.Errorf("格式错误，需发送: workspace_id [name]")
+	}
+	id := parts[0]
+	cwd := strings.TrimSpace(payload.SelectedCWD)
+	name := id
+	if cwd == "" && len(parts) >= 2 {
+		// 兼容旧格式: workspace_id cwd [name]
+		cwd = parts[1]
+		if len(parts) > 2 {
+			name = strings.Join(parts[2:], " ")
+		}
+	} else if len(parts) > 1 {
+		name = strings.Join(parts[1:], " ")
+	}
+	if strings.TrimSpace(cwd) == "" {
+		return fmt.Errorf("请先选择目录")
+	}
+	sessionKey := a.makeSessionKey(msg)
+	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
 	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -968,4 +1108,83 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+}
+
+func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := a.store.PendingByID(requestID)
+	if pending == nil || pending.Kind != "workspace_new" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := mergeWorkspaceNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
+	currentPath := firstNonEmpty(strings.TrimSpace(payload.SelectedCWD), "/")
+	payload.Picker = &pathPickerPayload{
+		Mode:        pathPickerModeDirectory,
+		Style:       pathPickerStyleDropdown,
+		RootPath:    firstNonEmpty(strings.TrimSpace(payload.RootPath), "/"),
+		CurrentPath: currentPath,
+	}
+	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开目录选择"},
+		Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+	}, nil
+}
+
+func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := a.store.PendingByID(requestID)
+	if pending == nil || pending.Kind != "workspace_new" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := mergeWorkspaceNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
+	id := strings.TrimSpace(payload.DraftID)
+	if id == "" {
+		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "请填写 workspace_id"},
+			Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+		}, nil
+	}
+	cwd := strings.TrimSpace(payload.SelectedCWD)
+	if cwd == "" {
+		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "请先选择目录"},
+			Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+		}, nil
+	}
+	name := strings.TrimSpace(payload.DraftName)
+	if name == "" {
+		name = id
+	}
+	sess := a.store.GetSession(pending.SessionKey)
+	chatID := action.ChatID
+	chatType := ""
+	if sess != nil {
+		chatID = firstNonEmpty(chatID, sess.ChatID)
+		chatType = sess.ChatType
+	}
+	if err := a.createWorkspaceAndSwitch(pending.SessionKey, action.UserID, chatID, chatType, id, name, cwd); err != nil {
+		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+		}, nil
+	}
+	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = "resolved"
+		req.PayloadJSON = mustJSON(payload)
+	})
+	body := "已创建并切换到工作区 `" + id + "`\n\ncwd: `" + cwd + "`"
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已创建工作区"},
+		Card:  rawCard(a.feishu.SimpleStatusCard("工作区已创建", "green", body, nil)),
+	}, nil
 }

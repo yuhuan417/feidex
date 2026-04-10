@@ -68,6 +68,7 @@ type CardAction struct {
 	ChatID      string
 	MessageID   string
 	Name        string
+	Option      string
 	InputValue  string
 	Options     []string
 	Checked     bool
@@ -193,6 +194,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 						cardAction.ActionValue = event.Event.Action.Value
 						cardAction.FormValue = event.Event.Action.FormValue
 						cardAction.Name = event.Event.Action.Name
+						cardAction.Option = event.Event.Action.Option
 						cardAction.InputValue = event.Event.Action.InputValue
 						cardAction.Options = append([]string(nil), event.Event.Action.Options...)
 						cardAction.Checked = event.Event.Action.Checked
@@ -724,6 +726,7 @@ func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string,
 
 func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) map[string]any {
 	card := map[string]any{
+		"schema": "2.0",
 		"config": map[string]any{
 			"wide_screen_mode": true,
 			"update_multi":     true,
@@ -735,30 +738,82 @@ func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) 
 			},
 			"template": color,
 		},
-		"elements": []map[string]any{
-			{"tag": "markdown", "content": body},
+		"body": map[string]any{
+			"elements": []map[string]any{
+				{"tag": "markdown", "content": body},
+			},
 		},
 	}
 	if len(buttons) > 0 {
-		actions := make([]map[string]any, 0, len(buttons))
-		for _, btn := range buttons {
-			action := map[string]any{
-				"tag":   "button",
-				"type":  btn.Type,
-				"text":  map[string]any{"tag": "plain_text", "content": btn.Text},
-				"value": btn.Value,
-			}
-			if strings.TrimSpace(btn.Name) != "" {
-				action["name"] = btn.Name
-			}
-			actions = append(actions, action)
+		bodyMap, _ := card["body"].(map[string]any)
+		elements, _ := bodyMap["elements"].([]map[string]any)
+		for _, row := range buildV2ButtonRows(buttons, 2) {
+			elements = append(elements, row)
 		}
-		card["elements"] = append(card["elements"].([]map[string]any), map[string]any{
-			"tag":     "action",
-			"actions": actions,
-		})
+		bodyMap["elements"] = elements
 	}
 	return card
+}
+
+func buildV2ButtonRows(buttons []Button, rowSize int) []map[string]any {
+	if len(buttons) == 0 {
+		return nil
+	}
+	if rowSize <= 0 {
+		rowSize = len(buttons)
+	}
+	rows := make([]map[string]any, 0, (len(buttons)+rowSize-1)/rowSize)
+	for len(buttons) > 0 {
+		n := rowSize
+		if len(buttons) < n {
+			n = len(buttons)
+		}
+		rows = append(rows, buildV2ButtonRow(buttons[:n]))
+		buttons = buttons[n:]
+	}
+	return rows
+}
+
+func buildV2ButtonRow(buttons []Button) map[string]any {
+	columns := make([]map[string]any, 0, len(buttons))
+	for _, btn := range buttons {
+		columns = append(columns, map[string]any{
+			"tag":    "column",
+			"width":  "weighted",
+			"weight": 1,
+			"elements": []map[string]any{
+				buildV2ButtonElement(btn),
+			},
+		})
+	}
+	return map[string]any{
+		"tag":                "column_set",
+		"horizontal_spacing": "8px",
+		"columns":            columns,
+	}
+}
+
+func buildV2ButtonElement(btn Button) map[string]any {
+	btnType := strings.TrimSpace(btn.Type)
+	if btnType == "" {
+		btnType = "default"
+	}
+	element := map[string]any{
+		"tag":  "button",
+		"type": btnType,
+		"text": map[string]any{
+			"tag":     "plain_text",
+			"content": btn.Text,
+		},
+		"behaviors": []map[string]any{{
+			"type":  "callback",
+			"value": btn.Value,
+		}},
+	}
+	if strings.TrimSpace(btn.Name) != "" {
+		element["name"] = btn.Name
+	}
+	return element
 }
 
 type Button struct {
@@ -1091,39 +1146,54 @@ func summarizeCardForLog(card map[string]any) (title string, preview string, but
 			}
 		}
 	}
-	if elements, ok := card["elements"].([]map[string]any); ok {
-		for _, elem := range elements {
-			tag, _ := elem["tag"].(string)
-			switch tag {
-			case "markdown":
-				if content, ok := elem["content"].(string); ok && strings.TrimSpace(preview) == "" {
-					preview = truncateForLog(content, 160)
-				}
-			case "action":
-				if actions, ok := elem["actions"].([]map[string]any); ok {
-					buttonCount += len(actions)
-				}
-			}
-		}
-	}
+	summarizeCardElementsForLog(card["elements"], &preview, &buttonCount)
 	if body, ok := card["body"].(map[string]any); ok {
-		if elements, ok := body["elements"].([]map[string]any); ok {
-			for _, elem := range elements {
-				tag, _ := elem["tag"].(string)
-				switch tag {
-				case "markdown":
-					if content, ok := elem["content"].(string); ok && strings.TrimSpace(preview) == "" {
-						preview = truncateForLog(content, 160)
-					}
-				case "action":
-					if actions, ok := elem["actions"].([]map[string]any); ok {
-						buttonCount += len(actions)
-					}
-				}
-			}
-		}
+		summarizeCardElementsForLog(body["elements"], &preview, &buttonCount)
 	}
 	return strings.TrimSpace(title), strings.TrimSpace(preview), buttonCount
+}
+
+func summarizeCardElementsForLog(raw any, preview *string, buttonCount *int) {
+	elements, ok := raw.([]map[string]any)
+	if !ok {
+		return
+	}
+	for _, elem := range elements {
+		summarizeCardElementForLog(elem, preview, buttonCount)
+	}
+}
+
+func summarizeCardElementForLog(elem map[string]any, preview *string, buttonCount *int) {
+	tag, _ := elem["tag"].(string)
+	switch tag {
+	case "markdown":
+		if content, ok := elem["content"].(string); ok && strings.TrimSpace(*preview) == "" {
+			*preview = truncateForLog(content, 160)
+		}
+	case "div":
+		if text, ok := elem["text"].(map[string]any); ok && strings.TrimSpace(*preview) == "" {
+			if content, ok := text["content"].(string); ok {
+				*preview = truncateForLog(content, 160)
+			}
+		}
+	case "action":
+		if actions, ok := elem["actions"].([]map[string]any); ok {
+			*buttonCount += len(actions)
+		}
+	case "column_set":
+		columns, _ := elem["columns"].([]map[string]any)
+		for _, column := range columns {
+			if columnElems, ok := column["elements"].([]map[string]any); ok {
+				for _, child := range columnElems {
+					if childTag, _ := child["tag"].(string); childTag == "button" {
+						*buttonCount++
+						continue
+					}
+					summarizeCardElementForLog(child, preview, buttonCount)
+				}
+			}
+		}
+	}
 }
 
 func sanitizeDownloadedFileName(name string) string {

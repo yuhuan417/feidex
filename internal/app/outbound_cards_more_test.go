@@ -17,9 +17,10 @@ func TestMarkdownBodyCardHelpers(t *testing.T) {
 
 	appendMarkdownBodyCardElement(map[string]any{}, map[string]any{"tag": "markdown", "content": "body"})
 	action := buildMarkdownBodyCardActionElement([]feishu.Button{{Text: "Open", Type: "primary", Name: "open", Value: map[string]any{"id": "1"}}})
-	actions := action["actions"].([]map[string]any)
-	if actions[0]["name"] != "open" {
-		t.Fatalf("action name = %#v, want open", actions[0]["name"])
+	columns := action["columns"].([]map[string]any)
+	button := columns[0]["elements"].([]map[string]any)[0]
+	if button["name"] != "open" {
+		t.Fatalf("button name = %#v, want open", button["name"])
 	}
 }
 
@@ -38,9 +39,9 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	compact := a.renderCompactMarkdownCard(sub, "Status", "orange", " status=running ", "hello", []feishu.Button{{Text: "More", Type: "default"}})
 	body := compact["body"].(map[string]any)["elements"].([]map[string]any)
 	if len(body) != 3 {
-		t.Fatalf("compact card elements = %#v, want meta + markdown + action", body)
+		t.Fatalf("compact card elements = %#v, want meta + markdown + button row", body)
 	}
-	if body[0]["tag"] != "div" || body[1]["tag"] != "markdown" || body[2]["tag"] != "action" {
-		t.Fatalf("compact card layout = %#v, want div/markdown/action", body)
+	if body[0]["tag"] != "div" || body[1]["tag"] != "markdown" || body[2]["tag"] != "column_set" {
+		t.Fatalf("compact card layout = %#v, want div/markdown/column_set", body)
 	}
 }

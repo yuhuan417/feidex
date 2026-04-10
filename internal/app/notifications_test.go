@@ -26,9 +26,9 @@ func TestRenderSubmissionCardShowsFullContentInCard(t *testing.T) {
 	}
 
 	card := a.renderSubmissionCard(sub, sub.Status)
-	elements, ok := card["elements"].([]map[string]any)
-	if !ok || len(elements) == 0 {
-		t.Fatalf("unexpected card elements: %#v", card["elements"])
+	elements := cardElementsForTest(card)
+	if len(elements) == 0 {
+		t.Fatalf("unexpected card elements: %#v", card)
 	}
 	body, ok := elements[0]["content"].(string)
 	if !ok {
