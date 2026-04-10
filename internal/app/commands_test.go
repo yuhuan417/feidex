@@ -95,8 +95,10 @@ func TestIsLocalCommand(t *testing.T) {
 		"/model":          true,
 		"/quiet":          true,
 		"/compact":        true,
+		"/fork":           true,
 		"/new":            true,
 		"/threads":        true,
+		"/threads fork":   true,
 		"/threads new":    true,
 		"/threads all":    true,
 		"/interrupt":      true,
@@ -127,7 +129,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 		t.Fatalf("unexpected card elements: %#v", card)
 	}
 	body, _ := elements[0]["content"].(string)
-	for _, alias := range []string{"/menu", "/help", "/history", "/compact", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
+	for _, alias := range []string{"/menu", "/help", "/history", "/compact", "/fork", "/new", "/stop", "/cd", "/model", "/quiet", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
 		if strings.Contains(body, alias) {
 			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
 		}
@@ -246,5 +248,70 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 	sess := a.store.GetSession("feishu:p2p:chat:user")
 	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
 		t.Fatalf("session after failed /compact = %+v, want idle without turn", sess)
+	}
+}
+
+func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	fc := &fakeCodexClient{}
+	ff := &fakeFeishuClient{}
+	cfg := config.Default()
+	a := &App{store: store, codex: fc, feishu: ff, cfg: cfg}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                        "feishu:p2p:chat:user",
+		WorkspaceID:                "default",
+		ActiveThreadID:             "thread-1",
+		ActiveThreadWorkspaceID:    "default",
+		ActiveThreadApprovalPolicy: "never",
+		ActiveThreadSandboxMode:    "read-only",
+		ActiveThreadServiceTier:    serviceTierFast,
+		Status:                     "idle",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	var gotMethod string
+	var gotParams map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		gotMethod = method
+		gotParams, _ = params.(map[string]any)
+		result := out.(*codexrpc.ThreadStartResult)
+		result.Thread.ID = "thread-forked"
+		result.Thread.Name = "Forked Thread"
+		result.Thread.Preview = "fork preview"
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := a.commandFork(msg, nil); err != nil {
+		t.Fatalf("commandFork() error = %v", err)
+	}
+	if gotMethod != "thread/fork" {
+		t.Fatalf("fork call method = %q, want thread/fork", gotMethod)
+	}
+	if got, _ := gotParams["threadId"].(string); got != "thread-1" {
+		t.Fatalf("fork threadId = %q, want thread-1", got)
+	}
+	if got, _ := gotParams["cwd"].(string); got != cfg.Workspaces[0].Cwd {
+		t.Fatalf("fork cwd = %q, want %q", got, cfg.Workspaces[0].Cwd)
+	}
+	if got, _ := gotParams["approvalPolicy"].(string); got != "never" {
+		t.Fatalf("fork approvalPolicy = %q, want never", got)
+	}
+	if got, _ := gotParams["sandbox"].(string); got != "read-only" {
+		t.Fatalf("fork sandbox = %q, want read-only", got)
+	}
+	if got, _ := gotParams["serviceTier"].(string); got != serviceTierFast {
+		t.Fatalf("fork serviceTier = %q, want %q", got, serviceTierFast)
+	}
+	sess := a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || sess.ActiveThreadID != "thread-forked" || sess.ActiveThreadName != "Forked Thread" || sess.Status != "idle" {
+		t.Fatalf("session after /fork = %+v", sess)
+	}
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前线程") {
+		t.Fatalf("fork reply = %#v, want success text", ff.replyTexts)
 	}
 }

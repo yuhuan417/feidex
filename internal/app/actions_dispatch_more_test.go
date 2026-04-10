@@ -144,6 +144,11 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 			result.Thread.ID = "thread-2"
 			result.Thread.Name = "Thread 2"
 			result.Thread.Preview = "preview"
+		case "thread/fork":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked Thread"
+			result.Thread.Preview = "fork preview"
 		}
 		return nil
 	}
@@ -193,6 +198,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "menu.root", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.session", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.context", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "menu.fork", "session_key": "sess-1", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.compact", "session_key": "sess-2", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.model", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.system", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},

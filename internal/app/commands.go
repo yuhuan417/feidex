@@ -46,6 +46,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandFast(msg, fields[1:])
 	case "/compact":
 		return a.commandCompact(msg, fields[1:])
+	case "/fork":
+		return a.commandFork(msg, fields[1:])
 	case "/new":
 		return a.commandNew(msg)
 	case "/threads":
@@ -53,6 +55,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 			switch fields[1] {
 			case "new":
 				return a.commandThreadsNew(msg)
+			case "fork":
+				return a.commandFork(msg, fields[2:])
 			case "sandbox":
 				return a.showThreadSandboxMenu(msg)
 			case "policy":
@@ -85,7 +89,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/help", "/history", "/usage", "/compact", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/history", "/usage", "/compact", "/fork", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false
@@ -203,6 +207,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	if len(result.Data) == 0 {
 		buttons := []feishu.Button{
 			{Text: commandLabel("新会话", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.threads"}},
+			{Text: commandLabel("Fork 当前线程", "/fork"), Type: "default", Value: map[string]any{"action": "menu.fork", "session_key": sessionKey, "parent_action": "menu.threads"}},
 			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.context", "session_key": sessionKey}},
 		}
 		return a.feishu.SimpleStatusCard("线程列表", "blue", menuCardBody("menu.threads", "没有可恢复的线程。"), buttons), nil
@@ -279,6 +284,15 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			Type: "default",
 			Value: map[string]any{
 				"action":        "menu.new",
+				"session_key":   sessionKey,
+				"parent_action": "menu.threads",
+			},
+		},
+		feishu.Button{
+			Text: commandLabel("Fork 当前线程", "/fork"),
+			Type: "default",
+			Value: map[string]any{
+				"action":        "menu.fork",
 				"session_key":   sessionKey,
 				"parent_action": "menu.threads",
 			},
@@ -454,6 +468,7 @@ func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
 func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: commandLabel("新线程", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.group.context"}},
+		{Text: commandLabel("Fork 线程", "/fork"), Type: "default", Value: map[string]any{"action": "menu.fork", "session_key": sessionKey, "parent_action": "menu.group.context"}},
 		{Text: commandLabel("压缩上下文", "/compact"), Type: "default", Value: map[string]any{"action": "menu.compact", "session_key": sessionKey, "parent_action": "menu.group.context"}},
 		{Text: submenuCommandLabel("工作区管理", "/workspace"), Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
 		{Text: submenuCommandLabel("线程管理", "/threads"), Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
@@ -505,12 +520,16 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"会话管理：",
 		"`/new`",
 		"切换到新线程模式，下一条消息会新建线程。",
+		"`/fork`",
+		"复制当前 thread 为一个新分支，并立即切换过去。",
 		"`/compact`",
 		"压缩当前线程的上下文，减少上下文占用。",
 		"`/threads`",
 		"查看当前工作区可恢复的线程。",
 		"`/threads all`",
 		"查看更多来源的线程。",
+		"`/threads fork`",
+		"等价于 `/fork`。",
 		"`/threads new`",
 		"等价于 `/new`。",
 		"`/threads sandbox`",

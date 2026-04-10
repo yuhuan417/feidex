@@ -56,6 +56,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.compact":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuCompact(action, sessionKey)
+	case "menu.fork":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuFork(action, sessionKey)
 	case "menu.usage":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuUsage(action, sessionKey)

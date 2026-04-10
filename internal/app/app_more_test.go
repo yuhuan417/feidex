@@ -878,7 +878,16 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 }
 
 func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
-	a, _, _ := newTestApp(t)
+	a, _, fc := newTestApp(t)
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method == "thread/fork" {
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked"
+			result.Thread.Preview = "fork preview"
+		}
+		return nil
+	}
 	action := &feishu.CardAction{
 		UserID:    "user-1",
 		ChatID:    "chat-1",
@@ -904,6 +913,21 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 		"menu.group.context": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuGroupContext(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
+			const forkSessionKey = "feishu:group:chat-1:root:fork-root"
+			if err := a.store.UpsertSession(&state.Session{
+				Key:                     forkSessionKey,
+				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ActiveThreadID:          "thread-1",
+				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+			}); err != nil {
+				t.Fatalf("UpsertSession(fork) error = %v", err)
+			}
+			return a.completeMenuFork(&feishu.CardAction{ActionValue: map[string]any{
+				"session_key":   forkSessionKey,
+				"parent_action": "menu.group.context",
+			}}, forkSessionKey)
 		},
 		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
 			const compactSessionKey = "feishu:group:chat-1:root:compact-root"
@@ -974,14 +998,14 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		if name == "thread.sandbox.menu" || name == "thread.policy.menu" || name == "menu.history" {
 			wantToastType = "warning"
 		}
-		if name == "menu.compact" {
+		if name == "menu.compact" || name == "menu.fork" {
 			wantToastType = "success"
 		}
 		if resp.Toast.Type != wantToastType {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.group.session", "menu.group.context", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.group.session", "menu.group.context", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -1080,10 +1104,10 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	if indicatorByAction["menu.workspace"] != true || indicatorByAction["menu.threads"] != true {
 		t.Fatalf("expected context submenu indicators, got %#v", indicatorByAction)
 	}
-	if indicatorByAction["menu.new"] || indicatorByAction["menu.compact"] {
+	if indicatorByAction["menu.new"] || indicatorByAction["menu.fork"] || indicatorByAction["menu.compact"] {
 		t.Fatalf("direct context commands should not show submenu indicator, got %#v", indicatorByAction)
 	}
-	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
+	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") || !strings.Contains(labelByAction["menu.fork"], "/fork") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
 		t.Fatalf("expected real command labels in context menu, got %#v", labelByAction)
 	}
 
@@ -2271,6 +2295,12 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 			result.Thread.Name = "Resumed"
 			result.Thread.Preview = "preview"
 			return nil
+		case "thread/fork":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked"
+			result.Thread.Preview = "fork preview"
+			return nil
 		default:
 			return nil
 		}
@@ -2315,6 +2345,17 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-9" || got.Status != "idle" {
 		t.Fatalf("session after completeThreadResume = %+v", got)
+	}
+	resp, err = a.completeMenuFork(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"parent_action": "menu.group.context"},
+	}, sessionKey)
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeMenuFork() = %#v, %v", resp, err)
+	}
+	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-fork" || got.Status != "idle" {
+		t.Fatalf("session after completeMenuFork = %+v", got)
 	}
 
 	seedActiveSubmission(t, a, sessionKey, "thread-9", "turn-1")
@@ -2417,6 +2458,12 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		case "thread/list":
 			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
 			return nil
+		case "thread/fork":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked"
+			result.Thread.Preview = "fork preview"
+			return nil
 		default:
 			return nil
 		}
@@ -2429,7 +2476,9 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/status",
 		"/model",
 		"/quiet",
+		"/fork",
 		"/threads",
+		"/threads fork",
 		"/threads sandbox",
 		"/threads policy",
 		"/workspace",
@@ -2492,7 +2541,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/compact", "/workspace use ID", "/threads all", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/fork", "/compact", "/workspace use ID", "/threads all", "/threads fork", "/upgrade"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}

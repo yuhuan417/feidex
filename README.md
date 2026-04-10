@@ -266,6 +266,7 @@ Feidex 会把这些状态写进去：
   - `Quiet 模式 /quiet`
 - 会话管理
   - `新线程 /new`
+  - `Fork 线程 /fork`
   - `工作区管理 /workspace`
   - `线程管理 /threads`
 - 模型能力
@@ -285,6 +286,8 @@ Feidex 会把这些状态写进去：
   - 查看命令说明
 - `/new`
   - 切换到新线程模式
+- `/fork`
+  - fork 当前线程并切换到新的分支线程
 - `/interrupt` 或 `/stop`
   - 中断当前任务
 - `/quiet`
@@ -297,6 +300,8 @@ Feidex 会把这些状态写进去：
   - 查看线程列表
 - `/threads all`
   - 查看更多来源的线程
+- `/threads fork`
+  - 等价于 `/fork`
 - `/threads sandbox`
   - 配置当前 thread 的 sandbox
 - `/threads policy`
