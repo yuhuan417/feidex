@@ -408,11 +408,14 @@ func (a *Adapter) AddReaction(ctx context.Context, messageID, emojiType string) 
 		Build())
 	if err != nil {
 		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "add", "message_id", messageID, "emoji_type", emojiType)
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_reaction.create", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu reaction failed", nil, resp.Code, resp.Msg, "op", "add", "message_id", messageID, "emoji_type", emojiType)
-		return fmt.Errorf("feishu add reaction failed code=%d msg=%s", resp.Code, resp.Msg)
+		return wrapPermissionIssue(
+			fmt.Errorf("feishu add reaction failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message_reaction.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	reactionID := ""
 	if resp.Data != nil && resp.Data.ReactionId != nil {
@@ -443,11 +446,14 @@ func (a *Adapter) RemoveReaction(ctx context.Context, messageID, emojiType strin
 		Build())
 	if err != nil {
 		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "remove", "message_id", messageID, "emoji_type", emojiType)
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_reaction.delete", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu reaction failed", nil, resp.Code, resp.Msg, "op", "remove", "message_id", messageID, "emoji_type", emojiType)
-		return fmt.Errorf("feishu remove reaction failed code=%d msg=%s", resp.Code, resp.Msg)
+		return wrapPermissionIssue(
+			fmt.Errorf("feishu remove reaction failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message_reaction.delete", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	a.reactionMu.Lock()
 	delete(a.reactions, key)
@@ -491,11 +497,14 @@ func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 	resp, err := a.client.Im.Message.Create(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "send", "msg_type", "text", "chat_id", chatID)
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.create", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "send", "msg_type", "text", "chat_id", chatID)
-		return fmt.Errorf("feishu send failed code=%d msg=%s", resp.Code, resp.Msg)
+		return wrapPermissionIssue(
+			fmt.Errorf("feishu send failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	messageID := ""
 	if resp.Data != nil && resp.Data.MessageId != nil {
@@ -537,11 +546,14 @@ func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[stri
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", "interactive", "reply_to", messageID)
-		return "", err
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.reply", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "reply", "msg_type", "interactive", "reply_to", messageID, "card_title", title)
-		return "", fmt.Errorf("feishu reply card failed code=%d msg=%s", resp.Code, resp.Msg)
+		return "", wrapPermissionIssue(
+			fmt.Errorf("feishu reply card failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message.reply", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
 		slog.Debug("feishu outbound sent", "op", "reply", "msg_type", "interactive", "reply_to", messageID, "message_id", "")
@@ -566,11 +578,14 @@ func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]a
 	resp, err := a.client.Im.Message.Create(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "send", "msg_type", "interactive", "chat_id", chatID)
-		return "", err
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.create", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "send", "msg_type", "interactive", "chat_id", chatID, "card_title", title)
-		return "", fmt.Errorf("feishu send card failed code=%d msg=%s", resp.Code, resp.Msg)
+		return "", wrapPermissionIssue(
+			fmt.Errorf("feishu send card failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
 		slog.Debug("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", "", "card_title", title)
@@ -593,11 +608,14 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 	resp, err := a.client.Im.Message.Patch(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "patch", "msg_type", "interactive", "message_id", messageID)
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.patch", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title)
-		return fmt.Errorf("feishu patch failed code=%d msg=%s", resp.Code, resp.Msg)
+		return wrapPermissionIssue(
+			fmt.Errorf("feishu patch failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message.patch", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	slog.Debug("feishu outbound sent", "op", "patch", "msg_type", "interactive", "message_id", messageID, "card_title", title)
 	return nil
@@ -615,10 +633,13 @@ func (a *Adapter) replyLocalImage(ctx context.Context, messageID, path string, i
 		Body(body).
 		Build())
 	if err != nil {
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.image.create", err))
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.ImageKey == nil || strings.TrimSpace(*resp.Data.ImageKey) == "" {
-		return fmt.Errorf("feishu image upload failed code=%d msg=%s", resp.Code, resp.Msg)
+		return wrapPermissionIssue(
+			fmt.Errorf("feishu image upload failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.image.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	content, _ := (&larkim.MessageImage{ImageKey: *resp.Data.ImageKey}).String()
 	_, err = a.replyMessageDetailed(ctx, messageID, "image", content, inThread)
@@ -641,10 +662,13 @@ func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path st
 		Body(body).
 		Build())
 	if err != nil {
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.file.create", err))
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.FileKey == nil || strings.TrimSpace(*resp.Data.FileKey) == "" {
-		return fmt.Errorf("feishu file upload failed code=%d msg=%s", resp.Code, resp.Msg)
+		return wrapPermissionIssue(
+			fmt.Errorf("feishu file upload failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.file.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	content, _ := (&larkim.MessageFile{FileKey: *resp.Data.FileKey}).String()
 	_, err = a.replyMessageDetailed(ctx, messageID, "file", content, inThread)
@@ -664,11 +688,14 @@ func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, 
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", msgType, "reply_to", messageID)
-		return "", err
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.reply", err))
 	}
 	if !resp.Success() {
 		logFeishuFailure("feishu outbound failed", nil, resp.Code, resp.Msg, "op", "reply", "msg_type", msgType, "reply_to", messageID)
-		return "", fmt.Errorf("feishu reply failed code=%d msg=%s", resp.Code, resp.Msg)
+		return "", wrapPermissionIssue(
+			fmt.Errorf("feishu reply failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message.reply", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
 	}
 	if resp.Data == nil || resp.Data.MessageId == nil {
 		slog.Debug("feishu outbound sent", "op", "reply", "msg_type", msgType, "reply_to", messageID, "message_id", "")
@@ -699,11 +726,14 @@ func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string,
 		Build()
 	resp, err := a.client.Im.MessageResource.Get(ctx, req)
 	if err != nil {
-		return "", "", err
+		return "", "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_resource.get", err))
 	}
 	if resp == nil || resp.File == nil {
 		if resp != nil {
-			return "", "", fmt.Errorf("feishu resource download failed code=%d msg=%s", resp.Code, resp.Msg)
+			return "", "", wrapPermissionIssue(
+				fmt.Errorf("feishu resource download failed code=%d msg=%s", resp.Code, resp.Msg),
+				permissionIssueFromCodeError("im.message_resource.get", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+			)
 		}
 		return "", "", fmt.Errorf("feishu resource download returned empty response")
 	}

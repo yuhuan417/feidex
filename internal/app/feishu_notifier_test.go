@@ -1,0 +1,132 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"feidex/internal/feishu"
+)
+
+type permissionIssueTestError struct {
+	err   error
+	issue *feishu.PermissionIssue
+}
+
+func (e *permissionIssueTestError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *permissionIssueTestError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func (e *permissionIssueTestError) PermissionIssue() *feishu.PermissionIssue {
+	if e == nil {
+		return nil
+	}
+	return e.issue
+}
+
+func TestNotifyingFeishuClientRepliesPermissionCardForMessageTarget(t *testing.T) {
+	base := &fakeFeishuClient{
+		addReactionErr: &permissionIssueTestError{
+			err: errors.New("permission denied"),
+			issue: &feishu.PermissionIssue{
+				API:            "im.message_reaction.create",
+				Code:           99991668,
+				Message:        "permission denied",
+				LogID:          "log-1",
+				Troubleshooter: "https://open.feishu.cn/troubleshoot",
+				PermissionViolations: []feishu.PermissionIssueViolation{{
+					Description: "缺少 scope:im:message.reaction",
+				}},
+				Helps: []feishu.PermissionIssueHelp{{
+					URL:         "https://open.feishu.cn/app/scope",
+					Description: "开通接口权限",
+				}},
+			},
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	err := client.AddReaction(context.Background(), "msg-1", "SMILE")
+	if err == nil {
+		t.Fatal("expected AddReaction to return error")
+	}
+	if len(base.replyCards) != 1 {
+		t.Fatalf("permission diagnostic reply cards = %d, want 1", len(base.replyCards))
+	}
+	body := cardMarkdownContent(t, base.replyCards[0])
+	for _, want := range []string{
+		"飞书接口权限或鉴权失败",
+		"im.message_reaction.create",
+		"99991668",
+		"log-1",
+		"scope:im:message.reaction",
+		"https://open.feishu.cn/app/scope",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("permission diagnostic body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestNotifyingFeishuClientSendsPermissionCardForChatTarget(t *testing.T) {
+	base := &fakeFeishuClient{
+		rewritePreviewErr: &permissionIssueTestError{
+			err: errors.New("drive no permission"),
+			issue: &feishu.PermissionIssue{
+				API:     "drive.permission_member.create",
+				Code:    99991663,
+				Message: "no permission",
+				Helps: []feishu.PermissionIssueHelp{{
+					URL:         "https://open.feishu.cn/permissions/drive",
+					Description: "开通云文档权限",
+				}},
+			},
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	if _, err := client.RewriteMarkdownPreview(context.Background(), feishu.MarkdownPreviewRequest{Text: "hello", ChatID: "chat-1"}); err == nil {
+		t.Fatal("expected RewriteMarkdownPreview to return error")
+	}
+	if len(base.sendCards) != 1 {
+		t.Fatalf("permission diagnostic send cards = %d, want 1", len(base.sendCards))
+	}
+	if body := cardMarkdownContent(t, base.sendCards[0]); !strings.Contains(body, "drive.permission_member.create") || !strings.Contains(body, "https://open.feishu.cn/permissions/drive") {
+		t.Fatalf("permission diagnostic send body = %q", body)
+	}
+}
+
+func TestNotifyingFeishuClientDeduplicatesRecentPermissionCards(t *testing.T) {
+	base := &fakeFeishuClient{
+		removeReactionErr: &permissionIssueTestError{
+			err: errors.New("permission denied"),
+			issue: &feishu.PermissionIssue{
+				API:     "im.message_reaction.delete",
+				Code:    99991668,
+				Message: "permission denied",
+			},
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	if err := client.RemoveReaction(context.Background(), "msg-1", "SMILE"); err == nil {
+		t.Fatal("expected first RemoveReaction to fail")
+	}
+	if err := client.RemoveReaction(context.Background(), "msg-1", "SMILE"); err == nil {
+		t.Fatal("expected second RemoveReaction to fail")
+	}
+	if len(base.replyCards) != 1 {
+		t.Fatalf("deduplicated permission diagnostic cards = %d, want 1", len(base.replyCards))
+	}
+}

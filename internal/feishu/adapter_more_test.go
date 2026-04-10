@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -60,6 +61,34 @@ func TestAuthFailureHelpersAndLogging(t *testing.T) {
 	logWithLevel(8, "error log")
 	logFeishuFailure("failure", errors.New("token invalid"), 0, "", "op", "test")
 	logFeishuFailure("failure", nil, 403, "forbidden", "op", "test")
+}
+
+func TestPermissionIssueFromError(t *testing.T) {
+	var codeErr larkcore.CodeError
+	if err := json.Unmarshal([]byte(`{
+		"code": 99991668,
+		"msg": "no permission",
+		"error": {
+			"log_id": "log-1",
+			"troubleshooter": "https://open.feishu.cn/troubleshoot",
+			"details": [{"key":"scope","value":"im:message"}],
+			"permission_violations": [{"type":"scope","subject":"app","description":"missing scope"}],
+			"helps": [{"url":"https://open.feishu.cn/app/scope","description":"开通权限"}]
+		}
+	}`), &codeErr); err != nil {
+		t.Fatalf("Unmarshal(CodeError) error = %v", err)
+	}
+	err := wrapPermissionIssue(errors.New("forbidden"), permissionIssueFromCodeError("im.message.create", codeErr.Code, codeErr.Msg, &codeErr, nil, nil))
+	issue, ok := PermissionIssueFromError(err)
+	if !ok || issue == nil {
+		t.Fatal("expected PermissionIssueFromError to extract issue")
+	}
+	if issue.API != "im.message.create" || issue.LogID != "log-1" || issue.Troubleshooter == "" {
+		t.Fatalf("permission issue = %+v", issue)
+	}
+	if len(issue.PermissionViolations) != 1 || len(issue.Helps) != 1 || len(issue.Details) != 1 {
+		t.Fatalf("permission issue details lost: %+v", issue)
+	}
 }
 
 func TestSimpleStatusCardAndSummaries(t *testing.T) {

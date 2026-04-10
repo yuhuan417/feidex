@@ -62,12 +62,13 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		return nil, err
 	}
 	codexClient := newCodexClient(cfg.Codex)
+	feishuClient := wrapFeishuClient(newFeishuClient(cfg.Feishu))
 	app := &App{
 		cfg:           cfg,
 		cfgPath:       cfgPath,
 		store:         store,
 		codex:         codexClient,
-		feishu:        newFeishuClient(cfg.Feishu),
+		feishu:        feishuClient,
 		started:       time.Now(),
 		deduper:       newInboundDeduper(),
 		turnStreams:   map[string]*turnStream{},

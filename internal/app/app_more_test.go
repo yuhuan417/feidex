@@ -151,6 +151,10 @@ type fakeFeishuClient struct {
 	replyCardErr      error
 	sendCardErr       error
 	patchCardErr      error
+	rewritePreviewErr error
+	addReactionErr    error
+	removeReactionErr error
+	downloadErr       error
 	cleanupResult     feishu.PreviewDriveCleanupResult
 	cleanupErr        error
 	started           bool
@@ -166,6 +170,9 @@ type fakeFeishuClient struct {
 	sendCardID        string
 	previewStatePath  string
 	previewProcessCWD string
+	rewritePreviewOut string
+	downloadPath      string
+	downloadName      string
 	onMessage         func(*feishu.InboundMessage)
 }
 
@@ -188,15 +195,19 @@ func (f *fakeFeishuClient) ConfigureMarkdownPreview(statePath, processCWD string
 }
 
 func (f *fakeFeishuClient) RewriteMarkdownPreview(context.Context, feishu.MarkdownPreviewRequest) (string, error) {
-	return "", nil
+	return f.rewritePreviewOut, f.rewritePreviewErr
 }
 
 func (f *fakeFeishuClient) CleanupMarkdownPreviewsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
 	return f.cleanupResult, f.cleanupErr
 }
 
-func (f *fakeFeishuClient) AddReaction(context.Context, string, string) error    { return nil }
-func (f *fakeFeishuClient) RemoveReaction(context.Context, string, string) error { return nil }
+func (f *fakeFeishuClient) AddReaction(context.Context, string, string) error {
+	return f.addReactionErr
+}
+func (f *fakeFeishuClient) RemoveReaction(context.Context, string, string) error {
+	return f.removeReactionErr
+}
 
 func (f *fakeFeishuClient) ReplyText(_ context.Context, _ string, text string, _ bool) error {
 	f.replyTexts = append(f.replyTexts, text)
@@ -236,7 +247,7 @@ func (f *fakeFeishuClient) PatchCard(_ context.Context, _ string, card map[strin
 }
 
 func (f *fakeFeishuClient) DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error) {
-	return "", "", nil
+	return f.downloadPath, f.downloadName, f.downloadErr
 }
 
 func (f *fakeFeishuClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
@@ -376,7 +387,8 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if app.codex != fc || app.feishu != ff {
+	notifier, ok := app.feishu.(*notifyingFeishuClient)
+	if app.codex != fc || !ok || notifier.base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
 	if fc.onNotification == nil || fc.onRequest == nil {

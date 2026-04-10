@@ -93,8 +93,9 @@ type previewFolderRecord struct {
 }
 
 type driveAPIError struct {
-	Code int
-	Msg  string
+	Code  int
+	Msg   string
+	Issue *PermissionIssue
 }
 
 func (e *driveAPIError) Error() string {
@@ -105,6 +106,13 @@ func (e *driveAPIError) Error() string {
 		return fmt.Sprintf("feishu drive api error %d", e.Code)
 	}
 	return fmt.Sprintf("feishu drive api error %d: %s", e.Code, strings.TrimSpace(e.Msg))
+}
+
+func (e *driveAPIError) PermissionIssue() *PermissionIssue {
+	if e == nil {
+		return nil
+	}
+	return e.Issue
 }
 
 func NewDriveMarkdownPreviewer(api previewDriveAPI, cfg MarkdownPreviewConfig) *DriveMarkdownPreviewer {
@@ -595,10 +603,14 @@ func (a *larkDrivePreviewAPI) CreateFolder(ctx context.Context, name, parentToke
 			Build()).
 		Build())
 	if err != nil {
-		return previewRemoteNode{}, err
+		return previewRemoteNode{}, wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.create_folder", err))
 	}
 	if !resp.Success() {
-		return previewRemoteNode{}, &driveAPIError{Code: resp.Code, Msg: resp.Msg}
+		return previewRemoteNode{}, &driveAPIError{
+			Code:  resp.Code,
+			Msg:   resp.Msg,
+			Issue: permissionIssueFromCodeError("drive.file.create_folder", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		}
 	}
 	if resp.Data == nil {
 		return previewRemoteNode{}, fmt.Errorf("missing create folder response data")
@@ -621,13 +633,13 @@ func (a *larkDrivePreviewAPI) ListFiles(ctx context.Context, folderToken string)
 	}
 	iterator, err := a.client.Drive.V1.File.ListByIterator(ctx, builder.Build())
 	if err != nil {
-		return nil, err
+		return nil, wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.list", err))
 	}
 	out := []previewRemoteNode{}
 	for {
 		ok, item, err := iterator.Next()
 		if err != nil {
-			return nil, err
+			return nil, wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.list", err))
 		}
 		if !ok {
 			break
@@ -656,10 +668,14 @@ func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileN
 			Build()).
 		Build())
 	if err != nil {
-		return "", err
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_all", err))
 	}
 	if !resp.Success() {
-		return "", &driveAPIError{Code: resp.Code, Msg: resp.Msg}
+		return "", &driveAPIError{
+			Code:  resp.Code,
+			Msg:   resp.Msg,
+			Issue: permissionIssueFromCodeError("drive.file.upload_all", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		}
 	}
 	if resp.Data == nil {
 		return "", fmt.Errorf("missing upload file response data")
@@ -680,10 +696,14 @@ func (a *larkDrivePreviewAPI) QueryMetaURL(ctx context.Context, token, docType s
 			Build()).
 		Build())
 	if err != nil {
-		return "", err
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.meta.batch_query", err))
 	}
 	if !resp.Success() {
-		return "", &driveAPIError{Code: resp.Code, Msg: resp.Msg}
+		return "", &driveAPIError{
+			Code:  resp.Code,
+			Msg:   resp.Msg,
+			Issue: permissionIssueFromCodeError("drive.meta.batch_query", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		}
 	}
 	if resp.Data == nil || len(resp.Data.Metas) == 0 || resp.Data.Metas[0] == nil {
 		return "", fmt.Errorf("missing meta url for token %s", token)
@@ -703,10 +723,14 @@ func (a *larkDrivePreviewAPI) GrantPermission(ctx context.Context, token, docTyp
 			Build()).
 		Build())
 	if err != nil {
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("drive.permission_member.create", err))
 	}
 	if !resp.Success() {
-		return &driveAPIError{Code: resp.Code, Msg: resp.Msg}
+		return &driveAPIError{
+			Code:  resp.Code,
+			Msg:   resp.Msg,
+			Issue: permissionIssueFromCodeError("drive.permission_member.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		}
 	}
 	return nil
 }
@@ -717,10 +741,14 @@ func (a *larkDrivePreviewAPI) DeleteFile(ctx context.Context, token, docType str
 		Type(docType).
 		Build())
 	if err != nil {
-		return err
+		return wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.delete", err))
 	}
 	if !resp.Success() {
-		return &driveAPIError{Code: resp.Code, Msg: resp.Msg}
+		return &driveAPIError{
+			Code:  resp.Code,
+			Msg:   resp.Msg,
+			Issue: permissionIssueFromCodeError("drive.file.delete", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		}
 	}
 	return nil
 }
