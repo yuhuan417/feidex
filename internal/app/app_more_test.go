@@ -685,12 +685,31 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 		t.Fatalf("commandWorkspace(list) reply = %+v", ff.replyTexts)
 	}
 
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-new"
+			result.Thread.Name = "Alt Thread"
+			result.Thread.Preview = "Alt Preview"
+			return nil
+		default:
+			t.Fatalf("unexpected codex method: %s", method)
+			return nil
+		}
+	}
 	if err := a.commandWorkspace(msg, []string{"use", "alt"}); err != nil {
 		t.Fatalf("commandWorkspace(use) error = %v", err)
 	}
 	sess := a.store.GetSession(a.makeSessionKey(msg))
 	if sess == nil || sess.WorkspaceID != "alt" {
 		t.Fatalf("workspace switch did not persist session: %+v", sess)
+	}
+	if sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("workspace switch should auto-bind new thread: %+v", sess)
 	}
 
 	ff.replyCards = nil
@@ -756,6 +775,21 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if err := a.store.UpsertPending(pending); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-repo"
+			result.Thread.Name = "Repo Thread"
+			result.Thread.Preview = "Repo Preview"
+			return nil
+		default:
+			return nil
+		}
+	}
 
 	if err := a.completeWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
@@ -765,6 +799,9 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 	if got := a.store.GetSession(a.makeSessionKey(msg)); got == nil || got.WorkspaceID != "repo" {
 		t.Fatalf("workspace session after creation = %+v, want switched workspace", got)
+	}
+	if got := a.store.GetSession(a.makeSessionKey(msg)); got == nil || got.ActiveThreadID != "thread-repo" || got.ActiveThreadWorkspaceID != "repo" {
+		t.Fatalf("workspace session should auto-bind thread after creation = %+v", got)
 	}
 	if len(ff.patchedCards) == 0 || len(ff.replyTexts) == 0 {
 		t.Fatalf("expected workspace creation to patch card and reply, patches=%d replies=%d", len(ff.patchedCards), len(ff.replyTexts))

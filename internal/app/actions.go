@@ -710,8 +710,25 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 	}
 	switchSessionWorkspace(sess, workspaceID)
 	_ = a.store.UpsertSession(sess)
+	toast := "已切换工作区"
+	if !sessionHasInFlightSubmission(sess) {
+		binding, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+		if err != nil {
+			slog.Warn("workspace action thread binding failed",
+				"session_key", sessionKey,
+				"workspace_id", workspaceID,
+				"cwd", ws.Cwd,
+				"error", err,
+			)
+			toast = "已切换工作区，自动绑定 thread 失败"
+		} else if binding.Resumed {
+			toast = "已切换工作区，并恢复最近线程"
+		} else {
+			toast = "已切换工作区，并创建新线程"
+		}
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已切换工作区"},
+		Toast: &callback.Toast{Type: "success", Content: toast},
 		Card:  rawCard(a.renderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }

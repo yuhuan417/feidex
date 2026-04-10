@@ -124,6 +124,12 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		switch method {
 		case "model/list":
 			*out.(*codexrpc.ModelListResult) = models
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{
+				Data: []codexrpc.ThreadListEntry{
+					{ID: "thread-alt", Name: "Alt Thread", Preview: "Alt Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[1].Cwd},
+				},
+			}
 		case "thread/read":
 			*out.(*codexrpc.ThreadReadResult) = codexrpc.ThreadReadResult{
 				Thread: codexrpc.ThreadReadThread{
@@ -149,6 +155,11 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 			result.Thread.ID = "thread-fork"
 			result.Thread.Name = "Forked Thread"
 			result.Thread.Preview = "fork preview"
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "Fresh Thread"
+			result.Thread.Preview = "fresh preview"
 		}
 		return nil
 	}

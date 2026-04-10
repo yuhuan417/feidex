@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -161,54 +160,11 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			workspace = *ws
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	queries := []map[string]any{
-		{
-			"limit":    8,
-			"cwd":      workspace.Cwd,
-			"archived": false,
-		},
-		{
-			"limit":    8,
-			"cwd":      workspace.Cwd,
-			"archived": false,
-		},
-		{
-			"limit":    8,
-			"archived": false,
-		},
-	}
-	if includeAll {
-		queries[0]["sourceKinds"] = []string{"appServer", "cli", "vscode", "exec"}
-	} else {
-		queries[0]["sourceKinds"] = []string{"appServer"}
-	}
-
-	var result codexrpc.ThreadListResult
-	var err error
-	for idx, params := range queries {
-		slog.Debug("thread list query",
-			"attempt", idx+1,
-			"session_key", sessionKey,
-			"params", fmt.Sprintf("%v", params),
-		)
-		result = codexrpc.ThreadListResult{}
-		err = a.codex.Call(ctx, "thread/list", params, &result)
-		if err != nil {
-			slog.Error("thread list query failed", "attempt", idx+1, "error", err)
-			continue
-		}
-		slog.Debug("thread list query result", "attempt", idx+1, "count", len(result.Data))
-		if len(result.Data) > 0 {
-			break
-		}
-	}
-	if err != nil && len(result.Data) == 0 {
+	items, err := a.listWorkspaceThreads(sessionKey, &workspace, includeAll)
+	if err != nil {
 		return nil, err
 	}
-	result.Data = filterThreadsByWorkspaceCWD(result.Data, workspace.Cwd)
-	if len(result.Data) == 0 {
+	if len(items) == 0 {
 		buttons := []feishu.Button{
 			{Text: commandLabel("新会话", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.threads"}},
 			{Text: commandLabel("Fork 当前线程", "/fork"), Type: "default", Value: map[string]any{"action": "menu.fork", "session_key": sessionKey, "parent_action": "menu.threads"}},
@@ -216,12 +172,12 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		}
 		return a.feishu.SimpleStatusCard("线程列表", "blue", menuCardBody("menu.threads", "没有可恢复的线程。"), buttons), nil
 	}
-	sort.Slice(result.Data, func(i, j int) bool { return result.Data[i].UpdatedAt > result.Data[j].UpdatedAt })
+	sortThreadsByUpdated(items)
 	currentLabel := "-"
 	if sess != nil {
 		currentLabel = currentThreadLabel(sess)
 	}
-	lines := make([]string, 0, len(result.Data)+2)
+	lines := make([]string, 0, len(items)+2)
 	lines = append(lines, "当前线程: "+currentLabel, "", "最近线程：")
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		lines = append(lines,
@@ -231,9 +187,9 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		)
 	}
 	buttons := make([]feishu.Button, 0, 5)
-	selectOptions := make([]selectStaticOption, 0, len(result.Data))
+	selectOptions := make([]selectStaticOption, 0, len(items))
 	initialOption := ""
-	for idx, item := range result.Data {
+	for idx, item := range items {
 		entry := fmt.Sprintf("%d. %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
 		if sess != nil && item.ID == sess.ActiveThreadID {
 			entry = fmt.Sprintf("%d. [当前] %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
@@ -412,8 +368,25 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 			return err
 		}
 		reply := "已切换工作区到 " + ws.ID
-		if sess.ActiveTurnID != "" {
+		if sessionHasInFlightSubmission(sess) {
 			reply += "。当前运行中的任务仍归属原线程；后续新任务会使用新工作区。"
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		}
+		binding, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+		if err != nil {
+			slog.Warn("workspace switch thread binding failed",
+				"session_key", sessionKey,
+				"workspace_id", ws.ID,
+				"cwd", ws.Cwd,
+				"error", err,
+			)
+			reply += "。自动绑定 thread 失败，可稍后重试。"
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		}
+		if binding.Resumed {
+			reply += "。已自动恢复该工作区最近使用的线程。"
+		} else {
+			reply += "。已自动创建新线程。"
 		}
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
@@ -1117,7 +1090,25 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
 	}
 	switchSessionWorkspace(sess, id)
-	return a.store.UpsertSession(sess)
+	if err := a.store.UpsertSession(sess); err != nil {
+		return err
+	}
+	if sessionHasInFlightSubmission(sess) {
+		return nil
+	}
+	ws := config.FindWorkspace(a.cfg, id)
+	if ws == nil {
+		return nil
+	}
+	if _, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws); err != nil {
+		slog.Warn("workspace create thread binding failed",
+			"session_key", sessionKey,
+			"workspace_id", id,
+			"cwd", cwd,
+			"error", err,
+		)
+	}
+	return nil
 }
 
 func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {

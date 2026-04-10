@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
+	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -124,6 +126,137 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 	}
 	if sess.ActiveTurnID != "turn-1" || sess.ActiveSubmissionID != "sub-1" {
 		t.Fatalf("expected turn lineage preserved, got %#v", sess)
+	}
+}
+
+func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         "sess-1",
+		WorkspaceID: "default",
+		OwnerUserID: "u-1",
+		ChatID:      "c-1",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{
+				Data: []codexrpc.ThreadListEntry{
+					{ID: "thread-alt-old", UpdatedAt: 10, Cwd: a.cfg.Workspaces[1].Cwd},
+					{ID: "thread-alt-new", UpdatedAt: 20, Name: "Alt Thread", Preview: "Alt Preview", Cwd: a.cfg.Workspaces[1].Cwd},
+				},
+			}
+		case "thread/resume":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-new"
+			result.Thread.Name = "Alt Thread"
+			result.Thread.Preview = "Alt Preview"
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		return nil
+	}
+
+	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	if err != nil {
+		t.Fatalf("completeWorkspaceUse: %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("expected success toast, got %#v", resp)
+	}
+	sess := a.store.GetSession("sess-1")
+	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("session after workspace resume = %+v", sess)
+	}
+}
+
+func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         "sess-1",
+		WorkspaceID: "default",
+		OwnerUserID: "u-1",
+		ChatID:      "c-1",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-new"
+			result.Thread.Name = "Fresh Thread"
+			result.Thread.Preview = "Fresh Preview"
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		return nil
+	}
+
+	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	if err != nil {
+		t.Fatalf("completeWorkspaceUse: %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("expected success toast, got %#v", resp)
+	}
+	sess := a.store.GetSession("sess-1")
+	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("session after workspace start = %+v", sess)
+	}
+}
+
+func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         "sess-1",
+		WorkspaceID: "default",
+		OwnerUserID: "u-1",
+		ChatID:      "c-1",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{
+				Data: []codexrpc.ThreadListEntry{{ID: "thread-alt-old", UpdatedAt: 20, Cwd: a.cfg.Workspaces[1].Cwd}},
+			}
+			return nil
+		case "thread/resume":
+			return context.DeadlineExceeded
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-fresh"
+			result.Thread.Name = "Fresh Thread"
+			result.Thread.Preview = "Fresh Preview"
+			return nil
+		default:
+			t.Fatalf("unexpected method: %s", method)
+			return nil
+		}
+	}
+
+	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	if err != nil {
+		t.Fatalf("completeWorkspaceUse: %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("expected success toast, got %#v", resp)
+	}
+	sess := a.store.GetSession("sess-1")
+	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-fresh" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("session after workspace fallback = %+v", sess)
 	}
 }
 
