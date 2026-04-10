@@ -104,6 +104,7 @@ type Adapter struct {
 	previewStatePath  string
 	previewProcessCWD string
 	previewer         *DriveMarkdownPreviewer
+	fileSharer        *DriveFileSharer
 
 	startErr error
 }

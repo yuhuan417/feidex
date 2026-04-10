@@ -44,6 +44,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandQuiet(msg, fields[1:])
 	case "/fast":
 		return a.commandFast(msg, fields[1:])
+	case "/download":
+		return a.commandDownload(msg, fields[1:])
 	case "/compact":
 		return a.commandCompact(msg, fields[1:])
 	case "/fork":
@@ -89,7 +91,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet":
 		return true
-	case "/menu", "/help", "/history", "/usage", "/compact", "/fork", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/history", "/usage", "/download", "/compact", "/fork", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
 		return true
 	default:
 		return false
@@ -468,6 +470,7 @@ func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
 func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: commandLabel("新线程", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.group.context"}},
+		{Text: commandLabel("下载文件", "/download"), Type: "default", Value: map[string]any{"action": "menu.download", "session_key": sessionKey, "parent_action": "menu.group.context"}},
 		{Text: commandLabel("Fork 线程", "/fork"), Type: "default", Value: map[string]any{"action": "menu.fork", "session_key": sessionKey, "parent_action": "menu.group.context"}},
 		{Text: commandLabel("压缩上下文", "/compact"), Type: "default", Value: map[string]any{"action": "menu.compact", "session_key": sessionKey, "parent_action": "menu.group.context"}},
 		{Text: submenuCommandLabel("工作区管理", "/workspace"), Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
@@ -520,6 +523,8 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"会话管理：",
 		"`/new`",
 		"切换到新线程模式，下一条消息会新建线程。",
+		"`/download`",
+		"在当前 workspace 范围内选择文件，并生成下载链接。",
 		"`/fork`",
 		"复制当前 thread 为一个新分支，并立即切换过去。",
 		"`/compact`",

@@ -32,6 +32,7 @@ type feishuClient interface {
 	ConfigureMarkdownPreview(string, string)
 	RewriteMarkdownPreview(context.Context, feishu.MarkdownPreviewRequest) (string, error)
 	CleanupMarkdownPreviewsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
+	CleanupSharedFilesBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
 	AddReaction(context.Context, string, string) error
 	RemoveReaction(context.Context, string, string) error
 	ReplyText(context.Context, string, string, bool) error
@@ -41,6 +42,7 @@ type feishuClient interface {
 	SendCard(context.Context, string, map[string]any) (string, error)
 	PatchCard(context.Context, string, map[string]any) error
 	DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error)
+	ShareLocalFile(context.Context, feishu.SharedFileRequest) (feishu.SharedFileResult, error)
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 

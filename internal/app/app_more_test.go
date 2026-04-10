@@ -145,35 +145,40 @@ func (f *fakeCodexClient) ReplyError(id json.RawMessage, code int, msg string) e
 }
 
 type fakeFeishuClient struct {
-	startErr          error
-	replyTextErr      error
-	sendTextErr       error
-	replyCardErr      error
-	sendCardErr       error
-	patchCardErr      error
-	rewritePreviewErr error
-	addReactionErr    error
-	removeReactionErr error
-	downloadErr       error
-	cleanupResult     feishu.PreviewDriveCleanupResult
-	cleanupErr        error
-	started           bool
-	stopped           bool
-	replyTexts        []string
-	sentTexts         []string
-	replyCards        []map[string]any
-	sendCards         []map[string]any
-	patchedCards      []map[string]any
-	replyCardInThread []bool
-	replyTextWithIDs  []string
-	replyCardID       string
-	sendCardID        string
-	previewStatePath  string
-	previewProcessCWD string
-	rewritePreviewOut string
-	downloadPath      string
-	downloadName      string
-	onMessage         func(*feishu.InboundMessage)
+	startErr            error
+	replyTextErr        error
+	sendTextErr         error
+	replyCardErr        error
+	sendCardErr         error
+	patchCardErr        error
+	rewritePreviewErr   error
+	addReactionErr      error
+	removeReactionErr   error
+	downloadErr         error
+	shareFileErr        error
+	cleanupResult       feishu.PreviewDriveCleanupResult
+	cleanupErr          error
+	sharedCleanupResult feishu.PreviewDriveCleanupResult
+	sharedCleanupErr    error
+	started             bool
+	stopped             bool
+	replyTexts          []string
+	sentTexts           []string
+	replyCards          []map[string]any
+	sendCards           []map[string]any
+	patchedCards        []map[string]any
+	replyCardInThread   []bool
+	replyTextWithIDs    []string
+	replyCardID         string
+	sendCardID          string
+	previewStatePath    string
+	previewProcessCWD   string
+	rewritePreviewOut   string
+	downloadPath        string
+	downloadName        string
+	sharedFileResult    feishu.SharedFileResult
+	sharedFileRequests  []feishu.SharedFileRequest
+	onMessage           func(*feishu.InboundMessage)
 }
 
 func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
@@ -200,6 +205,10 @@ func (f *fakeFeishuClient) RewriteMarkdownPreview(context.Context, feishu.Markdo
 
 func (f *fakeFeishuClient) CleanupMarkdownPreviewsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
 	return f.cleanupResult, f.cleanupErr
+}
+
+func (f *fakeFeishuClient) CleanupSharedFilesBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
+	return f.sharedCleanupResult, f.sharedCleanupErr
 }
 
 func (f *fakeFeishuClient) AddReaction(context.Context, string, string) error {
@@ -248,6 +257,11 @@ func (f *fakeFeishuClient) PatchCard(_ context.Context, _ string, card map[strin
 
 func (f *fakeFeishuClient) DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error) {
 	return f.downloadPath, f.downloadName, f.downloadErr
+}
+
+func (f *fakeFeishuClient) ShareLocalFile(_ context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
+	f.sharedFileRequests = append(f.sharedFileRequests, req)
+	return f.sharedFileResult, f.shareFileErr
 }
 
 func (f *fakeFeishuClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
@@ -914,6 +928,21 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.group.context": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuGroupContext(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
+			const downloadSessionKey = "feishu:group:chat-1:root:download-root"
+			if err := a.store.UpsertSession(&state.Session{
+				Key:         downloadSessionKey,
+				WorkspaceID: a.cfg.Workspaces[0].ID,
+			}); err != nil {
+				t.Fatalf("UpsertSession(download) error = %v", err)
+			}
+			return a.completeMenuDownload(&feishu.CardAction{
+				UserID:      "user-1",
+				ChatID:      "chat-1",
+				MessageID:   "msg-download",
+				ActionValue: map[string]any{"session_key": downloadSessionKey, "parent_action": "menu.group.context"},
+			}, downloadSessionKey)
+		},
 		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
 			const forkSessionKey = "feishu:group:chat-1:root:fork-root"
 			if err := a.store.UpsertSession(&state.Session{
@@ -1005,7 +1034,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.group.session", "menu.group.context", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.group.session", "menu.group.context", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -1104,10 +1133,10 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	if indicatorByAction["menu.workspace"] != true || indicatorByAction["menu.threads"] != true {
 		t.Fatalf("expected context submenu indicators, got %#v", indicatorByAction)
 	}
-	if indicatorByAction["menu.new"] || indicatorByAction["menu.fork"] || indicatorByAction["menu.compact"] {
+	if indicatorByAction["menu.new"] || indicatorByAction["menu.download"] || indicatorByAction["menu.fork"] || indicatorByAction["menu.compact"] {
 		t.Fatalf("direct context commands should not show submenu indicator, got %#v", indicatorByAction)
 	}
-	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") || !strings.Contains(labelByAction["menu.fork"], "/fork") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
+	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.fork"], "/fork") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
 		t.Fatalf("expected real command labels in context menu, got %#v", labelByAction)
 	}
 
@@ -2476,6 +2505,7 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/status",
 		"/model",
 		"/quiet",
+		"/download",
 		"/fork",
 		"/threads",
 		"/threads fork",
@@ -2541,7 +2571,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/fork", "/compact", "/workspace use ID", "/threads all", "/threads fork", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/download", "/fork", "/compact", "/workspace use ID", "/threads all", "/threads fork", "/upgrade"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}

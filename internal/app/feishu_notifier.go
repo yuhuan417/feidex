@@ -66,6 +66,10 @@ func (n *notifyingFeishuClient) CleanupMarkdownPreviewsBefore(ctx context.Contex
 	return n.base.CleanupMarkdownPreviewsBefore(ctx, cutoff)
 }
 
+func (n *notifyingFeishuClient) CleanupSharedFilesBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {
+	return n.base.CleanupSharedFilesBefore(ctx, cutoff)
+}
+
 func (n *notifyingFeishuClient) AddReaction(ctx context.Context, messageID, emoji string) error {
 	err := n.base.AddReaction(ctx, messageID, emoji)
 	if err != nil {
@@ -136,6 +140,14 @@ func (n *notifyingFeishuClient) DownloadMessageResource(ctx context.Context, mes
 		n.notifyPermissionIssue(feishuNotifyTarget{MessageID: messageID}, err)
 	}
 	return path, name, err
+}
+
+func (n *notifyingFeishuClient) ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
+	result, err := n.base.ShareLocalFile(ctx, req)
+	if err != nil {
+		n.notifyPermissionIssue(feishuNotifyTarget{ChatID: req.ChatID}, err)
+	}
+	return result, err
 }
 
 func (n *notifyingFeishuClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {

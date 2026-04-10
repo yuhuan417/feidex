@@ -13,6 +13,7 @@ import (
 
 const attachmentRetention = 7 * 24 * time.Hour
 const markdownPreviewRetention = 7 * 24 * time.Hour
+const sharedFileRetention = 7 * 24 * time.Hour
 
 func (a *App) expirePendingRequestsOnStartup() {
 	for _, req := range a.store.AllPendingRequests() {
@@ -126,14 +127,24 @@ func (a *App) runMarkdownPreviewGC(source string) {
 	result, err := a.feishu.CleanupMarkdownPreviewsBefore(ctx, time.Now().Add(-markdownPreviewRetention))
 	if err != nil {
 		slog.Warn("markdown preview gc failed", "source", source, "error", err)
+	} else if result.DeletedFileCount > 0 {
+		slog.Debug("markdown preview gc complete",
+			"source", source,
+			"deleted_file_count", result.DeletedFileCount,
+			"deleted_estimated_bytes", result.DeletedEstimatedBytes,
+		)
+	}
+	sharedResult, sharedErr := a.feishu.CleanupSharedFilesBefore(ctx, time.Now().Add(-sharedFileRetention))
+	if sharedErr != nil {
+		slog.Warn("shared file gc failed", "source", source, "error", sharedErr)
 		return
 	}
-	if result.DeletedFileCount == 0 {
+	if sharedResult.DeletedFileCount == 0 {
 		return
 	}
-	slog.Debug("markdown preview gc complete",
+	slog.Debug("shared file gc complete",
 		"source", source,
-		"deleted_file_count", result.DeletedFileCount,
-		"deleted_estimated_bytes", result.DeletedEstimatedBytes,
+		"deleted_file_count", sharedResult.DeletedFileCount,
+		"deleted_estimated_bytes", sharedResult.DeletedEstimatedBytes,
 	)
 }

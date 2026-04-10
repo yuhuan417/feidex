@@ -41,6 +41,10 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	a.runMarkdownPreviewGC("test")
 	ff.cleanupErr = nil
 	ff.cleanupResult = feishu.PreviewDriveCleanupResult{DeletedFileCount: 1}
+	ff.sharedCleanupErr = context.Canceled
+	a.runMarkdownPreviewGC("test")
+	ff.sharedCleanupErr = nil
+	ff.sharedCleanupResult = feishu.PreviewDriveCleanupResult{DeletedFileCount: 1}
 	a.runMarkdownPreviewGC("test")
 
 	root := filepath.Join(a.cfg.Workspaces[0].Cwd, attachmentsDirName, "old")

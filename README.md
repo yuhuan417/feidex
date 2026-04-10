@@ -266,6 +266,7 @@ Feidex 会把这些状态写进去：
   - `Quiet 模式 /quiet`
 - 会话管理
   - `新线程 /new`
+  - `下载文件 /download`
   - `Fork 线程 /fork`
   - `工作区管理 /workspace`
   - `线程管理 /threads`
@@ -286,6 +287,8 @@ Feidex 会把这些状态写进去：
   - 查看命令说明
 - `/new`
   - 切换到新线程模式
+- `/download`
+  - 在当前 workspace 范围内选择文件并生成下载链接
 - `/fork`
   - fork 当前线程并切换到新的分支线程
 - `/interrupt` 或 `/stop`

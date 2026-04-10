@@ -50,6 +50,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.new":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuNew(action, sessionKey)
+	case "menu.download":
+		sessionKey, _ := action.ActionValue["session_key"].(string)
+		return a.completeMenuDownload(action, sessionKey)
 	case "menu.quiet":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuQuiet(action, sessionKey)

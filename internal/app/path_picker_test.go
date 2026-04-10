@@ -262,6 +262,65 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 	}
 }
 
+func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	root := a.cfg.Workspaces[0].Cwd
+	target := filepath.Join(root, "report.txt")
+	if err := os.WriteFile(target, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile(report.txt) error = %v", err)
+	}
+	ff.sharedFileResult = feishu.SharedFileResult{
+		FileName:  "report.txt",
+		URL:       "https://drive.example/file-1",
+		SizeBytes: 5,
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	if err := a.commandDownload(msg, nil); err != nil {
+		t.Fatalf("commandDownload() error = %v", err)
+	}
+	pending := a.store.AllPendingRequests()
+	if len(pending) != 1 || pending[0].Kind != downloadFilePendingKind {
+		t.Fatalf("download pending requests = %+v", pending)
+	}
+	requestID := pending[0].ID
+
+	resp, err := a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"request_id": requestID},
+		Option:      encodePathPickerOption(pathPickerEntry{Name: "report.txt", Path: target, IsDir: false}),
+	}, "path_picker.dropdown")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("download picker dropdown = %#v, %v", resp, err)
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"request_id": requestID},
+	}, "path_picker.confirm")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("download picker confirm = %#v, %v", resp, err)
+	}
+	if len(ff.sharedFileRequests) != 1 {
+		t.Fatalf("sharedFileRequests = %+v, want 1", ff.sharedFileRequests)
+	}
+	if got := filepath.Clean(ff.sharedFileRequests[0].LocalPath); got != filepath.Clean(target) {
+		t.Fatalf("share local path = %q, want %q", got, target)
+	}
+	if got := ff.sharedFileRequests[0].ChatID; got != "chat-1" {
+		t.Fatalf("share chat id = %q, want chat-1", got)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "https://drive.example/file-1") || !strings.Contains(body, "report.txt") {
+		t.Fatalf("download result card body = %q", body)
+	}
+	if got := a.store.PendingByID(requestID); got == nil || got.Status != "resolved" {
+		t.Fatalf("download pending after confirm = %+v", got)
+	}
+}
+
 func cardHasTag(card map[string]any, wantTag string) bool {
 	elements := cardElements(card)
 	for _, elem := range elements {

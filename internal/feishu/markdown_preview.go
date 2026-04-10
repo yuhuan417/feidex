@@ -547,10 +547,16 @@ func previewFileName(resolvedPath, contentSHA string, now time.Time) string {
 }
 
 func previewManagedFileTime(name string) (time.Time, bool) {
-	if !strings.HasPrefix(strings.TrimSpace(name), previewManagedFilePrefix) {
+	return managedFileTime(previewManagedFilePrefix, name)
+}
+
+func managedFileTime(prefix, name string) (time.Time, bool) {
+	prefix = strings.TrimSpace(prefix)
+	name = strings.TrimSpace(name)
+	if prefix == "" || !strings.HasPrefix(name, prefix) {
 		return time.Time{}, false
 	}
-	rest := strings.TrimPrefix(strings.TrimSpace(name), previewManagedFilePrefix)
+	rest := strings.TrimPrefix(name, prefix)
 	if len(rest) < len(previewTimestampFormat)+1 || rest[len(previewTimestampFormat)] != '-' {
 		return time.Time{}, false
 	}

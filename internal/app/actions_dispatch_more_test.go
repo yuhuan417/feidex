@@ -198,6 +198,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "menu.root", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.session", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.context", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "menu.download", "session_key": "sess-1", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1", MessageID: "msg-1"},
 		{ActionValue: map[string]any{"action": "menu.fork", "session_key": "sess-1", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.compact", "session_key": "sess-2", "parent_action": "menu.group.context"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.group.model", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
