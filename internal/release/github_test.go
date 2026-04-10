@@ -56,6 +56,30 @@ func TestLatestLinuxBinaryAARCH64(t *testing.T) {
 	}
 }
 
+func TestLinuxBinaryByVersionAMD64(t *testing.T) {
+	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
+		responses: map[string]string{
+			"https://api.github.com/repos/test/feidex/releases/tags/v0.3.0": `{
+				"tag_name":"v0.3.0",
+				"html_url":"https://example.test/releases/v0.3.0",
+				"published_at":"2026-04-08T00:00:00Z",
+				"assets":[
+					{"name":"feidex-linux-amd64","browser_download_url":"https://download.test/bin"},
+					{"name":"sha256sums.txt","browser_download_url":"https://download.test/sums"}
+				]
+			}`,
+			"https://download.test/sums": "abc123  dist/feidex-linux-amd64\n",
+		},
+	}})
+	info, err := client.LinuxBinaryByVersion(context.Background(), "v0.3.0", "amd64")
+	if err != nil {
+		t.Fatalf("LinuxBinaryByVersion() error = %v", err)
+	}
+	if info.Version != "v0.3.0" || info.ExpectedSHA256 != "abc123" {
+		t.Fatalf("LinuxBinaryByVersion() = %+v", info)
+	}
+}
+
 func TestCurrentLinuxAssetName(t *testing.T) {
 	if got, err := CurrentLinuxAssetName("amd64"); err != nil || got != "feidex-linux-amd64" {
 		t.Fatalf("CurrentLinuxAssetName(amd64) = %q, %v", got, err)

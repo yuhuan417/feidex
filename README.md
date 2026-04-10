@@ -322,7 +322,9 @@ Feidex 会把这些状态写进去：
 - `/status`
   - 查看当前状态
 - `/upgrade`
-  - 发起升级
+  - 检查最新版本并发起升级
+- `/upgrade v0.3.0`
+  - 跳过最新版本探测，直接发起指定版本升级确认
 
 ## 审批卡片
 
@@ -374,13 +376,22 @@ feidex daemon uninstall
 
 升级逻辑会：
 
-- 查询最新 release
+- `/upgrade`
+  - 查询最新 release
+- `/upgrade vX.Y.Z`
+  - 直接查询指定 tag，跳过最新版本探测
 - 根据本机架构选择正确二进制
   - `amd64 -> feidex-linux-amd64`
   - `arm64 -> feidex-linux-aarch64`
 - 校验 `sha256sums.txt`
 - 下载、替换、重启
 - 启动失败自动回退
+
+设计约束：
+
+- `/upgrade` 是救援路径；即使线程、工作区、Codex RPC、普通交互流程等其它功能异常，升级链路也必须尽量保持可用
+- 升级实现不能依赖其它业务功能的成功执行；允许依赖的前置条件应尽量收敛到 daemon 状态、release 查询、确认卡片和本地 pending store
+- 任何改动升级链路的提交，都必须补或更新独立的 upgrade 隔离测试，证明 `/upgrade` 和确认动作在缺失 `codex`/session 运行态时仍能工作
 
 ## 发布
 

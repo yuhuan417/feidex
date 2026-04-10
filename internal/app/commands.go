@@ -63,7 +63,7 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	case "/status":
 		return a.commandStatus(msg)
 	case "/upgrade":
-		return a.commandUpgrade(msg)
+		return a.commandUpgrade(msg, fields[1:])
 	case "/workspace", "/cd":
 		return a.commandWorkspace(msg, fields[1:])
 	default:
@@ -540,8 +540,8 @@ func (a *App) renderHelpCard(sessionKey string) map[string]any {
 		"服务管理：",
 		"`/status`",
 		"查看当前会话、线程、工作区与模型状态。",
-		"`/upgrade`",
-		"检查新版本并发起服务升级。",
+		"`/upgrade [VERSION]`",
+		"检查最新版本，或直接升级到指定版本。",
 	}, "\n")
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},

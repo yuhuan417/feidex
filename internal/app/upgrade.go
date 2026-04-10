@@ -28,6 +28,10 @@ type upgradePendingPayload struct {
 }
 
 func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any, error) {
+	return a.renderUpgradeCardForVersion(sessionKey, ownerUserID, "")
+}
+
+func (a *App) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVersion string) (map[string]any, error) {
 	manager, err := newDaemonManager()
 	if err != nil {
 		return nil, fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
@@ -53,31 +57,46 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	latest, err := newReleaseClient().LatestLinuxBinary(ctx, currentGOARCH())
-	if err != nil {
-		return nil, fmt.Errorf("查询最新版本失败: %w", err)
-	}
 	assetName, err := release.CurrentLinuxAssetName(currentGOARCH())
 	if err != nil {
 		return nil, fmt.Errorf("当前架构不支持自动升级: %w", err)
 	}
+	target := &release.ReleaseInfo{}
+	forceVersion := strings.TrimSpace(requestedVersion) != ""
+	if forceVersion {
+		target, err = newReleaseClient().LinuxBinaryByVersion(ctx, requestedVersion, currentGOARCH())
+		if err != nil {
+			return nil, fmt.Errorf("查询指定版本 %s 失败: %w", requestedVersion, err)
+		}
+	} else {
+		target, err = newReleaseClient().LatestLinuxBinary(ctx, currentGOARCH())
+		if err != nil {
+			return nil, fmt.Errorf("查询最新版本失败: %w", err)
+		}
+	}
 
 	current := currentVersion()
-	bodyLines := []string{
-		"当前版本: `" + current + "`",
-		"最新版本: `" + latest.Version + "`",
-		"目标架构: `" + currentGOARCH() + "`",
-		"目标包: `" + assetName + "`",
-		"二进制: `" + exePath + "`",
+	bodyLines := []string{"当前版本: `" + current + "`"}
+	if forceVersion {
+		bodyLines = append(bodyLines, "指定版本: `"+target.Version+"`")
+	} else {
+		bodyLines = append(bodyLines, "最新版本: `"+target.Version+"`")
 	}
-	if strings.TrimSpace(latest.HTMLURL) != "" {
-		bodyLines = append(bodyLines, "Release: <"+latest.HTMLURL+">")
+	bodyLines = append(bodyLines,
+		"目标架构: `"+currentGOARCH()+"`",
+		"目标包: `"+assetName+"`",
+		"二进制: `"+exePath+"`",
+	)
+	if strings.TrimSpace(target.HTMLURL) != "" {
+		bodyLines = append(bodyLines, "Release: <"+target.HTMLURL+">")
 	}
 
-	if cmp, err := release.CompareVersions(current, latest.Version); err == nil && cmp >= 0 {
-		return a.feishu.SimpleStatusCard("已是最新版本", "green", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), []feishu.Button{
-			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
-		}), nil
+	if !forceVersion {
+		if cmp, err := release.CompareVersions(current, target.Version); err == nil && cmp >= 0 {
+			return a.feishu.SimpleStatusCard("已是最新版本", "green", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), []feishu.Button{
+				{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+			}), nil
+		}
 	}
 
 	requestID, err := a.store.NextLocalID("upgrade")
@@ -86,15 +105,19 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 	}
 	payload := upgradePendingPayload{
 		CurrentVersion: current,
-		TargetVersion:  latest.Version,
+		TargetVersion:  target.Version,
 		BinaryPath:     exePath,
-		DownloadURL:    latest.BinaryURL,
-		ExpectedSHA256: latest.ExpectedSHA256,
-		ReleaseURL:     latest.HTMLURL,
+		DownloadURL:    target.BinaryURL,
+		ExpectedSHA256: target.ExpectedSHA256,
+		ReleaseURL:     target.HTMLURL,
 	}
-	bodyLines = append(bodyLines, "", "确认后会下载新版本、重启 daemon；如果启动失败会自动回退到旧版本。")
+	if forceVersion {
+		bodyLines = append(bodyLines, "", "已跳过最新版本检查。确认后会下载指定版本、重启 daemon；如果启动失败会自动回退到旧版本。")
+	} else {
+		bodyLines = append(bodyLines, "", "确认后会下载新版本、重启 daemon；如果启动失败会自动回退到旧版本。")
+	}
 	card := a.feishu.SimpleStatusCard("升级确认", "orange", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), []feishu.Button{
-		{Text: "升级到 " + latest.Version, Type: "primary", Value: map[string]any{"action": "upgrade.confirm", "request_id": requestID, "session_key": sessionKey}},
+		{Text: "升级到 " + target.Version, Type: "primary", Value: map[string]any{"action": "upgrade.confirm", "request_id": requestID, "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "upgrade.cancel", "request_id": requestID, "session_key": sessionKey}},
 	})
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -113,13 +136,35 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 	return card, nil
 }
 
-func (a *App) commandUpgrade(msg *feishu.InboundMessage) error {
-	card, err := a.renderUpgradeCard(a.makeSessionKey(msg), msg.UserID)
+func (a *App) commandUpgrade(msg *feishu.InboundMessage, args []string) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: /upgrade [VERSION]")
+	}
+	targetVersion := ""
+	if len(args) == 1 {
+		var err error
+		targetVersion, err = normalizeUpgradeVersion(args[0])
+		if err != nil {
+			return fmt.Errorf("版本格式不正确: %q，示例: /upgrade v0.3.0", args[0])
+		}
+	}
+	card, err := a.renderUpgradeCardForVersion(a.makeSessionKey(msg), msg.UserID, targetVersion)
 	if err != nil {
 		return err
 	}
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
+}
+
+func normalizeUpgradeVersion(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("missing version")
+	}
+	if _, err := release.ParseVersion(raw); err != nil {
+		return "", err
+	}
+	return "v" + strings.TrimPrefix(raw, "v"), nil
 }
 
 func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {

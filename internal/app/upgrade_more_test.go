@@ -28,7 +28,9 @@ func TestUpgradeBranches(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	currentVersion = func() string { return "v9.9.9" }
 	currentGOARCH = func() string { return "amd64" }
-	newDaemonManager = func() (daemon.Manager, error) { return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil }
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v9.9.9", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}
@@ -37,12 +39,29 @@ func TestUpgradeBranches(t *testing.T) {
 		t.Fatalf("renderUpgradeCard(latest) = %#v, %v", card, err)
 	}
 
-	newDaemonManager = func() (daemon.Manager, error) { return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: false}}, nil }
+	newReleaseClient = func() releaseClient {
+		return &fakeReleaseClient{
+			latestErr: errors.New("latest should not be called"),
+			versionInfo: map[string]*release.ReleaseInfo{
+				"v1.0.0": {Version: "v1.0.0", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"},
+			},
+		}
+	}
+	card, err = a.renderUpgradeCardForVersion("sess-1", "user-1", "v1.0.0")
+	if err != nil || card == nil {
+		t.Fatalf("renderUpgradeCardForVersion() = %#v, %v", card, err)
+	}
+
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: false}}, nil
+	}
 	if _, err := a.renderUpgradeCard("sess-1", "user-1"); err == nil {
 		t.Fatal("expected renderUpgradeCard() to reject uninstalled daemon")
 	}
 
-	newDaemonManager = func() (daemon.Manager, error) { return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil }
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v10.0.0", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}

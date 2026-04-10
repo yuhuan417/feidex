@@ -42,13 +42,43 @@ type fakeCodexClient struct {
 }
 
 type fakeReleaseClient struct {
-	info *release.ReleaseInfo
-	err  error
+	info         *release.ReleaseInfo
+	versionInfo  map[string]*release.ReleaseInfo
+	err          error
+	latestErr    error
+	versionErr   error
+	latestCalls  int
+	versionCalls []string
 }
 
 func (f *fakeReleaseClient) LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error) {
+	f.latestCalls++
+	if f.latestErr != nil {
+		return nil, f.latestErr
+	}
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.info == nil {
+		return nil, errors.New("missing release info")
+	}
+	cp := *f.info
+	return &cp, nil
+}
+
+func (f *fakeReleaseClient) LinuxBinaryByVersion(_ context.Context, version string, _ string) (*release.ReleaseInfo, error) {
+	f.versionCalls = append(f.versionCalls, version)
+	if f.versionErr != nil {
+		return nil, f.versionErr
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.versionInfo != nil {
+		if info := f.versionInfo[version]; info != nil {
+			cp := *info
+			return &cp, nil
+		}
 	}
 	if f.info == nil {
 		return nil, errors.New("missing release info")
@@ -1315,7 +1345,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandUpgrade(msg); err != nil {
+	if err := a.commandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1334,6 +1364,67 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	}
 	if pending == nil {
 		t.Fatal("expected upgrade pending request to be created")
+	}
+}
+
+func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	releaseStub := &fakeReleaseClient{
+		latestErr: errors.New("latest query should not be called"),
+		versionInfo: map[string]*release.ReleaseInfo{
+			"v0.3.0": {
+				Version:        "v0.3.0",
+				HTMLURL:        "https://example.test/releases/v0.3.0",
+				BinaryName:     "feidex-linux-amd64",
+				BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+				ExpectedSHA256: "def456",
+			},
+		},
+	}
+	newReleaseClient = func() releaseClient { return releaseStub }
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v9.9.9" }
+	currentGOARCH = func() string { return "amd64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandUpgrade(msg, []string{"v0.3.0"}); err != nil {
+		t.Fatalf("commandUpgrade(specified version) error = %v", err)
+	}
+	if releaseStub.latestCalls != 0 {
+		t.Fatalf("latest release call count = %d, want 0", releaseStub.latestCalls)
+	}
+	if len(releaseStub.versionCalls) != 1 || releaseStub.versionCalls[0] != "v0.3.0" {
+		t.Fatalf("version calls = %#v, want v0.3.0", releaseStub.versionCalls)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "当前版本: `v9.9.9`") || !strings.Contains(body, "指定版本: `v0.3.0`") || !strings.Contains(body, "已跳过最新版本检查") {
+		t.Fatalf("upgrade card body = %q", body)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == "upgrade_release" {
+			pending = req
+			break
+		}
+	}
+	if pending == nil || !strings.Contains(pending.PayloadJSON, "\"target_version\":\"v0.3.0\"") {
+		t.Fatalf("pending = %+v, want target v0.3.0", pending)
 	}
 }
 

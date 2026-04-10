@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -40,6 +41,7 @@ type ReleaseInfo struct {
 
 type Client interface {
 	LatestLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error)
+	LinuxBinaryByVersion(ctx context.Context, version, goarch string) (*ReleaseInfo, error)
 }
 
 type GitHubClient struct {
@@ -100,6 +102,29 @@ func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*R
 	if err != nil {
 		return nil, err
 	}
+	return c.releaseInfoFromGitHubRelease(ctx, release, assetName, "latest release")
+}
+
+func (c *GitHubClient) LinuxBinaryByVersion(ctx context.Context, version, goarch string) (*ReleaseInfo, error) {
+	if c == nil {
+		return nil, fmt.Errorf("nil release client")
+	}
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return nil, fmt.Errorf("missing release version")
+	}
+	assetName, err := CurrentLinuxAssetName(goarch)
+	if err != nil {
+		return nil, err
+	}
+	release, err := c.fetchReleaseByTag(ctx, version)
+	if err != nil {
+		return nil, err
+	}
+	return c.releaseInfoFromGitHubRelease(ctx, release, assetName, "release "+version)
+}
+
+func (c *GitHubClient) releaseInfoFromGitHubRelease(ctx context.Context, release *githubRelease, assetName, releaseLabel string) (*ReleaseInfo, error) {
 	info := &ReleaseInfo{
 		Version: strings.TrimSpace(release.TagName),
 		HTMLURL: strings.TrimSpace(release.HTMLURL),
@@ -120,13 +145,13 @@ func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*R
 		}
 	}
 	if info.Version == "" {
-		return nil, fmt.Errorf("latest release is missing tag_name")
+		return nil, fmt.Errorf("%s is missing tag_name", releaseLabel)
 	}
 	if info.BinaryURL == "" || info.BinaryName == "" {
-		return nil, fmt.Errorf("latest release %s is missing asset %s", info.Version, assetName)
+		return nil, fmt.Errorf("%s is missing asset %s", releaseLabel, assetName)
 	}
 	if checksumsURL == "" {
-		return nil, fmt.Errorf("latest release %s is missing asset %s", info.Version, sha256AssetName)
+		return nil, fmt.Errorf("%s is missing asset %s", releaseLabel, sha256AssetName)
 	}
 	checksums, err := c.fetchChecksums(ctx, checksumsURL)
 	if err != nil {
@@ -134,7 +159,7 @@ func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*R
 	}
 	expected := strings.TrimSpace(checksums[info.BinaryName])
 	if expected == "" {
-		return nil, fmt.Errorf("latest release %s is missing checksum for %s", info.Version, info.BinaryName)
+		return nil, fmt.Errorf("%s is missing checksum for %s", releaseLabel, info.BinaryName)
 	}
 	info.ExpectedSHA256 = expected
 	return info, nil
@@ -142,6 +167,15 @@ func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*R
 
 func (c *GitHubClient) fetchLatestRelease(ctx context.Context) (*githubRelease, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", c.owner, c.repo)
+	return c.fetchRelease(ctx, url, "latest release")
+}
+
+func (c *GitHubClient) fetchReleaseByTag(ctx context.Context, tag string) (*githubRelease, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", c.owner, c.repo, url.PathEscape(strings.TrimSpace(tag)))
+	return c.fetchRelease(ctx, url, fmt.Sprintf("release %s", strings.TrimSpace(tag)))
+}
+
+func (c *GitHubClient) fetchRelease(ctx context.Context, url, label string) (*githubRelease, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -155,7 +189,7 @@ func (c *GitHubClient) fetchLatestRelease(ctx context.Context) (*githubRelease, 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("github latest release request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("github %s request failed: status=%d body=%s", label, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var release githubRelease
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
