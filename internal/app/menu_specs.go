@@ -34,11 +34,6 @@ type helpCommandSpec struct {
 	Summary string
 }
 
-type helpSectionSpec struct {
-	Title    string
-	Commands []helpCommandSpec
-}
-
 var commandMenuGroupSpecs = []commandMenuGroupSpec{
 	{
 		Action:      "menu.tools",
@@ -86,71 +81,6 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 	{GroupAction: "menu.group.system", Action: "menu.status", Label: "状态面板", Slash: "/status", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.help", Label: "命令帮助", Slash: "/help", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
-}
-
-var helpIntroCommandSpecs = []helpCommandSpec{
-	{Command: "/menu", Summary: "打开命令菜单。"},
-	{Command: "/help", Summary: "查看所有本地命令与说明。"},
-}
-
-var helpSectionSpecs = []helpSectionSpec{
-	{
-		Title: "常用工具",
-		Commands: []helpCommandSpec{
-			{Command: "`/interrupt` 或 `/stop`", Summary: "中断当前运行中的任务，并清空排队/暂存输入。"},
-			{Command: "/quiet", Summary: "切换 Quiet 模式。"},
-			{Command: "/quiet on", Summary: "开启 Quiet 模式。"},
-			{Command: "/quiet off", Summary: "关闭 Quiet 模式。"},
-			{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"},
-			{Command: "/download", Summary: "在当前 workspace 范围内选择文件，并生成下载链接。"},
-			{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
-			{Command: "/usage", Summary: "查看当前 thread 的累计 token usage。"},
-		},
-	},
-	{
-		Title: "model",
-		Commands: []helpCommandSpec{
-			{Command: "/model", Summary: "打开模型选择与推理强度配置。"},
-			{Command: "/fast", Summary: "切换当前线程的响应速度设置。"},
-		},
-	},
-	{
-		Title: "thread",
-		Commands: []helpCommandSpec{
-			{Command: "/thread", Summary: "打开 thread 菜单。"},
-			{Command: "/thread list", Summary: "查看当前工作区可恢复的线程。"},
-			{Command: "/thread list all", Summary: "查看更多来源的线程，仅保留命令入口。"},
-			{Command: "/thread new", Summary: "立即创建并切换到新的 thread。"},
-			{Command: "/thread fork", Summary: "复制当前 thread 为一个新分支，并立即切换过去。"},
-			{Command: "/thread sandbox", Summary: "配置当前线程的 sandbox。"},
-			{Command: "/thread policy", Summary: "配置当前线程的 approval policy。"},
-			{Command: "/threads", Summary: "等价于 `/thread list`。"},
-			{Command: "/new", Summary: "等价于 `/thread new`。"},
-			{Command: "/fork", Summary: "等价于 `/thread fork`。"},
-		},
-	},
-	{
-		Title: "workspace",
-		Commands: []helpCommandSpec{
-			{Command: "/workspace", Summary: "打开工作区菜单。"},
-			{Command: "/workspace list", Summary: "打开工作区列表并可直接切换。"},
-			{Command: "/workspace new", Summary: "创建新工作区。"},
-			{Command: "/workspace use ID", Summary: "切换到指定工作区。"},
-			{Command: "/workspace sandbox", Summary: "配置当前工作区默认 sandbox。"},
-			{Command: "/workspace policy", Summary: "配置当前工作区默认 approval policy。"},
-		},
-	},
-	{
-		Title: "system",
-		Commands: []helpCommandSpec{
-			{Command: "/debug", Summary: "切换服务端 slog 日志级别（debug/info）。"},
-			{Command: "/debug on", Summary: "切换到 debug 级别。"},
-			{Command: "/debug off", Summary: "切换到 info 级别。"},
-			{Command: "/debug logs", Summary: "查看最近一段服务端 slog 日志。"},
-			{Command: "/status", Summary: "查看当前会话、线程、工作区与模型状态。"},
-			{Command: "/upgrade [VERSION]", Summary: "检查最新版本，或直接升级到指定版本。"},
-		},
-	},
 }
 
 func menuGroupSpec(action string) (commandMenuGroupSpec, bool) {
@@ -216,16 +146,6 @@ func renderMenuButtonSpec(spec commandMenuItemSpec, sessionKey string) feishu.Bu
 		Type:  "default",
 		Value: value,
 	}
-}
-
-func renderHelpBodyFromSpecs() string {
-	lines := []string{"命令说明：", ""}
-	lines = appendHelpCommands(lines, helpIntroCommandSpecs)
-	for _, section := range helpSectionSpecs {
-		lines = append(lines, "", section.Title+"：")
-		lines = appendHelpCommands(lines, section.Commands)
-	}
-	return strings.Join(lines, "\n")
 }
 
 func appendHelpCommands(lines []string, specs []helpCommandSpec) []string {
