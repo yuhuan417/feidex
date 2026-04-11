@@ -119,6 +119,7 @@ func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Sessio
 }
 
 func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*workspaceThreadBinding, error) {
+	appState := a.appState()
 	threadID := strings.TrimSpace(entry.ID)
 	if threadID == "" {
 		return nil, fmt.Errorf("missing thread id")
@@ -152,7 +153,7 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return nil, err
 	}
 	a.markSessionThreadLive(sessionKey, boundThreadID)
@@ -165,6 +166,7 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 }
 
 func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
+	appState := a.appState()
 	effectiveModel := configuredGlobalModel(a.cfg)
 	threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
 	var result codexrpc.ThreadStartResult
@@ -182,7 +184,7 @@ func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *c
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return nil, err
 	}
 	a.markSessionThreadLive(sessionKey, threadID)

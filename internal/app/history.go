@@ -219,7 +219,7 @@ func (a *App) fetchCurrentThreadHistory(sessionKey string) (*state.Session, *cod
 	if a == nil || a.store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
 	}

@@ -35,7 +35,8 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 	if a == nil || a.store == nil {
 		return 0, fmt.Errorf("store not initialized")
 	}
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return 0, fmt.Errorf("当前没有活动线程，无法 fork")
 	}
@@ -48,7 +49,7 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 		return 0, fmt.Errorf("workspace %q not found", workspaceID)
 	}
 	discarded := a.discardSessionPendingInputs(sessionKey)
-	sess = a.store.GetSession(sessionKey)
+	sess = appState.session(sessionKey)
 	if sess == nil {
 		return 0, fmt.Errorf("session %q disappeared", sessionKey)
 	}
@@ -83,7 +84,7 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 	sess.Status = "idle"
 	sess.Queue = nil
 	sess.StagedImages = nil
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return 0, err
 	}
 	return discarded, nil

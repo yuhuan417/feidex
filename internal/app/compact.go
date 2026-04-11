@@ -44,7 +44,8 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动线程，无法压缩上下文")
 	}
@@ -53,7 +54,7 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	}
 	previousStatus := strings.TrimSpace(sess.Status)
 	sess.Status = sessionStatusCompacting
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -65,7 +66,7 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 		a.restoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
 		return nil, err
 	}
-	return a.store.GetSession(sessionKey), nil
+	return appState.session(sessionKey), nil
 }
 
 func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
@@ -74,7 +75,8 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
 		return false
 	}
-	for _, sess := range a.store.AllSessions() {
+	appState := a.appState()
+	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
 		}
@@ -95,7 +97,7 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 		}
 		sess.ActiveTurnID = turnID
 		sess.Status = sessionStatusCompacting
-		return a.store.UpsertSession(sess) == nil
+		return appState.saveSession(sess) == nil
 	}
 	return false
 }
@@ -106,7 +108,8 @@ func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 	if a == nil || a.store == nil || threadID == "" {
 		return false
 	}
-	for _, sess := range a.store.AllSessions() {
+	appState := a.appState()
+	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
 		}
@@ -124,7 +127,7 @@ func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 		}
 		sess.ActiveTurnID = ""
 		sess.Status = "idle"
-		if err := a.store.UpsertSession(sess); err != nil {
+		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
 		a.sendStandaloneCompactResult(sess, "completed")
@@ -139,7 +142,8 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool 
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
 		return false
 	}
-	for _, sess := range a.store.AllSessions() {
+	appState := a.appState()
+	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
 		}
@@ -154,7 +158,7 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool 
 		}
 		sess.ActiveTurnID = ""
 		sess.Status = "idle"
-		if err := a.store.UpsertSession(sess); err != nil {
+		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
 		a.sendStandaloneCompactResult(sess, status)
@@ -170,7 +174,8 @@ func (a *App) failStandaloneCompactTurn(threadID, turnID, message string) bool {
 	if a == nil || a.store == nil || threadID == "" {
 		return false
 	}
-	for _, sess := range a.store.AllSessions() {
+	appState := a.appState()
+	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
 		}
@@ -188,7 +193,7 @@ func (a *App) failStandaloneCompactTurn(threadID, turnID, message string) bool {
 		}
 		sess.ActiveTurnID = ""
 		sess.Status = "idle"
-		if err := a.store.UpsertSession(sess); err != nil {
+		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
 		text := "当前线程上下文压缩失败。"
@@ -205,7 +210,8 @@ func (a *App) restoreStandaloneCompactSession(sessionKey, threadID, previousStat
 	if a == nil || a.store == nil {
 		return
 	}
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		return
 	}
@@ -222,7 +228,7 @@ func (a *App) restoreStandaloneCompactSession(sessionKey, threadID, previousStat
 	if sess.Status == "" {
 		sess.Status = "idle"
 	}
-	_ = a.store.UpsertSession(sess)
+	_ = appState.saveSession(sess)
 }
 
 func (a *App) sendStandaloneCompactResult(sess *state.Session, status string) {

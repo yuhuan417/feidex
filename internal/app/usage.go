@@ -113,7 +113,7 @@ func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) renderUsageCard(sessionKey string) map[string]any {
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	body := "当前没有活动线程。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		body = "当前线程暂无 token usage 数据。"
