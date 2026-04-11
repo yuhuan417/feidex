@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -16,155 +15,7 @@ import (
 )
 
 func (a *App) handleNotification(method string, params json.RawMessage) {
-	slog.Debug("codex notification", "method", method)
-	switch method {
-	case "item/agentMessage/delta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "agent_message", p.Delta)
-		}
-	case "item/reasoning/summaryTextDelta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "reasoning", p.Delta)
-		}
-	case "item/commandExecution/outputDelta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "command_execution", p.Delta)
-		}
-	case "item/fileChange/outputDelta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "file_change", p.Delta)
-		}
-	case "item/completed":
-		var p struct {
-			ThreadID string         `json:"threadId"`
-			TurnID   string         `json:"turnId"`
-			ItemID   string         `json:"itemId"`
-			Item     map[string]any `json:"item"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			if p.ItemID == "" {
-				p.ItemID = strings.TrimSpace(stringValue(p.Item["id"]))
-			}
-			a.completeTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, p.Item)
-		}
-	case "turn/plan/updated":
-		var p struct {
-			TurnID string `json:"turnId"`
-			Plan   []struct {
-				Step   string `json:"step"`
-				Status string `json:"status"`
-			} `json:"plan"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			plan := make([]string, 0, len(p.Plan))
-			for _, item := range p.Plan {
-				plan = append(plan, fmt.Sprintf("- [%s] %s", item.Status, item.Step))
-			}
-			a.updatePendingPlan(p.TurnID, strings.Join(plan, "\n"))
-		}
-	case "turn/started":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Turn     struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
-			} `json:"turn"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			turnID := strings.TrimSpace(firstNonEmpty(p.Turn.ID, p.TurnID))
-			if turnID != "" {
-				a.onTurnStartedNotification(p.ThreadID, turnID)
-			}
-		}
-	case "turn/completed":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			Turn     struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
-			} `json:"turn"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			slog.Debug("turn completed",
-				"thread_id", p.ThreadID,
-				"turn_id", p.Turn.ID,
-				"status", p.Turn.Status,
-			)
-			a.finishTurn(p.ThreadID, p.Turn.ID, p.Turn.Status)
-		}
-	case "thread/compacted":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.completeStandaloneCompactTurn(p.ThreadID, p.TurnID)
-		}
-	case "thread/tokenUsage/updated":
-		var p codexrpc.ThreadTokenUsageUpdatedNotification
-		if json.Unmarshal(params, &p) == nil {
-			a.onThreadTokenUsageUpdated(p.ThreadID, p.TurnID, p.TokenUsage)
-		}
-	case "error":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Error    struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			slog.Error("codex turn error",
-				"thread_id", p.ThreadID,
-				"turn_id", p.TurnID,
-				"message", p.Error.Message,
-			)
-			if a.failStandaloneCompactTurn(p.ThreadID, p.TurnID, p.Error.Message) {
-				return
-			}
-			a.recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
-			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
-				sub.Status = "failed"
-				sub.SummaryText = p.Error.Message
-			})
-		}
-	case "serverRequest/resolved":
-		var p struct {
-			ThreadID  string          `json:"threadId"`
-			RequestID json.RawMessage `json:"requestId"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			reqID := requestIDKey(p.RequestID)
-			_ = a.store.UpdatePending(reqID, func(req *state.PendingRequest) { req.Status = "resolved" })
-			pending := a.store.PendingByID(reqID)
-			a.resumeSubmissionAfterRequest(pending)
-		}
-	}
+	newCodexEventRouter(a).handleNotification(method, params)
 }
 
 func (a *App) onThreadTokenUsageUpdated(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
@@ -176,104 +27,27 @@ func (a *App) onTurnStartedNotification(threadID, turnID string) {
 }
 
 func (a *App) handleServerRequest(req codexrpc.RequestEnvelope) {
-	slog.Debug("codex server request", "method", req.Method)
-	switch req.Method {
-	case "item/commandExecution/requestApproval":
-		a.onCommandApproval(req)
-	case "item/fileChange/requestApproval":
-		a.onFileApproval(req)
-	case "item/permissions/requestApproval":
-		a.onPermissionsApproval(req)
-	case "item/tool/requestUserInput":
-		a.onToolUserInput(req)
-	case "mcpServer/elicitation/request":
-		a.onMcpElicitationRequest(req)
-	default:
-		_ = a.codex.ReplyError(req.ID, -32601, "unsupported server request")
-	}
+	newCodexEventRouter(a).handleServerRequest(req)
 }
 
 func (a *App) onCommandApproval(req codexrpc.RequestEnvelope) {
-	var raw map[string]any
-	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-		return
-	}
-	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
-	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
-	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	a.sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, renderCommandApprovalBody(raw), raw)
+	newCodexEventRouter(a).onCommandApproval(req)
 }
 
 func (a *App) onFileApproval(req codexrpc.RequestEnvelope) {
-	var raw map[string]any
-	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-		return
-	}
-	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
-	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
-	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	a.sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, renderFileApprovalBody(raw), raw)
+	newCodexEventRouter(a).onFileApproval(req)
 }
 
 func (a *App) onPermissionsApproval(req codexrpc.RequestEnvelope) {
-	var raw map[string]any
-	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-		return
-	}
-	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
-	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
-	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	permissions, _ := raw["permissions"].(map[string]any)
-	a.sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, renderPermissionsApprovalBody(raw), permissions, raw)
+	newCodexEventRouter(a).onPermissionsApproval(req)
 }
 
 func (a *App) onToolUserInput(req codexrpc.RequestEnvelope) {
-	var p toolUserInputPayload
-	if err := json.Unmarshal(req.Params, &p); err != nil {
-		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-		return
-	}
-	if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 {
-		a.sendUserInputCard(req.ID, p)
-		return
-	}
-	a.sendUserInputFormCard(req.ID, p)
+	newCodexEventRouter(a).onToolUserInput(req)
 }
 
 func (a *App) onMcpElicitationRequest(req codexrpc.RequestEnvelope) {
-	var header struct {
-		ServerName string `json:"serverName"`
-		ThreadID   string `json:"threadId"`
-		TurnID     string `json:"turnId"`
-		Mode       string `json:"mode"`
-		Message    string `json:"message"`
-		URL        string `json:"url"`
-	}
-	if err := json.Unmarshal(req.Params, &header); err != nil {
-		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-		return
-	}
-	switch header.Mode {
-	case "url":
-		var payload elicitationURLPayload
-		if err := json.Unmarshal(req.Params, &payload); err != nil {
-			_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-			return
-		}
-		a.sendElicitationURLCard(req.ID, payload)
-	case "form":
-		var payload elicitationFormPayload
-		if err := json.Unmarshal(req.Params, &payload); err != nil {
-			_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
-			return
-		}
-		a.sendElicitationFormCard(req.ID, payload)
-	default:
-		_ = a.codex.ReplyError(req.ID, -32601, "unsupported elicitation mode")
-	}
+	newCodexEventRouter(a).onMcpElicitationRequest(req)
 }
 
 func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state.Submission)) {
