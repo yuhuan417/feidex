@@ -12,6 +12,14 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
 
 项目面向中文使用场景，README 也以中文为主。
 
+## 最近更新
+
+- 这轮更新主要补齐了：
+  - `/compact`、`/usage`、`/thread fork`、立即生效的 `/thread new`
+  - 启动时恢复活动 thread，切换 workspace 时自动绑定对应 thread
+  - workspace 路径选择器与 `/download` 文件下载分享
+  - `/debug`、`/debug logs`、权限问题卡片、`/upgrade [VERSION]`
+
 ## 主要能力
 
 - 飞书消息接入
@@ -23,6 +31,8 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
   - 回复消息支持 steer 到当前 root 绑定的 turn
   - steer 失败时自动回退到 queue
   - 支持查看当前 thread 的 `/history`
+  - 支持 `/compact`、`/usage`、`/thread new`、`/thread fork`
+  - 支持启动恢复活动 thread，以及按 workspace 自动恢复/绑定 thread
 - 菜单卡片
   - 单卡片内导航
   - 面包屑路径
@@ -32,15 +42,21 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
   - 多 workspace
   - workspace 级别 sandbox / approval policy
   - thread 级别 sandbox / policy / service tier
+  - 支持 workspace 范围内的路径选择与文件下载分享
 - 审批与补充输入
   - 命令审批
   - 文件变更审批
   - 权限审批
   - request_user_input / elicitation 表单
+- 诊断与可观测性
+  - 运行时日志级别切换与最近日志查看
+  - thread token usage / context left 展示
+  - 飞书权限问题卡片化提示
 - 运行与升级
   - Linux 用户态 systemd daemon
   - GitHub Release 自升级
   - 自动按本机架构选择 `amd64` 或 `aarch64` 资产
+  - 支持 `/upgrade [VERSION]` 直接指定目标版本
 - 发布
   - 自带打 tag 脚本
   - 可自动从 GitHub 远端 tag 推导下一个 minor 版本
@@ -257,6 +273,14 @@ Feidex 会把这些状态写进去：
 - 同一个 thread 上来自 Codex CLI / VSCode / app-server 的 turn 都能看见
 - 当前展示重点是每个 turn 的输入和状态
 
+### Thread 恢复与 Workspace 绑定
+
+- 服务启动时，会尽量恢复 session 上次活动的 thread
+- 切换 workspace 时，会优先恢复该 workspace 最近可用的 thread
+- 如果当前 workspace 没有可恢复 thread，会立即创建一个新的 thread
+- `/thread new` 会立刻创建并切换到新 thread
+- `/thread fork` 会复制当前 thread 为分支线程，并立即切换过去
+
 ## 菜单与命令
 
 主菜单分五组：
@@ -371,6 +395,26 @@ Feidex 会把这些状态写进去：
 - 权限审批
 
 审批处理后，卡片不会只剩“已允许本会话执行”这类结果文案，而会保留原审批内容，便于回看上下文。
+
+## 文件下载与预览
+
+- `/download` 会打开一个 workspace 范围内的文件选择器
+- 路径选择器只允许浏览当前 workspace 根目录之内的路径
+- 确认后会通过飞书云盘中转生成下载链接
+- markdown 预览与本地文件分享共用同一套 artifact 流程
+
+## 诊断与可观测性
+
+- `/usage`
+  - 查看当前 thread 的累计 token usage，包括 input、cached input、output 和 reasoning output
+- turn 通知和最终输出
+  - 会附带本次 token usage、耗时，以及可用时的 `context left`
+- `/debug`、`/debug on`、`/debug off`
+  - 运行时切换服务端 slog 日志级别
+- `/debug logs`
+  - 查看内存缓冲中的最近服务端日志
+- 飞书权限问题
+  - 如果接口调用因权限或鉴权问题失败，会优先渲染诊断卡片，附带 `log_id`、帮助链接和更具体的失败原因
 
 ## Daemon 模式
 
