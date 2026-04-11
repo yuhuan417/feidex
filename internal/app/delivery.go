@@ -39,35 +39,30 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
 		return nil
 	}
-	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, strings.TrimSpace(text), nil, true)
-	appendReplyCardFooter(card, footerLines)
-	cardID := ""
-	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
-	if err == nil {
-		cardID = strings.TrimSpace(id)
-	}
-	if err != nil {
-		fallback := appendFooterText(strings.TrimSpace(text), footerLines)
-		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
-	}
-	if err != nil || strings.TrimSpace(id) == "" {
+	chunks := buildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
+	results := a.sendReplyCardChunks(ctx, sub, "最终答复", "green", chunks, inThread, true)
+	if len(results) == 0 {
 		return nil
 	}
-	_ = a.store.UpsertMessageLink(&state.MessageLink{
-		MessageID:    id,
-		Kind:         "final_message",
-		SessionKey:   sub.SessionKey,
-		SubmissionID: sub.ID,
-		ThreadID:     sub.ThreadID,
-		TurnID:       sub.TurnID,
-	})
-	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-		s.FinalMessageIDs = []string{id}
-	})
-	if cardID != "" {
-		a.scheduleMarkdownPreviewPatch(sub, cardID, "最终答复", "green", true, strings.TrimSpace(text), footerLines)
+	ids := make([]string, 0, len(results))
+	for _, result := range results {
+		ids = append(ids, result.MessageID)
+		_ = a.store.UpsertMessageLink(&state.MessageLink{
+			MessageID:    result.MessageID,
+			Kind:         "final_message",
+			SessionKey:   sub.SessionKey,
+			SubmissionID: sub.ID,
+			ThreadID:     sub.ThreadID,
+			TurnID:       sub.TurnID,
+		})
+		if result.CardID != "" {
+			a.scheduleMarkdownPreviewPatch(sub, result.CardID, "最终答复", "green", result.ShowHeader, result.Body, result.FooterLines)
+		}
 	}
-	return []string{id}
+	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+		s.FinalMessageIDs = append([]string(nil), ids...)
+	})
+	return ids
 }
 
 func appendReplyCardFooter(card map[string]any, footerLines []string) {
@@ -129,12 +124,35 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 		text = "任务已结束。"
 	}
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
-	var card map[string]any
 	if replyClass {
-		card = a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, text, nil, enablePreview)
-	} else {
-		card = a.renderCompactMarkdownCard(sub, title, color, "", text, nil)
+		results := a.sendReplyCardChunks(ctx, sub, title, color, buildReplyCardChunks(text, showHeader, nil), inThread, enablePreview)
+		if len(results) == 0 {
+			return nil
+		}
+		ids := make([]string, 0, len(results))
+		for _, result := range results {
+			ids = append(ids, result.MessageID)
+			_ = a.store.UpsertMessageLink(&state.MessageLink{
+				MessageID:    result.MessageID,
+				Kind:         kind,
+				SessionKey:   sub.SessionKey,
+				SubmissionID: sub.ID,
+				ThreadID:     sub.ThreadID,
+				TurnID:       sub.TurnID,
+			})
+			if strings.TrimSpace(kind) == "final_message" && result.CardID != "" {
+				a.scheduleMarkdownPreviewPatch(sub, result.CardID, title, color, result.ShowHeader, result.Body, result.FooterLines)
+			}
+		}
+		if strings.TrimSpace(kind) == "final_message" {
+			_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+				s.FinalMessageIDs = append([]string(nil), ids...)
+			})
+		}
+		return ids
 	}
+
+	card := a.renderCompactMarkdownCard(sub, title, color, "", text, nil)
 	cardID := ""
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
 	if err == nil {
@@ -163,6 +181,38 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 		}
 	}
 	return []string{id}
+}
+
+func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool) []sentReplyChunk {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return nil
+	}
+	chunks = a.fitReplyCardChunks(ctx, sub, title, color, chunks, enablePreview)
+	results := make([]sentReplyChunk, 0, len(chunks))
+	for _, chunk := range chunks {
+		card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
+		appendReplyCardFooter(card, chunk.FooterLines)
+
+		cardID := ""
+		id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+		if err == nil && strings.TrimSpace(id) != "" {
+			cardID = strings.TrimSpace(id)
+		} else {
+			fallback := appendFooterText(strings.TrimSpace(chunk.Body), chunk.FooterLines)
+			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
+		}
+		if err != nil || strings.TrimSpace(id) == "" {
+			break
+		}
+		results = append(results, sentReplyChunk{
+			MessageID:   strings.TrimSpace(id),
+			CardID:      cardID,
+			Body:        chunk.Body,
+			FooterLines: append([]string(nil), chunk.FooterLines...),
+			ShowHeader:  chunk.ShowHeader,
+		})
+	}
+	return results
 }
 
 func outboundMessageCardMeta(kind string) (title, color string, replyClass bool, showHeader bool) {

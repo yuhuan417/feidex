@@ -169,6 +169,8 @@ type fakeFeishuClient struct {
 	replyCardInThread  []bool
 	replyTextWithIDs   []string
 	replyCardID        string
+	replyCardIDs       []string
+	replyTextIDs       []string
 	sendCardID         string
 	previewStatePath   string
 	previewProcessCWD  string
@@ -220,6 +222,11 @@ func (f *fakeFeishuClient) ReplyText(_ context.Context, _ string, text string, _
 
 func (f *fakeFeishuClient) ReplyTextWithID(_ context.Context, _ string, text string, _ bool) (string, error) {
 	f.replyTextWithIDs = append(f.replyTextWithIDs, text)
+	if len(f.replyTextIDs) > 0 {
+		id := f.replyTextIDs[0]
+		f.replyTextIDs = f.replyTextIDs[1:]
+		return id, nil
+	}
 	return "reply-text-id", nil
 }
 
@@ -231,6 +238,11 @@ func (f *fakeFeishuClient) SendText(_ context.Context, _ string, text string) er
 func (f *fakeFeishuClient) ReplyCard(_ context.Context, _ string, card map[string]any, inThread bool) (string, error) {
 	f.replyCards = append(f.replyCards, card)
 	f.replyCardInThread = append(f.replyCardInThread, inThread)
+	if len(f.replyCardIDs) > 0 {
+		id := f.replyCardIDs[0]
+		f.replyCardIDs = f.replyCardIDs[1:]
+		return id, f.replyCardErr
+	}
 	if f.replyCardID == "" {
 		f.replyCardID = "reply-card-id"
 	}
@@ -2690,9 +2702,25 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 		t.Fatal("expected history card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"历史记录", "Turn #2", "second input", "Turn #1", "first input"} {
+	for _, want := range []string{"历史记录", "当前页: `1-2 / 2`", "当前 turn: `Turn #2`", "在线下拉菜单中选择要查看的 turn。"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("history body missing %q: %q", want, body)
+		}
+	}
+	selects := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1])
+	if len(selects) != 1 {
+		t.Fatalf("history card selects = %+v, want 1 select", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 2 {
+		t.Fatalf("history options = %+v, want 2 options", options)
+	}
+	wantLabels := []string{"当前 · Turn #2 | running | second input", "Turn #1 | completed | first input"}
+	for i, want := range wantLabels {
+		text, _ := options[i]["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		if !strings.Contains(label, want) {
+			t.Fatalf("history option %d = %q, want %q", i, label, want)
 		}
 	}
 }
@@ -2787,6 +2815,9 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected thread list card to be sent")
 	}
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "在线下拉菜单中选择要恢复的线程。") || strings.Contains(body, "Older Preview") {
+		t.Fatalf("thread list body = %q, want summary without duplicated list", body)
+	}
 	if got := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1]); len(got) != 1 {
 		t.Fatalf("thread list selects = %+v, want 1 select", got)
 	}
@@ -2833,11 +2864,8 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	}
 	elements := cardElementsForTest(ff.replyCards[0])
 	body := elements[0]["content"].(string)
-	if !strings.Contains(body, "Default Thread") {
-		t.Fatalf("thread list body missing current workspace thread: %q", body)
-	}
-	if strings.Contains(body, "Alt Thread") {
-		t.Fatalf("thread list body should exclude other workspace thread: %q", body)
+	if !strings.Contains(body, "可恢复线程数: `1`") || !strings.Contains(body, "在线下拉菜单中选择要恢复的线程。") {
+		t.Fatalf("thread list body = %q, want summary only", body)
 	}
 	selects := cardSelectStaticForTest(ff.replyCards[0])
 	if len(selects) != 1 {

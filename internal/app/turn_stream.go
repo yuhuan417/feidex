@@ -825,6 +825,37 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 		LinkKind:      snapshot.LinkKind,
 		IsFinalAnswer: snapshot.IsFinalAnswer,
 	}
+	if isReplyTurnItem(payload.ItemType) {
+		body := replyTurnItemCardBody(payload)
+		if body == "" {
+			body = payload.DetailText
+		}
+		results := a.sendReplyCardChunks(
+			ctx,
+			sub,
+			replyTurnItemCardTitle(payload),
+			payload.Color,
+			buildReplyCardChunks(body, payload.IsFinalAnswer, nil),
+			a.replyInThreadForSubmission(sub),
+			snapshot.IsFinalAnswer,
+		)
+		if len(results) == 0 {
+			fallback := payload.SummaryText
+			if fallback == "" {
+				fallback = payload.DetailText
+			}
+			if snapshot.IsFinalAnswer {
+				a.sendFinalMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub))
+			} else {
+				a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
+			}
+			return ""
+		}
+		for _, result := range results {
+			a.recordMessageLink(result.MessageID, snapshot.LinkKind, sub, snapshot.ItemID)
+		}
+		return results[0].MessageID
+	}
 	card := a.renderTurnItemCardWithOptions(ctx, sub, payload, false, false, "", snapshot.IsFinalAnswer)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {

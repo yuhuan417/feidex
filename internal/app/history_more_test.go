@@ -98,11 +98,21 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 		t.Fatalf("renderHistoryCard() error = %v", err)
 	}
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "当前线程: thread-1") || !strings.Contains(body, "Turn #1") {
-		t.Fatalf("history card body = %q, want thread id and turn summary", body)
+	if !strings.Contains(body, "当前线程: thread-1") || !strings.Contains(body, "当前页: `1-1 / 1`") || !strings.Contains(body, "在线下拉菜单中选择要查看的 turn。") {
+		t.Fatalf("history card body = %q, want thread summary only", body)
 	}
-	if got := cardSelectStaticForTest(card); len(got) != 1 {
-		t.Fatalf("history card selects = %+v, want 1 select", got)
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("history card selects = %+v, want 1 select", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 1 {
+		t.Fatalf("history select options = %+v, want 1 option", options)
+	}
+	text, _ := options[0]["text"].(map[string]any)
+	label, _ := text["content"].(string)
+	if !strings.Contains(label, "Turn #1 | completed | hello") {
+		t.Fatalf("history select label = %q, want status and input preview", label)
 	}
 
 	detail, err := a.renderHistoryDetailCard(sessionKey, 0)

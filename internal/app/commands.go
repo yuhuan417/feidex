@@ -177,15 +177,23 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	if sess != nil {
 		currentLabel = currentThreadLabel(sess)
 	}
-	lines := make([]string, 0, len(items)+2)
-	lines = append(lines, "当前线程: "+currentLabel, "", "最近线程：")
+	scopeLabel := "当前工作区"
+	if includeAll {
+		scopeLabel = "全部来源"
+	}
+	lines := []string{
+		"当前线程: " + currentLabel,
+		"工作区: `" + workspace.ID + "`",
+		"显示范围: " + scopeLabel,
+		fmt.Sprintf("可恢复线程数: `%d`", len(items)),
+	}
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		lines = append(lines,
 			"当前 thread sandbox: "+renderThreadSettingValue(sess.ActiveThreadSandboxMode, workspace.SandboxMode),
 			"当前 thread policy: "+renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, workspace.ApprovalPolicy),
-			"",
 		)
 	}
+	lines = append(lines, "", "在线下拉菜单中选择要恢复的线程。")
 	buttons := make([]feishu.Button, 0, 5)
 	selectOptions := make([]selectStaticOption, 0, len(items))
 	initialOption := ""
@@ -195,7 +203,6 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			entry = fmt.Sprintf("%d. [当前] %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
 			initialOption = item.ID
 		}
-		lines = append(lines, entry)
 		selectOptions = append(selectOptions, selectStaticOption{
 			Text:  entry,
 			Value: item.ID,
@@ -436,133 +443,31 @@ func renderThreadListEntry(name, preview, id string) string {
 }
 
 func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
-	buttons := []feishu.Button{
-		{Text: commandLabel("中断任务", "/interrupt"), Type: "default", Value: map[string]any{"action": "menu.interrupt", "session_key": sessionKey, "parent_action": "menu.group.session"}},
-		{Text: submenuCommandLabel("Quiet 模式", "/quiet"), Type: "default", Value: map[string]any{"action": "menu.quiet", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("Token Usage", "/usage"), Type: "default", Value: map[string]any{"action": "menu.usage", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-	}
-	return a.feishu.SimpleStatusCard("会话行为", "blue", menuCardBody("menu.group.session", "控制当前会话的行为与输出方式。"), buttons)
+	spec, _ := menuGroupSpec("menu.group.session")
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
 }
 
 func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
-	buttons := []feishu.Button{
-		{Text: commandLabel("新线程", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.group.context"}},
-		{Text: commandLabel("下载文件", "/download"), Type: "default", Value: map[string]any{"action": "menu.download", "session_key": sessionKey, "parent_action": "menu.group.context"}},
-		{Text: commandLabel("Fork 线程", "/fork"), Type: "default", Value: map[string]any{"action": "menu.fork", "session_key": sessionKey, "parent_action": "menu.group.context"}},
-		{Text: commandLabel("压缩上下文", "/compact"), Type: "default", Value: map[string]any{"action": "menu.compact", "session_key": sessionKey, "parent_action": "menu.group.context"}},
-		{Text: submenuCommandLabel("工作区管理", "/workspace"), Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("线程管理", "/threads"), Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-	}
-	return a.feishu.SimpleStatusCard("会话管理", "blue", menuCardBody("menu.group.context", "管理线程、上下文压缩与工作区上下文。"), buttons)
+	spec, _ := menuGroupSpec("menu.group.context")
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
 }
 
 func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
-	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-		{Text: submenuLabel("推理强度"), Type: "default", Value: map[string]any{"action": "menu.reasoning", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("响应速度", "/fast"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-	}
-	return a.feishu.SimpleStatusCard("模型能力", "blue", menuCardBody("menu.group.model", "配置模型、推理强度与响应速度。"), buttons)
+	spec, _ := menuGroupSpec("menu.group.model")
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
 }
 
 func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
-	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("状态面板", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
-		{Text: commandLabel("调试日志", "/debug"), Type: "default", Value: map[string]any{"action": "menu.debug", "session_key": sessionKey}},
-		{Text: commandLabel("查看日志", "/debug logs"), Type: "default", Value: map[string]any{"action": "menu.debug.logs", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("升级服务", "/upgrade"), Type: "default", Value: map[string]any{"action": "menu.upgrade", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("帮助说明", "/help"), Type: "default", Value: map[string]any{"action": "menu.help", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-	}
-	body := "查看服务状态、执行升级，或查阅命令帮助。\n\n当前 slog 日志级别: " + renderRuntimeLogLevelValue()
-	return a.feishu.SimpleStatusCard("服务管理", "blue", menuCardBody("menu.group.system", body), buttons)
+	spec, _ := menuGroupSpec("menu.group.system")
+	body := spec.Description + "\n\n当前 slog 日志级别: " + renderRuntimeLogLevelValue()
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(spec.Action, sessionKey))
 }
 
 func (a *App) renderHelpCard(sessionKey string) map[string]any {
-	body := strings.Join([]string{
-		"命令说明：",
-		"",
-		"`/menu`",
-		"打开命令菜单。",
-		"",
-		"`/help`",
-		"查看所有本地命令与说明。",
-		"",
-		"会话行为：",
-		"`/interrupt` 或 `/stop`",
-		"中断当前运行中的任务，并清空排队/暂存输入。",
-		"`/quiet`",
-		"切换 Quiet 模式。",
-		"`/quiet on`",
-		"开启 Quiet 模式。",
-		"`/quiet off`",
-		"关闭 Quiet 模式。",
-		"`/debug`",
-		"切换服务端 slog 日志级别（debug/info）。",
-		"`/debug on`",
-		"切换到 debug 级别。",
-		"`/debug off`",
-		"切换到 info 级别。",
-		"`/debug logs`",
-		"查看最近一段服务端 slog 日志。",
-		"",
-		"会话管理：",
-		"`/new`",
-		"切换到新线程模式，下一条消息会新建线程。",
-		"`/download`",
-		"在当前 workspace 范围内选择文件，并生成下载链接。",
-		"`/fork`",
-		"复制当前 thread 为一个新分支，并立即切换过去。",
-		"`/compact`",
-		"压缩当前线程的上下文，减少上下文占用。",
-		"`/threads`",
-		"查看当前工作区可恢复的线程。",
-		"`/threads all`",
-		"查看更多来源的线程。",
-		"`/threads fork`",
-		"等价于 `/fork`。",
-		"`/threads new`",
-		"等价于 `/new`。",
-		"`/threads sandbox`",
-		"配置当前线程的 sandbox。",
-		"`/threads policy`",
-		"配置当前线程的 approval policy。",
-		"`/history`",
-		"查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。",
-		"`/usage`",
-		"查看当前 thread 的累计 token usage。",
-		"`/workspace` 或 `/cd`",
-		"打开工作区菜单。",
-		"`/workspace list`",
-		"列出所有工作区。",
-		"`/workspace new`",
-		"创建新工作区。",
-		"`/workspace use ID`",
-		"切换到指定工作区。",
-		"`/workspace sandbox`",
-		"配置当前工作区默认 sandbox。",
-		"`/workspace policy`",
-		"配置当前工作区默认 approval policy。",
-		"",
-		"模型能力：",
-		"`/model`",
-		"打开模型与推理强度配置。",
-		"`/fast`",
-		"切换当前线程的响应速度设置。",
-		"",
-		"服务管理：",
-		"`/status`",
-		"查看当前会话、线程、工作区与模型状态。",
-		"`/upgrade [VERSION]`",
-		"检查最新版本，或直接升级到指定版本。",
-	}, "\n")
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("帮助说明", "blue", menuCardBody("menu.help", body), buttons)
+	return a.feishu.SimpleStatusCard("帮助说明", "blue", menuCardBody("menu.help", renderHelpBodyFromSpecs()), buttons)
 }
 
 func filterThreadsByWorkspaceCWD(items []codexrpc.ThreadListEntry, workspaceCWD string) []codexrpc.ThreadListEntry {

@@ -64,28 +64,20 @@ func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, er
 		"当前线程: " + label,
 		"thread: `" + thread.ID + "`",
 		fmt.Sprintf("turn 数: `%d`", total),
-		"",
 	}
 	if total == 0 {
-		bodyLines = append(bodyLines, "这个 thread 暂无可展示的 turn 记录。")
+		bodyLines = append(bodyLines, "", "这个 thread 暂无可展示的 turn 记录。")
 	} else {
-		bodyLines = append(bodyLines, "最近记录：")
-		for idx := start; idx < end; idx++ {
-			turn := turns[idx]
-			prefix := fmt.Sprintf("%d.", idx-start+1)
-			current := ""
+		bodyLines = append(bodyLines,
+			fmt.Sprintf("当前页: `%d-%d / %d`", start+1, end, total),
+		)
+		for _, turn := range turns {
 			if turn.IsCurrent {
-				current = " [当前]"
+				bodyLines = append(bodyLines, fmt.Sprintf("当前 turn: `Turn #%d`", turn.Ordinal))
+				break
 			}
-			bodyLines = append(bodyLines,
-				fmt.Sprintf("%s Turn #%d%s · `%s`", prefix, turn.Ordinal, current, firstNonEmpty(turn.Status, "-")),
-				"输入: "+firstNonEmpty(turn.InputPreview, "-"),
-			)
-			if turn.ErrorText != "" {
-				bodyLines = append(bodyLines, "错误: "+truncate(turn.ErrorText, 72))
-			}
-			bodyLines = append(bodyLines, "")
 		}
+		bodyLines = append(bodyLines, "", "在线下拉菜单中选择要查看的 turn。")
 	}
 
 	buttons := make([]feishu.Button, 0, 3)
@@ -93,7 +85,7 @@ func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, er
 	initialOption := ""
 	for idx := start; idx < end; idx++ {
 		turn := turns[idx]
-		label := fmt.Sprintf("Turn #%d | %s", turn.Ordinal, firstNonEmpty(turn.InputPreview, "-"))
+		label := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, firstNonEmpty(turn.Status, "-"), firstNonEmpty(turn.InputPreview, "-"))
 		if turn.IsCurrent {
 			label = "当前 · " + label
 			initialOption = strconv.Itoa(idx)
