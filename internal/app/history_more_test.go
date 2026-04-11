@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -131,5 +132,90 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 	}
 	if len(ff.replyCards) != 0 {
 		t.Fatalf("unexpected feishu side effects: %+v", ff.replyCards)
+	}
+}
+
+func TestHistoryPaginationUsesHundredItemsPerPage(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            sessionKey,
+		WorkspaceID:    "default",
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-1",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/read" {
+			t.Fatalf("unexpected method %q", method)
+		}
+		result := out.(*codexrpc.ThreadReadResult)
+		result.Thread = codexrpc.ThreadReadThread{
+			ID: "thread-1",
+		}
+		for i := 1; i <= historyPageSize+1; i++ {
+			result.Thread.Turns = append(result.Thread.Turns, codexrpc.ThreadReadTurn{
+				ID:     fmt.Sprintf("turn-%d", i),
+				Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", Content: json.RawMessage(fmt.Sprintf(`[{"type":"text","text":"input-%d"}]`, i))},
+					{Type: "agentMessage", Text: fmt.Sprintf("output-%d", i)},
+				},
+			})
+		}
+		_ = params
+		return nil
+	}
+
+	card, err := a.renderHistoryCard(sessionKey, 1)
+	if err != nil {
+		t.Fatalf("renderHistoryCard(page=1) error = %v", err)
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, fmt.Sprintf("当前页: `%d-%d / %d`", historyPageSize+1, historyPageSize+1, historyPageSize+1)) {
+		t.Fatalf("history page body = %q, want second page range", body)
+	}
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("history page selects = %+v, want 1 select", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 1 {
+		t.Fatalf("history page options = %+v, want 1 option on second page", options)
+	}
+	text, _ := options[0]["text"].(map[string]any)
+	label, _ := text["content"].(string)
+	if !strings.Contains(label, "当前 · Turn #1 | completed | input-1") {
+		t.Fatalf("history page option label = %q, want current turn on second page", label)
+	}
+
+	detail, err := a.renderHistoryDetailCard(sessionKey, historyPageSize)
+	if err != nil {
+		t.Fatalf("renderHistoryDetailCard(last) error = %v", err)
+	}
+	buttons := cardButtonsForTest(detail)
+	if len(buttons) != 2 {
+		t.Fatalf("detail buttons = %+v, want 2 buttons", buttons)
+	}
+	values, _ := buttons[1]["value"].(map[string]any)
+	if len(values) == 0 {
+		behaviors, _ := buttons[1]["behaviors"].([]map[string]any)
+		if len(behaviors) > 0 {
+			values, _ = behaviors[0]["value"].(map[string]any)
+		}
+	}
+	switch got := values["page"].(type) {
+	case int:
+		if got != 1 {
+			t.Fatalf("detail back page = %v, want 1", values["page"])
+		}
+	case float64:
+		if got != 1 {
+			t.Fatalf("detail back page = %v, want 1", values["page"])
+		}
+	default:
+		t.Fatalf("detail back page type = %T, want int or float64", values["page"])
 	}
 }

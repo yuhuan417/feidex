@@ -13,7 +13,7 @@ import (
 	"feidex/internal/state"
 )
 
-const historyPageSize = 5
+const historyPageSize = 100
 
 type historyTurnSummary struct {
 	Ordinal      int
