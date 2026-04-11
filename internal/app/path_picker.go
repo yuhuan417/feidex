@@ -307,8 +307,9 @@ func decodePathPickerOption(raw string) (path string, isDir bool, ok bool) {
 }
 
 func (a *App) completePathPickerAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != downloadFilePendingKind) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择请求已过期"}}, nil
 	}
@@ -331,13 +332,13 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 	case "path_picker.cancel":
 		if pending.Kind == "workspace_new" {
 			workspacePayload.Picker = nil
-			_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回工作区创建"},
 				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
 			}, nil
 		}
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消路径选择"},
 			Card:  rawCard(a.feishu.SimpleStatusCard("路径选择已取消", "grey", "本次路径选择已取消。", nil)),
@@ -407,7 +408,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 		if pending.Kind == "workspace_new" {
 			workspacePayload.SelectedCWD = selectedPath
 			workspacePayload.Picker = nil
-			_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择目录"},
 				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
@@ -415,10 +416,10 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 		}
 		if pending.Kind == downloadFilePendingKind {
 			payload.SelectedPath = selectedPath
-			_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 			return a.completeDownloadFileConfirm(action, pending, payload, selectedPath)
 		}
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) {
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "resolved"
 			req.PayloadJSON = mustJSON(payload)
 		})
@@ -433,9 +434,9 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 
 	if pending.Kind == "workspace_new" {
 		workspacePayload.Picker = &payload
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 	} else {
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	}
 	card, err := a.renderPathPickerCard(requestID, payload)
 	if err != nil {

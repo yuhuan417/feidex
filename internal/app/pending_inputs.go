@@ -36,7 +36,8 @@ func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKe
 	if msg == nil {
 		return nil
 	}
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
@@ -68,7 +69,7 @@ func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKe
 	if sessionHasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		sess.Status = "queued"
 	}
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return err
 	}
 	a.markMessagesQueuedReactions([]string{msg.MessageID})
@@ -124,12 +125,13 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 	if messageID == "" {
 		return false
 	}
-	for _, sess := range a.store.AllSessions() {
+	appState := a.appState()
+	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
 		}
 		if discarded := discardStagedImageByMessageID(sess, messageID); discarded {
-			if updateErr := a.store.UpsertSession(sess); updateErr != nil {
+			if updateErr := appState.saveSession(sess); updateErr != nil {
 				slog.Error("discard staged image session update failed", "session_key", sess.Key, "message_id", messageID, "error", updateErr)
 				return false
 			}
@@ -137,7 +139,7 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 			return true
 		}
 		for _, submissionID := range append([]string(nil), sess.Queue...) {
-			sub := a.store.GetSubmission(submissionID)
+			sub := appState.submission(submissionID)
 			if !submissionHasSourceMessage(sub, messageID) {
 				continue
 			}
@@ -149,11 +151,11 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 					sess.Status = "queued"
 				}
 			}
-			if err := a.store.UpsertSession(sess); err != nil {
+			if err := appState.saveSession(sess); err != nil {
 				slog.Error("discard queued submission session update failed", "session_key", sess.Key, "submission_id", submissionID, "error", err)
 				return false
 			}
-			if err := a.store.UpdateSubmission(submissionID, func(value *state.Submission) {
+			if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
 				value.Status = "discarded"
 				value.Finalized = true
 			}); err != nil {
@@ -169,7 +171,8 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 }
 
 func (a *App) discardSessionPendingInputs(sessionKey string) int {
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		return 0
 	}
@@ -180,9 +183,9 @@ func (a *App) discardSessionPendingInputs(sessionKey string) int {
 	}
 	queueIDs := append([]string(nil), sess.Queue...)
 	for _, submissionID := range queueIDs {
-		sub := a.store.GetSubmission(submissionID)
+		sub := appState.submission(submissionID)
 		a.markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
-		if err := a.store.UpdateSubmission(submissionID, func(value *state.Submission) {
+		if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
 			value.Status = "discarded"
 			value.Finalized = true
 		}); err != nil {
@@ -197,7 +200,7 @@ func (a *App) discardSessionPendingInputs(sessionKey string) int {
 	if !sessionHasInFlightSubmission(sess) {
 		sess.Status = "idle"
 	}
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		slog.Error("discard session pending inputs failed", "session_key", sessionKey, "error", err)
 	}
 	return discarded
