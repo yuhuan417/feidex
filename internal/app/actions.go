@@ -320,31 +320,18 @@ func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any,
 
 func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	parentAction, _ := action.ActionValue["parent_action"].(string)
-	sess := a.store.GetSession(sessionKey)
-	if sess == nil {
-		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
-	}
-	if sessionHasActiveWork(sess) {
+	discarded, binding, err := a.startFreshThread(sessionKey, action.UserID, action.ChatID, "")
+	if err != nil {
 		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
 		}, nil
 	}
-	discarded := a.discardSessionPendingInputs(sessionKey)
-	sess = a.store.GetSession(sessionKey)
-	if sess == nil {
-		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
+	content := "已创建新线程"
+	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
+		content += "并切换过去"
 	}
-	clearSessionThreadContext(sess)
-	a.clearSessionLiveThread(sessionKey)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
-	sess.Status = "idle"
-	sess.Queue = nil
-	sess.StagedImages = nil
-	_ = a.store.UpsertSession(sess)
-	content := "已切换到新会话"
 	if discarded > 0 {
-		content = fmt.Sprintf("已切换到新会话，并丢弃 %d 条排队或暂存输入", discarded)
+		content = fmt.Sprintf("%s，并丢弃 %d 条排队或暂存输入", content, discarded)
 	}
 	if parentAction == "menu.thread" || parentAction == "menu.threads" {
 		card, err := a.renderThreadsCard(sessionKey, false)

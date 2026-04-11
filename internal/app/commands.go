@@ -121,31 +121,72 @@ func (a *App) commandNew(msg *feishu.InboundMessage) error {
 	return a.commandThreadsNew(msg)
 }
 
-func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
-	sess := a.store.GetSession(sessionKey)
-	if sess == nil {
-		sess = &state.Session{Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
+func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int, *workspaceThreadBinding, error) {
+	if a == nil || a.store == nil {
+		return 0, nil, fmt.Errorf("store not initialized")
 	}
-	if sessionHasActiveWork(sess) {
-		return fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
+	defaultWorkspaceID := "default"
+	if a.cfg != nil && len(a.cfg.Workspaces) > 0 {
+		defaultWorkspaceID = a.cfg.Workspaces[0].ID
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess != nil && sessionHasActiveWork(sess) {
+		return 0, nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
+	}
+	if sess == nil {
+		sess = &state.Session{
+			Key:         sessionKey,
+			WorkspaceID: defaultWorkspaceID,
+			ChatID:      chatID,
+			ChatType:    chatType,
+			OwnerUserID: userID,
+		}
+	}
+	if strings.TrimSpace(sess.WorkspaceID) == "" {
+		sess.WorkspaceID = defaultWorkspaceID
 	}
 	discarded := a.discardSessionPendingInputs(sessionKey)
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil {
-		sess = &state.Session{Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
+		sess = &state.Session{
+			Key:         sessionKey,
+			WorkspaceID: defaultWorkspaceID,
+			ChatID:      chatID,
+			ChatType:    chatType,
+			OwnerUserID: userID,
+		}
 	}
-	clearSessionThreadContext(sess)
-	a.clearSessionLiveThread(sessionKey)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
-	sess.Status = "idle"
-	sess.Queue = nil
-	sess.StagedImages = nil
-	if err := a.store.UpsertSession(sess); err != nil {
+	if strings.TrimSpace(sess.OwnerUserID) == "" {
+		sess.OwnerUserID = userID
+	}
+	if strings.TrimSpace(sess.ChatID) == "" {
+		sess.ChatID = chatID
+	}
+	if strings.TrimSpace(sess.ChatType) == "" {
+		sess.ChatType = chatType
+	}
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID)
+	ws := config.FindWorkspace(a.cfg, workspaceID)
+	if ws == nil {
+		return discarded, nil, fmt.Errorf("workspace %q not found", workspaceID)
+	}
+	binding, err := a.startWorkspaceThread(sessionKey, sess, ws)
+	if err != nil {
+		return discarded, nil, err
+	}
+	return discarded, binding, nil
+}
+
+func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
+	sessionKey := a.makeSessionKey(msg)
+	discarded, binding, err := a.startFreshThread(sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
+	if err != nil {
 		return err
 	}
-	reply := "已切换到新线程模式。下一条消息会创建新线程，当前工作区保持不变。"
+	reply := "已创建新线程并切换过去。"
+	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
+		reply += " thread: `" + binding.ThreadID + "`。"
+	}
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}

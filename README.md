@@ -330,7 +330,7 @@ Feidex 会把这些状态写进去：
 - `/thread list all`
   - 查看更多来源的线程
 - `/thread new`
-  - 切换到新线程模式
+  - 立即创建并切换到新的 thread
 - `/thread fork`
   - fork 当前线程并切换到新的分支线程
 - `/thread sandbox`

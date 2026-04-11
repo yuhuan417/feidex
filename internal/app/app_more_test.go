@@ -2345,6 +2345,12 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 		switch method {
 		case "turn/steer", "turn/interrupt":
 			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "New Thread"
+			result.Thread.Preview = "new preview"
+			return nil
 		default:
 			t.Fatalf("unexpected codex method in command helper test: %s", method)
 			return nil
@@ -2390,6 +2396,12 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 		switch method {
 		case "model/list":
 			*out.(*codexrpc.ModelListResult) = models
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "New Thread"
+			result.Thread.Preview = "new preview"
 			return nil
 		case "thread/resume":
 			result := out.(*codexrpc.ThreadStartResult)

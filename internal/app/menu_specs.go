@@ -120,7 +120,7 @@ var helpSectionSpecs = []helpSectionSpec{
 			{Command: "/thread", Summary: "打开 thread 菜单。"},
 			{Command: "/thread list", Summary: "查看当前工作区可恢复的线程。"},
 			{Command: "/thread list all", Summary: "查看更多来源的线程，仅保留命令入口。"},
-			{Command: "/thread new", Summary: "切换到新线程模式，下一条消息会新建线程。"},
+			{Command: "/thread new", Summary: "立即创建并切换到新的 thread。"},
 			{Command: "/thread fork", Summary: "复制当前 thread 为一个新分支，并立即切换过去。"},
 			{Command: "/thread sandbox", Summary: "配置当前线程的 sandbox。"},
 			{Command: "/thread policy", Summary: "配置当前线程的 approval policy。"},
