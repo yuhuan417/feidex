@@ -22,6 +22,7 @@ func newCodexEventRouter(app *App) *codexEventRouter {
 
 func (r *codexEventRouter) handleNotification(method string, params json.RawMessage) {
 	a := r.app
+	appState := a.appState()
 	slog.Debug("codex notification", "method", method)
 	switch method {
 	case "item/agentMessage/delta":
@@ -166,8 +167,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		}
 		if json.Unmarshal(params, &p) == nil {
 			reqID := requestIDKey(p.RequestID)
-			_ = a.store.UpdatePending(reqID, func(req *state.PendingRequest) { req.Status = "resolved" })
-			pending := a.store.PendingByID(reqID)
+			pending := appState.resolvePending(reqID)
 			a.resumeSubmissionAfterRequest(pending)
 		}
 	}

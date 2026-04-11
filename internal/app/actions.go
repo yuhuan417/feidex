@@ -340,13 +340,14 @@ func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActi
 }
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	parentAction := ""
 	if action != nil {
 		parentAction, _ = action.ActionValue["parent_action"].(string)
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	discarded := a.discardSessionPendingInputs(sessionKey)
-	sess = a.store.GetSession(sessionKey)
+	sess = appState.session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" {
 		if discarded > 0 {
 			if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
@@ -395,13 +396,14 @@ func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string
 }
 
 func (a *App) completeTurnItemToggle(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	if strings.TrimSpace(requestID) == "" {
 		if parsedID, _, ok := parseTurnItemToggleName(action.Name); ok {
 			requestID = parsedID
 		}
 	}
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "turn_item_card" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "详情卡已失效"}}, nil
 	}
@@ -418,9 +420,9 @@ func (a *App) completeTurnItemToggle(action *feishu.CardAction) (*callback.CardA
 			expanded = parsedExpanded
 		}
 	}
-	sub := a.store.GetSubmission(payload.SubmissionID)
+	sub := appState.submission(payload.SubmissionID)
 	includeActions := false
-	if sess := a.store.GetSession(payload.SessionKey); sess != nil && sess.ActiveTurnID == payload.TurnID {
+	if sess := appState.session(payload.SessionKey); sess != nil && sess.ActiveTurnID == payload.TurnID {
 		includeActions = true
 	}
 	card := a.renderTurnItemCard(sub, payload, !expanded, includeActions, requestID)
@@ -452,16 +454,17 @@ func parseTurnItemToggleName(name string) (requestID string, expanded bool, ok b
 }
 
 func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "工作区不存在"}}, nil
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
 	switchSessionWorkspace(sess, workspaceID)
-	_ = a.store.UpsertSession(sess)
+	_ = appState.saveSession(sess)
 	toast := "已切换工作区"
 	if !sessionHasInFlightSubmission(sess) {
 		binding, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
@@ -486,12 +489,13 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 }
 
 func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	requestID, err := a.store.NextLocalID("workspace")
+	appState := a.appState()
+	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	wsID := a.defaultWorkspaceID()
-	if sess := a.store.GetSession(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		wsID = sess.WorkspaceID
 	}
 	ws := config.FindWorkspace(a.cfg, wsID)
@@ -504,7 +508,7 @@ func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string)
 			return strings.TrimSpace(ws.Cwd)
 		}(), "/"),
 	}
-	_ = a.store.UpsertPending(&state.PendingRequest{
+	_ = appState.savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        "workspace_new",
 		SessionKey:  sessionKey,
@@ -638,6 +642,7 @@ func (a *App) completeWorkspacePolicySet(action *feishu.CardAction, sessionKey, 
 }
 
 func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	valid := false
 	for _, opt := range workspaceSandboxOptions() {
 		if opt.Value == sandboxMode {
@@ -648,12 +653,12 @@ func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, th
 	if !valid {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 sandbox"}}, nil
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
 	}
 	sess.ActiveThreadSandboxMode = sandboxMode
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := a.renderThreadSandboxMenuCard(sessionKey)
@@ -667,6 +672,7 @@ func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, th
 }
 
 func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	valid := false
 	for _, opt := range workspaceApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
@@ -677,12 +683,12 @@ func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, thr
 	if !valid {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 policy"}}, nil
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
 	}
 	sess.ActiveThreadApprovalPolicy = approvalPolicy
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := a.renderThreadPolicyMenuCard(sessionKey)
@@ -696,7 +702,8 @@ func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, thr
 }
 
 func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
@@ -747,7 +754,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	sess.ActiveTurnID = ""
 	sess.ActiveSubmissionID = ""
 	sess.Status = "idle"
-	_ = a.store.UpsertSession(sess)
+	_ = appState.saveSession(sess)
 	includeAll, _ := action.ActionValue["include_all"].(bool)
 	card, err := a.renderThreadsCard(sessionKey, includeAll)
 	if err != nil {
@@ -760,8 +767,9 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 }
 
 func (a *App) completeApprovalAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "审批已过期"}}, nil
 	}
@@ -820,7 +828,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
 		}, nil
 	}
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	card := a.renderResolvedApprovalCard(pending, actionName)
 	return &callback.CardActionTriggerResponse{
@@ -897,10 +905,11 @@ func (a *App) approvalBodyText(pending *state.PendingRequest) string {
 }
 
 func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	questionID, _ := action.ActionValue["question_id"].(string)
 	answer, _ := action.ActionValue["answer"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}
@@ -915,7 +924,7 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 		},
 	}
 	_ = a.codex.Reply(pendingRequestIDRaw(pending), payload)
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
@@ -942,6 +951,7 @@ func (a *App) approvalDecisionText(action string) string {
 }
 
 func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
+	appState := a.appState()
 	if pending == nil {
 		return
 	}
@@ -949,6 +959,6 @@ func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
 	if sub == nil {
 		return
 	}
-	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "running" })
+	_ = appState.setSubmissionStatus(sub.ID, "running")
 	_ = a.refreshStatusCard(sub.ID)
 }

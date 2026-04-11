@@ -65,11 +65,12 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 	if a == nil || a.store == nil {
 		return 0, nil, fmt.Errorf("store not initialized")
 	}
+	appState := a.appState()
 	defaultWorkspaceID := "default"
 	if a.cfg != nil && len(a.cfg.Workspaces) > 0 {
 		defaultWorkspaceID = a.cfg.Workspaces[0].ID
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess != nil && sessionHasActiveWork(sess) {
 		return 0, nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
@@ -86,7 +87,7 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 		sess.WorkspaceID = defaultWorkspaceID
 	}
 	discarded := a.discardSessionPendingInputs(sessionKey)
-	sess = a.store.GetSession(sessionKey)
+	sess = appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
 			Key:         sessionKey,
@@ -185,7 +186,7 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
 		if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {
@@ -323,7 +324,7 @@ func renderThreadSettingValue(override, fallback string) string {
 
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := a.makeSessionKey(msg)
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	discarded := a.discardSessionPendingInputs(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		if discarded > 0 {
@@ -348,7 +349,7 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 
 func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
 	sessionKey := a.makeSessionKey(msg)
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
@@ -380,17 +381,18 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		return a.showWorkspacePolicyMenu(msg)
 	}
 	if len(args) >= 2 && args[0] == "use" {
+		appState := a.appState()
 		ws := config.FindWorkspace(a.cfg, args[1])
 		if ws == nil {
 			return fmt.Errorf("workspace %q not found", args[1])
 		}
 		sessionKey := a.makeSessionKey(msg)
-		sess := a.store.GetSession(sessionKey)
+		sess := appState.session(sessionKey)
 		if sess == nil {
 			sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
 		switchSessionWorkspace(sess, ws.ID)
-		if err := a.store.UpsertSession(sess); err != nil {
+		if err := appState.saveSession(sess); err != nil {
 			return err
 		}
 		reply := "已切换工作区到 " + ws.ID
@@ -477,7 +479,7 @@ func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
 	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(a.cfg), "(default)")
 	fastValue := "-"
 	if a.store != nil {
-		if sess := a.store.GetSession(sessionKey); sess != nil {
+		if sess := a.appState().session(sessionKey); sess != nil {
 			fastValue = renderServiceTierValue(sess.ActiveThreadServiceTier)
 		}
 	}
@@ -540,7 +542,7 @@ func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
 func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	if a.store != nil {
-		sess = a.store.GetSession(sessionKey)
+		sess = a.appState().session(sessionKey)
 	}
 	currentID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -631,7 +633,7 @@ func workspaceApprovalPolicyOptions() []workspaceSettingOption {
 
 func (a *App) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
 	sessionKey = a.makeSessionKey(msg)
-	sess = a.store.GetSession(sessionKey)
+	sess = a.appState().session(sessionKey)
 	workspaceID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -659,7 +661,7 @@ func (a *App) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
 func (a *App) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if a.store != nil {
-		sess = a.store.GetSession(sessionKey)
+		sess = a.appState().session(sessionKey)
 	}
 	workspaceID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -712,7 +714,7 @@ func (a *App) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
 func (a *App) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if a.store != nil {
-		sess = a.store.GetSession(sessionKey)
+		sess = a.appState().session(sessionKey)
 	}
 	workspaceID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -763,7 +765,7 @@ func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	workspaceID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -815,7 +817,7 @@ func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
-	sess := a.store.GetSession(sessionKey)
+	sess := a.appState().session(sessionKey)
 	workspaceID := a.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -959,8 +961,9 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 }
 
 func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
+	appState := a.appState()
 	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
-	requestID, err := a.store.NextLocalID("workspace")
+	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return err
 	}
@@ -978,7 +981,7 @@ func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	return a.store.UpsertPending(&state.PendingRequest{
+	return appState.savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        "workspace_new",
 		SessionKey:  sessionKey,
@@ -1018,6 +1021,7 @@ func mergeWorkspaceNewFormValues(payload workspaceNewPayload, values map[string]
 }
 
 func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
+	appState := a.appState()
 	if config.FindWorkspace(a.cfg, id) != nil {
 		return fmt.Errorf("workspace %q 已存在", id)
 	}
@@ -1037,12 +1041,12 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
 		return err
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
 	}
 	switchSessionWorkspace(sess, id)
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return err
 	}
 	if sessionHasInFlightSubmission(sess) {
@@ -1064,6 +1068,7 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 }
 
 func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+	appState := a.appState()
 	payload := workspaceNewPayloadFromPending(pending)
 	parts := strings.Fields(strings.TrimSpace(msg.Text))
 	if len(parts) < 1 {
@@ -1088,7 +1093,7 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
-	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
@@ -1096,8 +1101,9 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 }
 
 func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_new" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
 	}
@@ -1112,7 +1118,7 @@ func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.
 		RootPath:    firstNonEmpty(strings.TrimSpace(payload.RootPath), "/"),
 		CurrentPath: currentPath,
 	}
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开目录选择"},
 		Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
@@ -1120,8 +1126,9 @@ func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.
 }
 
 func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_new" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
 	}
@@ -1131,7 +1138,7 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 	payload := mergeWorkspaceNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
 	id := strings.TrimSpace(payload.DraftID)
 	if id == "" {
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请填写 workspace_id"},
 			Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
@@ -1139,7 +1146,7 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 	}
 	cwd := strings.TrimSpace(payload.SelectedCWD)
 	if cwd == "" {
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请先选择目录"},
 			Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
@@ -1149,7 +1156,7 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 	if name == "" {
 		name = id
 	}
-	sess := a.store.GetSession(pending.SessionKey)
+	sess := appState.session(pending.SessionKey)
 	chatID := action.ChatID
 	chatType := ""
 	if sess != nil {
@@ -1157,13 +1164,13 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 		chatType = sess.ChatType
 	}
 	if err := a.createWorkspaceAndSwitch(pending.SessionKey, action.UserID, chatID, chatType, id, name, cwd); err != nil {
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
 			Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) {
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = "resolved"
 		req.PayloadJSON = mustJSON(payload)
 	})

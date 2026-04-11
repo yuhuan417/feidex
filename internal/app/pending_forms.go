@@ -54,7 +54,7 @@ type elicitationURLPayload struct {
 }
 
 func (a *App) pendingTextRequest(sessionKey, userID string) *state.PendingRequest {
-	pending := a.store.AllPendingRequests()
+	pending := a.appState().pendingRequests()
 	sort.Slice(pending, func(i, j int) bool { return pending[i].CreatedAt > pending[j].CreatedAt })
 	for _, req := range pending {
 		if req == nil || req.Status != "pending" || req.SessionKey != sessionKey {
@@ -110,6 +110,7 @@ func (a *App) handlePendingTextResponse(msg *feishu.InboundMessage, pending *sta
 }
 
 func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserInputPayload) {
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
@@ -122,7 +123,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
 		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
-		_ = a.store.UpsertPending(&state.PendingRequest{
+		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
 			Kind:         "tool_request_user_input_form",
@@ -137,7 +138,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
+		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
@@ -145,8 +146,9 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 }
 
 func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}
@@ -159,7 +161,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 	case "mcp_elicitation_form":
 		_ = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
 	}
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	if pending.Kind == "workspace_new" {
 		return &callback.CardActionTriggerResponse{
@@ -174,6 +176,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 }
 
 func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+	appState := a.appState()
 	var payload toolUserInputPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
@@ -185,7 +188,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), response); err != nil {
 		return err
 	}
-	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
@@ -194,6 +197,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 }
 
 func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicitationFormPayload) {
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for elicitation")
@@ -206,7 +210,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
 		a.recordMessageLink(msgID, "elicitation_form_card", sub, requestKey)
-		_ = a.store.UpsertPending(&state.PendingRequest{
+		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
 			Kind:         "mcp_elicitation_form",
@@ -220,7 +224,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
+		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
@@ -228,6 +232,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 }
 
 func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitationURLPayload) {
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for elicitation")
@@ -246,7 +251,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
 		a.recordMessageLink(msgID, "elicitation_url_card", sub, requestKey)
-		_ = a.store.UpsertPending(&state.PendingRequest{
+		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
 			Kind:         "mcp_elicitation_url",
@@ -260,7 +265,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
+		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
@@ -268,8 +273,9 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 }
 
 func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "mcp_elicitation_url" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}
@@ -284,7 +290,7 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 		decision = "decline"
 	}
 	_ = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
@@ -293,6 +299,7 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 }
 
 func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+	appState := a.appState()
 	var payload elicitationFormPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
@@ -307,7 +314,7 @@ func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *s
 	}); err != nil {
 		return err
 	}
-	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	a.resumeSubmissionAfterRequest(pending)
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))

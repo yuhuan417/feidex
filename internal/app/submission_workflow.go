@@ -25,7 +25,8 @@ func newSubmissionWorkflow(app *App) *submissionWorkflow {
 
 func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
 	a := w.app
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
@@ -65,10 +66,10 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		"active_turn_id", sess.ActiveTurnID,
 		"queue_len", len(sess.Queue),
 	)
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return err
 	}
-	logSessionState("submission enqueue session persisted", sessionKey, a.store.GetSession(sessionKey))
+	logSessionState("submission enqueue session persisted", sessionKey, appState.session(sessionKey))
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          sess.WorkspaceID,
@@ -83,12 +84,12 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		Attachments:          attachments,
 		Status:               "queued",
 	}
-	id, err := a.store.CreateSubmission(sub)
+	id, err := appState.createSubmission(sub)
 	if err != nil {
 		return err
 	}
 	a.recordInboundSubmissionSourceLink(msg.MessageID, sessionKey, id)
-	if err := a.store.QueueSubmission(sessionKey, id); err != nil {
+	if err := appState.queueSubmission(sessionKey, id); err != nil {
 		return err
 	}
 	sub.ID = id
@@ -103,7 +104,7 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		"active_thread_id", sess.ActiveThreadID,
 		"active_turn_id", sess.ActiveTurnID,
 	)
-	logSessionState("submission queued session snapshot", sessionKey, a.store.GetSession(sessionKey))
+	logSessionState("submission queued session snapshot", sessionKey, appState.session(sessionKey))
 	if !sessionHasInFlightSubmission(sess) {
 		slog.Debug("submission starting immediately",
 			"submission_id", id,
@@ -118,7 +119,8 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 
 func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 	a := w.app
-	sess := a.store.GetSession(sessionKey)
+	appState := a.appState()
+	sess := appState.session(sessionKey)
 	logSessionState("startNextSubmission entry", sessionKey, sess)
 	if sess == nil || sessionHasInFlightSubmission(sess) {
 		slog.Debug("startNextSubmission skipped",
@@ -133,17 +135,17 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 		)
 		return nil
 	}
-	subID, err := a.store.DequeueSubmission(sessionKey)
+	subID, err := appState.dequeueSubmission(sessionKey)
 	if err != nil || subID == "" {
 		slog.Debug("startNextSubmission no queued item",
 			"session_key", sessionKey,
 			"error", err,
 		)
-		logSessionState("startNextSubmission empty-after-dequeue", sessionKey, a.store.GetSession(sessionKey))
+		logSessionState("startNextSubmission empty-after-dequeue", sessionKey, appState.session(sessionKey))
 		return err
 	}
-	logSessionState("startNextSubmission after dequeue", sessionKey, a.store.GetSession(sessionKey))
-	sub := a.store.GetSubmission(subID)
+	logSessionState("startNextSubmission after dequeue", sessionKey, appState.session(sessionKey))
+	sub := appState.submission(subID)
 	if sub == nil {
 		slog.Warn("queued submission missing",
 			"session_key", sessionKey,
@@ -161,7 +163,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
 	}
 	// Refresh the session after dequeue so we don't write a stale queue back.
-	sess = a.store.GetSession(sessionKey)
+	sess = appState.session(sessionKey)
 	if sess == nil {
 		return fmt.Errorf("session %q disappeared after dequeue", sessionKey)
 	}
@@ -222,7 +224,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			logSessionState("startNextSubmission thread-start-failed", sessionKey, a.store.GetSession(sessionKey))
+			logSessionState("startNextSubmission thread-start-failed", sessionKey, appState.session(sessionKey))
 			return err
 		}
 		threadID = threadResp.Thread.ID
@@ -246,19 +248,16 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 	sub.ThreadID = threadID
 	sub.Status = "running"
 	a.notePendingTurnBinding(threadID, sessionKey, sub.ID)
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		a.clearPendingTurnBinding(threadID)
 		return err
 	}
-	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
-		m.ThreadID = threadID
-		m.Status = "running"
-	}); err != nil {
+	if err := appState.markSubmissionRunning(sub.ID, threadID, ""); err != nil {
 		a.clearPendingTurnBinding(threadID)
 		return err
 	}
 	a.markSubmissionRunningReactions(sub)
-	logSessionState("startNextSubmission session starting", sessionKey, a.store.GetSession(sessionKey))
+	logSessionState("startNextSubmission session starting", sessionKey, appState.session(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
 	turnCancel()
@@ -270,7 +269,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 				"thread_id", threadID,
 				"workspace_id", sub.WorkspaceID,
 			)
-			logSessionState("startNextSubmission awaiting turn-start-notification", sessionKey, a.store.GetSession(sessionKey))
+			logSessionState("startNextSubmission awaiting turn-start-notification", sessionKey, appState.session(sessionKey))
 			return nil
 		}
 		a.clearPendingTurnBinding(threadID)
@@ -282,7 +281,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 			"workspace_id", sub.WorkspaceID,
 			"error", err,
 		)
-		logSessionState("startNextSubmission turn-start-failed", sessionKey, a.store.GetSession(sessionKey))
+		logSessionState("startNextSubmission turn-start-failed", sessionKey, appState.session(sessionKey))
 		return err
 	}
 	slog.Debug("turn started",
@@ -300,15 +299,11 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return err
 	}
-	logSessionState("startNextSubmission session activated", sessionKey, a.store.GetSession(sessionKey))
-	if err := a.store.UpdateSubmission(sub.ID, func(m *state.Submission) {
-		m.ThreadID = threadID
-		m.TurnID = turnID
-		m.Status = "running"
-	}); err != nil {
+	logSessionState("startNextSubmission session activated", sessionKey, appState.session(sessionKey))
+	if err := appState.markSubmissionRunning(sub.ID, threadID, turnID); err != nil {
 		return err
 	}
 	a.recordSubmissionSourceLinks(sub)
@@ -325,6 +320,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 
 func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) {
 	a := w.app
+	appState := a.appState()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -336,7 +332,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		a.markTurnStartedAt(turnID, time.Now())
 		a.clearPendingTurnBinding(threadID)
 
-		sess := a.store.GetSession(sessionKey)
+		sess := appState.session(sessionKey)
 		if sess == nil {
 			return
 		}
@@ -344,14 +340,10 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		sess.ActiveTurnID = turnID
 		sess.Status = "turn_in_progress"
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
-		if err := a.store.UpsertSession(sess); err != nil {
+		if err := appState.saveSession(sess); err != nil {
 			return
 		}
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-			s.ThreadID = threadID
-			s.TurnID = turnID
-			s.Status = "running"
-		})
+		_ = appState.markSubmissionRunning(sub.ID, threadID, turnID)
 		sub.ThreadID = threadID
 		sub.TurnID = turnID
 		sub.Status = "running"
@@ -366,7 +358,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	}
 
 	sessionKey := ""
-	for _, candidate := range a.store.AllSessions() {
+	for _, candidate := range appState.sessions() {
 		if candidate == nil {
 			continue
 		}
@@ -388,7 +380,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	if sessionKey == "" {
 		return
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		slog.Warn("turn started notification missing session",
 			"session_key", sessionKey,
@@ -397,7 +389,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		)
 		return
 	}
-	sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+	sub := appState.submission(sess.ActiveSubmissionID)
 	if sub == nil {
 		slog.Warn("turn started notification missing submission",
 			"session_key", sessionKey,
@@ -411,7 +403,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	sess.ActiveTurnID = turnID
 	sess.Status = "turn_in_progress"
 	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		slog.Error("turn started notification session bind failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -421,11 +413,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		)
 		return
 	}
-	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-		s.ThreadID = threadID
-		s.TurnID = turnID
-		s.Status = "running"
-	})
+	_ = appState.markSubmissionRunning(sub.ID, threadID, turnID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"
@@ -441,11 +429,12 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		"thread_id", threadID,
 		"turn_id", turnID,
 	)
-	logSessionState("turn started notification session snapshot", sessionKey, a.store.GetSession(sessionKey))
+	logSessionState("turn started notification session snapshot", sessionKey, appState.session(sessionKey))
 }
 
 func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 	a := w.app
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		if a.finishStandaloneCompactTurn(threadID, turnID, status) {
@@ -471,22 +460,13 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 
 	switch status {
 	case "completed":
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-			s.Status = "completed"
-			s.Finalized = true
-		})
+		_ = appState.finalizeSubmission(sub.ID, "completed")
 	case "interrupted":
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-			s.Status = "interrupted"
-			s.Finalized = true
-		})
+		_ = appState.finalizeSubmission(sub.ID, "interrupted")
 	default:
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-			s.Status = "failed"
-			s.Finalized = true
-		})
+		_ = appState.finalizeSubmission(sub.ID, "failed")
 	}
-	sub = a.store.GetSubmission(sub.ID)
+	sub = appState.submission(sub.ID)
 	if sub != nil {
 		a.clearSubmissionProcessingReactions(sub)
 		slog.Debug("submission finalized",
@@ -513,14 +493,14 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 			a.sendTurnEventMessages(context.Background(), sub, terminalText, a.replyInThreadForSubmission(sub), "turn_terminal")
 		}
 	}
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess != nil {
 		logSessionState("finishTurn before session clear", sessionKey, sess)
 		sess.ActiveTurnID = ""
 		sess.ActiveSubmissionID = ""
 		sess.Status = "idle"
-		_ = a.store.UpsertSession(sess)
-		logSessionState("finishTurn after session clear", sessionKey, a.store.GetSession(sessionKey))
+		_ = appState.saveSession(sess)
+		logSessionState("finishTurn after session clear", sessionKey, appState.session(sessionKey))
 		slog.Debug("finishTurn scheduling next submission asynchronously",
 			"session_key", sessionKey,
 			"thread_id", sess.ActiveThreadID,
@@ -532,6 +512,7 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 
 func (w *submissionWorkflow) startNextSubmissionAsync(sessionKey, source string) {
 	a := w.app
+	appState := a.appState()
 	if strings.TrimSpace(sessionKey) == "" {
 		return
 	}
@@ -541,6 +522,6 @@ func (w *submissionWorkflow) startNextSubmissionAsync(sessionKey, source string)
 			"source", source,
 			"error", err,
 		)
-		logSessionState("async startNextSubmission failed snapshot", sessionKey, a.store.GetSession(sessionKey))
+		logSessionState("async startNextSubmission failed snapshot", sessionKey, appState.session(sessionKey))
 	}
 }

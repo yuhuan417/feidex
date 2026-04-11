@@ -51,11 +51,12 @@ func (a *App) onMcpElicitationRequest(req codexrpc.RequestEnvelope) {
 }
 
 func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state.Submission)) {
+	appState := a.appState()
 	_, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return
 	}
-	_ = a.store.UpdateSubmission(sub.ID, mutate)
+	_ = appState.updateSubmission(sub.ID, mutate)
 }
 
 func (a *App) finishTurn(threadID, turnID, status string) {
@@ -100,13 +101,14 @@ func turnCompletionMessages(status, outputText, lastError string, sentOutput boo
 }
 
 func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+	appState := a.appState()
 	if strings.TrimSpace(turnID) != "" {
 		if sessionKey, sub := a.boundSubmissionForTurn(turnID); sub != nil {
 			return sessionKey, sub
 		}
-		for _, sess := range a.store.AllSessions() {
+		for _, sess := range appState.sessions() {
 			if turnID != "" && sess.ActiveTurnID == turnID {
-				sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+				sub := appState.submission(sess.ActiveSubmissionID)
 				if sub != nil {
 					return sess.Key, sub
 				}
@@ -115,7 +117,7 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 		return "", nil
 	}
 	if strings.TrimSpace(threadID) != "" {
-		for _, sess := range a.store.AllSessions() {
+		for _, sess := range appState.sessions() {
 			if sess == nil {
 				continue
 			}
@@ -128,7 +130,7 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 			if strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(turnID) != "" && sess.ActiveTurnID != turnID {
 				continue
 			}
-			sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+			sub := appState.submission(sess.ActiveSubmissionID)
 			if sub != nil {
 				return sess.Key, sub
 			}
@@ -141,17 +143,18 @@ func (a *App) sendStatusCardForSubmission(sub *state.Submission, msg *feishu.Inb
 	if a == nil || a.feishu == nil {
 		return nil
 	}
+	appState := a.appState()
 	card := a.renderSubmissionCard(sub, status)
 	id, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	if err == nil && id != "" {
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.StatusCardID = id })
+		_ = appState.setSubmissionStatusCard(sub.ID, id)
 		a.recordMessageLink(id, "status_card", sub, "")
 	}
 	return err
 }
 
 func (a *App) refreshStatusCard(submissionID string) error {
-	sub := a.store.GetSubmission(submissionID)
+	sub := a.appState().submission(submissionID)
 	if sub == nil || sub.StatusCardID == "" {
 		return nil
 	}
@@ -284,6 +287,7 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 }
 
 func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string, requestPayload map[string]any) {
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for approval")
@@ -302,7 +306,7 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 		if len(requestPayload) > 0 {
 			payload["request"] = requestPayload
 		}
-		_ = a.store.UpsertPending(&state.PendingRequest{
+		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
 			Kind:         kind,
@@ -317,7 +321,7 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_approval" })
+		_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
@@ -729,6 +733,7 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 }
 
 func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any, requestPayload map[string]any) {
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for permissions approval")
@@ -749,7 +754,7 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 		if len(requestPayload) > 0 {
 			payload["request"] = requestPayload
 		}
-		_ = a.store.UpsertPending(&state.PendingRequest{
+		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
 			Kind:         "permissions",
@@ -764,7 +769,7 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_approval" })
+		_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
@@ -776,6 +781,7 @@ func (a *App) renderApprovalCard(_ string, _ *state.Submission, title, color, bo
 }
 
 func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
+	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil || len(payload.Questions) == 0 {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
@@ -800,7 +806,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 	if err == nil {
 		requestKey := requestIDKey(requestID)
 		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
-		_ = a.store.UpsertPending(&state.PendingRequest{
+		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
 			Kind:         "tool_request_user_input",
@@ -815,7 +821,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 			CreatedAt:    time.Now().Unix(),
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
-		_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.Status = "waiting_user_input" })
+		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
 		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
