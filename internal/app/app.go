@@ -914,5 +914,5 @@ func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) renderCommandMenuCard(sessionKey string) map[string]any {
-	return a.feishu.SimpleStatusCard("命令菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(sessionKey))
+	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(sessionKey))
 }

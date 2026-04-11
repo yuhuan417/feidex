@@ -84,7 +84,7 @@ func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
 		buttons = append(buttons, feishu.Button{
 			Text:  "返回上一级",
 			Type:  "default",
-			Value: map[string]any{"action": "menu.group.session", "session_key": sessionKey},
+			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		})
 	}
 	return a.feishu.SimpleStatusCard("Quiet Mode", "blue", menuCardBody("menu.quiet", body), buttons)

@@ -41,51 +41,50 @@ type helpSectionSpec struct {
 
 var commandMenuGroupSpecs = []commandMenuGroupSpec{
 	{
-		Action:      "menu.group.session",
-		Label:       "会话行为",
-		Description: "控制当前会话的行为与输出方式。",
-	},
-	{
-		Action:      "menu.group.context",
-		Label:       "会话管理",
-		Description: "管理线程、上下文压缩与工作区上下文。",
+		Action:      "menu.tools",
+		Label:       "常用工具",
+		Description: "常用会话与线程工具入口。",
 	},
 	{
 		Action:      "menu.group.model",
-		Label:       "模型能力",
-		Description: "配置模型、推理强度与响应速度。",
+		Label:       "模型配置",
+		Description: "模型选择与响应速度配置。",
+	},
+	{
+		Action:      "menu.thread",
+		Label:       "线程管理",
+		Description: "查看当前线程状态，并通过下拉切换线程。",
+	},
+	{
+		Action:      "menu.workspace",
+		Label:       "工作区管理",
+		Description: "查看当前工作区状态，并通过下拉切换工作区。",
 	},
 	{
 		Action:      "menu.group.system",
-		Label:       "服务管理",
-		Description: "查看服务状态、执行升级，或查阅命令帮助。",
+		Label:       "系统运维",
+		Description: "系统运维与帮助入口。",
 	},
 }
 
 var commandMenuItemSpecs = []commandMenuItemSpec{
-	{GroupAction: "menu.group.session", Action: "menu.interrupt", Label: "中断任务", Slash: "/interrupt", Kind: menuItemDirect, IncludeParentAction: true},
-	{GroupAction: "menu.group.session", Action: "menu.quiet", Label: "Quiet 模式", Slash: "/quiet", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.session", Action: "menu.usage", Label: "Token Usage", Slash: "/usage", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.session", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
-
-	{GroupAction: "menu.group.context", Action: "menu.new", Label: "新线程", Slash: "/new", Kind: menuItemDirect, IncludeParentAction: true},
-	{GroupAction: "menu.group.context", Action: "menu.download", Label: "下载文件", Slash: "/download", Kind: menuItemDirect, IncludeParentAction: true},
-	{GroupAction: "menu.group.context", Action: "menu.fork", Label: "Fork 线程", Slash: "/fork", Kind: menuItemDirect, IncludeParentAction: true},
-	{GroupAction: "menu.group.context", Action: "menu.compact", Label: "压缩上下文", Slash: "/compact", Kind: menuItemDirect, IncludeParentAction: true},
-	{GroupAction: "menu.group.context", Action: "menu.workspace", Label: "工作区管理", Slash: "/workspace", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.context", Action: "menu.threads", Label: "线程管理", Slash: "/threads", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.context", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
+	{GroupAction: "menu.tools", Action: "menu.interrupt", Label: "中断任务", Slash: "/stop", Kind: menuItemDirect, IncludeParentAction: true},
+	{GroupAction: "menu.tools", Action: "menu.quiet", Label: "静默模式", Slash: "/quiet", Kind: menuItemSubmenu},
+	{GroupAction: "menu.tools", Action: "menu.compact", Label: "压缩上下文", Slash: "/compact", Kind: menuItemDirect, IncludeParentAction: true},
+	{GroupAction: "menu.tools", Action: "menu.download", Label: "下载文件", Slash: "/download", Kind: menuItemDirect, IncludeParentAction: true},
+	{GroupAction: "menu.tools", Action: "menu.history", Label: "历史记录", Slash: "/history", Kind: menuItemSubmenu},
+	{GroupAction: "menu.tools", Action: "menu.usage", Label: "Token 消耗", Slash: "/usage", Kind: menuItemSubmenu},
+	{GroupAction: "menu.tools", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 
 	{GroupAction: "menu.group.model", Action: "menu.model", Label: "模型配置", Slash: "/model", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.model", Action: "menu.reasoning", Label: "推理强度", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.model", Action: "menu.fast", Label: "响应速度", Slash: "/fast", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.model", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 
-	{GroupAction: "menu.group.system", Action: "menu.status", Label: "状态面板", Slash: "/status", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.system", Action: "menu.debug", Label: "调试日志", Slash: "/debug", Kind: menuItemDirect},
+	{GroupAction: "menu.group.system", Action: "menu.debug", Label: "日志级别", Slash: "/debug", Kind: menuItemDirect},
 	{GroupAction: "menu.group.system", Action: "menu.debug.logs", Label: "查看日志", Slash: "/debug logs", Kind: menuItemDirect},
 	{GroupAction: "menu.group.system", Action: "menu.upgrade", Label: "升级服务", Slash: "/upgrade", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.system", Action: "menu.help", Label: "帮助说明", Slash: "/help", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.system", Action: "menu.status", Label: "状态面板", Slash: "/status", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.system", Action: "menu.help", Label: "命令帮助", Slash: "/help", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 }
 
@@ -96,35 +95,45 @@ var helpIntroCommandSpecs = []helpCommandSpec{
 
 var helpSectionSpecs = []helpSectionSpec{
 	{
-		Title: "会话行为",
+		Title: "常用工具",
 		Commands: []helpCommandSpec{
 			{Command: "`/interrupt` 或 `/stop`", Summary: "中断当前运行中的任务，并清空排队/暂存输入。"},
 			{Command: "/quiet", Summary: "切换 Quiet 模式。"},
 			{Command: "/quiet on", Summary: "开启 Quiet 模式。"},
 			{Command: "/quiet off", Summary: "关闭 Quiet 模式。"},
-			{Command: "/debug", Summary: "切换服务端 slog 日志级别（debug/info）。"},
-			{Command: "/debug on", Summary: "切换到 debug 级别。"},
-			{Command: "/debug off", Summary: "切换到 info 级别。"},
-			{Command: "/debug logs", Summary: "查看最近一段服务端 slog 日志。"},
+			{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"},
+			{Command: "/download", Summary: "在当前 workspace 范围内选择文件，并生成下载链接。"},
+			{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
+			{Command: "/usage", Summary: "查看当前 thread 的累计 token usage。"},
 		},
 	},
 	{
-		Title: "会话管理",
+		Title: "model",
 		Commands: []helpCommandSpec{
-			{Command: "/new", Summary: "切换到新线程模式，下一条消息会新建线程。"},
-			{Command: "/download", Summary: "在当前 workspace 范围内选择文件，并生成下载链接。"},
-			{Command: "/fork", Summary: "复制当前 thread 为一个新分支，并立即切换过去。"},
-			{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"},
-			{Command: "/threads", Summary: "查看当前工作区可恢复的线程。"},
-			{Command: "/threads all", Summary: "查看更多来源的线程。"},
-			{Command: "/threads fork", Summary: "等价于 `/fork`。"},
-			{Command: "/threads new", Summary: "等价于 `/new`。"},
-			{Command: "/threads sandbox", Summary: "配置当前线程的 sandbox。"},
-			{Command: "/threads policy", Summary: "配置当前线程的 approval policy。"},
-			{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
-			{Command: "/usage", Summary: "查看当前 thread 的累计 token usage。"},
-			{Command: "`/workspace` 或 `/cd`", Summary: "打开工作区菜单。"},
-			{Command: "/workspace list", Summary: "列出所有工作区。"},
+			{Command: "/model", Summary: "打开模型选择与推理强度配置。"},
+			{Command: "/fast", Summary: "切换当前线程的响应速度设置。"},
+		},
+	},
+	{
+		Title: "thread",
+		Commands: []helpCommandSpec{
+			{Command: "/thread", Summary: "打开 thread 菜单。"},
+			{Command: "/thread list", Summary: "查看当前工作区可恢复的线程。"},
+			{Command: "/thread list all", Summary: "查看更多来源的线程，仅保留命令入口。"},
+			{Command: "/thread new", Summary: "切换到新线程模式，下一条消息会新建线程。"},
+			{Command: "/thread fork", Summary: "复制当前 thread 为一个新分支，并立即切换过去。"},
+			{Command: "/thread sandbox", Summary: "配置当前线程的 sandbox。"},
+			{Command: "/thread policy", Summary: "配置当前线程的 approval policy。"},
+			{Command: "/threads", Summary: "等价于 `/thread list`。"},
+			{Command: "/new", Summary: "等价于 `/thread new`。"},
+			{Command: "/fork", Summary: "等价于 `/thread fork`。"},
+		},
+	},
+	{
+		Title: "workspace",
+		Commands: []helpCommandSpec{
+			{Command: "/workspace", Summary: "打开工作区菜单。"},
+			{Command: "/workspace list", Summary: "打开工作区列表并可直接切换。"},
 			{Command: "/workspace new", Summary: "创建新工作区。"},
 			{Command: "/workspace use ID", Summary: "切换到指定工作区。"},
 			{Command: "/workspace sandbox", Summary: "配置当前工作区默认 sandbox。"},
@@ -132,15 +141,12 @@ var helpSectionSpecs = []helpSectionSpec{
 		},
 	},
 	{
-		Title: "模型能力",
+		Title: "system",
 		Commands: []helpCommandSpec{
-			{Command: "/model", Summary: "打开模型与推理强度配置。"},
-			{Command: "/fast", Summary: "切换当前线程的响应速度设置。"},
-		},
-	},
-	{
-		Title: "服务管理",
-		Commands: []helpCommandSpec{
+			{Command: "/debug", Summary: "切换服务端 slog 日志级别（debug/info）。"},
+			{Command: "/debug on", Summary: "切换到 debug 级别。"},
+			{Command: "/debug off", Summary: "切换到 info 级别。"},
+			{Command: "/debug logs", Summary: "查看最近一段服务端 slog 日志。"},
 			{Command: "/status", Summary: "查看当前会话、线程、工作区与模型状态。"},
 			{Command: "/upgrade [VERSION]", Summary: "检查最新版本，或直接升级到指定版本。"},
 		},

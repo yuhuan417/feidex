@@ -53,31 +53,40 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandFork(msg, fields[1:])
 	case "/new":
 		return a.commandNew(msg)
+	case "/thread":
+		return a.commandThread(msg, fields[1:])
 	case "/threads":
-		if len(fields) > 1 {
-			switch fields[1] {
-			case "new":
-				return a.commandThreadsNew(msg)
-			case "fork":
-				return a.commandFork(msg, fields[2:])
-			case "sandbox":
-				return a.showThreadSandboxMenu(msg)
-			case "policy":
-				return a.showThreadPolicyMenu(msg)
-			}
-		}
-		all := len(fields) > 1 && fields[1] == "all"
-		return a.commandThreads(msg, all)
+		return a.commandThread(msg, legacyThreadAliasArgs(fields[1:]))
 	case "/interrupt", "/stop":
 		return a.commandInterrupt(msg)
 	case "/status":
 		return a.commandStatus(msg)
 	case "/upgrade":
 		return a.commandUpgrade(msg, fields[1:])
-	case "/workspace", "/cd":
+	case "/workspace":
 		return a.commandWorkspace(msg, fields[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", fields[0])
+	}
+}
+
+func legacyThreadAliasArgs(args []string) []string {
+	if len(args) == 0 {
+		return []string{"list"}
+	}
+	switch strings.TrimSpace(args[0]) {
+	case "all":
+		return []string{"list", "all"}
+	case "new":
+		return []string{"new"}
+	case "fork":
+		return []string{"fork"}
+	case "sandbox":
+		return []string{"sandbox"}
+	case "policy":
+		return []string{"policy"}
+	default:
+		return args
 	}
 }
 
@@ -92,7 +101,7 @@ func isLocalCommand(raw string) bool {
 		return len(fields) == 1
 	case "/quiet", "/debug":
 		return true
-	case "/menu", "/help", "/history", "/usage", "/download", "/compact", "/fork", "/new", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/cd", "/upgrade", "/fast":
+	case "/menu", "/help", "/history", "/usage", "/download", "/compact", "/fork", "/new", "/thread", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/upgrade", "/fast":
 		return true
 	default:
 		return false
@@ -152,6 +161,48 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 	return err
 }
 
+func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
+	if len(args) == 0 {
+		return a.commandThreads(msg, false)
+	}
+	switch strings.TrimSpace(args[0]) {
+	case "list":
+		includeAll := false
+		if len(args) > 2 {
+			return fmt.Errorf("usage: /thread | /thread list [all] | /thread new | /thread fork | /thread sandbox | /thread policy")
+		}
+		if len(args) == 2 {
+			if strings.TrimSpace(args[1]) != "all" {
+				return fmt.Errorf("usage: /thread | /thread list [all] | /thread new | /thread fork | /thread sandbox | /thread policy")
+			}
+			includeAll = true
+		}
+		return a.commandThreads(msg, includeAll)
+	case "new":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /thread new")
+		}
+		return a.commandThreadsNew(msg)
+	case "fork":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /thread fork")
+		}
+		return a.commandFork(msg, nil)
+	case "sandbox":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /thread sandbox")
+		}
+		return a.showThreadSandboxMenu(msg)
+	case "policy":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /thread policy")
+		}
+		return a.showThreadPolicyMenu(msg)
+	default:
+		return fmt.Errorf("usage: /thread | /thread list [all] | /thread new | /thread fork | /thread sandbox | /thread policy")
+	}
+}
+
 func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
 	sess := a.store.GetSession(sessionKey)
 	workspace := a.cfg.Workspaces[0]
@@ -164,36 +215,37 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	if err != nil {
 		return nil, err
 	}
-	if len(items) == 0 {
-		buttons := []feishu.Button{
-			{Text: commandLabel("新会话", "/new"), Type: "default", Value: map[string]any{"action": "menu.new", "session_key": sessionKey, "parent_action": "menu.threads"}},
-			{Text: commandLabel("Fork 当前线程", "/fork"), Type: "default", Value: map[string]any{"action": "menu.fork", "session_key": sessionKey, "parent_action": "menu.threads"}},
-			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.context", "session_key": sessionKey}},
-		}
-		return a.feishu.SimpleStatusCard("线程列表", "blue", menuCardBody("menu.threads", "没有可恢复的线程。"), buttons), nil
-	}
 	sortThreadsByUpdated(items)
 	currentLabel := "-"
+	currentThreadID := "-"
+	currentThreadSandbox := "-"
+	currentThreadPolicy := "-"
 	if sess != nil {
 		currentLabel = currentThreadLabel(sess)
+		if strings.TrimSpace(sess.ActiveThreadID) != "" {
+			currentThreadID = strings.TrimSpace(sess.ActiveThreadID)
+			currentThreadSandbox = renderThreadSettingValue(sess.ActiveThreadSandboxMode, workspace.SandboxMode)
+			currentThreadPolicy = renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, workspace.ApprovalPolicy)
+		}
 	}
 	scopeLabel := "当前工作区"
 	if includeAll {
-		scopeLabel = "全部来源"
+		scopeLabel = "全部来源（仅命令入口）"
 	}
 	lines := []string{
 		"当前线程: " + currentLabel,
+		"当前 thread id: `" + currentThreadID + "`",
 		"工作区: `" + workspace.ID + "`",
-		"显示范围: " + scopeLabel,
-		fmt.Sprintf("可恢复线程数: `%d`", len(items)),
+		"当前 thread sandbox: " + currentThreadSandbox,
+		"当前 thread policy: " + currentThreadPolicy,
+		"list 范围: " + scopeLabel,
+		fmt.Sprintf("list 数量: `%d`", len(items)),
 	}
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		lines = append(lines,
-			"当前 thread sandbox: "+renderThreadSettingValue(sess.ActiveThreadSandboxMode, workspace.SandboxMode),
-			"当前 thread policy: "+renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, workspace.ApprovalPolicy),
-		)
+	if len(items) == 0 {
+		lines = append(lines, "", "当前没有可切换的线程。")
+	} else {
+		lines = append(lines, "", "通过下拉 list 选择要切换的线程。")
 	}
-	lines = append(lines, "", "在线下拉菜单中选择要恢复的线程。")
 	buttons := make([]feishu.Button, 0, 5)
 	selectOptions := make([]selectStaticOption, 0, len(items))
 	initialOption := ""
@@ -208,10 +260,30 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			Value: item.ID,
 		})
 	}
+	buttons = append(buttons,
+		feishu.Button{
+			Text: commandLabel("新建线程", "/thread new"),
+			Type: "default",
+			Value: map[string]any{
+				"action":        "menu.new",
+				"session_key":   sessionKey,
+				"parent_action": "menu.thread",
+			},
+		},
+	)
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		buttons = append(buttons,
 			feishu.Button{
-				Text: submenuCommandLabel("配置 Thread Sandbox", "/threads sandbox"),
+				Text: commandLabel("派生线程", "/thread fork"),
+				Type: "default",
+				Value: map[string]any{
+					"action":        "menu.fork",
+					"session_key":   sessionKey,
+					"parent_action": "menu.thread",
+				},
+			},
+			feishu.Button{
+				Text: submenuCommandLabel("配置线程沙箱", "/thread sandbox"),
 				Type: "default",
 				Value: map[string]any{
 					"action":      "thread.sandbox.menu",
@@ -219,7 +291,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 				},
 			},
 			feishu.Button{
-				Text: submenuCommandLabel("配置 Thread Policy", "/threads policy"),
+				Text: submenuCommandLabel("配置审批策略", "/thread policy"),
 				Type: "default",
 				Value: map[string]any{
 					"action":      "thread.policy.menu",
@@ -230,58 +302,26 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	}
 	buttons = append(buttons,
 		feishu.Button{
-			Text: submenuCommandLabel("历史记录", "/history"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.history",
-				"session_key": sessionKey,
-			},
-		},
-		feishu.Button{
-			Text: commandLabel("新会话", "/new"),
-			Type: "default",
-			Value: map[string]any{
-				"action":        "menu.new",
-				"session_key":   sessionKey,
-				"parent_action": "menu.threads",
-			},
-		},
-		feishu.Button{
-			Text: commandLabel("Fork 当前线程", "/fork"),
-			Type: "default",
-			Value: map[string]any{
-				"action":        "menu.fork",
-				"session_key":   sessionKey,
-				"parent_action": "menu.threads",
-			},
-		},
-		feishu.Button{
-			Text: commandLabel("刷新列表", "/threads"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.threads",
-				"session_key": sessionKey,
-			},
-		},
-		feishu.Button{
 			Text: "返回上一级",
 			Type: "default",
 			Value: map[string]any{
-				"action":      "menu.group.context",
+				"action":      "menu.root",
 				"session_key": sessionKey,
 			},
 		},
 	)
 	body := strings.Join(lines, "\n")
-	card := newMarkdownBodyCard("线程列表", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.threads", body)})
-	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
-		"thread_resume_select",
-		"选择要恢复的线程",
-		map[string]any{"action": "thread.resume.select", "session_key": sessionKey},
-		selectOptions,
-		initialOption,
-	))
+	card := newMarkdownBodyCard("线程管理", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.thread", body)})
+	if len(selectOptions) > 0 {
+		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+			"thread_resume_select",
+			"list",
+			map[string]any{"action": "thread.resume.select", "session_key": sessionKey, "include_all": includeAll},
+			selectOptions,
+			initialOption,
+		))
+	}
 	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
 		appendMarkdownBodyCardElement(card, row)
 	}
@@ -347,11 +387,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		return a.showWorkspaceMenu(msg)
 	}
 	if args[0] == "list" {
-		lines := make([]string, 0, len(a.cfg.Workspaces))
-		for _, ws := range a.cfg.Workspaces {
-			lines = append(lines, fmt.Sprintf("- %s: %s", ws.ID, ws.Cwd))
-		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, strings.Join(lines, "\n"), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return a.showWorkspaceMenu(msg)
 	}
 	if args[0] == "new" {
 		return a.beginWorkspaceNew(msg)
@@ -442,24 +478,44 @@ func renderThreadListEntry(name, preview, id string) string {
 	}
 }
 
-func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
-	spec, _ := menuGroupSpec("menu.group.session")
+func (a *App) renderToolsMenuCard(sessionKey string) map[string]any {
+	spec, _ := menuGroupSpec("menu.tools")
 	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
+}
+
+func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
+	return a.renderToolsMenuCard(sessionKey)
 }
 
 func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
-	spec, _ := menuGroupSpec("menu.group.context")
-	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
+	return a.renderCommandMenuCard(sessionKey)
 }
 
 func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
-	spec, _ := menuGroupSpec("menu.group.model")
-	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
+	modelValue := firstNonEmpty(configuredGlobalModel(a.cfg), "(default)")
+	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(a.cfg), "(default)")
+	fastValue := "-"
+	if a.store != nil {
+		if sess := a.store.GetSession(sessionKey); sess != nil {
+			fastValue = renderServiceTierValue(sess.ActiveThreadServiceTier)
+		}
+	}
+	body := strings.Join([]string{
+		"当前 model: `" + modelValue + "`",
+		"当前 reasoning: `" + effortValue + "`",
+		"当前 fast: " + fastValue,
+	}, "\n")
+	buttons := []feishu.Button{
+		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("响应速度", "/fast"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+	}
+	return a.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
 }
 
 func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
-	body := spec.Description + "\n\n当前 slog 日志级别: " + renderRuntimeLogLevelValue()
+	body := spec.Description + "\n\n当前 slog 日志级别: " + renderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
 	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(spec.Action, sessionKey))
 }
 
@@ -510,7 +566,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 		currentID = sess.WorkspaceID
 	}
 	currentWS := config.FindWorkspace(a.cfg, currentID)
-	body := "选择工作区：\n\n当前工作区: `" + currentID + "`"
+	body := "当前工作区: `" + currentID + "`"
 	if currentWS != nil {
 		body += "\n默认 sandbox: `" + currentWS.SandboxMode + "`"
 		body += "\n默认 policy: `" + currentWS.ApprovalPolicy + "`"
@@ -537,7 +593,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 		feishu.Button{
-			Text: submenuCommandLabel("配置 Sandbox", "/workspace sandbox"),
+			Text: submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.sandbox.menu",
@@ -545,7 +601,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 		feishu.Button{
-			Text: submenuCommandLabel("配置 Policy", "/workspace policy"),
+			Text: submenuCommandLabel("配置默认策略", "/workspace policy"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.policy.menu",
@@ -556,16 +612,16 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			Text: "返回上一级",
 			Type: "default",
 			Value: map[string]any{
-				"action":      "menu.group.context",
+				"action":      "menu.root",
 				"session_key": sessionKey,
 			},
 		},
 	)
-	card := newMarkdownBodyCard("工作区", "blue")
+	card := newMarkdownBodyCard("工作区管理", "blue")
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.workspace", body)})
 	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
 		"workspace_select",
-		"选择工作区",
+		"list",
 		map[string]any{"action": "workspace.use.select", "session_key": sessionKey},
 		selectOptions,
 		currentID,
@@ -758,10 +814,10 @@ func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, er
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回线程列表", "/threads"),
+		Text: commandLabel("返回 thread", "/thread"),
 		Type: "default",
 		Value: map[string]any{
-			"action":      "menu.threads",
+			"action":      "menu.thread",
 			"session_key": sessionKey,
 		},
 	})
@@ -810,10 +866,10 @@ func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, err
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回线程列表", "/threads"),
+		Text: commandLabel("返回 thread", "/thread"),
 		Type: "default",
 		Value: map[string]any{
-			"action":      "menu.threads",
+			"action":      "menu.thread",
 			"session_key": sessionKey,
 		},
 	})
@@ -853,7 +909,7 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 		selectedCWD = payload.RootPath
 	}
 	card := newMarkdownBodyCard("新建工作区", "orange")
-	body := "当前位置：命令菜单 / 会话管理 / 工作区管理 / 新建工作区\n\n" +
+	body := "当前位置：主菜单 / workspace / new\n\n" +
 		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
 		"填写 `workspace_id` 和可选的 `name`，需要换目录时点“选目录”，最后点“确认”。"

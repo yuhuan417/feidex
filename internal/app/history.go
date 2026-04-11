@@ -121,7 +121,7 @@ func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, er
 		Text: "返回上一级",
 		Type: "default",
 		Value: map[string]any{
-			"action":      "menu.threads",
+			"action":      "menu.tools",
 			"session_key": sessionKey,
 		},
 	})

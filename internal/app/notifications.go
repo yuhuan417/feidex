@@ -615,7 +615,7 @@ func (a *App) renderSubmissionCard(sub *state.Submission, status string) map[str
 		color = "grey"
 	}
 	body := a.renderSubmissionCardBody(sub)
-	buttons := []feishu.Button{{Text: "线程列表", Type: "default", Value: map[string]any{"action": "menu.threads", "session_key": sub.SessionKey}}}
+	buttons := []feishu.Button{{Text: "线程管理", Type: "default", Value: map[string]any{"action": "menu.thread", "session_key": sub.SessionKey}}}
 	switch status {
 	case "queued", "running", "turn_in_progress", "waiting_approval", "waiting_user_input":
 		buttons = append([]feishu.Button{{Text: "中断", Type: "danger", Value: map[string]any{"action": "menu.interrupt", "session_key": sub.SessionKey}}}, buttons...)

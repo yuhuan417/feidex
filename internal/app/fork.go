@@ -90,7 +90,7 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 }
 
 func (a *App) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	parentAction := "menu.group.context"
+	parentAction := "menu.thread"
 	if action != nil {
 		if value, ok := action.ActionValue["parent_action"].(string); ok && strings.TrimSpace(value) != "" {
 			parentAction = value
@@ -98,7 +98,7 @@ func (a *App) completeMenuFork(action *feishu.CardAction, sessionKey string) (*c
 	}
 	discarded, err := a.startThreadFork(sessionKey)
 	if err != nil {
-		if parentAction == "menu.threads" {
+		if parentAction == "menu.thread" || parentAction == "menu.threads" {
 			card, renderErr := a.renderThreadsCard(sessionKey, false)
 			if renderErr == nil {
 				return &callback.CardActionTriggerResponse{
@@ -119,7 +119,7 @@ func (a *App) completeMenuFork(action *feishu.CardAction, sessionKey string) (*c
 	if discarded > 0 {
 		content = fmt.Sprintf("已 fork 当前线程，并丢弃 %d 条排队或暂存输入", discarded)
 	}
-	if parentAction == "menu.threads" {
+	if parentAction == "menu.thread" || parentAction == "menu.threads" {
 		card, renderErr := a.renderThreadsCard(sessionKey, false)
 		if renderErr == nil {
 			return &callback.CardActionTriggerResponse{

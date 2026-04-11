@@ -259,39 +259,42 @@ Feidex 会把这些状态写进去：
 
 ## 菜单与命令
 
-菜单分四组：
+主菜单分五组：
 
-- 会话行为
-  - `中断任务 /interrupt`
-  - `Quiet 模式 /quiet`
-- 会话管理
-  - `新线程 /new`
+- 常用工具
+  - `中断任务 /stop`
+  - `静默模式 /quiet`
+  - `压缩上下文 /compact`
   - `下载文件 /download`
-  - `Fork 线程 /fork`
-  - `工作区管理 /workspace`
-  - `线程管理 /threads`
-- 模型能力
+  - `历史记录 /history`
+  - `Token 消耗 /usage`
+- model
   - `模型配置 /model`
-  - `推理强度`
   - `响应速度 /fast`
-- 服务管理
-  - `状态面板 /status`
-  - `调试日志 /debug`
+- thread
+  - `list` 下拉切换当前 workspace 的线程
+  - `新建线程 /thread new`
+  - `派生线程 /thread fork`
+  - `配置线程沙箱 /thread sandbox`
+  - `配置审批策略 /thread policy`
+- workspace
+  - `list` 下拉切换工作区
+  - `新建工作区 /workspace new`
+  - `配置默认沙箱 /workspace sandbox`
+  - `配置默认策略 /workspace policy`
+- system
+  - `日志级别 /debug`
+  - `查看日志 /debug logs`
   - `升级服务 /upgrade`
-  - `帮助说明 /help`
+  - `状态面板 /status`
+  - `命令帮助 /help`
 
 ### 本地 slash 命令
 
 - `/menu`
-  - 打开菜单
+  - 打开主菜单
 - `/help`
   - 查看命令说明
-- `/new`
-  - 切换到新线程模式
-- `/download`
-  - 在当前 workspace 范围内选择文件并生成下载链接
-- `/fork`
-  - fork 当前线程并切换到新的分支线程
 - `/interrupt` 或 `/stop`
   - 中断当前任务
 - `/quiet`
@@ -300,6 +303,18 @@ Feidex 会把这些状态写进去：
   - 开启 Quiet 模式
 - `/quiet off`
   - 关闭 Quiet 模式
+- `/compact`
+  - 压缩当前线程上下文
+- `/download`
+  - 在当前 workspace 范围内选择文件并生成下载链接
+- `/history`
+  - 查看当前 thread 的历史记录
+- `/usage`
+  - 查看当前 thread 的累计 token usage
+- `/model`
+  - 打开模型选择与推理强度配置
+- `/fast`
+  - 配置当前 thread 的 service tier
 - `/debug`
   - 切换服务端 slog 日志级别（debug/info）
 - `/debug on`
@@ -308,22 +323,30 @@ Feidex 会把这些状态写进去：
   - 切换到 info 级别
 - `/debug logs`
   - 查看最近一段服务端 slog 日志
-- `/threads`
-  - 查看线程列表
-- `/threads all`
+- `/thread`
+  - 打开 thread 菜单
+- `/thread list`
+  - 查看当前工作区可恢复的线程
+- `/thread list all`
   - 查看更多来源的线程
-- `/threads fork`
-  - 等价于 `/fork`
-- `/threads sandbox`
+- `/thread new`
+  - 切换到新线程模式
+- `/thread fork`
+  - fork 当前线程并切换到新的分支线程
+- `/thread sandbox`
   - 配置当前 thread 的 sandbox
-- `/threads policy`
+- `/thread policy`
   - 配置当前 thread 的 approval policy
-- `/history`
-  - 查看当前 thread 的历史记录
+- `/threads`
+  - 等价于 `/thread list`
+- `/new`
+  - 等价于 `/thread new`
+- `/fork`
+  - 等价于 `/thread fork`
 - `/workspace`
   - 打开工作区菜单
 - `/workspace list`
-  - 列出工作区
+  - 打开工作区列表并可直接切换
 - `/workspace new`
   - 新建工作区
 - `/workspace use ID`
@@ -332,10 +355,6 @@ Feidex 会把这些状态写进去：
   - 配置 workspace 默认 sandbox
 - `/workspace policy`
   - 配置 workspace 默认 approval policy
-- `/model`
-  - 打开模型配置
-- `/fast`
-  - 配置当前 thread 的 service tier
 - `/status`
   - 查看当前状态
 - `/upgrade`

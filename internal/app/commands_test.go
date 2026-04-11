@@ -108,10 +108,12 @@ func TestIsLocalCommand(t *testing.T) {
 		"/threads fork":   true,
 		"/threads new":    true,
 		"/threads all":    true,
+		"/thread":         true,
+		"/thread list":    true,
+		"/thread new":     true,
 		"/interrupt":      true,
 		"/stop":           true,
 		"/workspace":      true,
-		"/cd":             true,
 		"/status":         true,
 		"/upgrade":        true,
 		"/upgrade v0.3.0": true,
@@ -136,7 +138,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 		t.Fatalf("unexpected card elements: %#v", card)
 	}
 	body, _ := elements[0]["content"].(string)
-	for _, alias := range []string{"/menu", "/help", "/history", "/download", "/compact", "/fork", "/new", "/stop", "/cd", "/model", "/quiet", "/debug", "/fast", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
+	for _, alias := range []string{"/menu", "/help", "/history", "/download", "/compact", "/fork", "/new", "/stop", "/model", "/quiet", "/debug", "/fast", "/thread", "/threads", "/interrupt", "/status", "/workspace", "/upgrade"} {
 		if strings.Contains(body, alias) {
 			t.Fatalf("expected menu body to omit command text %q, got %q", alias, body)
 		}

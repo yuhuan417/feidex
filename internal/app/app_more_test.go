@@ -687,8 +687,8 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	if err := a.commandWorkspace(msg, []string{"list"}); err != nil {
 		t.Fatalf("commandWorkspace(list) error = %v", err)
 	}
-	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[len(ff.replyTexts)-1], "- default:") {
-		t.Fatalf("commandWorkspace(list) reply = %+v", ff.replyTexts)
+	if len(ff.replyCards) == 0 {
+		t.Fatalf("commandWorkspace(list) cards = %+v, want workspace menu card", ff.replyCards)
 	}
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
@@ -769,7 +769,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatalf("commandThreads(empty) card = %+v", ff.replyCards)
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "没有可恢复的线程。") {
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "当前没有可切换的线程。") {
 		t.Fatalf("commandThreads(empty) body = %q", body)
 	}
 }
@@ -1134,7 +1134,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 				value, _ = behaviors[0]["value"].(map[string]any)
 			}
 		}
-		if value["action"] == "menu.group.context" {
+		if value["action"] == "menu.root" {
 			foundBackToMenu = true
 		}
 	}
@@ -1170,7 +1170,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	sessionKey := "feishu:p2p:chat:user"
 
 	rootCard := a.renderCommandMenuCard(sessionKey)
-	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：命令菜单") {
+	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：主菜单") {
 		t.Fatalf("root menu missing breadcrumb: %q", body)
 	}
 	rootActions := cardButtonsForTest(rootCard)
@@ -1182,11 +1182,11 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		}
 	}
 
-	contextCard := a.renderContextMenuCard(sessionKey)
-	if body := cardMarkdownContent(t, contextCard); !strings.Contains(body, "当前位置：命令菜单 / 会话管理") {
-		t.Fatalf("context menu missing breadcrumb: %q", body)
+	toolsCard := a.renderToolsMenuCard(sessionKey)
+	if body := cardMarkdownContent(t, toolsCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") {
+		t.Fatalf("tools menu missing breadcrumb: %q", body)
 	}
-	contextActions := cardButtonsForTest(contextCard)
+	contextActions := cardButtonsForTest(toolsCard)
 	indicatorByAction := map[string]bool{}
 	labelByAction := map[string]string{}
 	for _, action := range contextActions {
@@ -1203,18 +1203,18 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
 		labelByAction[actionName] = label
 	}
-	if indicatorByAction["menu.workspace"] != true || indicatorByAction["menu.threads"] != true {
-		t.Fatalf("expected context submenu indicators, got %#v", indicatorByAction)
+	if indicatorByAction["menu.quiet"] != true || indicatorByAction["menu.history"] != true || indicatorByAction["menu.usage"] != true {
+		t.Fatalf("expected tools submenu indicators, got %#v", indicatorByAction)
 	}
-	if indicatorByAction["menu.new"] || indicatorByAction["menu.download"] || indicatorByAction["menu.fork"] || indicatorByAction["menu.compact"] {
-		t.Fatalf("direct context commands should not show submenu indicator, got %#v", indicatorByAction)
+	if indicatorByAction["menu.interrupt"] || indicatorByAction["menu.download"] || indicatorByAction["menu.compact"] {
+		t.Fatalf("direct tools commands should not show submenu indicator, got %#v", indicatorByAction)
 	}
-	if !strings.Contains(labelByAction["menu.workspace"], "/workspace") || !strings.Contains(labelByAction["menu.threads"], "/threads") || !strings.Contains(labelByAction["menu.new"], "/new") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.fork"], "/fork") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
-		t.Fatalf("expected real command labels in context menu, got %#v", labelByAction)
+	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
+		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
 	}
 
 	helpCard := a.renderHelpCard(sessionKey)
-	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：命令菜单 / 服务管理 / 帮助说明") {
+	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 命令帮助") {
 		t.Fatalf("help card missing breadcrumb: %q", body)
 	}
 }
@@ -2645,9 +2645,14 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/threads all", "/threads fork", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
+		}
+	}
+	for _, unwanted := range []string{"/threads all", "/threads new", "/threads fork", "/threads sandbox", "/threads policy"} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("help body should not expose legacy thread subcommand %q: %q", unwanted, body)
 		}
 	}
 }
@@ -2702,7 +2707,7 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 		t.Fatal("expected history card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"历史记录", "当前页: `1-2 / 2`", "当前 turn: `Turn #2`", "在线下拉菜单中选择要查看的 turn。"} {
+	for _, want := range []string{"当前位置：主菜单 / 常用工具 / 历史记录", "当前页: `1-2 / 2`", "当前 turn: `Turn #2`", "在线下拉菜单中选择要查看的 turn。"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("history body missing %q: %q", want, body)
 		}
@@ -2815,7 +2820,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected thread list card to be sent")
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "在线下拉菜单中选择要恢复的线程。") || strings.Contains(body, "Older Preview") {
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "通过下拉 list 选择要切换的线程。") || strings.Contains(body, "Older Preview") {
 		t.Fatalf("thread list body = %q, want summary without duplicated list", body)
 	}
 	if got := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1]); len(got) != 1 {
@@ -2864,7 +2869,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	}
 	elements := cardElementsForTest(ff.replyCards[0])
 	body := elements[0]["content"].(string)
-	if !strings.Contains(body, "可恢复线程数: `1`") || !strings.Contains(body, "在线下拉菜单中选择要恢复的线程。") {
+	if !strings.Contains(body, "list 数量: `1`") || !strings.Contains(body, "通过下拉 list 选择要切换的线程。") {
 		t.Fatalf("thread list body = %q, want summary only", body)
 	}
 	selects := cardSelectStaticForTest(ff.replyCards[0])

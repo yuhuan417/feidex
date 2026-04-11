@@ -126,6 +126,6 @@ func (a *App) renderUsageCard(sessionKey string) map[string]any {
 		}
 	}
 	return a.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.session", "session_key": sessionKey}},
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
 	})
 }
