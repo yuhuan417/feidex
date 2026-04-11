@@ -135,7 +135,7 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 	}
 }
 
-func TestHistoryPaginationUsesHundredItemsPerPage(t *testing.T) {
+func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
 	if err := a.store.UpsertSession(&state.Session{
@@ -217,5 +217,62 @@ func TestHistoryPaginationUsesHundredItemsPerPage(t *testing.T) {
 		}
 	default:
 		t.Fatalf("detail back page type = %T, want int or float64", values["page"])
+	}
+}
+
+func TestHistoryCardWithConfiguredPageSizeFitsFeishuCardLimits(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            sessionKey,
+		WorkspaceID:    "default",
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   fmt.Sprintf("turn-%d", historyPageSize),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/read" {
+			t.Fatalf("unexpected method %q", method)
+		}
+		result := out.(*codexrpc.ThreadReadResult)
+		result.Thread = codexrpc.ThreadReadThread{
+			ID: "thread-1",
+		}
+		for i := 1; i <= historyPageSize; i++ {
+			result.Thread.Turns = append(result.Thread.Turns, codexrpc.ThreadReadTurn{
+				ID:     fmt.Sprintf("turn-%d", i),
+				Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", Content: json.RawMessage(fmt.Sprintf(`[{"type":"text","text":"input-%d"}]`, i))},
+				},
+			})
+		}
+		_ = params
+		return nil
+	}
+
+	card, err := a.renderHistoryCard(sessionKey, 0)
+	if err != nil {
+		t.Fatalf("renderHistoryCard() error = %v", err)
+	}
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("history card selects = %+v, want 1 select", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != historyPageSize {
+		t.Fatalf("history card options = %d, want %d", len(options), historyPageSize)
+	}
+	if got := countCardComponentNodes(card); got >= feishuReplyCardMaxComponentCount {
+		t.Fatalf("history card component count = %d, want < %d", got, feishuReplyCardMaxComponentCount)
+	}
+	payload, err := json.Marshal(card)
+	if err != nil {
+		t.Fatalf("Marshal(card) error = %v", err)
+	}
+	if len(payload) > feishuReplyCardMaxPayloadBytes {
+		t.Fatalf("history card payload = %d, want <= %d", len(payload), feishuReplyCardMaxPayloadBytes)
 	}
 }
