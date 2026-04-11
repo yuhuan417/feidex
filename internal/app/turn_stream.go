@@ -226,7 +226,7 @@ func (a *App) storePlanSnapshot(submissionID, plan string) {
 	if strings.TrimSpace(submissionID) == "" {
 		return
 	}
-	_ = a.store.UpdateSubmission(submissionID, func(sub *state.Submission) {
+	_ = a.appState().updateSubmission(submissionID, func(sub *state.Submission) {
 		sub.PlanText = strings.TrimSpace(plan)
 	})
 }
@@ -235,7 +235,7 @@ func (a *App) storeTurnItemSnapshot(submissionID string, snapshot turnItemSnapsh
 	if strings.TrimSpace(submissionID) == "" || strings.TrimSpace(snapshot.StoreText) == "" {
 		return
 	}
-	_ = a.store.UpdateSubmission(submissionID, func(sub *state.Submission) {
+	_ = a.appState().updateSubmission(submissionID, func(sub *state.Submission) {
 		switch snapshot.ItemType {
 		case "reasoning":
 			sub.SummaryText = appendSeparatedText(sub.SummaryText, snapshot.StoreText)
@@ -774,7 +774,7 @@ func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
 	if sub == nil {
 		return false
 	}
-	sess := a.store.GetSession(sub.SessionKey)
+	sess := a.appState().session(sub.SessionKey)
 	return sess != nil && sess.ChatType == "group" && a.cfg.Feishu.ReplyInThread
 }
 

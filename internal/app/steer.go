@@ -21,7 +21,7 @@ func (a *App) replyRootTurnLink(msg *feishu.InboundMessage) *state.MessageLink {
 	if root == "" || root == strings.TrimSpace(msg.MessageID) {
 		return nil
 	}
-	return a.store.GetMessageLink(root)
+	return a.appState().messageLink(root)
 }
 
 func (a *App) sessionKeyForInboundMessage(msg *feishu.InboundMessage, link *state.MessageLink) string {
@@ -42,6 +42,7 @@ func (a *App) pendingInputSessionKey(msg *feishu.InboundMessage) string {
 }
 
 func (a *App) collectPendingStagedImages(targetSessionKey, bucketSessionKey string) []state.SessionStagedImage {
+	appState := a.appState()
 	images := []state.SessionStagedImage{}
 	seen := map[string]struct{}{}
 	for _, key := range []string{strings.TrimSpace(bucketSessionKey), strings.TrimSpace(targetSessionKey)} {
@@ -52,7 +53,7 @@ func (a *App) collectPendingStagedImages(targetSessionKey, bucketSessionKey stri
 			continue
 		}
 		seen[key] = struct{}{}
-		sess := a.store.GetSession(key)
+		sess := appState.session(key)
 		if sess == nil {
 			continue
 		}
@@ -68,6 +69,7 @@ func (a *App) collectPendingStagedImages(targetSessionKey, bucketSessionKey stri
 }
 
 func (a *App) clearPendingStagedImages(targetSessionKey, bucketSessionKey string) error {
+	appState := a.appState()
 	seen := map[string]struct{}{}
 	for _, key := range []string{strings.TrimSpace(bucketSessionKey), strings.TrimSpace(targetSessionKey)} {
 		if key == "" {
@@ -77,7 +79,7 @@ func (a *App) clearPendingStagedImages(targetSessionKey, bucketSessionKey string
 			continue
 		}
 		seen[key] = struct{}{}
-		sess := a.store.GetSession(key)
+		sess := appState.session(key)
 		if sess == nil || len(sess.StagedImages) == 0 {
 			continue
 		}
@@ -85,7 +87,7 @@ func (a *App) clearPendingStagedImages(targetSessionKey, bucketSessionKey string
 		if !sessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 {
 			sess.Status = "idle"
 		}
-		if err := a.store.UpsertSession(sess); err != nil {
+		if err := appState.saveSession(sess); err != nil {
 			return err
 		}
 	}
@@ -96,13 +98,14 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 	if a == nil || msg == nil || link == nil {
 		return false, nil
 	}
+	appState := a.appState()
 	threadID := strings.TrimSpace(link.ThreadID)
 	turnID := strings.TrimSpace(link.TurnID)
 	if threadID == "" || turnID == "" {
 		return false, nil
 	}
 	sessionKey := a.sessionKeyForInboundMessage(msg, link)
-	sess := a.store.GetSession(sessionKey)
+	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
@@ -145,7 +148,7 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 		return false, err
 	}
 	sess.WorkspaceID = firstNonEmpty(sess.WorkspaceID, a.defaultWorkspaceID())
-	if err := a.store.UpsertSession(sess); err != nil {
+	if err := appState.saveSession(sess); err != nil {
 		return false, err
 	}
 	if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
@@ -158,7 +161,7 @@ func (a *App) recordInboundSubmissionSourceLink(messageID, sessionKey, submissio
 	if a == nil || a.store == nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = a.store.UpsertMessageLink(&state.MessageLink{
+	_ = a.appState().saveMessageLink(&state.MessageLink{
 		MessageID:    strings.TrimSpace(messageID),
 		Kind:         "submission_source",
 		SessionKey:   strings.TrimSpace(sessionKey),
@@ -191,7 +194,7 @@ func (a *App) recordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID 
 	if a == nil || a.store == nil || strings.TrimSpace(rootMessageID) == "" {
 		return
 	}
-	_ = a.store.UpsertMessageLink(&state.MessageLink{
+	_ = a.appState().saveMessageLink(&state.MessageLink{
 		MessageID:  strings.TrimSpace(rootMessageID),
 		Kind:       "root_turn",
 		SessionKey: strings.TrimSpace(sessionKey),
@@ -204,7 +207,7 @@ func (a *App) recordTurnMessageLink(messageID, sessionKey, threadID, turnID stri
 	if a == nil || a.store == nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = a.store.UpsertMessageLink(&state.MessageLink{
+	_ = a.appState().saveMessageLink(&state.MessageLink{
 		MessageID:  strings.TrimSpace(messageID),
 		Kind:       "turn_source",
 		SessionKey: strings.TrimSpace(sessionKey),

@@ -15,11 +15,12 @@ const attachmentRetention = 7 * 24 * time.Hour
 const artifactRetention = 3 * 24 * time.Hour
 
 func (a *App) expirePendingRequestsOnStartup() {
-	for _, req := range a.store.AllPendingRequests() {
+	appState := a.appState()
+	for _, req := range appState.pendingRequests() {
 		if req == nil || req.Status != "pending" {
 			continue
 		}
-		_ = a.store.UpdatePending(req.ID, func(p *state.PendingRequest) {
+		_ = appState.updatePending(req.ID, func(p *state.PendingRequest) {
 			p.Status = "expired"
 			if p.ExpiresAt < time.Now().Unix() {
 				return
@@ -67,10 +68,11 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 	if a == nil || a.store == nil || sub == nil {
 		return
 	}
+	appState := a.appState()
 	submissionID := strings.TrimSpace(sub.ID)
 	turnID := strings.TrimSpace(sub.TurnID)
 	threadID := strings.TrimSpace(sub.ThreadID)
-	a.store.DeleteMessageLinks(func(link *state.MessageLink) bool {
+	appState.deleteMessageLinks(func(link *state.MessageLink) bool {
 		if link == nil {
 			return false
 		}
@@ -83,12 +85,12 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 		return false
 	})
 	if turnID != "" {
-		a.store.DeletePendingRequests(func(req *state.PendingRequest) bool {
+		appState.deletePendingRequests(func(req *state.PendingRequest) bool {
 			return req != nil && strings.TrimSpace(req.TurnID) == turnID
 		})
 	}
 	if submissionID != "" {
-		a.store.DeleteSubmission(submissionID)
+		appState.deleteSubmission(submissionID)
 	}
 	if turnID != "" {
 		a.clearTurnBinding(turnID)

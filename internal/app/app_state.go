@@ -44,6 +44,13 @@ func (s *appStateFacade) createSubmission(sub *state.Submission) (string, error)
 	return s.store.CreateSubmission(sub)
 }
 
+func (s *appStateFacade) deleteSubmission(id string) {
+	if s == nil || s.store == nil {
+		return
+	}
+	s.store.DeleteSubmission(strings.TrimSpace(id))
+}
+
 func (s *appStateFacade) submission(id string) *state.Submission {
 	if s == nil || s.store == nil {
 		return nil
@@ -134,9 +141,37 @@ func (s *appStateFacade) resolvePending(id string) *state.PendingRequest {
 	return s.pending(id)
 }
 
+func (s *appStateFacade) deletePendingRequests(match func(*state.PendingRequest) bool) {
+	if s == nil || s.store == nil {
+		return
+	}
+	s.store.DeletePendingRequests(match)
+}
+
 func (s *appStateFacade) nextLocalID(prefix string) (string, error) {
 	if s == nil || s.store == nil {
 		return "", nil
 	}
 	return s.store.NextLocalID(strings.TrimSpace(prefix))
+}
+
+func (s *appStateFacade) messageLink(messageID string) *state.MessageLink {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	return s.store.GetMessageLink(strings.TrimSpace(messageID))
+}
+
+func (s *appStateFacade) saveMessageLink(link *state.MessageLink) error {
+	if s == nil || s.store == nil || link == nil {
+		return nil
+	}
+	return s.store.UpsertMessageLink(link)
+}
+
+func (s *appStateFacade) deleteMessageLinks(match func(*state.MessageLink) bool) {
+	if s == nil || s.store == nil {
+		return
+	}
+	s.store.DeleteMessageLinks(match)
 }
