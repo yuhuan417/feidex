@@ -47,6 +47,7 @@ func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any,
 }
 
 func (a *App) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVersion string) (map[string]any, error) {
+	appState := a.appState()
 	manager, err := newDaemonManager()
 	if err != nil {
 		return nil, fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
@@ -114,7 +115,7 @@ func (a *App) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVers
 		}
 	}
 
-	requestID, err := a.store.NextLocalID("upgrade")
+	requestID, err := appState.nextLocalID("upgrade")
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +136,7 @@ func (a *App) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVers
 		{Text: "升级到 " + target.Version, Type: "primary", Value: map[string]any{"action": "upgrade.confirm", "request_id": requestID, "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "upgrade.cancel", "request_id": requestID, "session_key": sessionKey}},
 	})
-	if err := a.store.UpsertPending(&state.PendingRequest{
+	if err := appState.savePending(&state.PendingRequest{
 		ID:           requestID,
 		RequestIDRaw: requestID,
 		Kind:         "upgrade_release",
@@ -183,8 +184,9 @@ func normalizeUpgradeVersion(raw string) (string, error) {
 }
 
 func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.store.PendingByID(requestID)
+	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "upgrade_release" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级请求已过期"}}, nil
 	}
@@ -192,7 +194,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个升级请求"}}, nil
 	}
 	if actionName == "upgrade.cancel" {
-		_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		if strings.TrimSpace(sessionKey) == "" {
 			sessionKey = pending.SessionKey
@@ -224,7 +226,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 			Toast: &callback.Toast{Type: "warning", Content: "启动升级失败，请重试"},
 		}, nil
 	}
-	_ = a.store.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	body := "目标版本: `" + payload.TargetVersion + "`\n后台任务: `" + unitName + "`\n服务即将重启；如果启动失败会自动回退。"
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	if strings.TrimSpace(sessionKey) == "" {

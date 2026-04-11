@@ -25,11 +25,12 @@ func (a *App) commandDownload(msg *feishu.InboundMessage, args []string) error {
 		return nil
 	}
 	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	appState := a.appState()
 	payload, err := a.newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return err
 	}
-	requestID, err := a.store.NextLocalID("download")
+	requestID, err := appState.nextLocalID("download")
 	if err != nil {
 		return err
 	}
@@ -41,7 +42,7 @@ func (a *App) commandDownload(msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return err
 	}
-	return a.store.UpsertPending(&state.PendingRequest{
+	return appState.savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        downloadFilePendingKind,
 		SessionKey:  sessionKey,
@@ -55,8 +56,9 @@ func (a *App) commandDownload(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) completeMenuDownload(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
 	wsID := a.defaultWorkspaceID()
-	if sess := a.store.GetSession(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		wsID = sess.WorkspaceID
 	}
 	ws := config.FindWorkspace(a.cfg, wsID)
@@ -64,11 +66,11 @@ func (a *App) completeMenuDownload(action *feishu.CardAction, sessionKey string)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	requestID, err := a.store.NextLocalID("download")
+	requestID, err := appState.nextLocalID("download")
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	_ = a.store.UpsertPending(&state.PendingRequest{
+	_ = appState.savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        downloadFilePendingKind,
 		SessionKey:  sessionKey,
@@ -112,7 +114,8 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 			Card:  rawCard(a.renderDownloadPreparingCard(selectedPath, payload.RootPath)),
 		}, nil
 	}
-	sess := a.store.GetSession(pending.SessionKey)
+	appState := a.appState()
+	sess := appState.session(pending.SessionKey)
 	chatID := strings.TrimSpace(action.ChatID)
 	userID := strings.TrimSpace(action.UserID)
 	messageID := firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
@@ -124,7 +127,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 			workspaceCWD = firstNonEmpty(workspaceCWD, strings.TrimSpace(ws.Cwd))
 		}
 	}
-	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) {
+	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) {
 		req.Status = "processing"
 		req.PayloadJSON = mustJSON(payload)
 		if strings.TrimSpace(req.FeishuMsgID) == "" {
@@ -143,6 +146,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 }
 
 func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
+	appState := a.appState()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	slog.Debug("download share started",
@@ -158,7 +162,7 @@ func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathP
 			"path", selectedPath,
 			"error", err,
 		)
-		_ = a.store.UpdatePending(requestID, func(p *state.PendingRequest) {
+		_ = appState.updatePending(requestID, func(p *state.PendingRequest) {
 			p.Status = "pending"
 			p.PayloadJSON = mustJSON(payload)
 		})
@@ -184,7 +188,7 @@ func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathP
 		"path", selectedPath,
 		"url", result.URL,
 	)
-	_ = a.store.UpdatePending(requestID, func(p *state.PendingRequest) {
+	_ = appState.updatePending(requestID, func(p *state.PendingRequest) {
 		p.Status = "resolved"
 		p.PayloadJSON = mustJSON(payload)
 	})
