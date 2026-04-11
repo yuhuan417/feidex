@@ -91,6 +91,12 @@ func TestSendFinalMessagesWithFooterSplitsReplyCardsByTableLimit(t *testing.T) {
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count = %d, want 2", len(ff.replyCards))
 	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "最终答复 1/2" {
+		t.Fatalf("first split title = %q, want 最终答复 1/2", got)
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[1]); got != "最终答复 2/2" {
+		t.Fatalf("second split title = %q, want 最终答复 2/2", got)
+	}
 	if tables := countTablesInMarkdown(cardMarkdownContent(t, ff.replyCards[0])); tables != 5 {
 		t.Fatalf("first reply card tables = %d, want 5", tables)
 	}
@@ -182,4 +188,18 @@ func countTablesInMarkdown(text string) int {
 		count += block.TableCount
 	}
 	return count
+}
+
+func cardHeaderTitle(t *testing.T, card map[string]any) string {
+	t.Helper()
+	header, _ := card["header"].(map[string]any)
+	if header == nil {
+		return ""
+	}
+	title, _ := header["title"].(map[string]any)
+	if title == nil {
+		return ""
+	}
+	content, _ := title["content"].(string)
+	return content
 }

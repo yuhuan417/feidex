@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"feidex/internal/config"
@@ -56,7 +57,7 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 			TurnID:       sub.TurnID,
 		})
 		if result.CardID != "" {
-			a.scheduleMarkdownPreviewPatch(sub, result.CardID, "最终答复", "green", result.ShowHeader, result.Body, result.FooterLines)
+			a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 		}
 	}
 	_ = a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
@@ -141,7 +142,7 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 				TurnID:       sub.TurnID,
 			})
 			if strings.TrimSpace(kind) == "final_message" && result.CardID != "" {
-				a.scheduleMarkdownPreviewPatch(sub, result.CardID, title, color, result.ShowHeader, result.Body, result.FooterLines)
+				a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
 			}
 		}
 		if strings.TrimSpace(kind) == "final_message" {
@@ -189,8 +190,14 @@ func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, ti
 	}
 	chunks = a.fitReplyCardChunks(ctx, sub, title, color, chunks, enablePreview)
 	results := make([]sentReplyChunk, 0, len(chunks))
-	for _, chunk := range chunks {
-		card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
+	for i, chunk := range chunks {
+		effectiveTitle := title
+		showHeader := chunk.ShowHeader
+		if strings.TrimSpace(title) == "最终答复" && len(chunks) > 1 {
+			effectiveTitle = fmt.Sprintf("%s %d/%d", strings.TrimSpace(title), i+1, len(chunks))
+			showHeader = true
+		}
+		card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, effectiveTitle, color, showHeader, chunk.Body, nil, enablePreview)
 		appendReplyCardFooter(card, chunk.FooterLines)
 
 		cardID := ""
@@ -207,9 +214,10 @@ func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, ti
 		results = append(results, sentReplyChunk{
 			MessageID:   strings.TrimSpace(id),
 			CardID:      cardID,
+			Title:       effectiveTitle,
 			Body:        chunk.Body,
 			FooterLines: append([]string(nil), chunk.FooterLines...),
-			ShowHeader:  chunk.ShowHeader,
+			ShowHeader:  showHeader,
 		})
 	}
 	return results

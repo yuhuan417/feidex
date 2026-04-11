@@ -29,6 +29,7 @@ type replyCardChunk struct {
 type sentReplyChunk struct {
 	MessageID   string
 	CardID      string
+	Title       string
 	Body        string
 	FooterLines []string
 	ShowHeader  bool
