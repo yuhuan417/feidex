@@ -105,7 +105,8 @@ func (a *App) Stop(ctx context.Context) error {
 
 func (a *App) recoverRuntimeState() {
 	a.resetLiveThreadState()
-	sessions := a.store.AllSessions()
+	appState := a.appState()
+	sessions := appState.sessions()
 	cleared := 0
 	for _, sess := range sessions {
 		if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -119,7 +120,7 @@ func (a *App) recoverRuntimeState() {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 				clearSessionThreadContext(sess)
 			}
-			_ = a.store.UpsertSession(sess)
+			_ = appState.saveSession(sess)
 			continue
 		}
 		slog.Warn("clearing stale runtime session state on startup",
@@ -138,7 +139,7 @@ func (a *App) recoverRuntimeState() {
 		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 			clearSessionThreadContext(sess)
 		}
-		_ = a.store.UpsertSession(sess)
+		_ = appState.saveSession(sess)
 		cleared++
 	}
 	if cleared > 0 {
@@ -162,8 +163,9 @@ func (a *App) recoverSessionThreadsOnStartup() {
 	if a == nil || a.store == nil {
 		return
 	}
+	appState := a.appState()
 	effectiveModel := configuredGlobalModel(a.cfg)
-	for _, sess := range a.store.AllSessions() {
+	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
 		}
@@ -191,7 +193,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			)
 			clearSessionThreadContext(sess)
 			sess.Status = "idle"
-			_ = a.store.UpsertSession(sess)
+			_ = appState.saveSession(sess)
 			a.clearSessionLiveThread(sessionKey)
 			continue
 		}
@@ -222,7 +224,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 				firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Preview), sess.ActiveThreadPreview),
 			)
 			sess.Status = "idle"
-			if upsertErr := a.store.UpsertSession(sess); upsertErr != nil {
+			if upsertErr := appState.saveSession(sess); upsertErr != nil {
 				slog.Error("startup thread resume persistence failed",
 					"session_key", sessionKey,
 					"thread_id", sess.ActiveThreadID,
@@ -269,13 +271,13 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			)
 			clearSessionThreadContext(sess)
 			sess.Status = "idle"
-			_ = a.store.UpsertSession(sess)
+			_ = appState.saveSession(sess)
 			a.clearSessionLiveThread(sessionKey)
 			continue
 		}
 		setSessionThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
 		sess.Status = "idle"
-		if upsertErr := a.store.UpsertSession(sess); upsertErr != nil {
+		if upsertErr := appState.saveSession(sess); upsertErr != nil {
 			slog.Error("startup fresh thread persistence failed",
 				"session_key", sessionKey,
 				"thread_id", threadResp.Thread.ID,
@@ -473,7 +475,7 @@ func (a *App) sendStartupReadyNotifications() {
 	if a == nil || a.feishu == nil || a.store == nil {
 		return
 	}
-	chatIDs := startupReadyChatIDs(a.store.AllSessions())
+	chatIDs := startupReadyChatIDs(a.appState().sessions())
 	if len(chatIDs) == 0 {
 		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return
