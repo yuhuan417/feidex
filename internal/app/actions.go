@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,183 +21,9 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	if action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
-	name, _ := action.ActionValue["action"].(string)
-	if strings.TrimSpace(name) == "" {
-		if alt := strings.TrimSpace(action.Name); alt != "" {
-			if strings.HasPrefix(alt, "turn.item.toggle:") {
-				name = "turn.item.toggle"
-			} else {
-				name = alt
-			}
-		}
-	}
-	switch name {
-	case "menu.root":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuRoot(action, sessionKey)
-	case "menu.tools":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuTools(action, sessionKey)
-	case "menu.group.model":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuGroupModel(action, sessionKey)
-	case "menu.group.system":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuGroupSystem(action, sessionKey)
-	case "menu.thread":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuThread(action, sessionKey)
-	case "menu.new":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuNew(action, sessionKey)
-	case "menu.download":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuDownload(action, sessionKey)
-	case "menu.quiet":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuQuiet(action, sessionKey)
-	case "menu.compact":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuCompact(action, sessionKey)
-	case "menu.fork":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuFork(action, sessionKey)
-	case "menu.usage":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuUsage(action, sessionKey)
-	case "menu.model":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuModel(action, sessionKey)
-	case "menu.fast":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuFast(action, sessionKey)
-	case "menu.status":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuStatus(action, sessionKey)
-	case "menu.debug":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuDebug(action, sessionKey)
-	case "menu.debug.logs":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuDebugLogs(action, sessionKey)
-	case "menu.help":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuHelp(action, sessionKey)
-	case "menu.history":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuHistory(action, sessionKey)
-	case "menu.upgrade":
-		return a.completeMenuUpgrade(action)
-	case "quiet.set":
-		enabled, _ := action.ActionValue["enabled"].(bool)
-		return a.completeQuietSet(action, enabled)
-	case "service_tier.set":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		threadID, _ := action.ActionValue["thread_id"].(string)
-		serviceTier, _ := action.ActionValue["service_tier"].(string)
-		return a.completeServiceTierSet(action, sessionKey, threadID, serviceTier)
-	case "model.config.set_model":
-		modelID, _ := action.ActionValue["model_id"].(string)
-		return a.completeGlobalModelSet(action, modelID)
-	case "model.config.select_model":
-		modelID := strings.TrimSpace(action.Option)
-		if modelID == modelConfigDefaultOptionValue {
-			modelID = ""
-		}
-		return a.completeGlobalModelSet(action, modelID)
-	case "model.config.set_effort":
-		reasoningEffort, _ := action.ActionValue["reasoning_effort"].(string)
-		return a.completeGlobalReasoningEffortSet(action, reasoningEffort)
-	case "model.config.select_effort":
-		reasoningEffort := strings.TrimSpace(action.Option)
-		if reasoningEffort == modelConfigDefaultOptionValue {
-			reasoningEffort = ""
-		}
-		return a.completeGlobalReasoningEffortSet(action, reasoningEffort)
-	case "menu.interrupt":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		turnID, _ := action.ActionValue["turn_id"].(string)
-		return a.completeMenuInterrupt(action, sessionKey, turnID)
-	case "menu.workspace":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuWorkspace(action, sessionKey)
-	case "workspace.use.select":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeWorkspaceUse(action, sessionKey, strings.TrimSpace(action.Option))
-	case "workspace.new":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeWorkspaceNew(action, sessionKey)
-	case "workspace.new.pickdir":
-		return a.completeWorkspaceNewPickDir(action)
-	case "workspace.new.submit":
-		return a.completeWorkspaceNewSubmit(action)
-	case "workspace.sandbox.menu":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeWorkspaceSandboxMenu(action, sessionKey)
-	case "workspace.policy.menu":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeWorkspacePolicyMenu(action, sessionKey)
-	case "workspace.sandbox.set":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		workspaceID, _ := action.ActionValue["workspace_id"].(string)
-		sandboxMode, _ := action.ActionValue["sandbox_mode"].(string)
-		return a.completeWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
-	case "workspace.policy.set":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		workspaceID, _ := action.ActionValue["workspace_id"].(string)
-		approvalPolicy, _ := action.ActionValue["approval_policy"].(string)
-		return a.completeWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
-	case "thread.sandbox.menu":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeThreadSandboxMenu(action, sessionKey)
-	case "thread.policy.menu":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeThreadPolicyMenu(action, sessionKey)
-	case "thread.sandbox.set":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		threadID, _ := action.ActionValue["thread_id"].(string)
-		sandboxMode, _ := action.ActionValue["sandbox_mode"].(string)
-		return a.completeThreadSandboxSet(action, sessionKey, threadID, sandboxMode)
-	case "thread.policy.set":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		threadID, _ := action.ActionValue["thread_id"].(string)
-		approvalPolicy, _ := action.ActionValue["approval_policy"].(string)
-		return a.completeThreadPolicySet(action, sessionKey, threadID, approvalPolicy)
-	case "thread.resume.select":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeThreadResume(action, sessionKey, strings.TrimSpace(action.Option))
-	case "history.page":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		page, _ := action.ActionValue["page"].(float64)
-		return a.completeHistoryPage(action, sessionKey, int(page))
-	case "history.detail":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		index, _ := action.ActionValue["index"].(float64)
-		return a.completeHistoryDetail(action, sessionKey, int(index))
-	case "history.detail.select":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		index, err := strconv.Atoi(strings.TrimSpace(action.Option))
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 turn 选项"}}, nil
-		}
-		return a.completeHistoryDetail(action, sessionKey, index)
-	case "turn.item.toggle":
-		return a.completeTurnItemToggle(action)
-	case "user_input.answer":
-		return a.completeUserInputAnswer(action)
-	case "path_picker.dropdown", "path_picker.up", "path_picker.open", "path_picker.select", "path_picker.confirm", "path_picker.cancel":
-		return a.completePathPickerAction(action, name)
-	case "upgrade.confirm", "upgrade.cancel":
-		return a.completeUpgradeAction(action, name)
-	case "approval.command.accept", "approval.command.accept_session", "approval.command.decline", "approval.command.cancel",
-		"approval.file.accept", "approval.file.accept_session", "approval.file.decline", "approval.file.cancel",
-		"approval.permissions.accept_turn", "approval.permissions.accept_session":
-		return a.completeApprovalAction(action, name)
-	case "pending_form.cancel":
-		return a.completePendingFormCancel(action)
-	case "elicitation_url.accept", "elicitation_url.decline", "elicitation_url.cancel":
-		return a.completeElicitationURLAction(action, name)
-	default:
+	name := resolvedCardActionName(action)
+	handler := cardActionHandlers[name]
+	if handler == nil {
 		slog.Warn("unknown feishu card action",
 			"name", name,
 			"raw_name", action.Name,
@@ -212,6 +37,7 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 			Toast: &callback.Toast{Type: "warning", Content: "未知操作"},
 		}, nil
 	}
+	return handler(a, action)
 }
 
 func (a *App) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -254,28 +80,11 @@ func (a *App) completeMenuThread(action *feishu.CardAction, sessionKey string) (
 }
 
 func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
-	switch strings.TrimSpace(actionName) {
-	case "menu.root":
-		return a.renderCommandMenuCard(sessionKey), true
-	case "menu.tools":
-		return a.renderToolsMenuCard(sessionKey), true
-	case "menu.group.model":
-		return a.renderModelMenuCard(sessionKey), true
-	case "menu.group.system":
-		return a.renderSystemMenuCard(sessionKey), true
-	case "menu.thread":
-		card, err := a.renderThreadsCard(sessionKey, false)
-		if err == nil {
-			return card, true
-		}
-		return nil, false
-	case "menu.workspace":
-		return a.renderWorkspaceMenuCard(sessionKey), true
-	case "menu.debug.logs":
-		return a.renderDebugLogsCard(sessionKey), true
-	default:
+	renderer := menuNodeRenderers[strings.TrimSpace(actionName)]
+	if renderer == nil {
 		return nil, false
 	}
+	return renderer(a, sessionKey)
 }
 
 func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

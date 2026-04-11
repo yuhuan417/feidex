@@ -28,49 +28,11 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	switch fields[0] {
-	case "/menu":
-		return a.sendCommandMenu(msg)
-	case "/help":
-		return a.commandHelp(msg, fields[1:])
-	case "/history":
-		return a.commandHistory(msg, fields[1:])
-	case "/usage":
-		return a.commandUsage(msg, fields[1:])
-	case "/model":
-		return a.commandModel(msg)
-	case "/quiet":
-		return a.commandQuiet(msg, fields[1:])
-	case "/debug":
-		return a.commandDebug(msg, fields[1:])
-	case "/fast":
-		return a.commandFast(msg, fields[1:])
-	case "/download":
-		return a.commandDownload(msg, fields[1:])
-	case "/compact":
-		return a.commandCompact(msg, fields[1:])
-	case "/fork":
-		return a.commandFork(msg, fields[1:])
-	case "/new":
-		return a.commandNew(msg)
-	case "/thread":
-		return a.commandThread(msg, fields[1:])
-	case "/threads":
-		if len(fields) > 1 {
-			return fmt.Errorf("usage: /threads")
-		}
-		return a.commandThread(msg, []string{"list"})
-	case "/interrupt", "/stop":
-		return a.commandInterrupt(msg)
-	case "/status":
-		return a.commandStatus(msg)
-	case "/upgrade":
-		return a.commandUpgrade(msg, fields[1:])
-	case "/workspace":
-		return a.commandWorkspace(msg, fields[1:])
-	default:
+	spec := findLocalCommandSpec(fields[0])
+	if spec == nil {
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
+	return spec.Handle(a, msg, fields[1:])
 }
 
 func isLocalCommand(raw string) bool {
@@ -79,16 +41,11 @@ func isLocalCommand(raw string) bool {
 	if len(fields) == 0 {
 		return false
 	}
-	switch fields[0] {
-	case "/model":
-		return len(fields) == 1
-	case "/quiet", "/debug":
-		return true
-	case "/menu", "/help", "/history", "/usage", "/download", "/compact", "/fork", "/new", "/thread", "/threads", "/interrupt", "/stop", "/status", "/workspace", "/upgrade", "/fast":
-		return true
-	default:
+	spec := findLocalCommandSpec(fields[0])
+	if spec == nil {
 		return false
 	}
+	return spec.IsLocal(fields)
 }
 
 func (a *App) commandHelp(msg *feishu.InboundMessage, args []string) error {
