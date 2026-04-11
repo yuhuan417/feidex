@@ -10,8 +10,6 @@ type menuNode struct {
 var menuNodes = map[string]menuNode{
 	"menu.root":              {Label: "主菜单"},
 	"menu.tools":             {Label: "常用工具", Parent: "menu.root"},
-	"menu.group.session":     {Label: "常用工具", Parent: "menu.root"},
-	"menu.group.context":     {Label: "主菜单", Parent: "menu.root"},
 	"menu.group.model":       {Label: "模型配置", Parent: "menu.root"},
 	"menu.group.system":      {Label: "系统运维", Parent: "menu.root"},
 	"menu.thread":            {Label: "线程管理", Parent: "menu.root"},
@@ -25,9 +23,7 @@ var menuNodes = map[string]menuNode{
 	"workspace.policy.menu":  {Label: "默认策略", Parent: "menu.workspace"},
 	"thread.sandbox.menu":    {Label: "线程沙箱", Parent: "menu.thread"},
 	"thread.policy.menu":     {Label: "审批策略", Parent: "menu.thread"},
-	"menu.threads":           {Label: "线程管理", Parent: "menu.root"},
 	"menu.model":             {Label: "模型配置", Parent: "menu.group.model"},
-	"menu.reasoning":         {Label: "模型配置", Parent: "menu.group.model"},
 	"menu.fast":              {Label: "响应速度", Parent: "menu.group.model"},
 	"menu.status":            {Label: "状态面板", Parent: "menu.group.system"},
 	"menu.debug.logs":        {Label: "查看日志", Parent: "menu.group.system"},

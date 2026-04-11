@@ -99,10 +99,6 @@ func TestTurnStreamLifecycleStoresSnapshots(t *testing.T) {
 		t.Fatalf("reply cards = %d, want plan + snapshot cards", len(ff.replyCards))
 	}
 
-	buttons := turnActionButtons(sub, "item-1")
-	if len(buttons) != 2 || buttons[0].Text != "追加" {
-		t.Fatalf("turnActionButtons() = %+v", buttons)
-	}
 	if title, color := turnSnapshotCardMeta(turnItemSnapshot{ItemType: "agent_message", IsFinalAnswer: true}); title != "最终答复" || color != "green" {
 		t.Fatalf("turnSnapshotCardMeta(final) = %q, %q", title, color)
 	}

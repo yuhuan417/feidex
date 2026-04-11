@@ -88,7 +88,7 @@ func TestActionHelperBranches(t *testing.T) {
 		return nil
 	}
 
-	for _, actionName := range []string{"menu.root", "menu.group.session", "menu.group.context", "menu.group.model", "menu.group.system"} {
+	for _, actionName := range []string{"menu.root", "menu.tools", "menu.thread", "menu.group.model", "menu.group.system"} {
 		if _, ok := a.renderMenuNodeCard(actionName, "sess-1"); !ok {
 			t.Fatalf("renderMenuNodeCard(%q) should succeed", actionName)
 		}
@@ -97,9 +97,6 @@ func TestActionHelperBranches(t *testing.T) {
 		t.Fatal("renderMenuNodeCard(missing) should fail")
 	}
 
-	if resp, err := a.completeMenuReasoning(&feishu.CardAction{}, "sess-1"); err != nil || resp.Toast == nil || resp.Toast.Type != "info" {
-		t.Fatalf("completeMenuReasoning() = %#v, %v", resp, err)
-	}
 	if resp, err := a.completeHistoryPage(&feishu.CardAction{}, "sess-1", 0); err != nil || resp.Card == nil {
 		t.Fatalf("completeHistoryPage() = %#v, %v", resp, err)
 	}
@@ -107,7 +104,7 @@ func TestActionHelperBranches(t *testing.T) {
 	if resp, err := a.completeServiceTierSet(&feishu.CardAction{}, "sess-1", "thread-1", serviceTierFast); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeServiceTierSet() = %#v, %v", resp, err)
 	}
-	if resp, err := a.completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.group.context"}}, "sess-1"); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+	if resp, err := a.completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.tools"}}, "sess-1"); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuCompact() = %#v, %v", resp, err)
 	}
 	if resp, err := a.completeMenuUpgrade(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"session_key": "sess-1"}}); err != nil || resp.Toast == nil || resp.Toast.Type != "info" {

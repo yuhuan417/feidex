@@ -69,26 +69,20 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
-		ID:          "append-1",
-		Kind:        "turn_append",
+		ID:          "input-1",
+		Kind:        "tool_request_user_input_form",
 		SessionKey:  sessionKey,
 		ThreadID:    "thread-1",
 		TurnID:      "turn-1",
 		OwnerUserID: "user",
 		Status:      "pending",
+		PayloadJSON: mustJSON(toolUserInputPayload{Questions: []toolUserInputQuestion{{ID: "mode"}}}),
 	}); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
-	calledSteer := false
-	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
-		if method == "turn/steer" {
-			calledSteer = true
-		}
-		return nil
-	}
 	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "pending", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "append"})
-	if !calledSteer {
-		t.Fatal("pending text response should steer turn")
+	if len(fc.replies) == 0 {
+		t.Fatal("pending text response should reply to the pending input request")
 	}
 
 	ff.replyCards = nil

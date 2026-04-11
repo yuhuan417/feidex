@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
@@ -1008,24 +1007,6 @@ func joinMarkdownSections(parts ...string) string {
 		sections = append(sections, part)
 	}
 	return strings.Join(sections, "\n\n")
-}
-
-func turnActionButtons(sub *state.Submission, itemID string) []feishu.Button {
-	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
-		return nil
-	}
-	appendValue := map[string]any{
-		"action":      "turn.append",
-		"session_key": sub.SessionKey,
-		"turn_id":     sub.TurnID,
-	}
-	if strings.TrimSpace(itemID) != "" {
-		appendValue["item_id"] = itemID
-	}
-	return []feishu.Button{
-		{Text: "追加", Type: "primary", Value: appendValue},
-		{Text: "停止", Type: "danger", Value: map[string]any{"action": "menu.interrupt", "session_key": sub.SessionKey, "turn_id": sub.TurnID}},
-	}
 }
 
 func turnSnapshotCardMeta(snapshot turnItemSnapshot) (string, string) {

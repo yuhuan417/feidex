@@ -56,7 +56,10 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	case "/thread":
 		return a.commandThread(msg, fields[1:])
 	case "/threads":
-		return a.commandThread(msg, legacyThreadAliasArgs(fields[1:]))
+		if len(fields) > 1 {
+			return fmt.Errorf("usage: /threads")
+		}
+		return a.commandThread(msg, []string{"list"})
 	case "/interrupt", "/stop":
 		return a.commandInterrupt(msg)
 	case "/status":
@@ -67,26 +70,6 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.commandWorkspace(msg, fields[1:])
 	default:
 		return fmt.Errorf("unknown command: %s", fields[0])
-	}
-}
-
-func legacyThreadAliasArgs(args []string) []string {
-	if len(args) == 0 {
-		return []string{"list"}
-	}
-	switch strings.TrimSpace(args[0]) {
-	case "all":
-		return []string{"list", "all"}
-	case "new":
-		return []string{"new"}
-	case "fork":
-		return []string{"fork"}
-	case "sandbox":
-		return []string{"sandbox"}
-	case "policy":
-		return []string{"policy"}
-	default:
-		return args
 	}
 }
 

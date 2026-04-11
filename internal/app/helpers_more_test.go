@@ -18,8 +18,8 @@ func TestPendingTextRequestPrefersLatestMatchingRequest(t *testing.T) {
 	a := &App{store: store}
 
 	for _, req := range []*state.PendingRequest{
-		{ID: "old", Kind: "turn_append", SessionKey: "sess", OwnerUserID: "u-1", Status: "pending", CreatedAt: 1},
-		{ID: "wrong-user", Kind: "turn_append", SessionKey: "sess", OwnerUserID: "u-2", Status: "pending", CreatedAt: 3},
+		{ID: "old", Kind: "workspace_new", SessionKey: "sess", OwnerUserID: "u-1", Status: "pending", CreatedAt: 1},
+		{ID: "wrong-user", Kind: "workspace_new", SessionKey: "sess", OwnerUserID: "u-2", Status: "pending", CreatedAt: 3},
 		{ID: "wrong-kind", Kind: "permissions", SessionKey: "sess", OwnerUserID: "u-1", Status: "pending", CreatedAt: 4},
 		{ID: "latest", Kind: "tool_request_user_input_form", SessionKey: "sess", OwnerUserID: "u-1", Status: "pending", CreatedAt: 5},
 	} {

@@ -39,12 +39,6 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.tools":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuTools(action, sessionKey)
-	case "menu.group.session":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuGroupSession(action, sessionKey)
-	case "menu.group.context":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuGroupContext(action, sessionKey)
 	case "menu.group.model":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuGroupModel(action, sessionKey)
@@ -73,9 +67,6 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuUsage(action, sessionKey)
 	case "menu.model":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuModel(action, sessionKey)
-	case "menu.reasoning":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuModel(action, sessionKey)
 	case "menu.fast":
@@ -124,9 +115,6 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 			reasoningEffort = ""
 		}
 		return a.completeGlobalReasoningEffortSet(action, reasoningEffort)
-	case "menu.threads":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		return a.completeMenuThreads(action, sessionKey)
 	case "menu.interrupt":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		turnID, _ := action.ActionValue["turn_id"].(string)
@@ -134,10 +122,6 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 	case "menu.workspace":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeMenuWorkspace(action, sessionKey)
-	case "workspace.use":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		workspaceID, _ := action.ActionValue["workspace_id"].(string)
-		return a.completeWorkspaceUse(action, sessionKey, workspaceID)
 	case "workspace.use.select":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeWorkspaceUse(action, sessionKey, strings.TrimSpace(action.Option))
@@ -180,10 +164,6 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		threadID, _ := action.ActionValue["thread_id"].(string)
 		approvalPolicy, _ := action.ActionValue["approval_policy"].(string)
 		return a.completeThreadPolicySet(action, sessionKey, threadID, approvalPolicy)
-	case "thread.resume":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		threadID, _ := action.ActionValue["thread_id"].(string)
-		return a.completeThreadResume(action, sessionKey, threadID)
 	case "thread.resume.select":
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		return a.completeThreadResume(action, sessionKey, strings.TrimSpace(action.Option))
@@ -202,11 +182,6 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 turn 选项"}}, nil
 		}
 		return a.completeHistoryDetail(action, sessionKey, index)
-	case "turn.append":
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		turnID, _ := action.ActionValue["turn_id"].(string)
-		itemID, _ := action.ActionValue["item_id"].(string)
-		return a.completeTurnAppend(action, sessionKey, turnID, itemID)
 	case "turn.item.toggle":
 		return a.completeTurnItemToggle(action)
 	case "user_input.answer":
@@ -246,21 +221,10 @@ func (a *App) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*c
 	}, nil
 }
 
-func (a *App) completeMenuGroupSession(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuTools(action, sessionKey)
-}
-
 func (a *App) completeMenuTools(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开常用工具"},
 		Card:  rawCard(a.renderToolsMenuCard(sessionKey)),
-	}, nil
-}
-
-func (a *App) completeMenuGroupContext(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "菜单已更新，请从主菜单重新选择"},
-		Card:  rawCard(a.renderCommandMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -295,15 +259,11 @@ func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any,
 		return a.renderCommandMenuCard(sessionKey), true
 	case "menu.tools":
 		return a.renderToolsMenuCard(sessionKey), true
-	case "menu.group.session":
-		return a.renderToolsMenuCard(sessionKey), true
-	case "menu.group.context":
-		return a.renderCommandMenuCard(sessionKey), true
 	case "menu.group.model":
 		return a.renderModelMenuCard(sessionKey), true
 	case "menu.group.system":
 		return a.renderSystemMenuCard(sessionKey), true
-	case "menu.thread", "menu.threads":
+	case "menu.thread":
 		card, err := a.renderThreadsCard(sessionKey, false)
 		if err == nil {
 			return card, true
@@ -455,10 +415,6 @@ func (a *App) completeQuietSet(action *feishu.CardAction, enabled bool) (*callba
 	}, nil
 }
 
-func (a *App) completeMenuThreads(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuThread(action, sessionKey)
-}
-
 func (a *App) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -470,10 +426,6 @@ func (a *App) completeMenuModel(action *feishu.CardAction, sessionKey string) (*
 		Toast: &callback.Toast{Type: "info", Content: "已打开模型配置"},
 		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, "menu.model")),
 	}, nil
-}
-
-func (a *App) completeMenuReasoning(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuModel(action, sessionKey)
 }
 
 func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -630,45 +582,6 @@ func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 workspace"},
 		Card:  rawCard(a.renderWorkspaceMenuCard(sessionKey)),
-	}, nil
-}
-
-func (a *App) completeTurnAppend(action *feishu.CardAction, sessionKey, targetTurnID, itemID string) (*callback.CardActionTriggerResponse, error) {
-	sess := a.store.GetSession(sessionKey)
-	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前没有可追加的任务"}}, nil
-	}
-	if strings.TrimSpace(targetTurnID) != "" && sess.ActiveTurnID != targetTurnID {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "这个任务已经结束或已切换到其他任务"}}, nil
-	}
-	a.resolvePendingTurnAppendRequests(sessionKey, action.UserID)
-	requestID, err := a.store.NextLocalID("turn-append")
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	body := "请直接发送要追加到当前任务的文本。\n\n下一条非命令消息会作为补充输入提交到当前 turn。"
-	card := a.feishu.SimpleStatusCard("补充当前任务", "orange", body, []feishu.Button{
-		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID}},
-	})
-	msgID, err := a.feishu.SendCard(context.Background(), action.ChatID, card)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	_ = a.store.UpsertPending(&state.PendingRequest{
-		ID:          requestID,
-		Kind:        "turn_append",
-		SessionKey:  sessionKey,
-		ThreadID:    sess.ActiveThreadID,
-		TurnID:      sess.ActiveTurnID,
-		ItemID:      itemID,
-		OwnerUserID: action.UserID,
-		FeishuMsgID: msgID,
-		Status:      "pending",
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
-	})
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "请发送要追加的内容"},
 	}, nil
 }
 

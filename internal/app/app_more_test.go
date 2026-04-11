@@ -1006,11 +1006,11 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuRoot(action, action.ActionValue["session_key"].(string))
 		},
-		"menu.group.session": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuGroupSession(action, action.ActionValue["session_key"].(string))
+		"menu.tools": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
-		"menu.group.context": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuGroupContext(action, action.ActionValue["session_key"].(string))
+		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:group:chat-1:root:download-root"
@@ -1024,7 +1024,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 				UserID:      "user-1",
 				ChatID:      "chat-1",
 				MessageID:   "msg-download",
-				ActionValue: map[string]any{"session_key": downloadSessionKey, "parent_action": "menu.group.context"},
+				ActionValue: map[string]any{"session_key": downloadSessionKey, "parent_action": "menu.tools"},
 			}, downloadSessionKey)
 		},
 		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
@@ -1039,7 +1039,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}
 			return a.completeMenuFork(&feishu.CardAction{ActionValue: map[string]any{
 				"session_key":   forkSessionKey,
-				"parent_action": "menu.group.context",
+				"parent_action": "menu.thread",
 			}}, forkSessionKey)
 		},
 		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
@@ -1054,7 +1054,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}
 			return a.completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{
 				"session_key":   compactSessionKey,
-				"parent_action": "menu.group.context",
+				"parent_action": "menu.tools",
 			}}, compactSessionKey)
 		},
 		"menu.group.model": func() (*callback.CardActionTriggerResponse, error) {
@@ -1068,9 +1068,6 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 		"menu.fast": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuFast(action, action.ActionValue["session_key"].(string))
-		},
-		"menu.threads": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuThreads(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.model": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuModel(action, action.ActionValue["session_key"].(string))
@@ -1127,7 +1124,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.group.session", "menu.group.context", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.threads", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -1741,23 +1738,6 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
-		ID:          "append-1",
-		Kind:        "turn_append",
-		SessionKey:  sessionKey,
-		ThreadID:    "thread-1",
-		TurnID:      "turn-1",
-		OwnerUserID: "user-1",
-		FeishuMsgID: "card-append",
-		Status:      "pending",
-	}); err != nil {
-		t.Fatalf("UpsertPending(append) error = %v", err)
-	}
-	resp, err := a.completePendingFormCancel(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "append-1"}})
-	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
-		t.Fatalf("completePendingFormCancel(append) = %#v, %v", resp, err)
-	}
-
-	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "tool-form-1",
 		Kind:        "tool_request_user_input_form",
 		SessionKey:  sessionKey,
@@ -1806,7 +1786,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(url) error = %v", err)
 	}
-	resp, err = a.completeElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
+	resp, err := a.completeElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeElicitationURLAction() = %#v, %v", resp, err)
 	}
@@ -2545,7 +2525,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	resp, err = a.completeMenuFork(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
-		ActionValue: map[string]any{"parent_action": "menu.group.context"},
+		ActionValue: map[string]any{"parent_action": "menu.thread"},
 	}, sessionKey)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuFork() = %#v, %v", resp, err)
@@ -2555,14 +2535,6 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}
 
 	seedActiveSubmission(t, a, sessionKey, "thread-9", "turn-1")
-	resp, err = a.completeTurnAppend(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "turn-1", "item-1")
-	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
-		t.Fatalf("completeTurnAppend() = %#v, %v", resp, err)
-	}
-	if len(ff.sendCards) == 0 {
-		t.Fatal("expected completeTurnAppend to send append card")
-	}
-
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "toggle-1",
 		Kind:        "turn_item_card",
@@ -2676,9 +2648,9 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/download",
 		"/fork",
 		"/threads",
-		"/threads fork",
-		"/threads sandbox",
-		"/threads policy",
+		"/thread fork",
+		"/thread sandbox",
+		"/thread policy",
 		"/workspace",
 		"/workspace list",
 		"/workspace sandbox",

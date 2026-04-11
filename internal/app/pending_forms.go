@@ -64,7 +64,7 @@ func (a *App) pendingTextRequest(sessionKey, userID string) *state.PendingReques
 			continue
 		}
 		switch req.Kind {
-		case "turn_append", "tool_request_user_input_form", "mcp_elicitation_form", "workspace_new":
+		case "tool_request_user_input_form", "mcp_elicitation_form", "workspace_new":
 			return req
 		}
 	}
@@ -98,8 +98,6 @@ func (a *App) handlePendingTextResponse(msg *feishu.InboundMessage, pending *sta
 		return nil
 	}
 	switch pending.Kind {
-	case "turn_append":
-		return a.completeTurnAppendText(msg, pending)
 	case "tool_request_user_input_form":
 		return a.completeToolUserInputText(msg, pending)
 	case "mcp_elicitation_form":
@@ -156,10 +154,6 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
 	switch pending.Kind {
-	case "turn_append":
-		if pending.FeishuMsgID != "" {
-			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已取消", "grey", "本次追加已取消。", nil))
-		}
 	case "tool_request_user_input_form":
 		_ = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
 	case "mcp_elicitation_form":
@@ -177,58 +171,6 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 		Toast: &callback.Toast{Type: "success", Content: "已取消"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已取消", "grey", "该请求已取消。", nil)),
 	}, nil
-}
-
-func (a *App) completeTurnAppendText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	if pending == nil || msg == nil {
-		return nil
-	}
-	sess := a.store.GetSession(pending.SessionKey)
-	if sess == nil || sess.ActiveThreadID == "" || sess.ActiveTurnID == "" {
-		_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
-		if pending.FeishuMsgID != "" {
-			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已失效", "grey", "对应任务已结束，无法继续追加。", nil))
-		}
-		return fmt.Errorf("当前没有可补充的任务")
-	}
-	if strings.TrimSpace(pending.TurnID) != "" && sess.ActiveTurnID != pending.TurnID {
-		_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
-		if pending.FeishuMsgID != "" {
-			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已失效", "grey", "这个任务已经结束或已切换到其他任务。", nil))
-		}
-		return fmt.Errorf("这个任务已经结束或已切换到其他任务")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := a.codex.Call(ctx, "turn/steer", map[string]any{
-		"threadId":       sess.ActiveThreadID,
-		"expectedTurnId": sess.ActiveTurnID,
-		"input": []map[string]any{
-			{"type": "text", "text": strings.TrimSpace(msg.Text), "text_elements": []any{}},
-		},
-	}, nil); err != nil {
-		return err
-	}
-	_ = a.store.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	if pending.FeishuMsgID != "" {
-		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已追加", "green", truncate(strings.TrimSpace(msg.Text), 300), nil))
-	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已追加到当前任务。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
-}
-
-func (a *App) resolvePendingTurnAppendRequests(sessionKey, userID string) {
-	for _, req := range a.store.AllPendingRequests() {
-		if req == nil || req.Kind != "turn_append" || req.Status != "pending" || req.SessionKey != sessionKey {
-			continue
-		}
-		if userID != "" && req.OwnerUserID != "" && req.OwnerUserID != userID {
-			continue
-		}
-		_ = a.store.UpdatePending(req.ID, func(p *state.PendingRequest) { p.Status = "resolved" })
-		if req.FeishuMsgID != "" {
-			_ = a.feishu.PatchCard(context.Background(), req.FeishuMsgID, a.feishu.SimpleStatusCard("已失效", "grey", "已被新的追加请求替代。", nil))
-		}
-	}
 }
 
 func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
