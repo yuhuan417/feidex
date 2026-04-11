@@ -42,7 +42,7 @@ func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submis
 	if !ok {
 		return "", nil
 	}
-	sub := a.store.GetSubmission(binding.SubmissionID)
+	sub := a.appState().submission(binding.SubmissionID)
 	if sub == nil {
 		return "", nil
 	}
@@ -96,7 +96,7 @@ func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) 
 	if !ok {
 		return "", nil
 	}
-	sub := a.store.GetSubmission(binding.SubmissionID)
+	sub := a.appState().submission(binding.SubmissionID)
 	if sub == nil {
 		return "", nil
 	}

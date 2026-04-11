@@ -264,7 +264,7 @@ func (a *App) commandModel(msg *feishu.InboundMessage) error {
 func (a *App) renderStatusCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	if strings.TrimSpace(sessionKey) != "" {
-		sess = a.store.GetSession(sessionKey)
+		sess = a.appState().session(sessionKey)
 	}
 	buttons := []feishu.Button{
 		{Text: commandLabel("刷新", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
