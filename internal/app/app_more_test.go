@@ -52,6 +52,12 @@ type fakeReleaseClient struct {
 	versionCalls []string
 }
 
+type blockingReleaseClient struct {
+	started chan struct{}
+	release chan struct{}
+	info    *release.ReleaseInfo
+}
+
 func (f *fakeReleaseClient) LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error) {
 	f.latestCalls++
 	if f.latestErr != nil {
@@ -63,6 +69,20 @@ func (f *fakeReleaseClient) LatestLinuxBinary(context.Context, string) (*release
 	if f.info == nil {
 		return nil, errors.New("missing release info")
 	}
+	cp := *f.info
+	return &cp, nil
+}
+
+func (f *blockingReleaseClient) LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error) {
+	close(f.started)
+	<-f.release
+	cp := *f.info
+	return &cp, nil
+}
+
+func (f *blockingReleaseClient) LinuxBinaryByVersion(context.Context, string, string) (*release.ReleaseInfo, error) {
+	close(f.started)
+	<-f.release
 	cp := *f.info
 	return &cp, nil
 }
@@ -1650,6 +1670,68 @@ func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 	}
 	if pending := a.store.PendingByID("upgrade-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("upgrade pending = %+v, want resolved", pending)
+	}
+}
+
+func TestCompleteMenuUpgradeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	blocking := &blockingReleaseClient{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		info: &release.ReleaseInfo{
+			Version:        "v0.2.0",
+			HTMLURL:        "https://example.test/releases/v0.2.0",
+			BinaryName:     "feidex-linux-amd64",
+			BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "abc123",
+		},
+	}
+	newReleaseClient = func() releaseClient { return blocking }
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "0.1.0" }
+	currentGOARCH = func() string { return "amd64" }
+
+	resp, err := a.completeMenuUpgrade(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-upgrade",
+		ActionValue: map[string]any{"session_key": "sess-1"},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" || resp.Card == nil {
+		t.Fatalf("completeMenuUpgrade(async) = %#v, %v", resp, err)
+	}
+	card, _ := resp.Card.Data.(map[string]any)
+	if body := cardMarkdownContent(t, card); !strings.Contains(body, "正在检查可升级版本") {
+		t.Fatalf("upgrade preparing body = %q", body)
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched cards before release completes = %+v, want none", ff.patchedCards)
+	}
+
+	<-blocking.started
+	close(blocking.release)
+
+	deadline := time.Now().Add(1 * time.Second)
+	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected upgrade card to be patched asynchronously")
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]); !strings.Contains(body, "最新版本: `v0.2.0`") {
+		t.Fatalf("patched upgrade body = %q", body)
 	}
 }
 

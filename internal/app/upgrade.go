@@ -27,6 +27,21 @@ type upgradePendingPayload struct {
 	ReleaseURL     string `json:"release_url"`
 }
 
+func (a *App) renderUpgradePreparingCard(sessionKey string) map[string]any {
+	body := "正在检查可升级版本，请稍候。\n\n这张卡片会自动刷新。"
+	return a.feishu.SimpleStatusCard("升级服务", "blue", menuCardBody("menu.upgrade", body), nil)
+}
+
+func (a *App) renderUpgradeFailedCard(sessionKey, errText string) map[string]any {
+	body := "检查升级信息失败。"
+	if text := strings.TrimSpace(errText); text != "" {
+		body += "\n\n错误: " + text
+	}
+	return a.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", body), []feishu.Button{
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+	})
+}
+
 func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any, error) {
 	return a.renderUpgradeCardForVersion(sessionKey, ownerUserID, "")
 }

@@ -540,6 +540,34 @@ func (a *App) completeServiceTierSet(action *feishu.CardAction, sessionKey, thre
 
 func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
+	if action != nil && strings.TrimSpace(action.MessageID) != "" {
+		messageID := strings.TrimSpace(action.MessageID)
+		userID := action.UserID
+		go func() {
+			card, err := a.renderUpgradeCard(sessionKey, userID)
+			if err != nil {
+				slog.Warn("upgrade panel render failed",
+					"session_key", sessionKey,
+					"user_id", userID,
+					"message_id", messageID,
+					"error", err,
+				)
+				card = a.renderUpgradeFailedCard(sessionKey, err.Error())
+			}
+			if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
+				slog.Warn("upgrade panel patch failed",
+					"session_key", sessionKey,
+					"user_id", userID,
+					"message_id", messageID,
+					"error", err,
+				)
+			}
+		}()
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "正在检查可升级版本"},
+			Card:  rawCard(a.renderUpgradePreparingCard(sessionKey)),
+		}, nil
+	}
 	card, err := a.renderUpgradeCard(sessionKey, action.UserID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
