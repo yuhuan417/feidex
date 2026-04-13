@@ -174,8 +174,8 @@ feidex feishu bind  --app app_id:app_secret
 
 对应实现见：
 
-- [feishu.go](/home/yuhuan/feidex/cmd/feidex/feishu.go)
-- [feishu_setup.go](/home/yuhuan/feidex/internal/config/feishu_setup.go)
+- [feishu.go](cmd/feidex/feishu.go)
+- [feishu_setup.go](internal/config/feishu_setup.go)
 
 ## 配置说明
 
@@ -443,8 +443,8 @@ feidex daemon uninstall
 
 对应实现见：
 
-- [daemon.go](/home/yuhuan/feidex/cmd/feidex/daemon.go)
-- [manager.go](/home/yuhuan/feidex/internal/daemon/manager.go)
+- [daemon.go](cmd/feidex/daemon.go)
+- [manager.go](internal/daemon/manager.go)
 
 ## 自动升级
 
@@ -564,8 +564,8 @@ feidex version
 
 ## 相关文件
 
-- 配置样例：[config.example.toml](/home/yuhuan/feidex/config.example.toml)
-- 发布脚本：[create_github_release.sh](/home/yuhuan/feidex/scripts/create_github_release.sh)
-- 主入口：[main.go](/home/yuhuan/feidex/cmd/feidex/main.go)
-- 飞书绑定：[feishu.go](/home/yuhuan/feidex/cmd/feidex/feishu.go)
-- daemon 管理：[daemon.go](/home/yuhuan/feidex/cmd/feidex/daemon.go)
+- 配置样例：[config.example.toml](config.example.toml)
+- 发布脚本：[create_github_release.sh](scripts/create_github_release.sh)
+- 主入口：[main.go](cmd/feidex/main.go)
+- 飞书绑定：[feishu.go](cmd/feidex/feishu.go)
+- daemon 管理：[daemon.go](cmd/feidex/daemon.go)

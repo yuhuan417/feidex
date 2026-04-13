@@ -1284,7 +1284,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		Status:      "pending",
 		PayloadJSON: mustJSON(map[string]any{"request": map[string]any{
 			"command": "git status --short",
-			"cwd":     "/home/yuhuan/feidex",
+			"cwd":     "/workspace/feidex",
 			"reason":  "inspect working tree",
 		}}),
 	}); err != nil {
@@ -1298,7 +1298,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatal("expected command approval response card from raw request payload")
 	}
 	cardData, _ = resp.Card.Data.(map[string]any)
-	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "git status --short") || !strings.Contains(got, "/home/yuhuan/feidex") {
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "git status --short") || !strings.Contains(got, "/workspace/feidex") {
 		t.Fatalf("command approval resolved-from-request card = %q", got)
 	}
 
