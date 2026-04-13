@@ -970,6 +970,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 
 func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	a.cfg.Feishu.DebugAllowFrom = []string{"user-1"}
 	prevLevel := runtimeLogLevelText()
 	t.Cleanup(func() {
 		_ = logcontrol.SetName(prevLevel)

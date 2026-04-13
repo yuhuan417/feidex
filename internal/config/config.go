@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -30,6 +31,7 @@ type FeishuConfig struct {
 	AppID               string   `toml:"app_id"`
 	AppSecret           string   `toml:"app_secret"`
 	AllowFrom           []string `toml:"allow_from"`
+	DebugAllowFrom      []string `toml:"debug_allow_from"`
 	GroupAtOnly         bool     `toml:"group_at_only"`
 	RespondToAtEveryone bool     `toml:"respond_to_at_everyone"`
 	CardEnabled         bool     `toml:"card_enabled"`
@@ -194,15 +196,18 @@ func Save(path string, cfg *Config) error {
 	if cfg == nil {
 		return errors.New("nil config")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	f, err := os.Create(path)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {
 		return err
 	}
-	defer f.Close()
-	return toml.NewEncoder(f).Encode(cfg)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func FindWorkspace(cfg *Config, id string) *Workspace {

@@ -1,6 +1,7 @@
 package feishu
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 
 	"feidex/internal/config"
@@ -321,6 +323,18 @@ func TestConvertMessageAttachmentsRecallAndReaction(t *testing.T) {
 	}); got != nil {
 		t.Fatalf("expected non-user reaction to be ignored, got %+v", got)
 	}
+
+	restricted := New(config.FeishuConfig{AllowFrom: []string{"allowed-user"}})
+	if got := restricted.convertMessageReaction(&larkim.P2MessageReactionCreatedV1{
+		Event: &larkim.P2MessageReactionCreatedV1Data{
+			MessageId:    strPtr("msg-2"),
+			OperatorType: strPtr("user"),
+			ReactionType: &larkim.Emoji{EmojiType: strPtr("SMILE")},
+			UserId:       &larkim.UserId{OpenId: strPtr("blocked-user")},
+		},
+	}); got != nil {
+		t.Fatalf("expected reaction from blocked user to be ignored, got %+v", got)
+	}
 }
 
 func TestAdapterHelperFunctions(t *testing.T) {
@@ -484,6 +498,51 @@ func TestDownloadNamingAndAttachmentHelpers(t *testing.T) {
 	}
 	if got := reactionKey(" msg ", " smile "); got != "msg:smile" {
 		t.Fatalf("reactionKey() = %q, want trimmed key", got)
+	}
+}
+
+func TestHandleCardActionEventChecksAllowList(t *testing.T) {
+	a := New(config.FeishuConfig{AllowFrom: []string{"allowed-user"}})
+	called := false
+	a.onCardAction = func(action *CardAction) (*callback.CardActionTriggerResponse, error) {
+		called = true
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: action.UserID},
+		}, nil
+	}
+
+	resp, err := a.handleCardActionEvent(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "blocked-user"},
+			Context:  &callback.Context{OpenChatID: "chat-1", OpenMessageID: "msg-1"},
+			Action:   &callback.CallBackAction{Name: "menu.debug.logs", Value: map[string]any{"action": "menu.debug.logs"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("handleCardActionEvent(blocked) error = %v", err)
+	}
+	if called {
+		t.Fatal("blocked card action should not reach handler")
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Content != unauthorizedBotMessage {
+		t.Fatalf("handleCardActionEvent(blocked) = %#v, want unauthorized toast", resp)
+	}
+
+	resp, err = a.handleCardActionEvent(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "allowed-user"},
+			Context:  &callback.Context{OpenChatID: "chat-1", OpenMessageID: "msg-2"},
+			Action:   &callback.CallBackAction{Name: "menu.debug.logs", Value: map[string]any{"action": "menu.debug.logs"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("handleCardActionEvent(allowed) error = %v", err)
+	}
+	if !called {
+		t.Fatal("allowed card action should reach handler")
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Content != "allowed-user" {
+		t.Fatalf("handleCardActionEvent(allowed) = %#v, want handler response", resp)
 	}
 }
 

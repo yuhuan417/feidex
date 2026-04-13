@@ -59,6 +59,22 @@ func TestOpenCreatesDefaultSnapshotAndFile(t *testing.T) {
 	if snapshot.Version != currentSnapshotVersion {
 		t.Fatalf("persisted version = %d, want %d", snapshot.Version, currentSnapshotVersion)
 	}
+
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(file) error = %v", err)
+	}
+	if got := fileInfo.Mode().Perm(); got&0o077 != 0 {
+		t.Fatalf("state file perms = %#o, want no group/world access", got)
+	}
+
+	dirInfo, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("Stat(dir) error = %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got&0o077 != 0 {
+		t.Fatalf("state dir perms = %#o, want no group/world access", got)
+	}
 }
 
 func TestOpenHandlesEmptyLegacyAndInvalidFiles(t *testing.T) {
@@ -257,17 +273,17 @@ func TestSessionContextIsRecoveredFromSessionKey(t *testing.T) {
 
 	groupKey := "feishu:group:chat-1:root:root-1"
 	if err := store.UpsertSession(&Session{
-		Key:                      groupKey,
-		WorkspaceID:              "ws",
-		ActiveThreadID:           "thread-1",
-		ActiveThreadWorkspaceID:  "ws",
-		ActiveThreadPreview:      "preview",
-		ChatID:                   "chat-1",
-		ChatType:                 "group",
-		RootMessageID:            "root-1",
-		ActiveTurnID:             "turn-1",
-		ActiveSubmissionID:       "sub-1",
-		Status:                   "turn_in_progress",
+		Key:                     groupKey,
+		WorkspaceID:             "ws",
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: "ws",
+		ActiveThreadPreview:     "preview",
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		RootMessageID:           "root-1",
+		ActiveTurnID:            "turn-1",
+		ActiveSubmissionID:      "sub-1",
+		Status:                  "turn_in_progress",
 	}); err != nil {
 		t.Fatalf("UpsertSession(group) error = %v", err)
 	}
@@ -286,9 +302,9 @@ func TestSessionContextIsRecoveredFromSessionKey(t *testing.T) {
 
 	p2pKey := "feishu:p2p:chat-2:user-9"
 	if err := reopened.UpsertSession(&Session{
-		Key:       p2pKey,
-		ChatID:    "chat-2",
-		ChatType:  "p2p",
+		Key:      p2pKey,
+		ChatID:   "chat-2",
+		ChatType: "p2p",
 	}); err != nil {
 		t.Fatalf("UpsertSession(p2p) error = %v", err)
 	}

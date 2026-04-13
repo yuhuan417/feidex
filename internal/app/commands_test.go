@@ -325,6 +325,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	a := &App{feishu: ff, cfg: config.Default()}
+	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
 	prev := runtimeLogLevelText()
 	t.Cleanup(func() {
 		_ = logcontrol.SetName(prev)
@@ -356,6 +357,7 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	a := &App{feishu: ff, cfg: config.Default()}
+	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
 	prevLevel := runtimeLogLevelText()
 	oldLogger := slog.Default()
 	t.Cleanup(func() {
@@ -389,5 +391,69 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	}
 	if strings.Contains(body, "```") {
 		t.Fatalf("debug logs card should use plain_text blocks, got %q", body)
+	}
+}
+
+func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
+	ff := &fakeFeishuClient{}
+	a := &App{feishu: ff, cfg: config.Default(), cfgPath: "/etc/feidex/config.toml"}
+	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
+
+	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
+	if err := a.commandDebug(msg, []string{"logs"}); err != nil {
+		t.Fatalf("commandDebug(logs blocked) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("replyCards = %#v, want one denied card", ff.replyCards)
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	for _, want := range []string{"blocked-user", "debug_allow_from", "/etc/feidex/config.toml"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("denied debug logs card body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
+	a := &App{cfg: config.Default(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
+	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
+
+	resp, err := a.completeMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
+	if err != nil {
+		t.Fatalf("completeMenuDebugLogs(blocked) error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Content != debugAccessUnauthorizedText || resp.Card == nil {
+		t.Fatalf("completeMenuDebugLogs(blocked) = %#v, want unauthorized toast", resp)
+	}
+}
+
+func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
+	ff := &fakeFeishuClient{}
+	a := &App{feishu: ff, cfg: config.Default(), cfgPath: "/etc/feidex/config.toml"}
+	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
+
+	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
+	if err := a.commandDebug(msg, nil); err != nil {
+		t.Fatalf("commandDebug(blocked) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("replyCards = %#v, want one denied card", ff.replyCards)
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "blocked-user") || !strings.Contains(body, "debug_allow_from") {
+		t.Fatalf("denied debug card body = %q", body)
+	}
+}
+
+func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
+	a := &App{cfg: config.Default(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
+	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
+
+	resp, err := a.completeMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
+	if err != nil {
+		t.Fatalf("completeMenuDebug(blocked) error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Content != debugAccessUnauthorizedText || resp.Card == nil {
+		t.Fatalf("completeMenuDebug(blocked) = %#v, want denied toast and card", resp)
 	}
 }

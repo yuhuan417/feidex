@@ -117,6 +117,8 @@ var wsClientRunner = func(client *larkws.Client, ctx context.Context) {
 	_ = client.Start(ctx)
 }
 
+const unauthorizedBotMessage = "你没有权限使用这个机器人"
+
 func New(cfg config.FeishuConfig) *Adapter {
 	allowSet := map[string]struct{}{}
 	allowAll := len(cfg.AllowFrom) == 0
@@ -183,40 +185,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 				return nil
 			}).
 			OnP2CardActionTrigger(func(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
-				if a.onCardAction == nil {
-					return &callback.CardActionTriggerResponse{}, nil
-				}
-				cardAction := &CardAction{
-					ActionValue: map[string]any{},
-					FormValue:   map[string]any{},
-				}
-				if event.Event != nil {
-					if event.Event.Action != nil {
-						cardAction.ActionValue = event.Event.Action.Value
-						cardAction.FormValue = event.Event.Action.FormValue
-						cardAction.Name = event.Event.Action.Name
-						cardAction.Option = event.Event.Action.Option
-						cardAction.InputValue = event.Event.Action.InputValue
-						cardAction.Options = append([]string(nil), event.Event.Action.Options...)
-						cardAction.Checked = event.Event.Action.Checked
-					}
-					if event.Event.Operator != nil {
-						cardAction.UserID = event.Event.Operator.OpenID
-					}
-					if event.Event.Context != nil {
-						cardAction.ChatID = event.Event.Context.OpenChatID
-						cardAction.MessageID = event.Event.Context.OpenMessageID
-					}
-				}
-				slog.Debug("feishu card action",
-					"name", cardAction.Name,
-					"message_id", cardAction.MessageID,
-					"chat_id", cardAction.ChatID,
-					"user_id", cardAction.UserID,
-					"action_value", fmt.Sprintf("%v", cardAction.ActionValue),
-					"form_value", fmt.Sprintf("%v", cardAction.FormValue),
-				)
-				return a.onCardAction(cardAction)
+				return a.handleCardActionEvent(ctx, event)
 			}).
 			OnP2BotMenuV6(func(ctx context.Context, event *larkapplication.P2BotMenuV6) error {
 				if a.onBotMenu == nil || event == nil || event.Event == nil || event.Event.EventKey == nil {
@@ -320,6 +289,60 @@ func (a *Adapter) Stop() {
 	if a.cancel != nil {
 		a.cancel()
 	}
+}
+
+func (a *Adapter) handleCardActionEvent(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
+	if a.onCardAction == nil {
+		return &callback.CardActionTriggerResponse{}, nil
+	}
+	cardAction := cardActionFromCallbackEvent(event)
+	if !a.allowed(cardAction.UserID) {
+		slog.Warn("feishu unauthorized card action",
+			"message_id", cardAction.MessageID,
+			"chat_id", cardAction.ChatID,
+			"user_id", cardAction.UserID,
+			"name", cardAction.Name,
+		)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: unauthorizedBotMessage},
+		}, nil
+	}
+	slog.Debug("feishu card action",
+		"name", cardAction.Name,
+		"message_id", cardAction.MessageID,
+		"chat_id", cardAction.ChatID,
+		"user_id", cardAction.UserID,
+		"action_value", fmt.Sprintf("%v", cardAction.ActionValue),
+		"form_value", fmt.Sprintf("%v", cardAction.FormValue),
+	)
+	return a.onCardAction(cardAction)
+}
+
+func cardActionFromCallbackEvent(event *callback.CardActionTriggerEvent) *CardAction {
+	cardAction := &CardAction{
+		ActionValue: map[string]any{},
+		FormValue:   map[string]any{},
+	}
+	if event == nil || event.Event == nil {
+		return cardAction
+	}
+	if event.Event.Action != nil {
+		cardAction.ActionValue = event.Event.Action.Value
+		cardAction.FormValue = event.Event.Action.FormValue
+		cardAction.Name = event.Event.Action.Name
+		cardAction.Option = event.Event.Action.Option
+		cardAction.InputValue = event.Event.Action.InputValue
+		cardAction.Options = append([]string(nil), event.Event.Action.Options...)
+		cardAction.Checked = event.Event.Action.Checked
+	}
+	if event.Event.Operator != nil {
+		cardAction.UserID = event.Event.Operator.OpenID
+	}
+	if event.Event.Context != nil {
+		cardAction.ChatID = event.Event.Context.OpenChatID
+		cardAction.MessageID = event.Event.Context.OpenMessageID
+	}
+	return cardAction
 }
 
 func (a *Adapter) ConfigureMarkdownPreview(statePath, processCWD string) {
@@ -980,6 +1003,9 @@ func (a *Adapter) convertMessageReaction(event *larkim.P2MessageReactionCreatedV
 	}
 	userID := parseReactionUserID(event.Event.UserId)
 	if messageID == "" || emojiType == "" {
+		return nil
+	}
+	if !a.allowed(userID) {
 		return nil
 	}
 	reaction := &MessageReaction{

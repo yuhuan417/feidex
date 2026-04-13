@@ -118,6 +118,7 @@ level = "info"
 app_id = "cli_xxx"
 app_secret = "sec_xxx"
 allow_from = []
+debug_allow_from = []
 group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
@@ -196,6 +197,8 @@ Feidex 会把这些状态写进去：
   - 飞书应用凭据
 - `allow_from`
   - 允许的用户列表；空表示不限制
+- `debug_allow_from`
+  - 允许使用 debug 功能的用户列表；控制 `/debug` 和 `/debug logs`，空表示默认不允许任何用户使用
 - `group_at_only`
   - 群聊是否仅在 `@bot` 时响应
 - `respond_to_at_everyone`
@@ -341,12 +344,14 @@ Feidex 会把这些状态写进去：
   - 配置当前 thread 的 service tier
 - `/debug`
   - 切换服务端 slog 日志级别（debug/info）
+  - 仅 `debug_allow_from` 白名单内用户可用
 - `/debug on`
   - 切换到 debug 级别
 - `/debug off`
   - 切换到 info 级别
 - `/debug logs`
   - 查看最近一段服务端 slog 日志
+  - 仅 `debug_allow_from` 白名单内用户可用
 - `/thread`
   - 打开 thread 菜单
 - `/thread list`

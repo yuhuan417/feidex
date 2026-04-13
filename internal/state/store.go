@@ -23,8 +23,8 @@ type Store struct {
 }
 
 type Snapshot struct {
-	Version  int                        `json:"version"`
-	Sessions map[string]*storedSession  `json:"sessions"`
+	Version  int                       `json:"version"`
+	Sessions map[string]*storedSession `json:"sessions"`
 }
 
 type runtimeState struct {
@@ -147,7 +147,7 @@ type MessageLink struct {
 }
 
 func Open(path string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
 	s := &Store{
@@ -608,7 +608,7 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.path)

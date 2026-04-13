@@ -65,6 +65,7 @@ func TestMarkdownPreviewHelpers(t *testing.T) {
 
 func TestDriveMarkdownPreviewerResolveAndPermissionHelpers(t *testing.T) {
 	root := t.TempDir()
+	outsideRoot := t.TempDir()
 	valid := filepath.Join(root, "docs", "guide.md")
 	if err := os.MkdirAll(filepath.Dir(valid), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
@@ -76,6 +77,14 @@ func TestDriveMarkdownPreviewerResolveAndPermissionHelpers(t *testing.T) {
 	if err := os.WriteFile(empty, nil, 0o644); err != nil {
 		t.Fatalf("WriteFile(empty) error = %v", err)
 	}
+	outside := filepath.Join(outsideRoot, "secret.md")
+	if err := os.WriteFile(outside, []byte("# secret\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(outside) error = %v", err)
+	}
+	escaped := filepath.Join(root, "docs", "escaped.md")
+	if err := os.Symlink(outside, escaped); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
 
 	api := &fakePreviewAPI{}
 	p := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{ProcessCWD: root, MaxFileBytes: 4})
@@ -84,6 +93,9 @@ func TestDriveMarkdownPreviewerResolveAndPermissionHelpers(t *testing.T) {
 	}
 	if _, ok, err := p.resolveMarkdownPath("../outside.txt", MarkdownPreviewRequest{WorkspaceCWD: root}); err != nil || ok {
 		t.Fatalf("resolveMarkdownPath(outside) = %v, %v, want false", ok, err)
+	}
+	if _, ok, err := p.resolveMarkdownPath("./docs/escaped.md", MarkdownPreviewRequest{WorkspaceCWD: root}); err != nil || ok {
+		t.Fatalf("resolveMarkdownPath(symlink escape) = %v, %v, want false", ok, err)
 	}
 
 	p = NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{ProcessCWD: root, MaxFileBytes: 1024})

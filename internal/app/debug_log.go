@@ -17,6 +17,8 @@ const (
 	debugLogPreviewAction = "menu.debug.logs"
 )
 
+const debugAccessUnauthorizedText = "当前用户无权使用 debug 功能"
+
 func runtimeLogLevelText() string {
 	return logcontrol.CurrentName()
 }
@@ -49,6 +51,11 @@ func (a *App) commandDebug(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 && strings.TrimSpace(args[0]) == "logs" {
 		return a.commandDebugLogs(msg, args[1:])
 	}
+	if !a.debugAccessAllowed(msg.UserID) {
+		card := a.renderDebugAccessDeniedCard(a.makeSessionKey(msg), msg.UserID)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return err
+	}
 	enabled, err := desiredDebugEnabled(args)
 	if err != nil {
 		return err
@@ -58,6 +65,12 @@ func (a *App) commandDebug(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if action == nil || !a.debugAccessAllowed(action.UserID) {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: debugAccessUnauthorizedText},
+			Card:  rawCard(a.renderDebugAccessDeniedCard(sessionKey, actionUserID(action))),
+		}, nil
+	}
 	level := a.setRuntimeDebug(!logcontrol.DebugEnabled())
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已切换日志级别为 " + level},
@@ -69,16 +82,85 @@ func (a *App) commandDebugLogs(msg *feishu.InboundMessage, args []string) error 
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /debug logs")
 	}
+	if msg == nil {
+		return nil
+	}
+	if !a.debugAccessAllowed(msg.UserID) {
+		card := a.renderDebugAccessDeniedCard(a.makeSessionKey(msg), msg.UserID)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return err
+	}
 	card := a.renderDebugLogsCard(a.makeSessionKey(msg))
 	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
 }
 
 func (a *App) completeMenuDebugLogs(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if action == nil || !a.debugAccessAllowed(action.UserID) {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: debugAccessUnauthorizedText},
+			Card:  rawCard(a.renderDebugAccessDeniedCard(sessionKey, actionUserID(action))),
+		}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开最近日志"},
 		Card:  rawCard(a.renderDebugLogsCard(sessionKey)),
 	}, nil
+}
+
+func (a *App) debugAccessAllowed(userID string) bool {
+	if a == nil || a.cfg == nil {
+		return false
+	}
+	return debugUserAllowed(userID, a.cfg.Feishu.DebugAllowFrom)
+}
+
+func debugUserAllowed(userID string, allowFrom []string) bool {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false
+	}
+	for _, item := range allowFrom {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if item == "*" || item == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) renderDebugAccessDeniedCard(sessionKey, userID string) map[string]any {
+	bodyLines := []string{
+		"当前用户无权使用 debug 功能。",
+		"",
+		"当前用户 OpenID: `" + firstNonEmpty(strings.TrimSpace(userID), "-") + "`",
+	}
+	if cfgPath := strings.TrimSpace(a.cfgPath); cfgPath != "" {
+		bodyLines = append(bodyLines, "配置文件: `"+cfgPath+"`")
+	}
+	bodyLines = append(bodyLines,
+		"",
+		"请把该用户加入 `[feishu].debug_allow_from`，然后重启服务。",
+		"",
+		"示例配置：",
+		"```toml",
+		"[feishu]",
+		"debug_allow_from = [\""+firstNonEmpty(strings.TrimSpace(userID), "ou_xxx")+"\"]",
+		"```",
+	)
+	return a.feishu.SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+	})
+}
+
+func actionUserID(action *feishu.CardAction) string {
+	if action == nil {
+		return ""
+	}
+	return strings.TrimSpace(action.UserID)
 }
 
 func (a *App) renderDebugLogsCard(sessionKey string) map[string]any {

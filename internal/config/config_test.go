@@ -2,6 +2,8 @@ package config
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -59,5 +61,29 @@ func TestDefaultConfigUsesInfoLogLevel(t *testing.T) {
 	cfg := Default()
 	if cfg.Log.Level != "info" {
 		t.Fatalf("default log level = %q, want info", cfg.Log.Level)
+	}
+}
+
+func TestSaveUsesPrivatePermissions(t *testing.T) {
+	cfg := Default()
+	path := filepath.Join(t.TempDir(), "nested", "config.toml")
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat(file) error = %v", err)
+	}
+	if got := fileInfo.Mode().Perm(); got&0o077 != 0 {
+		t.Fatalf("config file perms = %#o, want no group/world access", got)
+	}
+
+	dirInfo, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("Stat(dir) error = %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got&0o077 != 0 {
+		t.Fatalf("config dir perms = %#o, want no group/world access", got)
 	}
 }

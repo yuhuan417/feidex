@@ -116,11 +116,6 @@ func NewDriveMarkdownPreviewer(api previewDriveAPI, cfg MarkdownPreviewConfig) *
 	if cfg.MaxFileBytes < 0 {
 		cfg.MaxFileBytes = defaultPreviewMaxFileBytes
 	}
-	if cfg.ProcessCWD == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			cfg.ProcessCWD = cwd
-		}
-	}
 	return &DriveMarkdownPreviewer{
 		store: NewDriveArtifactStore(api, ArtifactStoreConfig{
 			RootFolderName: cfg.RootFolderName,
@@ -303,7 +298,7 @@ func (p *DriveMarkdownPreviewer) resolveMarkdownPath(rawTarget string, req Markd
 	roots := previewAllowedRoots(req.WorkspaceCWD, p.config.ProcessCWD)
 	candidates := previewPathCandidates(target, roots)
 	for _, candidate := range candidates {
-		resolved, err := filepath.Abs(candidate)
+		resolved, err := canonicalPreviewPath(candidate)
 		if err != nil {
 			continue
 		}
@@ -393,11 +388,10 @@ func previewAllowedRoots(values ...string) []string {
 		if value == "" {
 			continue
 		}
-		resolved, err := filepath.Abs(value)
+		resolved, err := canonicalPreviewPath(value)
 		if err != nil {
 			continue
 		}
-		resolved = filepath.Clean(resolved)
 		if _, exists := seen[resolved]; exists {
 			continue
 		}
@@ -406,6 +400,18 @@ func previewAllowedRoots(values ...string) []string {
 	}
 	sort.Strings(roots)
 	return roots
+}
+
+func canonicalPreviewPath(value string) (string, error) {
+	resolved, err := filepath.Abs(value)
+	if err != nil {
+		return "", err
+	}
+	resolved = filepath.Clean(resolved)
+	if real, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = filepath.Clean(real)
+	}
+	return resolved, nil
 }
 
 func previewPathCandidates(target string, roots []string) []string {
