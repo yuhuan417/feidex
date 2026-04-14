@@ -292,6 +292,39 @@ func TestConvertMessageAttachmentsRecallAndReaction(t *testing.T) {
 		t.Fatalf("convertMessage(audio) = %+v, want audio attachment", audioMsg)
 	}
 
+	postType := "post"
+	postContent := `{"title":"","content":[[{"tag":"text","text":"look at this "},{"tag":"img","image_key":"img-post"},{"tag":"text","text":"please"}]]}`
+	postMsg := a.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   strPtr("post-msg"),
+				ChatType:    &chatType,
+				MessageType: &postType,
+				Content:     &postContent,
+			},
+		},
+	})
+	if postMsg == nil || postMsg.Text != "look at this please" || len(postMsg.Attachments) != 1 || postMsg.Attachments[0].Kind != "image" || postMsg.Attachments[0].ResourceKey != "img-post" {
+		t.Fatalf("convertMessage(post) = %+v, want text + image attachment", postMsg)
+	}
+
+	localizedPostContent := `{"zh_cn":{"title":"Title","content":[[{"tag":"text","text":"caption"}],[{"tag":"img","image_key":"img-localized"}]]}}`
+	localizedPostMsg := a.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   strPtr("post-msg-localized"),
+				ChatType:    &chatType,
+				MessageType: &postType,
+				Content:     &localizedPostContent,
+			},
+		},
+	})
+	if localizedPostMsg == nil || localizedPostMsg.Text != "Title\ncaption" || len(localizedPostMsg.Attachments) != 1 || localizedPostMsg.Attachments[0].ResourceKey != "img-localized" {
+		t.Fatalf("convertMessage(localized post) = %+v, want title + text + image attachment", localizedPostMsg)
+	}
+
 	recall := a.convertMessageRecall(&larkim.P2MessageRecalledV1{
 		Event: &larkim.P2MessageRecalledV1Data{
 			MessageId: strPtr("msg-1"),

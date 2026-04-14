@@ -912,6 +912,12 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	switch messageType {
 	case "text":
 		text = stripBotMention(extractText(msg.Content), msg.Mentions, a.botOpenID)
+	case "post":
+		var ok bool
+		text, attachments, ok = extractPostMessage(msg.Content)
+		if !ok {
+			return nil
+		}
 	case "image":
 		attachment, ok := extractImageAttachment(msg.Content)
 		if !ok {
@@ -1054,6 +1060,87 @@ func extractText(raw *string) string {
 	return body.Text
 }
 
+type postMessageBody struct {
+	Title   string               `json:"title"`
+	Content [][]postMessageBlock `json:"content"`
+}
+
+type postMessageBlock struct {
+	Tag      string `json:"tag"`
+	Text     string `json:"text"`
+	Href     string `json:"href"`
+	UserName string `json:"user_name"`
+	ImageKey string `json:"image_key"`
+}
+
+func extractPostMessage(raw *string) (string, []Attachment, bool) {
+	if raw == nil {
+		return "", nil, false
+	}
+
+	var direct postMessageBody
+	if err := json.Unmarshal([]byte(*raw), &direct); err == nil && postMessageBodyNonEmpty(direct) {
+		return renderPostMessageBody(direct)
+	}
+
+	var localized map[string]postMessageBody
+	if err := json.Unmarshal([]byte(*raw), &localized); err != nil {
+		return "", nil, false
+	}
+	for _, body := range localized {
+		if !postMessageBodyNonEmpty(body) {
+			continue
+		}
+		return renderPostMessageBody(body)
+	}
+	return "", nil, false
+}
+
+func postMessageBodyNonEmpty(body postMessageBody) bool {
+	return strings.TrimSpace(body.Title) != "" || len(body.Content) > 0
+}
+
+func renderPostMessageBody(body postMessageBody) (string, []Attachment, bool) {
+	lines := make([]string, 0, len(body.Content)+2)
+	attachments := make([]Attachment, 0, 4)
+	if title := strings.TrimSpace(body.Title); title != "" {
+		lines = append(lines, title)
+	}
+	for _, row := range body.Content {
+		var line strings.Builder
+		for _, block := range row {
+			switch strings.TrimSpace(block.Tag) {
+			case "text":
+				line.WriteString(block.Text)
+			case "a":
+				line.WriteString(firstNonEmptyString(strings.TrimSpace(block.Text), strings.TrimSpace(block.Href)))
+			case "at":
+				name := strings.TrimSpace(block.UserName)
+				if name != "" && !strings.HasPrefix(name, "@") {
+					name = "@" + name
+				}
+				line.WriteString(firstNonEmptyString(name, strings.TrimSpace(block.Text)))
+			case "img":
+				if key := strings.TrimSpace(block.ImageKey); key != "" {
+					attachments = append(attachments, Attachment{Kind: "image", ResourceKey: key})
+				}
+			default:
+				if text := strings.TrimSpace(block.Text); text != "" {
+					line.WriteString(text)
+				}
+			}
+		}
+		if rendered := strings.TrimSpace(line.String()); rendered != "" {
+			lines = append(lines, rendered)
+		}
+	}
+	text := strings.TrimSpace(strings.Join(lines, "\n"))
+	if text == "" && len(attachments) == 0 {
+		return "", nil, false
+	}
+	return text, attachments, true
+}
+
 func parseUnixMillis(raw string) int64 {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1106,6 +1193,15 @@ func extractAudioAttachment(raw *string) (Attachment, bool) {
 		return Attachment{}, false
 	}
 	return Attachment{Kind: "audio", ResourceKey: strings.TrimSpace(body.FileKey)}, true
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func stripBotMention(text string, mentions []*larkim.MentionEvent, botOpenID string) string {
