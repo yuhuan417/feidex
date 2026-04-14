@@ -136,42 +136,6 @@ func (a *App) markTurnStartedAt(turnID string, startedAt time.Time) {
 	}
 }
 
-func (a *App) noteTurnFirstFinal(turnID, text string) bool {
-	if a == nil {
-		return false
-	}
-	turnID = strings.TrimSpace(turnID)
-	text = strings.TrimSpace(text)
-	if turnID == "" || text == "" {
-		return false
-	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	binding, ok := a.turnBindings[turnID]
-	if !ok {
-		return false
-	}
-	if strings.TrimSpace(binding.FirstFinal) != "" {
-		return false
-	}
-	binding.FirstFinal = text
-	a.turnBindings[turnID] = binding
-	return true
-}
-
-func (a *App) turnFinalText(turnID string) string {
-	if a == nil {
-		return ""
-	}
-	turnID = strings.TrimSpace(turnID)
-	if turnID == "" {
-		return ""
-	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	return strings.TrimSpace(a.turnBindings[turnID].FirstFinal)
-}
-
 func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 	if a == nil {
 		return
@@ -223,6 +187,18 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 		elapsedLine = formatTurnElapsedLine(completedAt.Sub(binding.StartedAt))
 	}
 	return usageLine, contextLine, elapsedLine
+}
+
+func (a *App) turnFinalFooterLines(turnID string, completedAt time.Time) []string {
+	_, contextLine, elapsedLine := a.turnFinalMetadata(turnID, completedAt)
+	lines := make([]string, 0, 2)
+	for _, line := range []string{contextLine, elapsedLine} {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 func (a *App) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {

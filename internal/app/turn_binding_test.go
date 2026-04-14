@@ -60,7 +60,7 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 	}
 }
 
-func TestDuplicateFinalAnswerIsDroppedBeforeTurnCompleted(t *testing.T) {
+func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
@@ -78,24 +78,21 @@ func TestDuplicateFinalAnswerIsDroppedBeforeTurnCompleted(t *testing.T) {
 		"phase": "final_answer",
 	})
 
-	if len(ff.replyCards) != 0 {
-		t.Fatalf("expected no final card before completion, got %d", len(ff.replyCards))
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("expected both final cards to be sent immediately, got %d", len(ff.replyCards))
 	}
 	a.finishTurn("thread-1", "turn-1", "completed")
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("expected exactly one final card after completion, got %d", len(ff.replyCards))
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("expected no replay on completion, got %d cards", len(ff.replyCards))
 	}
 }
 
-func TestBindTurnSubmissionRebindClearsFinalAndMetadataState(t *testing.T) {
+func TestBindTurnSubmissionRebindClearsMetadataState(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	startedAt := time.Now().Add(-2 * time.Second)
 
 	a.bindTurnSubmission("thread-old", "turn-1", "sess-old", "sub-old")
 	a.markTurnStartedAt("turn-1", startedAt)
-	if !a.noteTurnFirstFinal("turn-1", "stale final") {
-		t.Fatal("expected initial final text to be recorded")
-	}
 	a.recordTurnTokenUsage("thread-old", "turn-1", codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 42,
@@ -104,16 +101,7 @@ func TestBindTurnSubmissionRebindClearsFinalAndMetadataState(t *testing.T) {
 
 	a.bindTurnSubmission("thread-new", "turn-1", "sess-new", "sub-new")
 
-	if got := a.turnFinalText("turn-1"); got != "" {
-		t.Fatalf("turnFinalText() after rebind = %q, want empty", got)
-	}
 	if usageLine, contextLine, elapsedLine := a.turnFinalMetadata("turn-1", time.Now()); usageLine != "" || contextLine != "" || elapsedLine != "" {
 		t.Fatalf("turnFinalMetadata() after rebind = %q, %q, %q, want all empty", usageLine, contextLine, elapsedLine)
-	}
-	if !a.noteTurnFirstFinal("turn-1", "fresh final") {
-		t.Fatal("expected rebind to accept a fresh final text")
-	}
-	if got := a.turnFinalText("turn-1"); got != "fresh final" {
-		t.Fatalf("turnFinalText() after fresh final = %q, want fresh final", got)
 	}
 }

@@ -127,11 +127,6 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		buf.Command = command
 	}
 	snapshot = snapshotTurnItem(buf, item, false)
-	if snapshot.IsFinalAnswer && stream.SentFinal {
-		delete(stream.Items, key)
-		a.turnStreamsMu.Unlock()
-		return
-	}
 	delete(stream.Items, key)
 	if snapshot.IsFinalAnswer {
 		stream.SentFinal = true
@@ -141,11 +136,6 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	if planText != "" {
 		a.storePlanSnapshot(sub.ID, planText)
 		a.sendPlanCard(ctx, sub, planText, true)
-	}
-	if snapshot.IsFinalAnswer {
-		a.storeTurnItemSnapshot(sub.ID, snapshot)
-		_ = a.noteTurnFirstFinal(turnID, snapshot.StoreText)
-		return
 	}
 	a.deliverTurnItemSnapshot(ctx, sub, snapshot, true)
 }

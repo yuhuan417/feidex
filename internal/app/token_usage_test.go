@@ -36,10 +36,10 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	if got := formatTurnElapsedLine(1500 * time.Millisecond); got != "elapsed: 2s" {
 		t.Fatalf("formatTurnElapsedLine(1500ms) = %q", got)
 	}
-	if got := formatTurnElapsedLine((2*time.Hour)+(3*time.Minute)+(4*time.Second)); got != "elapsed: 2h3m4s" {
+	if got := formatTurnElapsedLine((2 * time.Hour) + (3 * time.Minute) + (4 * time.Second)); got != "elapsed: 2h3m4s" {
 		t.Fatalf("formatTurnElapsedLine(2h3m4s) = %q", got)
 	}
-	if got := formatTurnElapsedLine((26*time.Hour)+(3*time.Minute)); got != "elapsed: 1d2h3m" {
+	if got := formatTurnElapsedLine((26 * time.Hour) + (3 * time.Minute)); got != "elapsed: 1d2h3m" {
 		t.Fatalf("formatTurnElapsedLine(26h3m) = %q", got)
 	}
 }
@@ -103,7 +103,7 @@ func TestCommandUsageAndMenuAction(t *testing.T) {
 	}
 }
 
-func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
+func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
@@ -123,10 +123,9 @@ func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 		"text":  "final text",
 		"phase": "final_answer",
 	})
-	a.finishTurn("thread-1", "turn-1", "completed")
 
 	if len(ff.replyCards) == 0 {
-		t.Fatal("expected final card to be sent on completion")
+		t.Fatal("expected final card to be sent immediately")
 	}
 	card := ff.replyCards[len(ff.replyCards)-1]
 	bodyMap := card["body"].(map[string]any)
@@ -143,5 +142,11 @@ func TestCompletedTurnSendsFinalWithUsageFooter(t *testing.T) {
 	}
 	if strings.Contains(footerText, "token: input") {
 		t.Fatalf("expected token footer line to be omitted, got %q", footerText)
+	}
+
+	beforeComplete := len(ff.replyCards)
+	a.finishTurn("thread-1", "turn-1", "completed")
+	if len(ff.replyCards) != beforeComplete {
+		t.Fatalf("expected completion not to replay final answer, got %d -> %d cards", beforeComplete, len(ff.replyCards))
 	}
 }

@@ -46,7 +46,6 @@ type turnBinding struct {
 	SubmissionID string
 	ThreadID     string
 	StartedAt    time.Time
-	FirstFinal   string
 	LastUsage    codexrpc.TokenUsageBreakdown
 	HasLastUsage bool
 }

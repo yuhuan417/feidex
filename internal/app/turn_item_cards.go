@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"strings"
+	"time"
 
 	"feidex/internal/state"
 )
@@ -61,6 +62,10 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 		LinkKind:      snapshot.LinkKind,
 		IsFinalAnswer: snapshot.IsFinalAnswer,
 	}
+	footerLines := []string(nil)
+	if snapshot.IsFinalAnswer {
+		footerLines = a.turnFinalFooterLines(payload.TurnID, time.Now())
+	}
 	if isReplyTurnItem(payload.ItemType) {
 		body := replyTurnItemCardBody(payload)
 		if body == "" {
@@ -71,7 +76,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 			sub,
 			replyTurnItemCardTitle(payload),
 			payload.Color,
-			buildReplyCardChunks(body, payload.IsFinalAnswer, nil),
+			buildReplyCardChunks(body, payload.IsFinalAnswer, footerLines),
 			a.replyInThreadForSubmission(sub),
 			snapshot.IsFinalAnswer,
 		)
@@ -81,7 +86,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 				fallback = payload.DetailText
 			}
 			if snapshot.IsFinalAnswer {
-				a.sendFinalMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub))
+				a.sendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, a.replyInThreadForSubmission(sub))
 			} else {
 				a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
 			}
@@ -100,7 +105,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 			fallback = payload.DetailText
 		}
 		if snapshot.IsFinalAnswer {
-			a.sendFinalMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub))
+			a.sendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, a.replyInThreadForSubmission(sub))
 		} else {
 			a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
 		}
