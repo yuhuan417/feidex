@@ -85,18 +85,21 @@ type BotMenuClick struct {
 }
 
 type Adapter struct {
-	cfg        config.FeishuConfig
-	client     *lark.Client
-	wsClient   *larkws.Client
-	botOpenID  string
-	cancel     context.CancelFunc
-	allowSet   map[string]struct{}
-	allowAll   bool
-	startOnce  sync.Once
-	seenMu     sync.Mutex
-	seen       map[string]time.Time
-	reactionMu sync.Mutex
-	reactions  map[string]string
+	cfg         config.FeishuConfig
+	client      *lark.Client
+	wsClient    *larkws.Client
+	botOpenID   string
+	cancel      context.CancelFunc
+	allowSet    map[string]struct{}
+	allowAll    bool
+	startOnce   sync.Once
+	seenMu      sync.Mutex
+	seen        map[string]time.Time
+	paceMu      sync.Mutex
+	createPacer *requestPacer
+	patchPacer  *keyedRequestPacer
+	reactionMu  sync.Mutex
+	reactions   map[string]string
 
 	onMessage    func(*InboundMessage)
 	onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error)
@@ -527,7 +530,7 @@ func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 			Content(string(content)).
 			Build()).
 		Build()
-	resp, err := a.client.Im.Message.Create(ctx, req)
+	resp, err := a.createMessage(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "send", "msg_type", "text", "chat_id", chatID)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.create", err))
@@ -608,7 +611,7 @@ func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]a
 			Content(string(contentBytes)).
 			Build()).
 		Build()
-	resp, err := a.client.Im.Message.Create(ctx, req)
+	resp, err := a.createMessage(ctx, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "send", "msg_type", "interactive", "chat_id", chatID)
 		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.create", err))
@@ -638,7 +641,7 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 			Content(string(contentBytes)).
 			Build()).
 		Build()
-	resp, err := a.client.Im.Message.Patch(ctx, req)
+	resp, err := a.patchMessage(ctx, messageID, req)
 	if err != nil {
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "patch", "msg_type", "interactive", "message_id", messageID)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.patch", err))
