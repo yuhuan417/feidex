@@ -17,7 +17,7 @@ const (
 )
 
 func (a *App) shouldStageInboundImages(msg *feishu.InboundMessage) bool {
-	if msg == nil || strings.TrimSpace(msg.Text) != "" || len(msg.Attachments) == 0 {
+	if msg == nil || msg.ExpandedMergeForward || strings.TrimSpace(msg.Text) != "" || len(msg.Attachments) == 0 {
 		return false
 	}
 	for _, attachment := range msg.Attachments {

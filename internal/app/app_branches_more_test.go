@@ -229,3 +229,105 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 		t.Fatalf("session after timeout = %+v", sess)
 	}
 }
+
+func TestHandleFeishuMessageMergeForwardPrefetchesInBackgroundAndSubmitsImageOnly(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	downloadPath := filepath.Join(t.TempDir(), "merge-forward.png")
+	if err := os.WriteFile(downloadPath, []byte("png"), 0o644); err != nil {
+		t.Fatalf("WriteFile(downloadPath) error = %v", err)
+	}
+	ff.downloadPath = downloadPath
+	ff.downloadName = filepath.Base(downloadPath)
+
+	resolveStarted := make(chan struct{})
+	releaseResolve := make(chan struct{})
+	ff.resolveMergeForwardHook = func(_ context.Context, messageID string, ids []string) (string, []feishu.Attachment, error) {
+		close(resolveStarted)
+		<-releaseResolve
+		return "", []feishu.Attachment{{
+			Kind:            "image",
+			ResourceKey:     "img-forward",
+			SourceMessageID: "forwarded-source",
+		}}, nil
+	}
+
+	var seenInputs []map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-merge"
+			return nil
+		case "turn/start":
+			raw, _ := params.(map[string]any)
+			seenInputs, _ = raw["input"].([]map[string]any)
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-merge"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:              "merge-msg-1",
+		ChatID:                 "chat-merge",
+		ChatType:               "p2p",
+		UserID:                 "user-merge",
+		MergeForwardMessageIDs: []string{"forwarded-source"},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		a.handleFeishuMessage(msg)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("handleFeishuMessage() should not block on merge_forward prefetch")
+	}
+	select {
+	case <-resolveStarted:
+	case <-time.After(time.Second):
+		t.Fatal("expected background merge_forward prefetch to start")
+	}
+
+	close(releaseResolve)
+
+	sessionKey := a.makeSessionKey(msg)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sess := a.store.GetSession(sessionKey)
+		if sess != nil && sess.ActiveTurnID == "turn-merge" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveTurnID != "turn-merge" || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after merge_forward prefetch = %+v", sess)
+	}
+	if len(sess.StagedImages) != 0 {
+		t.Fatalf("merge_forward image-only message should not be staged: %+v", sess.StagedImages)
+	}
+	if len(ff.mergeForwardCalls) != 1 || ff.mergeForwardCalls[0].messageID != "merge-msg-1" || len(ff.mergeForwardCalls[0].ids) != 1 || ff.mergeForwardCalls[0].ids[0] != "forwarded-source" {
+		t.Fatalf("ResolveMergeForward() calls = %+v", ff.mergeForwardCalls)
+	}
+
+	if sess.ActiveSubmissionID == "" {
+		t.Fatalf("session missing active submission after merge_forward prefetch: %+v", sess)
+	}
+	sub := a.store.GetSubmission(sess.ActiveSubmissionID)
+	if sub == nil || len(sub.Attachments) != 1 || sub.Attachments[0].LocalPath != downloadPath {
+		t.Fatalf("submission after merge_forward prefetch = %+v", sub)
+	}
+	if len(seenInputs) != 1 || seenInputs[0]["type"] != "localImage" {
+		t.Fatalf("turn/start inputs = %+v, want localImage only", seenInputs)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("unexpected reply texts after successful merge_forward prefetch: %+v", ff.replyTexts)
+	}
+}

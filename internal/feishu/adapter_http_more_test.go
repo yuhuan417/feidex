@@ -10,10 +10,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"feidex/internal/config"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
+	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
 
 type adapterMockAPI struct {
@@ -92,6 +94,62 @@ func (m *adapterMockAPI) RoundTrip(r *http.Request) (*http.Response, error) {
 		})
 	case "/open-apis/im/v1/messages/msg-2":
 		return jsonResponse(http.StatusOK, map[string]any{"code": 0, "msg": "ok"})
+	case "/open-apis/im/v1/messages/msg-mf-text":
+		return jsonResponse(http.StatusOK, map[string]any{
+			"code": 0,
+			"msg":  "ok",
+			"data": map[string]any{
+				"items": []map[string]any{{
+					"message_id": "msg-mf-text",
+					"msg_type":   "text",
+					"body": map[string]any{
+						"content": `{"text":"forwarded hello"}`,
+					},
+				}},
+			},
+		})
+	case "/open-apis/im/v1/messages/msg-mf-post":
+		return jsonResponse(http.StatusOK, map[string]any{
+			"code": 0,
+			"msg":  "ok",
+			"data": map[string]any{
+				"items": []map[string]any{{
+					"message_id": "msg-mf-post",
+					"msg_type":   "post",
+					"body": map[string]any{
+						"content": `{"title":"Title","content":[[{"tag":"text","text":"caption"}],[{"tag":"img","image_key":"img-post-forward"}]]}`,
+					},
+				}},
+			},
+		})
+	case "/open-apis/im/v1/messages/msg-mf-image":
+		return jsonResponse(http.StatusOK, map[string]any{
+			"code": 0,
+			"msg":  "ok",
+			"data": map[string]any{
+				"items": []map[string]any{{
+					"message_id": "msg-mf-image",
+					"msg_type":   "image",
+					"body": map[string]any{
+						"content": `{"image_key":"img-forward"}`,
+					},
+				}},
+			},
+		})
+	case "/open-apis/im/v1/messages/msg-mf-nested":
+		return jsonResponse(http.StatusOK, map[string]any{
+			"code": 0,
+			"msg":  "ok",
+			"data": map[string]any{
+				"items": []map[string]any{{
+					"message_id": "msg-mf-nested",
+					"msg_type":   "merge_forward",
+					"body": map[string]any{
+						"content": `{"message_id_list":["msg-mf-post"]}`,
+					},
+				}},
+			},
+		})
 	case "/open-apis/im/v1/messages/msg-1/resources/file-key":
 		return fileResponse("report.txt", "application/octet-stream", "report")
 	default:
@@ -132,6 +190,8 @@ func newHTTPBackedAdapter(t *testing.T) (*Adapter, *adapterMockAPI) {
 	)
 	return &Adapter{
 		client:    client,
+		allowAll:  true,
+		seen:      map[string]time.Time{},
 		reactions: map[string]string{},
 	}, mock
 }
@@ -266,6 +326,58 @@ func TestAdapterReplyLocalFileSuccessPaths(t *testing.T) {
 	}
 	if err := a.ReplyLocalFile(context.Background(), "msg-1", filePath, false); err != nil {
 		t.Fatalf("ReplyLocalFile(file) error = %v", err)
+	}
+}
+
+func TestConvertMessageMergeForwardKeepsDeferredIDs(t *testing.T) {
+	a, _ := newHTTPBackedAdapter(t)
+	userID := "user-1"
+	chatType := "p2p"
+	msgType := "merge_forward"
+	content := `{"message_id_list":["msg-mf-text","msg-mf-nested","msg-mf-image"]}`
+
+	msg := a.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   strPtr("msg-merge-root"),
+				ChatType:    &chatType,
+				MessageType: &msgType,
+				Content:     &content,
+			},
+		},
+	})
+	if msg == nil {
+		t.Fatal("convertMessage(merge_forward) returned nil")
+	}
+	if msg.Text != "" {
+		t.Fatalf("convertMessage(merge_forward) text = %q, want empty before prefetch", msg.Text)
+	}
+	if len(msg.Attachments) != 0 {
+		t.Fatalf("convertMessage(merge_forward) attachments = %+v, want deferred empty attachments", msg.Attachments)
+	}
+	if len(msg.MergeForwardMessageIDs) != 3 || msg.MergeForwardMessageIDs[0] != "msg-mf-text" || msg.MergeForwardMessageIDs[2] != "msg-mf-image" {
+		t.Fatalf("convertMessage(merge_forward) ids = %+v", msg.MergeForwardMessageIDs)
+	}
+}
+
+func TestResolveMergeForwardExpandsForwardedMessages(t *testing.T) {
+	a, _ := newHTTPBackedAdapter(t)
+	text, attachments, err := a.ResolveMergeForward(context.Background(), "msg-merge-root", []string{"msg-mf-text", "msg-mf-nested", "msg-mf-image"})
+	if err != nil {
+		t.Fatalf("ResolveMergeForward() error = %v", err)
+	}
+	if text != "forwarded hello\n\nTitle\ncaption" {
+		t.Fatalf("ResolveMergeForward() text = %q", text)
+	}
+	if len(attachments) != 2 {
+		t.Fatalf("ResolveMergeForward() attachments = %+v, want 2", attachments)
+	}
+	if attachments[0].ResourceKey != "img-post-forward" || attachments[0].SourceMessageID != "msg-mf-post" {
+		t.Fatalf("first forwarded attachment = %+v, want post image source", attachments[0])
+	}
+	if attachments[1].ResourceKey != "img-forward" || attachments[1].SourceMessageID != "msg-mf-image" {
+		t.Fatalf("second forwarded attachment = %+v, want image source", attachments[1])
 	}
 }
 

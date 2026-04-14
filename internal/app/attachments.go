@@ -42,7 +42,11 @@ func (a *App) resolveInboundAttachments(msg *feishu.InboundMessage, workspaceID,
 
 	attachments := make([]state.SubmissionAttachment, 0, len(msg.Attachments))
 	for _, attachment := range msg.Attachments {
-		path, name, err := a.feishu.DownloadMessageResource(ctx, msg.MessageID, attachment, dir)
+		sourceMessageID := strings.TrimSpace(attachment.SourceMessageID)
+		if sourceMessageID == "" {
+			sourceMessageID = strings.TrimSpace(msg.MessageID)
+		}
+		path, name, err := a.feishu.DownloadMessageResource(ctx, sourceMessageID, attachment, dir)
 		if err != nil {
 			return nil, err
 		}

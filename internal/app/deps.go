@@ -41,6 +41,7 @@ type feishuClient interface {
 	SendCard(context.Context, string, map[string]any) (string, error)
 	PatchCard(context.Context, string, map[string]any) error
 	DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error)
+	ResolveMergeForward(context.Context, string, []string) (string, []feishu.Attachment, error)
 	ShareLocalFile(context.Context, feishu.SharedFileRequest) (feishu.SharedFileResult, error)
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }

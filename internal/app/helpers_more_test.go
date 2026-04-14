@@ -1,14 +1,27 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
+
+type attachmentDownloadFeishuStub struct {
+	*fakeFeishuClient
+	downloadPath string
+	messageIDs   []string
+}
+
+func (s *attachmentDownloadFeishuStub) DownloadMessageResource(_ context.Context, messageID string, _ feishu.Attachment, _ string) (string, string, error) {
+	s.messageIDs = append(s.messageIDs, messageID)
+	return s.downloadPath, filepath.Base(s.downloadPath), nil
+}
 
 func TestPendingTextRequestPrefersLatestMatchingRequest(t *testing.T) {
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
@@ -370,6 +383,35 @@ func TestAttachmentHelpers(t *testing.T) {
 	}
 	if len(shortHash("value")) != 24 {
 		t.Fatalf("shortHash() length = %d, want 24", len(shortHash("value")))
+	}
+
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = workspace
+	downloadPath := filepath.Join(t.TempDir(), "forwarded.png")
+	if err := os.WriteFile(downloadPath, []byte("png"), 0o644); err != nil {
+		t.Fatalf("WriteFile(downloadPath) error = %v", err)
+	}
+	stub := &attachmentDownloadFeishuStub{
+		fakeFeishuClient: &fakeFeishuClient{},
+		downloadPath:     downloadPath,
+	}
+	a := &App{cfg: cfg, feishu: stub}
+	attachments, err := a.resolveInboundAttachments(&feishu.InboundMessage{
+		MessageID: "root-message",
+		Attachments: []feishu.Attachment{{
+			Kind:            "image",
+			ResourceKey:     "img-forwarded",
+			SourceMessageID: "forwarded-message",
+		}},
+	}, cfg.Workspaces[0].ID, "sess-1")
+	if err != nil {
+		t.Fatalf("resolveInboundAttachments() error = %v", err)
+	}
+	if len(stub.messageIDs) != 1 || stub.messageIDs[0] != "forwarded-message" {
+		t.Fatalf("resolveInboundAttachments() download message ids = %+v, want forwarded source", stub.messageIDs)
+	}
+	if len(attachments) != 1 || attachments[0].LocalPath != downloadPath {
+		t.Fatalf("resolveInboundAttachments() attachments = %+v, want downloaded file", attachments)
 	}
 
 	sub := &state.Submission{

@@ -412,6 +412,9 @@ func TestAdapterHelperFunctions(t *testing.T) {
 	if attachment, ok := extractAudioAttachment(strPtr(`{"file_key":"audio"}`)); !ok || attachment.ResourceKey != "audio" {
 		t.Fatalf("extractAudioAttachment() = %+v, %v", attachment, ok)
 	}
+	if ids, ok := extractMergeForwardMessageIDs(strPtr(`{"message_id_list":["msg-1"," msg-2 ",""]}`)); !ok || len(ids) != 2 || ids[0] != "msg-1" || ids[1] != "msg-2" {
+		t.Fatalf("extractMergeForwardMessageIDs() = %+v, %v", ids, ok)
+	}
 
 	mentionKey := "@bot"
 	everyoneKey := "@all"

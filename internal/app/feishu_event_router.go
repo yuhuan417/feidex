@@ -42,6 +42,18 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 		}
 		releaseClaim = false
 	}
+	if err := r.processMessage(msg); err != nil {
+		_ = a.replyError(msg, err)
+		return
+	}
+	markHandled()
+}
+
+func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
+	a := r.app
+	if msg == nil {
+		return nil
+	}
 	sessionKey := a.makeSessionKey(msg)
 	logText := truncate(msg.Text, 160)
 	if a.shouldRedactInboundText(sessionKey, msg.UserID) {
@@ -55,42 +67,41 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 		"root_message_id", msg.RootMessageID,
 		"text", logText,
 		"attachment_count", len(msg.Attachments),
+		"merge_forward_count", len(msg.MergeForwardMessageIDs),
 	)
-	if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
-		if err := a.handlePendingTextResponse(msg, pending); err != nil {
-			_ = a.replyError(msg, err)
-			return
-		}
-		markHandled()
-		return
+	if len(msg.MergeForwardMessageIDs) > 0 {
+		a.startMergeForwardPrefetch(msg)
+		return nil
 	}
-	if strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
+	if !msg.ExpandedMergeForward {
+		if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
+			if err := a.handlePendingTextResponse(msg, pending); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	if !msg.ExpandedMergeForward && strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
 		if isLocalCommand(strings.TrimSpace(msg.Text)) {
 			if err := a.handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
-				_ = a.replyError(msg, err)
-				return
+				return err
 			}
-			markHandled()
-			return
+			return nil
 		}
 	}
 	replyLink := a.replyRootTurnLink(msg)
 	if a.shouldStageInboundImages(msg) {
 		if err := a.stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
-			_ = a.replyError(msg, err)
-			return
+			return err
 		}
-		markHandled()
-		return
+		return nil
 	}
 	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
-		markHandled()
-		return
+		return nil
 	}
 	if replyLink != nil {
 		if steered, err := a.trySteerInboundReply(msg, replyLink); err == nil && steered {
-			markHandled()
-			return
+			return nil
 		} else if err != nil {
 			slog.Warn("reply steer failed; falling back to queue",
 				"message_id", msg.MessageID,
@@ -102,10 +113,9 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 		}
 	}
 	if err := a.enqueueSubmissionWithSessionKey(msg, a.makeSessionKey(msg), replyLink != nil); err != nil {
-		_ = a.replyError(msg, err)
-		return
+		return err
 	}
-	markHandled()
+	return nil
 }
 
 func (r *feishuEventRouter) handleRecall(recall *feishu.MessageRecall) {

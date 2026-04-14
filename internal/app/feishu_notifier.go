@@ -138,6 +138,14 @@ func (n *notifyingFeishuClient) DownloadMessageResource(ctx context.Context, mes
 	return path, name, err
 }
 
+func (n *notifyingFeishuClient) ResolveMergeForward(ctx context.Context, messageID string, messageIDs []string) (string, []feishu.Attachment, error) {
+	text, attachments, err := n.base.ResolveMergeForward(ctx, messageID, messageIDs)
+	if err != nil {
+		n.notifyPermissionIssue(feishuNotifyTarget{MessageID: messageID}, err)
+	}
+	return text, attachments, err
+}
+
 func (n *notifyingFeishuClient) ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
 	result, err := n.base.ShareLocalFile(ctx, req)
 	if err != nil {

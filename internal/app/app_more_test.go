@@ -199,37 +199,45 @@ func (f *fakeCodexClient) ReplyError(id json.RawMessage, code int, msg string) e
 }
 
 type fakeFeishuClient struct {
-	startErr           error
-	replyTextErr       error
-	sendTextErr        error
-	replyCardErr       error
-	sendCardErr        error
-	patchCardErr       error
-	rewritePreviewErr  error
-	addReactionErr     error
-	removeReactionErr  error
-	downloadErr        error
-	shareFileErr       error
-	cleanupResult      feishu.PreviewDriveCleanupResult
-	cleanupErr         error
-	started            bool
-	stopped            bool
-	replyTexts         []string
-	sentTexts          []string
-	replyCards         []map[string]any
-	sendCards          []map[string]any
-	patchedCards       []map[string]any
-	replyCardInThread  []bool
-	replyTextWithIDs   []string
-	replyCardID        string
-	replyCardIDs       []string
-	replyTextIDs       []string
-	sendCardID         string
-	previewStatePath   string
-	previewProcessCWD  string
-	rewritePreviewOut  string
-	downloadPath       string
-	downloadName       string
+	startErr                error
+	replyTextErr            error
+	sendTextErr             error
+	replyCardErr            error
+	sendCardErr             error
+	patchCardErr            error
+	rewritePreviewErr       error
+	addReactionErr          error
+	removeReactionErr       error
+	downloadErr             error
+	shareFileErr            error
+	cleanupResult           feishu.PreviewDriveCleanupResult
+	cleanupErr              error
+	started                 bool
+	stopped                 bool
+	replyTexts              []string
+	sentTexts               []string
+	replyCards              []map[string]any
+	sendCards               []map[string]any
+	patchedCards            []map[string]any
+	replyCardInThread       []bool
+	replyTextWithIDs        []string
+	replyCardID             string
+	replyCardIDs            []string
+	replyTextIDs            []string
+	sendCardID              string
+	previewStatePath        string
+	previewProcessCWD       string
+	rewritePreviewOut       string
+	downloadPath            string
+	downloadName            string
+	mergeForwardText        string
+	mergeForwardAttachments []feishu.Attachment
+	mergeForwardErr         error
+	resolveMergeForwardHook func(context.Context, string, []string) (string, []feishu.Attachment, error)
+	mergeForwardCalls       []struct {
+		messageID string
+		ids       []string
+	}
 	sharedFileResult   feishu.SharedFileResult
 	sharedFileRequests []feishu.SharedFileRequest
 	onMessage          func(*feishu.InboundMessage)
@@ -317,6 +325,19 @@ func (f *fakeFeishuClient) PatchCard(_ context.Context, _ string, card map[strin
 
 func (f *fakeFeishuClient) DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error) {
 	return f.downloadPath, f.downloadName, f.downloadErr
+}
+
+func (f *fakeFeishuClient) ResolveMergeForward(ctx context.Context, messageID string, messageIDs []string) (string, []feishu.Attachment, error) {
+	ids := append([]string(nil), messageIDs...)
+	f.mergeForwardCalls = append(f.mergeForwardCalls, struct {
+		messageID string
+		ids       []string
+	}{messageID: messageID, ids: ids})
+	if f.resolveMergeForwardHook != nil {
+		return f.resolveMergeForwardHook(ctx, messageID, ids)
+	}
+	attachments := append([]feishu.Attachment(nil), f.mergeForwardAttachments...)
+	return f.mergeForwardText, attachments, f.mergeForwardErr
 }
 
 func (f *fakeFeishuClient) ShareLocalFile(_ context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {

@@ -42,7 +42,9 @@ type InboundMessage struct {
 	ParentMessageID string
 	ThreadID        string
 	Attachments     []Attachment
-	CreatedAt       int64
+	MergeForwardMessageIDs []string
+	ExpandedMergeForward   bool
+	CreatedAt              int64
 }
 
 type MessageRecall struct {
@@ -58,8 +60,9 @@ type MessageReaction struct {
 }
 
 type Attachment struct {
-	Kind        string
-	ResourceKey string
+	Kind            string
+	ResourceKey     string
+	SourceMessageID string
 }
 
 type CardAction struct {
@@ -119,6 +122,10 @@ var wsClientRunner = func(client *larkws.Client, ctx context.Context) {
 }
 
 const unauthorizedBotMessage = "你没有权限使用这个机器人"
+
+const (
+	mergeForwardMaxDepth = 3
+)
 
 func New(cfg config.FeishuConfig) *Adapter {
 	allowSet := map[string]struct{}{}
@@ -905,50 +912,8 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 			return nil
 		}
 	}
-	var (
-		text        string
-		attachments []Attachment
-	)
-	switch messageType {
-	case "text":
-		text = stripBotMention(extractText(msg.Content), msg.Mentions, a.botOpenID)
-	case "post":
-		var ok bool
-		text, attachments, ok = extractPostMessage(msg.Content)
-		if !ok {
-			return nil
-		}
-	case "image":
-		attachment, ok := extractImageAttachment(msg.Content)
-		if !ok {
-			slog.Warn("feishu image message missing image key")
-			return nil
-		}
-		attachments = append(attachments, attachment)
-	case "file":
-		attachment, ok := extractFileAttachment(msg.Content)
-		if !ok {
-			slog.Warn("feishu file message missing file key")
-			return nil
-		}
-		attachments = append(attachments, attachment)
-	case "audio":
-		attachment, ok := extractAudioAttachment(msg.Content)
-		if !ok {
-			slog.Warn("feishu audio message missing file key")
-			return nil
-		}
-		attachments = append(attachments, attachment)
-	default:
-		return nil
-	}
-	if strings.TrimSpace(text) == "" && len(attachments) == 0 {
-		return nil
-	}
 	out := &InboundMessage{
-		UserID:      userID,
-		Text:        text,
-		Attachments: attachments,
+		UserID: userID,
 	}
 	if msg.MessageId != nil {
 		out.MessageID = *msg.MessageId
@@ -978,6 +943,55 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	if msg.CreateTime != nil {
 		out.CreatedAt = parseUnixMillis(*msg.CreateTime)
 	}
+	var (
+		text        string
+		attachments []Attachment
+	)
+	switch messageType {
+	case "text":
+		text = stripBotMention(extractText(msg.Content), msg.Mentions, a.botOpenID)
+	case "post":
+		var ok bool
+		text, attachments, ok = extractPostMessage(msg.Content)
+		if !ok {
+			return nil
+		}
+		attachments = attachmentsWithSource(attachments, out.MessageID)
+	case "image":
+		attachment, ok := extractImageAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu image message missing image key")
+			return nil
+		}
+		attachments = append(attachments, attachmentWithSource(attachment, out.MessageID))
+	case "file":
+		attachment, ok := extractFileAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu file message missing file key")
+			return nil
+		}
+		attachments = append(attachments, attachmentWithSource(attachment, out.MessageID))
+	case "audio":
+		attachment, ok := extractAudioAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu audio message missing file key")
+			return nil
+		}
+		attachments = append(attachments, attachmentWithSource(attachment, out.MessageID))
+	case "merge_forward":
+		ids, ok := extractMergeForwardMessageIDs(msg.Content)
+		if !ok {
+			return nil
+		}
+		out.MergeForwardMessageIDs = ids
+	default:
+		return nil
+	}
+	if strings.TrimSpace(text) == "" && len(attachments) == 0 && len(out.MergeForwardMessageIDs) == 0 {
+		return nil
+	}
+	out.Text = text
+	out.Attachments = attachments
 	return out
 }
 
@@ -1139,6 +1153,170 @@ func renderPostMessageBody(body postMessageBody) (string, []Attachment, bool) {
 		return "", nil, false
 	}
 	return text, attachments, true
+}
+
+func attachmentWithSource(attachment Attachment, messageID string) Attachment {
+	if strings.TrimSpace(attachment.SourceMessageID) == "" {
+		attachment.SourceMessageID = strings.TrimSpace(messageID)
+	}
+	return attachment
+}
+
+func attachmentsWithSource(attachments []Attachment, messageID string) []Attachment {
+	if len(attachments) == 0 {
+		return nil
+	}
+	out := make([]Attachment, 0, len(attachments))
+	for _, attachment := range attachments {
+		out = append(out, attachmentWithSource(attachment, messageID))
+	}
+	return out
+}
+
+func extractMergeForwardMessageIDs(raw *string) ([]string, bool) {
+	if raw == nil {
+		return nil, false
+	}
+	var body struct {
+		MessageIDList []string `json:"message_id_list"`
+	}
+	if err := json.Unmarshal([]byte(*raw), &body); err != nil {
+		return nil, false
+	}
+	ids := make([]string, 0, len(body.MessageIDList))
+	for _, id := range body.MessageIDList {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, false
+	}
+	return ids, true
+}
+
+func (a *Adapter) ResolveMergeForward(ctx context.Context, _ string, messageIDs []string) (string, []Attachment, error) {
+	text, attachments, err := a.resolveMergeForwardMessages(ctx, messageIDs, 0, map[string]int{})
+	if strings.TrimSpace(text) == "" && len(attachments) == 0 {
+		if err != nil {
+			return "", nil, err
+		}
+		return "", nil, fmt.Errorf("merge_forward resolved empty content")
+	}
+	return text, attachments, err
+}
+
+func (a *Adapter) resolveMergeForwardMessages(ctx context.Context, ids []string, depth int, path map[string]int) (string, []Attachment, error) {
+	parts := make([]string, 0, len(ids))
+	attachments := make([]Attachment, 0, len(ids))
+	var firstErr error
+	for _, id := range ids {
+		text, nestedAttachments, err := a.resolveForwardedMessage(ctx, strings.TrimSpace(id), depth, path)
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		if strings.TrimSpace(text) != "" {
+			parts = append(parts, strings.TrimSpace(text))
+		}
+		if len(nestedAttachments) > 0 {
+			attachments = append(attachments, nestedAttachments...)
+		}
+	}
+	return strings.Join(parts, "\n\n"), attachments, firstErr
+}
+
+func (a *Adapter) resolveForwardedMessage(ctx context.Context, messageID string, depth int, path map[string]int) (string, []Attachment, error) {
+	if strings.TrimSpace(messageID) == "" {
+		return "", nil, nil
+	}
+	if path[messageID] > 0 {
+		return "Forwarded merge message (cycle detected).", nil, nil
+	}
+	path[messageID]++
+	defer func() {
+		path[messageID]--
+		if path[messageID] <= 0 {
+			delete(path, messageID)
+		}
+	}()
+
+	resp, err := a.client.Im.Message.Get(ctx, larkim.NewGetMessageReqBuilder().
+		MessageId(messageID).
+		Build())
+	if err != nil {
+		logFeishuFailure("feishu merge_forward message get failed", err, 0, "", "message_id", messageID)
+		return "", nil, wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.get", err))
+	}
+	if !resp.Success() {
+		logFeishuFailure("feishu merge_forward message get failed", nil, resp.Code, resp.Msg, "message_id", messageID)
+		return "", nil, wrapPermissionIssue(
+			fmt.Errorf("feishu get message failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.message.get", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
+	}
+	if resp.Data == nil || len(resp.Data.Items) == 0 || resp.Data.Items[0] == nil {
+		return "", nil, fmt.Errorf("feishu get message returned no items for %s", messageID)
+	}
+	return a.resolveFetchedMessage(ctx, resp.Data.Items[0], depth, path)
+}
+
+func (a *Adapter) resolveFetchedMessage(ctx context.Context, msg *larkim.Message, depth int, path map[string]int) (string, []Attachment, error) {
+	if msg == nil || msg.MsgType == nil {
+		return "", nil, nil
+	}
+	messageID := ""
+	if msg.MessageId != nil {
+		messageID = strings.TrimSpace(*msg.MessageId)
+	}
+	content := messageBodyContent(msg.Body)
+	switch strings.TrimSpace(*msg.MsgType) {
+	case "text":
+		return strings.TrimSpace(extractText(content)), nil, nil
+	case "post":
+		text, attachments, ok := extractPostMessage(content)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid forwarded post message %s", messageID)
+		}
+		return text, attachmentsWithSource(attachments, messageID), nil
+	case "image":
+		attachment, ok := extractImageAttachment(content)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid forwarded image message %s", messageID)
+		}
+		return "", []Attachment{attachmentWithSource(attachment, messageID)}, nil
+	case "file":
+		attachment, ok := extractFileAttachment(content)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid forwarded file message %s", messageID)
+		}
+		return "", []Attachment{attachmentWithSource(attachment, messageID)}, nil
+	case "audio":
+		attachment, ok := extractAudioAttachment(content)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid forwarded audio message %s", messageID)
+		}
+		return "", []Attachment{attachmentWithSource(attachment, messageID)}, nil
+	case "merge_forward":
+		if depth >= mergeForwardMaxDepth {
+			return "Forwarded messages (nested merge depth limit reached).", nil, nil
+		}
+		ids, ok := extractMergeForwardMessageIDs(content)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid forwarded merge message %s", messageID)
+		}
+		return a.resolveMergeForwardMessages(ctx, ids, depth+1, path)
+	default:
+		return fmt.Sprintf("Forwarded %s message (not expanded).", strings.TrimSpace(*msg.MsgType)), nil, nil
+	}
+}
+
+func messageBodyContent(body *larkim.MessageBody) *string {
+	if body == nil {
+		return nil
+	}
+	return body.Content
 }
 
 func parseUnixMillis(raw string) int64 {
