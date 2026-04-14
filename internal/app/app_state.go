@@ -71,12 +71,6 @@ func (s *appStateFacade) setSubmissionStatus(id, status string) error {
 	})
 }
 
-func (s *appStateFacade) setSubmissionStatusCard(id, cardID string) error {
-	return s.updateSubmission(id, func(sub *state.Submission) {
-		sub.StatusCardID = strings.TrimSpace(cardID)
-	})
-}
-
 func (s *appStateFacade) markSubmissionRunning(id, threadID, turnID string) error {
 	return s.updateSubmission(id, func(sub *state.Submission) {
 		sub.ThreadID = strings.TrimSpace(threadID)

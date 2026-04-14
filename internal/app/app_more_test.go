@@ -439,7 +439,6 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		liveThreads:   map[string]string{},
 		turnBindings:  map[string]turnBinding{},
 		pendingTurns:  map[string]turnBinding{},
-		statusFlushCh: make(chan struct{}, 1),
 	}
 	return a, ff, fc
 }
@@ -2189,14 +2188,10 @@ func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
 	}
 }
 
-func TestNotificationAndStatusHelpers(t *testing.T) {
-	a, ff, fc := newTestApp(t)
+func TestNotificationHelpers(t *testing.T) {
+	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
-	sub.StatusCardID = "status-card-1"
-	if err := a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.StatusCardID = "status-card-1" }); err != nil {
-		t.Fatalf("UpdateSubmission(status card) error = %v", err)
-	}
 	if err := a.store.UpsertPending(&state.PendingRequest{ID: "req-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", Status: "pending"}); err != nil {
 		t.Fatalf("UpsertPending(notification) error = %v", err)
 	}
@@ -2223,26 +2218,7 @@ func TestNotificationAndStatusHelpers(t *testing.T) {
 		t.Fatalf("updateSubmissionByTurn() = %+v, want updated plan", got)
 	}
 
-	if err := a.sendStatusCardForSubmission(sub, &feishu.InboundMessage{MessageID: "trigger-1", ChatType: "group"}, "running"); err != nil {
-		t.Fatalf("sendStatusCardForSubmission() error = %v", err)
-	}
-	if len(ff.replyCards) == 0 {
-		t.Fatal("expected status card to be sent")
-	}
-	if err := a.refreshStatusCard(sub.ID); err != nil {
-		t.Fatalf("refreshStatusCard() error = %v", err)
-	}
-	if len(ff.patchedCards) == 0 {
-		t.Fatal("expected refreshStatusCard to patch card")
-	}
-
 	a.startNextSubmissionAsync("", "test")
-	if got := submissionStatusPlaceholder("queued"); got != "排队中..." {
-		t.Fatalf("submissionStatusPlaceholder(queued) = %q", got)
-	}
-	if got := submissionStatusPlaceholder("completed"); got != "任务已结束。" {
-		t.Fatalf("submissionStatusPlaceholder(completed) = %q", got)
-	}
 	if got := truncate("  abcdef  ", 3); got != "abc..." {
 		t.Fatalf("truncate() = %q, want abc...", got)
 	}
@@ -2795,36 +2771,6 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}
 
 	seedActiveSubmission(t, a, sessionKey, "thread-9", "turn-1")
-	if err := a.store.UpsertPending(&state.PendingRequest{
-		ID:          "toggle-1",
-		Kind:        "turn_item_card",
-		SessionKey:  sessionKey,
-		TurnID:      "turn-1",
-		OwnerUserID: "user-1",
-		Status:      "pending",
-		PayloadJSON: mustJSON(turnItemCardPayload{
-			SubmissionID: "sub-1",
-			SessionKey:   sessionKey,
-			TurnID:       "turn-1",
-			ItemID:       "item-1",
-			ItemType:     "agent_message",
-			Title:        "Reply",
-			Color:        "green",
-			SummaryText:  "summary",
-			DetailText:   "detail",
-			LinkKind:     "turn_output",
-		}),
-	}); err != nil {
-		t.Fatalf("UpsertPending(toggle) error = %v", err)
-	}
-	resp, err = a.completeTurnItemToggle(&feishu.CardAction{
-		UserID:      "user-1",
-		ActionValue: map[string]any{"request_id": "toggle-1", "expanded": true},
-	})
-	if err != nil || resp.Card == nil {
-		t.Fatalf("completeTurnItemToggle() = %#v, %v", resp, err)
-	}
-
 	ff.sendCards = nil
 	a.onFileApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-approval"`), Params: json.RawMessage(`{"threadId":"thread-9","turnId":"turn-1","itemId":"item-2","reason":"need review","changes":[{"path":"internal/app/notifications.go","kind":"modified"},{"path":"README.md","kind":"added"}]}`)})
 	if pending := a.store.PendingByID("file-approval"); pending == nil || pending.Kind != "file" {

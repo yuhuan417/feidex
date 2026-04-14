@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -54,9 +55,6 @@ func TestSnapshotTurnItemAgentMessageUsesCompletedText(t *testing.T) {
 	if got.ItemType != "agent_message" {
 		t.Fatalf("unexpected item type: %q", got.ItemType)
 	}
-	if got.StoreText != "final text" {
-		t.Fatalf("unexpected store text: %q", got.StoreText)
-	}
 	if got.SendText != "final text" {
 		t.Fatalf("unexpected send text: %q", got.SendText)
 	}
@@ -106,9 +104,6 @@ func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	got := snapshotTurnItem(buf, item, false)
 	if got.ItemType != "command_execution" {
 		t.Fatalf("unexpected item type: %q", got.ItemType)
-	}
-	if got.StoreText != "/tmp/work" {
-		t.Fatalf("unexpected store text: %q", got.StoreText)
 	}
 	want := "````\npwd\n````\nstatus=completed exit_code=0"
 	if rendered := normalizeCardMarkdown(got.SendText); rendered != want {
@@ -195,7 +190,6 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		TurnID:      "turn-1",
 	}
 	payload := turnItemCardPayload{
-		SessionKey:  sub.SessionKey,
 		TurnID:      sub.TurnID,
 		ItemType:    "command_execution",
 		Title:       "命令执行",
@@ -204,7 +198,7 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		DetailText:  "命令执行:\n命令:\n" + markdownCodeBlock("$ pwd") + "\n输出:\n" + markdownCodeBlock("/tmp/work"),
 	}
 
-	card := a.renderTurnItemCard(sub, payload, false, false, "req-1")
+	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
 	elements := cardBodyElements(t, card)
 	if len(elements) != 2 {
 		t.Fatalf("expected 2 compact elements (meta, markdown), got %d", len(elements))
@@ -238,7 +232,6 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 		TurnID:      "turn-1",
 	}
 	payload := turnItemCardPayload{
-		SessionKey:  sub.SessionKey,
 		TurnID:      sub.TurnID,
 		ItemType:    "agent_message",
 		Title:       "回复",
@@ -246,7 +239,7 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 		SummaryText: "回复（未完成）:\nfinal text",
 	}
 
-	card := a.renderTurnItemCard(sub, payload, false, false, "")
+	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
 	if _, ok := card["header"]; ok {
 		t.Fatalf("expected normal reply card to omit header, got: %#v", card["header"])
 	}
@@ -274,7 +267,6 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 	}
 	longText := strings.Repeat("hello ", 200)
 	payload := turnItemCardPayload{
-		SessionKey:    sub.SessionKey,
 		TurnID:        sub.TurnID,
 		ItemType:      "agent_message",
 		Title:         "最终答复",
@@ -283,7 +275,7 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 		IsFinalAnswer: true,
 	}
 
-	card := a.renderTurnItemCard(sub, payload, false, false, "")
+	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
 	header, ok := card["header"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected final answer header, got: %#v", card["header"])
@@ -312,7 +304,6 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 		TurnID:      "turn-1",
 	}
 	payload := turnItemCardPayload{
-		SessionKey:  sub.SessionKey,
 		TurnID:      sub.TurnID,
 		ItemType:    "file_change",
 		Title:       "文件改动",
@@ -321,7 +312,7 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 		DetailText:  markdownCodeBlockWithLang("diff", "@@ -1 +1 @@\n-old\n+new"),
 	}
 
-	card := a.renderTurnItemCard(sub, payload, false, false, "")
+	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
 	elements := cardBodyElements(t, card)
 	if len(elements) != 1 {
 		t.Fatalf("expected compact file-change card, got %d elements", len(elements))

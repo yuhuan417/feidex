@@ -23,13 +23,11 @@ func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submiss
 	a.sendTurnEventMessages(ctx, sub, "已加入队列，等待当前任务结束后开始处理。", a.replyInThreadForSubmission(sub), "turn_queued")
 }
 
-func (a *App) sendPlanCard(ctx context.Context, sub *state.Submission, planText string, includeActions bool) string {
-	return a.sendTurnEventCard(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", includeActions, "")
+func (a *App) sendPlanCard(ctx context.Context, sub *state.Submission, planText string) string {
+	return a.sendTurnEventCard(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "")
 }
 
 type turnItemCardPayload struct {
-	SubmissionID  string `json:"submission_id"`
-	SessionKey    string `json:"session_key"`
 	TurnID        string `json:"turn_id"`
 	ItemID        string `json:"item_id"`
 	ItemType      string `json:"item_type"`
@@ -41,7 +39,7 @@ type turnItemCardPayload struct {
 	IsFinalAnswer bool   `json:"is_final_answer"`
 }
 
-func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot, includeActions bool) string {
+func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -50,8 +48,6 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 	}
 	title, color := turnSnapshotCardMeta(snapshot)
 	payload := turnItemCardPayload{
-		SubmissionID:  sub.ID,
-		SessionKey:    sub.SessionKey,
 		TurnID:        sub.TurnID,
 		ItemID:        snapshot.ItemID,
 		ItemType:      snapshot.ItemType,
@@ -97,7 +93,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 		}
 		return results[0].MessageID
 	}
-	card := a.renderTurnItemCardWithOptions(ctx, sub, payload, false, false, "", snapshot.IsFinalAnswer)
+	card := a.renderTurnItemCard(ctx, sub, payload, snapshot.IsFinalAnswer)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
@@ -115,7 +111,7 @@ func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, s
 	return id
 }
 
-func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind string, includeActions bool, itemID string) string {
+func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -136,14 +132,7 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 	return id
 }
 
-func (a *App) renderTurnItemCard(sub *state.Submission, payload turnItemCardPayload, expanded bool, includeActions bool, requestID string) map[string]any {
-	return a.renderTurnItemCardWithOptions(context.Background(), sub, payload, expanded, includeActions, requestID, false)
-}
-
-func (a *App) renderTurnItemCardWithOptions(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, expanded bool, includeActions bool, requestID string, enablePreview bool) map[string]any {
-	_ = expanded
-	_ = includeActions
-	_ = requestID
+func (a *App) renderTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, enablePreview bool) map[string]any {
 	if isReplyTurnItem(payload.ItemType) {
 		return a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
 	}

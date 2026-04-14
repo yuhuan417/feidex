@@ -174,5 +174,4 @@ func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
 		return
 	}
 	_ = appState.setSubmissionStatus(sub.ID, "running")
-	_ = a.refreshStatusCard(sub.ID)
 }

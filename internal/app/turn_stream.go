@@ -18,7 +18,6 @@ type turnStream struct {
 	PendingPlan  string
 	LastSentPlan string
 	LastError    string
-	SentOutput   bool
 	SentFinal    bool
 	NextOrder    int
 	Items        map[string]*turnItemBuffer
@@ -36,7 +35,6 @@ type turnItemBuffer struct {
 type turnItemSnapshot struct {
 	ItemID        string
 	ItemType      string
-	StoreText     string
 	SendText      string
 	DetailText    string
 	LinkKind      string
@@ -46,9 +44,8 @@ type turnItemSnapshot struct {
 }
 
 type turnStreamFlushResult struct {
-	SentOutput bool
-	SawFinal   bool
-	LastError  string
+	SawFinal  bool
+	LastError string
 }
 
 func (a *App) noteTurnStarted(sessionKey string, sub *state.Submission) {
@@ -134,10 +131,9 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	a.turnStreamsMu.Unlock()
 
 	if planText != "" {
-		a.storePlanSnapshot(sub.ID, planText)
-		a.sendPlanCard(ctx, sub, planText, true)
+		a.sendPlanCard(ctx, sub, planText)
 	}
-	a.deliverTurnItemSnapshot(ctx, sub, snapshot, true)
+	a.deliverTurnItemSnapshot(ctx, sub, snapshot)
 }
 
 func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
@@ -157,7 +153,6 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 
 	a.turnStreamsMu.Lock()
 	stream := a.ensureTurnStreamLocked(sessionKey, sub)
-	result.SentOutput = stream.SentOutput
 	result.SawFinal = stream.SentFinal
 	result.LastError = stream.LastError
 	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
@@ -175,63 +170,27 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	a.turnStreamsMu.Unlock()
 
 	if planText != "" {
-		a.storePlanSnapshot(sub.ID, planText)
-		a.sendPlanCard(ctx, sub, planText, false)
+		a.sendPlanCard(ctx, sub, planText)
 	}
 	for _, item := range items {
-		if sent := a.deliverTurnItemSnapshot(ctx, sub, item, false); sent && item.IsOutput {
-			result.SentOutput = true
-		}
+		a.deliverTurnItemSnapshot(ctx, sub, item)
 	}
 	return result
 }
 
-func (a *App) deliverTurnItemSnapshot(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot, includeActions bool) bool {
+func (a *App) deliverTurnItemSnapshot(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot) bool {
 	if sub == nil {
 		return false
 	}
-	a.storeTurnItemSnapshot(sub.ID, snapshot)
 	if strings.TrimSpace(snapshot.SendText) == "" && strings.TrimSpace(snapshot.DetailText) == "" {
 		return false
 	}
-	id := a.sendTurnSnapshotCard(ctx, sub, snapshot, includeActions)
+	id := a.sendTurnSnapshotCard(ctx, sub, snapshot)
 	ids := []string{}
 	if strings.TrimSpace(id) != "" {
 		ids = append(ids, id)
 	}
-	if snapshot.IsOutput && len(ids) > 0 {
-		a.turnStreamsMu.Lock()
-		if stream := a.turnStreams[sub.TurnID]; stream != nil {
-			stream.SentOutput = true
-		}
-		a.turnStreamsMu.Unlock()
-	}
 	return len(ids) > 0
-}
-
-func (a *App) storePlanSnapshot(submissionID, plan string) {
-	if strings.TrimSpace(submissionID) == "" {
-		return
-	}
-	_ = a.appState().updateSubmission(submissionID, func(sub *state.Submission) {
-		sub.PlanText = strings.TrimSpace(plan)
-	})
-}
-
-func (a *App) storeTurnItemSnapshot(submissionID string, snapshot turnItemSnapshot) {
-	if strings.TrimSpace(submissionID) == "" || strings.TrimSpace(snapshot.StoreText) == "" {
-		return
-	}
-	_ = a.appState().updateSubmission(submissionID, func(sub *state.Submission) {
-		switch snapshot.ItemType {
-		case "reasoning":
-			sub.SummaryText = appendSeparatedText(sub.SummaryText, snapshot.StoreText)
-		case "command_execution":
-			sub.CommandText = appendSeparatedText(sub.CommandText, snapshot.StoreText)
-		case "agent_message":
-			sub.OutputText = appendSeparatedText(sub.OutputText, snapshot.StoreText)
-		}
-	})
 }
 
 func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *turnStream {

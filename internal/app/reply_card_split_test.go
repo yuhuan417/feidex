@@ -166,7 +166,7 @@ func TestSendTurnSnapshotCardSplitsReplyTables(t *testing.T) {
 		LinkKind: "turn_output",
 	}
 
-	got := a.sendTurnSnapshotCard(context.Background(), sub, snapshot, false)
+	got := a.sendTurnSnapshotCard(context.Background(), sub, snapshot)
 	if got != "card-1" {
 		t.Fatalf("sendTurnSnapshotCard() = %q, want first split card id", got)
 	}

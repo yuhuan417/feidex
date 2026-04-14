@@ -44,7 +44,6 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
@@ -85,7 +84,6 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())

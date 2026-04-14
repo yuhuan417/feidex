@@ -27,7 +27,6 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		return turnItemSnapshot{
 			ItemID:    itemIDValue(buf, item),
 			ItemType:  itemType,
-			StoreText: strings.TrimSpace(text),
 			SendText:  buildLabeledTurnEventText("计划", text, partial),
 			LinkKind:  "turn_plan",
 		}
@@ -39,7 +38,6 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		return turnItemSnapshot{
 			ItemID:    itemIDValue(buf, item),
 			ItemType:  itemType,
-			StoreText: text,
 			SendText:  buildLabeledTurnEventText("思考", text, partial),
 			LinkKind:  "turn_reasoning",
 		}
@@ -58,7 +56,6 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		return turnItemSnapshot{
 			ItemID:        itemIDValue(buf, item),
 			ItemType:      itemType,
-			StoreText:     strings.TrimSpace(text),
 			SendText:      sendText,
 			LinkKind:      "turn_output",
 			IsOutput:      true,
@@ -83,7 +80,6 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		return turnItemSnapshot{
 			ItemID:     itemIDValue(buf, item),
 			ItemType:   itemType,
-			StoreText:  strings.TrimSpace(firstNonEmpty(output, formatTurnCommandEvent(command, output, status, nil, partial))),
 			SendText:   summary,
 			DetailText: detail,
 			LinkKind:   "turn_command_execution",
@@ -94,7 +90,6 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		return turnItemSnapshot{
 			ItemID:     itemIDValue(buf, item),
 			ItemType:   itemType,
-			StoreText:  strings.TrimSpace(detail),
 			SendText:   summary,
 			DetailText: detail,
 			LinkKind:   "turn_file_change",
@@ -105,14 +100,9 @@ func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) tu
 		if strings.TrimSpace(summary) == "" && strings.TrimSpace(detail) == "" {
 			return turnItemSnapshot{}
 		}
-		storeText := strings.TrimSpace(detail)
-		if storeText == "" {
-			storeText = strings.TrimSpace(summary)
-		}
 		return turnItemSnapshot{
 			ItemID:     itemIDValue(buf, item),
 			ItemType:   itemType,
-			StoreText:  storeText,
 			SendText:   summary,
 			DetailText: detail,
 			LinkKind:   "turn_item",

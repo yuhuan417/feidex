@@ -13,10 +13,7 @@ import (
 
 func TestHandleNotificationAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if err := a.store.UpdateSubmission(sub.ID, func(s *state.Submission) { s.StatusCardID = "status-1" }); err != nil {
-		t.Fatalf("UpdateSubmission(status card) error = %v", err)
-	}
+	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	a.handleNotification("item/reasoning/summaryTextDelta", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"reason-1","delta":"thinking"}`))
 	a.handleNotification("item/commandExecution/outputDelta", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"cmd-1","delta":"output"}`))
@@ -48,7 +45,7 @@ func TestHandleServerRequestRoutesKnownMethods(t *testing.T) {
 	}
 }
 
-func TestFinishTurnAndSubmissionCardStatuses(t *testing.T) {
+func TestFinishTurnStatuses(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	sub.OutputText = "partial"
@@ -66,24 +63,6 @@ func TestFinishTurnAndSubmissionCardStatuses(t *testing.T) {
 	}
 
 	a.finishTurn("missing", "missing", "failed")
-
-	sub = &state.Submission{SessionKey: "sess-1"}
-	for _, status := range []string{"queued", "waiting_approval", "waiting_user_input", "completed", "failed", "interrupted"} {
-		card := a.renderSubmissionCard(sub, status)
-		body := cardMarkdownContent(t, card)
-		if !strings.Contains(body, "内容:") {
-			t.Fatalf("renderSubmissionCard(%s) body = %q", status, body)
-		}
-	}
-	if got := submissionStatusPlaceholder("waiting_approval"); got != "等待审批..." {
-		t.Fatalf("submissionStatusPlaceholder(waiting_approval) = %q", got)
-	}
-	if got := submissionStatusPlaceholder("interrupted"); got != "任务已中断。" {
-		t.Fatalf("submissionStatusPlaceholder(interrupted) = %q", got)
-	}
-	if got := submissionStatusPlaceholder("other"); got != "任务状态未知。" {
-		t.Fatalf("submissionStatusPlaceholder(other) = %q", got)
-	}
 }
 
 func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {

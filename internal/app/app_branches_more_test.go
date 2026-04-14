@@ -36,15 +36,14 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	ff := &appDownloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
 	fc := &fakeCodexClient{}
 	a := &App{
-		cfg:           cfg,
-		store:         store,
-		feishu:        ff,
-		codex:         fc,
-		started:       time.Now(),
-		deduper:       newInboundDeduper(),
-		turnStreams:   map[string]*turnStream{},
-		liveThreads:   map[string]string{},
-		statusFlushCh: make(chan struct{}, 1),
+		cfg:         cfg,
+		store:       store,
+		feishu:      ff,
+		codex:       fc,
+		started:     time.Now(),
+		deduper:     newInboundDeduper(),
+		turnStreams: map[string]*turnStream{},
+		liveThreads: map[string]string{},
 	}
 
 	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
@@ -100,14 +99,13 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
 	bad := &App{
-		cfg:           &config.Config{},
-		store:         store,
-		feishu:        ff,
-		codex:         fc,
-		started:       time.Now(),
-		turnStreams:   map[string]*turnStream{},
-		liveThreads:   map[string]string{},
-		statusFlushCh: make(chan struct{}, 1),
+		cfg:         &config.Config{},
+		store:       store,
+		feishu:      ff,
+		codex:       fc,
+		started:     time.Now(),
+		turnStreams: map[string]*turnStream{},
+		liveThreads: map[string]string{},
 	}
 	bad.handleFeishuMessage(&feishu.InboundMessage{
 		MessageID:   "bad-attach",

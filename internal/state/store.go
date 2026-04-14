@@ -105,7 +105,6 @@ type Submission struct {
 	TriggerMessageID     string                 `json:"trigger_message_id"`
 	SourceMessageIDs     []string               `json:"source_message_ids,omitempty"`
 	SourceRootMessageIDs []string               `json:"source_root_message_ids,omitempty"`
-	StatusCardID         string                 `json:"status_card_id"`
 	InputText            string                 `json:"input_text"`
 	Attachments          []SubmissionAttachment `json:"attachments,omitempty"`
 	Status               string                 `json:"status"`

@@ -88,24 +88,6 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(active submission) error = %v", err)
 	}
-	if err := a.store.UpsertPending(&state.PendingRequest{
-		ID:          "toggle-1",
-		Kind:        "turn_item_card",
-		SessionKey:  "sess-1",
-		OwnerUserID: "user-1",
-		PayloadJSON: mustJSON(turnItemCardPayload{
-			SubmissionID: subID,
-			SessionKey:   "sess-1",
-			TurnID:       "turn-1",
-			ItemType:     "agent_message",
-			Title:        "回复",
-			Color:        "green",
-			SummaryText:  "hello",
-		}),
-		Status: "pending",
-	}); err != nil {
-		t.Fatalf("UpsertPending(toggle) error = %v", err)
-	}
 
 	models := codexrpc.ModelListResult{
 		Data: []codexrpc.ModelListEntry{{
@@ -205,7 +187,6 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "workspace.use.select", "session_key": "sess-1"}, Option: "alt", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "thread.sandbox.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "thread.policy.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
-		{Name: "turn.item.toggle:toggle-1:expanded", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.root", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.tools", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.thread", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},

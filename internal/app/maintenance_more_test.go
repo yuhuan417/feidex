@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -86,23 +85,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	}
 }
 
-func TestStatusRefreshHelpersAndMiscAppFunctions(t *testing.T) {
-	a := &App{statusFlushCh: make(chan struct{}, 1)}
-	a.scheduleStatusCardRefresh("sub-2")
-	a.scheduleStatusCardRefresh("sub-1")
-	a.scheduleStatusCardRefresh("")
-	ids := a.takePendingStatusCardRefreshes()
-	if len(ids) != 2 || ids[0] != "sub-1" || ids[1] != "sub-2" {
-		t.Fatalf("takePendingStatusCardRefreshes() = %+v, want sorted ids", ids)
-	}
-	if got := a.takePendingStatusCardRefreshes(); got != nil {
-		t.Fatalf("takePendingStatusCardRefreshes(second) = %+v, want nil", got)
-	}
-	if err := a.refreshStatusCardNow(""); err != nil {
-		t.Fatalf("refreshStatusCardNow(empty) error = %v", err)
-	}
-	a.startStatusRefreshLoop(context.Background())
-
+func TestMiscAppFunctions(t *testing.T) {
 	logSessionState("test", "sess", nil)
 	logSessionState("test", "sess", &state.Session{WorkspaceID: "ws", Queue: []string{"a"}})
 
@@ -131,7 +114,4 @@ func TestReplyAndStartupHelpersReturnEarly(t *testing.T) {
 	}
 	var a *App
 	a.sendStartupReadyNotifications()
-	if got := submissionStatusPlaceholder(""); got != "任务状态未知。" {
-		t.Fatalf("submissionStatusPlaceholder() = %q, want unknown placeholder", got)
-	}
 }

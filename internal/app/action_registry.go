@@ -154,9 +154,6 @@ var cardActionHandlers = map[string]cardActionHandler{
 		}
 		return a.completeHistoryDetail(action, actionSessionKey(action), index)
 	},
-	"turn.item.toggle": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeTurnItemToggle(action)
-	},
 	"user_input.answer": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeUserInputAnswer(action)
 	},
@@ -242,11 +239,7 @@ func resolvedCardActionName(action *feishu.CardAction) string {
 	if strings.TrimSpace(name) != "" {
 		return strings.TrimSpace(name)
 	}
-	alt := strings.TrimSpace(action.Name)
-	if strings.HasPrefix(alt, "turn.item.toggle:") {
-		return "turn.item.toggle"
-	}
-	return alt
+	return strings.TrimSpace(action.Name)
 }
 
 func actionSessionKey(action *feishu.CardAction) string {

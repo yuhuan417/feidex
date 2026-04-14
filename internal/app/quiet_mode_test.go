@@ -103,15 +103,14 @@ func TestSendTurnSnapshotCardAllowsAgentMessageInQuietMode(t *testing.T) {
 		TriggerMessageID: "msg-1",
 	}
 	snapshot := turnItemSnapshot{
-		ItemID:    "item-1",
-		ItemType:  "agent_message",
-		SendText:  "intermediate reply",
-		StoreText: "intermediate reply",
-		LinkKind:  "turn_output",
-		IsOutput:  true,
+		ItemID:   "item-1",
+		ItemType: "agent_message",
+		SendText: "intermediate reply",
+		LinkKind: "turn_output",
+		IsOutput: true,
 	}
 
-	if got := a.sendTurnSnapshotCard(context.Background(), sub, snapshot, false); got != "reply-card-id" {
+	if got := a.sendTurnSnapshotCard(context.Background(), sub, snapshot); got != "reply-card-id" {
 		t.Fatalf("sendTurnSnapshotCard() = %q, want reply-card-id", got)
 	}
 	if len(ff.replyCards) != 1 {

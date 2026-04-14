@@ -165,11 +165,7 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 			"turn_id", turnID,
 			"status", sub.Status,
 		)
-		replyText, terminalText := turnCompletionMessages(sub.Status, sub.OutputText, flush.LastError, flush.SentOutput)
-		if replyText != "" {
-			a.sendFinalMessagesWithFooter(context.Background(), sub, replyText, a.turnFinalFooterLines(turnID, time.Now()), a.replyInThreadForSubmission(sub))
-			flush.SentOutput = true
-		}
+		terminalText := turnCompletionTerminalText(sub.Status, flush.LastError)
 		if sub.Status == "completed" && !flush.SawFinal {
 			a.sendEmptyFinalCard(context.Background(), sub, a.turnFinalFooterLines(turnID, time.Now()))
 		}

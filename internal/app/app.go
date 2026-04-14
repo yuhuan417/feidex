@@ -34,11 +34,6 @@ type App struct {
 	turnBindings  map[string]turnBinding
 	pendingTurns  map[string]turnBinding
 	threadUsage   map[string]codexrpc.ThreadTokenUsage
-
-	statusFlushOnce    sync.Once
-	statusFlushMu      sync.Mutex
-	statusFlushPending map[string]struct{}
-	statusFlushCh      chan struct{}
 }
 
 type turnBinding struct {
@@ -61,19 +56,18 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	codexClient := newCodexClient(cfg.Codex)
 	feishuClient := wrapFeishuClient(newFeishuClient(cfg.Feishu))
 	app := &App{
-		cfg:           cfg,
-		cfgPath:       cfgPath,
-		store:         store,
-		codex:         codexClient,
-		feishu:        feishuClient,
-		started:       time.Now(),
-		deduper:       newInboundDeduper(),
-		turnStreams:   map[string]*turnStream{},
-		liveThreads:   map[string]string{},
-		turnBindings:  map[string]turnBinding{},
-		pendingTurns:  map[string]turnBinding{},
-		threadUsage:   map[string]codexrpc.ThreadTokenUsage{},
-		statusFlushCh: make(chan struct{}, 1),
+		cfg:          cfg,
+		cfgPath:      cfgPath,
+		store:        store,
+		codex:        codexClient,
+		feishu:       feishuClient,
+		started:      time.Now(),
+		deduper:      newInboundDeduper(),
+		turnStreams:  map[string]*turnStream{},
+		liveThreads:  map[string]string{},
+		turnBindings: map[string]turnBinding{},
+		pendingTurns: map[string]turnBinding{},
+		threadUsage:  map[string]codexrpc.ThreadTokenUsage{},
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
@@ -85,7 +79,6 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
 		return err
 	}
-	a.startStatusRefreshLoop(ctx)
 	a.startInboundDeduperLoop(ctx)
 	a.recoverRuntimeState()
 	if err := a.feishu.Start(ctx); err != nil {

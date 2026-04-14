@@ -41,7 +41,6 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())

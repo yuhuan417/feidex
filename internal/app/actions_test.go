@@ -260,19 +260,6 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 	}
 }
 
-func TestParseTurnItemToggleName(t *testing.T) {
-	requestID, expanded, ok := parseTurnItemToggleName("turn.item.toggle:req-123:expanded")
-	if !ok {
-		t.Fatal("expected toggle name to parse")
-	}
-	if requestID != "req-123" {
-		t.Fatalf("unexpected request id: %q", requestID)
-	}
-	if !expanded {
-		t.Fatal("expected expanded=true")
-	}
-}
-
 func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()

@@ -173,15 +173,3 @@ func commandValue(buf *turnItemBuffer) string {
 	}
 	return buf.Command
 }
-
-func appendSeparatedText(current, next string) string {
-	current = strings.TrimSpace(current)
-	next = strings.TrimSpace(next)
-	if current == "" {
-		return next
-	}
-	if next == "" {
-		return current
-	}
-	return current + "\n\n" + next
-}

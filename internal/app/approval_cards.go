@@ -50,7 +50,6 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
-		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
@@ -98,7 +97,6 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
-		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
@@ -146,7 +144,6 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 		})
 		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-		_ = a.refreshStatusCard(sub.ID)
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())

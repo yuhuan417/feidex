@@ -114,9 +114,6 @@ func TestActionHelperBranches(t *testing.T) {
 	if resp, err := a.completeMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
 		t.Fatalf("completeMenuInterrupt() = %#v, %v", resp, err)
 	}
-	if _, _, ok := parseTurnItemToggleName("turn.item.toggle:req-1:bad"); ok {
-		t.Fatal("parseTurnItemToggleName(invalid) should fail")
-	}
 
 	cfgPath := a.cfgPath
 	if _, err := a.updateWorkspaceDefaults("default", func(w *config.Workspace) { w.Name = "Renamed" }); err != nil {

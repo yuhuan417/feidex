@@ -61,9 +61,6 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := commandValue(&turnItemBuffer{Command: "pwd"}); got != "pwd" {
 		t.Fatalf("commandValue() = %q", got)
 	}
-	if got := appendSeparatedText("a", "b"); got != "a\n\nb" {
-		t.Fatalf("appendSeparatedText() = %q", got)
-	}
 	if body, meta := splitCompactMetaLine(markdownCodeBlock("pwd") + "\nstatus=completed exit_code=0"); meta != "status=completed · exit_code=0" || !strings.Contains(body, "pwd") {
 		t.Fatalf("splitCompactMetaLine() = %q / %q", body, meta)
 	}
@@ -75,7 +72,7 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	}
 }
 
-func TestTurnStreamLifecycleStoresSnapshots(t *testing.T) {
+func TestTurnStreamLifecycleDeliversSnapshotsWithoutStoringAccumulation(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
@@ -85,14 +82,14 @@ func TestTurnStreamLifecycleStoresSnapshots(t *testing.T) {
 	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{"type": "reasoning"})
 
 	updated := a.store.GetSubmission(sub.ID)
-	if updated == nil || !strings.Contains(updated.PlanText, "run") || updated.SummaryText != "thinking" {
+	if updated == nil || updated.PlanText != "" || updated.SummaryText != "" {
 		t.Fatalf("submission after completeTurnItem = %+v", updated)
 	}
 
 	a.appendTurnItemDelta("thread-1", "turn-1", "msg-1", "agent_message", "partial answer")
 	result := a.flushTurnStream(context.Background(), "thread-1", "turn-1")
 	updated = a.store.GetSubmission(sub.ID)
-	if !result.SentOutput || updated.OutputText != "partial answer" {
+	if result.SawFinal || updated.OutputText != "" {
 		t.Fatalf("flushTurnStream() = %+v, submission=%+v", result, updated)
 	}
 	if a.turnStreams["turn-1"] != nil {
