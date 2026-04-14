@@ -49,6 +49,31 @@ func TestSplitMarkdownByTableLimitSplitsRealTablesOnly(t *testing.T) {
 	}
 }
 
+func TestSplitMarkdownByTableLimitKeepsFourBacktickFences(t *testing.T) {
+	text := strings.Join([]string{
+		"intro",
+		"",
+		"````md",
+		"| fake | table |",
+		"| --- | --- |",
+		"| inside | code |",
+		"````",
+		"",
+		markdownTestTable("t1"),
+	}, "\n")
+
+	parts := splitMarkdownByTableLimit(text, 1)
+	if len(parts) != 1 {
+		t.Fatalf("splitMarkdownByTableLimit() parts = %d, want 1", len(parts))
+	}
+	if tables := countTablesInMarkdown(parts[0]); tables != 1 {
+		t.Fatalf("table count = %d, want 1 real table", tables)
+	}
+	if !strings.Contains(parts[0], "````md") || !strings.Contains(parts[0], "````") {
+		t.Fatalf("four-backtick fences should be preserved, got: %q", parts[0])
+	}
+}
+
 func TestCountCardComponentNodesCountsTaggedNodes(t *testing.T) {
 	card := newMarkdownBodyCard("Title", "blue")
 	for i := 0; i < 198; i++ {

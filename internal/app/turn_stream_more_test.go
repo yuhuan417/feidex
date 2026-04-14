@@ -16,7 +16,7 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := summarizeCommandExecution("pwd", "/tmp", "completed", optionalIntPointer(0, true)); !strings.Contains(got, "status=completed") {
 		t.Fatalf("summarizeCommandExecution() = %q", got)
 	}
-	if got := formatTurnCommandOutput(" /tmp "); got != "输出:\n```\n/tmp\n```" {
+	if got := normalizeCardMarkdown(formatTurnCommandOutput(" /tmp ")); got != "输出:\n````\n/tmp\n````" {
 		t.Fatalf("formatTurnCommandOutput() = %q", got)
 	}
 	if summary, detail := summarizeGenericTurnItem("web_search", map[string]any{"query": "golang"}, nil); !strings.Contains(summary, "golang") || detail == "" {
@@ -31,8 +31,11 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := extractTurnItemText(map[string]any{"summary": []any{map[string]any{"type": "summary_text", "text": "hello"}}}, "summary", "summary_text"); got != "hello" {
 		t.Fatalf("extractTurnItemText() = %q", got)
 	}
-	if got := markdownCodeBlock("a```b"); !strings.Contains(got, "'''") {
-		t.Fatalf("markdownCodeBlock() = %q, want sanitized backticks", got)
+	if got := markdownCodeBlock("a```b"); !strings.Contains(got, "a```b") {
+		t.Fatalf("markdownCodeBlock() = %q, want raw inner triple backticks", got)
+	}
+	if got := markdownCodeBlock("pwd"); !strings.Contains(got, "````\npwd\n````") {
+		t.Fatalf("markdownCodeBlock() = %q, want whitelist 4-backtick fence", got)
 	}
 	if got := inlineCodeText(" `a` "); got != "'a'" {
 		t.Fatalf("inlineCodeText() = %q", got)
@@ -61,7 +64,7 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := appendSeparatedText("a", "b"); got != "a\n\nb" {
 		t.Fatalf("appendSeparatedText() = %q", got)
 	}
-	if body, meta := splitCompactMetaLine("```\npwd\n```\nstatus=completed exit_code=0"); meta != "status=completed · exit_code=0" || !strings.Contains(body, "pwd") {
+	if body, meta := splitCompactMetaLine(markdownCodeBlock("pwd") + "\nstatus=completed exit_code=0"); meta != "status=completed · exit_code=0" || !strings.Contains(body, "pwd") {
 		t.Fatalf("splitCompactMetaLine() = %q / %q", body, meta)
 	}
 	if got := joinMarkdownSections("a", "", "b"); got != "a\n\nb" {

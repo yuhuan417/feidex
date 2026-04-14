@@ -55,7 +55,7 @@ func buildReplyCardChunks(body string, showHeader bool, footerLines []string) []
 }
 
 func splitMarkdownByTableLimit(text string, maxTables int) []string {
-	text = normalizeCardMarkdown(strings.TrimSpace(text))
+	text = normalizeMarkdownForSplit(strings.TrimSpace(text))
 	if text == "" {
 		return nil
 	}
@@ -104,7 +104,7 @@ func splitMarkdownByTableLimit(text string, maxTables int) []string {
 }
 
 func splitMarkdownBlocks(text string) []markdownSplitBlock {
-	lines := strings.Split(normalizeCardMarkdown(strings.TrimSpace(text)), "\n")
+	lines := strings.Split(normalizeMarkdownForSplit(strings.TrimSpace(text)), "\n")
 	if len(lines) == 0 {
 		return nil
 	}
@@ -120,6 +120,7 @@ func splitMarkdownBlocks(text string) []markdownSplitBlock {
 	}
 
 	fenceOpen := false
+	openFenceLen := 0
 	for i := 0; i < len(lines); {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
@@ -130,7 +131,7 @@ func splitMarkdownBlocks(text string) []markdownSplitBlock {
 			i += 2
 			for i < len(lines) {
 				next := strings.TrimSpace(lines[i])
-				if next == "" || strings.HasPrefix(next, "```") || !strings.Contains(lines[i], "|") {
+				if next == "" || isFenceBoundaryForSplit(next) || !strings.Contains(lines[i], "|") {
 					break
 				}
 				tableLines = append(tableLines, lines[i])
@@ -144,8 +145,14 @@ func splitMarkdownBlocks(text string) []markdownSplitBlock {
 		}
 
 		current = append(current, line)
-		if strings.HasPrefix(trimmed, "```") {
-			fenceOpen = !fenceOpen
+		if !fenceOpen {
+			if run, _, ok := parseBacktickFenceLine(trimmed); ok {
+				fenceOpen = true
+				openFenceLen = run
+			}
+		} else if isFenceCloseForSplit(trimmed, openFenceLen) {
+			fenceOpen = false
+			openFenceLen = 0
 		}
 		i++
 	}
@@ -162,13 +169,27 @@ func isMarkdownTableStart(lines []string, index int) bool {
 	if header == "" || separator == "" {
 		return false
 	}
-	if strings.HasPrefix(header, "```") || strings.HasPrefix(separator, "```") {
+	if isFenceBoundaryForSplit(header) || isFenceBoundaryForSplit(separator) {
 		return false
 	}
 	if !strings.Contains(header, "|") {
 		return false
 	}
 	return markdownTableSeparatorLineRe.MatchString(separator)
+}
+
+func normalizeMarkdownForSplit(text string) string {
+	return strings.TrimSpace(text)
+}
+
+func isFenceBoundaryForSplit(trimmed string) bool {
+	_, _, ok := parseBacktickFenceLine(trimmed)
+	return ok
+}
+
+func isFenceCloseForSplit(trimmed string, openLen int) bool {
+	run, info, ok := parseBacktickFenceLine(trimmed)
+	return ok && info == "" && run >= openLen
 }
 
 func (a *App) fitReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, enablePreview bool) []replyCardChunk {

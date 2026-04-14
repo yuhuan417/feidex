@@ -80,7 +80,7 @@ func defaultOutboundCardDemoBody(kind string) string {
 	case "turn_reasoning":
 		return "这是 reasoning 卡片 demo。"
 	case "turn_command_execution":
-		return "命令执行:\n```bash\npwd\n```"
+		return "命令执行:\n" + markdownCodeBlockWithLang("bash", "pwd")
 	case "turn_file_change":
 		return "文件改动:\n- [main.go](file:///tmp/main.go)"
 	case "turn_plan":

@@ -110,8 +110,8 @@ func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	if got.StoreText != "/tmp/work" {
 		t.Fatalf("unexpected store text: %q", got.StoreText)
 	}
-	want := "```\npwd\n```\nstatus=completed exit_code=0"
-	if got.SendText != want {
+	want := "````\npwd\n````\nstatus=completed exit_code=0"
+	if rendered := normalizeCardMarkdown(got.SendText); rendered != want {
 		t.Fatalf("unexpected send text:\nwant: %q\ngot:  %q", want, got.SendText)
 	}
 	if !got.Expandable {
@@ -120,10 +120,10 @@ func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	if got.DetailText == "" {
 		t.Fatal("expected detail text for command execution snapshot")
 	}
-	if got.DetailText != "输出:\n```\n/tmp/work\n```" {
+	if rendered := normalizeCardMarkdown(got.DetailText); rendered != "输出:\n````\n/tmp/work\n````" {
 		t.Fatalf("unexpected command detail: %q", got.DetailText)
 	}
-	if !strings.Contains(got.DetailText, "```\n/tmp/work\n```") {
+	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "````\n/tmp/work\n````") {
 		t.Fatalf("expected command output detail to include code block, got: %q", got.DetailText)
 	}
 }
@@ -145,10 +145,10 @@ func TestSnapshotTurnItemToolCallUsesCodeBlockDetail(t *testing.T) {
 	}
 
 	got := snapshotTurnItem(buf, item, false)
-	if !strings.Contains(got.SendText, "```\ngithub/search_repos\n```") {
+	if !strings.Contains(normalizeCardMarkdown(got.SendText), "````\ngithub/search_repos\n````") {
 		t.Fatalf("expected tool summary code block, got: %q", got.SendText)
 	}
-	if !strings.Contains(got.DetailText, "```") {
+	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "```") {
 		t.Fatalf("expected tool detail code block, got: %q", got.DetailText)
 	}
 }
@@ -171,13 +171,13 @@ func TestSnapshotTurnItemFileChangeUsesCodeBlockSummaryAndDiffDetail(t *testing.
 	}
 
 	got := snapshotTurnItem(buf, item, false)
-	if !strings.Contains(got.SendText, "```\nchanged=1\nstatus=completed\ninternal/app/turn_stream.go (modified)\n```") {
+	if !strings.Contains(normalizeCardMarkdown(got.SendText), "````\nchanged=1\nstatus=completed\ninternal/app/turn_stream.go (modified)\n````") {
 		t.Fatalf("expected file change summary code block, got: %q", got.SendText)
 	}
-	if !strings.Contains(got.DetailText, "```\ninternal/app/turn_stream.go (modified)\n```") {
+	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "````\ninternal/app/turn_stream.go (modified)\n````") {
 		t.Fatalf("expected file change header code block in detail, got: %q", got.DetailText)
 	}
-	if !strings.Contains(got.DetailText, "```diff\n@@ -1 +1 @@\n-old\n+new\n```") {
+	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "````diff\n@@ -1 +1 @@\n-old\n+new\n````") {
 		t.Fatalf("expected file change diff code block, got: %q", got.DetailText)
 	}
 	if strings.Contains(got.DetailText, "changed=1") {
@@ -200,8 +200,8 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		ItemType:    "command_execution",
 		Title:       "命令执行",
 		Color:       "blue",
-		SummaryText: "命令执行:\n```\npwd\n```\nstatus=completed",
-		DetailText:  "命令执行:\n命令:\n```\n$ pwd\n```\n输出:\n```\n/tmp/work\n```",
+		SummaryText: "命令执行:\n" + markdownCodeBlock("pwd") + "\nstatus=completed",
+		DetailText:  "命令执行:\n命令:\n" + markdownCodeBlock("$ pwd") + "\n输出:\n" + markdownCodeBlock("/tmp/work"),
 	}
 
 	card := a.renderTurnItemCard(sub, payload, false, false, "req-1")
@@ -220,10 +220,10 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 	if strings.Contains(body, "命令执行:") {
 		t.Fatalf("expected redundant command title to be stripped, got: %q", body)
 	}
-	if !strings.Contains(body, "```\npwd\n```") {
+	if !strings.Contains(body, "````\npwd\n````") {
 		t.Fatalf("expected command block in compact body, got: %q", body)
 	}
-	if !strings.Contains(body, "输出:\n```\n/tmp/work\n```") {
+	if !strings.Contains(body, "输出:\n````\n/tmp/work\n````") {
 		t.Fatalf("expected output block in compact body, got: %q", body)
 	}
 }
@@ -317,8 +317,8 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 		ItemType:    "file_change",
 		Title:       "文件改动",
 		Color:       "orange",
-		SummaryText: "文件改动:\n```\nchanged=1\nstatus=completed\ninternal/app/turn_stream.go (modified)\n```",
-		DetailText:  "```diff\n@@ -1 +1 @@\n-old\n+new\n```",
+		SummaryText: "文件改动:\n" + markdownCodeBlock("changed=1\nstatus=completed\ninternal/app/turn_stream.go (modified)"),
+		DetailText:  markdownCodeBlockWithLang("diff", "@@ -1 +1 @@\n-old\n+new"),
 	}
 
 	card := a.renderTurnItemCard(sub, payload, false, false, "")

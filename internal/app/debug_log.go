@@ -127,10 +127,10 @@ func (a *App) renderDebugAccessDeniedCard(sessionKey, userID string) map[string]
 		"请把该用户加入 `[feishu].debug_allow_from`，然后重启服务。",
 		"",
 		"示例配置：",
-		"```toml",
-		"[feishu]",
-		"debug_allow_from = [\""+firstNonEmpty(strings.TrimSpace(userID), "ou_xxx")+"\"]",
-		"```",
+		markdownCodeBlockWithLang("toml", strings.Join([]string{
+			"[feishu]",
+			"debug_allow_from = [\"" + firstNonEmpty(strings.TrimSpace(userID), "ou_xxx") + "\"]",
+		}, "\n")),
 	)
 	return a.feishu.SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},

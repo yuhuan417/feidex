@@ -48,11 +48,23 @@ func TestRenderSubmissionCardShowsFullContentInCard(t *testing.T) {
 	}
 }
 
-func TestNormalizeCardMarkdownNormalizesFenceSyntax(t *testing.T) {
-	got := normalizeCardMarkdown("```txt\nhello")
-	want := "```\nhello\n```"
+func TestNormalizeCardMarkdownOnlyTrimsWhitespace(t *testing.T) {
+	input := "\n\n```txt\nhello\n```\n\n"
+	got := normalizeCardMarkdown(input)
+	want := "```txt\nhello\n```"
 	if got != want {
-		t.Fatalf("unexpected normalized markdown:\nwant: %q\ngot:  %q", want, got)
+		t.Fatalf("normalizeCardMarkdown() should only trim, got: %q", got)
+	}
+}
+
+func TestMarkdownCodeBlockWithLangUsesDynamicOuterFence(t *testing.T) {
+	got := normalizeCardMarkdown("命令:\n" + markdownCodeBlockWithLang("bash", "pwd"))
+	if !strings.Contains(got, "````bash\npwd\n````") {
+		t.Fatalf("simple content should keep 4-backtick outer fence, got: %q", got)
+	}
+	got = markdownCodeBlockWithLang("", "keep ```` inner")
+	if !strings.HasPrefix(got, "`````\n") || !strings.HasSuffix(got, "\n`````") {
+		t.Fatalf("outer fence should be inner max+1 when inner has 4 backticks, got: %q", got)
 	}
 }
 

@@ -92,12 +92,24 @@ func stringValue(v any) string {
 }
 
 func markdownCodeBlock(s string) string {
+	return markdownCodeBlockWithLang("", s)
+}
+
+func markdownCodeBlockWithLang(lang, s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return ""
 	}
-	s = strings.ReplaceAll(s, "```", "'''")
-	return "```\n" + s + "\n```"
+	fenceLen := maxConsecutiveBackticks(s) + 1
+	if fenceLen < markdownFencePreferredLen {
+		fenceLen = markdownFencePreferredLen
+	}
+	open := strings.Repeat("`", fenceLen)
+	lang = strings.TrimSpace(strings.Trim(strings.TrimSpace(lang), "`"))
+	if lang != "" {
+		open += strings.ToLower(lang)
+	}
+	return open + "\n" + s + "\n" + strings.Repeat("`", fenceLen)
 }
 
 func inlineCodeText(s string) string {

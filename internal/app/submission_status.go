@@ -185,27 +185,6 @@ func (a *App) prepareSubmissionCardMarkdown(sub *state.Submission, text string) 
 	return normalizeCardMarkdown(text)
 }
 
-func normalizeCardMarkdown(text string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
-	lines := strings.Split(text, "\n")
-	fenceOpen := false
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") {
-			lines[i] = "```"
-			fenceOpen = !fenceOpen
-		}
-	}
-	text = strings.Join(lines, "\n")
-	if fenceOpen {
-		text += "\n```"
-	}
-	return text
-}
-
 func submissionStatusPlaceholder(status string) string {
 	switch status {
 	case "queued":

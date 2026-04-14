@@ -230,7 +230,7 @@ func summarizeFileChangeItem(item map[string]any) (string, string) {
 			detailLines = append(detailLines, "", markdownCodeBlock(header))
 		}
 		if diff != "" {
-			detailLines = append(detailLines, "```diff\n"+diff+"\n```")
+			detailLines = append(detailLines, markdownCodeBlockWithLang("diff", diff))
 			continue
 		}
 		if changeDetail := strings.TrimSpace(prettyJSON(change)); changeDetail != "" {
