@@ -61,6 +61,9 @@ func TestMarkdownPreviewHelpers(t *testing.T) {
 	if got := NewLarkDrivePreviewAPI(nil); got != nil {
 		t.Fatalf("NewLarkDrivePreviewAPI(nil) = %+v, want nil", got)
 	}
+	if got := formatPreviewLinkReplacement("./docs/guide.md:12", "https://drive.example/file-1"); got != "`./docs/guide.md:12` [guide.md](https://drive.example/file-1)" {
+		t.Fatalf("formatPreviewLinkReplacement() = %q", got)
+	}
 }
 
 func TestDriveMarkdownPreviewerResolveAndPermissionHelpers(t *testing.T) {

@@ -184,14 +184,17 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 		if len(match) < 4 {
 			continue
 		}
+		matchStart := match[0]
+		matchEnd := match[1]
 		targetStart := match[2]
 		targetEnd := match[3]
 		rawTarget := req.Text[targetStart:targetEnd]
-		builder.WriteString(req.Text[last:targetStart])
-		replacement := rawTarget
+		builder.WriteString(req.Text[last:matchStart])
+		original := req.Text[matchStart:matchEnd]
+		replacement := original
 		if cached, ok := rewrittenTargets[rawTarget]; ok {
 			replacement = cached
-			if replacement != rawTarget {
+			if replacement != original {
 				changed = true
 			}
 		} else {
@@ -200,15 +203,15 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 			case err != nil:
 				errs = append(errs, err.Error())
 			case ok && strings.TrimSpace(url) != "":
-				replacement = url
-				rewrittenTargets[rawTarget] = url
+				replacement = formatPreviewLinkReplacement(rawTarget, url)
+				rewrittenTargets[rawTarget] = replacement
 				changed = true
 			default:
-				rewrittenTargets[rawTarget] = rawTarget
+				rewrittenTargets[rawTarget] = original
 			}
 		}
 		builder.WriteString(replacement)
-		last = targetEnd
+		last = matchEnd
 	}
 	builder.WriteString(req.Text[last:])
 	if !changed {
@@ -218,6 +221,59 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 		return builder.String(), fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return builder.String(), nil
+}
+
+func formatPreviewLinkReplacement(rawTarget, url string) string {
+	displayPath := previewDisplayPath(rawTarget)
+	clickableName := previewClickableName(displayPath)
+	if displayPath == "" {
+		displayPath = clickableName
+	}
+	if clickableName == "" {
+		clickableName = "preview.md"
+	}
+	return "`" + sanitizeInlineCodeText(displayPath) + "` [" + sanitizeMarkdownLinkLabel(clickableName) + "](" + strings.TrimSpace(url) + ")"
+}
+
+func previewDisplayPath(rawTarget string) string {
+	target := strings.TrimSpace(rawTarget)
+	target = strings.Trim(target, "\"'")
+	if target == "" {
+		return ""
+	}
+	if strings.HasPrefix(target, "<") && strings.HasSuffix(target, ">") {
+		target = strings.TrimPrefix(strings.TrimSuffix(target, ">"), "<")
+	}
+	if idx := strings.IndexByte(target, '#'); idx >= 0 {
+		target = target[:idx]
+	}
+	return strings.TrimSpace(target)
+}
+
+func previewClickableName(displayPath string) string {
+	target := strings.TrimSpace(displayPath)
+	if matched := markdownPreviewLineSuffixRe.FindStringSubmatch(target); len(matched) == 3 {
+		target = matched[1]
+	}
+	target = filepath.Clean(strings.TrimSpace(target))
+	name := strings.TrimSpace(filepath.Base(target))
+	switch name {
+	case "", ".", string(filepath.Separator):
+		return "preview.md"
+	default:
+		return name
+	}
+}
+
+func sanitizeInlineCodeText(value string) string {
+	return strings.ReplaceAll(strings.TrimSpace(value), "`", "'")
+}
+
+func sanitizeMarkdownLinkLabel(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, `[`, `\[` )
+	value = strings.ReplaceAll(value, `]`, `\]`)
+	return value
 }
 
 func (p *DriveMarkdownPreviewer) CleanupBefore(ctx context.Context, cutoff time.Time) (PreviewDriveCleanupResult, error) {

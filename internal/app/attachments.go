@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -206,30 +207,20 @@ func repairMalformedWorkspacePath(path, workspaceCwd string) (string, bool) {
 }
 
 func sanitizeLocalMarkdownLinks(text, workspaceCwd string) string {
-	if strings.TrimSpace(text) == "" {
-		return text
-	}
-	return markdownLinkFullRe.ReplaceAllStringFunc(text, func(match string) string {
-		parts := markdownLinkFullRe.FindStringSubmatch(match)
-		if len(parts) != 3 {
-			return match
-		}
-		label := strings.TrimSpace(parts[1])
-		href := strings.TrimSpace(parts[2])
-		if path, ok := normalizeReferencedPath(href, workspaceCwd); ok {
-			return "`" + filepath.Base(path) + "`"
-		}
-		if fixed := recoverFilenameFromMalformedLabel(label); fixed != "" {
-			return "`" + fixed + "`"
-		}
-		return "`" + label + "`"
-	})
+	return rewriteMarkdownLinksForCard(text, workspaceCwd, false)
 }
 
 func neutralizeLocalMarkdownLinks(text, workspaceCwd string) string {
 	if strings.TrimSpace(text) == "" {
 		return text
 	}
+	return rewriteMarkdownLinksForCard(text, workspaceCwd, true)
+}
+
+func rewriteMarkdownLinksForCard(text, workspaceCwd string, keepNonLocalLink bool) string {
+	if strings.TrimSpace(text) == "" {
+		return text
+	}
 	return markdownLinkFullRe.ReplaceAllStringFunc(text, func(match string) string {
 		parts := markdownLinkFullRe.FindStringSubmatch(match)
 		if len(parts) != 3 {
@@ -237,14 +228,59 @@ func neutralizeLocalMarkdownLinks(text, workspaceCwd string) string {
 		}
 		label := strings.TrimSpace(parts[1])
 		href := strings.TrimSpace(parts[2])
-		if path, ok := normalizeReferencedPath(href, workspaceCwd); ok {
-			return "`" + filepath.Base(path) + "`"
+		if pathText, ok := localLinkDisplayTarget(href, workspaceCwd); ok {
+			return "`" + pathText + "`"
 		}
 		if fixed := recoverFilenameFromMalformedLabel(label); fixed != "" {
 			return "`" + fixed + "`"
 		}
-		return match
+		if keepNonLocalLink {
+			return match
+		}
+		return "`" + label + "`"
 	})
+}
+
+func localLinkDisplayTarget(rawHref, workspaceCwd string) (string, bool) {
+	target := cleanMarkdownLinkTarget(rawHref)
+	if target == "" {
+		return "", false
+	}
+	if _, ok := normalizeReferencedPath(target, workspaceCwd); ok {
+		return target, true
+	}
+	if !looksLikeLocalPathTarget(target) {
+		return "", false
+	}
+	return target, true
+}
+
+func cleanMarkdownLinkTarget(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.Trim(raw, "\"'")
+	raw = strings.TrimSuffix(raw, ")")
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "<") && strings.HasSuffix(raw, ">") {
+		raw = strings.TrimPrefix(strings.TrimSuffix(raw, ">"), "<")
+	}
+	return strings.TrimSpace(raw)
+}
+
+func looksLikeLocalPathTarget(target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" || strings.HasPrefix(target, "#") {
+		return false
+	}
+	parsed, err := url.Parse(target)
+	if err == nil && strings.TrimSpace(parsed.Scheme) != "" {
+		return strings.EqualFold(parsed.Scheme, "file")
+	}
+	if filepath.IsAbs(target) || strings.HasPrefix(target, "./") || strings.HasPrefix(target, "../") || strings.HasPrefix(target, "~/") {
+		return true
+	}
+	return strings.Contains(target, "/") || strings.Contains(target, `\`)
 }
 
 func recoverFilenameFromMalformedLabel(label string) string {

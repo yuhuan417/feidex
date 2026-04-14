@@ -419,8 +419,28 @@ func TestAttachmentHelpers(t *testing.T) {
 		"See [Guide](./docs/guide.md:12) and [.mdguide](missing)",
 		workspace,
 	)
-	if !strings.Contains(sanitized, "`guide.md`") {
-		t.Fatalf("sanitizeLocalMarkdownLinks() = %q, want local file replacement", sanitized)
+	if !strings.Contains(sanitized, "`./docs/guide.md:12`") {
+		t.Fatalf("sanitizeLocalMarkdownLinks() = %q, want full local path replacement", sanitized)
+	}
+	sanitizedMissing := sanitizeLocalMarkdownLinks(
+		"See [Missing](./docs/missing.txt:9)",
+		workspace,
+	)
+	if !strings.Contains(sanitizedMissing, "`./docs/missing.txt:9`") {
+		t.Fatalf("sanitizeLocalMarkdownLinks(missing) = %q, want raw local path", sanitizedMissing)
+	}
+	neutralized := neutralizeLocalMarkdownLinks(
+		"See [Guide](./docs/guide.md:12) and [Web](https://example.com)",
+		workspace,
+	)
+	if !strings.Contains(neutralized, "`./docs/guide.md:12`") || !strings.Contains(neutralized, "[Web](https://example.com)") {
+		t.Fatalf("neutralizeLocalMarkdownLinks() = %q, want local de-link + remote keep", neutralized)
+	}
+	if _, ok := localLinkDisplayTarget("https://example.com/x.md", workspace); ok {
+		t.Fatal("localLinkDisplayTarget(https) should be non-local")
+	}
+	if got, ok := localLinkDisplayTarget("./docs/missing.txt:9", workspace); !ok || got != "./docs/missing.txt:9" {
+		t.Fatalf("localLinkDisplayTarget(missing) = %q, %v, want raw local path", got, ok)
 	}
 	if got := recoverFilenameFromMalformedLabel(".mdguide"); got != "dguide.m" {
 		t.Fatalf("recoverFilenameFromMalformedLabel() = %q, want dguide.m", got)

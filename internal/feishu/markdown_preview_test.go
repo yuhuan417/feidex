@@ -143,8 +143,8 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 	if err != nil {
 		t.Fatalf("RewriteText returned error: %v", err)
 	}
-	if !strings.Contains(got, "https://drive.example/file-1") {
-		t.Fatalf("expected rewritten preview url, got %q", got)
+	if !strings.Contains(got, "`README.md` [README.md](https://drive.example/file-1)") {
+		t.Fatalf("expected rewritten preview path + link, got %q", got)
 	}
 	if api.createFolderCalls != 2 || api.uploadCalls != 1 || api.queryCalls != 1 {
 		t.Fatalf("unexpected drive api usage: %#v", api)
@@ -162,8 +162,8 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 	if err != nil {
 		t.Fatalf("RewriteText second call returned error: %v", err)
 	}
-	if !strings.Contains(gotAgain, "https://drive.example/file-2") {
-		t.Fatalf("expected fresh upload on second rewrite, got %q", gotAgain)
+	if !strings.Contains(gotAgain, "`README.md` [README.md](https://drive.example/file-2)") {
+		t.Fatalf("expected fresh upload with path + link on second rewrite, got %q", gotAgain)
 	}
 	if api.uploadCalls != 2 {
 		t.Fatalf("expected one upload per rewrite call, upload calls=%d", api.uploadCalls)
