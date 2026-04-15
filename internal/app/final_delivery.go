@@ -18,7 +18,6 @@ func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission, foo
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
 		return ""
 	}
-	appState := a.appState()
 	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, "", nil, true)
 	appendReplyCardFooter(card, footerLines)
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
@@ -26,9 +25,6 @@ func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission, foo
 		return ""
 	}
 	a.recordMessageLink(id, "final_message", sub, "")
-	_ = appState.updateSubmission(sub.ID, func(s *state.Submission) {
-		s.FinalMessageIDs = append([]string(nil), id)
-	})
 	return id
 }
 
@@ -39,7 +35,6 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
 		return nil
 	}
-	appState := a.appState()
 	chunks := buildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
 	results := a.sendReplyCardChunks(ctx, sub, "最终答复", "green", chunks, inThread, true)
 	if len(results) == 0 {
@@ -48,9 +43,8 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	ids := make([]string, 0, len(results))
 	for _, result := range results {
 		ids = append(ids, result.MessageID)
-		_ = appState.saveMessageLink(&state.MessageLink{
+		_ = a.appState().saveMessageLink(&state.MessageLink{
 			MessageID:    result.MessageID,
-			Kind:         "final_message",
 			SessionKey:   sub.SessionKey,
 			SubmissionID: sub.ID,
 			ThreadID:     sub.ThreadID,
@@ -60,9 +54,6 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 			a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 		}
 	}
-	_ = appState.updateSubmission(sub.ID, func(s *state.Submission) {
-		s.FinalMessageIDs = append([]string(nil), ids...)
-	})
 	return ids
 }
 

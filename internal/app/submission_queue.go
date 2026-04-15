@@ -61,17 +61,15 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		return err
 	}
 	logSessionState("submission enqueue session persisted", sessionKey, appState.session(sessionKey))
-	sub := &state.Submission{
-		SessionKey:           sessionKey,
-		WorkspaceID:          sess.WorkspaceID,
-		UserID:               msg.UserID,
-		UserName:             msg.UserName,
-		ChatID:               msg.ChatID,
-		ChatName:             msg.ChatName,
-		TriggerMessageID:     msg.MessageID,
-		SourceMessageIDs:     sourceMessageIDs,
-		SourceRootMessageIDs: sourceRootMessageIDs,
-		InputText:            msg.Text,
+		sub := &state.Submission{
+			SessionKey:           sessionKey,
+			WorkspaceID:          sess.WorkspaceID,
+			UserID:               msg.UserID,
+			ChatID:               msg.ChatID,
+			TriggerMessageID:     msg.MessageID,
+			SourceMessageIDs:     sourceMessageIDs,
+			SourceRootMessageIDs: sourceRootMessageIDs,
+			InputText:            msg.Text,
 		Attachments:          attachments,
 		Status:               "queued",
 	}
@@ -79,7 +77,6 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	if err != nil {
 		return err
 	}
-	a.recordInboundSubmissionSourceLink(msg.MessageID, sessionKey, id)
 	if err := appState.queueSubmission(sessionKey, id); err != nil {
 		return err
 	}

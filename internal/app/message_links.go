@@ -12,8 +12,6 @@ func (a *App) recordMessageLink(messageID, kind string, sub *state.Submission, r
 	}
 	link := &state.MessageLink{
 		MessageID: messageID,
-		Kind:      kind,
-		RequestID: requestID,
 	}
 	if sub != nil {
 		link.SessionKey = sub.SessionKey

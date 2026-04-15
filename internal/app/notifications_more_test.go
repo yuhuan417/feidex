@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,10 +22,10 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 	permissionsBody := renderPermissionsApprovalBody(map[string]any{
 		"reason": "need access",
 		"permissions": map[string]any{
-			"mode":     "workspace-write",
-			"scope":    "session",
-			"sandbox":  map[string]any{"type": "workspace-write"},
-			"network":  "allow",
+			"mode":           "workspace-write",
+			"scope":          "session",
+			"sandbox":        map[string]any{"type": "workspace-write"},
+			"network":        "allow",
 			"writable_roots": []any{"/tmp/a", "/tmp/b"},
 		},
 	})
@@ -54,6 +55,16 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 	if !strings.Contains(fileBody, "2 个文件") || !strings.Contains(fileBody, "a.txt -> b.txt (rename)") {
 		t.Fatalf("renderFileApprovalBody() = %q", fileBody)
 	}
+	workspace := t.TempDir()
+	fileBody = renderFileApprovalBodyWithWorkspace(map[string]any{
+		"changes": []any{
+			map[string]any{"path": filepath.Join(workspace, "internal", "app", "main.go"), "kind": "modified"},
+			map[string]any{"path": "/tmp/outside.go", "kind": "modified"},
+		},
+	}, workspace)
+	if !strings.Contains(fileBody, "internal/app/main.go (modified)") || !strings.Contains(fileBody, "/tmp/outside.go (modified)") {
+		t.Fatalf("renderFileApprovalBodyWithWorkspace() = %q", fileBody)
+	}
 	entries := collectFileApprovalEntries(map[string]any{
 		"payload": map[string]any{
 			"fileChanges": []any{map[string]any{"path": "main.go", "status": "modified"}},
@@ -64,6 +75,9 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 	}
 	if got := parseApprovalFileEntry(map[string]any{"filePath": "go.mod", "changeType": "modified"}); got.Path != "go.mod" || got.Kind != "modified" {
 		t.Fatalf("parseApprovalFileEntry() = %+v", got)
+	}
+	if got := parseApprovalFileEntryWithWorkspace(map[string]any{"path": filepath.Join(workspace, "go.mod"), "changeType": "modified"}, workspace); got.Path != "go.mod" || got.Kind != "modified" {
+		t.Fatalf("parseApprovalFileEntryWithWorkspace() = %+v", got)
 	}
 	if got := truncatedApprovalRequestJSON(map[string]any{"threadId": "t", "value": "x"}); !strings.Contains(got, `"value": "x"`) || strings.Contains(got, "threadId") {
 		t.Fatalf("truncatedApprovalRequestJSON() = %q", got)

@@ -461,28 +461,38 @@ func TestAttachmentHelpers(t *testing.T) {
 		"See [Guide](./docs/guide.md:12) and [.mdguide](missing)",
 		workspace,
 	)
-	if !strings.Contains(sanitized, "`./docs/guide.md:12`") {
-		t.Fatalf("sanitizeLocalMarkdownLinks() = %q, want full local path replacement", sanitized)
+	if !strings.Contains(sanitized, "`docs/guide.md:12`") {
+		t.Fatalf("sanitizeLocalMarkdownLinks() = %q, want workspace-relative local path replacement", sanitized)
 	}
 	sanitizedMissing := sanitizeLocalMarkdownLinks(
 		"See [Missing](./docs/missing.txt:9)",
 		workspace,
 	)
-	if !strings.Contains(sanitizedMissing, "`./docs/missing.txt:9`") {
-		t.Fatalf("sanitizeLocalMarkdownLinks(missing) = %q, want raw local path", sanitizedMissing)
+	if !strings.Contains(sanitizedMissing, "`docs/missing.txt:9`") {
+		t.Fatalf("sanitizeLocalMarkdownLinks(missing) = %q, want workspace-relative local path", sanitizedMissing)
+	}
+	sanitizedAbsolute := sanitizeLocalMarkdownLinks(
+		"See [Guide]("+linked+":12)",
+		workspace,
+	)
+	if !strings.Contains(sanitizedAbsolute, "`docs/guide.md:12`") {
+		t.Fatalf("sanitizeLocalMarkdownLinks(abs) = %q, want workspace-relative absolute path", sanitizedAbsolute)
 	}
 	neutralized := neutralizeLocalMarkdownLinks(
 		"See [Guide](./docs/guide.md:12) and [Web](https://example.com)",
 		workspace,
 	)
-	if !strings.Contains(neutralized, "`./docs/guide.md:12`") || !strings.Contains(neutralized, "[Web](https://example.com)") {
+	if !strings.Contains(neutralized, "`docs/guide.md:12`") || !strings.Contains(neutralized, "[Web](https://example.com)") {
 		t.Fatalf("neutralizeLocalMarkdownLinks() = %q, want local de-link + remote keep", neutralized)
 	}
 	if _, ok := localLinkDisplayTarget("https://example.com/x.md", workspace); ok {
 		t.Fatal("localLinkDisplayTarget(https) should be non-local")
 	}
-	if got, ok := localLinkDisplayTarget("./docs/missing.txt:9", workspace); !ok || got != "./docs/missing.txt:9" {
-		t.Fatalf("localLinkDisplayTarget(missing) = %q, %v, want raw local path", got, ok)
+	if got, ok := localLinkDisplayTarget("./docs/missing.txt:9", workspace); !ok || got != filepath.Join("docs", "missing.txt")+":9" {
+		t.Fatalf("localLinkDisplayTarget(missing) = %q, %v, want workspace-relative path", got, ok)
+	}
+	if got, ok := localLinkDisplayTarget(linked+":7", workspace); !ok || got != filepath.Join("docs", "guide.md")+":7" {
+		t.Fatalf("localLinkDisplayTarget(abs) = %q, %v, want workspace-relative absolute path", got, ok)
 	}
 	if got := recoverFilenameFromMalformedLabel(".mdguide"); got != "dguide.m" {
 		t.Fatalf("recoverFilenameFromMalformedLabel() = %q, want dguide.m", got)
@@ -498,6 +508,12 @@ func TestAttachmentHelpers(t *testing.T) {
 	}
 	if !pathWithinWorkspace(linked, workspace) || pathWithinWorkspace(filepath.Join(workspace, "..", "elsewhere"), workspace) {
 		t.Fatal("pathWithinWorkspace() returned unexpected result")
+	}
+	if got := renderWorkspaceDisplayPath(linked+":12", workspace); got != filepath.Join("docs", "guide.md")+":12" {
+		t.Fatalf("renderWorkspaceDisplayPath(internal) = %q", got)
+	}
+	if got := renderWorkspaceDisplayPath(filepath.Join(workspace, "..", "elsewhere", "x.go"), workspace); !filepath.IsAbs(got) {
+		t.Fatalf("renderWorkspaceDisplayPath(external) = %q, want absolute path", got)
 	}
 }
 

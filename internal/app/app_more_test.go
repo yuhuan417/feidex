@@ -2070,7 +2070,6 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		TriggerMessageID: "trigger-1",
 		InputText:        "hello",
 		Status:           "queued",
-		OutputText:       "final answer",
 	})
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
@@ -2196,26 +2195,25 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("UpsertPending(notification) error = %v", err)
 	}
 
-	a.handleNotification("item/agentMessage/delta", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","delta":"hello"}`))
 	a.handleNotification("turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"a","status":"completed"}]}`))
 	a.handleNotification("error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
 	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
 
 	stream := a.turnStreams["turn-1"]
-	if stream == nil || len(stream.Items) == 0 || !strings.Contains(stream.PendingPlan, "a") {
+	if stream == nil || !strings.Contains(stream.PendingPlan, "a") {
 		t.Fatalf("turn stream after notifications = %+v", stream)
 	}
 	if pending := a.store.PendingByID("req-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("resolved pending = %+v, want resolved", pending)
 	}
 	updated := a.store.GetSubmission(sub.ID)
-	if updated.SummaryText != "boom" || updated.Status != "running" && updated.Status != "failed" {
+	if updated == nil || updated.Status != "running" && updated.Status != "failed" {
 		t.Fatalf("submission after error notification = %+v", updated)
 	}
 
-	a.updateSubmissionByTurn("thread-1", "turn-1", func(s *state.Submission) { s.PlanText = "done" })
-	if got := a.store.GetSubmission(sub.ID); got.PlanText != "done" {
-		t.Fatalf("updateSubmissionByTurn() = %+v, want updated plan", got)
+	a.updateSubmissionByTurn("thread-1", "turn-1", func(s *state.Submission) { s.Status = "custom" })
+	if got := a.store.GetSubmission(sub.ID); got == nil || got.Status != "custom" {
+		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
 	}
 
 	a.startNextSubmissionAsync("", "test")
@@ -2247,7 +2245,6 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
 		MessageID:  "root-msg",
-		Kind:       "root_turn",
 		SessionKey: targetSessionKey,
 		ThreadID:   "thread-1",
 		TurnID:     "turn-1",
@@ -2321,7 +2318,6 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
 		MessageID:  "root-msg",
-		Kind:       "root_turn",
 		SessionKey: targetSessionKey,
 		ThreadID:   "thread-1",
 		TurnID:     "turn-1",
@@ -2382,7 +2378,6 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
 		MessageID:  "root-msg",
-		Kind:       "root_turn",
 		SessionKey: targetSessionKey,
 		ThreadID:   "thread-old",
 		TurnID:     "turn-old",
@@ -2446,7 +2441,7 @@ func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
 	if err := a.enqueueSubmission(msg); err != nil {
 		t.Fatalf("enqueueSubmission() error = %v", err)
 	}
-	if link := a.store.GetMessageLink("root-msg"); link == nil || link.Kind != "root_turn" || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+	if link := a.store.GetMessageLink("root-msg"); link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
 		t.Fatalf("root turn binding = %+v, want current turn", link)
 	}
 }
@@ -2505,7 +2500,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 	}
 	for _, rootID := range []string{"a", "b", "c"} {
 		link := a.store.GetMessageLink(rootID)
-		if link == nil || link.Kind != "root_turn" || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+		if link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
 			t.Fatalf("root %s binding = %+v, want thread-1/turn-1", rootID, link)
 		}
 	}
@@ -2544,7 +2539,6 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
 		MessageID:  "reply-root",
-		Kind:       "root_turn",
 		SessionKey: replySessionKey,
 		ThreadID:   "thread-old",
 		TurnID:     "turn-old",

@@ -42,7 +42,6 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 			ids = append(ids, result.MessageID)
 			_ = appState.saveMessageLink(&state.MessageLink{
 				MessageID:    result.MessageID,
-				Kind:         kind,
 				SessionKey:   sub.SessionKey,
 				SubmissionID: sub.ID,
 				ThreadID:     sub.ThreadID,
@@ -51,11 +50,6 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 			if strings.TrimSpace(kind) == "final_message" && result.CardID != "" {
 				a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
 			}
-		}
-		if strings.TrimSpace(kind) == "final_message" {
-			_ = appState.updateSubmission(sub.ID, func(s *state.Submission) {
-				s.FinalMessageIDs = append([]string(nil), ids...)
-			})
 		}
 		return ids
 	}
@@ -74,16 +68,12 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	}
 	_ = appState.saveMessageLink(&state.MessageLink{
 		MessageID:    id,
-		Kind:         kind,
 		SessionKey:   sub.SessionKey,
 		SubmissionID: sub.ID,
 		ThreadID:     sub.ThreadID,
 		TurnID:       sub.TurnID,
 	})
 	if strings.TrimSpace(kind) == "final_message" {
-		_ = appState.updateSubmission(sub.ID, func(s *state.Submission) {
-			s.FinalMessageIDs = []string{id}
-		})
 		if cardID != "" {
 			a.scheduleMarkdownPreviewPatch(sub, cardID, title, color, showHeader, text, nil)
 		}
@@ -92,6 +82,10 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 }
 
 func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool) []sentReplyChunk {
+	return a.sendReplyCardChunksWithReuse(ctx, sub, title, color, chunks, inThread, enablePreview, "")
+}
+
+func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []sentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
@@ -108,10 +102,26 @@ func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, ti
 		appendReplyCardFooter(card, chunk.FooterLines)
 
 		cardID := ""
-		id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
-		if err == nil && strings.TrimSpace(id) != "" {
-			cardID = strings.TrimSpace(id)
+		id := ""
+		var err error
+		if i == 0 && strings.TrimSpace(reuseMessageID) != "" {
+			id = strings.TrimSpace(reuseMessageID)
+			err = a.feishu.PatchCard(ctx, id, card)
+			if err == nil {
+				cardID = id
+			} else {
+				id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+				if err == nil && strings.TrimSpace(id) != "" {
+					cardID = strings.TrimSpace(id)
+				}
+			}
 		} else {
+			id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+			if err == nil && strings.TrimSpace(id) != "" {
+				cardID = strings.TrimSpace(id)
+			}
+		}
+		if err != nil || strings.TrimSpace(id) == "" {
 			fallback := appendFooterText(strings.TrimSpace(chunk.Body), chunk.FooterLines)
 			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
 		}

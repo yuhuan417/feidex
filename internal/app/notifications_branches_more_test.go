@@ -15,9 +15,6 @@ func TestHandleNotificationAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.handleNotification("item/reasoning/summaryTextDelta", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"reason-1","delta":"thinking"}`))
-	a.handleNotification("item/commandExecution/outputDelta", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"cmd-1","delta":"output"}`))
-	a.handleNotification("item/fileChange/outputDelta", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"file-1","delta":"diff"}`))
 	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"agent-1","type":"agent_message","text":"done"}}`))
 	a.handleNotification("turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-2"}}`))
 	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
@@ -48,10 +45,8 @@ func TestHandleServerRequestRoutesKnownMethods(t *testing.T) {
 func TestFinishTurnStatuses(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	sub.OutputText = "partial"
 	sub.Status = "running"
 	if err := a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-		s.OutputText = "partial"
 		s.Status = "running"
 	}); err != nil {
 		t.Fatalf("UpdateSubmission() error = %v", err)

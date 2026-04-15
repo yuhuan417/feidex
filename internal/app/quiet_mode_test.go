@@ -25,21 +25,21 @@ func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
 	}
 }
 
-func TestShouldDeliverTurnSnapshotInQuiet(t *testing.T) {
-	if !shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "agent_message"}) {
-		t.Fatal("expected non-final agent_message snapshot to be allowed")
+func TestShouldDeliverTurnItemInQuiet(t *testing.T) {
+	if !shouldDeliverTurnItemInQuiet("agent_message") {
+		t.Fatal("expected non-final agent_message item to be allowed")
 	}
-	if !shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "agent_message", IsFinalAnswer: true}) {
-		t.Fatal("expected final agent_message snapshot to be allowed")
+	if !shouldDeliverTurnItemInQuiet("agent_message") {
+		t.Fatal("expected final agent_message item to be allowed")
 	}
-	if !shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "plan"}) {
-		t.Fatal("expected plan snapshot to be allowed")
+	if !shouldDeliverTurnItemInQuiet("plan") {
+		t.Fatal("expected plan item to be allowed")
 	}
-	if shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "reasoning"}) {
-		t.Fatal("expected reasoning snapshot to be blocked")
+	if shouldDeliverTurnItemInQuiet("reasoning") {
+		t.Fatal("expected reasoning item to be blocked")
 	}
-	if shouldDeliverTurnSnapshotInQuiet(turnItemSnapshot{ItemType: "command_execution"}) {
-		t.Fatal("expected command_execution snapshot to be blocked")
+	if shouldDeliverTurnItemInQuiet("command_execution") {
+		t.Fatal("expected command_execution item to be blocked")
 	}
 }
 
@@ -91,7 +91,7 @@ func TestCommandQuietTogglesAndSupportsConfigCard(t *testing.T) {
 	}
 }
 
-func TestSendTurnSnapshotCardAllowsAgentMessageInQuietMode(t *testing.T) {
+func TestSendTurnItemCardAllowsAgentMessageInQuietMode(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = true
 	sub := &state.Submission{
@@ -102,16 +102,16 @@ func TestSendTurnSnapshotCardAllowsAgentMessageInQuietMode(t *testing.T) {
 		TurnID:           "turn-1",
 		TriggerMessageID: "msg-1",
 	}
-	snapshot := turnItemSnapshot{
-		ItemID:   "item-1",
-		ItemType: "agent_message",
-		SendText: "intermediate reply",
-		LinkKind: "turn_output",
-		IsOutput: true,
+	payload := turnItemCardPayload{
+		ItemID:      "item-1",
+		ItemType:    "agent_message",
+		Title:       "回复",
+		Color:       "green",
+		SummaryText: "intermediate reply",
 	}
 
-	if got := a.sendTurnSnapshotCard(context.Background(), sub, snapshot); got != "reply-card-id" {
-		t.Fatalf("sendTurnSnapshotCard() = %q, want reply-card-id", got)
+	if got := a.sendTurnItemCard(context.Background(), sub, payload); got != "reply-card-id" {
+		t.Fatalf("sendTurnItemCard() = %q, want reply-card-id", got)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))

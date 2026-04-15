@@ -250,13 +250,14 @@ func localLinkDisplayTarget(rawHref, workspaceCwd string) (string, bool) {
 	if target == "" {
 		return "", false
 	}
+	display := renderWorkspaceDisplayPath(target, workspaceCwd)
 	if _, ok := normalizeReferencedPath(target, workspaceCwd); ok {
-		return target, true
+		return display, true
 	}
 	if !looksLikeLocalPathTarget(target) {
 		return "", false
 	}
-	return target, true
+	return display, true
 }
 
 func cleanMarkdownLinkTarget(raw string) string {

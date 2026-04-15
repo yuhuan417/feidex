@@ -11,8 +11,12 @@ type approvalFileEntry struct {
 }
 
 func renderFileApprovalBody(params map[string]any) string {
+	return renderFileApprovalBodyWithWorkspace(params, "")
+}
+
+func renderFileApprovalBodyWithWorkspace(params map[string]any, workspaceCwd string) string {
 	lines := []string{"文件变更审批"}
-	entries := collectFileApprovalEntries(params)
+	entries := collectFileApprovalEntriesWithWorkspace(params, workspaceCwd)
 	if len(entries) > 0 {
 		lines = append(lines, fmt.Sprintf("%d 个文件：", len(entries)))
 		const maxEntries = 8
@@ -46,6 +50,10 @@ func renderFileApprovalBody(params map[string]any) string {
 }
 
 func collectFileApprovalEntries(value any) []approvalFileEntry {
+	return collectFileApprovalEntriesWithWorkspace(value, "")
+}
+
+func collectFileApprovalEntriesWithWorkspace(value any, workspaceCwd string) []approvalFileEntry {
 	out := []approvalFileEntry{}
 	seen := map[string]struct{}{}
 	var add func(approvalFileEntry)
@@ -69,10 +77,10 @@ func collectFileApprovalEntries(value any) []approvalFileEntry {
 		}
 		switch x := current.(type) {
 		case string:
-			add(approvalFileEntry{Path: x})
+			add(approvalFileEntry{Path: renderWorkspaceDisplayPath(x, workspaceCwd)})
 		case []any:
 			for _, item := range x {
-				add(parseApprovalFileEntry(item))
+				add(parseApprovalFileEntryWithWorkspace(item, workspaceCwd))
 			}
 		case map[string]any:
 			for _, key := range []string{"changes", "fileChanges", "file_changes", "files", "paths", "filePaths", "file_paths"} {
@@ -82,7 +90,7 @@ func collectFileApprovalEntries(value any) []approvalFileEntry {
 			}
 			for _, key := range []string{"path", "file", "filePath", "file_path", "targetPath", "target_path"} {
 				if path := strings.TrimSpace(stringValue(x[key])); path != "" {
-					add(parseApprovalFileEntry(x))
+					add(parseApprovalFileEntryWithWorkspace(x, workspaceCwd))
 					break
 				}
 			}
@@ -98,9 +106,13 @@ func collectFileApprovalEntries(value any) []approvalFileEntry {
 }
 
 func parseApprovalFileEntry(value any) approvalFileEntry {
+	return parseApprovalFileEntryWithWorkspace(value, "")
+}
+
+func parseApprovalFileEntryWithWorkspace(value any, workspaceCwd string) approvalFileEntry {
 	switch x := value.(type) {
 	case string:
-		return approvalFileEntry{Path: strings.TrimSpace(x)}
+		return approvalFileEntry{Path: renderWorkspaceDisplayPath(x, workspaceCwd)}
 	case map[string]any:
 		oldPath := strings.TrimSpace(firstNonEmpty(stringValue(x["oldPath"]), stringValue(x["old_path"])))
 		newPath := strings.TrimSpace(firstNonEmpty(stringValue(x["newPath"]), stringValue(x["new_path"])))
@@ -114,7 +126,9 @@ func parseApprovalFileEntry(value any) approvalFileEntry {
 			stringValue(x["name"]),
 		))
 		if oldPath != "" && newPath != "" && oldPath != newPath {
-			path = oldPath + " -> " + newPath
+			path = renderWorkspaceDisplayPath(oldPath, workspaceCwd) + " -> " + renderWorkspaceDisplayPath(newPath, workspaceCwd)
+		} else {
+			path = renderWorkspaceDisplayPath(path, workspaceCwd)
 		}
 		kind := strings.TrimSpace(firstNonEmpty(
 			stringValue(x["kind"]),

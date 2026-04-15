@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"feidex/internal/state"
@@ -19,28 +18,7 @@ type turnStream struct {
 	LastSentPlan string
 	LastError    string
 	SentFinal    bool
-	NextOrder    int
-	Items        map[string]*turnItemBuffer
-}
-
-type turnItemBuffer struct {
-	Key      string
-	ItemID   string
-	ItemType string
-	Command  string
-	Delta    string
-	Order    int
-}
-
-type turnItemSnapshot struct {
-	ItemID        string
-	ItemType      string
-	SendText      string
-	DetailText    string
-	LinkKind      string
-	IsOutput      bool
-	Expandable    bool
-	IsFinalAnswer bool
+	QuietWorking *quietWorkingCard
 }
 
 type turnStreamFlushResult struct {
@@ -55,23 +33,6 @@ func (a *App) noteTurnStarted(sessionKey string, sub *state.Submission) {
 	a.turnStreamsMu.Lock()
 	defer a.turnStreamsMu.Unlock()
 	a.ensureTurnStreamLocked(sessionKey, sub)
-}
-
-func (a *App) appendTurnItemDelta(threadID, turnID, itemID, itemType, delta string) {
-	if strings.TrimSpace(delta) == "" {
-		return
-	}
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
-	if sub == nil {
-		return
-	}
-
-	a.turnStreamsMu.Lock()
-	defer a.turnStreamsMu.Unlock()
-	stream := a.ensureTurnStreamLocked(sessionKey, sub)
-	key := turnItemKey(itemID, itemType)
-	item := stream.ensureItemBuffer(key, itemID, itemType)
-	item.Delta += delta
 }
 
 func (a *App) updatePendingPlan(turnID, plan string) {
@@ -101,10 +62,16 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	if sub == nil {
 		return
 	}
+	workspaceCwd := a.workspaceCwd(sub.WorkspaceID)
+	payload, hasPayload := buildTurnItemCardPayloadWithWorkspace(itemID, item, workspaceCwd)
 
 	var (
-		planText string
-		snapshot turnItemSnapshot
+		planText         string
+		planBoundary     quietWorkingBoundary
+		itemBoundary     quietWorkingBoundary
+		workingUpdate    quietWorkingCardOp
+		planReuseMessage string
+		itemReuseMessage string
 	)
 
 	a.turnStreamsMu.Lock()
@@ -116,24 +83,35 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		planText = text
 		stream.LastSentPlan = text
 		stream.PendingPlan = ""
+		if a.quietModeEnabled() {
+			planBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
+			planReuseMessage = planBoundary.ReuseMessageID
+		}
 	}
-	itemType := normalizeTurnItemType(stringValue(item["type"]))
-	key := turnItemKey(itemID, itemType)
-	buf := stream.ensureItemBuffer(key, itemID, itemType)
-	if command := firstNonEmpty(stringValue(item["command"]), stringValue(item["commandLine"])); command != "" {
-		buf.Command = command
-	}
-	snapshot = snapshotTurnItem(buf, item, false)
-	delete(stream.Items, key)
-	if snapshot.IsFinalAnswer {
+	if hasPayload && payload.IsFinalAnswer {
 		stream.SentFinal = true
+	}
+	if a.quietModeEnabled() {
+		if hasPayload && isQuietBoundaryTurnItem(payload.ItemType) {
+			itemBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
+			itemReuseMessage = itemBoundary.ReuseMessageID
+		} else {
+			workingUpdate = a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
+		}
 	}
 	a.turnStreamsMu.Unlock()
 
+	a.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		a.sendPlanCard(ctx, sub, planText)
+		a.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
-	a.deliverTurnItemSnapshot(ctx, sub, snapshot)
+	a.executeQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
+	if a.quietModeEnabled() {
+		a.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
+	}
+	if hasPayload && (!a.quietModeEnabled() || isQuietBoundaryTurnItem(payload.ItemType)) {
+		a.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
+	}
 }
 
 func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
@@ -146,9 +124,10 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	}
 
 	var (
-		planText string
-		items    []turnItemSnapshot
-		result   turnStreamFlushResult
+		planText         string
+		planBoundary     quietWorkingBoundary
+		planReuseMessage string
+		result           turnStreamFlushResult
 	)
 
 	a.turnStreamsMu.Lock()
@@ -157,40 +136,19 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	result.LastError = stream.LastError
 	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
 		planText = text
-	}
-	pending := make([]*turnItemBuffer, 0, len(stream.Items))
-	for _, item := range stream.Items {
-		pending = append(pending, item)
-	}
-	sort.Slice(pending, func(i, j int) bool { return pending[i].Order < pending[j].Order })
-	for _, item := range pending {
-		items = append(items, snapshotTurnItem(item, nil, true))
+		if a.quietModeEnabled() {
+			planBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
+			planReuseMessage = planBoundary.ReuseMessageID
+		}
 	}
 	delete(a.turnStreams, turnID)
 	a.turnStreamsMu.Unlock()
 
+	a.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		a.sendPlanCard(ctx, sub, planText)
-	}
-	for _, item := range items {
-		a.deliverTurnItemSnapshot(ctx, sub, item)
+		a.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
 	return result
-}
-
-func (a *App) deliverTurnItemSnapshot(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot) bool {
-	if sub == nil {
-		return false
-	}
-	if strings.TrimSpace(snapshot.SendText) == "" && strings.TrimSpace(snapshot.DetailText) == "" {
-		return false
-	}
-	id := a.sendTurnSnapshotCard(ctx, sub, snapshot)
-	ids := []string{}
-	if strings.TrimSpace(id) != "" {
-		ids = append(ids, id)
-	}
-	return len(ids) > 0
 }
 
 func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *turnStream {
@@ -213,32 +171,7 @@ func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *
 		SubmissionID: sub.ID,
 		SessionKey:   sessionKey,
 		WorkspaceID:  sub.WorkspaceID,
-		Items:        map[string]*turnItemBuffer{},
 	}
 	a.turnStreams[sub.TurnID] = stream
 	return stream
-}
-
-func (s *turnStream) ensureItemBuffer(key, itemID, itemType string) *turnItemBuffer {
-	if s.Items == nil {
-		s.Items = map[string]*turnItemBuffer{}
-	}
-	if item := s.Items[key]; item != nil {
-		if item.ItemID == "" {
-			item.ItemID = strings.TrimSpace(itemID)
-		}
-		if item.ItemType == "" {
-			item.ItemType = normalizeTurnItemType(itemType)
-		}
-		return item
-	}
-	s.NextOrder++
-	item := &turnItemBuffer{
-		Key:      key,
-		ItemID:   strings.TrimSpace(itemID),
-		ItemType: normalizeTurnItemType(itemType),
-		Order:    s.NextOrder,
-	}
-	s.Items[key] = item
-	return item
 }

@@ -134,21 +134,22 @@ func TestSendFinalMessagesWithFooterSplitsReplyCardsByTableLimit(t *testing.T) {
 	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "footer line") {
 		t.Fatalf("last split card missing footer: %q", body)
 	}
-	updated := a.store.GetSubmission(sub.ID)
-	if updated == nil || len(updated.FinalMessageIDs) != 2 {
-		t.Fatalf("updated submission = %+v, want 2 final message ids", updated)
+	if updated := a.store.GetSubmission(sub.ID); updated == nil {
+		t.Fatalf("updated submission = %+v, want retained runtime submission", updated)
 	}
 }
 
-func TestSendTurnSnapshotCardSplitsReplyTables(t *testing.T) {
+func TestSendTurnItemCardSplitsReplyTables(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1", "card-2"}
 
-	snapshot := turnItemSnapshot{
+	payload := turnItemCardPayload{
 		ItemID:   "item-1",
 		ItemType: "agent_message",
-		SendText: strings.Join([]string{
+		Title:    "回复",
+		Color:    "green",
+		SummaryText: strings.Join([]string{
 			"reply",
 			"",
 			markdownTestTable("t1"),
@@ -163,12 +164,11 @@ func TestSendTurnSnapshotCardSplitsReplyTables(t *testing.T) {
 			"",
 			markdownTestTable("t6"),
 		}, "\n"),
-		LinkKind: "turn_output",
 	}
 
-	got := a.sendTurnSnapshotCard(context.Background(), sub, snapshot)
+	got := a.sendTurnItemCard(context.Background(), sub, payload)
 	if got != "card-1" {
-		t.Fatalf("sendTurnSnapshotCard() = %q, want first split card id", got)
+		t.Fatalf("sendTurnItemCard() = %q, want first split card id", got)
 	}
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count = %d, want 2", len(ff.replyCards))

@@ -24,94 +24,106 @@ func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submiss
 }
 
 func (a *App) sendPlanCard(ctx context.Context, sub *state.Submission, planText string) string {
-	return a.sendTurnEventCard(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "")
+	return a.sendPlanCardWithReuse(ctx, sub, planText, "")
+}
+
+func (a *App) sendPlanCardWithReuse(ctx context.Context, sub *state.Submission, planText, reuseMessageID string) string {
+	return a.sendTurnEventCardWithReuse(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "", reuseMessageID)
 }
 
 type turnItemCardPayload struct {
-	TurnID        string `json:"turn_id"`
 	ItemID        string `json:"item_id"`
 	ItemType      string `json:"item_type"`
 	Title         string `json:"title"`
 	Color         string `json:"color"`
 	SummaryText   string `json:"summary_text"`
 	DetailText    string `json:"detail_text"`
-	LinkKind      string `json:"link_kind"`
 	IsFinalAnswer bool   `json:"is_final_answer"`
 }
 
-func (a *App) sendTurnSnapshotCard(ctx context.Context, sub *state.Submission, snapshot turnItemSnapshot) string {
+func (a *App) sendTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload) string {
+	return a.sendTurnItemCardWithReuse(ctx, sub, payload, "")
+}
+
+func (a *App) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, reuseMessageID string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnSnapshotInQuiet(snapshot) {
+	if strings.TrimSpace(payload.SummaryText) == "" && strings.TrimSpace(payload.DetailText) == "" {
 		return ""
 	}
-	title, color := turnSnapshotCardMeta(snapshot)
-	payload := turnItemCardPayload{
-		TurnID:        sub.TurnID,
-		ItemID:        snapshot.ItemID,
-		ItemType:      snapshot.ItemType,
-		Title:         title,
-		Color:         color,
-		SummaryText:   strings.TrimSpace(snapshot.SendText),
-		DetailText:    strings.TrimSpace(snapshot.DetailText),
-		LinkKind:      snapshot.LinkKind,
-		IsFinalAnswer: snapshot.IsFinalAnswer,
+	if payload.Title == "" || payload.Color == "" {
+		payload.Title, payload.Color = turnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
+	if a.quietModeEnabled() && !shouldDeliverTurnItemInQuiet(payload.ItemType) {
+		return ""
+	}
+	kind := turnItemEventKind(payload.ItemType)
 	footerLines := []string(nil)
-	if snapshot.IsFinalAnswer {
-		footerLines = a.turnFinalFooterLines(payload.TurnID, time.Now())
+	if payload.IsFinalAnswer {
+		footerLines = a.turnFinalFooterLines(sub.TurnID, time.Now())
 	}
 	if isReplyTurnItem(payload.ItemType) {
 		body := replyTurnItemCardBody(payload)
 		if body == "" {
 			body = payload.DetailText
 		}
-		results := a.sendReplyCardChunks(
+		results := a.sendReplyCardChunksWithReuse(
 			ctx,
 			sub,
 			replyTurnItemCardTitle(payload),
 			payload.Color,
 			buildReplyCardChunks(body, payload.IsFinalAnswer, footerLines),
 			a.replyInThreadForSubmission(sub),
-			snapshot.IsFinalAnswer,
+			payload.IsFinalAnswer,
+			reuseMessageID,
 		)
 		if len(results) == 0 {
 			fallback := payload.SummaryText
 			if fallback == "" {
 				fallback = payload.DetailText
 			}
-			if snapshot.IsFinalAnswer {
+			if payload.IsFinalAnswer {
 				a.sendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, a.replyInThreadForSubmission(sub))
 			} else {
-				a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
+				a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), kind)
 			}
 			return ""
 		}
 		for _, result := range results {
-			a.recordMessageLink(result.MessageID, snapshot.LinkKind, sub, snapshot.ItemID)
+			a.recordMessageLink(result.MessageID, kind, sub, payload.ItemID)
 		}
 		return results[0].MessageID
 	}
-	card := a.renderTurnItemCard(ctx, sub, payload, snapshot.IsFinalAnswer)
+	card := a.renderTurnItemCard(ctx, sub, payload, payload.IsFinalAnswer)
+	if strings.TrimSpace(reuseMessageID) != "" {
+		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+			a.recordMessageLink(reuseMessageID, kind, sub, payload.ItemID)
+			return reuseMessageID
+		}
+	}
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
 		if fallback == "" {
 			fallback = payload.DetailText
 		}
-		if snapshot.IsFinalAnswer {
+		if payload.IsFinalAnswer {
 			a.sendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, a.replyInThreadForSubmission(sub))
 		} else {
-			a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), snapshot.LinkKind)
+			a.sendTurnEventMessages(ctx, sub, fallback, a.replyInThreadForSubmission(sub), kind)
 		}
 		return ""
 	}
-	a.recordMessageLink(id, snapshot.LinkKind, sub, snapshot.ItemID)
+	a.recordMessageLink(id, kind, sub, payload.ItemID)
 	return id
 }
 
 func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID string) string {
+	return a.sendTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, "")
+}
+
+func (a *App) sendTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -123,6 +135,12 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 		return ""
 	}
 	card := a.renderCompactMarkdownCard(sub, title, color, "", body, nil)
+	if strings.TrimSpace(reuseMessageID) != "" {
+		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+			a.recordMessageLink(reuseMessageID, kind, sub, itemID)
+			return reuseMessageID
+		}
+	}
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		a.sendTurnEventMessages(ctx, sub, body, a.replyInThreadForSubmission(sub), kind)
@@ -240,11 +258,11 @@ func joinMarkdownSections(parts ...string) string {
 	return strings.Join(sections, "\n\n")
 }
 
-func turnSnapshotCardMeta(snapshot turnItemSnapshot) (string, string) {
-	if snapshot.IsFinalAnswer {
+func turnItemCardMeta(itemType string, isFinalAnswer bool) (string, string) {
+	if isFinalAnswer {
 		return "最终答复", "green"
 	}
-	switch snapshot.ItemType {
+	switch normalizeTurnItemType(itemType) {
 	case "reasoning":
 		return "思考", "grey"
 	case "command_execution":
@@ -254,6 +272,23 @@ func turnSnapshotCardMeta(snapshot turnItemSnapshot) (string, string) {
 	case "agent_message":
 		return "回复", "green"
 	default:
-		return turnItemLabel(snapshot.ItemType), "blue"
+		return turnItemLabel(itemType), "blue"
+	}
+}
+
+func turnItemEventKind(itemType string) string {
+	switch normalizeTurnItemType(itemType) {
+	case "plan":
+		return "turn_plan"
+	case "reasoning":
+		return "turn_reasoning"
+	case "agent_message":
+		return "turn_output"
+	case "command_execution":
+		return "turn_command_execution"
+	case "file_change":
+		return "turn_file_change"
+	default:
+		return "turn_item"
 	}
 }

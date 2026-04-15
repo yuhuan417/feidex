@@ -7,11 +7,8 @@ import (
 )
 
 func TestTurnStreamHelperFunctions(t *testing.T) {
-	if got := buildLabeledTurnEventText("计划", "step", true); got != "计划（未完成）:\nstep" {
+	if got := buildLabeledTurnEventText("计划", "step"); got != "计划:\nstep" {
 		t.Fatalf("buildLabeledTurnEventText() = %q", got)
-	}
-	if got := formatTurnCommandEvent("pwd", "/tmp", "completed", optionalIntPointer(0, true), true); !strings.Contains(got, "命令执行（未完成）") || !strings.Contains(got, "exit_code=0") {
-		t.Fatalf("formatTurnCommandEvent() = %q", got)
 	}
 	if got := summarizeCommandExecution("pwd", "/tmp", "completed", optionalIntPointer(0, true)); !strings.Contains(got, "status=completed") {
 		t.Fatalf("summarizeCommandExecution() = %q", got)
@@ -19,14 +16,11 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := normalizeCardMarkdown(formatTurnCommandOutput(" /tmp ")); got != "输出:\n````\n/tmp\n````" {
 		t.Fatalf("formatTurnCommandOutput() = %q", got)
 	}
-	if summary, detail := summarizeGenericTurnItem("web_search", map[string]any{"query": "golang"}, nil); !strings.Contains(summary, "golang") || detail == "" {
+	if summary, detail := summarizeGenericTurnItem("web_search", map[string]any{"query": "golang"}); !strings.Contains(summary, "golang") || detail == "" {
 		t.Fatalf("summarizeGenericTurnItem(web_search) = %q / %q", summary, detail)
 	}
 	if got := turnItemLabel(""); got != "事件" {
 		t.Fatalf("turnItemLabel(empty) = %q", got)
-	}
-	if got := turnItemKey("", ""); got != "item" {
-		t.Fatalf("turnItemKey(empty) = %q", got)
 	}
 	if got := extractTurnItemText(map[string]any{"summary": []any{map[string]any{"type": "summary_text", "text": "hello"}}}, "summary", "summary_text"); got != "hello" {
 		t.Fatalf("extractTurnItemText() = %q", got)
@@ -52,15 +46,6 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if optionalIntPointer(1, false) != nil {
 		t.Fatal("optionalIntPointer(false) should return nil")
 	}
-	if got := itemIDValue(&turnItemBuffer{ItemID: "buf-id"}, map[string]any{"id": "item-id"}); got != "buf-id" {
-		t.Fatalf("itemIDValue() = %q, want buf-id", got)
-	}
-	if got := deltaText(&turnItemBuffer{Delta: "x"}); got != "x" {
-		t.Fatalf("deltaText() = %q", got)
-	}
-	if got := commandValue(&turnItemBuffer{Command: "pwd"}); got != "pwd" {
-		t.Fatalf("commandValue() = %q", got)
-	}
 	if body, meta := splitCompactMetaLine(markdownCodeBlock("pwd") + "\nstatus=completed exit_code=0"); meta != "status=completed · exit_code=0" || !strings.Contains(body, "pwd") {
 		t.Fatalf("splitCompactMetaLine() = %q / %q", body, meta)
 	}
@@ -72,34 +57,35 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	}
 }
 
-func TestTurnStreamLifecycleDeliversSnapshotsWithoutStoringAccumulation(t *testing.T) {
+func TestTurnStreamLifecycleDeliversItemCardsWithoutStoringAccumulation(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	a.noteTurnStarted("sess-1", sub)
 	a.updatePendingPlan("turn-1", "- [in_progress] run")
-	a.appendTurnItemDelta("thread-1", "turn-1", "reason-1", "reasoning", "thinking")
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{"type": "reasoning"})
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+		"type":    "reasoning",
+		"summary": []any{map[string]any{"type": "summary_text", "text": "thinking"}},
+	})
 
 	updated := a.store.GetSubmission(sub.ID)
-	if updated == nil || updated.PlanText != "" || updated.SummaryText != "" {
+	if updated == nil {
 		t.Fatalf("submission after completeTurnItem = %+v", updated)
 	}
 
-	a.appendTurnItemDelta("thread-1", "turn-1", "msg-1", "agent_message", "partial answer")
 	result := a.flushTurnStream(context.Background(), "thread-1", "turn-1")
 	updated = a.store.GetSubmission(sub.ID)
-	if result.SawFinal || updated.OutputText != "" {
+	if result.SawFinal || updated == nil {
 		t.Fatalf("flushTurnStream() = %+v, submission=%+v", result, updated)
 	}
 	if a.turnStreams["turn-1"] != nil {
 		t.Fatal("expected turn stream to be cleared after flush")
 	}
 	if len(ff.replyCards) < 2 {
-		t.Fatalf("reply cards = %d, want plan + snapshot cards", len(ff.replyCards))
+		t.Fatalf("reply cards = %d, want plan + item cards", len(ff.replyCards))
 	}
 
-	if title, color := turnSnapshotCardMeta(turnItemSnapshot{ItemType: "agent_message", IsFinalAnswer: true}); title != "最终答复" || color != "green" {
-		t.Fatalf("turnSnapshotCardMeta(final) = %q, %q", title, color)
+	if title, color := turnItemCardMeta("agent_message", true); title != "最终答复" || color != "green" {
+		t.Fatalf("turnItemCardMeta(final) = %q, %q", title, color)
 	}
 }

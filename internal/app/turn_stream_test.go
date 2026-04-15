@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,28 +23,19 @@ func cardBodyElements(t *testing.T, card map[string]any) []map[string]any {
 	return elements
 }
 
-func TestSnapshotTurnItemReasoningSkipsEmptyContent(t *testing.T) {
-	buf := &turnItemBuffer{
-		ItemID:   "item-reasoning-empty",
-		ItemType: "reasoning",
-	}
+func TestBuildTurnItemCardPayloadReasoningSkipsEmptyContent(t *testing.T) {
 	item := map[string]any{
 		"type":    "reasoning",
 		"summary": []any{},
 	}
 
-	got := snapshotTurnItem(buf, item, false)
-	if got != (turnItemSnapshot{}) {
-		t.Fatalf("expected empty snapshot for empty reasoning, got: %#v", got)
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-reasoning-empty", item, "")
+	if ok || got != (turnItemCardPayload{}) {
+		t.Fatalf("expected empty payload for empty reasoning, got: %#v / %v", got, ok)
 	}
 }
 
-func TestSnapshotTurnItemAgentMessageUsesCompletedText(t *testing.T) {
-	buf := &turnItemBuffer{
-		ItemID:   "item-1",
-		ItemType: "agent_message",
-		Delta:    "partial text",
-	}
+func TestBuildTurnItemCardPayloadAgentMessageUsesCompletedText(t *testing.T) {
 	item := map[string]any{
 		"type": "agent_message",
 		"content": []any{
@@ -51,48 +43,41 @@ func TestSnapshotTurnItemAgentMessageUsesCompletedText(t *testing.T) {
 		},
 	}
 
-	got := snapshotTurnItem(buf, item, false)
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-1", item, "")
+	if !ok {
+		t.Fatal("expected agent message payload")
+	}
 	if got.ItemType != "agent_message" {
 		t.Fatalf("unexpected item type: %q", got.ItemType)
 	}
-	if got.SendText != "final text" {
-		t.Fatalf("unexpected send text: %q", got.SendText)
-	}
-	if !got.IsOutput {
-		t.Fatal("agent message should be treated as output")
+	if got.SummaryText != "final text" {
+		t.Fatalf("unexpected summary text: %q", got.SummaryText)
 	}
 	if got.IsFinalAnswer {
 		t.Fatal("phase-less agent message should not be marked final")
 	}
 }
 
-func TestSnapshotTurnItemAgentMessageMarksFinalAnswer(t *testing.T) {
-	buf := &turnItemBuffer{
-		ItemID:   "item-final",
-		ItemType: "agent_message",
-	}
+func TestBuildTurnItemCardPayloadAgentMessageMarksFinalAnswer(t *testing.T) {
 	item := map[string]any{
 		"type":  "agent_message",
 		"text":  "final text",
 		"phase": "final_answer",
 	}
 
-	got := snapshotTurnItem(buf, item, false)
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-final", item, "")
+	if !ok {
+		t.Fatal("expected final agent message payload")
+	}
 	if !got.IsFinalAnswer {
 		t.Fatal("expected final_answer phase to be marked")
 	}
-	if got.SendText != "final text" {
-		t.Fatalf("unexpected final send text: %q", got.SendText)
+	if got.SummaryText != "final text" {
+		t.Fatalf("unexpected final summary text: %q", got.SummaryText)
 	}
 }
 
-func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
-	buf := &turnItemBuffer{
-		ItemID:   "item-2",
-		ItemType: "command_execution",
-		Command:  "pwd",
-		Delta:    "/tmp/work\n",
-	}
+func TestBuildTurnItemCardPayloadCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	item := map[string]any{
 		"type":              "command_execution",
 		"status":            "completed",
@@ -101,19 +86,19 @@ func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 		"aggregated_output": "/tmp/work\n",
 	}
 
-	got := snapshotTurnItem(buf, item, false)
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-2", item, "")
+	if !ok {
+		t.Fatal("expected command execution payload")
+	}
 	if got.ItemType != "command_execution" {
 		t.Fatalf("unexpected item type: %q", got.ItemType)
 	}
 	want := "````\npwd\n````\nstatus=completed exit_code=0"
-	if rendered := normalizeCardMarkdown(got.SendText); rendered != want {
-		t.Fatalf("unexpected send text:\nwant: %q\ngot:  %q", want, got.SendText)
-	}
-	if !got.Expandable {
-		t.Fatal("command execution snapshot should be expandable")
+	if rendered := normalizeCardMarkdown(got.SummaryText); rendered != want {
+		t.Fatalf("unexpected summary text:\nwant: %q\ngot:  %q", want, got.SummaryText)
 	}
 	if got.DetailText == "" {
-		t.Fatal("expected detail text for command execution snapshot")
+		t.Fatal("expected detail text for command execution payload")
 	}
 	if rendered := normalizeCardMarkdown(got.DetailText); rendered != "输出:\n````\n/tmp/work\n````" {
 		t.Fatalf("unexpected command detail: %q", got.DetailText)
@@ -123,11 +108,7 @@ func TestSnapshotTurnItemCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	}
 }
 
-func TestSnapshotTurnItemToolCallUsesCodeBlockDetail(t *testing.T) {
-	buf := &turnItemBuffer{
-		ItemID:   "item-tool",
-		ItemType: "mcp_tool_call",
-	}
+func TestBuildTurnItemCardPayloadToolCallUsesCodeBlockDetail(t *testing.T) {
 	item := map[string]any{
 		"type":   "mcp_tool_call",
 		"server": "github",
@@ -139,20 +120,19 @@ func TestSnapshotTurnItemToolCallUsesCodeBlockDetail(t *testing.T) {
 		},
 	}
 
-	got := snapshotTurnItem(buf, item, false)
-	if !strings.Contains(normalizeCardMarkdown(got.SendText), "````\ngithub/search_repos\n````") {
-		t.Fatalf("expected tool summary code block, got: %q", got.SendText)
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-tool", item, "")
+	if !ok {
+		t.Fatal("expected tool call payload")
+	}
+	if !strings.Contains(normalizeCardMarkdown(got.SummaryText), "````\ngithub/search_repos\n````") {
+		t.Fatalf("expected tool summary code block, got: %q", got.SummaryText)
 	}
 	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "```") {
 		t.Fatalf("expected tool detail code block, got: %q", got.DetailText)
 	}
 }
 
-func TestSnapshotTurnItemFileChangeUsesCodeBlockSummaryAndDiffDetail(t *testing.T) {
-	buf := &turnItemBuffer{
-		ItemID:   "item-file",
-		ItemType: "file_change",
-	}
+func TestBuildTurnItemCardPayloadFileChangeUsesCodeBlockSummaryAndDiffDetail(t *testing.T) {
 	item := map[string]any{
 		"type":   "file_change",
 		"status": "completed",
@@ -165,9 +145,12 @@ func TestSnapshotTurnItemFileChangeUsesCodeBlockSummaryAndDiffDetail(t *testing.
 		},
 	}
 
-	got := snapshotTurnItem(buf, item, false)
-	if !strings.Contains(normalizeCardMarkdown(got.SendText), "````\nchanged=1\nstatus=completed\ninternal/app/turn_stream.go (modified)\n````") {
-		t.Fatalf("expected file change summary code block, got: %q", got.SendText)
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-file", item, "")
+	if !ok {
+		t.Fatal("expected file change payload")
+	}
+	if !strings.Contains(normalizeCardMarkdown(got.SummaryText), "````\nchanged=1\nstatus=completed\ninternal/app/turn_stream.go (modified)\n````") {
+		t.Fatalf("expected file change summary code block, got: %q", got.SummaryText)
 	}
 	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "````\ninternal/app/turn_stream.go (modified)\n````") {
 		t.Fatalf("expected file change header code block in detail, got: %q", got.DetailText)
@@ -177,6 +160,31 @@ func TestSnapshotTurnItemFileChangeUsesCodeBlockSummaryAndDiffDetail(t *testing.
 	}
 	if strings.Contains(got.DetailText, "changed=1") {
 		t.Fatalf("expected file change detail to avoid repeating summary block, got: %q", got.DetailText)
+	}
+}
+
+func TestBuildTurnItemCardPayloadFileChangeUsesWorkspaceRelativePath(t *testing.T) {
+	workspace := t.TempDir()
+	item := map[string]any{
+		"type":   "file_change",
+		"status": "completed",
+		"changes": []any{
+			map[string]any{
+				"path": filepath.Join(workspace, "internal", "app", "turn_stream.go"),
+				"kind": "modified",
+			},
+		},
+	}
+
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-file", item, workspace)
+	if !ok {
+		t.Fatal("expected file change payload")
+	}
+	if !strings.Contains(normalizeCardMarkdown(got.SummaryText), "internal/app/turn_stream.go (modified)") {
+		t.Fatalf("expected workspace-relative path in summary, got: %q", got.SummaryText)
+	}
+	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "internal/app/turn_stream.go (modified)") {
+		t.Fatalf("expected workspace-relative path in detail, got: %q", got.DetailText)
 	}
 }
 
@@ -190,7 +198,6 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		TurnID:      "turn-1",
 	}
 	payload := turnItemCardPayload{
-		TurnID:      sub.TurnID,
 		ItemType:    "command_execution",
 		Title:       "命令执行",
 		Color:       "blue",
@@ -232,11 +239,10 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 		TurnID:      "turn-1",
 	}
 	payload := turnItemCardPayload{
-		TurnID:      sub.TurnID,
 		ItemType:    "agent_message",
 		Title:       "回复",
 		Color:       "green",
-		SummaryText: "回复（未完成）:\nfinal text",
+		SummaryText: "回复:\nfinal text",
 	}
 
 	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
@@ -267,7 +273,6 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 	}
 	longText := strings.Repeat("hello ", 200)
 	payload := turnItemCardPayload{
-		TurnID:        sub.TurnID,
 		ItemType:      "agent_message",
 		Title:         "最终答复",
 		Color:         "green",
@@ -304,7 +309,6 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 		TurnID:      "turn-1",
 	}
 	payload := turnItemCardPayload{
-		TurnID:      sub.TurnID,
 		ItemType:    "file_change",
 		Title:       "文件改动",
 		Color:       "orange",

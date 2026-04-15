@@ -6,152 +6,76 @@ import (
 	"strings"
 )
 
-func snapshotTurnItem(buf *turnItemBuffer, item map[string]any, partial bool) turnItemSnapshot {
-	if buf == nil && item == nil {
-		return turnItemSnapshot{}
+func buildTurnItemCardPayloadWithWorkspace(itemID string, item map[string]any, workspaceCwd string) (turnItemCardPayload, bool) {
+	if item == nil {
+		return turnItemCardPayload{}, false
 	}
 
-	itemType := ""
-	if buf != nil {
-		itemType = buf.ItemType
-	}
-	if itemType == "" {
-		itemType = normalizeTurnItemType(stringValue(item["type"]))
+	itemType := normalizeTurnItemType(stringValue(item["type"]))
+	itemID = strings.TrimSpace(firstNonEmpty(itemID, stringValue(item["id"])))
+	payload := turnItemCardPayload{
+		ItemID:   itemID,
+		ItemType: itemType,
 	}
 
 	switch itemType {
 	case "user_message":
-		return turnItemSnapshot{}
+		return turnItemCardPayload{}, false
 	case "plan":
-		text := firstNonEmpty(stringValue(item["text"]), strings.TrimSpace(deltaText(buf)))
-		return turnItemSnapshot{
-			ItemID:    itemIDValue(buf, item),
-			ItemType:  itemType,
-			SendText:  buildLabeledTurnEventText("计划", text, partial),
-			LinkKind:  "turn_plan",
-		}
+		text := stringValue(item["text"])
+		payload.SummaryText = buildLabeledTurnEventText("计划", text)
 	case "reasoning":
-		text := firstNonEmpty(extractTurnItemText(item, "summary", "summary_text"), strings.TrimSpace(deltaText(buf)), stringValue(item["text"]))
+		text := firstNonEmpty(extractTurnItemText(item, "summary", "summary_text"), stringValue(item["text"]))
 		if strings.TrimSpace(text) == "" {
-			return turnItemSnapshot{}
+			return turnItemCardPayload{}, false
 		}
-		return turnItemSnapshot{
-			ItemID:    itemIDValue(buf, item),
-			ItemType:  itemType,
-			SendText:  buildLabeledTurnEventText("思考", text, partial),
-			LinkKind:  "turn_reasoning",
-		}
+		payload.SummaryText = buildLabeledTurnEventText("思考", text)
 	case "agent_message":
-		text := firstNonEmpty(extractTurnItemText(item, "content", "output_text"), strings.TrimSpace(deltaText(buf)), stringValue(item["text"]))
-		phase := strings.TrimSpace(stringValue(item["phase"]))
-		isFinal := phase == "final_answer"
-		label := ""
-		if partial {
-			label = "回复（未完成）"
-		}
-		sendText := strings.TrimSpace(text)
-		if label != "" {
-			sendText = buildLabeledTurnEventText(label, text, false)
-		}
-		return turnItemSnapshot{
-			ItemID:        itemIDValue(buf, item),
-			ItemType:      itemType,
-			SendText:      sendText,
-			LinkKind:      "turn_output",
-			IsOutput:      true,
-			IsFinalAnswer: isFinal,
-		}
+		text := firstNonEmpty(extractTurnItemText(item, "content", "output_text"), stringValue(item["text"]))
+		payload.SummaryText = strings.TrimSpace(text)
+		payload.IsFinalAnswer = strings.TrimSpace(stringValue(item["phase"])) == "final_answer"
 	case "command_execution":
-		command := firstNonEmpty(stringValue(item["command"]), stringValue(item["commandLine"]), commandValue(buf))
+		command := firstNonEmpty(stringValue(item["command"]), stringValue(item["commandLine"]))
 		output := firstNonEmpty(
 			stringValue(item["aggregated_output"]),
 			stringValue(item["aggregatedOutput"]),
 			stringValue(item["output"]),
 			extractTurnItemText(item, "content", "output_text"),
-			strings.TrimSpace(deltaText(buf)),
 		)
 		status := strings.TrimSpace(firstNonEmpty(stringValue(item["status"]), stringValue(item["state"])))
 		exitCode, hasExitCode := intValue(item["exit_code"])
 		if !hasExitCode {
 			exitCode, hasExitCode = intValue(item["exitCode"])
 		}
-		summary := summarizeCommandExecution(command, output, status, optionalIntPointer(exitCode, hasExitCode))
-		detail := formatTurnCommandOutput(output)
-		return turnItemSnapshot{
-			ItemID:     itemIDValue(buf, item),
-			ItemType:   itemType,
-			SendText:   summary,
-			DetailText: detail,
-			LinkKind:   "turn_command_execution",
-			Expandable: strings.TrimSpace(detail) != "",
-		}
+		payload.SummaryText = summarizeCommandExecution(command, output, status, optionalIntPointer(exitCode, hasExitCode))
+		payload.DetailText = formatTurnCommandOutput(output)
 	case "file_change":
-		summary, detail := summarizeFileChangeItem(item)
-		return turnItemSnapshot{
-			ItemID:     itemIDValue(buf, item),
-			ItemType:   itemType,
-			SendText:   summary,
-			DetailText: detail,
-			LinkKind:   "turn_file_change",
-			Expandable: strings.TrimSpace(detail) != "",
-		}
+		payload.SummaryText, payload.DetailText = summarizeFileChangeItem(item, workspaceCwd)
 	default:
-		summary, detail := summarizeGenericTurnItem(itemType, item, buf)
+		summary, detail := summarizeGenericTurnItem(itemType, item)
 		if strings.TrimSpace(summary) == "" && strings.TrimSpace(detail) == "" {
-			return turnItemSnapshot{}
+			return turnItemCardPayload{}, false
 		}
-		return turnItemSnapshot{
-			ItemID:     itemIDValue(buf, item),
-			ItemType:   itemType,
-			SendText:   summary,
-			DetailText: detail,
-			LinkKind:   "turn_item",
-			Expandable: strings.TrimSpace(detail) != "",
-		}
+		payload.SummaryText = summary
+		payload.DetailText = detail
 	}
+
+	if strings.TrimSpace(payload.SummaryText) == "" && strings.TrimSpace(payload.DetailText) == "" {
+		return turnItemCardPayload{}, false
+	}
+	payload.Title, payload.Color = turnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
+	return payload, true
 }
 
-func buildLabeledTurnEventText(label, text string, partial bool) string {
+func buildLabeledTurnEventText(label, text string) string {
 	text = strings.TrimSpace(text)
 	if label == "" {
 		return text
-	}
-	if partial && !strings.Contains(label, "未完成") {
-		label += "（未完成）"
 	}
 	if text == "" {
 		return label
 	}
 	return label + ":\n" + text
-}
-
-func formatTurnCommandEvent(command, output, status string, exitCode *int, partial bool) string {
-	lines := []string{}
-	title := "命令执行"
-	if partial {
-		title = "命令执行（未完成）"
-	}
-	lines = append(lines, title+":")
-	if strings.TrimSpace(command) != "" {
-		lines = append(lines, "命令:")
-		lines = append(lines, markdownCodeBlock("$ "+strings.TrimSpace(command)))
-	}
-	output = strings.TrimSpace(output)
-	if output != "" {
-		lines = append(lines, "输出:")
-		lines = append(lines, markdownCodeBlock(output))
-	}
-	meta := make([]string, 0, 2)
-	if strings.TrimSpace(status) != "" {
-		meta = append(meta, "status="+strings.TrimSpace(status))
-	}
-	if exitCode != nil {
-		meta = append(meta, "exit_code="+strconv.Itoa(*exitCode))
-	}
-	if len(meta) > 0 {
-		lines = append(lines, strings.Join(meta, " "))
-	}
-	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func summarizeCommandExecution(command, output, status string, exitCode *int) string {
@@ -180,7 +104,7 @@ func formatTurnCommandOutput(output string) string {
 	return "输出:\n" + markdownCodeBlock(output)
 }
 
-func summarizeFileChangeItem(item map[string]any) (string, string) {
+func summarizeFileChangeItem(item map[string]any, workspaceCwd string) (string, string) {
 	changes, _ := item["changes"].([]any)
 	status := strings.TrimSpace(firstNonEmpty(stringValue(item["status"]), stringValue(item["state"])))
 	summaryBlock := make([]string, 0, 2+len(changes))
@@ -192,7 +116,7 @@ func summarizeFileChangeItem(item map[string]any) (string, string) {
 	}
 	for _, raw := range changes {
 		change, _ := raw.(map[string]any)
-		path := strings.TrimSpace(stringValue(change["path"]))
+		path := renderWorkspaceDisplayPath(stringValue(change["path"]), workspaceCwd)
 		kind := strings.TrimSpace(stringValue(change["kind"]))
 		entry := path
 		if kind != "" {
@@ -209,7 +133,7 @@ func summarizeFileChangeItem(item map[string]any) (string, string) {
 	detailLines := []string{}
 	for _, raw := range changes {
 		change, _ := raw.(map[string]any)
-		path := strings.TrimSpace(stringValue(change["path"]))
+		path := renderWorkspaceDisplayPath(stringValue(change["path"]), workspaceCwd)
 		kind := strings.TrimSpace(stringValue(change["kind"]))
 		diff := strings.TrimSpace(stringValue(change["diff"]))
 		header := path
@@ -237,7 +161,7 @@ func summarizeFileChangeItem(item map[string]any) (string, string) {
 	return strings.TrimSpace(strings.Join(summaryLines, "\n")), detail
 }
 
-func summarizeGenericTurnItem(itemType string, item map[string]any, buf *turnItemBuffer) (string, string) {
+func summarizeGenericTurnItem(itemType string, item map[string]any) (string, string) {
 	title := turnItemLabel(itemType)
 	summaryLines := []string{title + ":"}
 	switch normalizeTurnItemType(itemType) {
@@ -279,7 +203,6 @@ func summarizeGenericTurnItem(itemType string, item map[string]any, buf *turnIte
 			stringValue(item["text"]),
 			stringValue(item["output"]),
 			extractTurnItemText(item, "summary", ""),
-			strings.TrimSpace(deltaText(buf)),
 			prettyJSON(item),
 		))
 		if summary != "" {
@@ -293,9 +216,6 @@ func summarizeGenericTurnItem(itemType string, item map[string]any, buf *turnIte
 		extractTurnItemText(item, "summary", ""),
 		prettyJSON(item),
 	))
-	if detail == "" {
-		detail = strings.TrimSpace(deltaText(buf))
-	}
 	if isCodeStyledTurnItem(itemType) && detail != "" {
 		detail = turnItemLabel(itemType) + ":\n" + markdownCodeBlock(detail)
 	}

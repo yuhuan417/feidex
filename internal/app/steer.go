@@ -157,18 +157,6 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 	return true, nil
 }
 
-func (a *App) recordInboundSubmissionSourceLink(messageID, sessionKey, submissionID string) {
-	if a == nil || a.store == nil || strings.TrimSpace(messageID) == "" {
-		return
-	}
-	_ = a.appState().saveMessageLink(&state.MessageLink{
-		MessageID:    strings.TrimSpace(messageID),
-		Kind:         "submission_source",
-		SessionKey:   strings.TrimSpace(sessionKey),
-		SubmissionID: strings.TrimSpace(submissionID),
-	})
-}
-
 func (a *App) recordSubmissionSourceLinks(sub *state.Submission) {
 	if a == nil || a.store == nil || sub == nil {
 		return
@@ -196,7 +184,6 @@ func (a *App) recordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID 
 	}
 	_ = a.appState().saveMessageLink(&state.MessageLink{
 		MessageID:  strings.TrimSpace(rootMessageID),
-		Kind:       "root_turn",
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),
 		TurnID:     strings.TrimSpace(turnID),
@@ -209,7 +196,6 @@ func (a *App) recordTurnMessageLink(messageID, sessionKey, threadID, turnID stri
 	}
 	_ = a.appState().saveMessageLink(&state.MessageLink{
 		MessageID:  strings.TrimSpace(messageID),
-		Kind:       "turn_source",
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),
 		TurnID:     strings.TrimSpace(turnID),

@@ -332,7 +332,6 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 		SessionKey:       "session-1",
 		SourceMessageIDs: []string{"m-1", "m-2"},
 		Attachments:      []SubmissionAttachment{{Kind: "file", Name: "doc.txt", LocalPath: "/tmp/doc.txt"}},
-		FinalMessageIDs:  []string{"final-1"},
 	}
 	id, err := store.CreateSubmission(sub)
 	if err != nil {
@@ -344,13 +343,12 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 
 	sub.SourceMessageIDs[0] = "mutated"
 	sub.Attachments[0].Name = "changed.txt"
-	sub.FinalMessageIDs[0] = "changed"
 
 	saved := store.GetSubmission(id)
 	if saved == nil {
 		t.Fatal("GetSubmission() returned nil")
 	}
-	if saved.SourceMessageIDs[0] != "m-1" || saved.Attachments[0].Name != "doc.txt" || saved.FinalMessageIDs[0] != "final-1" {
+	if saved.SourceMessageIDs[0] != "m-1" || saved.Attachments[0].Name != "doc.txt" {
 		t.Fatalf("stored submission was mutated through caller slices: %+v", saved)
 	}
 	if saved.CreatedAt == 0 || saved.UpdatedAt == 0 {
@@ -361,7 +359,6 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond)
 	if err := store.UpdateSubmission(id, func(s *Submission) {
 		s.Status = "done"
-		s.FinalMessageIDs = append(s.FinalMessageIDs, "final-2")
 	}); err != nil {
 		t.Fatalf("UpdateSubmission() error = %v", err)
 	}
@@ -369,9 +366,6 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 	updated := store.GetSubmission(id)
 	if updated.Status != "done" {
 		t.Fatalf("updated.Status = %q, want done", updated.Status)
-	}
-	if len(updated.FinalMessageIDs) != 2 {
-		t.Fatalf("updated.FinalMessageIDs = %+v, want appended value", updated.FinalMessageIDs)
 	}
 	if updated.UpdatedAt <= before {
 		t.Fatalf("UpdatedAt did not move forward: before=%d after=%d", before, updated.UpdatedAt)
@@ -414,15 +408,15 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 		t.Fatalf("DeletePendingRequests() should remove request, got %+v", got)
 	}
 
-	link := &MessageLink{MessageID: "msg-1", Kind: "submission"}
+	link := &MessageLink{MessageID: "msg-1", ThreadID: "turn-thread"}
 	if err := store.UpsertMessageLink(link); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 	savedLink := store.GetMessageLink("msg-1")
-	if savedLink == nil || savedLink.CreatedAt == 0 {
-		t.Fatalf("GetMessageLink() = %+v, want populated timestamp", savedLink)
+	if savedLink == nil || savedLink.ThreadID != "turn-thread" {
+		t.Fatalf("GetMessageLink() = %+v, want stored clone", savedLink)
 	}
-	store.DeleteMessageLinks(func(link *MessageLink) bool { return link != nil && link.Kind == "submission" })
+	store.DeleteMessageLinks(func(link *MessageLink) bool { return link != nil && link.MessageID == "msg-1" })
 	if got := store.GetMessageLink("msg-1"); got != nil {
 		t.Fatalf("DeleteMessageLinks() should remove link, got %+v", got)
 	}

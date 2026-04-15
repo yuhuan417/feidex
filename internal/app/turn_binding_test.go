@@ -38,7 +38,6 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	if err := a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
-		s.OutputText = "non-final output"
 		s.Status = "running"
 	}); err != nil {
 		t.Fatalf("UpdateSubmission() error = %v", err)

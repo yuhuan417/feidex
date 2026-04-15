@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
@@ -25,46 +26,6 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 	appState := a.appState()
 	slog.Debug("codex notification", "method", method)
 	switch method {
-	case "item/agentMessage/delta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "agent_message", p.Delta)
-		}
-	case "item/reasoning/summaryTextDelta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "reasoning", p.Delta)
-		}
-	case "item/commandExecution/outputDelta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "command_execution", p.Delta)
-		}
-	case "item/fileChange/outputDelta":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			ItemID   string `json:"itemId"`
-			Delta    string `json:"delta"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.appendTurnItemDelta(p.ThreadID, p.TurnID, p.ItemID, "file_change", p.Delta)
-		}
 	case "item/completed":
 		var p struct {
 			ThreadID string         `json:"threadId"`
@@ -157,7 +118,6 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 			a.recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
 			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
 				sub.Status = "failed"
-				sub.SummaryText = p.Error.Message
 			})
 		}
 	case "serverRequest/resolved":
@@ -215,7 +175,13 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	a.sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, renderFileApprovalBody(raw), raw)
+	workspaceCwd := ""
+	if _, sub := a.findSubmissionByTurn(threadID, turnID); sub != nil {
+		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+			workspaceCwd = ws.Cwd
+		}
+	}
+	a.sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, renderFileApprovalBodyWithWorkspace(raw, workspaceCwd), raw)
 }
 
 func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
