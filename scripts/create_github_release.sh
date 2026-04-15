@@ -83,7 +83,10 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   fail "tracked changes are not committed"
 fi
 
-git fetch origin main --tags >/dev/null 2>&1
+# Do not fetch all tags here: this repo has a moving dev-latest tag, and a
+# plain `git fetch --tags` will fail once the local tag becomes stale. Stable
+# release tags are queried directly from origin via `git ls-remote` below.
+git fetch --no-tags origin main >/dev/null 2>&1
 
 if [[ $# -eq 1 ]]; then
   version="$(normalize_version "$1")"
