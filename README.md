@@ -12,6 +12,8 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
 
 项目面向中文使用场景，README 也以中文为主。
 
+开发约束、模块边界、构建产物放置规则见 [DEVELOPER.md](DEVELOPER.md)。
+
 ## 最近更新
 
 - 这轮更新主要补齐了：
@@ -96,7 +98,8 @@ config.example.toml         配置样例
 ### 1. 构建
 
 ```bash
-go build -o feidex ./cmd/feidex
+mkdir -p bin
+go build -o bin/feidex ./cmd/feidex
 ```
 
 ### 2. 准备配置
@@ -124,7 +127,7 @@ group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
 reply_in_thread = true
-quiet = false
+quiet = "verbose"
 
 [codex]
 command = "codex"
@@ -144,13 +147,13 @@ sandbox_mode = "workspace-write"
 ### 3. 启动
 
 ```bash
-./feidex serve --config config.toml
+./bin/feidex serve --config config.toml
 ```
 
 或者直接：
 
 ```bash
-./feidex
+./bin/feidex
 ```
 
 ## 飞书接入
