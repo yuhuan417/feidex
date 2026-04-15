@@ -167,7 +167,7 @@ func buildQuietWorkingCardLines(itemID string, item map[string]any, workspaceCwd
 	case "web_search":
 		return quietWorkingItemKey(itemID), buildQuietWebSearchLines(item)
 	case "context_compaction":
-		return quietWorkingItemKey(itemID), []string{"Context cmpaction..."}
+		return quietWorkingItemKey(itemID), []string{"Context compaction..."}
 	default:
 		return quietWorkingItemKey(itemID), nil
 	}

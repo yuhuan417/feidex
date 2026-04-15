@@ -93,6 +93,10 @@ func (c *commandCaptureClient) ShareLocalFile(ctx context.Context, req feishu.Sh
 	return c.base.ShareLocalFile(ctx, req)
 }
 
+func (c *commandCaptureClient) ResolveMergeForward(ctx context.Context, messageID string, messageIDs []string) (string, []feishu.Attachment, error) {
+	return c.base.ResolveMergeForward(ctx, messageID, messageIDs)
+}
+
 func (c *commandCaptureClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
 	return c.base.SimpleStatusCard(title, color, body, buttons)
 }
