@@ -20,13 +20,13 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	title, preview, buttonCount := feishu.New(cfg.Feishu).SimpleStatusCard("tmp", "blue", "tmp", nil)["header"], cardElementsForTest(card), 0
 	_ = title
 	_ = preview
-	if elems := cardElementsForTest(card); len(elems) != 3 {
+	if elems := cardElementsForTest(card); len(elems) != 5 {
 		t.Fatalf("renderQuietModeCard() elements = %#v", elems)
 	}
 	if err := a.commandQuiet(&feishu.InboundMessage{}, []string{"bad"}); err == nil {
 		t.Fatal("expected commandQuiet(invalid arg) to fail")
 	}
-	if quietModeStatusText(true) != "开启" || quietModeStatusText(false) != "关闭" || buttonCount != 0 {
+	if quietModeStatusText(config.QuietModeVerbose) != "verbose" || quietModeStatusText(config.QuietModeFinal) != "final" || buttonCount != 0 {
 		t.Fatal("quietModeStatusText() returned unexpected values")
 	}
 }

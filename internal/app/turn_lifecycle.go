@@ -166,11 +166,13 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 			"status", sub.Status,
 		)
 		terminalText := turnCompletionTerminalText(sub.Status, flush.LastError)
+		reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
 		if sub.Status == "completed" && !flush.SawFinal {
-			a.sendEmptyFinalCard(context.Background(), sub, a.turnFinalFooterLines(turnID, time.Now()))
+			a.sendEmptyFinalCardWithReuse(context.Background(), sub, a.turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
+			reuseMessageID = ""
 		}
 		if terminalText != "" {
-			a.sendTurnEventMessages(context.Background(), sub, terminalText, a.replyInThreadForSubmission(sub), "turn_terminal")
+			a.replaceTurnEventCardWithReuse(context.Background(), sub, "任务状态", "grey", terminalText, "turn_terminal", "", reuseMessageID)
 		}
 	}
 	sess := appState.session(sessionKey)

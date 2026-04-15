@@ -429,16 +429,16 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	ff := &fakeFeishuClient{}
 	fc := &fakeCodexClient{}
 	a := &App{
-		cfg:           loadedCfg,
-		cfgPath:       cfgPath,
-		store:         store,
-		codex:         fc,
-		feishu:        ff,
-		started:       time.Now(),
-		turnStreams:   map[string]*turnStream{},
-		liveThreads:   map[string]string{},
-		turnBindings:  map[string]turnBinding{},
-		pendingTurns:  map[string]turnBinding{},
+		cfg:          loadedCfg,
+		cfgPath:      cfgPath,
+		store:        store,
+		codex:        fc,
+		feishu:       ff,
+		started:      time.Now(),
+		turnStreams:  map[string]*turnStream{},
+		liveThreads:  map[string]string{},
+		turnBindings: map[string]turnBinding{},
+		pendingTurns: map[string]turnBinding{},
 	}
 	return a, ff, fc
 }
@@ -2720,12 +2720,12 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeGlobalReasoningEffortSet() = %#v, %v", resp, err)
 	}
-	resp, err = a.completeQuietSet(&feishu.CardAction{}, true)
+	resp, err = a.completeQuietSet(&feishu.CardAction{}, config.QuietModeProgress)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeQuietSet() = %#v, %v", resp, err)
 	}
-	if !a.cfg.Feishu.Quiet {
-		t.Fatal("expected quiet mode to be enabled")
+	if a.cfg.Feishu.Quiet != config.QuietModeProgress {
+		t.Fatalf("expected quiet mode to be progress, got %q", a.cfg.Feishu.Quiet)
 	}
 
 	sessionKey := "sess-1"

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"feidex/internal/config"
 )
 
 func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
@@ -139,7 +141,7 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.cfg.Feishu.Quiet = true
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	if got := a.sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
 		ItemType:    "command_execution",
 		SummaryText: "命令执行:\n" + markdownCodeBlock("pwd"),
@@ -150,7 +152,7 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 		t.Fatalf("sendTurnEventCardWithReuse(quiet gated) = %q", got)
 	}
 
-	a.cfg.Feishu.Quiet = false
+	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	ff.patchCardErr = errors.New("patch boom")
 	ff.replyCardID = "fresh-card-id"
 	if got := a.sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{

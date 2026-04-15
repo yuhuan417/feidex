@@ -12,14 +12,24 @@ func (a *App) sendFinalMessages(ctx context.Context, sub *state.Submission, text
 }
 
 func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission, footerLines []string) string {
+	return a.sendEmptyFinalCardWithReuse(ctx, sub, footerLines, "")
+}
+
+func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), "final_message") {
 		return ""
 	}
 	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, "", nil, true)
 	appendReplyCardFooter(card, footerLines)
+	if strings.TrimSpace(reuseMessageID) != "" {
+		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+			a.recordMessageLink(reuseMessageID, "final_message", sub, "")
+			return reuseMessageID
+		}
+	}
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		return ""
@@ -32,7 +42,7 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet("final_message") {
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), "final_message") {
 		return nil
 	}
 	chunks := buildReplyCardChunks(strings.TrimSpace(text), true, footerLines)

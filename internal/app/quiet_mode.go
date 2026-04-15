@@ -10,34 +10,103 @@ import (
 	"feidex/internal/feishu"
 )
 
+type quietModeOption struct {
+	Mode        config.QuietMode
+	Title       string
+	Description string
+}
+
+var quietModeOptions = []quietModeOption{
+	{
+		Mode:        config.QuietModeVerbose,
+		Title:       "verbose",
+		Description: "完整展开所有过程消息。",
+	},
+	{
+		Mode:        config.QuietModeProgress,
+		Title:       "progress",
+		Description: "把两次 plan / agent message 之间的过程折叠成一张持续更新的 `工作中` 卡。",
+	},
+	{
+		Mode:        config.QuietModeNormal,
+		Title:       "normal",
+		Description: "只发送 plan 和 agent / final message，不显示 `工作中` 卡。",
+	},
+	{
+		Mode:        config.QuietModeFinal,
+		Title:       "final",
+		Description: "只保留最终答复。",
+	},
+}
+
+func (a *App) quietMode() config.QuietMode {
+	if a == nil || a.cfg == nil {
+		return config.QuietModeVerbose
+	}
+	mode, err := config.ParseQuietMode(a.cfg.Feishu.Quiet)
+	if err != nil {
+		return config.QuietModeVerbose
+	}
+	return mode
+}
+
 func (a *App) quietModeEnabled() bool {
-	return a != nil && a.cfg != nil && a.cfg.Feishu.Quiet
+	return a.quietMode() != config.QuietModeVerbose
 }
 
-func quietModeStatusText(enabled bool) string {
-	if enabled {
-		return "开启"
+func (a *App) quietWorkingCardEnabled() bool {
+	return a.quietMode() == config.QuietModeProgress
+}
+
+func quietModeStatusText(mode config.QuietMode) string {
+	return mode.String()
+}
+
+func quietModeDescription(mode config.QuietMode) string {
+	for _, option := range quietModeOptions {
+		if option.Mode == mode {
+			return option.Description
+		}
 	}
-	return "关闭"
+	return ""
 }
 
-func shouldDeliverTurnKindInQuiet(kind string) bool {
-	switch strings.TrimSpace(kind) {
-	case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_terminal":
-		return true
+func shouldDeliverTurnKindInQuiet(mode config.QuietMode, kind string) bool {
+	switch mode {
+	case config.QuietModeProgress:
+		switch strings.TrimSpace(kind) {
+		case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_terminal":
+			return true
+		default:
+			return false
+		}
+	case config.QuietModeNormal:
+		switch strings.TrimSpace(kind) {
+		case "final_message", "turn_output", "turn_plan":
+			return true
+		default:
+			return false
+		}
+	case config.QuietModeFinal:
+		return strings.TrimSpace(kind) == "final_message"
 	default:
-		return false
+		return true
 	}
 }
 
-func shouldDeliverTurnItemInQuiet(itemType string) bool {
-	switch normalizeTurnItemType(itemType) {
-	case "plan":
-		return true
-	case "agent_message":
-		return true
+func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFinalAnswer bool) bool {
+	switch mode {
+	case config.QuietModeProgress, config.QuietModeNormal:
+		switch normalizeTurnItemType(itemType) {
+		case "plan", "agent_message":
+			return true
+		default:
+			return false
+		}
+	case config.QuietModeFinal:
+		return normalizeTurnItemType(itemType) == "agent_message" && isFinalAnswer
 	default:
-		return false
+		return true
 	}
 }
 
@@ -46,39 +115,35 @@ func (a *App) renderQuietModeCard() map[string]any {
 }
 
 func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
-	enabled := a.quietModeEnabled()
-	body := "当前状态: `" + quietModeStatusText(enabled) + "`\n\n开启后，会把 agent message / plan 之间的过程消息折叠成一张持续更新的 `工作中` 卡片；agent message、final answer、plan、排队/终态状态消息，以及 approval 请求仍会单独发送。"
-	buttons := []feishu.Button{
-		{
+	mode := a.quietMode()
+	lines := []string{
+		"当前模式: `" + quietModeStatusText(mode) + "`",
+		"",
+	}
+	for _, option := range quietModeOptions {
+		lines = append(lines, "- `"+option.Title+"`: "+option.Description)
+	}
+	buttons := make([]feishu.Button, 0, len(quietModeOptions)+1)
+	for _, option := range quietModeOptions {
+		buttons = append(buttons, feishu.Button{
 			Text: func() string {
-				if enabled {
-					return "当前 · 开启"
+				if option.Mode == mode {
+					return "当前 · " + option.Title
 				}
-				return "开启"
+				return option.Title
 			}(),
 			Type: func() string {
-				if enabled {
+				if option.Mode == mode {
 					return "primary"
 				}
 				return "default"
 			}(),
-			Value: map[string]any{"action": "quiet.set", "enabled": true, "session_key": sessionKey},
-		},
-		{
-			Text: func() string {
-				if !enabled {
-					return "当前 · 关闭"
-				}
-				return "关闭"
-			}(),
-			Type: func() string {
-				if !enabled {
-					return "primary"
-				}
-				return "default"
-			}(),
-			Value: map[string]any{"action": "quiet.set", "enabled": false, "session_key": sessionKey},
-		},
+			Value: map[string]any{
+				"action":      "quiet.set",
+				"mode":        option.Mode.String(),
+				"session_key": sessionKey,
+			},
+		})
 	}
 	if strings.TrimSpace(sessionKey) != "" {
 		buttons = append(buttons, feishu.Button{
@@ -87,14 +152,18 @@ func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
 			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		})
 	}
-	return a.feishu.SimpleStatusCard("Quiet Mode", "blue", menuCardBody("menu.quiet", body), buttons)
+	return a.feishu.SimpleStatusCard("Quiet Mode", "blue", menuCardBody("menu.quiet", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) updateQuietMode(enabled bool) error {
+func (a *App) updateQuietMode(mode config.QuietMode) error {
 	if a == nil || a.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
-	a.cfg.Feishu.Quiet = enabled
+	normalized, err := config.ParseQuietMode(mode)
+	if err != nil {
+		return err
+	}
+	a.cfg.Feishu.Quiet = normalized
 	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
 		return err
 	}
@@ -102,16 +171,20 @@ func (a *App) updateQuietMode(enabled bool) error {
 }
 
 func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
-	enabled := !a.quietModeEnabled()
 	if len(args) > 1 {
-		return fmt.Errorf("usage: /quiet | /quiet on | /quiet off | /quiet config")
+		return fmt.Errorf("usage: /quiet | /quiet <verbose|progress|normal|final> | /quiet config")
 	}
+	if len(args) == 0 {
+		if msg == nil {
+			return nil
+		}
+		card := a.renderQuietModeMenuCard(a.makeSessionKey(msg))
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return err
+	}
+	arg := strings.TrimSpace(args[0])
 	if len(args) == 1 {
-		switch strings.TrimSpace(args[0]) {
-		case "on":
-			enabled = true
-		case "off":
-			enabled = false
+		switch arg {
 		case "config":
 			if msg == nil {
 				return nil
@@ -120,14 +193,18 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 			return err
 		default:
-			return fmt.Errorf("usage: /quiet | /quiet on | /quiet off | /quiet config")
+			mode, err := config.ParseQuietMode(config.QuietMode(arg))
+			if err != nil {
+				return fmt.Errorf("usage: /quiet | /quiet <verbose|progress|normal|final> | /quiet config")
+			}
+			if msg == nil {
+				return nil
+			}
+			if err := a.updateQuietMode(mode); err != nil {
+				return err
+			}
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 		}
 	}
-	if msg == nil {
-		return nil
-	}
-	if err := a.updateQuietMode(enabled); err != nil {
-		return err
-	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(enabled)+"`。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return nil
 }

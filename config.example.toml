@@ -12,7 +12,7 @@ group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
 reply_in_thread = true
-quiet = false
+quiet = "verbose"
 
 [codex]
 command = "codex"

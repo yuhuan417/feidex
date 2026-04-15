@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"feidex/internal/config"
 )
 
 func TestBuildQuietWorkingCardLinesFormatsSupportedItems(t *testing.T) {
@@ -100,7 +102,7 @@ func TestBuildQuietWorkingCardLinesFormatsSupportedItems(t *testing.T) {
 
 func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Quiet = true
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
@@ -229,7 +231,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 
 func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Quiet = true
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	a.noteTurnStarted("sess-1", sub)
@@ -240,6 +242,8 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
+
+	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
 	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
 		"id":   "agent-1",
@@ -254,6 +258,80 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T
 	}
 	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "reply after reasoning") {
 		t.Fatalf("patched agent message body = %q", body)
+	}
+}
+
+func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	a.noteTurnStarted("sess-1", sub)
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+		"id":     "cmd-1",
+		"type":   "commandExecution",
+		"status": "completed",
+		"cwd":    workspace,
+		"commandActions": []any{
+			map[string]any{
+				"type": "read",
+				"path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+			},
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after command = %d, want 1", len(ff.replyCards))
+	}
+
+	a.cfg.Feishu.Quiet = config.QuietModeNormal
+	a.finishTurn("thread-1", "turn-1", "completed")
+
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after finishTurn = %d, want 1", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
+		t.Fatalf("patched card title = %q, want 最终答复", got)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after finishTurn = %d, want 1 because lingering card should be reused", len(ff.replyCards))
+	}
+}
+
+func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	a.noteTurnStarted("sess-1", sub)
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+		"id":     "cmd-1",
+		"type":   "commandExecution",
+		"status": "completed",
+		"cwd":    workspace,
+		"commandActions": []any{
+			map[string]any{
+				"type": "listFiles",
+				"path": filepath.Join(workspace, "internal", "app"),
+			},
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after command = %d, want 1", len(ff.replyCards))
+	}
+
+	a.cfg.Feishu.Quiet = config.QuietModeFinal
+	a.finishTurn("thread-1", "turn-1", "failed")
+
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after failed finishTurn = %d, want 1", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "任务状态" {
+		t.Fatalf("patched card title = %q, want 任务状态", got)
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "任务失败。") {
+		t.Fatalf("patched terminal card body = %q", body)
 	}
 }
 

@@ -28,15 +28,15 @@ type LogConfig struct {
 }
 
 type FeishuConfig struct {
-	AppID               string   `toml:"app_id"`
-	AppSecret           string   `toml:"app_secret"`
-	AllowFrom           []string `toml:"allow_from"`
-	DebugAllowFrom      []string `toml:"debug_allow_from"`
-	GroupAtOnly         bool     `toml:"group_at_only"`
-	RespondToAtEveryone bool     `toml:"respond_to_at_everyone"`
-	CardEnabled         bool     `toml:"card_enabled"`
-	ReplyInThread       bool     `toml:"reply_in_thread"`
-	Quiet               bool     `toml:"quiet"`
+	AppID               string    `toml:"app_id"`
+	AppSecret           string    `toml:"app_secret"`
+	AllowFrom           []string  `toml:"allow_from"`
+	DebugAllowFrom      []string  `toml:"debug_allow_from"`
+	GroupAtOnly         bool      `toml:"group_at_only"`
+	RespondToAtEveryone bool      `toml:"respond_to_at_everyone"`
+	CardEnabled         bool      `toml:"card_enabled"`
+	ReplyInThread       bool      `toml:"reply_in_thread"`
+	Quiet               QuietMode `toml:"quiet"`
 }
 
 type CodexConfig struct {
@@ -69,6 +69,7 @@ func Default() *Config {
 			GroupAtOnly:   true,
 			CardEnabled:   true,
 			ReplyInThread: true,
+			Quiet:         QuietModeVerbose,
 		},
 		Codex: CodexConfig{
 			Command:         "codex",
@@ -121,6 +122,11 @@ func (c *Config) Normalize(baseDir string) error {
 			c.Codex.Transport = "stdio"
 		}
 	}
+	quietMode, err := ParseQuietMode(c.Feishu.Quiet)
+	if err != nil {
+		quietMode = QuietModeNormal
+	}
+	c.Feishu.Quiet = quietMode
 	if len(c.Workspaces) == 0 {
 		return errors.New("at least one [[workspace]] is required")
 	}

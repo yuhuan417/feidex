@@ -183,7 +183,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "service_tier.set", "session_key": "sess-1", "thread_id": "thread-1", "service_tier": serviceTierFast}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.upgrade", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "upgrade.dev", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1", MessageID: "msg-1"},
-		{ActionValue: map[string]any{"action": "quiet.set", "session_key": "sess-1", "enabled": true}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "quiet.set", "session_key": "sess-1", "mode": "progress"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.use.select", "session_key": "sess-1"}, Option: "alt", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "thread.sandbox.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "thread.policy.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},

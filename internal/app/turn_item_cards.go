@@ -55,7 +55,7 @@ func (a *App) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submissi
 	if payload.Title == "" || payload.Color == "" {
 		payload.Title, payload.Color = turnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnItemInQuiet(payload.ItemType) {
+	if a.quietModeEnabled() && !shouldDeliverTurnItemInQuiet(a.quietMode(), payload.ItemType, payload.IsFinalAnswer) {
 		return ""
 	}
 	kind := turnItemEventKind(payload.ItemType)
@@ -123,11 +123,29 @@ func (a *App) sendTurnEventCard(ctx context.Context, sub *state.Submission, titl
 	return a.sendTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, "")
 }
 
+func (a *App) replaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return ""
+	}
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+	if strings.TrimSpace(reuseMessageID) != "" {
+		card := a.renderCompactMarkdownCard(sub, title, color, "", body, nil)
+		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+			a.recordMessageLink(reuseMessageID, kind, sub, itemID)
+			return reuseMessageID
+		}
+	}
+	return a.sendTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, "")
+}
+
 func (a *App) sendTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(kind) {
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), kind) {
 		return ""
 	}
 	body = strings.TrimSpace(body)

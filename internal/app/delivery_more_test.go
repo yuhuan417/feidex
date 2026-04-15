@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"feidex/internal/config"
 )
 
 func TestDeliveryAdditionalBranches(t *testing.T) {
@@ -61,7 +63,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 		t.Fatalf("replyCards after turn_output = %d, want %d", len(ff.replyCards), before+1)
 	}
 
-	a.cfg.Feishu.Quiet = true
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	if ids := a.sendReplyMessages(context.Background(), sub, "hidden", false, "turn_reasoning"); ids != nil {
 		t.Fatalf("sendReplyMessages(quiet gated) = %#v, want nil", ids)
 	}
@@ -82,7 +84,7 @@ func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 		t.Fatal("flushTurnStream(missing submission) should remove stream")
 	}
 
-	a.cfg.Feishu.Quiet = true
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.noteTurnStarted("sess-1", sub)
 	stream := a.turnStreams["turn-1"]
@@ -93,6 +95,7 @@ func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 		EntryOrder: []string{reasoningKey},
 		Entries:    map[string]string{reasoningKey: "思考中..."},
 	}
+	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
 	if result := a.flushTurnStream(context.Background(), "thread-1", "turn-1"); result != (turnStreamFlushResult{}) {
 		t.Fatalf("flushTurnStream(plan reuse) = %+v", result)

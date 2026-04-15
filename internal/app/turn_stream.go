@@ -22,8 +22,9 @@ type turnStream struct {
 }
 
 type turnStreamFlushResult struct {
-	SawFinal  bool
-	LastError string
+	SawFinal         bool
+	LastError        string
+	WorkingMessageID string
 }
 
 func (a *App) noteTurnStarted(sessionKey string, sub *state.Submission) {
@@ -83,7 +84,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		planText = text
 		stream.LastSentPlan = text
 		stream.PendingPlan = ""
-		if a.quietModeEnabled() {
+		if stream.QuietWorking != nil {
 			planBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
@@ -91,13 +92,13 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	if hasPayload && payload.IsFinalAnswer {
 		stream.SentFinal = true
 	}
-	if a.quietModeEnabled() {
-		if hasPayload && isQuietBoundaryTurnItem(payload.ItemType) {
+	if hasPayload && isQuietBoundaryTurnItem(payload.ItemType) {
+		if stream.QuietWorking != nil {
 			itemBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
 			itemReuseMessage = itemBoundary.ReuseMessageID
-		} else {
-			workingUpdate = a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 		}
+	} else if a.quietWorkingCardEnabled() {
+		workingUpdate = a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	}
 	a.turnStreamsMu.Unlock()
 
@@ -106,10 +107,10 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		a.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
 	a.executeQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
-	if a.quietModeEnabled() {
+	if a.quietWorkingCardEnabled() {
 		a.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
-	if hasPayload && (!a.quietModeEnabled() || isQuietBoundaryTurnItem(payload.ItemType)) {
+	if hasPayload && (!a.quietModeEnabled() || shouldDeliverTurnItemInQuiet(a.quietMode(), payload.ItemType, payload.IsFinalAnswer)) {
 		a.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
 }
@@ -134,9 +135,13 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	stream := a.ensureTurnStreamLocked(sessionKey, sub)
 	result.SawFinal = stream.SentFinal
 	result.LastError = stream.LastError
-	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
-		planText = text
-		if a.quietModeEnabled() {
+	pendingPlan := strings.TrimSpace(stream.PendingPlan)
+	if stream.QuietWorking != nil && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
+		result.WorkingMessageID = strings.TrimSpace(stream.QuietWorking.MessageID)
+	}
+	if pendingPlan != "" && pendingPlan != stream.LastSentPlan {
+		planText = pendingPlan
+		if stream.QuietWorking != nil {
 			planBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
 			planReuseMessage = planBoundary.ReuseMessageID
 		}

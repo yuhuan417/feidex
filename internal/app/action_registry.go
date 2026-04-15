@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -70,8 +71,7 @@ var cardActionHandlers = map[string]cardActionHandler{
 		return a.completeMenuUpgrade(action)
 	},
 	"quiet.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		enabled, _ := action.ActionValue["enabled"].(bool)
-		return a.completeQuietSet(action, enabled)
+		return a.completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
 	},
 	"service_tier.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeServiceTierSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "service_tier"))

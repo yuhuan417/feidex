@@ -17,7 +17,7 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(kind) {
+	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), kind) {
 		return nil
 	}
 	appState := a.appState()

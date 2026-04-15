@@ -74,7 +74,7 @@ func (a *App) statusCardBody(sess *state.Session) string {
 		"thread_id: `" + threadID + "`",
 		"全局模型: `" + model + "`",
 		"全局推理强度: `" + effort + "`",
-		"quiet: `" + quietModeStatusText(a.quietModeEnabled()) + "`",
+		"quiet: `" + quietModeStatusText(a.quietMode()) + "`",
 		"workspace sandbox: `" + workspaceSandbox + "`",
 		"workspace policy: `" + workspacePolicy + "`",
 		"thread sandbox: " + threadSandbox,

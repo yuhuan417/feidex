@@ -110,13 +110,13 @@ func (a *App) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*
 	return a.completeMenuCommand(action, sessionKey, "/usage", "menu.tools")
 }
 
-func (a *App) completeQuietSet(action *feishu.CardAction, enabled bool) (*callback.CardActionTriggerResponse, error) {
+func (a *App) completeQuietSet(action *feishu.CardAction, mode config.QuietMode) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
-	if err := a.updateQuietMode(enabled); err != nil {
+	if err := a.updateQuietMode(mode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 开关"},
+		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietModeStatusText(mode)},
 		Card:  rawCard(a.renderQuietModeMenuCard(sessionKey)),
 	}, nil
 }
