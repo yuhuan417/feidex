@@ -433,8 +433,18 @@ func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("completeMenuDebugLogs(blocked) error = %v", err)
 	}
-	if resp == nil || resp.Toast == nil || resp.Toast.Content != debugAccessUnauthorizedText || resp.Card == nil {
-		t.Fatalf("completeMenuDebugLogs(blocked) = %#v, want unauthorized toast", resp)
+	if resp == nil || resp.Toast == nil || resp.Card == nil {
+		t.Fatalf("completeMenuDebugLogs(blocked) = %#v, want denied card response", resp)
+	}
+	if resp.Toast.Content != "已执行 /debug logs" {
+		t.Fatalf("debug logs toast = %#v, want command execution toast", resp.Toast)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	cardBody := cardMarkdownContent(t, cardData)
+	for _, want := range []string{"blocked-user", "debug_allow_from", "/etc/feidex/config.toml"} {
+		if !strings.Contains(cardBody, want) {
+			t.Fatalf("denied debug logs card body = %q, want %q", cardBody, want)
+		}
 	}
 }
 
@@ -464,7 +474,17 @@ func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("completeMenuDebug(blocked) error = %v", err)
 	}
-	if resp == nil || resp.Toast == nil || resp.Toast.Content != debugAccessUnauthorizedText || resp.Card == nil {
-		t.Fatalf("completeMenuDebug(blocked) = %#v, want denied toast and card", resp)
+	if resp == nil || resp.Toast == nil || resp.Card == nil {
+		t.Fatalf("completeMenuDebug(blocked) = %#v, want denied card response", resp)
+	}
+	if resp.Toast.Content != "已执行 /debug" {
+		t.Fatalf("debug toast = %#v, want command execution toast", resp.Toast)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	cardBody := cardMarkdownContent(t, cardData)
+	for _, want := range []string{"blocked-user", "debug_allow_from", "/etc/feidex/config.toml"} {
+		if !strings.Contains(cardBody, want) {
+			t.Fatalf("denied debug card body = %q, want %q", cardBody, want)
+		}
 	}
 }
