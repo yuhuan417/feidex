@@ -465,3 +465,67 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 		t.Fatalf("formatID(7) = %q, want suffix -000007", got)
 	}
 }
+
+func TestDeleteAndCollectionHelpers(t *testing.T) {
+	store := openTestStore(t)
+
+	subID, err := store.CreateSubmission(&Submission{SessionKey: "session-1"})
+	if err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	store.DeleteSubmission(" " + subID + " ")
+	if got := store.GetSubmission(subID); got != nil {
+		t.Fatalf("DeleteSubmission() should remove submission, got %+v", got)
+	}
+	store.DeleteSubmission("missing")
+
+	if err := store.UpsertPending(nil); err != nil {
+		t.Fatalf("UpsertPending(nil) error = %v", err)
+	}
+	if err := store.UpsertPending(&PendingRequest{}); err != nil {
+		t.Fatalf("UpsertPending(empty) error = %v", err)
+	}
+	if err := store.UpsertPending(&PendingRequest{ID: "pending-1", Status: "open"}); err != nil {
+		t.Fatalf("UpsertPending(pending-1) error = %v", err)
+	}
+	allPending := store.AllPendingRequests()
+	if len(allPending) != 1 || allPending[0].ID != "pending-1" {
+		t.Fatalf("AllPendingRequests() = %+v", allPending)
+	}
+	allPending[0].Status = "mutated"
+	if got := store.PendingByID("pending-1"); got == nil || got.Status != "open" {
+		t.Fatalf("AllPendingRequests() returned shared pointer: %+v", got)
+	}
+	store.DeletePending(" pending-1 ")
+	if got := store.PendingByID("pending-1"); got != nil {
+		t.Fatalf("DeletePending() should remove request, got %+v", got)
+	}
+	store.DeletePending("missing")
+	store.DeletePendingRequests(nil)
+
+	if err := store.UpsertMessageLink(nil); err != nil {
+		t.Fatalf("UpsertMessageLink(nil) error = %v", err)
+	}
+	if err := store.UpsertMessageLink(&MessageLink{}); err != nil {
+		t.Fatalf("UpsertMessageLink(empty) error = %v", err)
+	}
+	if got := store.GetMessageLink(" "); got != nil {
+		t.Fatalf("GetMessageLink(blank) = %+v, want nil", got)
+	}
+	if err := store.UpsertMessageLink(&MessageLink{MessageID: "msg-1", ThreadID: "thread-1"}); err != nil {
+		t.Fatalf("UpsertMessageLink(msg-1) error = %v", err)
+	}
+	link := store.GetMessageLink("msg-1")
+	if link == nil || link.ThreadID != "thread-1" {
+		t.Fatalf("GetMessageLink(msg-1) = %+v", link)
+	}
+	link.ThreadID = "mutated"
+	if got := store.GetMessageLink("msg-1"); got == nil || got.ThreadID != "thread-1" {
+		t.Fatalf("GetMessageLink() returned shared pointer: %+v", got)
+	}
+	store.DeleteMessageLinks(nil)
+	store.DeleteMessageLinks(func(link *MessageLink) bool { return link != nil && strings.HasPrefix(link.MessageID, "msg-") })
+	if got := store.GetMessageLink("msg-1"); got != nil {
+		t.Fatalf("DeleteMessageLinks() should remove link, got %+v", got)
+	}
+}

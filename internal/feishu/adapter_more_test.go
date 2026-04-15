@@ -93,6 +93,38 @@ func TestPermissionIssueFromError(t *testing.T) {
 	}
 }
 
+func TestPermissionIssueWrapperHelpers(t *testing.T) {
+	var wrapped *permissionIssueError
+	if got := wrapped.Error(); got != "" {
+		t.Fatalf("nil permissionIssueError Error() = %q", got)
+	}
+	if got := wrapped.Unwrap(); got != nil {
+		t.Fatalf("nil permissionIssueError Unwrap() = %v, want nil", got)
+	}
+	if got := wrapped.PermissionIssue(); got != nil {
+		t.Fatalf("nil permissionIssueError PermissionIssue() = %+v, want nil", got)
+	}
+
+	baseErr := errors.New("denied")
+	issue := &PermissionIssue{API: "im.message.create"}
+	wrappedErr := &permissionIssueError{cause: baseErr, issue: issue}
+	if got := wrappedErr.Error(); got != "denied" {
+		t.Fatalf("permissionIssueError.Error() = %q", got)
+	}
+	if got := wrappedErr.Unwrap(); got != baseErr {
+		t.Fatalf("permissionIssueError.Unwrap() = %v, want base error", got)
+	}
+	if got := wrappedErr.PermissionIssue(); got != issue {
+		t.Fatalf("permissionIssueError.PermissionIssue() = %+v, want issue", got)
+	}
+	if got := wrapPermissionIssue(nil, issue); got != nil {
+		t.Fatalf("wrapPermissionIssue(nil, issue) = %v, want nil", got)
+	}
+	if got := wrapPermissionIssue(baseErr, nil); got != baseErr {
+		t.Fatalf("wrapPermissionIssue(err, nil) = %v, want original error", got)
+	}
+}
+
 func TestSimpleStatusCardAndSummaries(t *testing.T) {
 	a := &Adapter{}
 	card := a.SimpleStatusCard("Title", "green", "Body text", []Button{

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	lark "github.com/larksuite/oapi-sdk-go/v3"
 )
 
 func TestDriveFileSharerShareAndCleanup(t *testing.T) {
@@ -66,5 +68,32 @@ func TestFileShareHelpers(t *testing.T) {
 	}
 	if _, _, err := validateSharedLocalFile("", 1); err == nil {
 		t.Fatal("expected missing local path to fail")
+	}
+}
+
+func TestDriveFileSharerNilAndAdapterHelpers(t *testing.T) {
+	if _, err := (*DriveFileSharer)(nil).ShareFile(context.Background(), SharedFileRequest{}); err == nil {
+		t.Fatal("nil DriveFileSharer should fail ShareFile")
+	}
+	if got, err := (*DriveFileSharer)(nil).CleanupBefore(context.Background(), time.Now()); err != nil || got != (PreviewDriveCleanupResult{}) {
+		t.Fatalf("nil DriveFileSharer CleanupBefore() = %+v, %v", got, err)
+	}
+
+	a := &Adapter{}
+	if got := a.ensureDriveArtifactStore(); got != nil {
+		t.Fatalf("ensureDriveArtifactStore(nil client) = %+v, want nil", got)
+	}
+	if _, err := a.ShareLocalFile(context.Background(), SharedFileRequest{}); err == nil {
+		t.Fatal("ShareLocalFile(nil store) should fail")
+	}
+	if got, err := a.CleanupArtifactsBefore(context.Background(), time.Now()); err != nil || got != (PreviewDriveCleanupResult{}) {
+		t.Fatalf("CleanupArtifactsBefore(nil store) = %+v, %v", got, err)
+	}
+
+	a = &Adapter{client: lark.NewClient("app", "secret")}
+	first := a.ensureDriveArtifactStore()
+	second := a.ensureDriveArtifactStore()
+	if first == nil || second == nil || first != second {
+		t.Fatalf("ensureDriveArtifactStore() = %+v / %+v, want cached store", first, second)
 	}
 }
