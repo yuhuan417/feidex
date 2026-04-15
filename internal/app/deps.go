@@ -47,6 +47,7 @@ type feishuClient interface {
 
 type releaseClient interface {
 	LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error)
+	LatestDevLinuxBinary(context.Context, string) (*release.ReleaseInfo, error)
 	LinuxBinaryByVersion(context.Context, string, string) (*release.ReleaseInfo, error)
 }
 

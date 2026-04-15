@@ -253,6 +253,7 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/upgrade", Summary: "检查最新版本并发起升级。"},
+				{Command: "/upgrade dev", Summary: "升级到 `dev-latest` 当前指向的开发版构建。"},
 				{Command: "/upgrade v0.3.0", Summary: "跳过最新版本检查，直接升级到指定版本。"},
 				{Command: "/upgrade local", Summary: "打开当前 workspace 的本地 Binary 选择器。"},
 				{Command: "/upgrade path ./dist/feidex-linux-amd64", Summary: "直接用当前 workspace 下的本地 Binary 发起升级确认。"},

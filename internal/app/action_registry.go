@@ -187,6 +187,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"upgrade.local.pick": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeUpgradeLocalPick(action)
 	},
+	"upgrade.dev": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeUpgradeDev(action)
+	},
 	"approval.command.accept": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeApprovalAction(action, "approval.command.accept")
 	},

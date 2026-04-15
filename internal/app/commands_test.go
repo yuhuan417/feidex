@@ -114,6 +114,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/workspace":     true,
 		"/status":        true,
 		"/upgrade":       true,
+		"/upgrade dev":   true,
 		"/fast config":   true,
 		"/upgrade local": true,
 		"/upgrade path ./dist/feidex-linux-amd64": true,

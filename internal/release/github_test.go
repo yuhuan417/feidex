@@ -80,6 +80,33 @@ func TestLinuxBinaryByVersionAMD64(t *testing.T) {
 	}
 }
 
+func TestLatestDevLinuxBinaryAMD64(t *testing.T) {
+	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
+		responses: map[string]string{
+			"https://api.github.com/repos/test/feidex/releases/tags/dev-latest": `{
+				"tag_name":"dev-latest",
+				"name":"dev-a1b2c3d4e5f6",
+				"html_url":"https://example.test/releases/dev-latest",
+				"published_at":"2026-04-15T00:00:00Z",
+				"target_commitish":"a1b2c3d4e5f67890",
+				"prerelease":true,
+				"assets":[
+					{"name":"feidex-linux-amd64","browser_download_url":"https://download.test/dev-bin"},
+					{"name":"sha256sums.txt","browser_download_url":"https://download.test/dev-sums"}
+				]
+			}`,
+			"https://download.test/dev-sums": "fedcba  dist/feidex-linux-amd64\n",
+		},
+	}})
+	info, err := client.LatestDevLinuxBinary(context.Background(), "amd64")
+	if err != nil {
+		t.Fatalf("LatestDevLinuxBinary() error = %v", err)
+	}
+	if info.Version != "dev-a1b2c3d4e5f6" || info.ReleaseTag != DevReleaseTag || info.SourceCommit != "a1b2c3d4e5f67890" || !info.Prerelease || info.ExpectedSHA256 != "fedcba" {
+		t.Fatalf("LatestDevLinuxBinary() = %+v", info)
+	}
+}
+
 func TestCurrentLinuxAssetName(t *testing.T) {
 	if got, err := CurrentLinuxAssetName("amd64"); err != nil || got != "feidex-linux-amd64" {
 		t.Fatalf("CurrentLinuxAssetName(amd64) = %q, %v", got, err)

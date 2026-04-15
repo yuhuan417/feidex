@@ -24,6 +24,7 @@ import (
 const (
 	DefaultRepoOwner = "yuhuan417"
 	DefaultRepoName  = "feidex"
+	DevReleaseTag    = "dev-latest"
 
 	linuxAMD64AssetName   = "feidex-linux-amd64"
 	linuxAARCH64AssetName = "feidex-linux-aarch64"
@@ -32,8 +33,11 @@ const (
 
 type ReleaseInfo struct {
 	Version        string
+	ReleaseTag     string
 	HTMLURL        string
 	PublishedAt    time.Time
+	SourceCommit   string
+	Prerelease     bool
 	BinaryName     string
 	BinaryURL      string
 	ExpectedSHA256 string
@@ -41,6 +45,7 @@ type ReleaseInfo struct {
 
 type Client interface {
 	LatestLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error)
+	LatestDevLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error)
 	LinuxBinaryByVersion(ctx context.Context, version, goarch string) (*ReleaseInfo, error)
 }
 
@@ -51,10 +56,13 @@ type GitHubClient struct {
 }
 
 type githubRelease struct {
-	TagName     string `json:"tag_name"`
-	HTMLURL     string `json:"html_url"`
-	PublishedAt string `json:"published_at"`
-	Assets      []struct {
+	TagName        string `json:"tag_name"`
+	Name           string `json:"name"`
+	HTMLURL        string `json:"html_url"`
+	PublishedAt    string `json:"published_at"`
+	TargetCommitish string `json:"target_commitish"`
+	Prerelease     bool   `json:"prerelease"`
+	Assets         []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
@@ -105,6 +113,21 @@ func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*R
 	return c.releaseInfoFromGitHubRelease(ctx, release, assetName, "latest release")
 }
 
+func (c *GitHubClient) LatestDevLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error) {
+	if c == nil {
+		return nil, fmt.Errorf("nil release client")
+	}
+	assetName, err := CurrentLinuxAssetName(goarch)
+	if err != nil {
+		return nil, err
+	}
+	release, err := c.fetchReleaseByTag(ctx, DevReleaseTag)
+	if err != nil {
+		return nil, err
+	}
+	return c.releaseInfoFromGitHubRelease(ctx, release, assetName, "dev release "+DevReleaseTag)
+}
+
 func (c *GitHubClient) LinuxBinaryByVersion(ctx context.Context, version, goarch string) (*ReleaseInfo, error) {
 	if c == nil {
 		return nil, fmt.Errorf("nil release client")
@@ -125,9 +148,17 @@ func (c *GitHubClient) LinuxBinaryByVersion(ctx context.Context, version, goarch
 }
 
 func (c *GitHubClient) releaseInfoFromGitHubRelease(ctx context.Context, release *githubRelease, assetName, releaseLabel string) (*ReleaseInfo, error) {
+	tagName := strings.TrimSpace(release.TagName)
+	version := strings.TrimSpace(release.Name)
+	if version == "" {
+		version = tagName
+	}
 	info := &ReleaseInfo{
-		Version: strings.TrimSpace(release.TagName),
-		HTMLURL: strings.TrimSpace(release.HTMLURL),
+		Version:      version,
+		ReleaseTag:   tagName,
+		HTMLURL:      strings.TrimSpace(release.HTMLURL),
+		SourceCommit: strings.TrimSpace(release.TargetCommitish),
+		Prerelease:   release.Prerelease,
 	}
 	if publishedAt := strings.TrimSpace(release.PublishedAt); publishedAt != "" {
 		if ts, err := time.Parse(time.RFC3339, publishedAt); err == nil {
@@ -144,8 +175,11 @@ func (c *GitHubClient) releaseInfoFromGitHubRelease(ctx context.Context, release
 			checksumsURL = strings.TrimSpace(asset.BrowserDownloadURL)
 		}
 	}
-	if info.Version == "" {
+	if info.ReleaseTag == "" {
 		return nil, fmt.Errorf("%s is missing tag_name", releaseLabel)
+	}
+	if info.Version == "" {
+		info.Version = info.ReleaseTag
 	}
 	if info.BinaryURL == "" || info.BinaryName == "" {
 		return nil, fmt.Errorf("%s is missing asset %s", releaseLabel, assetName)

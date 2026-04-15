@@ -18,7 +18,7 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
   - `/compact`、`/usage`、`/thread fork`、立即生效的 `/thread new`
   - 启动时恢复活动 thread，切换 workspace 时自动绑定对应 thread
   - workspace 路径选择器与 `/download` 文件下载分享
-  - `/debug`、`/debug logs`、权限问题卡片、`/upgrade [VERSION]`
+  - `/debug`、`/debug logs`、权限问题卡片、`/upgrade [VERSION]`、`/upgrade dev`
 
 ## 主要能力
 
@@ -57,6 +57,7 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
   - GitHub Release 自升级
   - 自动按本机架构选择 `amd64` 或 `aarch64` 资产
   - 支持 `/upgrade [VERSION]` 直接指定目标版本
+  - 支持 `/upgrade dev` 升级到 `dev-latest` 当前指向的开发版构建
 - 发布
   - 自带打 tag 脚本
   - 可自动从 GitHub 远端 tag 推导下一个 minor 版本
@@ -388,6 +389,8 @@ Feidex 会把这些状态写进去：
   - 查看当前状态
 - `/upgrade`
   - 检查最新版本并发起升级
+- `/upgrade dev`
+  - 查询 `dev-latest` prerelease，并升级到当前最新开发版构建
 - `/upgrade v0.3.0`
   - 跳过最新版本探测，直接发起指定版本升级确认
 - `/upgrade local`
@@ -467,6 +470,8 @@ feidex daemon uninstall
 
 - `/upgrade`
   - 查询最新 release
+- `/upgrade dev`
+  - 查询 `dev-latest` prerelease，获取当前 main 分支最近一次 push 产物
 - `/upgrade vX.Y.Z`
   - 直接查询指定 tag，跳过最新版本探测
 - `/upgrade local`
@@ -500,6 +505,11 @@ feidex daemon uninstall
 ```bash
 ./scripts/create_github_release.sh
 ```
+
+### 开发版发布
+
+- 每次 `push main`，GitHub Actions 都会刷新 `dev-latest` tag 与同名 prerelease
+- 开发版二进制会写入形如 `dev-<shortsha>` 的版本号，便于 `/upgrade dev` 后确认当前运行的是哪次提交构建
 
 脚本会以 `origin` 的 tag 为准，自动做：
 

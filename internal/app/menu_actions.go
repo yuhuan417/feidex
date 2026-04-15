@@ -204,3 +204,7 @@ func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActi
 	}
 	return a.completeMenuCommand(action, sessionKey, "/upgrade", "menu.group.system")
 }
+
+func (a *App) completeUpgradeDev(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return a.completeMenuCommand(action, actionSessionKey(action), "/upgrade dev", "menu.group.system")
+}

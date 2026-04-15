@@ -44,11 +44,14 @@ type fakeCodexClient struct {
 
 type fakeReleaseClient struct {
 	info         *release.ReleaseInfo
+	devInfo      *release.ReleaseInfo
 	versionInfo  map[string]*release.ReleaseInfo
 	err          error
+	devErr       error
 	latestErr    error
 	versionErr   error
 	latestCalls  int
+	devCalls     int
 	versionCalls []string
 }
 
@@ -80,9 +83,39 @@ func (f *blockingReleaseClient) LatestLinuxBinary(context.Context, string) (*rel
 	return &cp, nil
 }
 
+func (f *blockingReleaseClient) LatestDevLinuxBinary(context.Context, string) (*release.ReleaseInfo, error) {
+	close(f.started)
+	<-f.release
+	cp := *f.info
+	return &cp, nil
+}
+
 func (f *blockingReleaseClient) LinuxBinaryByVersion(context.Context, string, string) (*release.ReleaseInfo, error) {
 	close(f.started)
 	<-f.release
+	cp := *f.info
+	return &cp, nil
+}
+
+func (f *fakeReleaseClient) LatestDevLinuxBinary(context.Context, string) (*release.ReleaseInfo, error) {
+	f.devCalls++
+	if f.devErr != nil {
+		return nil, f.devErr
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.devInfo != nil {
+		cp := *f.devInfo
+		return &cp, nil
+	}
+	if info := f.versionInfo[release.DevReleaseTag]; info != nil {
+		cp := *info
+		return &cp, nil
+	}
+	if f.info == nil {
+		return nil, errors.New("missing release info")
+	}
 	cp := *f.info
 	return &cp, nil
 }
@@ -1645,6 +1678,70 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	}
 }
 
+func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	releaseStub := &fakeReleaseClient{
+		latestErr: errors.New("latest query should not be called"),
+		devInfo: &release.ReleaseInfo{
+			Version:        "dev-a1b2c3d4e5f6",
+			ReleaseTag:     release.DevReleaseTag,
+			SourceCommit:   "a1b2c3d4e5f67890",
+			HTMLURL:        "https://example.test/releases/dev-latest",
+			BinaryName:     "feidex-linux-amd64",
+			BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "dev123",
+			Prerelease:     true,
+		},
+	}
+	newReleaseClient = func() releaseClient { return releaseStub }
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v0.3.0" }
+	currentGOARCH = func() string { return "amd64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandUpgrade(msg, []string{"dev"}); err != nil {
+		t.Fatalf("commandUpgrade(dev) error = %v", err)
+	}
+	if releaseStub.latestCalls != 0 {
+		t.Fatalf("latest release call count = %d, want 0", releaseStub.latestCalls)
+	}
+	if releaseStub.devCalls != 1 {
+		t.Fatalf("dev release call count = %d, want 1", releaseStub.devCalls)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	for _, want := range []string{"开发版本: `dev-a1b2c3d4e5f6`", "Release Tag: `dev-latest`", "提交: `a1b2c3d4e5f6`", "当前指向的开发版构建"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("upgrade dev card body = %q, want %q", body, want)
+		}
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == "upgrade_release" {
+			pending = req
+			break
+		}
+	}
+	if pending == nil || !strings.Contains(pending.PayloadJSON, "\"target_version\":\"dev-a1b2c3d4e5f6\"") || !strings.Contains(pending.PayloadJSON, "\"release_tag\":\"dev-latest\"") {
+		t.Fatalf("pending = %+v, want dev release payload", pending)
+	}
+}
+
 func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	origManager := newDaemonManager
 	origGOARCH := currentGOARCH
@@ -2849,7 +2946,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64"} {
+	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade dev", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}
