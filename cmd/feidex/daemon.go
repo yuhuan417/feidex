@@ -235,6 +235,7 @@ func daemonUpgradeRunner(args []string) int {
 	binaryPath := fs.String("binary-path", "", "installed daemon binary path")
 	version := fs.String("version", "", "target version")
 	downloadURL := fs.String("download-url", "", "binary download URL")
+	sourcePath := fs.String("source-path", "", "local staged binary path")
 	expectedSHA256 := fs.String("expected-sha256", "", "expected SHA256 of the downloaded binary")
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -243,6 +244,7 @@ func daemonUpgradeRunner(args []string) int {
 		Version:        *version,
 		BinaryPath:     *binaryPath,
 		DownloadURL:    *downloadURL,
+		SourcePath:     *sourcePath,
 		ExpectedSHA256: *expectedSHA256,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "daemon upgrade runner failed: %v\n", err)

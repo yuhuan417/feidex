@@ -390,6 +390,10 @@ Feidex 会把这些状态写进去：
   - 检查最新版本并发起升级
 - `/upgrade v0.3.0`
   - 跳过最新版本探测，直接发起指定版本升级确认
+- `/upgrade local`
+  - 打开当前 workspace 的文件选择器，选择本地 Binary 升级
+- `/upgrade path ./dist/feidex-linux-amd64`
+  - 直接用当前 workspace 下的本地 Binary 发起升级确认
 
 ## 审批卡片
 
@@ -457,7 +461,7 @@ feidex daemon uninstall
 
 - 当前运行在 Linux daemon 模式
 - 服务进程正在运行
-- 可访问 GitHub Release
+- 如果走 GitHub release 流程，需要可访问 GitHub Release
 
 升级逻辑会：
 
@@ -465,11 +469,16 @@ feidex daemon uninstall
   - 查询最新 release
 - `/upgrade vX.Y.Z`
   - 直接查询指定 tag，跳过最新版本探测
+- `/upgrade local`
+  - 打开当前 workspace 的文件选择器，选择本地 Binary
+- `/upgrade path ./dist/feidex-linux-amd64`
+  - 直接使用当前 workspace 下的本地 Binary，跳过 GitHub 查询
 - 根据本机架构选择正确二进制
   - `amd64 -> feidex-linux-amd64`
   - `arm64 -> feidex-linux-aarch64`
-- 校验 `sha256sums.txt`
-- 下载、替换、重启
+- 对 release 流程校验 `sha256sums.txt`
+- 对本地 Binary 流程先把制品复制到 `data_dir/upgrades/<request-id>/` 并计算 `sha256`
+- 替换、重启
 - 启动失败自动回退
 
 设计约束：

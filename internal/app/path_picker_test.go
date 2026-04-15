@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"feidex/internal/config"
+	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -332,6 +333,101 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 	}
 	if got := a.store.PendingByID(requestID); got == nil || got.Status != "resolved" {
 		t.Fatalf("download pending after confirm = %+v", got)
+	}
+}
+
+func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOARCH := currentGOARCH
+	defer func() {
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOARCH = origGOARCH
+	}()
+
+	a, _, _ := newTestApp(t)
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v0.1.0" }
+	currentGOARCH = func() string { return "amd64" }
+	sessionKey := "sess-upgrade"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: "default",
+		OwnerUserID: "user-1",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	sourcePath := filepath.Join(a.cfg.Workspaces[0].Cwd, "dist", "feidex-linux-amd64")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(source) error = %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte("upgrade-local"), 0o755); err != nil {
+		t.Fatalf("WriteFile(source) error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "upgrade-local-picker",
+		Kind:        upgradeLocalBinaryPendingKind,
+		SessionKey:  sessionKey,
+		OwnerUserID: "user-1",
+		FeishuMsgID: "msg-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(pathPickerPayload{
+			Mode:        pathPickerModeFile,
+			Style:       pathPickerStyleDropdown,
+			RootPath:    a.cfg.Workspaces[0].Cwd,
+			CurrentPath: a.cfg.Workspaces[0].Cwd,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(upgrade local picker) error = %v", err)
+	}
+
+	resp, err := a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "upgrade-local-picker"},
+		Option:      encodePathPickerOption(pathPickerEntry{Name: filepath.Base(sourcePath), Path: sourcePath, IsDir: false}),
+	}, "path_picker.dropdown")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("upgrade local dropdown = %#v, %v", resp, err)
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "upgrade-local-picker"},
+	}, "path_picker.confirm")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("upgrade local confirm = %#v, %v", resp, err)
+	}
+	if pending := a.store.PendingByID("upgrade-local-picker"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("upgrade local picker pending = %+v, want resolved", pending)
+	}
+	found := false
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind != "upgrade_release" {
+			continue
+		}
+		var payload upgradePendingPayload
+		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
+			t.Fatalf("Unmarshal(upgrade local payload) error = %v", err)
+		}
+		if payload.SourcePath == "" {
+			continue
+		}
+		content, err := os.ReadFile(payload.SourcePath)
+		if err != nil {
+			t.Fatalf("ReadFile(staged) error = %v", err)
+		}
+		if string(content) != "upgrade-local" {
+			t.Fatalf("staged content = %q, want upgrade-local", string(content))
+		}
+		found = true
+		break
+	}
+	if !found {
+		t.Fatal("expected staged local upgrade request")
 	}
 }
 

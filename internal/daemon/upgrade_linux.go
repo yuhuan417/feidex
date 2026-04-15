@@ -22,6 +22,7 @@ type UpgradeSpec struct {
 	Version        string
 	BinaryPath     string
 	DownloadURL    string
+	SourcePath     string
 	ExpectedSHA256 string
 }
 
@@ -45,8 +46,12 @@ func StartBackgroundUpgrade(spec UpgradeSpec) (string, error) {
 		"upgrade-runner",
 		"--binary-path", spec.BinaryPath,
 		"--version", spec.Version,
-		"--download-url", spec.DownloadURL,
 		"--expected-sha256", spec.ExpectedSHA256,
+	}
+	if strings.TrimSpace(spec.SourcePath) != "" {
+		args = append(args, "--source-path", spec.SourcePath)
+	} else {
+		args = append(args, "--download-url", spec.DownloadURL)
 	}
 	cmd := exec.Command("systemd-run", args...)
 	cmd.Env = append(os.Environ(), userSystemdEnv()...)
@@ -77,7 +82,7 @@ func runUpgradeWithManager(ctx context.Context, manager Manager, spec UpgradeSpe
 	defer os.RemoveAll(tmpDir)
 
 	stagedPath := filepath.Join(tmpDir, filepath.Base(spec.BinaryPath))
-	if err := downloadUpgradeBinary(ctx, stagedPath, spec); err != nil {
+	if err := stageUpgradeBinary(ctx, stagedPath, spec); err != nil {
 		return err
 	}
 	if info, err := os.Stat(spec.BinaryPath); err == nil {
@@ -121,6 +126,20 @@ func runUpgradeWithManager(ctx context.Context, manager Manager, spec UpgradeSpe
 	return nil
 }
 
+func stageUpgradeBinary(ctx context.Context, targetPath string, spec UpgradeSpec) error {
+	if strings.TrimSpace(spec.SourcePath) != "" {
+		content, err := readUpgradeBinaryFromLocal(spec.SourcePath)
+		if err != nil {
+			return err
+		}
+		if err := release.VerifySHA256(content, spec.ExpectedSHA256); err != nil {
+			return err
+		}
+		return os.WriteFile(targetPath, content, 0o755)
+	}
+	return downloadUpgradeBinary(ctx, targetPath, spec)
+}
+
 func downloadUpgradeBinary(ctx context.Context, targetPath string, spec UpgradeSpec) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spec.DownloadURL, nil)
 	if err != nil {
@@ -144,6 +163,30 @@ func downloadUpgradeBinary(ctx context.Context, targetPath string, spec UpgradeS
 		return err
 	}
 	return os.WriteFile(targetPath, content, 0o755)
+}
+
+func readUpgradeBinaryFromLocal(sourcePath string) ([]byte, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	f, err := os.Open(sourcePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("local source %q is not a regular file", sourcePath)
+	}
+	content, err := io.ReadAll(io.LimitReader(f, 128<<20))
+	if err != nil {
+		return nil, err
+	}
+	if len(content) == 0 {
+		return nil, fmt.Errorf("local source %q is empty", sourcePath)
+	}
+	return content, nil
 }
 
 func waitForServiceHealthy(ctx context.Context, manager Manager, timeout time.Duration) error {
@@ -173,11 +216,21 @@ func validateUpgradeSpec(spec UpgradeSpec) error {
 	if !filepath.IsAbs(spec.BinaryPath) {
 		return fmt.Errorf("binary path must be absolute")
 	}
-	if strings.TrimSpace(spec.DownloadURL) == "" {
-		return fmt.Errorf("missing download url")
-	}
-	if !strings.HasPrefix(strings.TrimSpace(spec.DownloadURL), "https://") {
-		return fmt.Errorf("download url must use https")
+	hasDownloadURL := strings.TrimSpace(spec.DownloadURL) != ""
+	hasSourcePath := strings.TrimSpace(spec.SourcePath) != ""
+	switch {
+	case hasDownloadURL && hasSourcePath:
+		return fmt.Errorf("upgrade source must use either download url or source path")
+	case !hasDownloadURL && !hasSourcePath:
+		return fmt.Errorf("missing upgrade source")
+	case hasDownloadURL:
+		if !strings.HasPrefix(strings.TrimSpace(spec.DownloadURL), "https://") {
+			return fmt.Errorf("download url must use https")
+		}
+	case hasSourcePath:
+		if !filepath.IsAbs(strings.TrimSpace(spec.SourcePath)) {
+			return fmt.Errorf("source path must be absolute")
+		}
 	}
 	if strings.TrimSpace(spec.ExpectedSHA256) == "" {
 		return fmt.Errorf("missing expected sha256")

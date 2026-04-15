@@ -16,7 +16,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
-	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != downloadFilePendingKind) {
+	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != downloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -124,6 +124,11 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 			payload.SelectedPath = selectedPath
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 			return a.completeDownloadFileConfirm(action, pending, payload, selectedPath)
+		}
+		if pending.Kind == upgradeLocalBinaryPendingKind {
+			payload.SelectedPath = selectedPath
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+			return a.completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
 		}
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "resolved"

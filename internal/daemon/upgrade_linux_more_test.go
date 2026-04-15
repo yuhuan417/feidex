@@ -58,6 +58,12 @@ func TestUpgradeHelpersValidateAndWaitErrors(t *testing.T) {
 	if err := validateUpgradeSpec(UpgradeSpec{Version: "v1", BinaryPath: "/tmp/x", DownloadURL: "http://x", ExpectedSHA256: "abc"}); err == nil || !strings.Contains(err.Error(), "https") {
 		t.Fatalf("validateUpgradeSpec(http) error = %v", err)
 	}
+	if err := validateUpgradeSpec(UpgradeSpec{Version: "v1", BinaryPath: "/tmp/x", SourcePath: "relative", ExpectedSHA256: "abc"}); err == nil || !strings.Contains(err.Error(), "source path") {
+		t.Fatalf("validateUpgradeSpec(relative source) error = %v", err)
+	}
+	if err := validateUpgradeSpec(UpgradeSpec{Version: "v1", BinaryPath: "/tmp/x", DownloadURL: "https://x", SourcePath: "/tmp/y", ExpectedSHA256: "abc"}); err == nil || !strings.Contains(err.Error(), "either") {
+		t.Fatalf("validateUpgradeSpec(dual source) error = %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

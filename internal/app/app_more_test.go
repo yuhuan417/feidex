@@ -1625,6 +1625,123 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	}
 }
 
+func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
+	origManager := newDaemonManager
+	origGOARCH := currentGOARCH
+	defer func() {
+		newDaemonManager = origManager
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	ff.replyCardIDs = []string{"upgrade-local-picker-card"}
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentGOARCH = func() string { return "amd64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandUpgrade(msg, []string{"local"}); err != nil {
+		t.Fatalf("commandUpgrade(local) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardSelectStaticForTest(ff.replyCards[0]); len(got) != 1 {
+		t.Fatalf("expected path picker select element, got %#v", got)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == upgradeLocalBinaryPendingKind {
+			pending = req
+			break
+		}
+	}
+	if pending == nil {
+		t.Fatal("expected local picker pending request")
+	}
+	if pending.FeishuMsgID != "upgrade-local-picker-card" {
+		t.Fatalf("pending FeishuMsgID = %q, want upgrade-local-picker-card", pending.FeishuMsgID)
+	}
+	var payload pathPickerPayload
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		t.Fatalf("Unmarshal(local picker payload) error = %v", err)
+	}
+	if payload.RootPath != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("picker root = %q, want %q", payload.RootPath, a.cfg.Workspaces[0].Cwd)
+	}
+}
+
+func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOARCH := currentGOARCH
+	defer func() {
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	ff.replyCardIDs = []string{"upgrade-local-path-card"}
+	newDaemonManager = func() (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v0.3.0" }
+	currentGOARCH = func() string { return "amd64" }
+
+	localArtifact := filepath.Join(a.cfg.Workspaces[0].Cwd, "dist", "feidex linux amd64")
+	if err := os.MkdirAll(filepath.Dir(localArtifact), 0o755); err != nil {
+		t.Fatalf("MkdirAll(localArtifact) error = %v", err)
+	}
+	if err := os.WriteFile(localArtifact, []byte("local-binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(localArtifact) error = %v", err)
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-upgrade-path", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.handleCommand(msg, "/upgrade path dist/feidex linux amd64"); err != nil {
+		t.Fatalf("handleCommand(/upgrade path ...) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "来源: 本地文件") || !strings.Contains(body, "文件: `feidex linux amd64`") {
+		t.Fatalf("upgrade local path body = %q", body)
+	}
+
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind != "upgrade_release" {
+			continue
+		}
+		var payload upgradePendingPayload
+		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
+			t.Fatalf("Unmarshal(upgrade payload) error = %v", err)
+		}
+		if payload.SourcePath == "" {
+			continue
+		}
+		pending = req
+		if payload.DownloadURL != "" {
+			t.Fatalf("payload.DownloadURL = %q, want empty", payload.DownloadURL)
+		}
+		if payload.SourceName != "feidex linux amd64" {
+			t.Fatalf("payload.SourceName = %q, want feidex linux amd64", payload.SourceName)
+		}
+		if _, err := os.Stat(payload.SourcePath); err != nil {
+			t.Fatalf("staged local artifact stat error = %v", err)
+		}
+		break
+	}
+	if pending == nil {
+		t.Fatal("expected local upgrade pending request")
+	}
+	if pending.FeishuMsgID != "upgrade-local-path-card" {
+		t.Fatalf("pending FeishuMsgID = %q, want upgrade-local-path-card", pending.FeishuMsgID)
+	}
+}
+
 func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 	origUpgrade := startDaemonUpgrade
 	defer func() { startDaemonUpgrade = origUpgrade }()
@@ -2712,7 +2829,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade"} {
+	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}

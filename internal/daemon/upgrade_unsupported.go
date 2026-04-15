@@ -11,6 +11,7 @@ type UpgradeSpec struct {
 	Version        string
 	BinaryPath     string
 	DownloadURL    string
+	SourcePath     string
 	ExpectedSHA256 string
 }
 

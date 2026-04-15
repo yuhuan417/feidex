@@ -1,8 +1,10 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"feidex/internal/daemon"
@@ -94,5 +96,72 @@ func TestUpgradeBranches(t *testing.T) {
 	startDaemonUpgrade = func(daemon.UpgradeSpec) (string, error) { return "", errors.New("boom") }
 	if resp, err := a.completeUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-start"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(start fail) = %#v, %v", resp, err)
+	}
+
+	localArtifact := filepath.Join(a.cfg.Workspaces[0].Cwd, "dist", "feidex-linux-amd64")
+	if err := os.MkdirAll(filepath.Dir(localArtifact), 0o755); err != nil {
+		t.Fatalf("MkdirAll(localArtifact) error = %v", err)
+	}
+	if err := os.WriteFile(localArtifact, []byte("local-binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(localArtifact) error = %v", err)
+	}
+	resp, err := a.completeUpgradeLocalPick(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"session_key": "sess-1"},
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeUpgradeLocalPick() = %#v, %v", resp, err)
+	}
+	var picker *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == upgradeLocalBinaryPendingKind {
+			picker = req
+			break
+		}
+	}
+	if picker == nil {
+		t.Fatal("expected local upgrade picker pending request")
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": picker.ID},
+		Option:      encodePathPickerOption(pathPickerEntry{Name: filepath.Base(localArtifact), Path: localArtifact, IsDir: false}),
+	}, "path_picker.dropdown")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("local picker dropdown = %#v, %v", resp, err)
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": picker.ID},
+	}, "path_picker.confirm")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("local picker confirm = %#v, %v", resp, err)
+	}
+	foundLocal := false
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind != "upgrade_release" || req.ID == "upgrade-start" {
+			continue
+		}
+		var payload upgradePendingPayload
+		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
+			continue
+		}
+		if payload.SourcePath == "" {
+			continue
+		}
+		if payload.DownloadURL != "" || payload.ExpectedSHA256 == "" {
+			t.Fatalf("unexpected local upgrade payload = %+v", payload)
+		}
+		if _, err := os.Stat(payload.SourcePath); err != nil {
+			t.Fatalf("staged local artifact stat error = %v", err)
+		}
+		foundLocal = true
+		break
+	}
+	if !foundLocal {
+		t.Fatal("expected staged local upgrade pending request")
 	}
 }
