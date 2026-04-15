@@ -397,6 +397,10 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("Save(config) error = %v", err)
 	}
+	loadedCfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load(config) error = %v", err)
+	}
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
 		t.Fatalf("Open(store) error = %v", err)
@@ -404,7 +408,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	ff := &fakeFeishuClient{}
 	fc := &fakeCodexClient{}
 	a := &App{
-		cfg:           cfg,
+		cfg:           loadedCfg,
 		cfgPath:       cfgPath,
 		store:         store,
 		codex:         fc,
