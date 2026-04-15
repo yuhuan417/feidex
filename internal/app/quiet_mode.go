@@ -103,15 +103,28 @@ func (a *App) updateQuietMode(enabled bool) error {
 
 func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 	enabled := !a.quietModeEnabled()
-	if len(args) > 0 {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: /quiet | /quiet on | /quiet off | /quiet config")
+	}
+	if len(args) == 1 {
 		switch strings.TrimSpace(args[0]) {
 		case "on":
 			enabled = true
 		case "off":
 			enabled = false
+		case "config":
+			if msg == nil {
+				return nil
+			}
+			card := a.renderQuietModeMenuCard(a.makeSessionKey(msg))
+			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+			return err
 		default:
-			return fmt.Errorf("usage: /quiet | /quiet on | /quiet off")
+			return fmt.Errorf("usage: /quiet | /quiet on | /quiet off | /quiet config")
 		}
+	}
+	if msg == nil {
+		return nil
 	}
 	if err := a.updateQuietMode(enabled); err != nil {
 		return err

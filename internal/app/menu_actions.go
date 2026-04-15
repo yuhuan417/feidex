@@ -49,30 +49,7 @@ func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any,
 }
 
 func (a *App) completeMenuCompact(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	parentAction := "menu.tools"
-	if action != nil {
-		if value, ok := action.ActionValue["parent_action"].(string); ok && strings.TrimSpace(value) != "" {
-			parentAction = value
-		}
-	}
-	if _, err := a.startThreadCompaction(sessionKey); err != nil {
-		if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-				Card:  rawCard(card),
-			}, nil
-		}
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已请求压缩当前线程上下文"},
-			Card:  rawCard(card),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已请求压缩当前线程上下文"},
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
 }
 
 func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -126,17 +103,11 @@ func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reason
 }
 
 func (a *App) completeMenuQuiet(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 quiet 配置"},
-		Card:  rawCard(a.renderQuietModeMenuCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/quiet config", "menu.tools")
 }
 
 func (a *App) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 token usage"},
-		Card:  rawCard(a.renderUsageCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/usage", "menu.tools")
 }
 
 func (a *App) completeQuietSet(action *feishu.CardAction, enabled bool) (*callback.CardActionTriggerResponse, error) {
@@ -151,41 +122,19 @@ func (a *App) completeQuietSet(action *feishu.CardAction, enabled bool) (*callba
 }
 
 func (a *App) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	result, err := a.fetchModelList(ctx)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开模型配置"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, "menu.model")),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/model", "menu.group.model")
 }
 
 func (a *App) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开状态面板"},
-		Card:  rawCard(a.renderStatusCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/status", "menu.group.system")
 }
 
 func (a *App) completeMenuHelp(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开帮助说明"},
-		Card:  rawCard(a.renderHelpCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/help", "menu.group.system")
 }
 
 func (a *App) completeMenuHistory(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderHistoryCard(sessionKey, 0)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开历史记录"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/history", "menu.tools")
 }
 
 func (a *App) completeHistoryPage(action *feishu.CardAction, sessionKey string, page int) (*callback.CardActionTriggerResponse, error) {
@@ -209,10 +158,7 @@ func (a *App) completeHistoryDetail(action *feishu.CardAction, sessionKey string
 }
 
 func (a *App) completeMenuFast(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 service tier 配置"},
-		Card:  rawCard(a.renderServiceTierMenuCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/fast config", "menu.group.model")
 }
 
 func (a *App) completeServiceTierSet(action *feishu.CardAction, sessionKey, threadID, serviceTier string) (*callback.CardActionTriggerResponse, error) {
@@ -229,22 +175,23 @@ func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActi
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	if action != nil && strings.TrimSpace(action.MessageID) != "" {
 		messageID := strings.TrimSpace(action.MessageID)
-		userID := action.UserID
 		go func() {
-			card, err := a.renderUpgradeCard(sessionKey, userID)
+			_, card, err := a.runCommandFromCardAction(action, sessionKey, "/upgrade")
 			if err != nil {
 				slog.Warn("upgrade panel render failed",
 					"session_key", sessionKey,
-					"user_id", userID,
+					"user_id", action.UserID,
 					"message_id", messageID,
 					"error", err,
 				)
 				card = a.renderUpgradeFailedCard(sessionKey, err.Error())
+			} else if card == nil {
+				card = a.renderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
 			}
 			if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
 				slog.Warn("upgrade panel patch failed",
 					"session_key", sessionKey,
-					"user_id", userID,
+					"user_id", action.UserID,
 					"message_id", messageID,
 					"error", err,
 				)
@@ -255,12 +202,5 @@ func (a *App) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActi
 			Card:  rawCard(a.renderUpgradePreparingCard(sessionKey)),
 		}, nil
 	}
-	card, err := a.renderUpgradeCard(sessionKey, action.UserID)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开升级面板"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/upgrade", "menu.group.system")
 }

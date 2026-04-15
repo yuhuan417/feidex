@@ -65,19 +65,29 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 	}
 }
 
-func TestCommandQuietTogglesWithoutCard(t *testing.T) {
+func TestCommandQuietTogglesAndSupportsConfigCard(t *testing.T) {
 	cfg := config.Default()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: &fakeFeishuClient{}}
+	ff := &fakeFeishuClient{}
+	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: ff}
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p"}
 	if err := a.commandQuiet(msg, nil); err != nil {
 		t.Fatalf("commandQuiet() error = %v", err)
 	}
 	if !a.quietModeEnabled() {
-		t.Fatal("expected quiet mode to be enabled after toggle")
+		t.Fatal("expected /quiet to toggle quiet mode")
+	}
+	if len(ff.replyTexts) != 1 {
+		t.Fatalf("reply text count = %d, want 1", len(ff.replyTexts))
+	}
+	if err := a.commandQuiet(msg, []string{"config"}); err != nil {
+		t.Fatalf("commandQuiet(config) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
 	}
 }
 

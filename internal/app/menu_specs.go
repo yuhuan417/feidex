@@ -64,7 +64,7 @@ var commandMenuGroupSpecs = []commandMenuGroupSpec{
 
 var commandMenuItemSpecs = []commandMenuItemSpec{
 	{GroupAction: "menu.tools", Action: "menu.interrupt", Label: "中断任务", Slash: "/stop", Kind: menuItemDirect, IncludeParentAction: true},
-	{GroupAction: "menu.tools", Action: "menu.quiet", Label: "静默模式", Slash: "/quiet", Kind: menuItemSubmenu},
+	{GroupAction: "menu.tools", Action: "menu.quiet", Label: "静默模式", Slash: "/quiet config", Kind: menuItemSubmenu},
 	{GroupAction: "menu.tools", Action: "menu.compact", Label: "压缩上下文", Slash: "/compact", Kind: menuItemDirect, IncludeParentAction: true},
 	{GroupAction: "menu.tools", Action: "menu.download", Label: "下载文件", Slash: "/download", Kind: menuItemDirect, IncludeParentAction: true},
 	{GroupAction: "menu.tools", Action: "menu.history", Label: "历史记录", Slash: "/history", Kind: menuItemSubmenu},
@@ -72,7 +72,7 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 	{GroupAction: "menu.tools", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 
 	{GroupAction: "menu.group.model", Action: "menu.model", Label: "模型配置", Slash: "/model", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.model", Action: "menu.fast", Label: "响应速度", Slash: "/fast", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.model", Action: "menu.fast", Label: "响应速度", Slash: "/fast config", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.model", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 
 	{GroupAction: "menu.group.system", Action: "menu.debug", Label: "日志级别", Slash: "/debug", Kind: menuItemDirect},

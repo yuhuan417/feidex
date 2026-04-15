@@ -91,51 +91,5 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 }
 
 func (a *App) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	parentAction := "menu.thread"
-	if action != nil {
-		if value, ok := action.ActionValue["parent_action"].(string); ok && strings.TrimSpace(value) != "" {
-			parentAction = value
-		}
-	}
-	discarded, err := a.startThreadFork(sessionKey)
-	if err != nil {
-		if parentAction == "menu.thread" || parentAction == "menu.threads" {
-			card, renderErr := a.renderThreadsCard(sessionKey, false)
-			if renderErr == nil {
-				return &callback.CardActionTriggerResponse{
-					Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-					Card:  rawCard(card),
-				}, nil
-			}
-		}
-		if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-				Card:  rawCard(card),
-			}, nil
-		}
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	content := "已 fork 当前线程"
-	if discarded > 0 {
-		content = fmt.Sprintf("已 fork 当前线程，并丢弃 %d 条排队或暂存输入", discarded)
-	}
-	if parentAction == "menu.thread" || parentAction == "menu.threads" {
-		card, renderErr := a.renderThreadsCard(sessionKey, false)
-		if renderErr == nil {
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "success", Content: content},
-				Card:  rawCard(card),
-			}, nil
-		}
-	}
-	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: content},
-			Card:  rawCard(card),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: content},
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/thread fork", "menu.thread")
 }

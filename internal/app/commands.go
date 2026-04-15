@@ -72,7 +72,7 @@ func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
 	}, "\n")
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("响应速度", "/fast"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
 	return a.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)

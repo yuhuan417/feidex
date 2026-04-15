@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -15,10 +14,7 @@ import (
 )
 
 func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 workspace"},
-		Card:  rawCard(a.renderWorkspaceMenuCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/workspace", "menu.root")
 }
 
 func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
@@ -57,41 +53,7 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 }
 
 func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
-	requestID, err := appState.nextLocalID("workspace")
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	wsID := a.defaultWorkspaceID()
-	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		wsID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(a.cfg, wsID)
-	payload := workspaceNewPayload{
-		RootPath: a.defaultWorkspaceNewRoot(ws),
-		SelectedCWD: firstNonEmpty(func() string {
-			if ws == nil {
-				return ""
-			}
-			return strings.TrimSpace(ws.Cwd)
-		}(), "/"),
-	}
-	_ = appState.savePending(&state.PendingRequest{
-		ID:          requestID,
-		Kind:        "workspace_new",
-		SessionKey:  sessionKey,
-		OwnerUserID: action.UserID,
-		FeishuMsgID: action.MessageID,
-		PayloadJSON: mustJSON(payload),
-		Status:      "pending",
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
-	})
-	card := a.renderWorkspaceNewCard(sessionKey, requestID, payload)
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "请填写工作区信息"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/workspace new", "menu.workspace")
 }
 
 func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -176,25 +138,11 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 }
 
 func (a *App) completeWorkspaceSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderWorkspaceSandboxMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 sandbox 配置"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/workspace sandbox", "menu.workspace")
 }
 
 func (a *App) completeWorkspacePolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderWorkspacePolicyMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 policy 配置"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/workspace policy", "menu.workspace")
 }
 
 func (a *App) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {

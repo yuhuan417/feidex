@@ -65,17 +65,7 @@ func (a *App) commandDebug(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if action == nil || !a.debugAccessAllowed(action.UserID) {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: debugAccessUnauthorizedText},
-			Card:  rawCard(a.renderDebugAccessDeniedCard(sessionKey, actionUserID(action))),
-		}, nil
-	}
-	level := a.setRuntimeDebug(!logcontrol.DebugEnabled())
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已切换日志级别为 " + level},
-		Card:  rawCard(a.renderSystemMenuCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/debug", "menu.group.system")
 }
 
 func (a *App) commandDebugLogs(msg *feishu.InboundMessage, args []string) error {
@@ -96,16 +86,7 @@ func (a *App) commandDebugLogs(msg *feishu.InboundMessage, args []string) error 
 }
 
 func (a *App) completeMenuDebugLogs(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if action == nil || !a.debugAccessAllowed(action.UserID) {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: debugAccessUnauthorizedText},
-			Card:  rawCard(a.renderDebugAccessDeniedCard(sessionKey, actionUserID(action))),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开最近日志"},
-		Card:  rawCard(a.renderDebugLogsCard(sessionKey)),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/debug logs", "menu.group.system")
 }
 
 func (a *App) debugAccessAllowed(userID string) bool {

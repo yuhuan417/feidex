@@ -30,6 +30,7 @@ import (
 )
 
 type InboundMessage struct {
+	SessionKey      string
 	MessageID       string
 	ChatID          string
 	ChatType        string

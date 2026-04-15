@@ -230,6 +230,9 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 }
 
 func (a *App) makeSessionKey(msg *feishu.InboundMessage) string {
+	if msg != nil && strings.TrimSpace(msg.SessionKey) != "" {
+		return strings.TrimSpace(msg.SessionKey)
+	}
 	if msg.ChatType == "group" {
 		root := msg.RootMessageID
 		if root == "" {

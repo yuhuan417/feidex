@@ -1231,6 +1231,26 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
 	}
 
+	modelCard := a.renderModelMenuCard(sessionKey)
+	modelActions := cardButtonsForTest(modelCard)
+	modelLabelByAction := map[string]string{}
+	for _, action := range modelActions {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		actionName, _ := value["action"].(string)
+		modelLabelByAction[actionName] = label
+	}
+	if !strings.Contains(modelLabelByAction["menu.model"], "/model") || !strings.Contains(modelLabelByAction["menu.fast"], "/fast config") {
+		t.Fatalf("expected real command labels in model menu, got %#v", modelLabelByAction)
+	}
+
 	helpCard := a.renderHelpCard(sessionKey)
 	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 命令帮助") {
 		t.Fatalf("help card missing breadcrumb: %q", body)

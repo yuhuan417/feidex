@@ -97,6 +97,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/history":       true,
 		"/model":         true,
 		"/quiet":         true,
+		"/quiet config":  true,
 		"/debug":         true,
 		"/debug on":      true,
 		"/debug logs":    true,
@@ -113,6 +114,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/workspace":     true,
 		"/status":        true,
 		"/upgrade":       true,
+		"/fast config":   true,
 		"/upgrade local": true,
 		"/upgrade path ./dist/feidex-linux-amd64": true,
 		"/upgrade v0.3.0":                         true,
@@ -161,12 +163,13 @@ func TestStartupReadyChatIDsDeduplicatesChats(t *testing.T) {
 	}
 }
 
-func TestCommandFastTogglesThreadServiceTier(t *testing.T) {
+func TestCommandFastTogglesAndSupportsConfigCard(t *testing.T) {
 	store, err := state.Open(t.TempDir() + "/state.json")
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := &App{store: store, feishu: &fakeFeishuClient{}}
+	ff := &fakeFeishuClient{}
+	a := &App{store: store, feishu: ff}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "feishu:p2p:chat:user",
 		WorkspaceID:             "default",
@@ -183,12 +186,18 @@ func TestCommandFastTogglesThreadServiceTier(t *testing.T) {
 	if sess == nil || sess.ActiveThreadServiceTier != "fast" {
 		t.Fatalf("expected service tier fast, got %#v", sess)
 	}
-	if err := a.commandFast(msg, nil); err != nil {
-		t.Fatalf("commandFast(toggle to unset) error = %v", err)
+	if err := a.commandFast(msg, []string{"config"}); err != nil {
+		t.Fatalf("commandFast(config) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	if err := a.commandFast(msg, []string{"default"}); err != nil {
+		t.Fatalf("commandFast(set default) error = %v", err)
 	}
 	sess = a.store.GetSession("feishu:p2p:chat:user")
 	if sess == nil || sess.ActiveThreadServiceTier != "" {
-		t.Fatalf("expected service tier unset, got %#v", sess)
+		t.Fatalf("expected service tier default, got %#v", sess)
 	}
 }
 

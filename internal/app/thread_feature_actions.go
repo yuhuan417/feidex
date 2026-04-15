@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 
@@ -15,120 +14,30 @@ import (
 )
 
 func (a *App) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderThreadsCard(sessionKey, false)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 thread"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/thread", "menu.root")
 }
 
 func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	parentAction, _ := action.ActionValue["parent_action"].(string)
-	discarded, binding, err := a.startFreshThread(sessionKey, action.UserID, action.ChatID, "")
-	if err != nil {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-		}, nil
-	}
-	content := "已创建新线程"
-	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
-		content += "并切换过去"
-	}
-	if discarded > 0 {
-		content = fmt.Sprintf("%s，并丢弃 %d 条排队或暂存输入", content, discarded)
-	}
-	if parentAction == "menu.thread" || parentAction == "menu.threads" {
-		card, err := a.renderThreadsCard(sessionKey, false)
-		if err == nil {
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "success", Content: content},
-				Card:  rawCard(card),
-			}, nil
-		}
-	}
-	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: content},
-			Card:  rawCard(card),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: content},
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/thread new", "menu.thread")
 }
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
-	parentAction := ""
-	if action != nil {
-		parentAction, _ = action.ActionValue["parent_action"].(string)
-	}
-	sess := appState.session(sessionKey)
-	discarded := a.discardSessionPendingInputs(sessionKey)
-	sess = appState.session(sessionKey)
-	if sess == nil || sess.ActiveTurnID == "" {
-		if discarded > 0 {
-			if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-				return &callback.CardActionTriggerResponse{
-					Toast: &callback.Toast{Type: "success", Content: fmt.Sprintf("已清空 %d 条排队或暂存输入", discarded)},
-					Card:  rawCard(card),
-				}, nil
-			}
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: fmt.Sprintf("已清空 %d 条排队或暂存输入", discarded)}}, nil
-		}
-		if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
+	if strings.TrimSpace(targetTurnID) != "" {
+		if sess := a.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveTurnID) != strings.TrimSpace(targetTurnID) {
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: "当前没有运行中的任务"},
-				Card:  rawCard(card),
+				Toast: &callback.Toast{Type: "warning", Content: "这个任务已经结束或已切换到其他任务"},
 			}, nil
 		}
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前没有运行中的任务"}}, nil
 	}
-	if strings.TrimSpace(targetTurnID) != "" && sess.ActiveTurnID != targetTurnID {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "这个任务已经结束或已切换到其他任务"}}, nil
-	}
-	go func() {
-		_ = a.codex.Call(context.Background(), "turn/interrupt", map[string]any{
-			"threadId": sess.ActiveThreadID,
-			"turnId":   sess.ActiveTurnID,
-		}, nil)
-	}()
-	content := "已请求中断"
-	if discarded > 0 {
-		content = fmt.Sprintf("已请求中断，并清空 %d 条排队或暂存输入", discarded)
-	}
-	if card, ok := a.renderMenuNodeCard(parentAction, sessionKey); ok {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: content},
-			Card:  rawCard(card),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: content}}, nil
+	return a.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
 }
 
 func (a *App) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderThreadSandboxMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 thread sandbox 配置"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/thread sandbox", "menu.thread")
 }
 
 func (a *App) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderThreadPolicyMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 thread policy 配置"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/thread policy", "menu.thread")
 }
 
 func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {

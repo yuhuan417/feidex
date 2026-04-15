@@ -56,39 +56,7 @@ func (a *App) commandDownload(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) completeMenuDownload(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
-	wsID := a.defaultWorkspaceID()
-	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		wsID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(a.cfg, wsID)
-	payload, err := a.newDownloadPathPickerPayload(ws)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	requestID, err := appState.nextLocalID("download")
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	_ = appState.savePending(&state.PendingRequest{
-		ID:          requestID,
-		Kind:        downloadFilePendingKind,
-		SessionKey:  sessionKey,
-		OwnerUserID: action.UserID,
-		FeishuMsgID: action.MessageID,
-		PayloadJSON: mustJSON(payload),
-		Status:      "pending",
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
-	})
-	card, err := a.renderPathPickerCard(requestID, payload)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "请选择要下载的文件"},
-		Card:  rawCard(card),
-	}, nil
+	return a.completeMenuCommand(action, sessionKey, "/download", "menu.tools")
 }
 
 func (a *App) newDownloadPathPickerPayload(ws *config.Workspace) (pathPickerPayload, error) {

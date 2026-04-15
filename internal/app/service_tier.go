@@ -113,19 +113,54 @@ func (a *App) setThreadServiceTier(sessionKey, threadID, serviceTier string) (*s
 }
 
 func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
-	if len(args) > 0 {
-		return fmt.Errorf("usage: /fast")
+	if len(args) == 0 {
+		if msg == nil {
+			return nil
+		}
+		sessionKey := a.makeSessionKey(msg)
+		appState := a.appState()
+		sess := appState.session(sessionKey)
+		if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+			return fmt.Errorf("当前没有活动线程，无法切换 service tier")
+		}
+		next := toggleServiceTier(sess.ActiveThreadServiceTier)
+		sess.ActiveThreadServiceTier = next
+		if err := appState.saveSession(sess); err != nil {
+			return err
+		}
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	}
+	if len(args) > 1 {
+		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast toggle | /fast config")
+	}
+	switch strings.TrimSpace(args[0]) {
+	case "config", "fast", "default", "off", "toggle":
+	default:
+		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast toggle | /fast config")
 	}
 	if msg == nil {
 		return nil
 	}
 	sessionKey := a.makeSessionKey(msg)
+	if strings.TrimSpace(args[0]) == "config" {
+		card := a.renderServiceTierMenuCard(sessionKey)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return err
+	}
 	appState := a.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return fmt.Errorf("当前没有活动线程，无法切换 service tier")
 	}
-	next := toggleServiceTier(sess.ActiveThreadServiceTier)
+	next := ""
+	switch strings.TrimSpace(args[0]) {
+	case "fast":
+		next = serviceTierFast
+	case "default", "off":
+		next = ""
+	case "toggle":
+		next = toggleServiceTier(sess.ActiveThreadServiceTier)
+	}
 	sess.ActiveThreadServiceTier = next
 	if err := appState.saveSession(sess); err != nil {
 		return err

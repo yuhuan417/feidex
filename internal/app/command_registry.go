@@ -90,9 +90,10 @@ func localCommandSpecList() []localCommandSpec {
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
-				{Command: "`/quiet`", Summary: "切换 Quiet 模式。"},
+				{Command: "/quiet", Summary: "切换 Quiet 模式。"},
 				{Command: "/quiet on", Summary: "开启 Quiet 模式。"},
 				{Command: "/quiet off", Summary: "关闭 Quiet 模式。"},
+				{Command: "/quiet config", Summary: "打开 Quiet Mode 配置卡。"},
 			},
 		},
 		{
@@ -122,6 +123,10 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "model",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/fast", Summary: "切换当前线程的响应速度设置。"},
+				{Command: "/fast fast", Summary: "将当前线程的 service tier 设为 fast。"},
+				{Command: "/fast default", Summary: "将当前线程的 service tier 恢复为默认。"},
+				{Command: "/fast toggle", Summary: "切换当前线程的响应速度设置。"},
+				{Command: "/fast config", Summary: "打开当前线程的响应速度配置卡。"},
 			},
 		},
 		{
