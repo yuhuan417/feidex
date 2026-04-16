@@ -7,6 +7,47 @@ import (
 	"time"
 )
 
+func (w *submissionWorkflow) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
+	a := w.app
+	appState := a.appState()
+	threadID = strings.TrimSpace(threadID)
+	turnID = strings.TrimSpace(turnID)
+	if threadID == "" || turnID == "" {
+		return false
+	}
+	sessionKey, sub := a.pendingSubmissionForThread(threadID)
+	if sub == nil {
+		return false
+	}
+	if isReviewSubmission(sub) && !allowReview {
+		return false
+	}
+	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	a.markTurnStartedAt(turnID, time.Now())
+	a.clearPendingTurnBinding(threadID)
+
+	sess := appState.session(sessionKey)
+	if sess == nil {
+		return false
+	}
+	sess.ActiveSubmissionID = sub.ID
+	sess.ActiveTurnID = turnID
+	sess.Status = "turn_in_progress"
+	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+	if err := appState.saveSession(sess); err != nil {
+		return false
+	}
+	_ = appState.markSubmissionRunning(sub.ID, threadID, turnID)
+	sub.ThreadID = threadID
+	sub.TurnID = turnID
+	sub.Status = "running"
+	a.recordSubmissionSourceLinks(sub)
+	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	a.noteTurnStarted(sessionKey, sub)
+	a.markSessionThreadLive(sessionKey, threadID)
+	return true
+}
+
 func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) {
 	a := w.app
 	appState := a.appState()
@@ -16,30 +57,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		return
 	}
 
-	if sessionKey, sub := a.pendingSubmissionForThread(threadID); sub != nil {
-		a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
-		a.markTurnStartedAt(turnID, time.Now())
-		a.clearPendingTurnBinding(threadID)
-
-		sess := appState.session(sessionKey)
-		if sess == nil {
-			return
-		}
-		sess.ActiveSubmissionID = sub.ID
-		sess.ActiveTurnID = turnID
-		sess.Status = "turn_in_progress"
-		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
-		if err := appState.saveSession(sess); err != nil {
-			return
-		}
-		_ = appState.markSubmissionRunning(sub.ID, threadID, turnID)
-		sub.ThreadID = threadID
-		sub.TurnID = turnID
-		sub.Status = "running"
-		a.recordSubmissionSourceLinks(sub)
-		a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
-		a.noteTurnStarted(sessionKey, sub)
-		a.markSessionThreadLive(sessionKey, threadID)
+	if w.bindPendingSubmissionTurn(threadID, turnID, false) {
 		return
 	}
 	if a.bindStandaloneCompactTurn(threadID, turnID) {

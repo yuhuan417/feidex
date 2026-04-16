@@ -14,6 +14,7 @@ var menuNodes = map[string]menuNode{
 	"menu.group.system":      {Label: "系统运维", Parent: "menu.root"},
 	"menu.thread":            {Label: "线程管理", Parent: "menu.root"},
 	"menu.workspace":         {Label: "工作区管理", Parent: "menu.root"},
+	"menu.review":            {Label: "代码审查", Parent: "menu.tools"},
 	"menu.quiet":             {Label: "静默模式", Parent: "menu.tools"},
 	"menu.usage":             {Label: "Token 消耗", Parent: "menu.tools"},
 	"menu.history":           {Label: "历史记录", Parent: "menu.tools"},

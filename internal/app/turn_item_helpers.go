@@ -24,6 +24,10 @@ func turnItemLabel(itemType string) string {
 		return "思考"
 	case "agent_message":
 		return "回复"
+	case "entered_review_mode":
+		return "进入 Review"
+	case "exited_review_mode":
+		return "Review 结果"
 	case "command_execution":
 		return "命令执行"
 	case "file_change":

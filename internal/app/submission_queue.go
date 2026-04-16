@@ -61,15 +61,15 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		return err
 	}
 	logSessionState("submission enqueue session persisted", sessionKey, appState.session(sessionKey))
-		sub := &state.Submission{
-			SessionKey:           sessionKey,
-			WorkspaceID:          sess.WorkspaceID,
-			UserID:               msg.UserID,
-			ChatID:               msg.ChatID,
-			TriggerMessageID:     msg.MessageID,
-			SourceMessageIDs:     sourceMessageIDs,
-			SourceRootMessageIDs: sourceRootMessageIDs,
-			InputText:            msg.Text,
+	sub := &state.Submission{
+		SessionKey:           sessionKey,
+		WorkspaceID:          sess.WorkspaceID,
+		UserID:               msg.UserID,
+		ChatID:               msg.ChatID,
+		TriggerMessageID:     msg.MessageID,
+		SourceMessageIDs:     sourceMessageIDs,
+		SourceRootMessageIDs: sourceRootMessageIDs,
+		InputText:            msg.Text,
 		Attachments:          attachments,
 		Status:               "queued",
 	}
@@ -246,7 +246,12 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 	a.markSubmissionRunningReactions(sub)
 	logSessionState("startNextSubmission session starting", sessionKey, appState.session(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	turnID, err := a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
+	turnID := ""
+	if isReviewSubmission(sub) {
+		turnID, err = a.startSubmissionReview(turnCtx, threadID, sub)
+	} else {
+		turnID, err = a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
+	}
 	turnCancel()
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {

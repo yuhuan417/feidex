@@ -36,7 +36,7 @@ type quietWorkingBoundary struct {
 
 func isQuietBoundaryTurnItem(itemType string) bool {
 	switch normalizeTurnItemType(itemType) {
-	case "agent_message", "plan":
+	case "agent_message", "plan", "exited_review_mode":
 		return true
 	default:
 		return false

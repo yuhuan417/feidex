@@ -317,10 +317,44 @@
 - 我们当前实现:
   - 没有 `review/start` 调用。
   - 没有 review item 生命周期处理。
+- 2026-04-16 detached review 实测补充:
+  - 测试方式: 连接本地启动的 `codex app-server`，对 `review/start` 进行真实协议探测；分别验证空 thread 与已 materialize thread。
+  - 空 thread 上直接调用 `review/start` 且 `delivery = detached` 时，服务端返回 `error creating detached review thread: No such file or directory (os error 2)`。
+  - 同场实测可见，空 thread 虽然在 `thread/start` 响应里已有 `thread.path`，但对应 rollout 文件实际尚未落盘；因此 detached review 当前可视为依赖 source thread 先完成至少一个 turn，使 rollout 文件 materialize。
+  - source thread 完成一个普通 turn 后，再调用 `review/start` 且 `delivery = detached`，detached review 可成功启动。
+  - 成功时观测到的新 thread 生命周期为:
+    - `review/start(detached)` response 返回 `reviewThreadId`，同时返回一个 `turn.id = A`
+    - `thread/started(reviewThreadId)`
+    - `item/started(enteredReviewMode, turnId = A)`
+    - `item/completed(enteredReviewMode, turnId = A)`
+    - `thread/status/changed(active)`，作用于 review thread
+    - `turn/started(turnId = B)`，其中 `B != A`
+    - review 过程中的 `userMessage`、`reasoning`、`exitedReviewMode`、最终 `agentMessage`、`turn/completed` 仍都挂在 `turnId = A` 上
+    - `thread/status/changed(idle)`，作用于 review thread
+  - 因此当前实现里，`review/start` response 返回的 `turn.id` 与后续 `turn/started.turn.id` 可能不一致；客户端若要跟踪 detached review 完成边界，不能只依赖 `turn/started` 的 id。
+  - review 完成后，没有观测到任何“切回 source thread”的通知；source thread 在 detached review 启动后到 review thread 完成后的静默窗口内，也没有收到新的 `thread/*`、`turn/*`、`item/*` 通知。
+  - 进一步对 `thread/read(includeTurns = true)` 的实测表明，最终持久化历史并不是“source thread 与 review thread 各自都含有 review 内容”:
+    - source thread 只保留自身原始 turn，不会写入 detached review 的任何 item 或 turn。
+    - review thread 会带着一份 fork 时刻的 source history 副本。
+    - review thread 的持久化 turns 中，除 fork 过来的 source turn 外，还会新增 review 相关 turns。
+    - `enteredReviewMode` 在持久化历史里可能单独占一个 turn。
+    - 通知流中的 `review/start` response.turn.id 与 `item(exitedReviewMode)`/`turn/completed` 使用的 turn id，以及最终 `thread/read` 里真实落盘的 turn ids，三者可能继续不一致。
+    - 在 2026-04-16 的一次真实探测中，`review/start` response.turn.id 与 `exitedReviewMode` 通知里的 `turnId` 均未出现在最终 `thread/read` 的 turns 列表中；真正持久化的是 `turn/started` 通知里的另一个 turn id。
+  - 结论上，若产品要在 UI 上“review 完成后切回旧 thread”，必须由客户端自行记住 source thread 并主动恢复焦点，不能依赖 app-server 发一个显式 switch-back 事件。
+  - 同时，如果 UI 切回旧 thread，也不能假设 review 结果已经进入旧 thread 的模型上下文；更合理的做法是把 detached review 结果作为 source thread 的本地 sidecar / backlink 展示，而不是伪造成 source thread 的真实历史。
+- 2026-04-16 当前讨论沉淀:
+  - detached review 的真实语义更接近“fork 当前 thread 后在 fork 上做 review”，而不是“开一个 fresh thread 做 review，再把结果带回原 thread”。
+  - 因此 detached review 主要解决的是“review 污染当前 thread 上下文”的风险，而不是“review 结果自动回灌原 thread”的需求。
+  - “fresh review thread + review 完成后把结果自然带回原 thread”是另一种产品形态，不应与当前 app-server 的 detached review 语义混为一谈。
+  - 当前产品判断: Feidex 先只实现 inline review。
+  - inline review 不增加 review 专属的 active-thread 兜底或切换逻辑，沿用普通 submission 的通用 thread 生命周期处理。
+  - 如果使用者担心 review 污染当前 thread，可由使用者先自行选择 `/new` 或 `/fork`，再在目标 thread 中执行 inline review。
+  - 因此当前不把 detached review 作为 Feidex 的首期实现目标，也不为 detached review 设计结果回灌 source thread 的额外机制。
 - 差异点:
   - 整条状态机未接入。
 - 修改建议:
-  - 如果产品要支持 review，再单独实现；否则保持未实现即可。
+  - 若后续决定支持 review，优先实现 inline review。
+  - 线程隔离需求交由使用者通过 `/new` 或 `/fork` 自行决定，不在首期实现中接入 detached review。
 
 ### SM-15 `ThreadLifecycleNotifications`
 

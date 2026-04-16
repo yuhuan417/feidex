@@ -52,6 +52,13 @@ func (a *App) completeMenuCompact(action *feishu.CardAction, sessionKey string) 
 	return a.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
 }
 
+func (a *App) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
+		Card:  rawCard(a.renderReviewMenuCard(sessionKey)),
+	}, nil
+}
+
 func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	menuAction, _ := action.ActionValue["menu_action"].(string)

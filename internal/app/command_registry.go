@@ -145,6 +145,26 @@ func localCommandSpecList() []localCommandSpec {
 			},
 		},
 		{
+			Names: []string{"/review"},
+			IsLocal: func([]string) bool {
+				return true
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandReview(msg, args)
+			},
+			HelpGroup: "常用工具",
+			HelpEntries: []helpCommandSpec{
+				{Command: "/review", Summary: "审查当前 workspace 的未提交改动。"},
+				{Command: "/review uncommitted", Summary: "等价于 `/review`。"},
+				{Command: "/review base", Summary: "打开 base branch 选择卡。"},
+				{Command: "/review base <branch>", Summary: "对比指定 branch 发起 review。"},
+				{Command: "/review commit", Summary: "打开最近 100 个 commit 选择卡。"},
+				{Command: "/review commit <rev>", Summary: "审查指定 commit/ref。"},
+				{Command: "/review custom", Summary: "打开自定义 review instructions 卡。"},
+				{Command: "/review custom <instructions>", Summary: "按自定义 instructions 发起 review。"},
+			},
+		},
+		{
 			Names: []string{"/compact"},
 			IsLocal: func([]string) bool {
 				return true

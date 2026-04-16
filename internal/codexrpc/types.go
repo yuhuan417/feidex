@@ -15,6 +15,14 @@ type TurnStartResult struct {
 	} `json:"turn"`
 }
 
+type ReviewStartResult struct {
+	ReviewThreadID string `json:"reviewThreadId"`
+	Turn           struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	} `json:"turn"`
+}
+
 type ThreadListResult struct {
 	Data []ThreadListEntry `json:"data"`
 }

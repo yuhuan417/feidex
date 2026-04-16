@@ -40,6 +40,21 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"menu.compact": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuCompact(action, actionSessionKey(action))
 	},
+	"menu.review": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuReview(action, actionSessionKey(action))
+	},
+	"menu.review.uncommitted": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuCommand(action, actionSessionKey(action), "/review", "menu.review")
+	},
+	"menu.review.base": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuCommand(action, actionSessionKey(action), "/review base", "menu.review")
+	},
+	"menu.review.commit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuCommand(action, actionSessionKey(action), "/review commit", "menu.review")
+	},
+	"menu.review.custom": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuCommand(action, actionSessionKey(action), "/review custom", "menu.review")
+	},
 	"menu.fork": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuFork(action, actionSessionKey(action))
 	},
@@ -219,6 +234,15 @@ var cardActionHandlers = map[string]cardActionHandler{
 	},
 	"pending_form.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completePendingFormCancel(action)
+	},
+	"review.base.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeReviewBaseSelect(action)
+	},
+	"review.commit.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeReviewCommitSelect(action)
+	},
+	"review.form.submit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeReviewFormSubmit(action)
 	},
 	"elicitation_url.accept": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeElicitationURLAction(action, "elicitation_url.accept")

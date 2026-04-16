@@ -64,6 +64,7 @@ var commandMenuGroupSpecs = []commandMenuGroupSpec{
 
 var commandMenuItemSpecs = []commandMenuItemSpec{
 	{GroupAction: "menu.tools", Action: "menu.interrupt", Label: "中断任务", Slash: "/stop", Kind: menuItemDirect, IncludeParentAction: true},
+	{GroupAction: "menu.tools", Action: "menu.review", Label: "代码审查", Slash: "/review", Kind: menuItemSubmenu},
 	{GroupAction: "menu.tools", Action: "menu.quiet", Label: "静默模式", Slash: "/quiet config", Kind: menuItemSubmenu},
 	{GroupAction: "menu.tools", Action: "menu.compact", Label: "压缩上下文", Slash: "/compact", Kind: menuItemDirect, IncludeParentAction: true},
 	{GroupAction: "menu.tools", Action: "menu.download", Label: "下载文件", Slash: "/download", Kind: menuItemDirect, IncludeParentAction: true},

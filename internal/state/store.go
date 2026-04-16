@@ -105,6 +105,12 @@ type Submission struct {
 	SourceRootMessageIDs []string               `json:"source_root_message_ids,omitempty"`
 	InputText            string                 `json:"input_text"`
 	Attachments          []SubmissionAttachment `json:"attachments,omitempty"`
+	Kind                 string                 `json:"kind,omitempty"`
+	ReviewTargetType     string                 `json:"review_target_type,omitempty"`
+	ReviewBranch         string                 `json:"review_branch,omitempty"`
+	ReviewCommitSHA      string                 `json:"review_commit_sha,omitempty"`
+	ReviewCommitTitle    string                 `json:"review_commit_title,omitempty"`
+	ReviewInstructions   string                 `json:"review_instructions,omitempty"`
 	Status               string                 `json:"status"`
 	Finalized            bool                   `json:"finalized"`
 	CreatedAt            int64                  `json:"created_at"`

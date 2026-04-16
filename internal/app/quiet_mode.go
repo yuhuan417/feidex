@@ -98,13 +98,18 @@ func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFina
 	switch mode {
 	case config.QuietModeProgress, config.QuietModeNormal:
 		switch normalizeTurnItemType(itemType) {
-		case "plan", "agent_message":
+		case "plan", "agent_message", "exited_review_mode":
 			return true
 		default:
 			return false
 		}
 	case config.QuietModeFinal:
-		return normalizeTurnItemType(itemType) == "agent_message" && isFinalAnswer
+		switch normalizeTurnItemType(itemType) {
+		case "agent_message", "exited_review_mode":
+			return isFinalAnswer
+		default:
+			return false
+		}
 	default:
 		return true
 	}

@@ -34,6 +34,14 @@ func buildTurnItemCardPayloadWithWorkspace(itemID string, item map[string]any, w
 		text := firstNonEmpty(extractTurnItemText(item, "content", "output_text"), stringValue(item["text"]))
 		payload.SummaryText = strings.TrimSpace(text)
 		payload.IsFinalAnswer = strings.TrimSpace(stringValue(item["phase"])) == "final_answer"
+	case "entered_review_mode":
+		payload.SummaryText = "已进入 review 模式。"
+	case "exited_review_mode":
+		payload.SummaryText = strings.TrimSpace(stringValue(item["review"]))
+		if payload.SummaryText == "" {
+			payload.SummaryText = "Review 已完成。"
+		}
+		payload.IsFinalAnswer = true
 	case "command_execution":
 		command := firstNonEmpty(stringValue(item["command"]), stringValue(item["commandLine"]))
 		output := firstNonEmpty(

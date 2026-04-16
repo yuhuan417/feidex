@@ -177,7 +177,12 @@ func (a *App) renderTurnItemCard(ctx context.Context, sub *state.Submission, pay
 }
 
 func isReplyTurnItem(itemType string) bool {
-	return normalizeTurnItemType(itemType) == "agent_message"
+	switch normalizeTurnItemType(itemType) {
+	case "agent_message", "exited_review_mode":
+		return true
+	default:
+		return false
+	}
 }
 
 func replyTurnItemCardBody(payload turnItemCardPayload) string {
@@ -289,6 +294,10 @@ func turnItemCardMeta(itemType string, isFinalAnswer bool) (string, string) {
 		return "文件改动", "orange"
 	case "agent_message":
 		return "回复", "green"
+	case "entered_review_mode":
+		return "进入 Review", "blue"
+	case "exited_review_mode":
+		return "Review 结果", "green"
 	case "context_compaction":
 		return "上下文压缩", "blue"
 	default:
@@ -303,6 +312,8 @@ func turnItemEventKind(itemType string) string {
 	case "reasoning":
 		return "turn_reasoning"
 	case "agent_message":
+		return "turn_output"
+	case "exited_review_mode":
 		return "turn_output"
 	case "command_execution":
 		return "turn_command_execution"
