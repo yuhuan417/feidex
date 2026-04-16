@@ -24,6 +24,9 @@ service_name = "feidex"
 # model = "gpt-5.4"
 # reasoning_effort = "medium"
 
+[daemon]
+service_name = "feidex"
+
 [[workspace]]
 id = "default"
 name = "Default"

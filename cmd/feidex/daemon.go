@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"feidex/internal/buildinfo"
+	"feidex/internal/config"
 	"feidex/internal/daemon"
 )
 
@@ -28,15 +29,15 @@ func runDaemon(args []string) int {
 	case "enable-linger":
 		return daemonEnableLinger()
 	case "uninstall":
-		return daemonUninstall()
+		return daemonUninstall(args[1:])
 	case "start":
-		return daemonStart()
+		return daemonStart(args[1:])
 	case "stop":
-		return daemonStop()
+		return daemonStop(args[1:])
 	case "restart":
-		return daemonRestart()
+		return daemonRestart(args[1:])
 	case "status":
-		return daemonStatus()
+		return daemonStatus(args[1:])
 	case "upgrade-runner":
 		return daemonUpgradeRunner(args[1:])
 	case "help", "--help", "-h":
@@ -74,7 +75,7 @@ func daemonInstall(args []string) int {
 			return 1
 		}
 	}
-	mgr, err := newDaemonManager()
+	mgr, err := newDaemonManager(cfg.Daemon.ServiceName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
 		return 1
@@ -127,10 +128,10 @@ func daemonEnableLinger() int {
 	return 0
 }
 
-func daemonUninstall() int {
-	mgr, err := newDaemonManager()
+func daemonUninstall(args []string) int {
+	_, mgr, err := loadDaemonManager(args, "uninstall")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 	if err := mgr.Uninstall(); err != nil {
@@ -141,10 +142,10 @@ func daemonUninstall() int {
 	return 0
 }
 
-func daemonStart() int {
-	mgr, err := newDaemonManager()
+func daemonStart(args []string) int {
+	_, mgr, err := loadDaemonManager(args, "start")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 	if err := requireInstalled(mgr); err != nil {
@@ -159,10 +160,10 @@ func daemonStart() int {
 	return 0
 }
 
-func daemonStop() int {
-	mgr, err := newDaemonManager()
+func daemonStop(args []string) int {
+	_, mgr, err := loadDaemonManager(args, "stop")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 	if err := requireInstalled(mgr); err != nil {
@@ -177,10 +178,10 @@ func daemonStop() int {
 	return 0
 }
 
-func daemonRestart() int {
-	mgr, err := newDaemonManager()
+func daemonRestart(args []string) int {
+	_, mgr, err := loadDaemonManager(args, "restart")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 	if err := requireInstalled(mgr); err != nil {
@@ -195,10 +196,10 @@ func daemonRestart() int {
 	return 0
 }
 
-func daemonStatus() int {
-	mgr, err := newDaemonManager()
+func daemonStatus(args []string) int {
+	_, mgr, err := loadDaemonManager(args, "status")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 	st, err := mgr.Status()
@@ -214,7 +215,7 @@ func daemonStatus() int {
 		fmt.Printf("  Platform:    %s\n", st.Platform)
 		fmt.Printf("  Unit:        %s\n", st.UnitPath)
 		fmt.Println()
-		fmt.Println("  Run: feidex daemon install --config config.toml")
+		fmt.Println("  Run: feidex daemon install")
 		return 0
 	}
 	statusText := "Stopped"
@@ -233,6 +234,7 @@ func daemonStatus() int {
 func daemonUpgradeRunner(args []string) int {
 	fs := flag.NewFlagSet("daemon upgrade-runner", flag.ContinueOnError)
 	binaryPath := fs.String("binary-path", "", "installed daemon binary path")
+	serviceName := fs.String("service-name", daemon.DefaultServiceName, "daemon service name")
 	version := fs.String("version", "", "target version")
 	downloadURL := fs.String("download-url", "", "binary download URL")
 	sourcePath := fs.String("source-path", "", "local staged binary path")
@@ -241,6 +243,7 @@ func daemonUpgradeRunner(args []string) int {
 		return 1
 	}
 	if err := runDaemonUpgrade(context.Background(), daemon.UpgradeSpec{
+		ServiceName:    *serviceName,
 		Version:        *version,
 		BinaryPath:     *binaryPath,
 		DownloadURL:    *downloadURL,
@@ -259,7 +262,7 @@ func requireInstalled(mgr daemon.Manager) error {
 		return err
 	}
 	if st == nil || !st.Installed {
-		return fmt.Errorf("service is not installed; run: feidex daemon install --config config.toml")
+		return fmt.Errorf("service is not installed; run: feidex daemon install")
 	}
 	return nil
 }
@@ -268,9 +271,26 @@ func printDaemonUsage() {
 	fmt.Println(`Usage:
   feidex daemon install [--config config.toml] [--force] [--enable-linger]
   feidex daemon enable-linger
-  feidex daemon uninstall
-  feidex daemon start
-  feidex daemon stop
-  feidex daemon restart
-  feidex daemon status`)
+  feidex daemon uninstall [--config config.toml]
+  feidex daemon start [--config config.toml]
+  feidex daemon stop [--config config.toml]
+  feidex daemon restart [--config config.toml]
+  feidex daemon status [--config config.toml]`)
+}
+
+func loadDaemonManager(args []string, command string) (*config.Config, daemon.Manager, error) {
+	fs := flag.NewFlagSet("daemon "+command, flag.ContinueOnError)
+	configPath := fs.String("config", "config.toml", "path to config file")
+	if err := fs.Parse(args); err != nil {
+		return nil, nil, err
+	}
+	cfg, err := loadConfig(*configPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load config: %w", err)
+	}
+	mgr, err := newDaemonManager(cfg.Daemon.ServiceName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("daemon manager: %w", err)
+	}
+	return cfg, mgr, nil
 }

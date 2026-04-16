@@ -10,7 +10,7 @@ import (
 )
 
 func TestBuildUnitUsesServeWithConfig(t *testing.T) {
-	mgr := &systemdManager{}
+	mgr := &systemdManager{serviceName: DefaultServiceName}
 	unit := mgr.buildUnit(Config{
 		BinaryPath: "/opt/feidex/bin/feidex",
 		ConfigPath: "/home/tester/config.toml",
@@ -33,7 +33,7 @@ func TestBuildUnitUsesServeWithConfig(t *testing.T) {
 }
 
 func TestBuildUnitQuotesPathsWithSpaces(t *testing.T) {
-	mgr := &systemdManager{}
+	mgr := &systemdManager{serviceName: DefaultServiceName}
 	unit := mgr.buildUnit(Config{
 		BinaryPath: "/opt/feidex bin/feidex",
 		ConfigPath: "/home/test user/config.toml",

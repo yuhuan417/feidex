@@ -28,7 +28,7 @@ esac
 	t.Setenv("PATH", binDir)
 	t.Setenv("SYSTEMCTL_LOG", logPath)
 
-	mgr := &systemdManager{}
+	mgr := &systemdManager{serviceName: DefaultServiceName}
 	if err := mgr.Start(); err == nil || !strings.Contains(err.Error(), "start:") {
 		t.Fatalf("Start() error = %v", err)
 	}

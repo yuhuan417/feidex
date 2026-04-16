@@ -49,9 +49,9 @@ func TestResolvePreservesExplicitValuesAndRejectsNil(t *testing.T) {
 	}
 }
 
-func TestServiceNameConstant(t *testing.T) {
-	if ServiceName != "feidex" {
-		t.Fatalf("ServiceName = %q, want feidex", ServiceName)
+func TestDefaultServiceNameConstant(t *testing.T) {
+	if DefaultServiceName != "feidex" {
+		t.Fatalf("DefaultServiceName = %q, want feidex", DefaultServiceName)
 	}
 	if _, err := os.Executable(); err != nil {
 		t.Fatalf("os.Executable() should work in tests: %v", err)

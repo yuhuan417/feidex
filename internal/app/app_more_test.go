@@ -1665,7 +1665,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 			ExpectedSHA256: "abc123",
 		}}
 	}
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "0.1.0" }
@@ -1720,7 +1720,7 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 		},
 	}
 	newReleaseClient = func() releaseClient { return releaseStub }
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v9.9.9" }
@@ -1785,7 +1785,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 		},
 	}
 	newReleaseClient = func() releaseClient { return releaseStub }
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
@@ -1833,7 +1833,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 
 	a, ff, _ := newTestApp(t)
 	ff.replyCardIDs = []string{"upgrade-local-picker-card"}
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentGOARCH = func() string { return "amd64" }
@@ -1882,7 +1882,7 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 
 	a, ff, _ := newTestApp(t)
 	ff.replyCardIDs = []string{"upgrade-local-path-card"}
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
@@ -2011,7 +2011,7 @@ func TestCompleteMenuUpgradeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 		},
 	}
 	newReleaseClient = func() releaseClient { return blocking }
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "0.1.0" }

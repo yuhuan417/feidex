@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-const ServiceName = "feidex"
+const DefaultServiceName = "feidex"
 
 type Config struct {
 	BinaryPath string
@@ -34,8 +35,8 @@ type Manager interface {
 	Platform() string
 }
 
-func NewManager() (Manager, error) {
-	return newPlatformManager()
+func NewManager(serviceName string) (Manager, error) {
+	return newPlatformManager(normalizeServiceName(serviceName))
 }
 
 func Resolve(cfg *Config) error {
@@ -77,4 +78,12 @@ func Resolve(cfg *Config) error {
 	}
 	cfg.HomeDir = filepath.Clean(cfg.HomeDir)
 	return nil
+}
+
+func normalizeServiceName(serviceName string) string {
+	serviceName = strings.TrimSpace(serviceName)
+	if serviceName == "" {
+		return DefaultServiceName
+	}
+	return serviceName
 }

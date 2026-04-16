@@ -7,7 +7,7 @@ import (
 	"runtime"
 )
 
-func newPlatformManager() (Manager, error) {
+func newPlatformManager(serviceName string) (Manager, error) {
 	return nil, fmt.Errorf("systemd daemon management is not supported on %s", runtime.GOOS)
 }
 

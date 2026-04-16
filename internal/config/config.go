@@ -20,6 +20,7 @@ type Config struct {
 	Log        LogConfig    `toml:"log"`
 	Feishu     FeishuConfig `toml:"feishu"`
 	Codex      CodexConfig  `toml:"codex"`
+	Daemon     DaemonConfig `toml:"daemon"`
 	Workspaces []Workspace  `toml:"workspace"`
 }
 
@@ -50,6 +51,10 @@ type CodexConfig struct {
 	ReasoningEffort string `toml:"reasoning_effort"`
 }
 
+type DaemonConfig struct {
+	ServiceName string `toml:"service_name"`
+}
+
 type Workspace struct {
 	ID             string `toml:"id"`
 	Name           string `toml:"name"`
@@ -76,6 +81,9 @@ func Default() *Config {
 			Transport:       "stdio",
 			ExperimentalAPI: true,
 			ServiceName:     "feidex",
+		},
+		Daemon: DaemonConfig{
+			ServiceName: "feidex",
 		},
 		Workspaces: []Workspace{
 			{
@@ -107,6 +115,14 @@ func Load(path string) (*Config, error) {
 func (c *Config) Normalize(baseDir string) error {
 	if c.Codex.Command == "" {
 		c.Codex.Command = "codex"
+	}
+	c.Codex.ServiceName = strings.TrimSpace(c.Codex.ServiceName)
+	if c.Codex.ServiceName == "" {
+		c.Codex.ServiceName = "feidex"
+	}
+	c.Daemon.ServiceName = strings.TrimSpace(c.Daemon.ServiceName)
+	if c.Daemon.ServiceName == "" {
+		c.Daemon.ServiceName = "feidex"
 	}
 	c.Codex.Model = strings.TrimSpace(c.Codex.Model)
 	c.Codex.ReasoningEffort = strings.TrimSpace(c.Codex.ReasoningEffort)

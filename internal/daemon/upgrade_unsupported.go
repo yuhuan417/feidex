@@ -8,6 +8,7 @@ import (
 )
 
 type UpgradeSpec struct {
+	ServiceName    string
 	Version        string
 	BinaryPath     string
 	DownloadURL    string

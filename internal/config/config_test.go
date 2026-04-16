@@ -62,6 +62,9 @@ func TestDefaultConfigUsesInfoLogLevel(t *testing.T) {
 	if cfg.Log.Level != "info" {
 		t.Fatalf("default log level = %q, want info", cfg.Log.Level)
 	}
+	if cfg.Daemon.ServiceName != "feidex" {
+		t.Fatalf("default daemon service name = %q, want feidex", cfg.Daemon.ServiceName)
+	}
 }
 
 func TestSaveUsesPrivatePermissions(t *testing.T) {

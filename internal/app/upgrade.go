@@ -387,6 +387,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级参数损坏"}}, nil
 	}
 	unitName, err := startDaemonUpgrade(daemon.UpgradeSpec{
+		ServiceName:    a.cfg.Daemon.ServiceName,
 		Version:        firstNonEmpty(strings.TrimSpace(payload.TargetVersion), firstNonEmpty(strings.TrimSpace(payload.SourceName), "local-artifact")),
 		BinaryPath:     payload.BinaryPath,
 		DownloadURL:    payload.DownloadURL,
@@ -459,7 +460,7 @@ func (a *App) completeUpgradeLocalBinaryConfirm(action *feishu.CardAction, pendi
 }
 
 func (a *App) validateUpgradeRuntime() (string, string, error) {
-	manager, err := newDaemonManager()
+	manager, err := newDaemonManager(a.cfg.Daemon.ServiceName)
 	if err != nil {
 		return "", "", fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
 	}

@@ -135,6 +135,9 @@ transport = "stdio"
 experimental_api = true
 service_name = "feidex"
 
+[daemon]
+service_name = "feidex"
+
 [[workspace]]
 id = "default"
 name = "Default"
@@ -230,6 +233,12 @@ Feidex 会把这些状态写进去：
   - 全局模型
 - `reasoning_effort`
   - 全局推理强度
+
+### `[daemon]`
+
+- `service_name`
+  - Linux daemon 的 systemd user service 名称，默认 `feidex`
+  - 同机多实例时应保证每套配置使用不同的 `service_name` 和 `data_dir`
 
 ### `[[workspace]]`
 
@@ -440,7 +449,7 @@ Feidex 支持 Linux 用户态 systemd daemon。
 命令：
 
 ```bash
-feidex daemon install --config config.toml
+feidex daemon install
 feidex daemon enable-linger
 feidex daemon start
 feidex daemon stop
@@ -452,9 +461,11 @@ feidex daemon uninstall
 说明：
 
 - `install`
-  - 安装并启动用户服务
+  - 安装并启动用户服务；默认读取当前目录的 `config.toml`
 - `enable-linger`
   - 为当前用户打开 linger，适合 SSH / 非登录会话
+- `start` / `stop` / `restart` / `status` / `uninstall`
+  - 也默认读取当前目录的 `config.toml`，按其中的 `[daemon].service_name` 选择实例
 - `upgrade-runner`
   - 内部升级 runner，不需要手动调用
 

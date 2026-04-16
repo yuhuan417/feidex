@@ -19,6 +19,7 @@ import (
 var upgradeHTTPClient = &http.Client{Timeout: 2 * time.Minute}
 
 type UpgradeSpec struct {
+	ServiceName    string
 	Version        string
 	BinaryPath     string
 	DownloadURL    string
@@ -44,6 +45,7 @@ func StartBackgroundUpgrade(spec UpgradeSpec) (string, error) {
 		spec.BinaryPath,
 		"daemon",
 		"upgrade-runner",
+		"--service-name", normalizeServiceName(spec.ServiceName),
 		"--binary-path", spec.BinaryPath,
 		"--version", spec.Version,
 		"--expected-sha256", spec.ExpectedSHA256,
@@ -66,7 +68,7 @@ func RunUpgradeRunner(ctx context.Context, spec UpgradeSpec) error {
 	if err := validateUpgradeSpec(spec); err != nil {
 		return err
 	}
-	manager, err := NewManager()
+	manager, err := NewManager(spec.ServiceName)
 	if err != nil {
 		return err
 	}

@@ -27,7 +27,7 @@ esac
 	if err := os.MkdirAll(unitDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(unitDir) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(unitDir, systemdServiceName), []byte("[Unit]\nDescription=feidex\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(unitDir, DefaultServiceName+".service"), []byte("[Unit]\nDescription=feidex\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(unit) error = %v", err)
 	}
 

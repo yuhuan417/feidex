@@ -30,7 +30,7 @@ func TestUpgradeBranches(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	currentVersion = func() string { return "v9.9.9" }
 	currentGOARCH = func() string { return "amd64" }
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	newReleaseClient = func() releaseClient {
@@ -54,14 +54,14 @@ func TestUpgradeBranches(t *testing.T) {
 		t.Fatalf("renderUpgradeCardForVersion() = %#v, %v", card, err)
 	}
 
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: false}}, nil
 	}
 	if _, err := a.renderUpgradeCard("sess-1", "user-1"); err == nil {
 		t.Fatal("expected renderUpgradeCard() to reject uninstalled daemon")
 	}
 
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	newReleaseClient = func() releaseClient {

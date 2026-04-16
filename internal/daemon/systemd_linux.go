@@ -12,18 +12,18 @@ import (
 	"strings"
 )
 
-const systemdServiceName = ServiceName + ".service"
+type systemdManager struct {
+	serviceName string
+}
 
-type systemdManager struct{}
-
-func newPlatformManager() (Manager, error) {
+func newPlatformManager(serviceName string) (Manager, error) {
 	if os.Getuid() == 0 {
 		return nil, fmt.Errorf("systemd install currently supports user services only; run as the target user instead of root")
 	}
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return nil, fmt.Errorf("systemctl not found: systemd is required on Linux")
 	}
-	return &systemdManager{}, nil
+	return &systemdManager{serviceName: normalizeServiceName(serviceName)}, nil
 }
 
 func (m *systemdManager) Platform() string {
@@ -41,8 +41,8 @@ func (m *systemdManager) Install(cfg Config) error {
 	}
 	for _, args := range [][]string{
 		{"--user", "daemon-reload"},
-		{"--user", "enable", systemdServiceName},
-		{"--user", "restart", systemdServiceName},
+		{"--user", "enable", m.serviceUnitName()},
+		{"--user", "restart", m.serviceUnitName()},
 	} {
 		if out, err := runSystemctl(args...); err != nil {
 			return fmt.Errorf("systemctl %s: %s (%w)", strings.Join(args, " "), out, err)
@@ -52,7 +52,7 @@ func (m *systemdManager) Install(cfg Config) error {
 }
 
 func (m *systemdManager) Uninstall() error {
-	if _, err := runSystemctl("--user", "disable", "--now", systemdServiceName); err != nil {
+	if _, err := runSystemctl("--user", "disable", "--now", m.serviceUnitName()); err != nil {
 		// best-effort stop/disable
 	}
 	unitPath := m.unitPath()
@@ -66,7 +66,7 @@ func (m *systemdManager) Uninstall() error {
 }
 
 func (m *systemdManager) Start() error {
-	out, err := runSystemctl("--user", "start", systemdServiceName)
+	out, err := runSystemctl("--user", "start", m.serviceUnitName())
 	if err != nil {
 		return fmt.Errorf("start: %s (%w)", out, err)
 	}
@@ -74,7 +74,7 @@ func (m *systemdManager) Start() error {
 }
 
 func (m *systemdManager) Stop() error {
-	out, err := runSystemctl("--user", "stop", systemdServiceName)
+	out, err := runSystemctl("--user", "stop", m.serviceUnitName())
 	if err != nil {
 		return fmt.Errorf("stop: %s (%w)", out, err)
 	}
@@ -82,7 +82,7 @@ func (m *systemdManager) Stop() error {
 }
 
 func (m *systemdManager) Restart() error {
-	out, err := runSystemctl("--user", "restart", systemdServiceName)
+	out, err := runSystemctl("--user", "restart", m.serviceUnitName())
 	if err != nil {
 		return fmt.Errorf("restart: %s (%w)", out, err)
 	}
@@ -101,7 +101,7 @@ func (m *systemdManager) Status() (*Status, error) {
 		return nil, err
 	}
 	st.Installed = true
-	out, err := runSystemctl("--user", "show", systemdServiceName, "--no-page", "--property", "ActiveState,MainPID")
+	out, err := runSystemctl("--user", "show", m.serviceUnitName(), "--no-page", "--property", "ActiveState,MainPID")
 	if err != nil {
 		return st, nil
 	}
@@ -117,13 +117,14 @@ func (m *systemdManager) Status() (*Status, error) {
 
 func (m *systemdManager) unitPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "systemd", "user", systemdServiceName)
+	return filepath.Join(home, ".config", "systemd", "user", m.serviceUnitName())
 }
 
 func (m *systemdManager) buildUnit(cfg Config) string {
+	serviceName := normalizeServiceName(m.serviceName)
 	var sb strings.Builder
 	sb.WriteString("[Unit]\n")
-	sb.WriteString("Description=feidex - Feishu Codex Bridge\n")
+	fmt.Fprintf(&sb, "Description=%s - Feishu Codex Bridge\n", serviceName)
 	sb.WriteString("After=network-online.target\n")
 	sb.WriteString("Wants=network-online.target\n\n")
 	sb.WriteString("[Service]\n")
@@ -141,6 +142,10 @@ func (m *systemdManager) buildUnit(cfg Config) string {
 	sb.WriteString("\n[Install]\n")
 	sb.WriteString("WantedBy=default.target\n")
 	return sb.String()
+}
+
+func (m *systemdManager) serviceUnitName() string {
+	return normalizeServiceName(m.serviceName) + ".service"
 }
 
 func runSystemctl(args ...string) (string, error) {

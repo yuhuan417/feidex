@@ -39,7 +39,7 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 			ExpectedSHA256: "abc123",
 		}}
 	}
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
@@ -84,7 +84,7 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 	a.turnBindings = nil
 	a.pendingTurns = nil
 
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }

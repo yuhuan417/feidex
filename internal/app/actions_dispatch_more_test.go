@@ -26,7 +26,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		currentGOARCH = origGOARCH
 	}()
 
-	newDaemonManager = func() (daemon.Manager, error) {
+	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	newReleaseClient = func() releaseClient {

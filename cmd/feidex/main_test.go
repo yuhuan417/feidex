@@ -385,12 +385,19 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 		statusResp: &daemon.Status{Installed: false, Platform: "linux", UnitPath: "/tmp/feidex.service"},
 		platform:   "linux",
 	}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
+	var gotServiceName string
+	newDaemonManager = func(serviceName string) (daemon.Manager, error) {
+		gotServiceName = serviceName
+		return mgr, nil
+	}
 	if got := daemonInstall([]string{"--config", "config.toml"}); got != 0 {
 		t.Fatalf("daemonInstall(success) = %d, want 0", got)
 	}
 	if len(mgr.calls) < 2 || mgr.calls[0] != "status" || mgr.calls[1] != "install" {
 		t.Fatalf("daemonInstall calls = %+v, want status then install", mgr.calls)
+	}
+	if gotServiceName != minimalConfig().Daemon.ServiceName {
+		t.Fatalf("daemonInstall serviceName = %q, want %q", gotServiceName, minimalConfig().Daemon.ServiceName)
 	}
 
 	enableLingerUser = func() error { return errors.New("linger failed") }
@@ -400,13 +407,13 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 
 	enableLingerUser = func() error { return nil }
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: true}}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
 	if got := daemonInstall(nil); got != 1 {
 		t.Fatalf("daemonInstall(already installed) = %d, want 1", got)
 	}
 
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: false}, installErr: errors.New("install failed")}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
 	if got := daemonInstall(nil); got != 1 {
 		t.Fatalf("daemonInstall(install error) = %d, want 1", got)
 	}
@@ -421,21 +428,21 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 	}
 
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: true}}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
-	if got := daemonStart(); got != 0 {
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
+	if got := daemonStart(nil); got != 0 {
 		t.Fatalf("daemonStart(success) = %d, want 0", got)
 	}
-	if got := daemonStop(); got != 0 {
+	if got := daemonStop(nil); got != 0 {
 		t.Fatalf("daemonStop(success) = %d, want 0", got)
 	}
-	if got := daemonRestart(); got != 0 {
+	if got := daemonRestart(nil); got != 0 {
 		t.Fatalf("daemonRestart(success) = %d, want 0", got)
 	}
 
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: false, Platform: "linux", UnitPath: "/tmp/feidex.service"}}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
 	stdout, _ := withCapturedOutput(t, func() {
-		if got := daemonStatus(); got != 0 {
+		if got := daemonStatus(nil); got != 0 {
 			t.Fatalf("daemonStatus(not installed) = %d, want 0", got)
 		}
 	})
@@ -444,9 +451,9 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 	}
 
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: true, Running: true, Platform: "linux", UnitPath: "/tmp/feidex.service", PID: 99}}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
 	stdout, _ = withCapturedOutput(t, func() {
-		if got := daemonStatus(); got != 0 {
+		if got := daemonStatus(nil); got != 0 {
 			t.Fatalf("daemonStatus(running) = %d, want 0", got)
 		}
 	})
@@ -455,14 +462,14 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 	}
 
 	mgr = &fakeManager{}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
-	if got := daemonUninstall(); got != 0 {
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
+	if got := daemonUninstall(nil); got != 0 {
 		t.Fatalf("daemonUninstall(success) = %d, want 0", got)
 	}
 
 	mgr = &fakeManager{removeErr: errors.New("remove failed")}
-	newDaemonManager = func() (daemon.Manager, error) { return mgr, nil }
-	if got := daemonUninstall(); got != 1 {
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
+	if got := daemonUninstall(nil); got != 1 {
 		t.Fatalf("daemonUninstall(error) = %d, want 1", got)
 	}
 }

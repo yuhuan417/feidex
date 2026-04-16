@@ -35,7 +35,7 @@ esac
 	t.Setenv("PATH", binDir)
 	t.Setenv("SYSTEMCTL_LOG", logPath)
 
-	manager, err := newPlatformManager()
+	manager, err := newPlatformManager(DefaultServiceName)
 	if err != nil {
 		t.Fatalf("newPlatformManager() error = %v", err)
 	}
@@ -109,7 +109,7 @@ func TestSystemdHelpersAndEnableLinger(t *testing.T) {
 
 	noSystemctl := t.TempDir()
 	t.Setenv("PATH", noSystemctl)
-	if _, err := newPlatformManager(); err == nil || !strings.Contains(err.Error(), "systemctl not found") {
+	if _, err := newPlatformManager(DefaultServiceName); err == nil || !strings.Contains(err.Error(), "systemctl not found") {
 		t.Fatalf("newPlatformManager(no systemctl) error = %v", err)
 	}
 
