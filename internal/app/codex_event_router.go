@@ -23,9 +23,18 @@ func newCodexEventRouter(app *App) *codexEventRouter {
 
 func (r *codexEventRouter) handleNotification(method string, params json.RawMessage) {
 	a := r.app
-	appState := a.appState()
 	slog.Debug("codex notification", "method", method)
 	switch method {
+	case "item/started":
+		var p struct {
+			ThreadID string         `json:"threadId"`
+			TurnID   string         `json:"turnId"`
+			Item     map[string]any `json:"item"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			a.noteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
+			a.noteStandaloneCompactItemStarted(p.ThreadID, p.TurnID, p.Item)
+		}
 	case "item/completed":
 		var p struct {
 			ThreadID string         `json:"threadId"`
@@ -85,14 +94,6 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 			)
 			a.finishTurn(p.ThreadID, p.Turn.ID, p.Turn.Status)
 		}
-	case "thread/compacted":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			a.completeStandaloneCompactTurn(p.ThreadID, p.TurnID)
-		}
 	case "thread/tokenUsage/updated":
 		var p codexrpc.ThreadTokenUsageUpdatedNotification
 		if json.Unmarshal(params, &p) == nil {
@@ -127,7 +128,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		}
 		if json.Unmarshal(params, &p) == nil {
 			reqID := requestIDKey(p.RequestID)
-			pending := appState.resolvePending(reqID)
+			pending := a.resolveServerPendingRequest(reqID)
 			a.resumeSubmissionAfterRequest(pending)
 		}
 	}
@@ -162,6 +163,7 @@ func (r *codexEventRouter) onCommandApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
+	raw = a.mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	a.sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, renderCommandApprovalBody(raw), raw)
 }
 
@@ -175,6 +177,7 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
+	raw = a.mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	workspaceCwd := ""
 	if _, sub := a.findSubmissionByTurn(threadID, turnID); sub != nil {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
@@ -194,6 +197,7 @@ func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
+	raw = a.mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	permissions, _ := raw["permissions"].(map[string]any)
 	a.sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, renderPermissionsApprovalBody(raw), permissions, raw)
 }

@@ -1,8 +1,9 @@
 package app
 
 import (
+	"log/slog"
+
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -26,9 +27,17 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 			},
 		},
 	}
-	_ = a.codex.Reply(pendingRequestIDRaw(pending), payload)
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	a.resumeSubmissionAfterRequest(pending)
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), payload); err != nil {
+		slog.Error("tool user input reply to codex failed",
+			"request_id", requestID,
+			"user_id", action.UserID,
+			"error", err,
+		)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
+		}, nil
+	}
+	_ = a.markPendingRequestReplied(requestID)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
 		Card: &callback.Card{

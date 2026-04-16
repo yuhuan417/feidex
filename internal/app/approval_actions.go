@@ -22,18 +22,10 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个审批"}}, nil
 	}
 	var replyPayload any
+	var warning string
 	switch pending.Kind {
 	case "command":
-		resp := map[string]any{"decision": "decline"}
-		switch actionName {
-		case "approval.command.accept":
-			resp["decision"] = "accept"
-		case "approval.command.accept_session":
-			resp["decision"] = "acceptForSession"
-		case "approval.command.cancel", "approval.command.decline":
-			resp["decision"] = "decline"
-		}
-		replyPayload = resp
+		replyPayload, warning = commandApprovalReplyPayload(pending, action, actionName)
 	case "file":
 		resp := map[string]any{"decision": "decline"}
 		switch actionName {
@@ -41,7 +33,9 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			resp["decision"] = "accept"
 		case "approval.file.accept_session":
 			resp["decision"] = "acceptForSession"
-		case "approval.file.cancel", "approval.file.decline":
+		case "approval.file.cancel":
+			resp["decision"] = "cancel"
+		case "approval.file.decline":
 			resp["decision"] = "decline"
 		}
 		replyPayload = resp
@@ -61,6 +55,9 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 	default:
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "不支持的审批类型"}}, nil
 	}
+	if strings.TrimSpace(warning) != "" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: warning}}, nil
+	}
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
 		slog.Error("approval reply to codex failed",
 			"request_id", requestID,
@@ -73,9 +70,8 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
 		}, nil
 	}
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	a.resumeSubmissionAfterRequest(pending)
-	card := a.renderResolvedApprovalCard(pending, actionName)
+	_ = a.markPendingRequestReplied(requestID)
+	card := a.renderResolvedApprovalCard(pending, action, actionName)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "审批已提交"},
 		Card: &callback.Card{
@@ -85,17 +81,48 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 	}, nil
 }
 
-func (a *App) renderResolvedApprovalCard(pending *state.PendingRequest, action string) map[string]any {
-	decision := a.approvalDecisionText(action)
+func commandApprovalReplyPayload(pending *state.PendingRequest, action *feishu.CardAction, actionName string) (any, string) {
+	resp := map[string]any{"decision": "decline"}
+	switch actionName {
+	case "approval.command.accept":
+		resp["decision"] = "accept"
+	case "approval.command.accept_session":
+		resp["decision"] = "acceptForSession"
+	case "approval.command.cancel":
+		resp["decision"] = "cancel"
+	case "approval.command.decline":
+		resp["decision"] = "decline"
+	default:
+		return nil, "不支持的审批动作"
+	}
+	return resp, ""
+}
+
+func approvalRequestPayload(pending *state.PendingRequest) map[string]any {
+	if pending == nil || strings.TrimSpace(pending.PayloadJSON) == "" {
+		return nil
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		return nil
+	}
+	if request, ok := payload["request"].(map[string]any); ok {
+		return request
+	}
+	return payload
+}
+
+func (a *App) renderResolvedApprovalCard(pending *state.PendingRequest, action *feishu.CardAction, actionName string) map[string]any {
+	decision := a.approvalDecisionText(actionName)
 	body := strings.TrimSpace(a.approvalBodyText(pending))
 	lines := []string{"处理结果: " + decision}
+	if detail := strings.TrimSpace(a.approvalDecisionDetail(pending, action, actionName)); detail != "" {
+		lines = append(lines, detail)
+	}
 	if body != "" {
 		lines = append(lines, "", body)
 	}
-	color := "green"
-	if decision == "已拒绝" {
-		color = "grey"
-	}
+	color := approvalDecisionColor(actionName)
 	return a.feishu.SimpleStatusCard("审批已处理", color, strings.Join(lines, "\n"), nil)
 }
 
@@ -159,14 +186,38 @@ func (a *App) approvalDecisionText(action string) string {
 		return "已授权本次权限请求"
 	case "approval.permissions.accept_session":
 		return "已授权本会话权限请求"
+	case "approval.command.cancel", "approval.file.cancel":
+		return "已拒绝并中断任务"
 	default:
 		return "已拒绝"
+	}
+}
+
+func (a *App) approvalDecisionDetail(pending *state.PendingRequest, action *feishu.CardAction, actionName string) string {
+	switch actionName {
+	case "approval.command.cancel", "approval.file.cancel":
+		return "该 turn 会立即中断。"
+	}
+	return ""
+}
+
+func approvalDecisionColor(action string) string {
+	switch action {
+	case "approval.command.cancel", "approval.file.cancel":
+		return "red"
+	case "approval.command.decline", "approval.file.decline":
+		return "grey"
+	default:
+		return "green"
 	}
 }
 
 func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
 	appState := a.appState()
 	if pending == nil {
+		return
+	}
+	if a.hasOpenPendingRequestForTurn(pending.ThreadID, pending.TurnID, pending.ID) {
 		return
 	}
 	_, sub := a.findSubmissionByTurn(pending.ThreadID, pending.TurnID)

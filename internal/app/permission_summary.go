@@ -6,23 +6,33 @@ import (
 	"strings"
 )
 
+type permissionSummarySection struct {
+	Title string
+	Lines []string
+}
+
 func renderPermissionsApprovalBody(params map[string]any) string {
 	lines := []string{"权限审批"}
 	if reason := strings.TrimSpace(stringValue(params["reason"])); reason != "" {
 		lines = append(lines, "说明:", reason)
 	}
 	permissions, _ := params["permissions"].(map[string]any)
-	summary := summarizePermissions(permissions)
-	if len(summary) > 0 {
+	sections := permissionSummarySections(permissions)
+	if len(sections) > 0 {
 		if len(lines) > 1 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, "权限摘要:")
-		for _, line := range summary {
-			lines = append(lines, "- "+line)
+		for i, section := range sections {
+			if i > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, section.Title+":")
+			for _, line := range section.Lines {
+				lines = append(lines, "- "+line)
+			}
 		}
 	}
-	if len(summary) == 0 {
+	if len(sections) == 0 {
 		if rendered := strings.TrimSpace(truncate(prettyJSON(permissions), 800)); rendered != "" {
 			if len(lines) > 1 {
 				lines = append(lines, "")
@@ -30,7 +40,7 @@ func renderPermissionsApprovalBody(params map[string]any) string {
 			lines = append(lines, "权限明细:", markdownCodeBlock(rendered))
 		}
 	}
-	if len(summary) == 0 && len(lines) == 1 {
+	if len(sections) == 0 && len(lines) == 1 {
 		if requestSummary := strings.TrimSpace(truncatedApprovalRequestJSON(params)); requestSummary != "" {
 			lines = append(lines, markdownCodeBlock(requestSummary))
 		}
@@ -38,7 +48,37 @@ func renderPermissionsApprovalBody(params map[string]any) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
+func permissionSummarySections(permissions map[string]any) []permissionSummarySection {
+	if len(permissions) == 0 {
+		return nil
+	}
+	sections := []permissionSummarySection{}
+	if summary := summarizePermissionMetadata(permissions); len(summary) > 0 {
+		sections = append(sections, permissionSummarySection{Title: "权限摘要", Lines: summary})
+	}
+	if fileSystem := summarizePermissionFileSystem(permissions); len(fileSystem) > 0 {
+		sections = append(sections, permissionSummarySection{Title: "fileSystem", Lines: fileSystem})
+	}
+	if network := summarizePermissionNetwork(permissions); len(network) > 0 {
+		sections = append(sections, permissionSummarySection{Title: "network", Lines: network})
+	}
+	if len(sections) > 0 {
+		return sections
+	}
+	if fallback := summarizePermissionsFallback(permissions); len(fallback) > 0 {
+		return []permissionSummarySection{{Title: "权限摘要", Lines: fallback}}
+	}
+	return nil
+}
+
 func summarizePermissions(permissions map[string]any) []string {
+	if summary := summarizePermissionMetadata(permissions); len(summary) > 0 {
+		return summary
+	}
+	return summarizePermissionsFallback(permissions)
+}
+
+func summarizePermissionMetadata(permissions map[string]any) []string {
 	if len(permissions) == 0 {
 		return nil
 	}
@@ -68,28 +108,80 @@ func summarizePermissions(permissions map[string]any) []string {
 	if sandbox := extractPermissionLabelledValue(permissions, "sandbox", "sandboxMode", "sandbox_mode", "type"); sandbox != "" {
 		add("sandbox", "`"+strings.ReplaceAll(sandbox, "`", "'")+"`")
 	}
-	if network, ok := extractPermissionBool(permissions, "network", "networkAccess", "network_access", "allowNetwork", "allow_network"); ok {
-		if network {
-			add("network", "允许")
-		} else {
-			add("network", "禁止")
+	return lines
+}
+
+func summarizePermissionFileSystem(permissions map[string]any) []string {
+	if len(permissions) == 0 {
+		return nil
+	}
+	lines := []string{}
+	if fileSystem, ok := permissions["fileSystem"].(map[string]any); ok && len(fileSystem) > 0 {
+		if read := permissionPathsFromValue(fileSystem["read"]); len(read) > 0 {
+			lines = append(lines, "read: "+formatPermissionPathList(read))
+		}
+		if write := permissionPathsFromValue(fileSystem["write"]); len(write) > 0 {
+			lines = append(lines, "write: "+formatPermissionPathList(write))
+		}
+		if len(lines) > 0 {
+			return lines
+		}
+		if flat := summarizePermissionsFallback(fileSystem); len(flat) > 0 {
+			return flat
 		}
 	}
-	if writable := collectPermissionPaths(permissions); len(writable) > 0 {
-		const maxPaths = 6
-		shown := writable
-		if len(shown) > maxPaths {
-			shown = shown[:maxPaths]
-		}
-		value := "`" + strings.Join(shown, "`, `") + "`"
-		if len(writable) > maxPaths {
-			value += fmt.Sprintf(" 等 %d 项", len(writable))
-		}
-		add("paths", value)
+	if legacy := collectPermissionPaths(permissions); len(legacy) > 0 {
+		return []string{"paths: " + formatPermissionPathList(legacy)}
 	}
-	if len(lines) > 0 {
-		return lines
+	return nil
+}
+
+func summarizePermissionNetwork(permissions map[string]any) []string {
+	if len(permissions) == 0 {
+		return nil
 	}
+	if network, ok := permissions["network"].(map[string]any); ok && len(network) > 0 {
+		if enabled, ok := extractPermissionBool(network, "enabled"); ok {
+			return []string{"enabled: " + permissionBoolLabel(enabled)}
+		}
+		if flat := summarizePermissionsFallback(network); len(flat) > 0 {
+			return flat
+		}
+	}
+	if enabled, ok := extractPermissionBool(permissions, "network", "networkAccess", "network_access", "allowNetwork", "allow_network"); ok {
+		return []string{"enabled: " + permissionBoolLabel(enabled)}
+	}
+	return nil
+}
+
+func permissionPathsFromValue(value any) []string {
+	return collectPermissionPaths(map[string]any{"paths": value})
+}
+
+func formatPermissionPathList(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	const maxPaths = 6
+	shown := paths
+	if len(shown) > maxPaths {
+		shown = shown[:maxPaths]
+	}
+	value := "`" + strings.Join(shown, "`, `") + "`"
+	if len(paths) > maxPaths {
+		value += fmt.Sprintf(" 等 %d 项", len(paths))
+	}
+	return value
+}
+
+func permissionBoolLabel(enabled bool) string {
+	if enabled {
+		return "允许"
+	}
+	return "禁止"
+}
+
+func summarizePermissionsFallback(permissions map[string]any) []string {
 	flat := flattenPermissionScalars("", permissions, 0)
 	if len(flat) == 0 {
 		return nil

@@ -60,7 +60,7 @@ func TestFinishTurnStatuses(t *testing.T) {
 	a.finishTurn("missing", "missing", "failed")
 }
 
-func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {
+func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-compact",
@@ -74,10 +74,14 @@ func TestStandaloneCompactNotificationsTrackSessionState(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
+	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+	if sess := a.store.GetSession("sess-compact"); sess == nil || sess.ActiveTurnID != "turn-compact" || sess.Status != sessionStatusCompacting {
+		t.Fatalf("session after item/started = %+v", sess)
+	}
+	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
 	sess := a.store.GetSession("sess-compact")
 	if sess == nil || sess.ActiveTurnID != "" || sess.Status != "idle" {
-		t.Fatalf("session after thread/compacted = %+v", sess)
+		t.Fatalf("session after item/completed = %+v", sess)
 	}
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
 		t.Fatalf("compact completion notice = %#v, want visible completion text", ff.sentTexts)
@@ -104,7 +108,8 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 		if method != "thread/compact/start" {
 			return nil
 		}
-		a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
+		a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+		a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
 		a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
 		return nil
 	}
@@ -135,7 +140,8 @@ func TestStandaloneCompactSuccessIgnoresLaterFailedCompletion(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("thread/compacted", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact"}`))
+	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
 	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"failed"}}`))
 
 	if len(ff.sentTexts) != 1 || !strings.Contains(ff.sentTexts[0], "压缩完成") {

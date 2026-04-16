@@ -47,7 +47,6 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 }
 
 func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	appState := a.appState()
 	var payload toolUserInputPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
@@ -59,8 +58,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), response); err != nil {
 		return err
 	}
-	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	a.resumeSubmissionAfterRequest(pending)
+	_ = a.markPendingRequestReplied(pending.ID)
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 	}

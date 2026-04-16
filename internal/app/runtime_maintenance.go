@@ -17,7 +17,7 @@ const artifactRetention = 3 * 24 * time.Hour
 func (a *App) expirePendingRequestsOnStartup() {
 	appState := a.appState()
 	for _, req := range appState.pendingRequests() {
-		if req == nil || req.Status != "pending" {
+		if req == nil || (req.Status != "pending" && req.Status != "replied") {
 			continue
 		}
 		_ = appState.updatePending(req.ID, func(p *state.PendingRequest) {
@@ -94,6 +94,7 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 	}
 	if turnID != "" {
 		a.clearTurnBinding(turnID)
+		a.clearTurnItemStates(turnID)
 	}
 	if threadID != "" {
 		a.clearPendingTurnBinding(threadID)

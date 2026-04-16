@@ -11,25 +11,37 @@ import (
 
 func TestApprovalRenderingHelpers(t *testing.T) {
 	commandBody := renderCommandApprovalBody(map[string]any{
-		"command": "pwd",
-		"cwd":     "/tmp/work",
-		"reason":  "needed",
+		"command":                "pwd",
+		"cwd":                    "/tmp/work",
+		"reason":                 "needed",
+		"networkApprovalContext": map[string]any{"protocol": "https", "host": "api.example.com"},
 	})
-	if !strings.Contains(commandBody, "命令审批") || !strings.Contains(commandBody, "工作目录") || !strings.Contains(commandBody, "needed") {
+	if !strings.Contains(commandBody, "命令审批") ||
+		!strings.Contains(commandBody, "工作目录") ||
+		!strings.Contains(commandBody, "needed") ||
+		!strings.Contains(commandBody, "https://api.example.com") {
 		t.Fatalf("renderCommandApprovalBody() = %q", commandBody)
 	}
 
 	permissionsBody := renderPermissionsApprovalBody(map[string]any{
 		"reason": "need access",
 		"permissions": map[string]any{
-			"mode":           "workspace-write",
-			"scope":          "session",
-			"sandbox":        map[string]any{"type": "workspace-write"},
-			"network":        "allow",
-			"writable_roots": []any{"/tmp/a", "/tmp/b"},
+			"scope": "session",
+			"fileSystem": map[string]any{
+				"read":  []any{"/tmp/a"},
+				"write": []any{"/tmp/b"},
+			},
+			"network": map[string]any{
+				"enabled": true,
+			},
 		},
 	})
-	if !strings.Contains(permissionsBody, "权限摘要") || !strings.Contains(permissionsBody, "network: 允许") {
+	if !strings.Contains(permissionsBody, "权限摘要") ||
+		!strings.Contains(permissionsBody, "fileSystem") ||
+		!strings.Contains(permissionsBody, "read: `/tmp/a`") ||
+		!strings.Contains(permissionsBody, "write: `/tmp/b`") ||
+		!strings.Contains(permissionsBody, "network") ||
+		!strings.Contains(permissionsBody, "enabled: 允许") {
 		t.Fatalf("renderPermissionsApprovalBody() = %q", permissionsBody)
 	}
 	if values := summarizePermissions(map[string]any{"nested": map[string]any{"enabled": true}}); len(values) == 0 {

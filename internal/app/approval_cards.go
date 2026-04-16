@@ -22,7 +22,7 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	buttons := approvalButtons(kind, requestKey)
+	buttons := approvalButtons(kind, requestKey, requestPayload)
 	card := a.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {

@@ -28,6 +28,8 @@ type App struct {
 
 	turnStreamsMu sync.Mutex
 	turnStreams   map[string]*turnStream
+	turnItemsMu   sync.Mutex
+	turnItems     map[string]*turnItemState
 	liveThreadMu  sync.Mutex
 	liveThreads   map[string]string
 	turnBindMu    sync.Mutex
@@ -64,6 +66,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		started:      time.Now(),
 		deduper:      newInboundDeduper(),
 		turnStreams:  map[string]*turnStream{},
+		turnItems:    map[string]*turnItemState{},
 		liveThreads:  map[string]string{},
 		turnBindings: map[string]turnBinding{},
 		pendingTurns: map[string]turnBinding{},

@@ -129,7 +129,6 @@ Notifications explicitly handled today:
 - `turn/plan/updated`
 - `turn/started`
 - `turn/completed`
-- `thread/compacted`
 - `thread/tokenUsage/updated`
 - `error`
 - `serverRequest/resolved`

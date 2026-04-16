@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -341,6 +342,23 @@ func TestStartWebSocketInitializesClientAndUsesBearerToken(t *testing.T) {
 	capabilities, _ := params["capabilities"].(map[string]any)
 	if capabilities["experimentalApi"] != false {
 		t.Fatalf("initialize capabilities = %+v, want experimentalApi false", capabilities)
+	}
+	optOutRaw, _ := capabilities["optOutNotificationMethods"].([]any)
+	gotOptOut := make([]string, 0, len(optOutRaw))
+	for _, item := range optOutRaw {
+		gotOptOut = append(gotOptOut, fmt.Sprint(item))
+	}
+	wantOptOut := []string{
+		"item/agentMessage/delta",
+		"item/plan/delta",
+		"item/commandExecution/outputDelta",
+		"item/fileChange/outputDelta",
+		"item/reasoning/summaryTextDelta",
+		"item/reasoning/summaryPartAdded",
+		"item/reasoning/textDelta",
+	}
+	if !reflect.DeepEqual(gotOptOut, wantOptOut) {
+		t.Fatalf("initialize optOutNotificationMethods = %+v, want %+v", gotOptOut, wantOptOut)
 	}
 
 	second := <-initializedCh

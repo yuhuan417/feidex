@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -115,14 +116,30 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
+	var replyErr error
 	switch pending.Kind {
 	case "tool_request_user_input_form":
-		_ = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
+		replyErr = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
 	case "mcp_elicitation_form":
-		_ = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
+		replyErr = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
 	}
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	a.resumeSubmissionAfterRequest(pending)
+	if replyErr != nil {
+		slog.Error("pending form cancel reply to codex failed",
+			"request_id", requestID,
+			"pending_kind", pending.Kind,
+			"user_id", action.UserID,
+			"error", replyErr,
+		)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "取消提交失败，请重试"},
+		}, nil
+	}
+	if isServerResolvedPendingKind(pending.Kind) {
+		_ = a.markPendingRequestReplied(requestID)
+	} else {
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		a.resumeSubmissionAfterRequest(pending)
+	}
 	if pending.Kind == "workspace_new" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},

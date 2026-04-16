@@ -289,6 +289,8 @@ func turnItemCardMeta(itemType string, isFinalAnswer bool) (string, string) {
 		return "文件改动", "orange"
 	case "agent_message":
 		return "回复", "green"
+	case "context_compaction":
+		return "上下文压缩", "blue"
 	default:
 		return turnItemLabel(itemType), "blue"
 	}
@@ -306,6 +308,8 @@ func turnItemEventKind(itemType string) string {
 		return "turn_command_execution"
 	case "file_change":
 		return "turn_file_change"
+	case "context_compaction":
+		return "turn_item"
 	default:
 		return "turn_item"
 	}

@@ -12,6 +12,10 @@ import (
 
 const sessionStatusCompacting = "compacting"
 
+func isContextCompactionItem(item map[string]any) bool {
+	return normalizeTurnItemType(stringValue(item["type"])) == "context_compaction"
+}
+
 func sessionHasActiveWork(sess *state.Session) bool {
 	if sess == nil {
 		return false
@@ -102,6 +106,13 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 	return false
 }
 
+func (a *App) noteStandaloneCompactItemStarted(threadID, turnID string, item map[string]any) bool {
+	if !isContextCompactionItem(item) {
+		return false
+	}
+	return a.bindStandaloneCompactTurn(threadID, turnID)
+}
+
 func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
@@ -134,6 +145,20 @@ func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 		return true
 	}
 	return false
+}
+
+func (a *App) completeStandaloneCompactItem(threadID, turnID string, item map[string]any) bool {
+	if !isContextCompactionItem(item) {
+		return false
+	}
+	switch normalizeWorkingStatus(firstNonEmpty(stringValue(item["status"]), stringValue(item["state"]))) {
+	case "", "completed":
+		return a.completeStandaloneCompactTurn(threadID, turnID)
+	case "interrupted", "cancelled", "canceled":
+		return a.finishStandaloneCompactTurn(threadID, turnID, "interrupted")
+	default:
+		return false
+	}
 }
 
 func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool {

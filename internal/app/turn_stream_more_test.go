@@ -22,6 +22,9 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := turnItemLabel(""); got != "事件" {
 		t.Fatalf("turnItemLabel(empty) = %q", got)
 	}
+	if got := turnItemLabel("contextCompaction"); got != "上下文压缩" {
+		t.Fatalf("turnItemLabel(contextCompaction) = %q", got)
+	}
 	if got := extractTurnItemText(map[string]any{"summary": []any{map[string]any{"type": "summary_text", "text": "hello"}}}, "summary", "summary_text"); got != "hello" {
 		t.Fatalf("extractTurnItemText() = %q", got)
 	}
@@ -87,5 +90,8 @@ func TestTurnStreamLifecycleDeliversItemCardsWithoutStoringAccumulation(t *testi
 
 	if title, color := turnItemCardMeta("agent_message", true); title != "最终答复" || color != "green" {
 		t.Fatalf("turnItemCardMeta(final) = %q, %q", title, color)
+	}
+	if title, color := turnItemCardMeta("contextCompaction", false); title != "上下文压缩" || color != "blue" {
+		t.Fatalf("turnItemCardMeta(contextCompaction) = %q, %q", title, color)
 	}
 }

@@ -28,6 +28,8 @@ func turnItemLabel(itemType string) string {
 		return "命令执行"
 	case "file_change":
 		return "文件改动"
+	case "context_compaction":
+		return "上下文压缩"
 	default:
 		if strings.TrimSpace(itemType) == "" {
 			return "事件"

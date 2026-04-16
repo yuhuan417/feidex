@@ -1338,8 +1338,8 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	if len(fc.replies) == 0 {
 		t.Fatal("expected command approval to reply to codex")
 	}
-	if pending := a.store.PendingByID("command-1"); pending == nil || pending.Status != "resolved" {
-		t.Fatalf("command pending = %+v, want resolved", pending)
+	if pending := a.store.PendingByID("command-1"); pending == nil || pending.Status != "replied" {
+		t.Fatalf("command pending = %+v, want replied", pending)
 	}
 	if got := string(fc.replies[0].id); got != `"command-1"` {
 		t.Fatalf("codex reply id = %s, want %q", got, `"command-1"`)
@@ -1427,7 +1427,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("completeApprovalAction(permissions) = %#v, %v", resp, err)
 	}
 	if refreshed := a.store.GetSubmission(sub.ID); refreshed.Status != "running" {
-		t.Fatalf("submission status after resumeSubmissionAfterRequest = %q, want running", refreshed.Status)
+		t.Fatalf("submission status after permissions reply = %q, want running", refreshed.Status)
 	}
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -1470,18 +1470,71 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeUserInputAnswer() = %#v, %v", resp, err)
 	}
-	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Status != "resolved" {
-		t.Fatalf("user input pending = %+v, want resolved", pending)
+	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Status != "replied" {
+		t.Fatalf("user input pending = %+v, want replied", pending)
 	}
 
 	if got := a.approvalDecisionText("approval.command.accept"); got != "已允许本次执行" {
 		t.Fatalf("approvalDecisionText(command.accept) = %q", got)
+	}
+	if got := a.approvalDecisionText("approval.command.cancel"); got != "已拒绝并中断任务" {
+		t.Fatalf("approvalDecisionText(command.cancel) = %q", got)
 	}
 	if got := a.approvalDecisionText("approval.permissions.accept_session"); got != "已授权本会话权限请求" {
 		t.Fatalf("approvalDecisionText(permissions.accept_session) = %q", got)
 	}
 	if got := a.approvalDecisionText("other"); got != "已拒绝" {
 		t.Fatalf("approvalDecisionText(default) = %q", got)
+	}
+}
+
+func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	fc.replies = nil
+	resp, err := a.completeApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "missing"},
+	}, "approval.command.decline")
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("completeApprovalAction(expired) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 0 {
+		t.Fatalf("expired command approval should not reply, got %d replies", len(fc.replies))
+	}
+}
+
+func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "file-cancel",
+		Kind:        "file",
+		SessionKey:  "sess-1",
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(file-cancel) error = %v", err)
+	}
+
+	resp, err := a.completeApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "file-cancel"},
+	}, "approval.file.cancel")
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(file.cancel) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 1 {
+		t.Fatalf("file cancel reply count = %d, want 1", len(fc.replies))
+	}
+	reply, _ := fc.replies[0].result.(map[string]any)
+	if got := strings.TrimSpace(stringValue(reply["decision"])); got != "cancel" {
+		t.Fatalf("file cancel decision = %q, want cancel", got)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已拒绝并中断任务") || !strings.Contains(got, "该 turn 会立即中断") {
+		t.Fatalf("file cancel resolved card = %q", got)
 	}
 }
 

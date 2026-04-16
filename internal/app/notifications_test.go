@@ -27,14 +27,37 @@ func TestMarkdownCodeBlockWithLangUsesDynamicOuterFence(t *testing.T) {
 	}
 }
 
-func TestApprovalButtonsOmitCancel(t *testing.T) {
-	buttons := approvalButtons("command", "req-1")
-	if len(buttons) != 3 {
-		t.Fatalf("expected 3 approval buttons, got %d", len(buttons))
+func TestApprovalButtonsCoverFullDecisionSet(t *testing.T) {
+	commandButtons := approvalButtons("command", "req-1")
+	if len(commandButtons) != 4 {
+		t.Fatalf("expected 4 command approval buttons, got %d", len(commandButtons))
 	}
-	for _, btn := range buttons {
-		if btn.Text == "取消" {
-			t.Fatalf("expected cancel button to be omitted, got %#v", buttons)
+	commandTexts := map[string]bool{}
+	for _, btn := range commandButtons {
+		commandTexts[btn.Text] = true
+	}
+	for _, want := range []string{
+		"允许一次",
+		"本会话允许",
+		"拒绝",
+		"拒绝并中断",
+	} {
+		if !commandTexts[want] {
+			t.Fatalf("missing command approval button %q in %#v", want, commandButtons)
+		}
+	}
+
+	fileButtons := approvalButtons("file", "req-2")
+	if len(fileButtons) != 4 {
+		t.Fatalf("expected 4 file approval buttons, got %d", len(fileButtons))
+	}
+	fileTexts := map[string]bool{}
+	for _, btn := range fileButtons {
+		fileTexts[btn.Text] = true
+	}
+	for _, want := range []string{"允许一次", "本会话允许", "拒绝", "拒绝并中断"} {
+		if !fileTexts[want] {
+			t.Fatalf("missing file approval button %q in %#v", want, fileButtons)
 		}
 	}
 }

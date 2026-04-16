@@ -42,20 +42,27 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 	if sess == nil || sess.Status != sessionStatusCompacting {
 		t.Fatalf("startThreadCompaction() = %+v", sess)
 	}
-	if !a.bindStandaloneCompactTurn("thread-1", "turn-1") {
-		t.Fatal("bindStandaloneCompactTurn() should succeed")
+	if !a.noteStandaloneCompactItemStarted("thread-1", "turn-1", map[string]any{
+		"id":   "item-compact",
+		"type": "contextCompaction",
+	}) {
+		t.Fatal("noteStandaloneCompactItemStarted() should succeed")
 	}
 	if updated := a.store.GetSession(sessionKey); updated == nil || updated.ActiveTurnID != "turn-1" || updated.Status != sessionStatusCompacting {
 		t.Fatalf("session after bind = %+v", updated)
 	}
-	if !a.finishStandaloneCompactTurn("thread-1", "turn-1", "completed") {
-		t.Fatal("finishStandaloneCompactTurn() should succeed")
+	if !a.completeStandaloneCompactItem("thread-1", "turn-1", map[string]any{
+		"id":     "item-compact",
+		"type":   "contextCompaction",
+		"status": "completed",
+	}) {
+		t.Fatal("completeStandaloneCompactItem() should succeed")
 	}
 	if updated := a.store.GetSession(sessionKey); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
 		t.Fatalf("session after finish = %+v", updated)
 	}
 	if len(ff.replyTexts) != 1 || ff.replyTexts[0] != "当前线程上下文已压缩完成。" {
-		t.Fatalf("finishStandaloneCompactTurn() notices = %#v", ff.replyTexts)
+		t.Fatalf("completeStandaloneCompactItem() notices = %#v", ff.replyTexts)
 	}
 }
 

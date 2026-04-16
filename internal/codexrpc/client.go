@@ -113,8 +113,13 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 		"capabilities": map[string]any{
 			"experimentalApi": experimentalAPI,
 			"optOutNotificationMethods": []string{
+				"item/agentMessage/delta",
+				"item/plan/delta",
+				"item/commandExecution/outputDelta",
+				"item/fileChange/outputDelta",
+				"item/reasoning/summaryTextDelta",
+				"item/reasoning/summaryPartAdded",
 				"item/reasoning/textDelta",
-				"rawResponseItem/completed",
 			},
 		},
 	}, &initResp); err != nil {

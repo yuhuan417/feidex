@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -106,9 +107,18 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 	case "elicitation_url.decline":
 		decision = "decline"
 	}
-	_ = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	a.resumeSubmissionAfterRequest(pending)
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision}); err != nil {
+		slog.Error("elicitation url reply to codex failed",
+			"request_id", requestID,
+			"action", actionName,
+			"user_id", action.UserID,
+			"error", err,
+		)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
+		}, nil
+	}
+	_ = a.markPendingRequestReplied(requestID)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已处理", "green", "已提交 "+decision+"。", nil)),
@@ -116,7 +126,6 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 }
 
 func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	appState := a.appState()
 	var payload elicitationFormPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
@@ -131,8 +140,7 @@ func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *s
 	}); err != nil {
 		return err
 	}
-	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
-	a.resumeSubmissionAfterRequest(pending)
+	_ = a.markPendingRequestReplied(pending.ID)
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 	}

@@ -279,6 +279,8 @@ Feidex 会把这些状态写进去：
 
 - 同一个 thread 上来自 Codex CLI / VSCode / app-server 的 turn 都能看见
 - 当前展示重点是每个 turn 的输入和状态
+- 历史输入摘要当前会渲染 `userMessage.content` 里的 `text`、`image`、`localImage`、`skill`、`mention`
+- `skill` 会显示为 `[skill] <name>`；如果没有 `name`，会回退显示 `path`
 
 ### Thread 恢复与 Workspace 绑定
 
