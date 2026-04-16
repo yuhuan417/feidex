@@ -119,10 +119,18 @@ func TestIsLocalCommand(t *testing.T) {
 		"/upgrade local": true,
 		"/upgrade path ./dist/feidex-linux-amd64": true,
 		"/upgrade v0.3.0":                         true,
+		"/review custom 请重点看并发安全":                 true,
 		"/append hello":                           false,
 		"/model list":                             false,
-		"/":                                       false,
-		"/unknown value":                          false,
+		"/new 和 /fork 之后能不能跑 /review 你不用管": false,
+		"/review 你不用管":                 false,
+		"/thread new please":           false,
+		"/workspace use default extra": false,
+		"/upgrade dev please":          false,
+		"/quiet 随便说说":                  false,
+		"/debug hello":                 false,
+		"/":                            false,
+		"/unknown value":               false,
 	}
 	for input, want := range cases {
 		if got := isLocalCommand(input); got != want {

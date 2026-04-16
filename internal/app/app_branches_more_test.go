@@ -90,8 +90,25 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		t.Fatal("local command should render reply card")
 	}
 
-	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "img", ChatID: "chat", ChatType: "p2p", UserID: "user", Attachments: []feishu.Attachment{{Kind: "image", ResourceKey: "img"}}})
+	ff.replyCards = nil
+	ff.replyTexts = nil
+	ff.replyTextWithIDs = nil
+	slashLikeText := "/new 和 /fork 之后能不能跑 /review 你不用管"
+	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "slash-like", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: slashLikeText})
 	sess := a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 1 {
+		t.Fatalf("slash-like text should be queued for codex, session=%+v", sess)
+	}
+	sub := a.store.GetSubmission(sess.Queue[0])
+	if sub == nil || sub.InputText != slashLikeText {
+		t.Fatalf("queued submission = %+v, want input %q", sub, slashLikeText)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("slash-like text should not trigger local command error replies: %+v", ff.replyTexts)
+	}
+
+	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "img", ChatID: "chat", ChatType: "p2p", UserID: "user", Attachments: []feishu.Attachment{{Kind: "image", ResourceKey: "img"}}})
+	sess = a.store.GetSession(sessionKey)
 	if sess == nil || len(sess.StagedImages) == 0 {
 		t.Fatalf("image-only message should be staged: %+v", sess)
 	}

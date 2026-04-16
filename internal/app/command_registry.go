@@ -15,12 +15,98 @@ type localCommandSpec struct {
 	HelpEntries []helpCommandSpec
 }
 
+func exactCommand(fields []string) bool {
+	return len(fields) == 1
+}
+
+func exactOrSingleArgCommand(fields []string, allowed ...string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	if len(fields) != 2 {
+		return false
+	}
+	return commandArgInSet(fields[1], allowed...)
+}
+
+func commandArgInSet(value string, allowed ...string) bool {
+	value = strings.TrimSpace(value)
+	for _, item := range allowed {
+		if value == item {
+			return true
+		}
+	}
+	return false
+}
+
+func matchReviewCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "uncommitted", "uncommittedChanges":
+		return len(fields) == 2
+	case "base", "commit":
+		return len(fields) == 2 || len(fields) == 3
+	case "custom":
+		return len(fields) >= 2
+	default:
+		return false
+	}
+}
+
+func matchThreadCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "list":
+		return len(fields) == 2 || (len(fields) == 3 && strings.TrimSpace(fields[2]) == "all")
+	case "new", "fork", "sandbox", "policy":
+		return len(fields) == 2
+	default:
+		return false
+	}
+}
+
+func matchUpgradeCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "dev", "local":
+		return len(fields) == 2
+	case "path":
+		return len(fields) >= 3
+	default:
+		if len(fields) != 2 {
+			return false
+		}
+		_, err := normalizeUpgradeVersion(fields[1])
+		return err == nil
+	}
+}
+
+func matchWorkspaceCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "list", "new", "sandbox", "policy":
+		return len(fields) == 2
+	case "use":
+		return len(fields) == 3
+	default:
+		return false
+	}
+}
+
 func localCommandSpecList() []localCommandSpec {
 	return []localCommandSpec{
 		{
 			Names: []string{"/menu"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 				return a.sendCommandMenu(msg)
@@ -31,8 +117,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/help"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandHelp(msg, args)
@@ -43,8 +129,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/history"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandHistory(msg, args)
@@ -56,8 +142,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/usage"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandUsage(msg, args)
@@ -70,7 +156,7 @@ func localCommandSpecList() []localCommandSpec {
 		{
 			Names: []string{"/model"},
 			IsLocal: func(fields []string) bool {
-				return len(fields) == 1
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 				return a.commandModel(msg)
@@ -82,8 +168,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/quiet"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactOrSingleArgCommand(fields, "config", "verbose", "progress", "normal", "final")
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandQuiet(msg, args)
@@ -100,8 +186,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/debug"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactOrSingleArgCommand(fields, "on", "off", "logs")
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandDebug(msg, args)
@@ -116,8 +202,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/fast"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactOrSingleArgCommand(fields, "config", "fast", "default", "off", "toggle")
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandFast(msg, args)
@@ -133,8 +219,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/download"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandDownload(msg, args)
@@ -146,8 +232,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/review"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return matchReviewCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandReview(msg, args)
@@ -166,8 +252,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/compact"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandCompact(msg, args)
@@ -179,8 +265,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/fork"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandFork(msg, args)
@@ -192,8 +278,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/new"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 				return a.commandNew(msg)
@@ -205,8 +291,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/thread"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return matchThreadCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandThread(msg, args)
@@ -224,8 +310,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/threads"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				if len(args) > 0 {
@@ -240,8 +326,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/interrupt", "/stop"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 				return a.commandInterrupt(msg)
@@ -253,8 +339,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/status"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 				return a.commandStatus(msg)
@@ -266,8 +352,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/upgrade"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return matchUpgradeCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandUpgrade(msg, args)
@@ -283,8 +369,8 @@ func localCommandSpecList() []localCommandSpec {
 		},
 		{
 			Names: []string{"/workspace"},
-			IsLocal: func([]string) bool {
-				return true
+			IsLocal: func(fields []string) bool {
+				return matchWorkspaceCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandWorkspace(msg, args)
