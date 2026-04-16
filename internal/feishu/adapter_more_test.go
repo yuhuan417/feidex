@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	gws "github.com/gorilla/websocket"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
@@ -63,6 +64,97 @@ func TestAuthFailureHelpersAndLogging(t *testing.T) {
 	logWithLevel(8, "error log")
 	logFeishuFailure("failure", errors.New("token invalid"), 0, "", "op", "test")
 	logFeishuFailure("failure", nil, 403, "forbidden", "op", "test")
+}
+
+func TestShouldReconnectTransport(t *testing.T) {
+	if !shouldReconnectTransport(errors.New("read tcp 127.0.0.1:1234->127.0.0.1:443: i/o timeout")) {
+		t.Fatal("expected timeout to trigger reconnect")
+	}
+	if shouldReconnectTransport(errors.New("context canceled")) {
+		t.Fatal("unexpected reconnect on context canceled")
+	}
+	if shouldReconnectTransport(errors.New("forbidden")) {
+		t.Fatal("unexpected reconnect on application error")
+	}
+}
+
+func TestCloseWSConnWhileWriteBlockedDoesNotWaitForStateLock(t *testing.T) {
+	origSetDeadline := wsSetWriteDeadline
+	origWriteFrame := wsWriteFrame
+	origCloseConn := wsCloseConn
+	t.Cleanup(func() {
+		wsSetWriteDeadline = origSetDeadline
+		wsWriteFrame = origWriteFrame
+		wsCloseConn = origCloseConn
+	})
+
+	a := New(config.FeishuConfig{})
+	a.storeWSConn(&gws.Conn{}, 42)
+
+	deadlineSet := make(chan time.Time, 1)
+	writeStarted := make(chan struct{})
+	releaseWrite := make(chan struct{})
+	wsSetWriteDeadline = func(conn *gws.Conn, deadline time.Time) error {
+		select {
+		case deadlineSet <- deadline:
+		default:
+		}
+		return nil
+	}
+	wsWriteFrame = func(conn *gws.Conn, messageType int, data []byte) error {
+		close(writeStarted)
+		<-releaseWrite
+		return nil
+	}
+	wsCloseConn = func(conn *gws.Conn) error { return nil }
+
+	writeErr := make(chan error, 1)
+	go func() {
+		writeErr <- a.writeWSMessage(gws.BinaryMessage, []byte("ping"))
+	}()
+
+	select {
+	case <-writeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("writeWSMessage did not reach wsWriteFrame")
+	}
+	select {
+	case deadline := <-deadlineSet:
+		remaining := time.Until(deadline)
+		if remaining < wsDefaultWriteTimeout-2*time.Second || remaining > wsDefaultWriteTimeout+2*time.Second {
+			t.Fatalf("write deadline remaining = %v, want around %v", remaining, wsDefaultWriteTimeout)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("writeWSMessage did not set a write deadline")
+	}
+
+	closeDone := make(chan struct{})
+	go func() {
+		a.closeWSConn()
+		close(closeDone)
+	}()
+	select {
+	case <-closeDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("closeWSConn blocked behind a write; ws state lock should stay available")
+	}
+
+	a.wsMu.Lock()
+	if a.wsConn != nil {
+		a.wsMu.Unlock()
+		t.Fatal("closeWSConn should clear current websocket connection immediately")
+	}
+	a.wsMu.Unlock()
+
+	close(releaseWrite)
+	select {
+	case err := <-writeErr:
+		if err != nil {
+			t.Fatalf("writeWSMessage returned error after releasing blocked write: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("writeWSMessage did not finish after blocked write was released")
+	}
 }
 
 func TestPermissionIssueFromError(t *testing.T) {

@@ -13,7 +13,6 @@ import (
 
 	gws "github.com/gorilla/websocket"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
-	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 )
 
 func TestAdapterStartInitializesWithoutBlocking(t *testing.T) {
@@ -109,8 +108,8 @@ func TestAdapterStartSuccessAndWSValidationBranches(t *testing.T) {
 		return nil, nil, nil
 	}
 	started := make(chan struct{}, 1)
-	wsClientRunner = func(client *larkws.Client, ctx context.Context) {
-		_ = client
+	wsClientRunner = func(adapter *Adapter, ctx context.Context) {
+		_ = adapter
 		_ = ctx
 		started <- struct{}{}
 	}

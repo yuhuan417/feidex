@@ -21,7 +21,7 @@ import (
 
 	gws "github.com/gorilla/websocket"
 	lark "github.com/larksuite/oapi-sdk-go/v3"
-	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
+	larkcache "github.com/larksuite/oapi-sdk-go/v3/cache"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkapplication "github.com/larksuite/oapi-sdk-go/v3/service/application/v6"
@@ -30,18 +30,18 @@ import (
 )
 
 type InboundMessage struct {
-	SessionKey      string
-	MessageID       string
-	ChatID          string
-	ChatType        string
-	UserID          string
-	UserName        string
-	ChatName        string
-	Text            string
-	RootMessageID   string
-	ParentMessageID string
-	ThreadID        string
-	Attachments     []Attachment
+	SessionKey             string
+	MessageID              string
+	ChatID                 string
+	ChatType               string
+	UserID                 string
+	UserName               string
+	ChatName               string
+	Text                   string
+	RootMessageID          string
+	ParentMessageID        string
+	ThreadID               string
+	Attachments            []Attachment
 	MergeForwardMessageIDs []string
 	ExpandedMergeForward   bool
 	CreatedAt              int64
@@ -87,7 +87,7 @@ type BotMenuClick struct {
 type Adapter struct {
 	cfg         config.FeishuConfig
 	client      *lark.Client
-	wsClient    *larkws.Client
+	wsClient    *wsClientState
 	botOpenID   string
 	cancel      context.CancelFunc
 	allowSet    map[string]struct{}
@@ -113,21 +113,40 @@ type Adapter struct {
 	artifactStore     *DriveArtifactStore
 	previewer         *DriveMarkdownPreviewer
 
+	wsMu                sync.Mutex
+	wsWriteMu           sync.Mutex
+	wsConn              *gws.Conn
+	wsServiceID         int32
+	wsDispatcher        *dispatcher.EventDispatcher
+	wsFragments         *larkcache.Cache
+	wsPingInterval      time.Duration
+	wsReconnectInterval time.Duration
+	wsRecycleAt         time.Time
+
 	startErr error
 }
+
+type wsClientState struct{}
 
 var wsDialContext = func(ctx context.Context, urlStr string, header http.Header) (*gws.Conn, *http.Response, error) {
 	return gws.DefaultDialer.DialContext(ctx, urlStr, header)
 }
 
-var wsClientRunner = func(client *larkws.Client, ctx context.Context) {
-	_ = client.Start(ctx)
+var wsClientRunner = func(a *Adapter, ctx context.Context) {
+	a.runWSLoop(ctx)
 }
 
 const unauthorizedBotMessage = "你没有权限使用这个机器人"
 
 const (
-	mergeForwardMaxDepth = 3
+	mergeForwardMaxDepth       = 3
+	wsDefaultPingInterval      = 2 * time.Minute
+	wsDefaultReconnectInterval = 5 * time.Second
+	wsDefaultWriteTimeout      = 15 * time.Second
+	wsMaxReconnectInterval     = 1 * time.Minute
+	wsMinReadTimeout           = 3 * time.Minute
+	wsFragmentCacheTTL         = 5 * time.Second
+	wsRecycleCooldown          = 5 * time.Second
 )
 
 func New(cfg config.FeishuConfig) *Adapter {
@@ -216,10 +235,11 @@ func (a *Adapter) Start(ctx context.Context) error {
 				go a.onBotMenu(&BotMenuClick{UserID: userID, Command: cmd})
 				return nil
 			})
-		a.wsClient = larkws.NewClient(a.cfg.AppID, a.cfg.AppSecret,
-			larkws.WithEventHandler(dispatcher),
-			larkws.WithLogLevel(larkcore.LogLevelInfo),
-		)
+		a.wsDispatcher = dispatcher
+		a.wsFragments = larkcache.New(30 * time.Second)
+		a.wsPingInterval = wsDefaultPingInterval
+		a.wsReconnectInterval = wsDefaultReconnectInterval
+		a.wsClient = &wsClientState{}
 		preflightCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		if err := a.validateWSStartup(preflightCtx); err != nil {
@@ -230,7 +250,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 		var runCtx context.Context
 		runCtx, a.cancel = context.WithCancel(ctx)
 		go func() {
-			wsClientRunner(a.wsClient, runCtx)
+			wsClientRunner(a, runCtx)
 		}()
 	})
 	return a.startErr
@@ -300,6 +320,7 @@ func (a *Adapter) Stop() {
 	if a.cancel != nil {
 		a.cancel()
 	}
+	a.closeWSConn()
 }
 
 func (a *Adapter) handleCardActionEvent(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
@@ -443,6 +464,7 @@ func (a *Adapter) AddReaction(ctx context.Context, messageID, emojiType string) 
 			Build()).
 		Build())
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "add", "message_id", messageID, "emoji_type", emojiType)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_reaction.create", err))
 	}
@@ -481,6 +503,7 @@ func (a *Adapter) RemoveReaction(ctx context.Context, messageID, emojiType strin
 		ReactionId(reactionID).
 		Build())
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "remove", "message_id", messageID, "emoji_type", emojiType)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_reaction.delete", err))
 	}
@@ -581,6 +604,7 @@ func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[stri
 		Build()
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", "interactive", "reply_to", messageID)
 		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.reply", err))
 	}
@@ -669,6 +693,7 @@ func (a *Adapter) replyLocalImage(ctx context.Context, messageID, path string, i
 		Body(body).
 		Build())
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.image.create", err))
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.ImageKey == nil || strings.TrimSpace(*resp.Data.ImageKey) == "" {
@@ -698,6 +723,7 @@ func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path st
 		Body(body).
 		Build())
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.file.create", err))
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.FileKey == nil || strings.TrimSpace(*resp.Data.FileKey) == "" {
@@ -723,6 +749,7 @@ func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, 
 		Build()
 	resp, err := a.client.Im.Message.Reply(ctx, req)
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", msgType, "reply_to", messageID)
 		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.reply", err))
 	}
@@ -762,6 +789,7 @@ func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string,
 		Build()
 	resp, err := a.client.Im.MessageResource.Get(ctx, req)
 	if err != nil {
+		a.noteOutboundTransportFailure(err)
 		return "", "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_resource.get", err))
 	}
 	if resp == nil || resp.File == nil {

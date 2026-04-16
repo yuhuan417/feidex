@@ -169,7 +169,11 @@ func (a *Adapter) createMessage(ctx context.Context, req *larkim.CreateMessageRe
 	} else if delay > 0 {
 		slog.Debug("feishu outbound paced", "op", "send", "delay_ms", delay.Milliseconds())
 	}
-	return a.client.Im.Message.Create(ctx, req)
+	resp, err := a.client.Im.Message.Create(ctx, req)
+	if err != nil {
+		a.noteOutboundTransportFailure(err)
+	}
+	return resp, err
 }
 
 func (a *Adapter) patchMessage(ctx context.Context, messageID string, req *larkim.PatchMessageReq) (*larkim.PatchMessageResp, error) {
@@ -178,5 +182,9 @@ func (a *Adapter) patchMessage(ctx context.Context, messageID string, req *larki
 	} else if delay > 0 {
 		slog.Debug("feishu outbound paced", "op", "patch", "message_id", strings.TrimSpace(messageID), "delay_ms", delay.Milliseconds())
 	}
-	return a.client.Im.Message.Patch(ctx, req)
+	resp, err := a.client.Im.Message.Patch(ctx, req)
+	if err != nil {
+		a.noteOutboundTransportFailure(err)
+	}
+	return resp, err
 }
