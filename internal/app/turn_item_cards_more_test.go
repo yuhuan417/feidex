@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
 
@@ -208,5 +209,45 @@ func TestTurnItemFinalAnswerSchedulesMarkdownPreviewPatch(t *testing.T) {
 	}
 	if body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]); !strings.Contains(body, "patched preview body") {
 		t.Fatalf("patched final turn item body = %q, want rewritten preview content", body)
+	}
+}
+
+func TestTurnItemFinalAnswerFooterStaysOnLastSplitCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	ff.replyCardIDs = []string{"card-1", "card-2", "card-3"}
+	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	modelContextWindow := int64(1000)
+	a.markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
+	a.recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
+		Last: codexrpc.TokenUsageBreakdown{
+			InputTokens: 150,
+		},
+		ModelContextWindow: &modelContextWindow,
+	})
+
+	longParagraph := strings.Repeat("payload-limit-text ", 1400)
+	got := a.sendTurnItemCard(context.Background(), sub, turnItemCardPayload{
+		ItemID:        "item-final",
+		ItemType:      "agent_message",
+		Title:         "最终答复",
+		Color:         "green",
+		SummaryText:   "intro\n\n" + longParagraph + "\n\n" + longParagraph,
+		IsFinalAnswer: true,
+	})
+	if got != "card-1" {
+		t.Fatalf("sendTurnItemCard(final split) = %q, want card-1", got)
+	}
+	if len(ff.replyCards) < 2 {
+		t.Fatalf("reply card count = %d, want payload-driven split", len(ff.replyCards))
+	}
+	for i, card := range ff.replyCards[:len(ff.replyCards)-1] {
+		if footer := cardFooterTextForTest(card); strings.TrimSpace(footer) != "" {
+			t.Fatalf("final split card[%d] should not include footer lines: %q", i, footer)
+		}
+	}
+	lastFooter := cardFooterTextForTest(ff.replyCards[len(ff.replyCards)-1])
+	if !strings.Contains(lastFooter, "耗时") && !strings.Contains(lastFooter, "context left") {
+		t.Fatalf("last final split card missing footer lines: %q", lastFooter)
 	}
 }

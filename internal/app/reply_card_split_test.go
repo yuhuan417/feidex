@@ -205,6 +205,14 @@ func TestSendFinalMessagesWithFooterSplitsLargePayload(t *testing.T) {
 			t.Fatalf("card[%d] payload = %d, want <= %d", i, len(payload), feishuReplyCardMaxPayloadBytes)
 		}
 	}
+	for i, card := range ff.replyCards[:len(ff.replyCards)-1] {
+		if footer := cardFooterTextForTest(card); strings.TrimSpace(footer) != "" {
+			t.Fatalf("split payload card[%d] should not include footer: %q", i, footer)
+		}
+	}
+	if footer := cardFooterTextForTest(ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(footer, "footer") {
+		t.Fatalf("last split payload card missing footer: %q", footer)
+	}
 }
 
 func countTablesInMarkdown(text string) int {
@@ -226,5 +234,17 @@ func cardHeaderTitle(t *testing.T, card map[string]any) string {
 		return ""
 	}
 	content, _ := title["content"].(string)
+	return content
+}
+
+func cardFooterTextForTest(card map[string]any) string {
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	if len(elements) == 0 {
+		return ""
+	}
+	last := elements[len(elements)-1]
+	text, _ := last["text"].(map[string]any)
+	content, _ := text["content"].(string)
 	return content
 }

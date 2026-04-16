@@ -77,6 +77,30 @@ func TestBuildTurnItemCardPayloadAgentMessageMarksFinalAnswer(t *testing.T) {
 	}
 }
 
+func TestBuildTurnItemCardPayloadExitedReviewModeUsesUnifiedFinalAnswerPath(t *testing.T) {
+	item := map[string]any{
+		"type":   "exitedReviewMode",
+		"review": "review text",
+	}
+
+	got, ok := buildTurnItemCardPayloadWithWorkspace("item-review", item, "")
+	if !ok {
+		t.Fatal("expected exitedReviewMode payload")
+	}
+	if got.ItemType != "agent_message" {
+		t.Fatalf("unexpected unified item type: %q", got.ItemType)
+	}
+	if got.ProtocolItemType != "exited_review_mode" {
+		t.Fatalf("unexpected protocol item type: %q", got.ProtocolItemType)
+	}
+	if !got.IsFinalAnswer {
+		t.Fatal("expected exitedReviewMode to be treated as final answer")
+	}
+	if got.SummaryText != "review text" {
+		t.Fatalf("unexpected review summary text: %q", got.SummaryText)
+	}
+}
+
 func TestBuildTurnItemCardPayloadCommandExecutionBuildsSummaryAndDetail(t *testing.T) {
 	item := map[string]any{
 		"type":              "command_execution",

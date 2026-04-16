@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -256,6 +257,50 @@ func TestExitedReviewModeDeliversFinalInQuietFinal(t *testing.T) {
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
 	if !strings.Contains(body, "Looks solid overall") {
 		t.Fatalf("review final body = %q, want exitedReviewMode.review", body)
+	}
+}
+
+func TestReviewResultSuppressesTrailingAgentMessageAndKeepsFooterOnLastSplitCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	ff.replyCardIDs = []string{"card-1", "card-2", "card-3", "card-4"}
+	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
+	modelContextWindow := int64(1000)
+	a.recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
+		Last: codexrpc.TokenUsageBreakdown{
+			InputTokens: 150,
+		},
+		ModelContextWindow: &modelContextWindow,
+	})
+
+	longReview := strings.Repeat("review-detail ", 1800)
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
+		"id":     "review-1",
+		"type":   "exitedReviewMode",
+		"review": longReview,
+	})
+	beforeTrailingAgent := len(ff.replyCards)
+	if beforeTrailingAgent < 2 {
+		t.Fatalf("review split replyCards = %d, want payload-driven split", beforeTrailingAgent)
+	}
+	for i, card := range ff.replyCards[:beforeTrailingAgent-1] {
+		if footer := cardFooterTextForTest(card); strings.TrimSpace(footer) != "" {
+			t.Fatalf("review split card[%d] should not include footer lines: %q", i, footer)
+		}
+	}
+	lastFooter := cardFooterTextForTest(ff.replyCards[beforeTrailingAgent-1])
+	if !strings.Contains(lastFooter, "耗时") && !strings.Contains(lastFooter, "context left") {
+		t.Fatalf("review split last card missing footer lines: %q", lastFooter)
+	}
+
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+		"id":   "agent-1",
+		"type": "agentMessage",
+		"text": "trailing review summary",
+	})
+	if len(ff.replyCards) != beforeTrailingAgent {
+		t.Fatalf("trailing review agent_message should be suppressed, got %d -> %d cards", beforeTrailingAgent, len(ff.replyCards))
 	}
 }
 

@@ -32,13 +32,14 @@ func (a *App) sendPlanCardWithReuse(ctx context.Context, sub *state.Submission, 
 }
 
 type turnItemCardPayload struct {
-	ItemID        string `json:"item_id"`
-	ItemType      string `json:"item_type"`
-	Title         string `json:"title"`
-	Color         string `json:"color"`
-	SummaryText   string `json:"summary_text"`
-	DetailText    string `json:"detail_text"`
-	IsFinalAnswer bool   `json:"is_final_answer"`
+	ItemID           string `json:"item_id"`
+	ItemType         string `json:"item_type"`
+	ProtocolItemType string `json:"protocol_item_type"`
+	Title            string `json:"title"`
+	Color            string `json:"color"`
+	SummaryText      string `json:"summary_text"`
+	DetailText       string `json:"detail_text"`
+	IsFinalAnswer    bool   `json:"is_final_answer"`
 }
 
 func (a *App) sendTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload) string {

@@ -14,8 +14,9 @@ func buildTurnItemCardPayloadWithWorkspace(itemID string, item map[string]any, w
 	itemType := normalizeTurnItemType(stringValue(item["type"]))
 	itemID = strings.TrimSpace(firstNonEmpty(itemID, stringValue(item["id"])))
 	payload := turnItemCardPayload{
-		ItemID:   itemID,
-		ItemType: itemType,
+		ItemID:           itemID,
+		ItemType:         itemType,
+		ProtocolItemType: itemType,
 	}
 
 	switch itemType {
@@ -41,6 +42,9 @@ func buildTurnItemCardPayloadWithWorkspace(itemID string, item map[string]any, w
 		if payload.SummaryText == "" {
 			payload.SummaryText = "Review 已完成。"
 		}
+		// Internally render review results through the normal final-answer path
+		// while keeping the original protocol item type for lifecycle decisions.
+		payload.ItemType = "agent_message"
 		payload.IsFinalAnswer = true
 	case "command_execution":
 		command := firstNonEmpty(stringValue(item["command"]), stringValue(item["commandLine"]))

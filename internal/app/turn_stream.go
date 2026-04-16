@@ -18,6 +18,7 @@ type turnStream struct {
 	LastSentPlan string
 	LastError    string
 	SentFinal    bool
+	ReviewFinal  bool
 	QuietWorking *quietWorkingCard
 }
 
@@ -82,6 +83,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		workingUpdate    quietWorkingCardOp
 		planReuseMessage string
 		itemReuseMessage string
+		skipPayload      bool
 	)
 
 	a.turnStreamsMu.Lock()
@@ -98,8 +100,24 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
-	if hasPayload && payload.IsFinalAnswer {
-		stream.SentFinal = true
+	if hasPayload {
+		switch normalizeTurnItemType(firstNonEmpty(payload.ProtocolItemType, payload.ItemType)) {
+		case "exited_review_mode":
+			if payload.IsFinalAnswer {
+				stream.SentFinal = true
+				stream.ReviewFinal = true
+			}
+		case "agent_message":
+			if stream.ReviewFinal {
+				skipPayload = true
+			} else if payload.IsFinalAnswer {
+				stream.SentFinal = true
+			}
+		default:
+			if payload.IsFinalAnswer {
+				stream.SentFinal = true
+			}
+		}
 	}
 	if hasPayload && isQuietBoundaryTurnItem(payload.ItemType) {
 		if stream.QuietWorking != nil {
@@ -119,7 +137,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	if a.quietWorkingCardEnabled() {
 		a.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
-	if hasPayload && (!a.quietModeEnabled() || shouldDeliverTurnItemInQuiet(a.quietMode(), payload.ItemType, payload.IsFinalAnswer)) {
+	if hasPayload && !skipPayload && (!a.quietModeEnabled() || shouldDeliverTurnItemInQuiet(a.quietMode(), payload.ItemType, payload.IsFinalAnswer)) {
 		a.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
 }
