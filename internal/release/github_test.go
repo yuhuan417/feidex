@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLatestLinuxBinaryAMD64(t *testing.T) {
@@ -85,7 +86,7 @@ func TestLatestDevLinuxBinaryAMD64(t *testing.T) {
 		responses: map[string]string{
 			"https://api.github.com/repos/test/feidex/releases/tags/dev-latest": `{
 				"tag_name":"dev-latest",
-				"name":"dev-a1b2c3d4e5f6",
+				"name":"dev-20260415T080000-a1b2c3d4e5f6",
 				"html_url":"https://example.test/releases/dev-latest",
 				"published_at":"2026-04-15T00:00:00Z",
 				"target_commitish":"a1b2c3d4e5f67890",
@@ -102,7 +103,10 @@ func TestLatestDevLinuxBinaryAMD64(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LatestDevLinuxBinary() error = %v", err)
 	}
-	if info.Version != "dev-a1b2c3d4e5f6" || info.ReleaseTag != DevReleaseTag || info.SourceCommit != "a1b2c3d4e5f67890" || !info.Prerelease || info.ExpectedSHA256 != "fedcba" {
+	if info.Version != "dev-20260415T080000-a1b2c3d4e5f6" || info.ReleaseTag != DevReleaseTag || info.SourceCommit != "a1b2c3d4e5f67890" || !info.Prerelease || info.ExpectedSHA256 != "fedcba" {
+		t.Fatalf("LatestDevLinuxBinary() = %+v", info)
+	}
+	if !info.PublishedAt.Equal(time.Date(2026, time.April, 15, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("LatestDevLinuxBinary() = %+v", info)
 	}
 }

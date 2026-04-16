@@ -34,6 +34,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: ci
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -49,8 +51,12 @@ jobs:
         id: dev_meta
         run: |
           SHORT_SHA="${GITHUB_SHA::12}"
+          BUILD_TS="$(date +%Y%m%dT%H%M%S)"
+          BUILD_TS_DISPLAY="$(date '+%Y-%m-%d %H:%M:%S')"
           echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
-          echo "version=dev-${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "build_ts=${BUILD_TS}" >> "${GITHUB_OUTPUT}"
+          echo "build_ts_display=${BUILD_TS_DISPLAY}" >> "${GITHUB_OUTPUT}"
+          echo "version=dev-${BUILD_TS}-${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
 
       - name: Build Linux dev binaries
         run: |
@@ -90,6 +96,7 @@ jobs:
           name: ${{ steps.dev_meta.outputs.version }}
           body: |
             Development build from `${{ github.sha }}`
+            Built at: `${{ steps.dev_meta.outputs.build_ts_display }}`
             Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
           prerelease: true
           make_latest: false

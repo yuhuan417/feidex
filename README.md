@@ -514,7 +514,7 @@ feidex daemon uninstall
 ### 开发版发布
 
 - 每次 `push main`，GitHub Actions 都会刷新 `dev-latest` tag 与同名 prerelease
-- 开发版二进制会写入形如 `dev-<shortsha>` 的版本号，便于 `/upgrade dev` 后确认当前运行的是哪次提交构建
+- 开发版二进制会写入形如 `dev-20260416T233045-<shortsha>` 的版本号，带日期时间，便于 `/upgrade dev` 前后确认具体构建批次
 
 脚本会以 `origin` 的 tag 为准，自动做：
 

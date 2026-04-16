@@ -1760,19 +1760,22 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	origManager := newDaemonManager
 	origVersion := currentVersion
 	origGOARCH := currentGOARCH
+	origUpgradeDisplayLocation := upgradeDisplayLocation
 	defer func() {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
 		currentGOARCH = origGOARCH
+		upgradeDisplayLocation = origUpgradeDisplayLocation
 	}()
 
 	a, ff, _ := newTestApp(t)
 	releaseStub := &fakeReleaseClient{
 		latestErr: errors.New("latest query should not be called"),
 		devInfo: &release.ReleaseInfo{
-			Version:        "dev-a1b2c3d4e5f6",
+			Version:        "dev-20260415T080000-a1b2c3d4e5f6",
 			ReleaseTag:     release.DevReleaseTag,
+			PublishedAt:    time.Date(2026, time.April, 15, 0, 0, 0, 0, time.UTC),
 			SourceCommit:   "a1b2c3d4e5f67890",
 			HTMLURL:        "https://example.test/releases/dev-latest",
 			BinaryName:     "feidex-linux-amd64",
@@ -1787,6 +1790,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	}
 	currentVersion = func() string { return "v0.3.0" }
 	currentGOARCH = func() string { return "amd64" }
+	upgradeDisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := a.commandUpgrade(msg, []string{"dev"}); err != nil {
@@ -1802,7 +1806,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
 	}
 	body := cardMarkdownContent(t, ff.replyCards[0])
-	for _, want := range []string{"开发版本: `dev-a1b2c3d4e5f6`", "Release Tag: `dev-latest`", "提交: `a1b2c3d4e5f6`", "当前指向的开发版构建"} {
+	for _, want := range []string{"开发版本: `dev-20260415T080000-a1b2c3d4e5f6`", "Release Tag: `dev-latest`", "发布时间(本机时区): `2026-04-15 08:00:00`", "提交: `a1b2c3d4e5f6`", "当前指向的开发版构建"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("upgrade dev card body = %q, want %q", body, want)
 		}
@@ -1814,7 +1818,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 			break
 		}
 	}
-	if pending == nil || !strings.Contains(pending.PayloadJSON, "\"target_version\":\"dev-a1b2c3d4e5f6\"") || !strings.Contains(pending.PayloadJSON, "\"release_tag\":\"dev-latest\"") {
+	if pending == nil || !strings.Contains(pending.PayloadJSON, "\"target_version\":\"dev-20260415T080000-a1b2c3d4e5f6\"") || !strings.Contains(pending.PayloadJSON, "\"release_tag\":\"dev-latest\"") {
 		t.Fatalf("pending = %+v, want dev release payload", pending)
 	}
 }

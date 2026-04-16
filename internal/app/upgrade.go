@@ -27,6 +27,8 @@ const (
 	upgradeCommandUsage           = "usage: /upgrade | /upgrade dev | /upgrade [VERSION] | /upgrade local | /upgrade path <PATH>"
 )
 
+var upgradeDisplayLocation = time.Local
+
 type upgradePendingPayload struct {
 	CurrentVersion string `json:"current_version"`
 	TargetVersion  string `json:"target_version"`
@@ -113,6 +115,9 @@ func (a *App) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersi
 			return a.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradePanelButtons(sessionKey, nil, true)), nil
 		}
 		bodyLines = append(bodyLines, "最新版本: `"+target.Version+"`")
+	}
+	if published := formatUpgradeReleasePublishedAt(target.PublishedAt); published != "" {
+		bodyLines = append(bodyLines, "发布时间(本机时区): `"+published+"`")
 	}
 	if strings.TrimSpace(target.HTMLURL) != "" {
 		bodyLines = append(bodyLines, "Release: <"+target.HTMLURL+">")
@@ -632,4 +637,11 @@ func shortUpgradeCommit(value string) string {
 		return value[:12]
 	}
 	return value
+}
+
+func formatUpgradeReleasePublishedAt(ts time.Time) string {
+	if ts.IsZero() {
+		return ""
+	}
+	return ts.In(upgradeDisplayLocation).Format("2006-01-02 15:04:05")
 }
