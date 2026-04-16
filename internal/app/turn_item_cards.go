@@ -92,6 +92,9 @@ func (a *App) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submissi
 		}
 		for _, result := range results {
 			a.recordMessageLink(result.MessageID, kind, sub, payload.ItemID)
+			if payload.IsFinalAnswer && result.CardID != "" {
+				a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, payload.Color, result.ShowHeader, result.Body, result.FooterLines)
+			}
 		}
 		return results[0].MessageID
 	}

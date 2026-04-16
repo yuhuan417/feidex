@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/config"
 )
@@ -179,5 +180,33 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 
 	if got := (&App{}).replyInThreadForSubmission(nil); got {
 		t.Fatal("replyInThreadForSubmission(nil) should be false")
+	}
+}
+
+func TestTurnItemFinalAnswerSchedulesMarkdownPreviewPatch(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	ff.replyCardID = "final-card-id"
+	ff.rewritePreviewOut = "patched preview body"
+
+	if got := a.sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+		ItemType:      "agent_message",
+		SummaryText:   "See [README](README.md)",
+		IsFinalAnswer: true,
+		Title:         "最终答复",
+		Color:         "green",
+	}, ""); got != "final-card-id" {
+		t.Fatalf("sendTurnItemCardWithReuse(final) = %q, want final-card-id", got)
+	}
+
+	deadline := time.Now().Add(1 * time.Second)
+	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected final turn item to patch markdown preview asynchronously")
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]); !strings.Contains(body, "patched preview body") {
+		t.Fatalf("patched final turn item body = %q, want rewritten preview content", body)
 	}
 }
