@@ -50,7 +50,7 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 	body := "当前位置：主菜单 / workspace / new\n\n" +
 		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
-		"填写 `workspace_id` 和可选的 `name`，需要换目录时点“选目录”，最后点“确认”。"
+		"可以先选目录，再填写 `workspace_id` 和可选的 `name`。点“确认”时才会校验 `workspace_id`。"
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
 		{
@@ -85,7 +85,7 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 	workspaceIDInput := map[string]any{
 		"tag":         "input",
 		"name":        "workspace_id",
-		"required":    true,
+		"required":    false,
 		"placeholder": map[string]any{"tag": "plain_text", "content": "workspace_id"},
 	}
 	if value := strings.TrimSpace(payload.DraftID); value != "" {

@@ -238,6 +238,9 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "repo" {
 		t.Fatalf("workspace_id default_value = %q, want repo", got)
 	}
+	if got, _ := inputs["workspace_id"]["required"].(bool); got {
+		t.Fatalf("workspace_id required = %v, want false", got)
+	}
 	if got, _ := inputs["workspace_name"]["default_value"].(string); got != "Repo" {
 		t.Fatalf("workspace_name default_value = %q, want Repo", got)
 	}
