@@ -89,6 +89,12 @@ Notes:
 
 Real Codex boundary tests are intentionally local-only:
 
+Naming:
+
+- Use `Codex Live Integration Tests` as the umbrella name for the real-Codex, `-tags=integration` test suite under `internal/codexrpc`.
+- Use `Codex Live State-Machine Tests` for the live lifecycle/state-machine subset, mainly `integration_live_state_machine_test.go`.
+- Do not use those names for fake-client contract tests under `internal/app`, such as `state_machine_contracts_test.go`.
+
 - They may require live credentials or a running local app-server endpoint.
 - Any live test that starts a real Codex turn or review consumes real tokens.
 - Review lifecycle tests are usually the most expensive token consumers, but they are not the only ones.

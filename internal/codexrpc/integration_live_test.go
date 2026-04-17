@@ -90,8 +90,7 @@ func TestLiveCodexInitializeModelListAndThreadRead(t *testing.T) {
 
 	var read ThreadReadResult
 	if err := client.Call(ctx, "thread/read", map[string]any{
-		"threadId":     thread.Thread.ID,
-		"includeTurns": true,
+		"threadId": thread.Thread.ID,
 	}, &read); err != nil {
 		t.Fatalf("thread/read error = %v", err)
 	}
@@ -100,5 +99,8 @@ func TestLiveCodexInitializeModelListAndThreadRead(t *testing.T) {
 	}
 	if strings.TrimSpace(read.Thread.Cwd) == "" {
 		t.Fatalf("thread/read cwd = %q, want non-empty cwd", read.Thread.Cwd)
+	}
+	if len(read.Thread.Turns) != 0 {
+		t.Fatalf("thread/read turns = %+v, want no turns before first user message", read.Thread.Turns)
 	}
 }
