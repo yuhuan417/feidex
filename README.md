@@ -570,17 +570,30 @@ GitHub Actions 会在 tag push 后自动发布 release。
 ### 常用测试
 
 ```bash
-go test ./internal/app
-go test ./internal/feishu
-go test ./internal/state
-go test ./internal/release
-go test ./internal/daemon
+./scripts/with_tmp_go_cache.sh go test ./internal/app
+./scripts/with_tmp_go_cache.sh go test ./internal/feishu
+./scripts/with_tmp_go_cache.sh go test ./internal/state
+./scripts/with_tmp_go_cache.sh go test ./internal/release
+./scripts/with_tmp_go_cache.sh go test ./internal/daemon
 ```
 
-如果当前环境的默认 Go cache 不可写，可以这样跑：
+Feidex 约定在“默认 Go cache 不可写”或“需要沙箱内临时 cache”时统一使用：
+
+- `GOCACHE=/tmp/feidex-gocache`
+- `GOMODCACHE=/tmp/feidex-gomodcache`
+
+优先使用脚本，不要临时发明新的 `/tmp/go-build-*` 或 `/tmp/*-gomodcache` 路径。
+
+等价环境变量写法：
 
 ```bash
-env GOCACHE=/tmp/feidex-gocache go test ./internal/app
+env GOCACHE=/tmp/feidex-gocache GOMODCACHE=/tmp/feidex-gomodcache go test ./internal/app
+```
+
+清理：
+
+```bash
+./scripts/clean_tmp_go_cache.sh
 ```
 
 ### 版本信息

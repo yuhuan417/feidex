@@ -59,6 +59,32 @@ go build -o bin/feishu_card_demo ./cmd/feishu_card_demo
 go test ./...
 ```
 
+## Go Cache Convention
+
+Use the system default Go cache when it is writable. If the environment is sandboxed or the default cache is read-only, use the Feidex-standard tmp locations instead of ad hoc names:
+
+- `GOCACHE=/tmp/feidex-gocache`
+- `GOMODCACHE=/tmp/feidex-gomodcache`
+
+Do not invent task-specific cache directories such as random `go-build-*` or `probe-*` paths under `/tmp`.
+
+Preferred entrypoint:
+
+```bash
+./scripts/with_tmp_go_cache.sh go test ./...
+```
+
+Cleanup:
+
+```bash
+./scripts/clean_tmp_go_cache.sh
+```
+
+Notes:
+
+- The cleanup script restores owner write permission before deletion because Go module cache directories are commonly extracted as read-only.
+- Use `FEIDEX_GOCACHE` and `FEIDEX_GOMODCACHE` only when you intentionally need non-standard locations.
+
 ### Local Integration Tests
 
 Real Codex boundary tests are intentionally local-only:
@@ -90,7 +116,7 @@ Codex smoke boundary:
 ```bash
 export FEIDEX_CODEX_COMMAND=codex
 export FEIDEX_CODEX_CWD=/absolute/path/to/a/worktree
-go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
+./scripts/with_tmp_go_cache.sh go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
 ```
 
 The smoke test above is intentionally cheap because it avoids `turn/start`, `turn/steer`, and `review/start`.
@@ -102,7 +128,7 @@ export FEIDEX_CODEX_TRANSPORT=ws
 export FEIDEX_CODEX_WS_URL=wss://example.com/codex
 export FEIDEX_CODEX_WS_BEARER_TOKEN=token
 export FEIDEX_CODEX_CWD=/absolute/path/to/a/worktree
-go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
+./scripts/with_tmp_go_cache.sh go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
 ```
 
 Expensive Codex review lifecycle over stdio:
@@ -110,7 +136,7 @@ Expensive Codex review lifecycle over stdio:
 ```bash
 export FEIDEX_CODEX_COMMAND=codex
 export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
 ```
 
 Expensive Codex review lifecycle over WebSocket:
@@ -120,7 +146,7 @@ export FEIDEX_CODEX_TRANSPORT=ws
 export FEIDEX_CODEX_WS_URL=wss://example.com/codex
 export FEIDEX_CODEX_WS_BEARER_TOKEN=token
 export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
 ```
 
 Token-consuming Codex state-machine probes over stdio:
@@ -128,12 +154,12 @@ Token-consuming Codex state-machine probes over stdio:
 ```bash
 export FEIDEX_CODEX_COMMAND=codex
 export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexTurnLifecycleCoreOnTinyRepo
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexSteerContinuationOnActiveTurn
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexCommandApprovalLifecycleOnTinyRepo
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexNeverApprovalPolicyRunsCommandWithoutServerRequest
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexFileApprovalLifecycleOnTinyRepo
-go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexTurnLifecycleCoreOnTinyRepo
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexSteerContinuationOnActiveTurn
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexCommandApprovalLifecycleOnTinyRepo
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexNeverApprovalPolicyRunsCommandWithoutServerRequest
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexFileApprovalLifecycleOnTinyRepo
+./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
 ```
 
 Notes:
