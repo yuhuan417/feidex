@@ -12,6 +12,13 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 	"menu.review": func(a *App, sessionKey string) (map[string]any, bool) {
 		return a.renderReviewMenuCard(sessionKey), true
 	},
+	"menu.skills": func(a *App, sessionKey string) (map[string]any, bool) {
+		card, err := a.renderSkillsCard(sessionKey, false)
+		if err != nil {
+			return nil, false
+		}
+		return card, true
+	},
 	"menu.group.model": func(a *App, sessionKey string) (map[string]any, bool) {
 		return a.renderModelMenuCard(sessionKey), true
 	},

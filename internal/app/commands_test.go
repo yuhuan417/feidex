@@ -95,6 +95,8 @@ func TestIsLocalCommand(t *testing.T) {
 		"/menu":          true,
 		"/help":          true,
 		"/history":       true,
+		"/skills":        true,
+		"/skills reload": true,
 		"/model":         true,
 		"/quiet":         true,
 		"/quiet config":  true,

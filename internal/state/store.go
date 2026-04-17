@@ -92,6 +92,11 @@ type SubmissionAttachment struct {
 	LocalPath string `json:"local_path"`
 }
 
+type SubmissionSkill struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 type Submission struct {
 	ID                   string                 `json:"id"`
 	SessionKey           string                 `json:"session_key"`
@@ -104,6 +109,7 @@ type Submission struct {
 	SourceMessageIDs     []string               `json:"source_message_ids,omitempty"`
 	SourceRootMessageIDs []string               `json:"source_root_message_ids,omitempty"`
 	InputText            string                 `json:"input_text"`
+	Skills               []SubmissionSkill      `json:"skills,omitempty"`
 	Attachments          []SubmissionAttachment `json:"attachments,omitempty"`
 	Kind                 string                 `json:"kind,omitempty"`
 	ReviewTargetType     string                 `json:"review_target_type,omitempty"`
@@ -501,6 +507,7 @@ func cloneSubmission(sub *Submission) *Submission {
 	cp := *sub
 	cp.SourceMessageIDs = append([]string(nil), sub.SourceMessageIDs...)
 	cp.SourceRootMessageIDs = append([]string(nil), sub.SourceRootMessageIDs...)
+	cp.Skills = append([]SubmissionSkill(nil), sub.Skills...)
 	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
 	return &cp
 }

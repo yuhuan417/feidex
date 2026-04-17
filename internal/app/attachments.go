@@ -69,7 +69,17 @@ func shortHash(value string) string {
 }
 
 func buildTurnInputs(sub *state.Submission) []map[string]any {
-	inputs := make([]map[string]any, 0, 1+len(sub.Attachments))
+	inputs := make([]map[string]any, 0, len(sub.Skills)+1+len(sub.Attachments))
+	for _, skill := range sub.Skills {
+		if strings.TrimSpace(skill.Name) == "" || strings.TrimSpace(skill.Path) == "" {
+			continue
+		}
+		inputs = append(inputs, map[string]any{
+			"type": "skill",
+			"name": skill.Name,
+			"path": skill.Path,
+		})
+	}
 	if text := strings.TrimSpace(sub.InputText); text != "" {
 		inputs = append(inputs, textInput(text))
 	}
@@ -121,7 +131,13 @@ func attachmentPrompt(attachment state.SubmissionAttachment) string {
 }
 
 func submissionInputPreview(sub *state.Submission) string {
-	parts := make([]string, 0, 1+len(sub.Attachments))
+	parts := make([]string, 0, len(sub.Skills)+1+len(sub.Attachments))
+	for _, skill := range sub.Skills {
+		if strings.TrimSpace(skill.Name) == "" {
+			continue
+		}
+		parts = append(parts, "[skill] "+skill.Name)
+	}
 	if text := strings.TrimSpace(sub.InputText); text != "" {
 		parts = append(parts, text)
 	}

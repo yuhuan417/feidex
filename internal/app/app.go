@@ -36,6 +36,8 @@ type App struct {
 	turnBindings  map[string]turnBinding
 	pendingTurns  map[string]turnBinding
 	threadUsage   map[string]codexrpc.ThreadTokenUsage
+	skillsMu      sync.Mutex
+	pendingSkills map[string]state.SubmissionSkill
 }
 
 type turnBinding struct {
@@ -71,6 +73,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		turnBindings: map[string]turnBinding{},
 		pendingTurns: map[string]turnBinding{},
 		threadUsage:  map[string]codexrpc.ThreadTokenUsage{},
+		pendingSkills: map[string]state.SubmissionSkill{},
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)

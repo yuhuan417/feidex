@@ -141,6 +141,21 @@ func localCommandSpecList() []localCommandSpec {
 			},
 		},
 		{
+			Names: []string{"/skills"},
+			IsLocal: func(fields []string) bool {
+				return matchSkillsCommand(fields)
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandSkills(msg, args)
+			},
+			HelpGroup: "常用工具",
+			HelpEntries: []helpCommandSpec{
+				{Command: "/skills", Summary: "查看当前工作区可用的 skills，并选择下一条消息默认携带的 skill。"},
+				{Command: "/skills reload", Summary: "强制刷新当前工作区的 skill 列表。"},
+				{Command: "$skill-name <内容>", Summary: "以 skill 前缀显式指定本条消息使用的 skill。"},
+			},
+		},
+		{
 			Names: []string{"/usage"},
 			IsLocal: func(fields []string) bool {
 				return exactCommand(fields)

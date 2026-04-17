@@ -69,6 +69,7 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 	{GroupAction: "menu.tools", Action: "menu.compact", Label: "压缩上下文", Slash: "/compact", Kind: menuItemDirect, IncludeParentAction: true},
 	{GroupAction: "menu.tools", Action: "menu.download", Label: "下载文件", Slash: "/download", Kind: menuItemDirect, IncludeParentAction: true},
 	{GroupAction: "menu.tools", Action: "menu.history", Label: "历史记录", Slash: "/history", Kind: menuItemSubmenu},
+	{GroupAction: "menu.tools", Action: "menu.skills", Label: "技能列表", Slash: "/skills", Kind: menuItemSubmenu},
 	{GroupAction: "menu.tools", Action: "menu.usage", Label: "Token 消耗", Slash: "/usage", Kind: menuItemSubmenu},
 	{GroupAction: "menu.tools", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 

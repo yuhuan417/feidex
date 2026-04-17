@@ -1145,6 +1145,9 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"menu.history": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuHistory(action, action.ActionValue["session_key"].(string))
 		},
+		"menu.skills": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeMenuSkills(action, action.ActionValue["session_key"].(string))
+		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuWorkspace(action, action.ActionValue["session_key"].(string))
 		},
@@ -1182,7 +1185,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -2968,7 +2971,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade dev", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64"} {
+	for _, want := range []string{"/help", "/history", "/skills", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade dev", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64", "$skill-name <内容>"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}

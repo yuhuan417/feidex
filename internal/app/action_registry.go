@@ -61,6 +61,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"menu.usage": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuUsage(action, actionSessionKey(action))
 	},
+	"menu.skills": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuSkills(action, actionSessionKey(action))
+	},
 	"menu.model": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuModel(action, actionSessionKey(action))
 	},
@@ -168,6 +171,12 @@ var cardActionHandlers = map[string]cardActionHandler{
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 turn 选项"}}, nil
 		}
 		return a.completeHistoryDetail(action, actionSessionKey(action), index)
+	},
+	"skills.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeSkillsSelect(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+	},
+	"skills.reload": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeSkillsReload(action, actionSessionKey(action))
 	},
 	"user_input.answer": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeUserInputAnswer(action)

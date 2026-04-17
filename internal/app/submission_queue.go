@@ -39,6 +39,14 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	bucketSessionKey := a.pendingInputSessionKey(msg)
 	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
 	attachments := append(stagedImageAttachments(stagedImages), inboundAttachments...)
+	skillResolution := a.resolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
+	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
+		a.setSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
+		if err := a.feishu.ReplyText(context.Background(), msg.MessageID, skillPendingConfirmationText(skillResolution.PendingReplacement.Name), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread); err != nil {
+			return err
+		}
+		return nil
+	}
 	sourceMessageIDs := uniqueStrings(append([]string{msg.MessageID}, stagedImageSourceMessageIDs(stagedImages)...))
 	currentRootMessageID := firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))
 	sourceRootMessageIDs := []string{currentRootMessageID}
@@ -69,7 +77,8 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		TriggerMessageID:     msg.MessageID,
 		SourceMessageIDs:     sourceMessageIDs,
 		SourceRootMessageIDs: sourceRootMessageIDs,
-		InputText:            msg.Text,
+		InputText:            skillResolution.InputText,
+		Skills:               skillResolution.Skills,
 		Attachments:          attachments,
 		Status:               "queued",
 	}
@@ -85,6 +94,9 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
 			return err
 		}
+	}
+	if skillResolution.ConsumePending {
+		a.clearSessionPendingSkill(sessionKey)
 	}
 	slog.Debug("submission queued",
 		"submission_id", id,

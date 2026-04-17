@@ -117,6 +117,10 @@ func (a *App) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*
 	return a.completeMenuCommand(action, sessionKey, "/usage", "menu.tools")
 }
 
+func (a *App) completeMenuSkills(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeMenuCommand(action, sessionKey, "/skills", "menu.tools")
+}
+
 func (a *App) completeQuietSet(action *feishu.CardAction, mode config.QuietMode) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	if err := a.updateQuietMode(mode); err != nil {

@@ -18,6 +18,7 @@ var menuNodes = map[string]menuNode{
 	"menu.quiet":             {Label: "静默模式", Parent: "menu.tools"},
 	"menu.usage":             {Label: "Token 消耗", Parent: "menu.tools"},
 	"menu.history":           {Label: "历史记录", Parent: "menu.tools"},
+	"menu.skills":            {Label: "技能列表", Parent: "menu.tools"},
 	"history.detail":         {Label: "Turn 详情", Parent: "menu.history"},
 	"workspace.new":          {Label: "新建工作区", Parent: "menu.workspace"},
 	"workspace.sandbox.menu": {Label: "默认沙箱", Parent: "menu.workspace"},

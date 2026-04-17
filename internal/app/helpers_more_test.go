@@ -416,6 +416,9 @@ func TestAttachmentHelpers(t *testing.T) {
 
 	sub := &state.Submission{
 		InputText: "hello",
+		Skills: []state.SubmissionSkill{
+			{Name: "openai-docs", Path: "/skills/openai-docs"},
+		},
 		Attachments: []state.SubmissionAttachment{
 			{Kind: "image", LocalPath: "/tmp/image.png"},
 			{Kind: "file", LocalPath: "/tmp/doc.txt"},
@@ -423,8 +426,11 @@ func TestAttachmentHelpers(t *testing.T) {
 		},
 	}
 	inputs := buildTurnInputs(sub)
-	if len(inputs) != 4 || inputs[0]["type"] != "text" || inputs[1]["type"] != "localImage" {
-		t.Fatalf("buildTurnInputs() = %+v, want text + localImage + prompts", inputs)
+	if len(inputs) != 5 || inputs[0]["type"] != "skill" || inputs[1]["type"] != "text" || inputs[2]["type"] != "localImage" {
+		t.Fatalf("buildTurnInputs() = %+v, want skill + text + localImage + prompts", inputs)
+	}
+	if inputs[0]["name"] != "openai-docs" || inputs[0]["path"] != "/skills/openai-docs" {
+		t.Fatalf("buildTurnInputs() skill item = %+v, want name/path", inputs[0])
 	}
 	if got := attachmentPrompt(state.SubmissionAttachment{Kind: "audio", LocalPath: "/tmp/a.wav"}); !strings.Contains(got, "audio file") {
 		t.Fatalf("attachmentPrompt(audio) = %q, want audio text", got)
@@ -435,13 +441,16 @@ func TestAttachmentHelpers(t *testing.T) {
 
 	preview := submissionInputPreview(&state.Submission{
 		InputText: "Question",
+		Skills: []state.SubmissionSkill{
+			{Name: "openai-docs", Path: "/skills/openai-docs"},
+		},
 		Attachments: []state.SubmissionAttachment{
 			{Kind: "image", Name: "pic.png"},
 			{Kind: "file", LocalPath: "/tmp/report.pdf"},
 		},
 	})
-	if !strings.Contains(preview, "Question") || !strings.Contains(preview, "[图片] pic.png") || !strings.Contains(preview, "[文件] report.pdf") {
-		t.Fatalf("submissionInputPreview() = %q, want text and attachment previews", preview)
+	if !strings.Contains(preview, "[skill] openai-docs") || !strings.Contains(preview, "Question") || !strings.Contains(preview, "[图片] pic.png") || !strings.Contains(preview, "[文件] report.pdf") {
+		t.Fatalf("submissionInputPreview() = %q, want skill, text and attachment previews", preview)
 	}
 	if got := submissionInputPreview(&state.Submission{}); got != "-" {
 		t.Fatalf("submissionInputPreview(empty) = %q, want -", got)
