@@ -192,6 +192,11 @@ func (a *Adapter) Start(ctx context.Context) error {
 				}
 				return nil
 			}).
+			OnP2MessageReadV1(func(ctx context.Context, event *larkim.P2MessageReadV1) error {
+				// We don't currently consume read receipts, but registering a
+				// handler prevents the SDK from treating them as unhandled events.
+				return nil
+			}).
 			OnP2MessageRecalledV1(func(ctx context.Context, event *larkim.P2MessageRecalledV1) error {
 				if a.onRecall != nil {
 					if recall := a.convertMessageRecall(event); recall != nil {
