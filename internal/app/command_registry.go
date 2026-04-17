@@ -94,6 +94,8 @@ func matchWorkspaceCommand(fields []string) bool {
 	switch strings.TrimSpace(fields[1]) {
 	case "list", "new", "sandbox", "policy":
 		return len(fields) == 2
+	case "clone":
+		return len(fields) == 3 || len(fields) == 4
 	case "use":
 		return len(fields) == 3
 	default:
@@ -395,6 +397,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/workspace", Summary: "打开工作区菜单。"},
 				{Command: "/workspace list", Summary: "打开工作区列表并可直接切换。"},
 				{Command: "/workspace new", Summary: "创建新工作区。"},
+				{Command: "/workspace clone GIT_URL [ID]", Summary: "clone 仓库并创建新工作区。"},
 				{Command: "/workspace use ID", Summary: "切换到指定工作区。"},
 				{Command: "/workspace sandbox", Summary: "配置当前工作区默认 sandbox。"},
 				{Command: "/workspace policy", Summary: "配置当前工作区默认 approval policy。"},

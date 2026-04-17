@@ -114,6 +114,8 @@ func TestIsLocalCommand(t *testing.T) {
 		"/interrupt":     true,
 		"/stop":          true,
 		"/workspace":     true,
+		"/workspace clone https://github.com/example/repo.git":       true,
+		"/workspace clone git@github.com:example/repo.git repo-copy": true,
 		"/status":        true,
 		"/upgrade":       true,
 		"/upgrade dev":   true,
@@ -128,11 +130,12 @@ func TestIsLocalCommand(t *testing.T) {
 		"/review 你不用管":                 false,
 		"/thread new please":           false,
 		"/workspace use default extra": false,
-		"/upgrade dev please":          false,
-		"/quiet 随便说说":                  false,
-		"/debug hello":                 false,
-		"/":                            false,
-		"/unknown value":               false,
+		"/workspace clone https://github.com/example/repo.git repo-copy extra": false,
+		"/upgrade dev please": false,
+		"/quiet 随便说说":         false,
+		"/debug hello":        false,
+		"/":                   false,
+		"/unknown value":      false,
 	}
 	for input, want := range cases {
 		if got := isLocalCommand(input); got != want {

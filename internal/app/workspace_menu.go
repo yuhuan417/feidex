@@ -26,6 +26,13 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 	if args[0] == "new" {
 		return a.beginWorkspaceNew(msg)
 	}
+	if len(args) >= 2 && args[0] == "clone" {
+		workspaceID := ""
+		if len(args) >= 3 {
+			workspaceID = args[2]
+		}
+		return a.cloneWorkspaceAndSwitch(msg, args[1], workspaceID)
+	}
 	if args[0] == "sandbox" {
 		return a.showWorkspaceSandboxMenu(msg)
 	}
@@ -70,7 +77,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		}
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
-	return fmt.Errorf("usage: /workspace | /workspace list | /workspace new | /workspace use ID | /workspace sandbox | /workspace policy")
+	return fmt.Errorf("usage: /workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] | /workspace use ID | /workspace sandbox | /workspace policy")
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {

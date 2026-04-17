@@ -3,8 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -13,6 +18,19 @@ import (
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
+
+var workspaceGitClone = func(ctx context.Context, repoURL, targetDir string) error {
+	cmd := exec.CommandContext(ctx, "git", "clone", repoURL, targetDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			message = err.Error()
+		}
+		return fmt.Errorf("git clone failed: %s", message)
+	}
+	return nil
+}
 
 type workspaceNewPayload struct {
 	RootPath    string             `json:"root_path"`
@@ -173,6 +191,108 @@ func mergeWorkspaceNewFormValues(payload workspaceNewPayload, values map[string]
 		payload.DraftName = value
 	}
 	return payload
+}
+
+func workspaceCloneRepoName(repoURL string) (string, error) {
+	repoURL = strings.TrimSpace(repoURL)
+	if repoURL == "" {
+		return "", fmt.Errorf("git 地址不能为空")
+	}
+	pathPart := repoURL
+	if !strings.Contains(repoURL, "://") {
+		if idx := strings.Index(repoURL, ":"); idx > 0 && !strings.Contains(repoURL[:idx], "/") && strings.Contains(repoURL[idx+1:], "/") {
+			pathPart = repoURL[idx+1:]
+		}
+	} else if parsed, err := url.Parse(repoURL); err == nil {
+		pathPart = firstNonEmpty(strings.TrimSpace(parsed.Path), strings.TrimSpace(parsed.Opaque))
+	}
+	base := strings.TrimSpace(strings.TrimSuffix(path.Base(strings.TrimSuffix(pathPart, "/")), ".git"))
+	if base == "" || base == "." || base == "/" {
+		return "", fmt.Errorf("无法从 git 地址推导仓库名")
+	}
+	return base, nil
+}
+
+func workspaceCloneDefaultID(repoName string) string {
+	repoName = strings.ToLower(strings.TrimSpace(repoName))
+	var out strings.Builder
+	lastDash := false
+	for _, r := range repoName {
+		switch {
+		case r >= 'a' && r <= 'z':
+			out.WriteRune(r)
+			lastDash = false
+		case r >= '0' && r <= '9':
+			out.WriteRune(r)
+			lastDash = false
+		case r == '-' || r == '_':
+			if out.Len() > 0 && !lastDash {
+				out.WriteByte('-')
+				lastDash = true
+			}
+		default:
+			if out.Len() > 0 && !lastDash {
+				out.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(out.String(), "-")
+}
+
+func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
+	if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
+		return filepath.Dir(strings.TrimSpace(ws.Cwd))
+	}
+	if strings.TrimSpace(a.cfgPath) != "" {
+		return filepath.Dir(strings.TrimSpace(a.cfgPath))
+	}
+	return "."
+}
+
+func (a *App) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, explicitID string) error {
+	if msg == nil {
+		return nil
+	}
+	repoName, err := workspaceCloneRepoName(repoURL)
+	if err != nil {
+		return err
+	}
+	workspaceID := strings.TrimSpace(explicitID)
+	if workspaceID == "" {
+		workspaceID = workspaceCloneDefaultID(repoName)
+		if workspaceID == "" {
+			return fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
+		}
+	}
+	if config.FindWorkspace(a.cfg, workspaceID) != nil {
+		return fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
+	}
+
+	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	targetName := repoName
+	if strings.TrimSpace(explicitID) != "" {
+		targetName = workspaceID
+	}
+	targetDir := filepath.Join(a.defaultWorkspaceCloneParent(ws), targetName)
+	if _, statErr := os.Stat(targetDir); statErr == nil {
+		return fmt.Errorf("目标目录已存在: %s", targetDir)
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
+	if err := os.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := workspaceGitClone(ctx, strings.TrimSpace(repoURL), targetDir); err != nil {
+		return err
+	}
+	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, workspaceID, workspaceID, targetDir); err != nil {
+		return fmt.Errorf("仓库已 clone 到 %q，但创建工作区失败: %w", targetDir, err)
+	}
+	reply := "已 clone 仓库并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }
 
 func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {

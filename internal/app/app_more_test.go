@@ -954,6 +954,66 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 }
 
+func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+
+	var gotRepoURL string
+	var gotTargetDir string
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string) error {
+		gotRepoURL = repoURL
+		gotTargetDir = targetDir
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-clone"
+			result.Thread.Name = "Clone Thread"
+			result.Thread.Preview = "Clone Preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	repoURL := "git@github.com:example/repo.git"
+	if err := a.commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
+		t.Fatalf("commandWorkspace(clone) error = %v", err)
+	}
+
+	wantTargetDir := filepath.Join(baseDir, "repo")
+	if gotRepoURL != repoURL {
+		t.Fatalf("workspaceGitClone repoURL = %q, want %q", gotRepoURL, repoURL)
+	}
+	if gotTargetDir != wantTargetDir {
+		t.Fatalf("workspaceGitClone targetDir = %q, want %q", gotTargetDir, wantTargetDir)
+	}
+	if ws := config.FindWorkspace(a.cfg, "repo"); ws == nil || ws.Cwd != wantTargetDir {
+		t.Fatalf("cloned workspace = %+v, want cwd %q", ws, wantTargetDir)
+	}
+	if sess := a.store.GetSession(a.makeSessionKey(msg)); sess == nil || sess.WorkspaceID != "repo" || sess.ActiveThreadID != "thread-clone" || sess.ActiveThreadWorkspaceID != "repo" {
+		t.Fatalf("session after clone = %+v", sess)
+	}
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "已 clone 仓库并切换到工作区 repo") || !strings.Contains(ff.replyTexts[0], wantTargetDir) {
+		t.Fatalf("workspace clone replyTexts = %+v", ff.replyTexts)
+	}
+}
+
 func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
 	a, _, fc := newTestApp(t)
 
