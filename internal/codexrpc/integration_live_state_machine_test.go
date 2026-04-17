@@ -244,6 +244,55 @@ func TestLiveCodexCommandApprovalLifecycleOnTinyRepo(t *testing.T) {
 	}
 }
 
+func TestLiveCodexNeverApprovalPolicyRunsCommandWithoutServerRequest(t *testing.T) {
+	requireLiveTokenTests(t)
+
+	cfg, _ := liveCodexConfigFromEnv(t)
+	repo, commandPath, expectedOutput := initTinyCommandApprovalRepo(t)
+
+	client, notifications, requests := startLiveClientWithNotificationsAndRequests(t, cfg)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+	startLiveClient(t, ctx, client)
+	defer func() { _ = client.Close() }()
+
+	threadID := startLiveThreadWithOptions(t, ctx, client, repo, "never", "read-only")
+	start := notifications.len()
+	turnID := startLiveTurn(t, ctx, client, threadID, repo, "never", map[string]any{"type": "readOnly"}, fmt.Sprintf("Invoke exactly this shell command via command execution: `%s`. Do not ask for approval. Do not simulate or invent the output. Do not edit files. After the command finishes, reply with exactly the stdout of that command and nothing else.", commandPath))
+
+	completedTurnID, status, lifecycle := waitForTurnCompletionOnThread(t, notifications, start, threadID, 90*time.Second)
+	if status != "completed" {
+		t.Fatalf("never policy turn completed with status %q, want completed; notifications: %s", status, summarizeLiveNotifications(lifecycle))
+	}
+	if completedTurnID != turnID {
+		t.Fatalf("never policy completed turn id = %s, want %s", completedTurnID, turnID)
+	}
+
+	for _, req := range requests.snapshot() {
+		switch req.Method {
+		case "item/commandExecution/requestApproval", "item/fileChange/requestApproval", "item/permissions/requestApproval":
+			t.Fatalf("never policy should not emit approval request, got %s with params %s", req.Method, string(req.Params))
+		}
+	}
+	if idx, itemTurnID, _ := findItemNotification(lifecycle, "item/completed", threadID, "commandExecution"); idx < 0 || itemTurnID != turnID {
+		t.Fatalf("missing item/completed(commandExecution) on turn %s; notifications: %s", turnID, summarizeLiveNotifications(lifecycle))
+	}
+
+	read := waitForThreadReadItemPredicate(t, ctx, client, threadID, 15*time.Second, func(item ThreadReadItem) bool {
+		return strings.TrimSpace(item.Type) == "commandExecution" && item.AggregatedOutput != nil && strings.TrimSpace(*item.AggregatedOutput) != ""
+	})
+	if !threadReadContainsItemType(read, "commandExecution") {
+		t.Fatalf("thread/read missing commandExecution item: %+v", read.Thread.Turns)
+	}
+	commandOutput := strings.TrimSpace(threadReadFirstCommandOutput(read))
+	if commandOutput != expectedOutput {
+		t.Fatalf("command output = %q, want %q", commandOutput, expectedOutput)
+	}
+	if !threadReadContainsAgentText(read, expectedOutput) {
+		t.Fatalf("thread/read final agent message does not echo command output %q: %+v", expectedOutput, read.Thread.Turns)
+	}
+}
+
 func TestLiveCodexFileApprovalLifecycleOnTinyRepo(t *testing.T) {
 	requireLiveTokenTests(t)
 

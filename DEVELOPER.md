@@ -131,6 +131,7 @@ export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
 go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexTurnLifecycleCoreOnTinyRepo
 go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexSteerContinuationOnActiveTurn
 go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexCommandApprovalLifecycleOnTinyRepo
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexNeverApprovalPolicyRunsCommandWithoutServerRequest
 go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexFileApprovalLifecycleOnTinyRepo
 go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
 ```
@@ -139,6 +140,7 @@ Notes:
 
 - The review lifecycle test creates its own tiny temporary git repository inside the test. It intentionally does not review the current Feidex worktree.
 - The turn lifecycle, steer, command approval, and file approval live tests also create their own tiny temporary repositories. Do not repoint them at this repository.
+- `TestLiveCodexNeverApprovalPolicyRunsCommandWithoutServerRequest` is the cheap reverse-guard for approval semantics: it uses the same tiny random-prefixed local script fixture, but with `approvalPolicy=never`, and fails if Codex still emits any approval request.
 - Any future live test that calls `turn/start`, `turn/steer`, or `review/start` must follow the same manual-only rule and stay behind `FEIDEX_CODEX_RUN_TOKEN_TESTS=1`.
 - Keep the smoke test and the expensive review test as separate commands so token spend stays explicit and predictable.
 - As of 2026-04-17, `TestLiveCodexCommandApprovalLifecycleOnTinyRepo` uses a tiny random-prefixed local script fixture instead of a common shell command. Repeated local runs against real Codex with `approvalPolicy=on-request` triggered `item/commandExecution/requestApproval` reliably for that fixture.
