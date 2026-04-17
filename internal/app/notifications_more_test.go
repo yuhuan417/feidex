@@ -62,9 +62,13 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 			map[string]any{"oldPath": "a.txt", "newPath": "b.txt", "kind": "rename"},
 			"README.md",
 		},
+		"grantRoot": "/repo/tmp",
 		"reason": "review",
 	})
-	if !strings.Contains(fileBody, "2 个文件") || !strings.Contains(fileBody, "a.txt -> b.txt (rename)") {
+	if !strings.Contains(fileBody, "2 个文件") ||
+		!strings.Contains(fileBody, "a.txt -> b.txt (rename)") ||
+		!strings.Contains(fileBody, "grantRoot") ||
+		!strings.Contains(fileBody, "/repo/tmp") {
 		t.Fatalf("renderFileApprovalBody() = %q", fileBody)
 	}
 	workspace := t.TempDir()

@@ -271,6 +271,7 @@
 - OpenAI 原始要求:
   - 官方页面原始协议名与约束: `item/started` emits a `fileChange` item.
   - 官方页面原始协议名与约束: `item/fileChange/requestApproval` asks the client for approval.
+  - schema 原始定义: `item/fileChange/requestApproval` 包含 `itemId`、`threadId`、`turnId`，并可带 `reason` 与 `grantRoot`。
   - 官方页面原始协议名与约束: client 回复后，server 会发 `serverRequest/resolved`。
   - 官方页面原始协议名与约束: 最终由 `item/completed` 收口。
   - 协议节点: `item/started(fileChange) -> item/fileChange/requestApproval -> client decision -> serverRequest/resolved -> item/completed`
@@ -278,6 +279,7 @@
 - 我们当前实现:
   - `internal/app/codex_event_router.go` 会先接 `item/started(fileChange)`，再处理 `item/fileChange/requestApproval`。
   - `internal/app/turn_item_state.go` 会把 started item 上的 `changes` 合并进审批请求，文件审批卡片可从 started item 补齐缺失文件列表。
+  - `internal/app/file_approval_summary.go` 会显式渲染请求里的 `grantRoot`，避免文件列表存在时该字段被摘要逻辑吞掉。
   - `internal/app/approval_actions.go` 和 `internal/app/server_request_state.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并改成 `pending -> replied -> resolved`，等待 `serverRequest/resolved` 再最终收口。
   - `internal/app/codex_event_router.go` 仍会在最终 `item/completed` 时收口 item。
 - 差异点:

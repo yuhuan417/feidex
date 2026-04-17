@@ -32,6 +32,12 @@ func renderFileApprovalBodyWithWorkspace(params map[string]any, workspaceCwd str
 			lines = append(lines, "- "+line)
 		}
 	}
+	if grantRoot := fileApprovalGrantRootSummary(params["grantRoot"], workspaceCwd); grantRoot != "" {
+		if len(lines) > 1 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, "grantRoot:", grantRoot)
+	}
 	if reason := strings.TrimSpace(stringValue(params["reason"])); reason != "" {
 		if len(lines) > 1 {
 			lines = append(lines, "")
@@ -47,6 +53,49 @@ func renderFileApprovalBodyWithWorkspace(params map[string]any, workspaceCwd str
 		}
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func fileApprovalGrantRootSummary(value any, workspaceCwd string) string {
+	switch x := value.(type) {
+	case nil:
+		return ""
+	case string:
+		path := strings.TrimSpace(renderWorkspaceDisplayPath(x, workspaceCwd))
+		if path == "" {
+			return ""
+		}
+		return "`" + strings.ReplaceAll(path, "`", "'") + "`"
+	case map[string]any:
+		path := strings.TrimSpace(firstNonEmpty(
+			stringValue(x["path"]),
+			stringValue(x["root"]),
+			stringValue(x["value"]),
+			stringValue(x["grantRoot"]),
+			stringValue(x["grant_root"]),
+		))
+		if path != "" {
+			path = renderWorkspaceDisplayPath(path, workspaceCwd)
+			return "`" + strings.ReplaceAll(path, "`", "'") + "`"
+		}
+		if rendered := strings.TrimSpace(truncate(prettyJSON(x), 300)); rendered != "" {
+			return markdownCodeBlock(rendered)
+		}
+	case bool:
+		if x {
+			return "允许"
+		}
+		return "禁止"
+	}
+	if enabled, ok := boolValue(value); ok {
+		if enabled {
+			return "允许"
+		}
+		return "禁止"
+	}
+	if rendered := strings.TrimSpace(stringValue(value)); rendered != "" {
+		return "`" + strings.ReplaceAll(rendered, "`", "'") + "`"
+	}
+	return ""
 }
 
 func collectFileApprovalEntries(value any) []approvalFileEntry {

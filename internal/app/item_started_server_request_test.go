@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"feidex/internal/codexrpc"
@@ -15,11 +16,12 @@ func TestFileApprovalHydratesFromStartedItem(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	changedPath := filepath.Join(a.cfg.Workspaces[0].Cwd, "dir", "main.go")
+	grantRoot := filepath.ToSlash(filepath.Join(a.cfg.Workspaces[0].Cwd, "dir"))
 	a.handleNotification("item/started", json.RawMessage(fmt.Sprintf(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"item-2","type":"fileChange","status":"inProgress","changes":[{"path":%q,"kind":"update"}]}}`, changedPath)))
 	a.handleServerRequest(codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"file-1"`),
 		Method: "item/fileChange/requestApproval",
-		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"need review"}`),
+		Params: json.RawMessage(fmt.Sprintf(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"need review","grantRoot":%q}`, grantRoot)),
 	})
 	pending := a.store.PendingByID("file-1")
 	if pending == nil {
@@ -36,6 +38,9 @@ func TestFileApprovalHydratesFromStartedItem(t *testing.T) {
 	}
 	if entries[0].Path != "dir/main.go" || entries[0].Kind != "update" {
 		t.Fatalf("approval entry = %+v, want relative hydrated file change", entries[0])
+	}
+	if got := renderFileApprovalBodyWithWorkspace(request, a.cfg.Workspaces[0].Cwd); !strings.Contains(got, "grantRoot") || !strings.Contains(got, "`dir`") {
+		t.Fatalf("approval body = %q, want relative grantRoot", got)
 	}
 }
 
