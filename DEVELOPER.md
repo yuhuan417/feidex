@@ -59,6 +59,91 @@ go build -o bin/feishu_card_demo ./cmd/feishu_card_demo
 go test ./...
 ```
 
+### Local Integration Tests
+
+Real Codex boundary tests are intentionally local-only:
+
+- They may require live credentials or a running local app-server endpoint.
+- Any live test that starts a real Codex turn or review consumes real tokens.
+- Review lifecycle tests are usually the most expensive token consumers, but they are not the only ones.
+- They must not run in GitHub CI.
+- They must not run as part of `go test ./...`, pre-push hooks, or routine local verification.
+- They are compiled only when you pass `-tags=integration`.
+- They must be triggered manually, one named test per command.
+- Any token-consuming live test must stay off by default and require `FEIDEX_CODEX_RUN_TOKEN_TESTS=1`.
+- Review tests must use tiny prepared fixtures to control token burn. Do not point them at this repository.
+
+Required environment variables:
+
+- Codex stdio path:
+  - `FEIDEX_CODEX_COMMAND` (optional, defaults to `codex`)
+  - `FEIDEX_CODEX_CWD` (optional, defaults to the package working directory)
+- Codex WebSocket mode:
+  - `FEIDEX_CODEX_TRANSPORT=ws`
+  - `FEIDEX_CODEX_WS_URL`
+  - `FEIDEX_CODEX_WS_BEARER_TOKEN` when the endpoint requires bearer auth
+
+Run them as separate commands. Do not fold them into the default `go test ./...` verification step.
+
+Codex smoke boundary:
+
+```bash
+export FEIDEX_CODEX_COMMAND=codex
+export FEIDEX_CODEX_CWD=/absolute/path/to/a/worktree
+go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
+```
+
+The smoke test above is intentionally cheap because it avoids `turn/start`, `turn/steer`, and `review/start`.
+
+Codex smoke boundary over WebSocket:
+
+```bash
+export FEIDEX_CODEX_TRANSPORT=ws
+export FEIDEX_CODEX_WS_URL=wss://example.com/codex
+export FEIDEX_CODEX_WS_BEARER_TOKEN=token
+export FEIDEX_CODEX_CWD=/absolute/path/to/a/worktree
+go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
+```
+
+Expensive Codex review lifecycle over stdio:
+
+```bash
+export FEIDEX_CODEX_COMMAND=codex
+export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
+```
+
+Expensive Codex review lifecycle over WebSocket:
+
+```bash
+export FEIDEX_CODEX_TRANSPORT=ws
+export FEIDEX_CODEX_WS_URL=wss://example.com/codex
+export FEIDEX_CODEX_WS_BEARER_TOKEN=token
+export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
+```
+
+Token-consuming Codex state-machine probes over stdio:
+
+```bash
+export FEIDEX_CODEX_COMMAND=codex
+export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexTurnLifecycleCoreOnTinyRepo
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexSteerContinuationOnActiveTurn
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexCommandApprovalLifecycleOnTinyRepo
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexFileApprovalLifecycleOnTinyRepo
+go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
+```
+
+Notes:
+
+- The review lifecycle test creates its own tiny temporary git repository inside the test. It intentionally does not review the current Feidex worktree.
+- The turn lifecycle, steer, command approval, and file approval live tests also create their own tiny temporary repositories. Do not repoint them at this repository.
+- Any future live test that calls `turn/start`, `turn/steer`, or `review/start` must follow the same manual-only rule and stay behind `FEIDEX_CODEX_RUN_TOKEN_TESTS=1`.
+- Keep the smoke test and the expensive review test as separate commands so token spend stays explicit and predictable.
+- As of 2026-04-17, `TestLiveCodexCommandApprovalLifecycleOnTinyRepo` uses a tiny random-prefixed local script fixture instead of a common shell command. Repeated local runs against real Codex with `approvalPolicy=on-request` triggered `item/commandExecution/requestApproval` reliably for that fixture.
+- Earlier probes that used common shell wrappers such as `/bin/bash -lc ...` produced false negatives, including direct execution without a protocol-level approval request. Do not switch this test back to a common trusted-looking command shape.
+
 Release-style local builds, if needed, should mimic CI naming and go to `dist/`:
 
 ```bash

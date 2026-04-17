@@ -61,6 +61,28 @@
 | `SM-23` | `McpElicitationRequest` |
 | `SM-24` | `SkillsCatalogLifecycle` |
 
+## 状态机到测试映射
+
+下表只列当前产品里最关键、最容易因为协议漂移而回归的状态机 guard。目标不是追求行覆盖率，而是把“协议边界一旦变了就会出事故”的路径固定成自动化测试。
+
+| 代号 | 风险点 | 当前 guard |
+| --- | --- | --- |
+| `SM-01` | 每条连接只做一次 `initialize -> initialized` 握手 | `internal/codexrpc/client_test.go`、`internal/codexrpc/integration_live_test.go` |
+| `SM-02` | experimental API / opt-out 协商不漂移 | `internal/codexrpc/client_test.go`、`internal/codexrpc/integration_live_test.go` |
+| `SM-03` | `thread/start` 后 thread 元数据与本地 session 绑定不乱 | `internal/codexrpc/integration_live_test.go`、`internal/app/critical_paths_test.go`、`internal/app/critical_paths_more_test.go` |
+| `SM-04` | `turn/start`、`turn/started`、`turn/completed` 与队列恢复不乱序 | `internal/app/critical_paths_test.go`、`internal/app/critical_paths_more_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
+| `SM-05` | `turn/steer` 必须绑定 `expectedTurnId`，reply follow-up 不能误开新 turn | `internal/app/app_more_test.go`、`internal/app/steer_more_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
+| `SM-06` | `turn/interrupt` 只请求中断，真正收口仍等 `turn/completed(interrupted)` | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go` |
+| `SM-07` | `error` 只记录失败上下文，不得早于 `turn/completed(failed)` 清 session | `internal/app/state_machine_contracts_test.go`、`internal/app/app_more_test.go` |
+| `SM-08` | compact 走 `contextCompaction` item 生命周期，不退回 deprecated 路径 | `internal/app/compact_more_test.go`、`internal/app/notifications_branches_more_test.go` |
+| `SM-09` | command approval 必须等待 `serverRequest/resolved` 才恢复 submission | `internal/app/critical_paths_test.go`、`internal/app/item_started_server_request_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
+| `SM-10` | file approval 必须把 started item 上下文和 request payload 合并 | `internal/app/item_started_server_request_test.go`、`internal/app/app_more_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
+| `SM-11` | tool user input 的 reply / resolve / resume 边界不能错 | `internal/app/critical_paths_more_test.go` |
+| `SM-13` | dynamic tool call 当前必须显式拒绝，不能半接入半放行 | `internal/app/state_machine_contracts_test.go`、`internal/app/app_more_test.go` |
+| `SM-14` | `review/start` payload、review item 生命周期、final 渲染、持久化历史 | `internal/app/review_critical_test.go`、`internal/app/review_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_review_test.go` |
+| `SM-22` | permissions approval 的 payload、reply、resolved 恢复契约 | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go`、`internal/app/app_more_test.go` |
+| `SM-23` | MCP elicitation 的 url/form pending、reply、resolved 恢复契约 | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go`、`internal/app/app_more_test.go`、`internal/app/server_request_reply_error_test.go` |
+
 ## 逐项审计
 
 ### SM-01 `InitializeHandshake`
@@ -232,8 +254,16 @@
 - 差异点:
   - command approval 的生命周期边界已经对齐。
   - schema 里虽然还有 `acceptWithExecpolicyAmendment`、`applyNetworkPolicyAmendment` 两类 amendment decision，但当前产品已明确不做这类 persistent amendment，因此不视为实现缺口。
+- 2026-04-17 真实 Codex probe 补充:
+  - 手动运行 `TestLiveCodexCommandApprovalLifecycleOnTinyRepo`，使用 tiny fixture、`approvalPolicy=on-request`、`sandbox=read-only`，并强制 prompt 要求走内建 command approval request 机制。
+  - 当前稳定有效的 probe 形状不是常见系统命令，而是 tiny fixture 里自带的随机前缀本地脚本，例如 `./zz_feidex_probe_<nonce>.sh`。
+  - 2026-04-17 同日连续 3 次真实运行里，这种随机前缀脚本都成功触发了 `item/commandExecution/requestApproval -> serverRequest/resolved -> item/completed(commandExecution) -> turn/completed`。
+  - `thread/read(includeTurns=true)` 也同时保留了 `commandExecution` item、脚本命令文本，以及最终 `agentMessage` 对脚本 stdout 的回显。
+  - 因此前述 app-layer contract test 与 current live Codex probe 现在已经能共同 guard `SM-09`。
+  - 需要注意的是，同日较早的 probe 若使用 `/bin/bash -lc 'cat /proc/sys/kernel/random/uuid'` 这类常见 shell 包装命令，则曾观测到 Codex 直接执行 `commandExecution` 而不发协议级 approval request，甚至可能退化为普通 `agentMessage` 文本询问。说明 command approval 的真实触发与命令形状强相关，测试 fixture 必须保持“随机前缀本地脚本”这种非 trusted-looking 形态。
 - 修改建议:
   - 保持现状即可；仅当后续产品重新需要 persistent exec/network policy amendment 时，再把对应 decision 与 UI 一起补回。
+  - 不要把 live command approval probe 改回常见 shell/system command；那会重新引入 false negative。
 
 ### SM-10 `FileApproval`
 
@@ -307,7 +337,7 @@
 
 ### SM-14 `ReviewLifecycle`
 
-- 结论: `未实现`
+- 结论: `部分遵循`
 - OpenAI 原始要求:
   - 官方页面原始协议名与约束: `review/start` starts a review.
   - 官方页面原始协议名与约束: detached review 会先新建 thread，并通过 `thread/started` 报告。
@@ -315,8 +345,12 @@
   - 协议节点: `review/start -> thread/started? -> turn/started -> item/started(enteredReviewMode) -> ... -> item/completed(exitedReviewMode) -> turn/completed`
   - 来源: OpenAI 官方页面 `Turn methods`, `Notifications`
 - 我们当前实现:
-  - 没有 `review/start` 调用。
-  - 没有 review item 生命周期处理。
+  - `internal/app/review.go` 已调用 `review/start`，并固定使用 `delivery = inline`。
+  - `internal/app/turn_item_payload.go` 已消费 `enteredReviewMode` / `exitedReviewMode`；其中 `exitedReviewMode.review` 会被统一走最终答复渲染路径。
+  - `internal/app/turn_stream.go` 在收到 review final 后会抑制 trailing `agentMessage`，避免 review 结果重复投递。
+  - `internal/app/review_critical_test.go` 已覆盖 review target 解析、`review/start` payload、selector payload 更新。
+  - `internal/app/review_test.go` 已覆盖 `exitedReviewMode` 最终渲染，以及 `review/start` response turn id 与后续 `turn/started` turn id 不一致时，客户端仍保持 response turn id 绑定。
+  - `internal/codexrpc/integration_live_review_test.go` 增加手动 live inline review 测试，使用 tiny git fixture 验证 `review/start -> turn/started -> item/started(enteredReviewMode) -> item/completed(enteredReviewMode) -> item/completed(exitedReviewMode) -> turn/completed -> thread/read`。
 - 2026-04-16 detached review 实测补充:
   - 测试方式: 连接本地启动的 `codex app-server`，对 `review/start` 进行真实协议探测；分别验证空 thread 与已 materialize thread。
   - 空 thread 上直接调用 `review/start` 且 `delivery = detached` 时，服务端返回 `error creating detached review thread: No such file or directory (os error 2)`。
@@ -350,11 +384,17 @@
   - inline review 不增加 review 专属的 active-thread 兜底或切换逻辑，沿用普通 submission 的通用 thread 生命周期处理。
   - 如果使用者担心 review 污染当前 thread，可由使用者先自行选择 `/new` 或 `/fork`，再在目标 thread 中执行 inline review。
   - 因此当前不把 detached review 作为 Feidex 的首期实现目标，也不为 detached review 设计结果回灌 source thread 的额外机制。
+- 2026-04-17 inline review 实测补充:
+  - 真实运行 `review/start(delivery=inline, target=uncommittedChanges)` 时，观测到 `item/started(enteredReviewMode)` / `item/completed(enteredReviewMode)` 可能先于 `turn/started`。
+  - 同次实测里，`turn/started.turn.id` 可能不同于 `review/start` response.turn.id。
+  - 但 `item/completed(exitedReviewMode)` 与 `turn/completed` 仍绑定在 `review/start response.turn.id` 上。
+  - 因此 inline review 也不能把 `turn/started` 视为 review lifecycle 的唯一 authoritative turn id；当前实现继续以 `review/start response.turn.id` 作为 review submission 的主绑定是必要的。
 - 差异点:
-  - 整条状态机未接入。
+  - `SM-14` 的 inline 子集已经接入，并且有 contract test + manual live test 双重 guard。
+  - detached review 仍未接入 `thread/started` / `thread/status/changed` / source-review 双线程关系处理，因此 `SM-14` 整体仍只能算 `部分遵循`，不能算 `严格遵循` 或 `兼容实现`。
 - 修改建议:
-  - 若后续决定支持 review，优先实现 inline review。
-  - 线程隔离需求交由使用者通过 `/new` 或 `/fork` 自行决定，不在首期实现中接入 detached review。
+  - 保持 inline review 作为当前受测主路径，并继续使用 tiny fixture 的手动 live test 监控真实协议漂移。
+  - 若后续决定支持 detached review，必须把 source thread 与 review thread 的双线程关系单独建模，并补独立的状态机测试；不要复用 inline review 的假设。
 
 ### SM-15 `ThreadLifecycleNotifications`
 

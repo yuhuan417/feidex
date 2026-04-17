@@ -6,4 +6,5 @@
 /feidex
 /feidex-bin
 /tmp/
+/.tmp-*/
 *.log
