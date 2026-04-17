@@ -54,8 +54,13 @@ func daemonInstall(args []string) int {
 	fs := flag.NewFlagSet("daemon install", flag.ContinueOnError)
 	configPath := fs.String("config", "config.toml", "path to config file")
 	force := fs.Bool("force", false, "reinstall even if service already exists")
-	enableLinger := fs.Bool("enable-linger", false, "enable loginctl linger for the current user before installing the service")
+	enableLinger := fs.Bool("enable-linger", false, "deprecated: linger is enabled by default during install")
+	disableLinger := fs.Bool("disable-linger", false, "skip enabling loginctl linger for the current user before installing the service")
 	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+	if *enableLinger && *disableLinger {
+		fmt.Fprintln(os.Stderr, "cannot combine --enable-linger with --disable-linger")
 		return 1
 	}
 
@@ -69,9 +74,10 @@ func daemonInstall(args []string) int {
 		fmt.Fprintf(os.Stderr, "resolve daemon config: %v\n", err)
 		return 1
 	}
-	if *enableLinger {
+	if !*disableLinger {
 		if err := enableLingerUser(); err != nil {
 			fmt.Fprintf(os.Stderr, "enable linger failed: %v\n", err)
+			fmt.Fprintln(os.Stderr, "hint: retry with --disable-linger if you do not want feidex to change the user linger setting")
 			return 1
 		}
 	}
@@ -91,9 +97,6 @@ func daemonInstall(args []string) int {
 	}
 	if err := mgr.Install(daemonCfg); err != nil {
 		fmt.Fprintf(os.Stderr, "daemon install failed: %v\n", err)
-		if !*enableLinger {
-			fmt.Fprintln(os.Stderr, "hint: if this is an SSH/non-login session, retry with --enable-linger")
-		}
 		return 1
 	}
 	fmt.Println("feidex daemon installed and started.")
@@ -269,7 +272,7 @@ func requireInstalled(mgr daemon.Manager) error {
 
 func printDaemonUsage() {
 	fmt.Println(`Usage:
-  feidex daemon install [--config config.toml] [--force] [--enable-linger]
+  feidex daemon install [--config config.toml] [--force] [--disable-linger]
   feidex daemon enable-linger
   feidex daemon uninstall [--config config.toml]
   feidex daemon start [--config config.toml]

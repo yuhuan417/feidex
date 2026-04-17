@@ -340,7 +340,7 @@ func TestRunDaemonCommandsAndRequireInstalled(t *testing.T) {
 			t.Fatalf("runDaemon(help) = %d, want 0", got)
 		}
 	})
-	if stderr != "" || !strings.Contains(stdout, "daemon enable-linger") {
+	if stderr != "" || !strings.Contains(stdout, "daemon enable-linger") || !strings.Contains(stdout, "--disable-linger") {
 		t.Fatalf("runDaemon(help) output = %q / %q", stdout, stderr)
 	}
 
@@ -385,6 +385,11 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 		statusResp: &daemon.Status{Installed: false, Platform: "linux", UnitPath: "/tmp/feidex.service"},
 		platform:   "linux",
 	}
+	lingerCalls := 0
+	enableLingerUser = func() error {
+		lingerCalls++
+		return nil
+	}
 	var gotServiceName string
 	newDaemonManager = func(serviceName string) (daemon.Manager, error) {
 		gotServiceName = serviceName
@@ -399,13 +404,52 @@ func TestDaemonInstallAndLifecycleCommands(t *testing.T) {
 	if gotServiceName != minimalConfig().Daemon.ServiceName {
 		t.Fatalf("daemonInstall serviceName = %q, want %q", gotServiceName, minimalConfig().Daemon.ServiceName)
 	}
-
-	enableLingerUser = func() error { return errors.New("linger failed") }
-	if got := daemonInstall([]string{"--enable-linger"}); got != 1 {
-		t.Fatalf("daemonInstall(linger error) = %d, want 1", got)
+	if lingerCalls != 1 {
+		t.Fatalf("daemonInstall(default) lingerCalls = %d, want 1", lingerCalls)
 	}
 
+	lingerCalls = 0
+	enableLingerUser = func() error {
+		lingerCalls++
+		return errors.New("linger failed")
+	}
+	mgr = &fakeManager{statusResp: &daemon.Status{Installed: false}}
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
+	_, stderr := withCapturedOutput(t, func() {
+		if got := daemonInstall(nil); got != 1 {
+			t.Fatalf("daemonInstall(linger error) = %d, want 1", got)
+		}
+	})
+	if lingerCalls != 1 {
+		t.Fatalf("daemonInstall(linger error) lingerCalls = %d, want 1", lingerCalls)
+	}
+	if !strings.Contains(stderr, "retry with --disable-linger") {
+		t.Fatalf("daemonInstall(linger error) stderr = %q, want disable-linger hint", stderr)
+	}
+	if len(mgr.calls) != 0 {
+		t.Fatalf("daemonInstall(linger error) manager calls = %+v, want no manager calls", mgr.calls)
+	}
+
+	lingerCalls = 0
 	enableLingerUser = func() error { return nil }
+	mgr = &fakeManager{statusResp: &daemon.Status{Installed: false}}
+	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
+	if got := daemonInstall([]string{"--disable-linger"}); got != 0 {
+		t.Fatalf("daemonInstall(disable linger) = %d, want 0", got)
+	}
+	if lingerCalls != 0 {
+		t.Fatalf("daemonInstall(disable linger) lingerCalls = %d, want 0", lingerCalls)
+	}
+
+	_, stderr = withCapturedOutput(t, func() {
+		if got := daemonInstall([]string{"--enable-linger", "--disable-linger"}); got != 1 {
+			t.Fatalf("daemonInstall(conflicting linger flags) = %d, want 1", got)
+		}
+	})
+	if !strings.Contains(stderr, "cannot combine --enable-linger with --disable-linger") {
+		t.Fatalf("daemonInstall(conflicting linger flags) stderr = %q", stderr)
+	}
+
 	mgr = &fakeManager{statusResp: &daemon.Status{Installed: true}}
 	newDaemonManager = func(string) (daemon.Manager, error) { return mgr, nil }
 	if got := daemonInstall(nil); got != 1 {

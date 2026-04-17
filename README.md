@@ -462,8 +462,9 @@ feidex daemon uninstall
 
 - `install`
   - 安装并启动用户服务；默认读取当前目录的 `config.toml`
+  - 安装前会默认尝试为当前用户打开 linger；如果你不希望修改这个用户级 systemd 设置，可改用 `feidex daemon install --disable-linger`
 - `enable-linger`
-  - 为当前用户打开 linger，适合 SSH / 非登录会话
+  - 手动为当前用户打开 linger；通常不需要单独执行，`install` 默认就会尝试开启
 - `start` / `stop` / `restart` / `status` / `uninstall`
   - 也默认读取当前目录的 `config.toml`，按其中的 `[daemon].service_name` 选择实例
 - `upgrade-runner`
