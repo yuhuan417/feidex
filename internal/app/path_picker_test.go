@@ -272,8 +272,12 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	baseDir := t.TempDir()
 	currentDir := filepath.Join(baseDir, "current")
+	parentDir := filepath.Join(baseDir, "parents")
 	if err := os.MkdirAll(currentDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
 	}
 	a.cfg.Workspaces[0].Cwd = currentDir
 
@@ -310,12 +314,72 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{}),
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: baseDir,
+		}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(workspace-clone-1) error = %v", err)
 	}
 
-	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.completeWorkspaceClonePickDir(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
+		FormValue: map[string]any{
+			"repo_url":     "git@github.com:example/repo.git",
+			"workspace_id": "repo-copy",
+		},
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeWorkspaceClonePickDir() = %#v, %v", resp, err)
+	}
+	pending := a.store.PendingByID("workspace-clone-1")
+	gotPayload := workspaceClonePayloadFromPending(pending)
+	if gotPayload.Picker == nil || gotPayload.RepoURL != "git@github.com:example/repo.git" || gotPayload.DraftID != "repo-copy" {
+		t.Fatalf("workspace clone payload after pickdir = %+v", gotPayload)
+	}
+
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
+		Option:      encodePathPickerOption(pathPickerEntry{Name: "parents", Path: parentDir, IsDir: true}),
+	}, "path_picker.dropdown")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace clone picker dropdown = %#v, %v", resp, err)
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
+	}, "path_picker.confirm")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace clone picker confirm = %#v, %v", resp, err)
+	}
+	pending = a.store.PendingByID("workspace-clone-1")
+	gotPayload = workspaceClonePayloadFromPending(pending)
+	if gotPayload.Picker != nil || filepath.Clean(gotPayload.SelectedParentDir) != filepath.Clean(parentDir) || gotPayload.RepoURL != "git@github.com:example/repo.git" || gotPayload.DraftID != "repo-copy" {
+		t.Fatalf("workspace clone payload after confirm = %+v", gotPayload)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	inputs := workspaceCloneFormInputs(t, cardData)
+	if got, _ := inputs["repo_url"]["default_value"].(string); got != "git@github.com:example/repo.git" {
+		t.Fatalf("repo_url default_value = %q, want git@github.com:example/repo.git", got)
+	}
+	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "repo-copy" {
+		t.Fatalf("workspace_id default_value = %q, want repo-copy", got)
+	}
+	buttons := workspaceCloneFormButtons(t, cardData)
+	if got, _ := buttons["workspace_clone_pickdir"]["form_action_type"].(string); got != "submit" {
+		t.Fatalf("workspace_clone_pickdir form_action_type = %q, want submit", got)
+	}
+	if got, _ := buttons["workspace_clone_submit"]["form_action_type"].(string); got != "submit" {
+		t.Fatalf("workspace_clone_submit form_action_type = %q, want submit", got)
+	}
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, parentDir) {
+		t.Fatalf("workspace clone card body = %q, want parent dir %q", body, parentDir)
+	}
+
+	resp, err = a.completeWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -328,7 +392,7 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
 	}
-	wantTargetDir := filepath.Join(baseDir, "repo-copy")
+	wantTargetDir := filepath.Join(parentDir, "repo-copy")
 	if gotRepoURL != "git@github.com:example/repo.git" {
 		t.Fatalf("workspaceGitClone repoURL = %q", gotRepoURL)
 	}
@@ -341,9 +405,9 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 	if ws := config.FindWorkspace(a.cfg, "repo-copy"); ws == nil || filepath.Clean(ws.Cwd) != filepath.Clean(wantTargetDir) {
 		t.Fatalf("created workspace = %+v, want cwd %q", ws, wantTargetDir)
 	}
-	cardData, _ := resp.Card.Data.(map[string]any)
-	body := cardMarkdownContent(t, cardData)
-	if !strings.Contains(body, "已从仓库创建并切换到工作区 repo-copy") || !strings.Contains(body, wantTargetDir) {
+	cardData, _ = resp.Card.Data.(map[string]any)
+	body = cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "已从仓库创建并切换到工作区 `repo-copy`") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("clone status card body = %q", body)
 	}
 }
@@ -608,5 +672,58 @@ func workspaceNewForm(t *testing.T, card map[string]any) map[string]any {
 		}
 	}
 	t.Fatalf("workspace new card missing form: %#v", card)
+	return nil
+}
+
+func workspaceCloneFormInputs(t *testing.T, card map[string]any) map[string]map[string]any {
+	t.Helper()
+	form := workspaceCloneForm(t, card)
+	elements, _ := form["elements"].([]map[string]any)
+	inputs := make(map[string]map[string]any)
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag != "input" {
+			continue
+		}
+		name, _ := elem["name"].(string)
+		inputs[name] = elem
+	}
+	return inputs
+}
+
+func workspaceCloneFormButtons(t *testing.T, card map[string]any) map[string]map[string]any {
+	t.Helper()
+	form := workspaceCloneForm(t, card)
+	elements, _ := form["elements"].([]map[string]any)
+	buttons := make(map[string]map[string]any)
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag != "column_set" {
+			continue
+		}
+		columns, _ := elem["columns"].([]map[string]any)
+		for _, column := range columns {
+			columnElems, _ := column["elements"].([]map[string]any)
+			for _, child := range columnElems {
+				if tag, _ := child["tag"].(string); tag != "button" {
+					continue
+				}
+				name, _ := child["name"].(string)
+				buttons[name] = child
+			}
+		}
+	}
+	return buttons
+}
+
+func workspaceCloneForm(t *testing.T, card map[string]any) map[string]any {
+	t.Helper()
+	for _, elem := range cardElements(card) {
+		if tag, _ := elem["tag"].(string); tag == "form" {
+			name, _ := elem["name"].(string)
+			if name == "workspace_clone_form" {
+				return elem
+			}
+		}
+	}
+	t.Fatalf("workspace clone card missing form: %#v", card)
 	return nil
 }

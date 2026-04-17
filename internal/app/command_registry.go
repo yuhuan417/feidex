@@ -95,7 +95,8 @@ func matchWorkspaceCommand(fields []string) bool {
 	case "list", "new", "sandbox", "policy":
 		return len(fields) == 2
 	case "clone":
-		return len(fields) == 3 || len(fields) == 4
+		_, _, _, err := parseWorkspaceCloneArgs(fields[1:])
+		return err == nil
 	case "use":
 		return len(fields) == 3
 	default:
@@ -397,7 +398,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/workspace", Summary: "打开工作区菜单。"},
 				{Command: "/workspace list", Summary: "打开工作区列表并可直接切换。"},
 				{Command: "/workspace new", Summary: "创建新工作区。"},
-				{Command: "/workspace clone GIT_URL [ID]", Summary: "从 Git 仓库创建新工作区。"},
+				{Command: "/workspace clone GIT_URL [ID] [--parent DIR]", Summary: "从 Git 仓库创建新工作区，可显式指定父目录。"},
 				{Command: "/workspace use ID", Summary: "切换到指定工作区。"},
 				{Command: "/workspace sandbox", Summary: "配置当前工作区默认 sandbox。"},
 				{Command: "/workspace policy", Summary: "配置当前工作区默认 approval policy。"},

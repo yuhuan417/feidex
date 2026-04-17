@@ -16,6 +16,39 @@ type workspaceSettingOption struct {
 	Label string
 }
 
+const workspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace sandbox | /workspace policy"
+
+func parseWorkspaceCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err error) {
+	if len(args) < 2 || strings.TrimSpace(args[0]) != "clone" {
+		return "", "", "", fmt.Errorf("usage: %s", workspaceCommandUsage)
+	}
+	repoURL = strings.TrimSpace(args[1])
+	if repoURL == "" {
+		return "", "", "", fmt.Errorf("usage: %s", workspaceCommandUsage)
+	}
+	switch len(args) {
+	case 2:
+		return repoURL, "", "", nil
+	case 3:
+		if strings.TrimSpace(args[2]) == "--parent" {
+			return "", "", "", fmt.Errorf("usage: %s", workspaceCommandUsage)
+		}
+		return repoURL, strings.TrimSpace(args[2]), "", nil
+	case 4:
+		if strings.TrimSpace(args[2]) != "--parent" || strings.TrimSpace(args[3]) == "" {
+			return "", "", "", fmt.Errorf("usage: %s", workspaceCommandUsage)
+		}
+		return repoURL, "", strings.TrimSpace(args[3]), nil
+	case 5:
+		if strings.TrimSpace(args[2]) == "" || strings.TrimSpace(args[3]) != "--parent" || strings.TrimSpace(args[4]) == "" {
+			return "", "", "", fmt.Errorf("usage: %s", workspaceCommandUsage)
+		}
+		return repoURL, strings.TrimSpace(args[2]), strings.TrimSpace(args[4]), nil
+	default:
+		return "", "", "", fmt.Errorf("usage: %s", workspaceCommandUsage)
+	}
+}
+
 func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
 		return a.showWorkspaceMenu(msg)
@@ -27,11 +60,14 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		return a.beginWorkspaceNew(msg)
 	}
 	if len(args) >= 2 && args[0] == "clone" {
-		workspaceID := ""
-		if len(args) >= 3 {
-			workspaceID = args[2]
+		repoURL, workspaceID, parentDir, err := parseWorkspaceCloneArgs(args)
+		if err != nil {
+			return err
 		}
-		return a.cloneWorkspaceAndSwitch(msg, args[1], workspaceID)
+		if parentDir != "" {
+			return a.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
+		}
+		return a.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
 	}
 	if args[0] == "sandbox" {
 		return a.showWorkspaceSandboxMenu(msg)
@@ -77,7 +113,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		}
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
-	return fmt.Errorf("usage: /workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] | /workspace use ID | /workspace sandbox | /workspace policy")
+	return fmt.Errorf("usage: %s", workspaceCommandUsage)
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {

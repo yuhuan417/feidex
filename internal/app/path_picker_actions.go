@@ -16,7 +16,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
-	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != downloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
+	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != downloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -24,12 +24,19 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 	}
 	var payload pathPickerPayload
 	var workspacePayload workspaceNewPayload
+	var clonePayload workspaceClonePayload
 	if pending.Kind == "workspace_new" {
 		workspacePayload = workspaceNewPayloadFromPending(pending)
 		if workspacePayload.Picker == nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "目录选择状态已失效"}}, nil
 		}
 		payload = *workspacePayload.Picker
+	} else if pending.Kind == "workspace_clone" {
+		clonePayload = workspaceClonePayloadFromPending(pending)
+		if clonePayload.Picker == nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "父目录选择状态已失效"}}, nil
+		}
+		payload = *clonePayload.Picker
 	} else if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择状态损坏"}}, nil
 	}
@@ -42,6 +49,14 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回工作区创建"},
 				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
+			}, nil
+		}
+		if pending.Kind == "workspace_clone" {
+			clonePayload.Picker = nil
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "success", Content: "已返回从仓库创建"},
+				Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -120,6 +135,15 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
 			}, nil
 		}
+		if pending.Kind == "workspace_clone" {
+			clonePayload.SelectedParentDir = selectedPath
+			clonePayload.Picker = nil
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "success", Content: "已选择父目录"},
+				Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
+			}, nil
+		}
 		if pending.Kind == downloadFilePendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
@@ -146,6 +170,9 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 	if pending.Kind == "workspace_new" {
 		workspacePayload.Picker = &payload
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+	} else if pending.Kind == "workspace_clone" {
+		clonePayload.Picker = &payload
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 	} else {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	}

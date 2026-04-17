@@ -41,8 +41,11 @@ type workspaceNewPayload struct {
 }
 
 type workspaceClonePayload struct {
-	RepoURL string `json:"repo_url,omitempty"`
-	DraftID string `json:"draft_id,omitempty"`
+	RootPath          string             `json:"root_path"`
+	SelectedParentDir string             `json:"selected_parent_dir,omitempty"`
+	RepoURL           string             `json:"repo_url,omitempty"`
+	DraftID           string             `json:"draft_id,omitempty"`
+	Picker            *pathPickerPayload `json:"picker,omitempty"`
 }
 
 func workspaceNewPayloadFromPending(pending *state.PendingRequest) workspaceNewPayload {
@@ -62,6 +65,10 @@ func workspaceClonePayloadFromPending(pending *state.PendingRequest) workspaceCl
 }
 
 func (a *App) defaultWorkspaceNewRoot(ws *config.Workspace) string {
+	return "/"
+}
+
+func (a *App) defaultWorkspaceCloneRoot(ws *config.Workspace) string {
 	return "/"
 }
 
@@ -147,6 +154,13 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 }
 
 func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload workspaceClonePayload) map[string]any {
+	if payload.Picker != nil {
+		card, err := a.renderPathPickerCard(requestID, *payload.Picker)
+		if err == nil {
+			return card
+		}
+		payload.Picker = nil
+	}
 	var sess *state.Session
 	if a.store != nil {
 		sess = a.appState().session(sessionKey)
@@ -156,13 +170,18 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 		workspaceID = sess.WorkspaceID
 	}
 	ws := config.FindWorkspace(a.cfg, workspaceID)
-	parentDir := a.defaultWorkspaceCloneParent(ws)
+	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), a.defaultWorkspaceCloneRoot(ws))
+	parentDir := strings.TrimSpace(payload.SelectedParentDir)
+	if parentDir == "" {
+		parentDir = firstNonEmpty(strings.TrimSpace(a.defaultWorkspaceCloneParent(ws)), rootPath)
+	}
 
 	card := newMarkdownBodyCard("从仓库创建工作区", "orange")
 	body := menuCardBody("workspace.clone",
 		"当前工作区: `"+workspaceID+"`\n"+
-			"目标父目录: `"+parentDir+"`\n\n"+
-			"填写 Git 地址；可选填写 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。",
+			"已选父目录: `"+firstNonEmpty(parentDir, "-")+"`\n"+
+			"浏览根目录: `"+firstNonEmpty(rootPath, "-")+"`\n\n"+
+			"可以先选父目录，再填写 Git 地址和可选 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。",
 	)
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 
@@ -186,6 +205,12 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 	}
 	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
 		{
+			Text:  "选父目录",
+			Type:  "default",
+			Name:  "workspace_clone_pickdir",
+			Value: map[string]any{"action": "workspace.clone.pickdir", "request_id": requestID},
+		},
+		{
 			Text:  "确认",
 			Type:  "primary",
 			Name:  "workspace_clone_submit",
@@ -198,13 +223,15 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
 		},
 	})
-	for _, row := range buttonRows {
+	for idx, row := range buttonRows {
 		columns := row["columns"].([]map[string]any)
 		if len(columns) == 0 {
 			continue
 		}
 		button := columns[0]["elements"].([]map[string]any)[0]
-		button["form_action_type"] = "submit"
+		if idx < 2 {
+			button["form_action_type"] = "submit"
+		}
 	}
 	form := map[string]any{
 		"tag":                "form",
@@ -348,46 +375,72 @@ func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
 	return "."
 }
 
-func (a *App) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, explicitID string) error {
-	if msg == nil {
-		return nil
-	}
+func (a *App) cloneWorkspaceInParent(sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string) (string, string, error) {
 	repoName, err := workspaceCloneRepoName(repoURL)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	workspaceID := strings.TrimSpace(explicitID)
 	if workspaceID == "" {
 		workspaceID = workspaceCloneDefaultID(repoName)
 		if workspaceID == "" {
-			return fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
+			return "", "", fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
 		}
 	}
 	if config.FindWorkspace(a.cfg, workspaceID) != nil {
-		return fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
+		return "", "", fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
 	}
-
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	parentDir = strings.TrimSpace(parentDir)
+	if parentDir == "" {
+		return "", "", fmt.Errorf("请先选择父目录")
+	}
 	targetName := repoName
 	if strings.TrimSpace(explicitID) != "" {
 		targetName = workspaceID
 	}
-	targetDir := filepath.Join(a.defaultWorkspaceCloneParent(ws), targetName)
+	targetDir := filepath.Join(parentDir, targetName)
 	if _, statErr := os.Stat(targetDir); statErr == nil {
-		return fmt.Errorf("目标目录已存在: %s", targetDir)
+		return "", "", fmt.Errorf("目标目录已存在: %s", targetDir)
 	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return statErr
+		return "", "", statErr
 	}
 	if err := os.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
-		return err
+		return "", "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	if err := workspaceGitClone(ctx, strings.TrimSpace(repoURL), targetDir); err != nil {
-		return err
+		return "", "", err
 	}
-	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, workspaceID, workspaceID, targetDir); err != nil {
-		return fmt.Errorf("仓库已拉取到 %q，但创建工作区失败: %w", targetDir, err)
+	if err := a.createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, workspaceID, workspaceID, targetDir); err != nil {
+		return "", "", fmt.Errorf("仓库已拉取到 %q，但创建工作区失败: %w", targetDir, err)
+	}
+	return workspaceID, targetDir, nil
+}
+
+func (a *App) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, explicitID string) error {
+	return a.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, explicitID, "")
+}
+
+func (a *App) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage, repoURL, explicitID, parentDir string) error {
+	if msg == nil {
+		return nil
+	}
+	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	if strings.TrimSpace(parentDir) == "" {
+		parentDir = a.defaultWorkspaceCloneParent(ws)
+	}
+	workspaceID, targetDir, err := a.cloneWorkspaceInParent(
+		sessionKey,
+		msg.UserID,
+		msg.ChatID,
+		msg.ChatType,
+		repoURL,
+		explicitID,
+		parentDir,
+	)
+	if err != nil {
+		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
