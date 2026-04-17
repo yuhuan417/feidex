@@ -290,7 +290,8 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "turn/interrupt", map[string]any{
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
+	if err := a.codex.Call(withCodexWorkspace(ctx, workspaceID), "turn/interrupt", map[string]any{
 		"threadId": sess.ActiveThreadID,
 		"turnId":   sess.ActiveTurnID,
 	}, nil); err != nil {
@@ -311,7 +312,8 @@ func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	return a.codex.Call(ctx, "turn/steer", map[string]any{
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
+	return a.codex.Call(withCodexWorkspace(ctx, workspaceID), "turn/steer", map[string]any{
 		"threadId":       sess.ActiveThreadID,
 		"expectedTurnId": sess.ActiveTurnID,
 		"input": []map[string]any{

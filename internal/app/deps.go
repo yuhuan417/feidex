@@ -53,10 +53,11 @@ type releaseClient interface {
 }
 
 var (
-	newCodexClient   = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
-	newFeishuClient  = func(cfg config.FeishuConfig) feishuClient { return feishu.New(cfg) }
-	newDaemonManager = daemon.NewManager
-	newReleaseClient = func() releaseClient {
+	newCodexClient    = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
+	newAppCodexClient = func(cfg *config.Config) codexClient { return newWorkspaceCodexPool(cfg, newCodexClient) }
+	newFeishuClient   = func(cfg config.FeishuConfig) feishuClient { return feishu.New(cfg) }
+	newDaemonManager  = daemon.NewManager
+	newReleaseClient  = func() releaseClient {
 		return release.NewGitHubClient(release.DefaultRepoOwner, release.DefaultRepoName, nil)
 	}
 	startDaemonUpgrade = daemon.StartBackgroundUpgrade

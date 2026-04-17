@@ -477,16 +477,16 @@ func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID str
 }
 
 func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
-	origCodex := newCodexClient
+	origCodex := newAppCodexClient
 	origFeishu := newFeishuClient
 	defer func() {
-		newCodexClient = origCodex
+		newAppCodexClient = origCodex
 		newFeishuClient = origFeishu
 	}()
 
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
-	newCodexClient = func(config.CodexConfig) codexClient { return fc }
+	newAppCodexClient = func(*config.Config) codexClient { return fc }
 	newFeishuClient = func(config.FeishuConfig) feishuClient { return ff }
 
 	cfg := config.Default()
@@ -496,7 +496,7 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	notifier, ok := app.feishu.(*notifyingFeishuClient)
-	if app.codex != fc || !ok || notifier.base != ff {
+	if app.codex != fc || app.codexPool != nil || !ok || notifier.base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
 	if fc.onNotification == nil || fc.onRequest == nil {

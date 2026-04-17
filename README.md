@@ -132,6 +132,8 @@ quiet = "verbose"
 [codex]
 command = "codex"
 transport = "stdio"
+# app_server_dir = "/srv/shared-codex-dir"
+# app_server_idle_ttl = "15m"
 experimental_api = true
 service_name = "feidex"
 
@@ -142,6 +144,7 @@ service_name = "feidex"
 id = "default"
 name = "Default"
 cwd = "."
+# app_server_dir = "."
 model = "gpt-5.4"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
@@ -229,6 +232,12 @@ Feidex 会把这些状态写进去：
   - 当前建议保持 `true`
 - `service_name`
   - 提交到 Codex 的 service name
+- `app_server_dir`
+  - `transport=stdio` 时，启动 `codex app-server` 的工作目录
+  - workspace 未显式配置时，会作为所有 workspace 的默认启动目录
+- `app_server_idle_ttl`
+  - `transport=stdio` 时，空闲 app-server 进程的回收时间
+  - 默认 `15m`，设为 `0` 可关闭空闲回收
 - `model`
   - 全局模型
 - `reasoning_effort`
@@ -245,9 +254,19 @@ Feidex 会把这些状态写进去：
 支持多个 workspace，每个 workspace 可以有自己独立的：
 
 - `cwd`
+- `app_server_dir`
 - `model`
 - `approval_policy`
 - `sandbox_mode`
+
+说明：
+
+- `transport=stdio` 时，Feidex 会按 workspace 懒启动独立的 `codex app-server`
+- workspace 的启动目录优先级是：
+  - `workspace.app_server_dir`
+  - `codex.app_server_dir`
+  - `workspace.cwd`
+- 空闲超过 `codex.app_server_idle_ttl` 的 workspace app-server 会被回收；下次访问同 workspace 时会自动重新拉起
 
 ## 消息与会话语义
 

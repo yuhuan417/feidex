@@ -13,6 +13,7 @@ import (
 
 const attachmentRetention = 7 * 24 * time.Hour
 const artifactRetention = 3 * 24 * time.Hour
+const codexAppServerGCInterval = time.Minute
 
 func (a *App) expirePendingRequestsOnStartup() {
 	appState := a.appState()
@@ -118,6 +119,63 @@ func (a *App) startMarkdownPreviewGCLoop(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (a *App) startCodexAppServerGCLoop(ctx context.Context) {
+	if a == nil || a.codexPool == nil {
+		return
+	}
+	ttl, err := time.ParseDuration(strings.TrimSpace(a.cfg.Codex.AppServerIdleTTL))
+	if err != nil || ttl <= 0 {
+		return
+	}
+	go a.runCodexAppServerGC("startup", ttl)
+	go func() {
+		ticker := time.NewTicker(codexAppServerGCInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				a.runCodexAppServerGC("ticker", ttl)
+			}
+		}
+	}()
+}
+
+func (a *App) runCodexAppServerGC(source string, ttl time.Duration) {
+	if a == nil || a.codexPool == nil || ttl <= 0 {
+		return
+	}
+	closed := a.codexPool.CloseIdleClients(time.Now(), ttl, a.busyCodexWorkspaceIDs())
+	if closed == 0 {
+		return
+	}
+	slog.Debug("codex app-server gc complete",
+		"source", source,
+		"closed_client_count", closed,
+		"idle_ttl", ttl.String(),
+	)
+}
+
+func (a *App) busyCodexWorkspaceIDs() map[string]struct{} {
+	busy := map[string]struct{}{}
+	if a == nil || a.store == nil {
+		return busy
+	}
+	appState := a.appState()
+	for _, sess := range appState.sessions() {
+		if sess == nil || !sessionHasActiveWork(sess) {
+			continue
+		}
+		workspaceID := strings.TrimSpace(firstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID))
+		if workspaceID == "" {
+			workspaceID = a.defaultWorkspaceID()
+		}
+		busy[workspaceID] = struct{}{}
+	}
+	return busy
 }
 
 func (a *App) runMarkdownPreviewGC(source string) {

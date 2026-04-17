@@ -41,14 +41,16 @@ type FeishuConfig struct {
 }
 
 type CodexConfig struct {
-	Command         string `toml:"command"`
-	Transport       string `toml:"transport"`
-	WSURL           string `toml:"ws_url"`
-	WSBearerToken   string `toml:"ws_bearer_token"`
-	ExperimentalAPI bool   `toml:"experimental_api"`
-	ServiceName     string `toml:"service_name"`
-	Model           string `toml:"model"`
-	ReasoningEffort string `toml:"reasoning_effort"`
+	Command          string `toml:"command"`
+	Transport        string `toml:"transport"`
+	WSURL            string `toml:"ws_url"`
+	WSBearerToken    string `toml:"ws_bearer_token"`
+	ExperimentalAPI  bool   `toml:"experimental_api"`
+	ServiceName      string `toml:"service_name"`
+	AppServerDir     string `toml:"app_server_dir"`
+	AppServerIdleTTL string `toml:"app_server_idle_ttl"`
+	Model            string `toml:"model"`
+	ReasoningEffort  string `toml:"reasoning_effort"`
 }
 
 type DaemonConfig struct {
@@ -59,6 +61,7 @@ type Workspace struct {
 	ID             string `toml:"id"`
 	Name           string `toml:"name"`
 	Cwd            string `toml:"cwd"`
+	AppServerDir   string `toml:"app_server_dir"`
 	Model          string `toml:"model"`
 	ApprovalPolicy string `toml:"approval_policy"`
 	SandboxMode    string `toml:"sandbox_mode"`
@@ -77,10 +80,11 @@ func Default() *Config {
 			Quiet:         QuietModeVerbose,
 		},
 		Codex: CodexConfig{
-			Command:         "codex",
-			Transport:       "stdio",
-			ExperimentalAPI: true,
-			ServiceName:     "feidex",
+			Command:          "codex",
+			Transport:        "stdio",
+			ExperimentalAPI:  true,
+			ServiceName:      "feidex",
+			AppServerIdleTTL: "15m",
 		},
 		Daemon: DaemonConfig{
 			ServiceName: "feidex",
@@ -119,6 +123,17 @@ func (c *Config) Normalize(baseDir string) error {
 	c.Codex.ServiceName = strings.TrimSpace(c.Codex.ServiceName)
 	if c.Codex.ServiceName == "" {
 		c.Codex.ServiceName = "feidex"
+	}
+	c.Codex.AppServerDir = strings.TrimSpace(c.Codex.AppServerDir)
+	if c.Codex.AppServerDir != "" && !filepath.IsAbs(c.Codex.AppServerDir) {
+		c.Codex.AppServerDir = filepath.Clean(filepath.Join(baseDir, c.Codex.AppServerDir))
+	}
+	c.Codex.AppServerIdleTTL = strings.TrimSpace(c.Codex.AppServerIdleTTL)
+	if c.Codex.AppServerIdleTTL == "" {
+		c.Codex.AppServerIdleTTL = "15m"
+	}
+	if _, err := time.ParseDuration(c.Codex.AppServerIdleTTL); err != nil {
+		return fmt.Errorf("invalid codex.app_server_idle_ttl %q: %w", c.Codex.AppServerIdleTTL, err)
 	}
 	c.Daemon.ServiceName = strings.TrimSpace(c.Daemon.ServiceName)
 	if c.Daemon.ServiceName == "" {
@@ -163,6 +178,10 @@ func (c *Config) Normalize(baseDir string) error {
 		}
 		if !filepath.IsAbs(ws.Cwd) {
 			ws.Cwd = filepath.Clean(filepath.Join(baseDir, ws.Cwd))
+		}
+		ws.AppServerDir = strings.TrimSpace(ws.AppServerDir)
+		if ws.AppServerDir != "" && !filepath.IsAbs(ws.AppServerDir) {
+			ws.AppServerDir = filepath.Clean(filepath.Join(baseDir, ws.AppServerDir))
 		}
 		if ws.ApprovalPolicy == "" {
 			ws.ApprovalPolicy = "on-request"

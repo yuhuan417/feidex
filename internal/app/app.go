@@ -18,13 +18,14 @@ import (
 )
 
 type App struct {
-	cfg     *config.Config
-	cfgPath string
-	store   *state.Store
-	codex   codexClient
-	feishu  feishuClient
-	started time.Time
-	deduper *inboundDeduper
+	cfg       *config.Config
+	cfgPath   string
+	store     *state.Store
+	codex     codexClient
+	codexPool *workspaceCodexPool
+	feishu    feishuClient
+	started   time.Time
+	deduper   *inboundDeduper
 
 	turnStreamsMu sync.Mutex
 	turnStreams   map[string]*turnStream
@@ -57,7 +58,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	codexClient := newCodexClient(cfg.Codex)
+	codexClient := newAppCodexClient(cfg)
 	feishuClient := wrapFeishuClient(newFeishuClient(cfg.Feishu))
 	app := &App{
 		cfg:          cfg,
@@ -75,6 +76,9 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		threadUsage:  map[string]codexrpc.ThreadTokenUsage{},
 		pendingSkills: map[string]state.SubmissionSkill{},
 	}
+	if pool, ok := codexClient.(*workspaceCodexPool); ok {
+		app.codexPool = pool
+	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
 	app.feishu.ConfigureMarkdownPreview("", "")
@@ -90,6 +94,7 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.feishu.Start(ctx); err != nil {
 		return err
 	}
+	a.startCodexAppServerGCLoop(ctx)
 	a.startMarkdownPreviewGCLoop(ctx)
 	go a.sendStartupReadyNotifications()
 	return nil
@@ -251,7 +256,7 @@ func firstNonEmpty(values ...string) string {
 }
 
 func (a *App) defaultWorkspaceID() string {
-	if len(a.cfg.Workspaces) == 0 {
+	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
 		return "default"
 	}
 	return a.cfg.Workspaces[0].ID

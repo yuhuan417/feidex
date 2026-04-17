@@ -216,6 +216,9 @@ func (c *Client) readLoop() {
 
 func (c *Client) startStdio(ctx context.Context) error {
 	c.cmd = exec.CommandContext(ctx, c.cfg.Command, "app-server")
+	if dir := strings.TrimSpace(c.cfg.AppServerDir); dir != "" {
+		c.cmd.Dir = dir
+	}
 	stdin, err := c.cmd.StdinPipe()
 	if err != nil {
 		return err

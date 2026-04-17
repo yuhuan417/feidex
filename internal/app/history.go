@@ -225,8 +225,9 @@ func (a *App) fetchCurrentThreadHistory(sessionKey string) (*state.Session, *cod
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
 	var result codexrpc.ThreadReadResult
-	if err := a.codex.Call(ctx, "thread/read", map[string]any{
+	if err := a.codex.Call(withCodexWorkspace(ctx, workspaceID), "thread/read", map[string]any{
 		"threadId":     strings.TrimSpace(sess.ActiveThreadID),
 		"includeTurns": true,
 	}, &result); err != nil {

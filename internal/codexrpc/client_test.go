@@ -287,6 +287,48 @@ done
 	}
 }
 
+func TestStartStdioUsesConfiguredAppServerDir(t *testing.T) {
+	dir := t.TempDir()
+	workDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(workDir) error = %v", err)
+	}
+	cwdPath := filepath.Join(dir, "cwd.log")
+	scriptPath := filepath.Join(dir, "codex-rpc.sh")
+	script := fmt.Sprintf(`#!/bin/sh
+pwd > %q
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '%%s\n' '{"id":1,"result":{"userAgent":"ua","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+    *'"method":"initialized"'*)
+      exit 0
+      ;;
+  esac
+done
+`, cwdPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	client := New(config.CodexConfig{
+		Command:      scriptPath,
+		AppServerDir: workDir,
+	})
+	if err := client.Start(context.Background(), true); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	cwdBytes, err := os.ReadFile(cwdPath)
+	if err != nil {
+		t.Fatalf("ReadFile(cwdPath) error = %v", err)
+	}
+	if got := strings.TrimSpace(string(cwdBytes)); got != workDir {
+		t.Fatalf("app-server cwd = %q, want %q", got, workDir)
+	}
+}
+
 func TestStartWebSocketInitializesClientAndUsesBearerToken(t *testing.T) {
 	origDial := websocketDial
 	defer func() { websocketDial = origDial }()

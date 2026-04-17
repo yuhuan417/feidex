@@ -29,6 +29,7 @@ func (a *App) listWorkspaceThreads(sessionKey string, ws *config.Workspace, incl
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	ctx = withCodexWorkspace(ctx, ws.ID)
 
 	queries := []map[string]any{
 		{
@@ -135,7 +136,7 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "thread/resume", params, &result); err != nil {
+	if err := a.codex.Call(withCodexWorkspace(ctx, ws.ID), "thread/resume", params, &result); err != nil {
 		return nil, err
 	}
 	boundThreadID := firstNonEmpty(strings.TrimSpace(result.Thread.ID), threadID)
@@ -172,7 +173,7 @@ func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *c
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "thread/start", threadParams, &result); err != nil {
+	if err := a.codex.Call(withCodexWorkspace(ctx, ws.ID), "thread/start", threadParams, &result); err != nil {
 		return nil, err
 	}
 	threadID := strings.TrimSpace(result.Thread.ID)

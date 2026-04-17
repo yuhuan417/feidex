@@ -70,7 +70,7 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "thread/fork", params, &result); err != nil {
+	if err := a.codex.Call(withCodexWorkspace(ctx, workspaceID), "thread/fork", params, &result); err != nil {
 		return 0, err
 	}
 	newThreadID := strings.TrimSpace(result.Thread.ID)
