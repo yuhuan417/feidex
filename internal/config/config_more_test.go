@@ -165,6 +165,47 @@ func TestLoadMissingFileAndSaveNilConfig(t *testing.T) {
 	}
 }
 
+func TestLoadLegacyConfigWithoutDaemonSectionKeepsDefaultDaemonServiceName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := strings.Join([]string{
+		`data_dir = ".feidex-data"`,
+		``,
+		`[log]`,
+		`level = "info"`,
+		``,
+		`[feishu]`,
+		`app_id = "app-id"`,
+		`app_secret = "app-secret"`,
+		``,
+		`[codex]`,
+		`command = "codex"`,
+		`transport = "stdio"`,
+		``,
+		`[[workspace]]`,
+		`id = "default"`,
+		`name = "Default"`,
+		`cwd = "."`,
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(legacy config without daemon section) error = %v", err)
+	}
+	if cfg.Daemon.ServiceName != "feidex" {
+		t.Fatalf("Daemon.ServiceName = %q, want default feidex", cfg.Daemon.ServiceName)
+	}
+	if cfg.Codex.ServiceName != "feidex" {
+		t.Fatalf("Codex.ServiceName = %q, want default feidex", cfg.Codex.ServiceName)
+	}
+	if len(cfg.Workspaces) != 1 || cfg.Workspaces[0].ID != "default" {
+		t.Fatalf("Workspaces = %+v, want preserved legacy workspace", cfg.Workspaces)
+	}
+}
+
 func TestQuietModeValidationAndConfigFallback(t *testing.T) {
 	if got, err := NormalizeQuietMode(""); err != nil || got != QuietModeVerbose {
 		t.Fatalf("NormalizeQuietMode(empty) = %q, %v", got, err)
