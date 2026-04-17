@@ -21,6 +21,7 @@ var menuNodes = map[string]menuNode{
 	"menu.skills":            {Label: "技能列表", Parent: "menu.tools"},
 	"history.detail":         {Label: "Turn 详情", Parent: "menu.history"},
 	"workspace.new":          {Label: "新建工作区", Parent: "menu.workspace"},
+	"workspace.clone":        {Label: "从仓库创建", Parent: "menu.workspace"},
 	"workspace.sandbox.menu": {Label: "默认沙箱", Parent: "menu.workspace"},
 	"workspace.policy.menu":  {Label: "默认策略", Parent: "menu.workspace"},
 	"thread.sandbox.menu":    {Label: "线程沙箱", Parent: "menu.thread"},

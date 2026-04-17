@@ -140,7 +140,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 		a.resumeSubmissionAfterRequest(pending)
 	}
-	if pending.Kind == "workspace_new" {
+	if pending.Kind == "workspace_new" || pending.Kind == "workspace_clone" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},
 			Card:  rawCard(a.renderWorkspaceMenuCard(pending.SessionKey)),

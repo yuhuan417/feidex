@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -54,6 +55,32 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 
 func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return a.completeMenuCommand(action, sessionKey, "/workspace new", "menu.workspace")
+}
+
+func (a *App) completeWorkspaceClone(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
+	requestID, err := appState.nextLocalID("workspace")
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	payload := workspaceClonePayload{}
+	if err := appState.savePending(&state.PendingRequest{
+		ID:          requestID,
+		Kind:        "workspace_clone",
+		SessionKey:  sessionKey,
+		OwnerUserID: action.UserID,
+		FeishuMsgID: strings.TrimSpace(action.MessageID),
+		PayloadJSON: mustJSON(payload),
+		Status:      "pending",
+		CreatedAt:   time.Now().Unix(),
+		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "请填写 git 地址"},
+		Card:  rawCard(a.renderWorkspaceCloneCard(sessionKey, requestID, payload)),
+	}, nil
 }
 
 func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -134,6 +161,62 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已创建工作区"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("工作区已创建", "green", body, nil)),
+	}, nil
+}
+
+func (a *App) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := appState.pending(requestID)
+	if pending == nil || pending.Kind != "workspace_clone" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区克隆请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := mergeWorkspaceCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
+	if strings.TrimSpace(payload.RepoURL) == "" {
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "请填写 git 地址"},
+			Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+		}, nil
+	}
+	rawCommand := "/workspace clone " + strings.TrimSpace(payload.RepoURL)
+	if workspaceID := strings.TrimSpace(payload.DraftID); workspaceID != "" {
+		rawCommand += " " + workspaceID
+	}
+	text, card, err := a.runCommandFromCardAction(action, pending.SessionKey, rawCommand)
+	if err != nil {
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+		}, nil
+	}
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = "resolved"
+		req.PayloadJSON = mustJSON(payload)
+	})
+	if card != nil {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: firstNonEmpty(text, "已从仓库创建工作区")},
+			Card:  rawCard(card),
+		}, nil
+	}
+	buttons := []feishu.Button{
+		{
+			Text: "返回工作区管理",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.workspace",
+				"session_key": pending.SessionKey,
+			},
+		},
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: firstNonEmpty(text, "已从仓库创建工作区")},
+		Card:  rawCard(a.feishu.SimpleStatusCard("工作区已创建", "green", firstNonEmpty(text, "已从仓库创建并切换工作区。"), buttons)),
 	}, nil
 }
 

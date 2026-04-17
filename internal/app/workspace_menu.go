@@ -101,7 +101,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 		body += "\n默认 sandbox: `" + currentWS.SandboxMode + "`"
 		body += "\n默认 policy: `" + currentWS.ApprovalPolicy + "`"
 	}
-	buttons := make([]feishu.Button, 0, 4)
+	buttons := make([]feishu.Button, 0, 5)
 	selectOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
 	for _, ws := range a.cfg.Workspaces {
 		label := ws.ID
@@ -119,6 +119,14 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.new",
+				"session_key": sessionKey,
+			},
+		},
+		feishu.Button{
+			Text: submenuCommandLabel("从仓库创建", "/workspace clone"),
+			Type: "default",
+			Value: map[string]any{
+				"action":      "workspace.clone",
 				"session_key": sessionKey,
 			},
 		},

@@ -1009,7 +1009,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 	if sess := a.store.GetSession(a.makeSessionKey(msg)); sess == nil || sess.WorkspaceID != "repo" || sess.ActiveThreadID != "thread-clone" || sess.ActiveThreadWorkspaceID != "repo" {
 		t.Fatalf("session after clone = %+v", sess)
 	}
-	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "已 clone 仓库并切换到工作区 repo") || !strings.Contains(ff.replyTexts[0], wantTargetDir) {
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "已从仓库创建并切换到工作区 repo") || !strings.Contains(ff.replyTexts[0], wantTargetDir) {
 		t.Fatalf("workspace clone replyTexts = %+v", ff.replyTexts)
 	}
 }
@@ -1214,6 +1214,9 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeWorkspaceNew(action, action.ActionValue["session_key"].(string))
 		},
+		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeWorkspaceClone(action, action.ActionValue["session_key"].(string))
+		},
 		"workspace.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
@@ -1245,7 +1248,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -1264,6 +1267,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	workspaceCard := a.renderWorkspaceMenuCard(sessionKey)
 	workspaceActions := cardButtonsForTest(workspaceCard)
 	foundBackToMenu := false
+	foundClone := false
 	for _, action := range workspaceActions {
 		value, _ := action["value"].(map[string]any)
 		if len(value) == 0 {
@@ -1275,9 +1279,15 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		if value["action"] == "menu.root" {
 			foundBackToMenu = true
 		}
+		if value["action"] == "workspace.clone" {
+			foundClone = true
+		}
 	}
 	if !foundBackToMenu {
 		t.Fatalf("workspace menu missing back button: %+v", workspaceActions)
+	}
+	if !foundClone {
+		t.Fatalf("workspace menu missing clone button: %+v", workspaceActions)
 	}
 
 	sandboxCard, err := a.renderWorkspaceSandboxMenuCard(sessionKey)

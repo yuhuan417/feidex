@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -263,6 +265,86 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 	}
 	if ws := config.FindWorkspace(a.cfg, "repo"); ws == nil || filepath.Clean(ws.Cwd) != filepath.Clean(target) {
 		t.Fatalf("created workspace = %+v, want cwd %q", ws, target)
+	}
+}
+
+func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+
+	var gotRepoURL string
+	var gotTargetDir string
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string) error {
+		gotRepoURL = repoURL
+		gotTargetDir = targetDir
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-clone"
+			result.Thread.Name = "Clone Thread"
+			result.Thread.Preview = "Clone Preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-1",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-1) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
+		FormValue: map[string]any{
+			"repo_url":     "git@github.com:example/repo.git",
+			"workspace_id": "repo-copy",
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	}
+	wantTargetDir := filepath.Join(baseDir, "repo-copy")
+	if gotRepoURL != "git@github.com:example/repo.git" {
+		t.Fatalf("workspaceGitClone repoURL = %q", gotRepoURL)
+	}
+	if gotTargetDir != wantTargetDir {
+		t.Fatalf("workspaceGitClone targetDir = %q, want %q", gotTargetDir, wantTargetDir)
+	}
+	if pending := a.store.PendingByID("workspace-clone-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after clone submit = %+v", pending)
+	}
+	if ws := config.FindWorkspace(a.cfg, "repo-copy"); ws == nil || filepath.Clean(ws.Cwd) != filepath.Clean(wantTargetDir) {
+		t.Fatalf("created workspace = %+v, want cwd %q", ws, wantTargetDir)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "已从仓库创建并切换到工作区 repo-copy") || !strings.Contains(body, wantTargetDir) {
+		t.Fatalf("clone status card body = %q", body)
 	}
 }
 

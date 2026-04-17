@@ -204,6 +204,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "model.config.select_effort", "session_key": "sess-1"}, Option: "high", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.interrupt", "session_key": "sess-1", "turn_id": "turn-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.new", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "workspace.clone", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.sandbox.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.policy.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.sandbox.set", "session_key": "sess-1", "workspace_id": "default", "sandbox_mode": "read-only"}, UserID: "user-1", ChatID: "chat-1"},

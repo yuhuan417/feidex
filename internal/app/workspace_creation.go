@@ -40,8 +40,21 @@ type workspaceNewPayload struct {
 	Picker      *pathPickerPayload `json:"picker,omitempty"`
 }
 
+type workspaceClonePayload struct {
+	RepoURL string `json:"repo_url,omitempty"`
+	DraftID string `json:"draft_id,omitempty"`
+}
+
 func workspaceNewPayloadFromPending(pending *state.PendingRequest) workspaceNewPayload {
 	var payload workspaceNewPayload
+	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	}
+	return payload
+}
+
+func workspaceClonePayloadFromPending(pending *state.PendingRequest) workspaceClonePayload {
+	var payload workspaceClonePayload
 	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
 		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
 	}
@@ -133,6 +146,81 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 	return card
 }
 
+func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload workspaceClonePayload) map[string]any {
+	var sess *state.Session
+	if a.store != nil {
+		sess = a.appState().session(sessionKey)
+	}
+	workspaceID := a.defaultWorkspaceID()
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
+	}
+	ws := config.FindWorkspace(a.cfg, workspaceID)
+	parentDir := a.defaultWorkspaceCloneParent(ws)
+
+	card := newMarkdownBodyCard("从仓库创建工作区", "orange")
+	body := menuCardBody("workspace.clone",
+		"当前工作区: `"+workspaceID+"`\n"+
+			"目标父目录: `"+parentDir+"`\n\n"+
+			"填写 Git 地址；可选填写 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。",
+	)
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
+
+	repoURLInput := map[string]any{
+		"tag":         "input",
+		"name":        "repo_url",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "git 地址，例如 https://github.com/org/repo.git"},
+	}
+	if value := strings.TrimSpace(payload.RepoURL); value != "" {
+		repoURLInput["default_value"] = value
+	}
+	workspaceIDInput := map[string]any{
+		"tag":         "input",
+		"name":        "workspace_id",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "workspace_id（可选）"},
+	}
+	if value := strings.TrimSpace(payload.DraftID); value != "" {
+		workspaceIDInput["default_value"] = value
+	}
+	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
+		{
+			Text:  "确认",
+			Type:  "primary",
+			Name:  "workspace_clone_submit",
+			Value: map[string]any{"action": "workspace.clone.submit", "request_id": requestID},
+		},
+		{
+			Text:  "取消",
+			Type:  "default",
+			Name:  "workspace_clone_cancel",
+			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
+		},
+	})
+	for _, row := range buttonRows {
+		columns := row["columns"].([]map[string]any)
+		if len(columns) == 0 {
+			continue
+		}
+		button := columns[0]["elements"].([]map[string]any)[0]
+		button["form_action_type"] = "submit"
+	}
+	form := map[string]any{
+		"tag":                "form",
+		"name":               "workspace_clone_form",
+		"direction":          "vertical",
+		"horizontal_spacing": "8px",
+		"vertical_spacing":   "8px",
+		"elements": append([]map[string]any{
+			repoURLInput,
+			workspaceIDInput,
+		}, buttonRows...),
+	}
+	appendMarkdownBodyCardElement(card, form)
+	return card
+}
+
 func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
 	appState := a.appState()
 	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
@@ -189,6 +277,16 @@ func mergeWorkspaceNewFormValues(payload workspaceNewPayload, values map[string]
 	}
 	if value, ok := formValueString(values, "workspace_name"); ok {
 		payload.DraftName = value
+	}
+	return payload
+}
+
+func mergeWorkspaceCloneFormValues(payload workspaceClonePayload, values map[string]any) workspaceClonePayload {
+	if value, ok := formValueString(values, "repo_url"); ok {
+		payload.RepoURL = value
+	}
+	if value, ok := formValueString(values, "workspace_id"); ok {
+		payload.DraftID = value
 	}
 	return payload
 }
@@ -289,9 +387,9 @@ func (a *App) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, expli
 		return err
 	}
 	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, workspaceID, workspaceID, targetDir); err != nil {
-		return fmt.Errorf("仓库已 clone 到 %q，但创建工作区失败: %w", targetDir, err)
+		return fmt.Errorf("仓库已拉取到 %q，但创建工作区失败: %w", targetDir, err)
 	}
-	reply := "已 clone 仓库并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
+	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 }
 

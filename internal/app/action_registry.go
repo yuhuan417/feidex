@@ -126,6 +126,12 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"workspace.new": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceNew(action, actionSessionKey(action))
 	},
+	"workspace.clone": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceClone(action, actionSessionKey(action))
+	},
+	"workspace.clone.submit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceCloneSubmit(action)
+	},
 	"workspace.new.pickdir": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceNewPickDir(action)
 	},
