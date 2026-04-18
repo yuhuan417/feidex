@@ -14,7 +14,7 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	if err := a.codexUpgradeBlocksCommand(raw); err != nil {
+	if err := a.codexMaintenanceBlocksCommand(raw); err != nil {
 		return err
 	}
 	spec := findLocalCommandSpec(fields[0])

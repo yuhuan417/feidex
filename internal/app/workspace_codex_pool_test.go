@@ -217,3 +217,24 @@ func TestWorkspaceCodexPoolRebindsThreadAfterIdleRecycle(t *testing.T) {
 		t.Fatalf("recycled client calls = %+v, want thread/resume then thread/read", got)
 	}
 }
+
+func TestWorkspaceCodexPoolCloseClearsRoutes(t *testing.T) {
+	root := t.TempDir()
+	cfg := config.Default()
+	cfg.Codex.Transport = "stdio"
+	cfg.Workspaces = []config.Workspace{{ID: "ws1", Cwd: filepath.Join(root, "ws1")}}
+
+	client := &fakeCodexClient{}
+	pool := newWorkspaceCodexPool(cfg, func(config.CodexConfig) codexClient { return client })
+	if err := pool.Start(context.Background(), true); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	pool.recordThreadRoute("ws1", "thread-ws1")
+	pool.recordRequest("ws1", codexrpc.RequestEnvelope{ID: json.RawMessage(`"req-1"`), Params: json.RawMessage(`{"threadId":"thread-ws1"}`)})
+	if err := pool.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if len(pool.threadClients) != 0 || len(pool.requestClients) != 0 || len(pool.clients) != 0 {
+		t.Fatalf("Close() should clear routes and clients, pool=%+v", pool)
+	}
+}

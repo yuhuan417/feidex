@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/codexinstall"
 	"feidex/internal/codexrpc"
@@ -115,13 +116,13 @@ func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(ff.replyCards))
 	}
-	if err := a.handleCommand(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在升级中") {
+	if err := a.handleCommand(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
 		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
 	router := newFeishuEventRouter(a)
 	err := router.processMessage(&feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "hello"})
-	if err == nil || !strings.Contains(err.Error(), "Codex 正在升级中") {
+	if err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
 		t.Fatalf("processMessage(non-local) error = %v, want maintenance block", err)
 	}
 }
@@ -254,5 +255,118 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
 	if !strings.Contains(body, "结果: `rolled_back`") {
 		t.Fatalf("rollback patched card body = %q", body)
+	}
+}
+
+func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	manager := &fakeCodexInstallManager{
+		probe: codexinstall.Probe{
+			Command:        "codex",
+			CommandPath:    "/usr/local/bin/codex",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newCodexInstallManager
+	origClient := newCodexClient
+	newCodexInstallManager = func(string) codexInstallManager { return manager }
+	newCodexClient = func(config config.CodexConfig) codexClient {
+		return &fakeCodexClient{
+			callHook: func(_ context.Context, method string, _ any, out any) error {
+				if method != "model/list" {
+					t.Fatalf("unexpected smoke method: %s", method)
+				}
+				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				return nil
+			},
+		}
+	}
+	defer func() {
+		newCodexInstallManager = origManager
+		newCodexClient = origClient
+	}()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandCodex(msg, []string{"restart"}); err != nil {
+		t.Fatalf("commandCodex(restart) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !a.codexRestartState().Running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !fc.closed {
+		t.Fatal("expected live runtime to be closed during restart")
+	}
+	snapshot := a.codexRestartState()
+	if snapshot.Running || snapshot.Result != "success" {
+		t.Fatalf("restart snapshot = %+v", snapshot)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected restart progress card patches")
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(body, "结果: `success`") {
+		t.Fatalf("restart final card body = %q", body)
+	}
+}
+
+func TestRunCodexRestartOperationFailureAfterClose(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	manager := &fakeCodexInstallManager{
+		probe: codexinstall.Probe{
+			Command:        "codex",
+			CommandPath:    "/usr/local/bin/codex",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newCodexInstallManager
+	origClient := newCodexClient
+	newCodexInstallManager = func(string) codexInstallManager { return manager }
+	newCodexClient = func(config config.CodexConfig) codexClient {
+		return &fakeCodexClient{
+			callHook: func(_ context.Context, method string, _ any, out any) error {
+				if method != "model/list" {
+					t.Fatalf("unexpected smoke method: %s", method)
+				}
+				return errString("restart-boom")
+			},
+		}
+	}
+	defer func() {
+		newCodexInstallManager = origManager
+		newCodexClient = origClient
+	}()
+
+	snapshot, err := a.beginCodexRestartOperation()
+	if err != nil {
+		t.Fatalf("beginCodexRestartOperation() error = %v", err)
+	}
+	if !snapshot.Running {
+		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
+	}
+	a.runCodexRestartOperation("msg-1", "sess-1")
+	if !fc.closed {
+		t.Fatal("restart should still close live runtime before smoke test")
+	}
+	state := a.codexRestartState()
+	if state.Running || state.Result != "failed" {
+		t.Fatalf("restart state = %+v", state)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected restart failure patches")
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(body, "结果: `failed`") {
+		t.Fatalf("restart failure card body = %q", body)
 	}
 }

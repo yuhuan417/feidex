@@ -94,7 +94,7 @@ func matchCodexCommand(fields []string) bool {
 	if len(fields) != 2 {
 		return false
 	}
-	return commandArgInSet(fields[1], "check", "upgrade")
+	return commandArgInSet(fields[1], "check", "upgrade", "restart")
 }
 
 func matchWorkspaceCommand(fields []string) bool {
@@ -391,6 +391,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/codex", Summary: "查看本机 Codex CLI 的安装与升级状态。"},
 				{Command: "/codex check", Summary: "检查 npm 官方最新稳定版。"},
 				{Command: "/codex upgrade", Summary: "准备升级到 npm 官方最新稳定版，并支持 smoke test 失败自动回滚。"},
+				{Command: "/codex restart", Summary: "在空闲态原地重启 Codex runtime，适合刷新新安装的 Skill。"},
 			},
 		},
 		{

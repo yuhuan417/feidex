@@ -43,6 +43,7 @@ type App struct {
 	pendingSkills     map[string]state.SubmissionSkill
 	codexUpgradeMu    sync.Mutex
 	codexUpgrade      codexUpgradeSnapshot
+	codexRestart      codexRestartSnapshot
 }
 
 type turnBinding struct {

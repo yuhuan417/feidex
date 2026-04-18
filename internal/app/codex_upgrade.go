@@ -18,7 +18,7 @@ import (
 
 const (
 	codexUpgradePendingKind  = "codex_npm_upgrade"
-	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade"
+	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade | /codex restart"
 )
 
 type codexUpgradePendingPayload struct {
@@ -30,11 +30,12 @@ type codexUpgradePendingPayload struct {
 }
 
 type codexUpgradeView struct {
-	Probe        codexinstall.Probe
+	Probe         codexinstall.Probe
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
 	Snapshot      codexUpgradeSnapshot
+	Restart       codexRestartSnapshot
 }
 
 func (a *App) commandCodex(msg *feishu.InboundMessage, args []string) error {
@@ -53,6 +54,8 @@ func (a *App) commandCodex(msg *feishu.InboundMessage, args []string) error {
 		case "upgrade":
 			includeLatest = true
 			prepareUpgrade = true
+		case "restart":
+			return a.startCodexRestartFromMessage(msg)
 		default:
 			return fmt.Errorf(codexUpgradeCommandUsage)
 		}
@@ -95,8 +98,9 @@ func (a *App) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (cod
 		Probe:      probe,
 		BusyReason: a.codexUpgradeRuntimeBusyReason(),
 		Snapshot:   a.codexUpgradeState(),
+		Restart:    a.codexRestartState(),
 	}
-	if includeLatest && probe.Supported && !view.Snapshot.Running {
+	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)
 		if latestErr != nil {
 			view.LatestError = latestErr.Error()
@@ -109,6 +113,7 @@ func (a *App) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (cod
 
 func (a *App) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
+	restart := view.Restart
 	lines := []string{
 		"command: `" + firstNonEmpty(view.Probe.Command, "codex") + "`",
 		"解析路径: `" + firstNonEmpty(view.Probe.CommandPath, "-") + "`",
@@ -153,18 +158,41 @@ func (a *App) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeV
 			lines = append(lines, "完成时间(本机时区): `"+formatCodexUpgradeTime(snapshot.UpdatedAt)+"`")
 		}
 	}
+	if restart.Running {
+		lines = append(lines,
+			"",
+			"当前重启状态: `"+codexRestartPhaseText(restart.Phase)+"`",
+			"重启进度: "+firstNonEmpty(restart.Message, "-"),
+		)
+		if !restart.StartedAt.IsZero() {
+			lines = append(lines, "重启开始时间(本机时区): `"+formatCodexUpgradeTime(restart.StartedAt)+"`")
+		}
+	} else if strings.TrimSpace(restart.Result) != "" {
+		lines = append(lines,
+			"",
+			"上次重启结果: `"+codexRestartResultText(restart.Result)+"`",
+			"重启摘要: "+firstNonEmpty(restart.Message, "-"),
+		)
+		if !restart.UpdatedAt.IsZero() {
+			lines = append(lines, "重启完成时间(本机时区): `"+formatCodexUpgradeTime(restart.UpdatedAt)+"`")
+		}
+	}
 
-	title := "Codex 升级"
+	title := "Codex 管理"
 	color := "blue"
 	switch {
-	case snapshot.Running:
+	case snapshot.Running || restart.Running:
 		color = "orange"
 	case strings.TrimSpace(snapshot.Result) == "success":
 		color = "green"
+	case strings.TrimSpace(restart.Result) == "success":
+		color = "green"
 	case strings.TrimSpace(snapshot.Result) != "":
 		color = "orange"
+	case strings.TrimSpace(restart.Result) != "":
+		color = "orange"
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running))
+	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
 }
 
 func (a *App) prepareCodexUpgradeCard(sessionKey, ownerUserID string, view codexUpgradeView) (map[string]any, string, error) {
@@ -253,7 +281,7 @@ func (a *App) renderCodexUpgradePreparingCard(sessionKey, body string) map[strin
 	if strings.TrimSpace(body) == "" {
 		body = "正在准备 Codex 升级信息，请稍候。\n\n这张卡片会自动刷新。"
 	}
-	return a.feishu.SimpleStatusCard("Codex 升级", "blue", menuCardBody("menu.codex_upgrade", body), nil)
+	return a.feishu.SimpleStatusCard("Codex 管理", "blue", menuCardBody("menu.codex_upgrade", body), nil)
 }
 
 func (a *App) renderCodexUpgradeFailedCard(sessionKey, errText string) map[string]any {
@@ -261,7 +289,7 @@ func (a *App) renderCodexUpgradeFailedCard(sessionKey, errText string) map[strin
 	if strings.TrimSpace(errText) != "" {
 		body += "\n\n错误: " + strings.TrimSpace(errText)
 	}
-	return a.feishu.SimpleStatusCard("Codex 升级", "orange", menuCardBody("menu.codex_upgrade", body), codexUpgradeStatusButtons(sessionKey, false))
+	return a.feishu.SimpleStatusCard("Codex 管理", "orange", menuCardBody("menu.codex_upgrade", body), codexUpgradeStatusButtons(sessionKey, false))
 }
 
 func (a *App) renderCodexUpgradeOperationCard(sessionKey string, snapshot codexUpgradeSnapshot) map[string]any {
@@ -329,6 +357,14 @@ func codexUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button 
 					"session_key": sessionKey,
 				},
 			},
+			feishu.Button{
+				Text: "原地重启 Runtime",
+				Type: "default",
+				Value: map[string]any{
+					"action":      "codex_restart.run",
+					"session_key": sessionKey,
+				},
+			},
 		)
 	}
 	buttons = append(buttons, feishu.Button{
@@ -351,8 +387,8 @@ func renderCodexInstallSource(probe codexinstall.Probe) string {
 
 func renderCodexUpgradeAvailability(view codexUpgradeView, latestChecked bool) string {
 	switch {
-	case view.Snapshot.Running:
-		return "`升级中`"
+	case view.Snapshot.Running || view.Restart.Running:
+		return "`维护中`"
 	case !view.Probe.Supported:
 		return "`不支持自动升级`"
 	case strings.TrimSpace(view.BusyReason) != "":
@@ -374,7 +410,7 @@ func renderCodexUpgradeRuntimeLine(view codexUpgradeView) string {
 	if strings.TrimSpace(view.BusyReason) != "" {
 		return "`busy` (" + strings.TrimSpace(view.BusyReason) + ")"
 	}
-	if view.Snapshot.Running {
+	if view.Snapshot.Running || view.Restart.Running {
 		return "`maintenance`"
 	}
 	return "`idle`"
@@ -419,6 +455,34 @@ func codexUpgradeResultText(result string) string {
 	}
 }
 
+func codexRestartPhaseText(phase string) string {
+	switch strings.TrimSpace(phase) {
+	case "preflight":
+		return "preflight"
+	case "restarting":
+		return "restarting"
+	case "smoke_testing":
+		return "smoke_testing"
+	case "completed":
+		return "completed"
+	case "failed":
+		return "failed"
+	default:
+		return firstNonEmpty(strings.TrimSpace(phase), "-")
+	}
+}
+
+func codexRestartResultText(result string) string {
+	switch strings.TrimSpace(result) {
+	case "success":
+		return "success"
+	case "failed":
+		return "failed"
+	default:
+		return firstNonEmpty(strings.TrimSpace(result), "-")
+	}
+}
+
 func (a *App) completeMenuCodexUpgrade(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return a.completeCodexUpgradeAsyncAction(action, "/codex", "正在加载 Codex 状态", "正在读取本机 Codex 状态，请稍候。")
 }
@@ -433,6 +497,32 @@ func (a *App) completeCodexUpgradeCheck(action *feishu.CardAction) (*callback.Ca
 
 func (a *App) completeCodexUpgradePrepare(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return a.completeCodexUpgradeAsyncAction(action, "/codex upgrade", "正在准备升级确认", "正在准备升级确认，请稍候。")
+}
+
+func (a *App) completeCodexRestartRun(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	snapshot, err := a.beginCodexRestartOperation()
+	if err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		view, viewErr := a.loadCodexUpgradeView(ctx, false)
+		if viewErr == nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+				Card:  rawCard(a.renderCodexUpgradeStatusCard(sessionKey, view, false)),
+			}, nil
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(a.renderCodexUpgradeFailedCard(sessionKey, viewErr.Error())),
+		}, nil
+	}
+	messageID := strings.TrimSpace(action.MessageID)
+	go a.runCodexRestartOperation(messageID, sessionKey)
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "正在重启 Codex runtime"},
+		Card:  rawCard(a.renderCodexRestartOperationCard(sessionKey, snapshot)),
+	}, nil
 }
 
 func (a *App) completeCodexUpgradeAsyncAction(action *feishu.CardAction, rawCommand, toastText, preparingText string) (*callback.CardActionTriggerResponse, error) {
@@ -504,8 +594,17 @@ func (a *App) completeCodexUpgradeAction(action *feishu.CardAction, actionName s
 		LatestVersion:   payload.TargetVersion,
 	}
 	if !a.beginCodexUpgrade(snapshot) {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		view, err := a.loadCodexUpgradeView(ctx, false)
+		if err == nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: "Codex 正在维护中"},
+				Card:  rawCard(a.renderCodexUpgradeStatusCard(sessionKey, view, false)),
+			}, nil
+		}
 		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: "Codex 正在升级中"},
+			Toast: &callback.Toast{Type: "warning", Content: "Codex 正在维护中"},
 			Card:  rawCard(a.renderCodexUpgradeOperationCard(sessionKey, a.codexUpgradeState())),
 		}, nil
 	}
@@ -555,7 +654,7 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 			finalize("rollback_failed", "升级失败，自动回滚也失败。原始错误: "+cause.Error()+"；回滚错误: "+err.Error())
 			return
 		}
-		if err := a.codexUpgradeSmokeTest(ctx); err != nil {
+		if err := a.codexSmokeTest(ctx); err != nil {
 			finalize("rollback_failed", "升级失败，回滚后的 smoke test 也失败。原始错误: "+cause.Error()+"；回滚验证错误: "+err.Error())
 			return
 		}
@@ -600,7 +699,7 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 
 	update("smoke_testing", "正在验证新版本")
 	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	err = a.codexUpgradeSmokeTest(ctx)
+	err = a.codexSmokeTest(ctx)
 	cancel()
 	if err != nil {
 		rollback(previousVersion, err)
@@ -615,7 +714,7 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 	finalize("success", "升级成功，已切换到 `"+payload.TargetVersion+"`")
 }
 
-func (a *App) codexUpgradeSmokeTest(ctx context.Context) error {
+func (a *App) codexSmokeTest(ctx context.Context) error {
 	client := newCodexClient(a.cfg.Codex)
 	if client == nil {
 		return fmt.Errorf("codex client not initialized")
@@ -632,4 +731,125 @@ func (a *App) codexUpgradeSmokeTest(ctx context.Context) error {
 		return fmt.Errorf("model/list returned no visible models")
 	}
 	return nil
+}
+
+func (a *App) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
+	if msg == nil {
+		return nil
+	}
+	sessionKey := a.makeSessionKey(msg)
+	snapshot, err := a.beginCodexRestartOperation()
+	if err != nil {
+		return err
+	}
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, a.renderCodexRestartOperationCard(sessionKey, snapshot), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	if err != nil {
+		a.finishCodexRestart("failed", "启动重启卡片失败: "+err.Error())
+		return err
+	}
+	go a.runCodexRestartOperation(msgID, sessionKey)
+	return nil
+}
+
+func (a *App) beginCodexRestartOperation() (codexRestartSnapshot, error) {
+	if err := a.ensureCodexUpgradeReady(); err != nil {
+		return codexRestartSnapshot{}, err
+	}
+	snapshot := codexRestartSnapshot{
+		Running:        true,
+		Phase:          "preflight",
+		Message:        "正在校验重启前置条件",
+		CurrentVersion: firstNonEmpty(a.codexUpgradeState().CurrentVersion, a.codexRestartState().CurrentVersion),
+	}
+	if !a.beginCodexRestart(snapshot) {
+		return codexRestartSnapshot{}, errString("Codex 正在维护中，请稍后再试")
+	}
+	return a.codexRestartState(), nil
+}
+
+func (a *App) renderCodexRestartOperationCard(sessionKey string, snapshot codexRestartSnapshot) map[string]any {
+	lines := []string{
+		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
+		"阶段: `" + codexRestartPhaseText(snapshot.Phase) + "`",
+		"进度: " + firstNonEmpty(snapshot.Message, "-"),
+	}
+	if !snapshot.StartedAt.IsZero() {
+		lines = append(lines, "开始时间(本机时区): `"+formatCodexUpgradeTime(snapshot.StartedAt)+"`")
+	}
+	if !snapshot.UpdatedAt.IsZero() {
+		lines = append(lines, "最近更新(本机时区): `"+formatCodexUpgradeTime(snapshot.UpdatedAt)+"`")
+	}
+	title := "Codex Runtime 重启中"
+	color := "orange"
+	if !snapshot.Running {
+		switch snapshot.Result {
+		case "success":
+			title = "Codex Runtime 已重启"
+			color = "green"
+		default:
+			title = "Codex Runtime 重启失败"
+			color = "orange"
+		}
+		lines = append(lines, "结果: `"+codexRestartResultText(snapshot.Result)+"`")
+	}
+	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running))
+}
+
+func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
+	patch := func(snapshot codexRestartSnapshot) {
+		if strings.TrimSpace(messageID) == "" {
+			return
+		}
+		if err := a.feishu.PatchCard(context.Background(), messageID, a.renderCodexRestartOperationCard(sessionKey, snapshot)); err != nil {
+			slog.Warn("codex restart progress patch failed",
+				"message_id", messageID,
+				"phase", snapshot.Phase,
+				"error", err,
+			)
+		}
+	}
+	update := func(phase, message string) codexRestartSnapshot {
+		snapshot := a.updateCodexRestart(func(snapshot *codexRestartSnapshot) {
+			snapshot.Phase = phase
+			snapshot.Message = message
+		})
+		patch(snapshot)
+		return snapshot
+	}
+	finalize := func(result, message string) {
+		patch(a.finishCodexRestart(result, message))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	manager := newCodexInstallManager(a.cfg.Codex.Command)
+	probe, err := manager.Probe(ctx)
+	cancel()
+	if err != nil {
+		finalize("failed", "重启前检查失败: "+err.Error())
+		return
+	}
+	a.updateCodexRestart(func(snapshot *codexRestartSnapshot) {
+		snapshot.CurrentVersion = firstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
+	})
+	if reason := a.codexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+		finalize("failed", "重启前检查失败: "+reason)
+		return
+	}
+
+	update("restarting", "正在关闭当前 Codex runtime")
+	if a.codex != nil {
+		if err := a.codex.Close(); err != nil {
+			finalize("failed", "关闭当前 Codex runtime 失败: "+err.Error())
+			return
+		}
+	}
+	update("smoke_testing", "正在验证重启后的 runtime")
+	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+	err = a.codexSmokeTest(ctx)
+	cancel()
+	if err != nil {
+		finalize("failed", "Codex runtime 已关闭，但重启后的 smoke test 失败: "+err.Error())
+		return
+	}
+	finalize("success", "Codex runtime 已原地重启，后续任务会使用新进程")
 }

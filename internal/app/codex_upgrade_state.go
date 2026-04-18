@@ -18,6 +18,16 @@ type codexUpgradeSnapshot struct {
 	UpdatedAt       time.Time
 }
 
+type codexRestartSnapshot struct {
+	Running        bool
+	Phase          string
+	Result         string
+	Message        string
+	CurrentVersion string
+	StartedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 func (a *App) codexUpgradeState() codexUpgradeSnapshot {
 	if a == nil {
 		return codexUpgradeSnapshot{}
@@ -29,6 +39,28 @@ func (a *App) codexUpgradeState() codexUpgradeSnapshot {
 
 func (a *App) codexUpgradeActive() bool {
 	return a.codexUpgradeState().Running
+}
+
+func (a *App) codexRestartState() codexRestartSnapshot {
+	if a == nil {
+		return codexRestartSnapshot{}
+	}
+	a.codexUpgradeMu.Lock()
+	defer a.codexUpgradeMu.Unlock()
+	return a.codexRestart
+}
+
+func (a *App) codexRestartActive() bool {
+	return a.codexRestartState().Running
+}
+
+func (a *App) codexMaintenanceActive() bool {
+	if a == nil {
+		return false
+	}
+	a.codexUpgradeMu.Lock()
+	defer a.codexUpgradeMu.Unlock()
+	return a.codexUpgrade.Running || a.codexRestart.Running
 }
 
 func (a *App) beginCodexUpgrade(snapshot codexUpgradeSnapshot) bool {
@@ -47,10 +79,33 @@ func (a *App) beginCodexUpgrade(snapshot codexUpgradeSnapshot) bool {
 
 	a.codexUpgradeMu.Lock()
 	defer a.codexUpgradeMu.Unlock()
-	if a.codexUpgrade.Running {
+	if a.codexUpgrade.Running || a.codexRestart.Running {
 		return false
 	}
 	a.codexUpgrade = snapshot
+	return true
+}
+
+func (a *App) beginCodexRestart(snapshot codexRestartSnapshot) bool {
+	if a == nil {
+		return false
+	}
+	now := time.Now()
+	snapshot.Running = true
+	if snapshot.Phase == "" {
+		snapshot.Phase = "preflight"
+	}
+	if snapshot.StartedAt.IsZero() {
+		snapshot.StartedAt = now
+	}
+	snapshot.UpdatedAt = now
+
+	a.codexUpgradeMu.Lock()
+	defer a.codexUpgradeMu.Unlock()
+	if a.codexUpgrade.Running || a.codexRestart.Running {
+		return false
+	}
+	a.codexRestart = snapshot
 	return true
 }
 
@@ -63,6 +118,17 @@ func (a *App) updateCodexUpgrade(mutate func(*codexUpgradeSnapshot)) codexUpgrad
 	mutate(&a.codexUpgrade)
 	a.codexUpgrade.UpdatedAt = time.Now()
 	return a.codexUpgrade
+}
+
+func (a *App) updateCodexRestart(mutate func(*codexRestartSnapshot)) codexRestartSnapshot {
+	if a == nil {
+		return codexRestartSnapshot{}
+	}
+	a.codexUpgradeMu.Lock()
+	defer a.codexUpgradeMu.Unlock()
+	mutate(&a.codexRestart)
+	a.codexRestart.UpdatedAt = time.Now()
+	return a.codexRestart
 }
 
 func (a *App) finishCodexUpgrade(result, message string) codexUpgradeSnapshot {
@@ -91,6 +157,24 @@ func (a *App) finishCodexUpgrade(result, message string) codexUpgradeSnapshot {
 			if snapshot.Phase == "" {
 				snapshot.Phase = "failed"
 			}
+		}
+	})
+}
+
+func (a *App) finishCodexRestart(result, message string) codexRestartSnapshot {
+	return a.updateCodexRestart(func(snapshot *codexRestartSnapshot) {
+		snapshot.Running = false
+		if strings.TrimSpace(result) != "" {
+			snapshot.Result = strings.TrimSpace(result)
+		}
+		if strings.TrimSpace(message) != "" {
+			snapshot.Message = strings.TrimSpace(message)
+		}
+		switch snapshot.Result {
+		case "success":
+			snapshot.Phase = "completed"
+		default:
+			snapshot.Phase = "failed"
 		}
 	})
 }
@@ -132,8 +216,8 @@ func (a *App) ensureCodexUpgradeReady() error {
 	if a == nil {
 		return nil
 	}
-	if a.codexUpgradeActive() {
-		return errString("Codex 正在升级，请稍后再试")
+	if a.codexMaintenanceActive() {
+		return errString("Codex 正在维护中，请稍后再试")
 	}
 	if reason := a.codexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		return errString(reason)
@@ -141,7 +225,7 @@ func (a *App) ensureCodexUpgradeReady() error {
 	return nil
 }
 
-func (a *App) codexUpgradeAllowsCommand(raw string) bool {
+func (a *App) codexMaintenanceAllowsCommand(raw string) bool {
 	raw = strings.TrimSpace(raw)
 	switch {
 	case raw == "/help":
@@ -157,14 +241,14 @@ func (a *App) codexUpgradeAllowsCommand(raw string) bool {
 	}
 }
 
-func (a *App) codexUpgradeBlocksCommand(raw string) error {
-	if a == nil || !a.codexUpgradeActive() {
+func (a *App) codexMaintenanceBlocksCommand(raw string) error {
+	if a == nil || !a.codexMaintenanceActive() {
 		return nil
 	}
-	if a.codexUpgradeAllowsCommand(raw) {
+	if a.codexMaintenanceAllowsCommand(raw) {
 		return nil
 	}
-	return errString("Codex 正在升级中，当前只允许 `/codex`、`/status`、`/help`")
+	return errString("Codex 正在维护中，当前只允许 `/codex`、`/status`、`/help`")
 }
 
 type errString string

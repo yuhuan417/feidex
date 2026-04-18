@@ -100,6 +100,8 @@ func (p *workspaceCodexPool) Close() error {
 		entries = append(entries, entry)
 	}
 	p.clients = map[string]*workspaceCodexPoolClient{}
+	p.threadClients = map[string]string{}
+	p.requestClients = map[string]string{}
 	p.mu.Unlock()
 
 	var firstErr error

@@ -240,6 +240,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"codex_upgrade.prepare": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeCodexUpgradePrepare(action)
 	},
+	"codex_restart.run": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexRestartRun(action)
+	},
 	"codex_upgrade.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeCodexUpgradeAction(action, "codex_upgrade.confirm")
 	},
