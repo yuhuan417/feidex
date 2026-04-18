@@ -61,14 +61,20 @@ func TestLocalFileLinkHelpers(t *testing.T) {
 	if got := NewLarkDrivePreviewAPI(nil); got != nil {
 		t.Fatalf("NewLarkDrivePreviewAPI(nil) = %+v, want nil", got)
 	}
-	if got := formatPreviewLinkReplacement("./docs/guide.md:12", "https://drive.example/file-1", ""); got != "`docs/guide.md:12` [guide.md](https://drive.example/file-1)" {
+	if got := formatPreviewLinkReplacement("./docs/guide.md:12", "https://drive.example/file-1", ""); got != "[docs/guide.md:12](https://drive.example/file-1)" {
 		t.Fatalf("formatPreviewLinkReplacement() = %q", got)
 	}
-	if got := formatPreviewLinkReplacement("/repo/docs/guide.md:12", "https://drive.example/file-1", "/repo"); got != "`docs/guide.md:12` [guide.md](https://drive.example/file-1)" {
+	if got := formatPreviewLinkReplacement("/repo/docs/guide.md:12", "https://drive.example/file-1", "/repo"); got != "[docs/guide.md:12](https://drive.example/file-1)" {
 		t.Fatalf("formatPreviewLinkReplacement(abs workspace path) = %q", got)
 	}
-	if got := formatPreviewLinkReplacement("./cmd/main.go:9", "https://drive.example/file-2", ""); got != "`cmd/main.go:9` [main.go](https://drive.example/file-2)" {
+	if got := formatPreviewLinkReplacement("./cmd/main.go:9", "https://drive.example/file-2", ""); got != "[cmd/main.go:9](https://drive.example/file-2)" {
 		t.Fatalf("formatPreviewLinkReplacement(non-markdown) = %q", got)
+	}
+	if got := formatPreviewLinkReplacement("/repo/docs/guide.md#L12", "https://drive.example/file-3", "/repo"); got != "[docs/guide.md:12](https://drive.example/file-3)" {
+		t.Fatalf("formatPreviewLinkReplacement(line anchor) = %q", got)
+	}
+	if got := formatPreviewLinkReplacement("/repo/docs/guide.md#L12C3", "https://drive.example/file-4", "/repo"); got != "[docs/guide.md:12:3](https://drive.example/file-4)" {
+		t.Fatalf("formatPreviewLinkReplacement(line+column anchor) = %q", got)
 	}
 }
 

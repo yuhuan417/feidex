@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"feidex/internal/config"
@@ -43,5 +44,20 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	}
 	if body[0]["tag"] != "div" || body[1]["tag"] != "markdown" || body[2]["tag"] != "column_set" {
 		t.Fatalf("compact card layout = %#v, want div/markdown/column_set", body)
+	}
+}
+
+func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &state.Submission{WorkspaceID: "default"}
+
+	body := a.prepareReplyCardMarkdown(nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
+	if !strings.Contains(body, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)") {
+		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want preview link preserved", body)
+	}
+	if strings.Contains(body, "`internal/app/outbound_cards.go:117`") {
+		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want no duplicate local-path neutralization", body)
 	}
 }

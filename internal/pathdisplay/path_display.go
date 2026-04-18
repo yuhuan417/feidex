@@ -7,6 +7,7 @@ import (
 )
 
 var lineSuffixRe = regexp.MustCompile(`^(.*?)(?::\d+(?::\d+)?)?$`)
+var lineAnchorSuffixRe = regexp.MustCompile(`^(.*?)(?:#L(\d+)(?:C(\d+))?)$`)
 
 // RenderWorkspaceDisplayPath rewrites absolute in-workspace paths to
 // workspace-relative display paths while preserving optional :line[:col] suffixes.
@@ -36,6 +37,14 @@ func splitPathLineReference(path string) (base, suffix string) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return "", ""
+	}
+	if matched := lineAnchorSuffixRe.FindStringSubmatch(path); len(matched) == 4 {
+		base = strings.TrimSpace(matched[1])
+		suffix = ":" + matched[2]
+		if strings.TrimSpace(matched[3]) != "" {
+			suffix += ":" + matched[3]
+		}
+		return base, suffix
 	}
 	base = trimLineReferenceSuffix(path)
 	return base, strings.TrimPrefix(path, base)

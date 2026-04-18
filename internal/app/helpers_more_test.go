@@ -521,6 +521,12 @@ func TestAttachmentHelpers(t *testing.T) {
 	if got := renderWorkspaceDisplayPath(linked+":12", workspace); got != filepath.Join("docs", "guide.md")+":12" {
 		t.Fatalf("renderWorkspaceDisplayPath(internal) = %q", got)
 	}
+	if got := renderWorkspaceDisplayPath(linked+"#L12", workspace); got != filepath.Join("docs", "guide.md")+":12" {
+		t.Fatalf("renderWorkspaceDisplayPath(line anchor) = %q", got)
+	}
+	if got := renderWorkspaceDisplayPath(linked+"#L12C3", workspace); got != filepath.Join("docs", "guide.md")+":12:3" {
+		t.Fatalf("renderWorkspaceDisplayPath(line+column anchor) = %q", got)
+	}
 	if got := renderWorkspaceDisplayPath(filepath.Join(workspace, "..", "elsewhere", "x.go"), workspace); !filepath.IsAbs(got) {
 		t.Fatalf("renderWorkspaceDisplayPath(external) = %q, want absolute path", got)
 	}

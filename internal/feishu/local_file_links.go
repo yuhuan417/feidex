@@ -33,6 +33,7 @@ const (
 
 var localFileLinkRe = regexp.MustCompile(`\[[^\]]+\]\(([^)\n]+)\)`)
 var previewLineSuffixRe = regexp.MustCompile(`^(.*?)(:\d+(?::\d+)?)$`)
+var previewLineAnchorFragmentRe = regexp.MustCompile(`^#L\d+(?:C\d+)?$`)
 
 type LocalFileLinkRewriteRequest struct {
 	Text         string
@@ -227,14 +228,10 @@ func (p *DriveLocalFileLinkRewriter) RewriteText(ctx context.Context, req LocalF
 
 func formatPreviewLinkReplacement(rawTarget, url, workspaceCWD string) string {
 	displayPath := previewDisplayPath(rawTarget, workspaceCWD)
-	clickableName := previewClickableName(displayPath)
 	if displayPath == "" {
-		displayPath = clickableName
+		displayPath = "preview.md"
 	}
-	if clickableName == "" {
-		clickableName = "preview.md"
-	}
-	return "`" + sanitizeInlineCodeText(displayPath) + "` [" + sanitizeMarkdownLinkLabel(clickableName) + "](" + strings.TrimSpace(url) + ")"
+	return "[" + sanitizeMarkdownLinkLabel(displayPath) + "](" + strings.TrimSpace(url) + ")"
 }
 
 func previewDisplayPath(rawTarget, workspaceCWD string) string {
@@ -247,28 +244,11 @@ func previewDisplayPath(rawTarget, workspaceCWD string) string {
 		target = strings.TrimPrefix(strings.TrimSuffix(target, ">"), "<")
 	}
 	if idx := strings.IndexByte(target, '#'); idx >= 0 {
-		target = target[:idx]
+		if !previewLineAnchorFragmentRe.MatchString(target[idx:]) {
+			target = target[:idx]
+		}
 	}
 	return pathdisplay.RenderWorkspaceDisplayPath(strings.TrimSpace(target), workspaceCWD)
-}
-
-func previewClickableName(displayPath string) string {
-	target := strings.TrimSpace(displayPath)
-	if matched := previewLineSuffixRe.FindStringSubmatch(target); len(matched) == 3 {
-		target = matched[1]
-	}
-	target = filepath.Clean(strings.TrimSpace(target))
-	name := strings.TrimSpace(filepath.Base(target))
-	switch name {
-	case "", ".", string(filepath.Separator):
-		return "preview.md"
-	default:
-		return name
-	}
-}
-
-func sanitizeInlineCodeText(value string) string {
-	return strings.ReplaceAll(strings.TrimSpace(value), "`", "'")
 }
 
 func sanitizeMarkdownLinkLabel(value string) string {
