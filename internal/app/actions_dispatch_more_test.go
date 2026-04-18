@@ -41,7 +41,10 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	a, _, fc := newTestApp(t)
-	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	a.cfg.Workspaces = append(a.cfg.Workspaces,
+		config.Workspace{ID: "alt", Cwd: t.TempDir()},
+		config.Workspace{ID: "drop", Cwd: t.TempDir()},
+	)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -214,9 +217,13 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "model.config.select_effort", "session_key": "sess-1"}, Option: "high", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.interrupt", "session_key": "sess-1", "turn_id": "turn-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.new", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "workspace.new.takeover", "session_key": "sess-1", "workspace_id": "repo", "target_dir": t.TempDir()}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.clone", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.clone.pickdir", "request_id": "workspace-clone-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.clone.cancel", "request_id": "workspace-clone-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "workspace.delete.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "workspace.delete.prompt", "session_key": "sess-1", "workspace_id": "drop"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "workspace.delete.confirm", "session_key": "sess-1", "workspace_id": "drop"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.sandbox.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.policy.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.sandbox.set", "session_key": "sess-1", "workspace_id": "default", "sandbox_mode": "read-only"}, UserID: "user-1", ChatID: "chat-1"},

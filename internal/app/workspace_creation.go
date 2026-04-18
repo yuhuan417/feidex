@@ -105,6 +105,7 @@ type workspaceNewPayload struct {
 	RootPath    string             `json:"root_path"`
 	SelectedCWD string             `json:"selected_cwd"`
 	DraftID     string             `json:"draft_id,omitempty"`
+	AutoDraftID string             `json:"auto_draft_id,omitempty"`
 	DraftName   string             `json:"draft_name,omitempty"`
 	Picker      *pathPickerPayload `json:"picker,omitempty"`
 }
@@ -124,11 +125,22 @@ type workspaceCloneTakeoverError struct {
 	Err         error
 }
 
+type workspaceCloneExistingDirError struct {
+	WorkspaceID string
+	TargetDir   string
+}
+
 type workspaceCloneProgressSnapshot struct {
 	StartedAt      time.Time
 	LastProgressAt time.Time
 	State          string
 	Lines          []string
+}
+
+type workspaceClonePlan struct {
+	RepoName    string
+	WorkspaceID string
+	TargetDir   string
 }
 
 type workspaceCloneOperation struct {
@@ -153,6 +165,13 @@ func (e *workspaceCloneTakeoverError) Unwrap() error {
 		return nil
 	}
 	return e.Err
+}
+
+func (e *workspaceCloneExistingDirError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("目标目录已存在: %s", e.TargetDir)
 }
 
 func newWorkspaceCloneOperation(cancel context.CancelFunc) *workspaceCloneOperation {
@@ -343,7 +362,7 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 	body := "当前位置：主菜单 / workspace / new\n\n" +
 		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
-		"可以先选目录，再填写 `workspace_id` 和可选的 `name`。点“确认”时才会校验 `workspace_id`。"
+		"可以先选目录，再填写 `workspace_id` 和可选的 `name`。选完目录后会按目录名自动建议 `workspace_id`。点“确认”时才会校验 `workspace_id`。"
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
 		{
@@ -399,10 +418,7 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 		"direction":          "vertical",
 		"horizontal_spacing": "8px",
 		"vertical_spacing":   "8px",
-		"elements": append([]map[string]any{
-			workspaceIDInput,
-			workspaceNameInput,
-		}, buttonRows...),
+		"elements":           append(append([]map[string]any{}, buttonRows...), workspaceIDInput, workspaceNameInput),
 	}
 	appendMarkdownBodyCardElement(card, form)
 	return card
@@ -497,10 +513,7 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 		"direction":          "vertical",
 		"horizontal_spacing": "8px",
 		"vertical_spacing":   "8px",
-		"elements": append([]map[string]any{
-			repoURLInput,
-			workspaceIDInput,
-		}, buttonRows...),
+		"elements":           append(append([]map[string]any{repoURLInput}, buttonRows...), workspaceIDInput),
 	}
 	appendMarkdownBodyCardElement(card, form)
 	return card
@@ -551,6 +564,16 @@ func (a *App) renderWorkspaceClonePreparingCard(requestID string, payload worksp
 
 func (a *App) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
 	buttons := []feishu.Button{
+		{
+			Text: "转为新建工作区",
+			Type: "primary",
+			Value: map[string]any{
+				"action":       "workspace.new.takeover",
+				"session_key":  sessionKey,
+				"workspace_id": strings.TrimSpace(workspaceID),
+				"target_dir":   strings.TrimSpace(targetDir),
+			},
+		},
 		{
 			Text: "返回工作区管理",
 			Type: "default",
@@ -758,12 +781,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 }
 
 func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
-	appState := a.appState()
 	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
-	requestID, err := appState.nextLocalID("workspace")
-	if err != nil {
-		return err
-	}
 	payload := workspaceNewPayload{
 		RootPath: a.defaultWorkspaceNewRoot(ws),
 		SelectedCWD: firstNonEmpty(func() string {
@@ -772,6 +790,15 @@ func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
 			}
 			return strings.TrimSpace(ws.Cwd)
 		}(), "/"),
+	}
+	return a.beginWorkspaceNewWithPayload(msg, sessionKey, payload)
+}
+
+func (a *App) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKey string, payload workspaceNewPayload) error {
+	appState := a.appState()
+	requestID, err := appState.nextLocalID("workspace")
+	if err != nil {
+		return err
 	}
 	card := a.renderWorkspaceNewCard(sessionKey, requestID, payload)
 	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
@@ -791,6 +818,28 @@ func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
 	})
 }
 
+func (a *App) createWorkspaceNewPending(sessionKey, userID, feishuMsgID string, payload workspaceNewPayload) (string, error) {
+	appState := a.appState()
+	requestID, err := appState.nextLocalID("workspace")
+	if err != nil {
+		return "", err
+	}
+	if err := appState.savePending(&state.PendingRequest{
+		ID:          requestID,
+		Kind:        "workspace_new",
+		SessionKey:  sessionKey,
+		OwnerUserID: userID,
+		FeishuMsgID: strings.TrimSpace(feishuMsgID),
+		PayloadJSON: mustJSON(payload),
+		Status:      "pending",
+		CreatedAt:   time.Now().Unix(),
+		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
+	}); err != nil {
+		return "", err
+	}
+	return requestID, nil
+}
+
 func formValueString(values map[string]any, key string) (string, bool) {
 	if len(values) == 0 {
 		return "", false
@@ -808,8 +857,16 @@ func formValueString(values map[string]any, key string) (string, bool) {
 }
 
 func mergeWorkspaceNewFormValues(payload workspaceNewPayload, values map[string]any) workspaceNewPayload {
-	if value, ok := formValueString(values, "workspace_id"); ok && value != "" {
-		payload.DraftID = value
+	if value, ok := formValueString(values, "workspace_id"); ok {
+		if value != "" {
+			payload.DraftID = value
+			if strings.TrimSpace(payload.AutoDraftID) != value {
+				payload.AutoDraftID = ""
+			}
+		} else if strings.TrimSpace(payload.DraftID) == strings.TrimSpace(payload.AutoDraftID) {
+			payload.DraftID = ""
+			payload.AutoDraftID = ""
+		}
 	}
 	if value, ok := formValueString(values, "workspace_name"); ok {
 		payload.DraftName = value
@@ -848,7 +905,23 @@ func workspaceCloneRepoName(repoURL string) (string, error) {
 }
 
 func workspaceCloneDefaultID(repoName string) string {
-	repoName = strings.ToLower(strings.TrimSpace(repoName))
+	return workspaceSuggestedID(repoName)
+}
+
+func workspaceSuggestedIDFromDir(dir string) string {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return ""
+	}
+	base := filepath.Base(filepath.Clean(dir))
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	return workspaceSuggestedID(base)
+}
+
+func workspaceSuggestedID(raw string) string {
+	repoName := strings.ToLower(strings.TrimSpace(raw))
 	var out strings.Builder
 	lastDash := false
 	for _, r := range repoName {
@@ -874,6 +947,17 @@ func workspaceCloneDefaultID(repoName string) string {
 	return strings.Trim(out.String(), "-")
 }
 
+func updateWorkspaceNewSuggestedID(payload workspaceNewPayload, selectedDir string) workspaceNewPayload {
+	nextAuto := workspaceSuggestedIDFromDir(selectedDir)
+	currentDraft := strings.TrimSpace(payload.DraftID)
+	currentAuto := strings.TrimSpace(payload.AutoDraftID)
+	if nextAuto != "" && (currentDraft == "" || currentDraft == currentAuto) {
+		payload.DraftID = nextAuto
+	}
+	payload.AutoDraftID = nextAuto
+	return payload
+}
+
 func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
 	if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
 		return filepath.Dir(strings.TrimSpace(ws.Cwd))
@@ -884,24 +968,24 @@ func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
 	return "."
 }
 
-func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string, report workspaceCloneProgressReporter) (string, string, error) {
+func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*workspaceClonePlan, error) {
 	repoName, err := workspaceCloneRepoName(repoURL)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	workspaceID := strings.TrimSpace(explicitID)
 	if workspaceID == "" {
 		workspaceID = workspaceCloneDefaultID(repoName)
 		if workspaceID == "" {
-			return "", "", fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
+			return nil, fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
 		}
 	}
 	if config.FindWorkspace(a.cfg, workspaceID) != nil {
-		return "", "", fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
+		return nil, fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
 	}
 	parentDir = strings.TrimSpace(parentDir)
 	if parentDir == "" {
-		return "", "", fmt.Errorf("请先选择父目录")
+		return nil, fmt.Errorf("请先选择父目录")
 	}
 	targetName := repoName
 	if strings.TrimSpace(explicitID) != "" {
@@ -909,30 +993,45 @@ func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, ch
 	}
 	targetDir := filepath.Join(parentDir, targetName)
 	if _, statErr := os.Stat(targetDir); statErr == nil {
-		return "", "", fmt.Errorf("目标目录已存在: %s", targetDir)
+		return nil, &workspaceCloneExistingDirError{
+			WorkspaceID: workspaceID,
+			TargetDir:   targetDir,
+		}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return "", "", statErr
+		return nil, statErr
 	}
-	if err := os.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
+	return &workspaceClonePlan{
+		RepoName:    repoName,
+		WorkspaceID: workspaceID,
+		TargetDir:   targetDir,
+	}, nil
+}
+
+func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string, report workspaceCloneProgressReporter) (string, string, error) {
+	plan, err := a.prepareWorkspaceClone(repoURL, explicitID, parentDir)
+	if err != nil {
 		return "", "", err
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := workspaceGitClone(ctx, strings.TrimSpace(repoURL), targetDir, report); err != nil {
+	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
+		return "", "", err
+	}
+	if err := workspaceGitClone(ctx, strings.TrimSpace(repoURL), plan.TargetDir, report); err != nil {
 		return "", "", err
 	}
 	if err := ctx.Err(); err != nil {
 		return "", "", err
 	}
-	if err := a.createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, workspaceID, workspaceID, targetDir); err != nil {
+	if err := a.createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
 		return "", "", &workspaceCloneTakeoverError{
-			WorkspaceID: workspaceID,
-			TargetDir:   targetDir,
+			WorkspaceID: plan.WorkspaceID,
+			TargetDir:   plan.TargetDir,
 			Err:         err,
 		}
 	}
-	return workspaceID, targetDir, nil
+	return plan.WorkspaceID, plan.TargetDir, nil
 }
 
 func (a *App) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, explicitID string) error {

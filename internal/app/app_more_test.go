@@ -1014,6 +1014,49 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 	}
 }
 
+func TestCommandWorkspaceCloneExistingDirectoryOpensWorkspaceNewCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	existingDir := filepath.Join(baseDir, "repo")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(existingDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	if err := a.commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+		t.Fatalf("commandWorkspace(clone existing dir) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	inputs := workspaceNewFormInputs(t, ff.replyCards[0])
+	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "repo" {
+		t.Fatalf("workspace_id default_value = %q, want repo", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, existingDir) {
+		t.Fatalf("workspace new takeover body = %q, want target dir %q", body, existingDir)
+	}
+}
+
+func TestCommandWorkspaceCloneRejectsExistingWorkspaceID(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: t.TempDir()})
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+
+	err := a.commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"})
+	if err == nil {
+		t.Fatal("expected existing workspace id to fail clone")
+	}
+	if !strings.Contains(err.Error(), `workspace "repo" 已存在`) {
+		t.Fatalf("clone existing workspace error = %v", err)
+	}
+}
+
 func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
 	a, _, fc := newTestApp(t)
 
@@ -1214,6 +1257,9 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeWorkspaceNew(action, action.ActionValue["session_key"].(string))
 		},
+		"workspace.delete.menu": func() (*callback.CardActionTriggerResponse, error) {
+			return a.completeWorkspaceDeleteMenu(action, action.ActionValue["session_key"].(string))
+		},
 		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeWorkspaceClone(action, action.ActionValue["session_key"].(string))
 		},
@@ -1248,7 +1294,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.delete.menu", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -1268,6 +1314,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	workspaceActions := cardButtonsForTest(workspaceCard)
 	foundBackToMenu := false
 	foundClone := false
+	foundDelete := false
 	for _, action := range workspaceActions {
 		value, _ := action["value"].(map[string]any)
 		if len(value) == 0 {
@@ -1282,12 +1329,18 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		if value["action"] == "workspace.clone" {
 			foundClone = true
 		}
+		if value["action"] == "workspace.delete.menu" {
+			foundDelete = true
+		}
 	}
 	if !foundBackToMenu {
 		t.Fatalf("workspace menu missing back button: %+v", workspaceActions)
 	}
 	if !foundClone {
 		t.Fatalf("workspace menu missing clone button: %+v", workspaceActions)
+	}
+	if !foundDelete {
+		t.Fatalf("workspace menu missing delete button: %+v", workspaceActions)
 	}
 
 	sandboxCard, err := a.renderWorkspaceSandboxMenuCard(sessionKey)

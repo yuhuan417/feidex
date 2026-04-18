@@ -134,6 +134,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"workspace.new": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceNew(action, actionSessionKey(action))
 	},
+	"workspace.new.takeover": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceNewTakeover(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "target_dir"))
+	},
 	"workspace.clone": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceClone(action, actionSessionKey(action))
 	},
@@ -157,6 +160,15 @@ var cardActionHandlers = map[string]cardActionHandler{
 	},
 	"workspace.policy.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspacePolicyMenu(action, actionSessionKey(action))
+	},
+	"workspace.delete.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceDeleteMenu(action, actionSessionKey(action))
+	},
+	"workspace.delete.prompt": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceDeletePrompt(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+	},
+	"workspace.delete.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceDeleteConfirm(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
 	"workspace.sandbox.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceSandboxSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "sandbox_mode"))

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -16,7 +17,7 @@ type workspaceSettingOption struct {
 	Label string
 }
 
-const workspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace sandbox [MODE] | /workspace policy [POLICY]"
+const workspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
 
 func parseWorkspaceCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err error) {
 	if len(args) < 2 || strings.TrimSpace(args[0]) != "clone" {
@@ -66,9 +67,29 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 			return err
 		}
 		if parentDir != "" {
-			return a.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
+			err = a.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
+		} else {
+			err = a.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
 		}
-		return a.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
+		var existingDirErr *workspaceCloneExistingDirError
+		if errors.As(err, &existingDirErr) {
+			return a.beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayload(existingDirErr.WorkspaceID, existingDirErr.TargetDir))
+		}
+		return err
+	}
+	if args[0] == "delete" {
+		if len(args) == 1 {
+			return a.showWorkspaceDeleteMenu(msg)
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /workspace delete [ID]")
+		}
+		workspaceID := strings.TrimSpace(args[1])
+		if err := a.deleteWorkspace(sessionKey, workspaceID); err != nil {
+			return err
+		}
+		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
@@ -165,7 +186,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 		body += "\n默认 sandbox: `" + currentWS.SandboxMode + "`"
 		body += "\n默认 policy: `" + currentWS.ApprovalPolicy + "`"
 	}
-	buttons := make([]feishu.Button, 0, 5)
+	buttons := make([]feishu.Button, 0, 6)
 	selectOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
 	for _, ws := range a.cfg.Workspaces {
 		label := ws.ID
@@ -207,6 +228,14 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.policy.menu",
+				"session_key": sessionKey,
+			},
+		},
+		feishu.Button{
+			Text: submenuCommandLabel("删除工作区", "/workspace delete"),
+			Type: "default",
+			Value: map[string]any{
+				"action":      "workspace.delete.menu",
 				"session_key": sessionKey,
 			},
 		},

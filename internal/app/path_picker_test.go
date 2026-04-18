@@ -270,6 +270,87 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 	}
 }
 
+func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	root := t.TempDir()
+	target := filepath.Join(root, "Feature Repo")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("MkdirAll(target) error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-suggest-1",
+		Kind:        "workspace_new",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceNewPayload{
+			RootPath:    "/",
+			SelectedCWD: root,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-suggest-1) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceNewPickDir(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeWorkspaceNewPickDir() = %#v, %v", resp, err)
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
+		Option:      encodePathPickerOption(pathPickerEntry{Name: "Feature Repo", Path: target, IsDir: true}),
+	}, "path_picker.dropdown")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace picker dropdown = %#v, %v", resp, err)
+	}
+	resp, err = a.completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
+	}, "path_picker.confirm")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace picker confirm = %#v, %v", resp, err)
+	}
+
+	pending := a.store.PendingByID("workspace-suggest-1")
+	gotPayload := workspaceNewPayloadFromPending(pending)
+	if gotPayload.DraftID != "feature-repo" || gotPayload.AutoDraftID != "feature-repo" {
+		t.Fatalf("workspace payload after suggest = %+v", gotPayload)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	inputs := workspaceNewFormInputs(t, cardData)
+	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "feature-repo" {
+		t.Fatalf("workspace_id default_value = %q, want feature-repo", got)
+	}
+}
+
+func TestWorkspaceFormOrdering(t *testing.T) {
+	a, _, _ := newTestApp(t)
+
+	newForm := workspaceNewForm(t, a.renderWorkspaceNewCard("sess-1", "req-new", workspaceNewPayload{
+		RootPath:    "/",
+		SelectedCWD: a.cfg.Workspaces[0].Cwd,
+	}))
+	newElements, _ := newForm["elements"].([]map[string]any)
+	if got, _ := newElements[0]["tag"].(string); got != "column_set" {
+		t.Fatalf("workspace new first form element = %q, want column_set", got)
+	}
+
+	cloneForm := workspaceCloneForm(t, a.renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+		RootPath:          "/",
+		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
+	}))
+	cloneElements, _ := cloneForm["elements"].([]map[string]any)
+	if got, _ := cloneElements[0]["tag"].(string); got != "input" {
+		t.Fatalf("workspace clone first form element = %q, want input", got)
+	}
+	if got, _ := cloneElements[0]["name"].(string); got != "repo_url" {
+		t.Fatalf("workspace clone first form field = %q, want repo_url", got)
+	}
+}
+
 func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	baseDir := t.TempDir()
@@ -461,6 +542,73 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	body = cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
 	if !strings.Contains(body, "已从仓库创建并切换到工作区 `repo-copy`") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("clone status card body = %q", body)
+	}
+}
+
+func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	existingDir := filepath.Join(baseDir, "repo")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(existingDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-existing",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: baseDir,
+			RepoURL:           "git@github.com:example/repo.git",
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-existing) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-existing"},
+		FormValue:   map[string]any{"repo_url": "git@github.com:example/repo.git"},
+	})
+	if err != nil || resp == nil || resp.Card == nil || resp.Toast == nil {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	}
+	if resp.Toast.Type != "info" || !strings.Contains(resp.Toast.Content, "转为新建工作区") {
+		t.Fatalf("clone existing dir toast = %#v, want takeover hint", resp.Toast)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	inputs := workspaceNewFormInputs(t, cardData)
+	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "repo" {
+		t.Fatalf("workspace_id default_value = %q, want repo", got)
+	}
+	if body := cardMarkdownContent(t, cardData); !strings.Contains(body, existingDir) {
+		t.Fatalf("workspace new takeover body = %q, want target dir %q", body, existingDir)
+	}
+	if pending := a.store.PendingByID("workspace-clone-existing"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("clone pending after takeover = %+v, want resolved", pending)
+	}
+
+	foundNewPending := false
+	for _, req := range a.store.AllPendingRequests() {
+		if req != nil && req.Kind == "workspace_new" {
+			payload := workspaceNewPayloadFromPending(req)
+			if filepath.Clean(payload.SelectedCWD) == filepath.Clean(existingDir) && payload.DraftID == "repo" {
+				foundNewPending = true
+				break
+			}
+		}
+	}
+	if !foundNewPending {
+		t.Fatal("expected a new workspace_new pending request for takeover")
 	}
 }
 

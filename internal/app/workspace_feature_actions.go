@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -86,6 +87,32 @@ func (a *App) completeWorkspaceClone(action *feishu.CardAction, sessionKey strin
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "请填写 git 地址"},
 		Card:  rawCard(a.renderWorkspaceCloneCard(sessionKey, requestID, payload)),
+	}, nil
+}
+
+func workspaceNewTakeoverPayload(workspaceID, targetDir string) workspaceNewPayload {
+	targetDir = strings.TrimSpace(targetDir)
+	suggestedID := firstNonEmpty(strings.TrimSpace(workspaceID), workspaceSuggestedIDFromDir(targetDir))
+	return workspaceNewPayload{
+		RootPath:    "/",
+		SelectedCWD: targetDir,
+		DraftID:     suggestedID,
+		AutoDraftID: suggestedID,
+	}
+}
+
+func (a *App) completeWorkspaceNewTakeover(action *feishu.CardAction, sessionKey, workspaceID, targetDir string) (*callback.CardActionTriggerResponse, error) {
+	payload := workspaceNewTakeoverPayload(workspaceID, targetDir)
+	if strings.TrimSpace(payload.SelectedCWD) == "" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "缺少可接管的目录"}}, nil
+	}
+	requestID, err := a.createWorkspaceNewPending(sessionKey, action.UserID, "", payload)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "目录已存在，已转为新建工作区"},
+		Card:  rawCard(a.renderWorkspaceNewCard(sessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -265,6 +292,27 @@ func (a *App) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在从仓库创建工作区"},
 			Card:  rawCard(a.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
+		}, nil
+	}
+	if _, err := a.prepareWorkspaceClone(payload.RepoURL, payload.DraftID, parentDir); err != nil {
+		var existingDirErr *workspaceCloneExistingDirError
+		if errors.As(err, &existingDirErr) {
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+				req.Status = "resolved"
+				req.PayloadJSON = mustJSON(payload)
+				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+			})
+			return a.completeWorkspaceNewTakeover(action, pending.SessionKey, existingDirErr.WorkspaceID, existingDirErr.TargetDir)
+		}
+		payload.ErrorMessage = err.Error()
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = "pending"
+			req.PayloadJSON = mustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())

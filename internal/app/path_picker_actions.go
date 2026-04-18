@@ -128,6 +128,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 		}
 		if pending.Kind == "workspace_new" {
 			workspacePayload.SelectedCWD = selectedPath
+			workspacePayload = updateWorkspaceNewSuggestedID(workspacePayload, selectedPath)
 			workspacePayload.Picker = nil
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{

@@ -3,10 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -143,6 +146,71 @@ func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "当前值: `never`") {
 		t.Fatalf("workspace policy card body = %q", body)
+	}
+}
+
+func TestCommandWorkspaceDeleteRemovesConfigOnly(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	altDir := filepath.Join(t.TempDir(), "alt-workspace")
+	if err := os.MkdirAll(altDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(altDir) error = %v", err)
+	}
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altDir})
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	sessionKey := a.makeSessionKey(msg)
+	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
+		t.Fatalf("UpsertSession(current) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-other",
+		WorkspaceID:             "alt",
+		ActiveThreadID:          "thread-alt",
+		ActiveThreadWorkspaceID: "alt",
+	}); err != nil {
+		t.Fatalf("UpsertSession(other) error = %v", err)
+	}
+
+	if err := a.commandWorkspace(msg, []string{"delete", "alt"}); err != nil {
+		t.Fatalf("commandWorkspace(delete alt) error = %v", err)
+	}
+	if ws := config.FindWorkspace(a.cfg, "alt"); ws != nil {
+		t.Fatalf("workspace alt should be removed, got %+v", ws)
+	}
+	if _, err := os.Stat(altDir); err != nil {
+		t.Fatalf("workspace directory should remain, stat error = %v", err)
+	}
+	if got := a.store.GetSession("sess-other"); got == nil || got.WorkspaceID != "default" || got.ActiveThreadID != "" || got.ActiveThreadWorkspaceID != "" {
+		t.Fatalf("other session after delete = %+v", got)
+	}
+	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "仅移除配置，未删除目录") {
+		t.Fatalf("workspace delete replyTexts = %+v", ff.replyTexts)
+	}
+}
+
+func TestCommandWorkspaceDeleteRejectsCurrentWorkspace(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	altDir := filepath.Join(t.TempDir(), "alt-workspace")
+	if err := os.MkdirAll(altDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(altDir) error = %v", err)
+	}
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altDir})
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	sessionKey := a.makeSessionKey(msg)
+	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	err := a.commandWorkspace(msg, []string{"delete", "alt"})
+	if err == nil {
+		t.Fatal("expected deleting current workspace to fail")
+	}
+	if !strings.Contains(err.Error(), "不能删除当前 workspace") {
+		t.Fatalf("delete current workspace error = %v", err)
+	}
+	if ws := config.FindWorkspace(a.cfg, "alt"); ws == nil {
+		t.Fatal("workspace alt should remain after rejected delete")
 	}
 }
 
