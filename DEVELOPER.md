@@ -55,6 +55,7 @@ Rules:
 - Do not use `dist/` for casual local test builds.
 - Do not use `tmp/` for release artifacts.
 - `bin/` and `dist/` contents should remain disposable and normally untracked.
+- Treat `/tmp` as a constrained resource on `tmpfs`-backed machines: keep temporary outputs and Feidex caches small, reuse standard cache directories instead of inventing ad hoc ones, and remove them promptly when the task is done.
 
 Recommended commands:
 
