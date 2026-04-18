@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -118,6 +119,36 @@ func (a *App) completeWorkspaceClonePickDir(action *feishu.CardAction) (*callbac
 	}, nil
 }
 
+func (a *App) completeWorkspaceCloneCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := appState.pending(requestID)
+	if pending == nil || pending.Kind != "workspace_clone" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区克隆请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := workspaceClonePayloadFromPending(pending)
+	parentDir := strings.TrimSpace(payload.SelectedParentDir)
+	if op := a.workspaceCloneOperation(requestID); op != nil {
+		snapshot := op.requestCancel()
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = "cancelling"
+			req.PayloadJSON = mustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "已请求取消仓库克隆"},
+			Card:  rawCard(a.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
+		}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "warning", Content: "当前没有进行中的仓库克隆"},
+		Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+	}, nil
+}
+
 func (a *App) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := a.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
@@ -210,6 +241,7 @@ func (a *App) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
 	}
 	payload := mergeWorkspaceCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
+	payload.ErrorMessage = ""
 	if strings.TrimSpace(payload.RepoURL) == "" {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
@@ -223,40 +255,42 @@ func (a *App) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback
 	if parentDir == "" {
 		parentDir = firstNonEmpty(strings.TrimSpace(a.defaultWorkspaceCloneParent(ws)), "/")
 	}
-	workspaceID, targetDir, err := a.cloneWorkspaceInParent(
+	payload.SelectedParentDir = parentDir
+	messageID := firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
+	if status := strings.TrimSpace(pending.Status); status == "processing" || status == "cancelling" {
+		snapshot := workspaceCloneProgressSnapshot{State: status}
+		if op := a.workspaceCloneOperation(requestID); op != nil {
+			snapshot = op.snapshot()
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "正在从仓库创建工作区"},
+			Card:  rawCard(a.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
+		}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	op := newWorkspaceCloneOperation(cancel)
+	a.setWorkspaceCloneOperation(requestID, op)
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = "processing"
+		req.PayloadJSON = mustJSON(payload)
+		req.FeishuMsgID = firstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
+		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+	})
+	go a.finishWorkspaceCloneSubmit(
+		ctx,
+		op,
+		requestID,
+		messageID,
 		sessionKey,
 		msg.UserID,
 		msg.ChatID,
 		msg.ChatType,
-		payload.RepoURL,
-		payload.DraftID,
 		parentDir,
+		payload,
 	)
-	if err != nil {
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
-		}, nil
-	}
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "resolved"
-		req.PayloadJSON = mustJSON(payload)
-	})
-	buttons := []feishu.Button{
-		{
-			Text: "返回工作区管理",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.workspace",
-				"session_key": pending.SessionKey,
-			},
-		},
-	}
-	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已从仓库创建工作区"},
-		Card:  rawCard(a.feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)),
+		Toast: &callback.Toast{Type: "info", Content: "已开始从仓库创建工作区"},
+		Card:  rawCard(a.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, op.snapshot())),
 	}, nil
 }
 

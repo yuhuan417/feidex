@@ -288,6 +288,20 @@ Current pacing constants are tied to `im/v1/messages` behavior:
 
 If you add new outbound paths, prefer reusing adapter helpers instead of calling the raw SDK directly, otherwise pacing and logging will be bypassed.
 
+### Feishu Card Callback Contract
+
+Feishu card actions are a latency-critical ack path. Treat them as short control-plane handlers, not as a place to run full workflows.
+
+Rules:
+
+- Card callbacks must return quickly. Assume the timeout budget is strict and user-visible.
+- Do not perform blocking network I/O directly inside a card callback.
+- Do not run long local processes directly inside a card callback, including `git clone`, `git fetch`, archive extraction, large directory scans, or similar work.
+- Do not start long Codex or other multi-step workflows directly inside a card callback when the first user-visible response can be returned earlier.
+- Card callbacks may validate input, update pending state, enqueue work, and return a toast or replacement card.
+- Heavy work must move to an async path: enqueue background work first, acknowledge the callback immediately, then patch the card or send a follow-up message when the background step finishes.
+- If a new card action can sometimes be fast but can also block on network, disk, subprocesses, or external services, treat it as heavy and keep it out of the callback path.
+
 ### Path Rendering
 
 User-visible file paths should follow one rule consistently:
@@ -342,6 +356,10 @@ Keep these in sync:
 - `internal/app/action_registry.go`
 - `internal/app/menu_actions.go`
 - tests for dispatch and card rendering
+
+Additional rule for Feishu card actions:
+
+- If the action can trigger clone, download, upload, fetch, review, upgrade, or any other potentially slow workflow, split it into `fast callback ack` plus `async execution`, rather than doing the work inline in the callback handler.
 
 ### When Adding Or Changing Config
 

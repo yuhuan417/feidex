@@ -14,6 +14,8 @@ import (
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func TestRenderPathPickerCardShowsDropdownAndShortButtons(t *testing.T) {
@@ -268,8 +270,8 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 	}
 }
 
-func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
-	a, _, fc := newTestApp(t)
+func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
+	a, ff, fc := newTestApp(t)
 	baseDir := t.TempDir()
 	currentDir := filepath.Join(baseDir, "current")
 	parentDir := filepath.Join(baseDir, "parents")
@@ -284,11 +286,21 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 	origClone := workspaceGitClone
 	defer func() { workspaceGitClone = origClone }()
 
+	started := make(chan struct{})
+	release := make(chan struct{})
+	released := false
+	t.Cleanup(func() {
+		if !released {
+			close(release)
+		}
+	})
 	var gotRepoURL string
 	var gotTargetDir string
-	workspaceGitClone = func(_ context.Context, repoURL, targetDir string) error {
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ workspaceCloneProgressReporter) error {
 		gotRepoURL = repoURL
 		gotTargetDir = targetDir
+		close(started)
+		<-release
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
 
@@ -313,6 +325,7 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 		Kind:        "workspace_clone",
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
+		FeishuMsgID: "msg-1",
 		Status:      "pending",
 		PayloadJSON: mustJSON(workspaceClonePayload{
 			RootPath:          "/",
@@ -379,36 +392,324 @@ func TestWorkspaceCloneSubmitFromMenu(t *testing.T) {
 		t.Fatalf("workspace clone card body = %q, want parent dir %q", body, parentDir)
 	}
 
-	resp, err = a.completeWorkspaceCloneSubmit(&feishu.CardAction{
-		UserID:      "user-1",
-		ChatID:      "chat-1",
-		MessageID:   "msg-1",
-		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
-		FormValue: map[string]any{
-			"repo_url":     "git@github.com:example/repo.git",
-			"workspace_id": "repo-copy",
-		},
-	})
-	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
-		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	var submitResp *callback.CardActionTriggerResponse
+	var submitErr error
+	done := make(chan struct{})
+	go func() {
+		submitResp, submitErr = a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+			UserID:      "user-1",
+			ChatID:      "chat-1",
+			MessageID:   "msg-1",
+			ActionValue: map[string]any{"request_id": "workspace-clone-1"},
+			FormValue: map[string]any{
+				"repo_url":     "git@github.com:example/repo.git",
+				"workspace_id": "repo-copy",
+			},
+		})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("completeWorkspaceCloneSubmit() blocked on clone")
 	}
+	if submitErr != nil || submitResp == nil || submitResp.Toast == nil || submitResp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", submitResp, submitErr)
+	}
+	cardData, _ = submitResp.Card.Data.(map[string]any)
+	body = cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "正在从仓库创建工作区") || !strings.Contains(body, "这张卡片会自动刷新") {
+		t.Fatalf("clone preparing card body = %q", body)
+	}
+	if pending := a.store.PendingByID("workspace-clone-1"); pending == nil || pending.Status != "processing" {
+		t.Fatalf("pending after async submit = %+v, want processing", pending)
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patchedCards before clone completes = %+v, want none", ff.patchedCards)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("workspace clone did not start in background")
+	}
+	close(release)
+	released = true
+
 	wantTargetDir := filepath.Join(parentDir, "repo-copy")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(ff.patchedCards) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if gotRepoURL != "git@github.com:example/repo.git" {
 		t.Fatalf("workspaceGitClone repoURL = %q", gotRepoURL)
 	}
 	if gotTargetDir != wantTargetDir {
 		t.Fatalf("workspaceGitClone targetDir = %q, want %q", gotTargetDir, wantTargetDir)
 	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatalf("patchedCards after clone completes = %+v, want success card", ff.patchedCards)
+	}
 	if pending := a.store.PendingByID("workspace-clone-1"); pending == nil || pending.Status != "resolved" {
-		t.Fatalf("pending after clone submit = %+v", pending)
+		t.Fatalf("pending after clone submit = %+v, want resolved", pending)
 	}
 	if ws := config.FindWorkspace(a.cfg, "repo-copy"); ws == nil || filepath.Clean(ws.Cwd) != filepath.Clean(wantTargetDir) {
 		t.Fatalf("created workspace = %+v, want cwd %q", ws, wantTargetDir)
 	}
-	cardData, _ = resp.Card.Data.(map[string]any)
-	body = cardMarkdownContent(t, cardData)
+	body = cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
 	if !strings.Contains(body, "已从仓库创建并切换到工作区 `repo-copy`") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("clone status card body = %q", body)
+	}
+}
+
+func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	parentDir := filepath.Join(baseDir, "parents")
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
+	}
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+
+	workspaceGitClone = func(_ context.Context, _, _ string, _ workspaceCloneProgressReporter) error {
+		return context.DeadlineExceeded
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-fail",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "msg-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: parentDir,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-fail) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-fail"},
+		FormValue: map[string]any{
+			"repo_url":     "git@github.com:example/repo.git",
+			"workspace_id": "repo-copy",
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(ff.patchedCards) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatalf("patchedCards after clone failure = %+v, want retry form", ff.patchedCards)
+	}
+	if pending := a.store.PendingByID("workspace-clone-fail"); pending == nil || pending.Status != "pending" {
+		t.Fatalf("pending after clone failure = %+v, want pending", pending)
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(body, "最近一次创建失败") || !strings.Contains(body, context.DeadlineExceeded.Error()) {
+		t.Fatalf("clone failure card body = %q", body)
+	}
+	inputs := workspaceCloneFormInputs(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if got, _ := inputs["repo_url"]["default_value"].(string); got != "git@github.com:example/repo.git" {
+		t.Fatalf("repo_url default_value after failure = %q", got)
+	}
+	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "repo-copy" {
+		t.Fatalf("workspace_id default_value after failure = %q", got)
+	}
+}
+
+func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	parentDir := filepath.Join(baseDir, "parents")
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
+	}
+	a.cfg.Codex.AppServerIdleTTL = "bad-duration"
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+
+	workspaceGitClone = func(_ context.Context, _, targetDir string, _ workspaceCloneProgressReporter) error {
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-manual",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "msg-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: parentDir,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-manual) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-manual"},
+		FormValue: map[string]any{
+			"repo_url":     "git@github.com:example/repo.git",
+			"workspace_id": "repo-copy",
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(ff.patchedCards) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatalf("patchedCards after manual hint = %+v, want status card", ff.patchedCards)
+	}
+	if pending := a.store.PendingByID("workspace-clone-manual"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after create workspace failure = %+v, want resolved", pending)
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	wantTargetDir := filepath.Join(parentDir, "repo-copy")
+	if !strings.Contains(body, "仓库已拉取，可手动接管") || !strings.Contains(body, wantTargetDir) {
+		t.Fatalf("manual hint body = %q", body)
+	}
+	if !strings.Contains(body, "/workspace new") || !strings.Contains(body, "bad-duration") {
+		t.Fatalf("manual hint body = %q, want workspace new guidance and underlying error", body)
+	}
+	if cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "接管为工作区") {
+		t.Fatalf("manual hint card should not include takeover button: %#v", ff.patchedCards[len(ff.patchedCards)-1])
+	}
+	if ws := config.FindWorkspace(a.cfg, "repo-copy"); ws != nil {
+		t.Fatalf("workspace should not be registered on manual hint path: %+v", ws)
+	}
+}
+
+func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	parentDir := filepath.Join(baseDir, "parents")
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
+	}
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+
+	started := make(chan struct{})
+	workspaceGitClone = func(ctx context.Context, _, targetDir string, report workspaceCloneProgressReporter) error {
+		if report != nil {
+			report("Cloning into '" + filepath.Base(targetDir) + "'...")
+			close(started)
+			time.Sleep(workspaceClonePatchInterval + 20*time.Millisecond)
+			report("Receiving objects: 42% (42/100)")
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-cancel",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "msg-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: parentDir,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-cancel) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-cancel"},
+		FormValue: map[string]any{
+			"repo_url":     "git@github.com:example/repo.git",
+			"workspace_id": "repo-copy",
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	}
+	if !cardHasButtonText(resp.Card.Data.(map[string]any), "取消克隆") {
+		t.Fatalf("preparing card missing cancel button: %#v", resp.Card.Data)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("workspace clone did not start")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(ff.patchedCards) > 0 && strings.Contains(cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]), "Receiving objects: 42%") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatalf("patchedCards after progress = %+v, want progress card", ff.patchedCards)
+	}
+	progressBody := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(progressBody, "Receiving objects: 42%") {
+		t.Fatalf("progress body = %q, want streamed git progress", progressBody)
+	}
+
+	cancelResp, err := a.completeWorkspaceCloneCancel(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-cancel"},
+	})
+	if err != nil || cancelResp == nil || cancelResp.Toast == nil || cancelResp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneCancel() = %#v, %v", cancelResp, err)
+	}
+	cancelBody := cardMarkdownContent(t, cancelResp.Card.Data.(map[string]any))
+	if !strings.Contains(cancelBody, "正在取消仓库克隆") {
+		t.Fatalf("cancel response body = %q", cancelBody)
+	}
+
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if pending := a.store.PendingByID("workspace-clone-cancel"); pending != nil && pending.Status == "resolved" && len(ff.patchedCards) > 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if pending := a.store.PendingByID("workspace-clone-cancel"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after cancel = %+v, want resolved", pending)
+	}
+	finalBody := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(finalBody, "已取消仓库克隆") {
+		t.Fatalf("final cancel body = %q", finalBody)
 	}
 }
 

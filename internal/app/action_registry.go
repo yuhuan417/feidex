@@ -12,6 +12,11 @@ import (
 
 type cardActionHandler func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 
+// Card action handlers run on the Feishu callback ack path.
+// Keep them fast: validate input, persist state, enqueue work, and return.
+// Do not put clone/download/fetch/review/upgrade or other blocking workflows
+// directly in these handlers.
+
 var cardActionHandlers = map[string]cardActionHandler{
 	"menu.root": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuRoot(action, actionSessionKey(action))
@@ -131,6 +136,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	},
 	"workspace.clone.pickdir": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceClonePickDir(action)
+	},
+	"workspace.clone.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceCloneCancel(action)
 	},
 	"workspace.clone.submit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceCloneSubmit(action)

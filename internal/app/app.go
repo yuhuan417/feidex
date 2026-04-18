@@ -27,18 +27,20 @@ type App struct {
 	started   time.Time
 	deduper   *inboundDeduper
 
-	turnStreamsMu sync.Mutex
-	turnStreams   map[string]*turnStream
-	turnItemsMu   sync.Mutex
-	turnItems     map[string]*turnItemState
-	liveThreadMu  sync.Mutex
-	liveThreads   map[string]string
-	turnBindMu    sync.Mutex
-	turnBindings  map[string]turnBinding
-	pendingTurns  map[string]turnBinding
-	threadUsage   map[string]codexrpc.ThreadTokenUsage
-	skillsMu      sync.Mutex
-	pendingSkills map[string]state.SubmissionSkill
+	turnStreamsMu     sync.Mutex
+	turnStreams       map[string]*turnStream
+	turnItemsMu       sync.Mutex
+	turnItems         map[string]*turnItemState
+	workspaceCloneMu  sync.Mutex
+	workspaceCloneOps map[string]*workspaceCloneOperation
+	liveThreadMu      sync.Mutex
+	liveThreads       map[string]string
+	turnBindMu        sync.Mutex
+	turnBindings      map[string]turnBinding
+	pendingTurns      map[string]turnBinding
+	threadUsage       map[string]codexrpc.ThreadTokenUsage
+	skillsMu          sync.Mutex
+	pendingSkills     map[string]state.SubmissionSkill
 }
 
 type turnBinding struct {
@@ -61,20 +63,21 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	codexClient := newAppCodexClient(cfg)
 	feishuClient := wrapFeishuClient(newFeishuClient(cfg.Feishu))
 	app := &App{
-		cfg:          cfg,
-		cfgPath:      cfgPath,
-		store:        store,
-		codex:        codexClient,
-		feishu:       feishuClient,
-		started:      time.Now(),
-		deduper:      newInboundDeduper(),
-		turnStreams:  map[string]*turnStream{},
-		turnItems:    map[string]*turnItemState{},
-		liveThreads:  map[string]string{},
-		turnBindings: map[string]turnBinding{},
-		pendingTurns: map[string]turnBinding{},
-		threadUsage:  map[string]codexrpc.ThreadTokenUsage{},
-		pendingSkills: map[string]state.SubmissionSkill{},
+		cfg:               cfg,
+		cfgPath:           cfgPath,
+		store:             store,
+		codex:             codexClient,
+		feishu:            feishuClient,
+		started:           time.Now(),
+		deduper:           newInboundDeduper(),
+		turnStreams:       map[string]*turnStream{},
+		turnItems:         map[string]*turnItemState{},
+		workspaceCloneOps: map[string]*workspaceCloneOperation{},
+		liveThreads:       map[string]string{},
+		turnBindings:      map[string]turnBinding{},
+		pendingTurns:      map[string]turnBinding{},
+		threadUsage:       map[string]codexrpc.ThreadTokenUsage{},
+		pendingSkills:     map[string]state.SubmissionSkill{},
 	}
 	if pool, ok := codexClient.(*workspaceCodexPool); ok {
 		app.codexPool = pool

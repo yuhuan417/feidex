@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/config"
@@ -19,15 +22,81 @@ import (
 	"feidex/internal/state"
 )
 
-var workspaceGitClone = func(ctx context.Context, repoURL, targetDir string) error {
-	cmd := exec.CommandContext(ctx, "git", "clone", repoURL, targetDir)
-	output, err := cmd.CombinedOutput()
+const workspaceCloneProgressKeepLines = 6
+const workspaceClonePatchInterval = 1200 * time.Millisecond
+
+type workspaceCloneProgressReporter func(string)
+
+var workspaceGitClone = func(ctx context.Context, repoURL, targetDir string, report workspaceCloneProgressReporter) error {
+	cmd := exec.CommandContext(ctx, "git", "clone", "--progress", repoURL, targetDir)
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		message := strings.TrimSpace(string(output))
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	var (
+		mu         sync.Mutex
+		output     []string
+		streamErr  error
+		streamWG   sync.WaitGroup
+		recordLine = func(line string) {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				return
+			}
+			mu.Lock()
+			output = append(output, line)
+			if len(output) > 20 {
+				output = append([]string(nil), output[len(output)-20:]...)
+			}
+			mu.Unlock()
+			if report != nil {
+				report(line)
+			}
+		}
+	)
+	consume := func(r io.Reader) {
+		defer streamWG.Done()
+		if err := readWorkspaceCloneOutput(r, recordLine); err != nil {
+			if ctx.Err() != nil || errors.Is(err, os.ErrClosed) {
+				return
+			}
+			mu.Lock()
+			if streamErr == nil {
+				streamErr = err
+			}
+			mu.Unlock()
+		}
+	}
+
+	streamWG.Add(2)
+	go consume(stdout)
+	go consume(stderr)
+	waitErr := cmd.Wait()
+	streamWG.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	mu.Lock()
+	message := strings.TrimSpace(strings.Join(output, "\n"))
+	err = streamErr
+	mu.Unlock()
+	if waitErr != nil {
 		if message == "" {
-			message = err.Error()
+			message = waitErr.Error()
 		}
 		return fmt.Errorf("git clone failed: %s", message)
+	}
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -45,7 +114,150 @@ type workspaceClonePayload struct {
 	SelectedParentDir string             `json:"selected_parent_dir,omitempty"`
 	RepoURL           string             `json:"repo_url,omitempty"`
 	DraftID           string             `json:"draft_id,omitempty"`
+	ErrorMessage      string             `json:"error_message,omitempty"`
 	Picker            *pathPickerPayload `json:"picker,omitempty"`
+}
+
+type workspaceCloneTakeoverError struct {
+	WorkspaceID string
+	TargetDir   string
+	Err         error
+}
+
+type workspaceCloneProgressSnapshot struct {
+	StartedAt      time.Time
+	LastProgressAt time.Time
+	State          string
+	Lines          []string
+}
+
+type workspaceCloneOperation struct {
+	mu             sync.Mutex
+	cancel         context.CancelFunc
+	startedAt      time.Time
+	lastProgressAt time.Time
+	lastPatchAt    time.Time
+	state          string
+	lines          []string
+}
+
+func (e *workspaceCloneTakeoverError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("仓库已拉取到 %q，但创建工作区失败: %v", e.TargetDir, e.Err)
+}
+
+func (e *workspaceCloneTakeoverError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func newWorkspaceCloneOperation(cancel context.CancelFunc) *workspaceCloneOperation {
+	now := time.Now()
+	return &workspaceCloneOperation{
+		cancel:         cancel,
+		startedAt:      now,
+		lastProgressAt: now,
+		state:          "running",
+	}
+}
+
+func (op *workspaceCloneOperation) snapshot() workspaceCloneProgressSnapshot {
+	if op == nil {
+		return workspaceCloneProgressSnapshot{}
+	}
+	op.mu.Lock()
+	defer op.mu.Unlock()
+	return op.snapshotLocked()
+}
+
+func (op *workspaceCloneOperation) snapshotLocked() workspaceCloneProgressSnapshot {
+	snapshot := workspaceCloneProgressSnapshot{
+		StartedAt:      op.startedAt,
+		LastProgressAt: op.lastProgressAt,
+		State:          op.state,
+	}
+	if len(op.lines) > 0 {
+		snapshot.Lines = append([]string(nil), op.lines...)
+	}
+	return snapshot
+}
+
+func (op *workspaceCloneOperation) recordProgress(line string) (workspaceCloneProgressSnapshot, bool) {
+	if op == nil {
+		return workspaceCloneProgressSnapshot{}, false
+	}
+	line = strings.TrimSpace(line)
+	now := time.Now()
+	op.mu.Lock()
+	defer op.mu.Unlock()
+	if line != "" {
+		if len(op.lines) == 0 || op.lines[len(op.lines)-1] != line {
+			op.lines = append(op.lines, line)
+			if len(op.lines) > workspaceCloneProgressKeepLines {
+				op.lines = append([]string(nil), op.lines[len(op.lines)-workspaceCloneProgressKeepLines:]...)
+			}
+		}
+		op.lastProgressAt = now
+	}
+	shouldPatch := op.lastPatchAt.IsZero() || now.Sub(op.lastPatchAt) >= workspaceClonePatchInterval
+	if shouldPatch {
+		op.lastPatchAt = now
+	}
+	return op.snapshotLocked(), shouldPatch
+}
+
+func (op *workspaceCloneOperation) requestCancel() workspaceCloneProgressSnapshot {
+	if op == nil {
+		return workspaceCloneProgressSnapshot{}
+	}
+	op.mu.Lock()
+	if strings.TrimSpace(op.state) == "" || op.state == "running" {
+		op.state = "cancelling"
+	}
+	op.lastPatchAt = time.Now()
+	snapshot := op.snapshotLocked()
+	cancel := op.cancel
+	op.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return snapshot
+}
+
+func readWorkspaceCloneOutput(r io.Reader, emit func(string)) error {
+	if r == nil {
+		return nil
+	}
+	reader := bufio.NewReader(r)
+	var buf strings.Builder
+	flush := func() {
+		line := strings.TrimSpace(buf.String())
+		buf.Reset()
+		if line == "" || emit == nil {
+			return
+		}
+		emit(line)
+	}
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				flush()
+				return nil
+			}
+			return err
+		}
+		switch b {
+		case '\r', '\n':
+			flush()
+		default:
+			buf.WriteByte(b)
+		}
+	}
 }
 
 func workspaceNewPayloadFromPending(pending *state.PendingRequest) workspaceNewPayload {
@@ -62,6 +274,49 @@ func workspaceClonePayloadFromPending(pending *state.PendingRequest) workspaceCl
 		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
 	}
 	return payload
+}
+
+func (a *App) setWorkspaceCloneOperation(requestID string, op *workspaceCloneOperation) {
+	if a == nil {
+		return
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" || op == nil {
+		return
+	}
+	a.workspaceCloneMu.Lock()
+	defer a.workspaceCloneMu.Unlock()
+	if a.workspaceCloneOps == nil {
+		a.workspaceCloneOps = map[string]*workspaceCloneOperation{}
+	}
+	if previous := a.workspaceCloneOps[requestID]; previous != nil && previous.cancel != nil && previous != op {
+		previous.cancel()
+	}
+	a.workspaceCloneOps[requestID] = op
+}
+
+func (a *App) workspaceCloneOperation(requestID string) *workspaceCloneOperation {
+	if a == nil {
+		return nil
+	}
+	a.workspaceCloneMu.Lock()
+	defer a.workspaceCloneMu.Unlock()
+	if a.workspaceCloneOps == nil {
+		return nil
+	}
+	return a.workspaceCloneOps[strings.TrimSpace(requestID)]
+}
+
+func (a *App) clearWorkspaceCloneOperation(requestID string) {
+	if a == nil {
+		return
+	}
+	a.workspaceCloneMu.Lock()
+	defer a.workspaceCloneMu.Unlock()
+	if a.workspaceCloneOps == nil {
+		return
+	}
+	delete(a.workspaceCloneOps, strings.TrimSpace(requestID))
 }
 
 func (a *App) defaultWorkspaceNewRoot(ws *config.Workspace) string {
@@ -183,6 +438,9 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 			"浏览根目录: `"+firstNonEmpty(rootPath, "-")+"`\n\n"+
 			"可以先选父目录，再填写 Git 地址和可选 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。",
 	)
+	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
+		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
+	}
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 
 	repoURLInput := map[string]any{
@@ -246,6 +504,257 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 	}
 	appendMarkdownBodyCardElement(card, form)
 	return card
+}
+
+func (a *App) renderWorkspaceClonePreparingCard(requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) map[string]any {
+	repoURL := strings.TrimSpace(payload.RepoURL)
+	parentDir = firstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
+	workspaceID := strings.TrimSpace(payload.DraftID)
+	if workspaceID == "" {
+		workspaceID = "将从仓库名自动推导"
+	}
+	statusLine := "正在从仓库创建工作区。"
+	if snapshot.State == "cancelling" {
+		statusLine = "正在取消仓库克隆。"
+	}
+	lines := []string{
+		statusLine,
+		"",
+		"仓库: `" + firstNonEmpty(repoURL, "-") + "`",
+		"父目录: `" + parentDir + "`",
+		"workspace_id: `" + workspaceID + "`",
+	}
+	if !snapshot.StartedAt.IsZero() {
+		lines = append(lines, "已运行: `"+strings.TrimSpace(strings.TrimPrefix(formatTurnElapsedLine(time.Since(snapshot.StartedAt)), "elapsed: "))+"`")
+	}
+	if len(snapshot.Lines) == 0 {
+		lines = append(lines, "", "尚未收到 git 进度输出。")
+	} else {
+		lines = append(lines, "", "最近进度:", markdownCodeBlock(strings.Join(snapshot.Lines, "\n")))
+	}
+	lines = append(lines, "", "这张卡片会自动刷新。")
+	var buttons []feishu.Button
+	if snapshot.State != "cancelling" {
+		buttons = []feishu.Button{
+			{
+				Text: "取消克隆",
+				Type: "default",
+				Value: map[string]any{
+					"action":     "workspace.clone.cancel",
+					"request_id": requestID,
+				},
+			},
+		}
+	}
+	return a.feishu.SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+}
+
+func (a *App) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
+	buttons := []feishu.Button{
+		{
+			Text: "返回工作区管理",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.workspace",
+				"session_key": sessionKey,
+			},
+		},
+	}
+	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
+	return a.feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
+}
+
+func (a *App) renderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText string) map[string]any {
+	lines := []string{
+		"仓库已拉取，可手动接管。",
+		"",
+		"目录: `" + firstNonEmpty(strings.TrimSpace(targetDir), "-") + "`",
+	}
+	if workspaceID = strings.TrimSpace(workspaceID); workspaceID != "" {
+		lines = append(lines, "建议 workspace_id: `"+workspaceID+"`")
+	}
+	lines = append(lines, "", "自动创建或切换工作区失败。仓库目录已保留，可稍后通过 `/workspace new` 手动接管。")
+	if errText = strings.TrimSpace(errText); errText != "" {
+		lines = append(lines, "", "错误: "+errText)
+	}
+	buttons := []feishu.Button{
+		{
+			Text: "返回工作区管理",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.workspace",
+				"session_key": sessionKey,
+			},
+		},
+	}
+	return a.feishu.SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
+}
+
+func (a *App) renderWorkspaceCloneCanceledCard(sessionKey string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) map[string]any {
+	repoURL := strings.TrimSpace(payload.RepoURL)
+	parentDir = firstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
+	workspaceID := strings.TrimSpace(payload.DraftID)
+	if workspaceID == "" {
+		workspaceID = "将从仓库名自动推导"
+	}
+	lines := []string{
+		"已取消仓库克隆。",
+		"",
+		"仓库: `" + firstNonEmpty(repoURL, "-") + "`",
+		"父目录: `" + parentDir + "`",
+		"workspace_id: `" + workspaceID + "`",
+		"",
+		"如果目标目录有残留，请清理后重新发起。",
+	}
+	if len(snapshot.Lines) > 0 {
+		lines = append(lines, "", "取消前最后进度:", markdownCodeBlock(strings.Join(snapshot.Lines, "\n")))
+	}
+	buttons := []feishu.Button{
+		{
+			Text: "返回工作区管理",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.workspace",
+				"session_key": sessionKey,
+			},
+		},
+	}
+	return a.feishu.SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
+}
+
+func (a *App) patchWorkspaceCloneProgressCard(messageID, requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) {
+	if a == nil || strings.TrimSpace(messageID) == "" {
+		return
+	}
+	card := a.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
+	if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
+		slog.Warn("workspace clone progress patch failed",
+			"request_id", requestID,
+			"message_id", messageID,
+			"error", err,
+		)
+	}
+}
+
+func (a *App) noteWorkspaceCloneProgress(op *workspaceCloneOperation, requestID, messageID string, payload workspaceClonePayload, parentDir, line string) {
+	if op == nil {
+		return
+	}
+	snapshot, shouldPatch := op.recordProgress(line)
+	if shouldPatch {
+		a.patchWorkspaceCloneProgressCard(messageID, requestID, payload, parentDir, snapshot)
+	}
+}
+
+func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceCloneOperation, requestID, messageID, sessionKey, userID, chatID, chatType, parentDir string, payload workspaceClonePayload) {
+	appState := a.appState()
+	defer a.clearWorkspaceCloneOperation(requestID)
+	slog.Debug("workspace clone started",
+		"request_id", requestID,
+		"message_id", messageID,
+		"session_key", sessionKey,
+		"repo_url", payload.RepoURL,
+		"parent_dir", parentDir,
+	)
+	workspaceID, targetDir, err := a.cloneWorkspaceInParent(
+		ctx,
+		sessionKey,
+		userID,
+		chatID,
+		chatType,
+		payload.RepoURL,
+		payload.DraftID,
+		parentDir,
+		func(line string) {
+			a.noteWorkspaceCloneProgress(op, requestID, messageID, payload, parentDir, line)
+		},
+	)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			slog.Warn("workspace clone canceled",
+				"request_id", requestID,
+				"message_id", messageID,
+				"session_key", sessionKey,
+				"repo_url", payload.RepoURL,
+				"parent_dir", parentDir,
+			)
+			payload.SelectedParentDir = parentDir
+			payload.ErrorMessage = ""
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+				req.Status = "resolved"
+				req.PayloadJSON = mustJSON(payload)
+				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+			})
+			if strings.TrimSpace(messageID) != "" {
+				a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.snapshot()))
+			}
+			return
+		}
+		var takeoverErr *workspaceCloneTakeoverError
+		if errors.As(err, &takeoverErr) {
+			slog.Warn("workspace clone needs manual takeover",
+				"request_id", requestID,
+				"message_id", messageID,
+				"session_key", sessionKey,
+				"repo_url", payload.RepoURL,
+				"parent_dir", parentDir,
+				"target_dir", takeoverErr.TargetDir,
+				"workspace_id", takeoverErr.WorkspaceID,
+				"error", takeoverErr.Err,
+			)
+			payload.SelectedParentDir = parentDir
+			payload.DraftID = firstNonEmpty(strings.TrimSpace(payload.DraftID), strings.TrimSpace(takeoverErr.WorkspaceID))
+			if takeoverErr.Err != nil {
+				payload.ErrorMessage = takeoverErr.Err.Error()
+			} else {
+				payload.ErrorMessage = err.Error()
+			}
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+				req.Status = "resolved"
+				req.PayloadJSON = mustJSON(payload)
+				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+			})
+			if strings.TrimSpace(messageID) != "" {
+				_ = a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
+			}
+			return
+		}
+		slog.Warn("workspace clone failed",
+			"request_id", requestID,
+			"message_id", messageID,
+			"session_key", sessionKey,
+			"repo_url", payload.RepoURL,
+			"parent_dir", parentDir,
+			"error", err,
+		)
+		payload.SelectedParentDir = parentDir
+		payload.ErrorMessage = err.Error()
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = "pending"
+			req.PayloadJSON = mustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		if strings.TrimSpace(messageID) != "" {
+			_ = a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneCard(sessionKey, requestID, payload))
+		}
+		return
+	}
+	slog.Debug("workspace clone completed",
+		"request_id", requestID,
+		"message_id", messageID,
+		"session_key", sessionKey,
+		"workspace_id", workspaceID,
+		"target_dir", targetDir,
+	)
+	payload.SelectedParentDir = parentDir
+	payload.ErrorMessage = ""
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = "resolved"
+		req.PayloadJSON = mustJSON(payload)
+	})
+	if strings.TrimSpace(messageID) != "" {
+		_ = a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir))
+	}
 }
 
 func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
@@ -375,7 +884,7 @@ func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
 	return "."
 }
 
-func (a *App) cloneWorkspaceInParent(sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string) (string, string, error) {
+func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string, report workspaceCloneProgressReporter) (string, string, error) {
 	repoName, err := workspaceCloneRepoName(repoURL)
 	if err != nil {
 		return "", "", err
@@ -407,13 +916,21 @@ func (a *App) cloneWorkspaceInParent(sessionKey, userID, chatID, chatType, repoU
 	if err := os.MkdirAll(filepath.Dir(targetDir), 0o755); err != nil {
 		return "", "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	if err := workspaceGitClone(ctx, strings.TrimSpace(repoURL), targetDir); err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := workspaceGitClone(ctx, strings.TrimSpace(repoURL), targetDir, report); err != nil {
+		return "", "", err
+	}
+	if err := ctx.Err(); err != nil {
 		return "", "", err
 	}
 	if err := a.createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, workspaceID, workspaceID, targetDir); err != nil {
-		return "", "", fmt.Errorf("仓库已拉取到 %q，但创建工作区失败: %w", targetDir, err)
+		return "", "", &workspaceCloneTakeoverError{
+			WorkspaceID: workspaceID,
+			TargetDir:   targetDir,
+			Err:         err,
+		}
 	}
 	return workspaceID, targetDir, nil
 }
@@ -431,6 +948,7 @@ func (a *App) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage
 		parentDir = a.defaultWorkspaceCloneParent(ws)
 	}
 	workspaceID, targetDir, err := a.cloneWorkspaceInParent(
+		context.Background(),
 		sessionKey,
 		msg.UserID,
 		msg.ChatID,
@@ -438,6 +956,7 @@ func (a *App) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage
 		repoURL,
 		explicitID,
 		parentDir,
+		nil,
 	)
 	if err != nil {
 		return err

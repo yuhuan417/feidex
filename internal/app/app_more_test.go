@@ -968,7 +968,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 
 	var gotRepoURL string
 	var gotTargetDir string
-	workspaceGitClone = func(_ context.Context, repoURL, targetDir string) error {
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ workspaceCloneProgressReporter) error {
 		gotRepoURL = repoURL
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
