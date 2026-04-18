@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"feidex/internal/pathdisplay"
+
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkdrive "github.com/larksuite/oapi-sdk-go/v3/service/drive/v1"
 )
@@ -203,7 +205,7 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 			case err != nil:
 				errs = append(errs, err.Error())
 			case ok && strings.TrimSpace(url) != "":
-				replacement = formatPreviewLinkReplacement(rawTarget, url)
+				replacement = formatPreviewLinkReplacement(rawTarget, url, req.WorkspaceCWD)
 				rewrittenTargets[rawTarget] = replacement
 				changed = true
 			default:
@@ -223,8 +225,8 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 	return builder.String(), nil
 }
 
-func formatPreviewLinkReplacement(rawTarget, url string) string {
-	displayPath := previewDisplayPath(rawTarget)
+func formatPreviewLinkReplacement(rawTarget, url, workspaceCWD string) string {
+	displayPath := previewDisplayPath(rawTarget, workspaceCWD)
 	clickableName := previewClickableName(displayPath)
 	if displayPath == "" {
 		displayPath = clickableName
@@ -235,7 +237,7 @@ func formatPreviewLinkReplacement(rawTarget, url string) string {
 	return "`" + sanitizeInlineCodeText(displayPath) + "` [" + sanitizeMarkdownLinkLabel(clickableName) + "](" + strings.TrimSpace(url) + ")"
 }
 
-func previewDisplayPath(rawTarget string) string {
+func previewDisplayPath(rawTarget, workspaceCWD string) string {
 	target := strings.TrimSpace(rawTarget)
 	target = strings.Trim(target, "\"'")
 	if target == "" {
@@ -247,7 +249,7 @@ func previewDisplayPath(rawTarget string) string {
 	if idx := strings.IndexByte(target, '#'); idx >= 0 {
 		target = target[:idx]
 	}
-	return strings.TrimSpace(target)
+	return pathdisplay.RenderWorkspaceDisplayPath(strings.TrimSpace(target), workspaceCWD)
 }
 
 func previewClickableName(displayPath string) string {
@@ -271,7 +273,7 @@ func sanitizeInlineCodeText(value string) string {
 
 func sanitizeMarkdownLinkLabel(value string) string {
 	value = strings.TrimSpace(value)
-	value = strings.ReplaceAll(value, `[`, `\[` )
+	value = strings.ReplaceAll(value, `[`, `\[`)
 	value = strings.ReplaceAll(value, `]`, `\]`)
 	return value
 }
