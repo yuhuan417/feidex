@@ -15,16 +15,14 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 			Level: " warning ",
 		},
 		Codex: CodexConfig{
-			AppServerDir:     "./codex-home",
-			AppServerIdleTTL: "20m",
-			Model:            " gpt-5 ",
-			ReasoningEffort:  " high ",
+			AppServerDir:    "./codex-home",
+			Model:           " gpt-5 ",
+			ReasoningEffort: " high ",
 		},
 		Workspaces: []Workspace{
 			{
-				ID:           " default ",
-				Cwd:          "./repo",
-				AppServerDir: "./repo-codex",
+				ID:  " default ",
+				Cwd: "./repo",
 			},
 		},
 	}
@@ -45,9 +43,6 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	if !filepath.IsAbs(cfg.Codex.AppServerDir) || !strings.HasSuffix(cfg.Codex.AppServerDir, filepath.Join("workspace", "codex-home")) {
 		t.Fatalf("Codex.AppServerDir = %q, want absolute path", cfg.Codex.AppServerDir)
 	}
-	if cfg.Codex.AppServerIdleTTL != "20m" {
-		t.Fatalf("Codex.AppServerIdleTTL = %q, want 20m", cfg.Codex.AppServerIdleTTL)
-	}
 	if cfg.Log.Level != "warn" {
 		t.Fatalf("Log.Level = %q, want warn", cfg.Log.Level)
 	}
@@ -65,9 +60,6 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	}
 	if !filepath.IsAbs(cfg.Workspaces[0].Cwd) || !strings.HasSuffix(cfg.Workspaces[0].Cwd, filepath.Join("workspace", "repo")) {
 		t.Fatalf("Workspace.Cwd = %q, want absolute workspace path", cfg.Workspaces[0].Cwd)
-	}
-	if !filepath.IsAbs(cfg.Workspaces[0].AppServerDir) || !strings.HasSuffix(cfg.Workspaces[0].AppServerDir, filepath.Join("workspace", "repo-codex")) {
-		t.Fatalf("Workspace.AppServerDir = %q, want absolute workspace path", cfg.Workspaces[0].AppServerDir)
 	}
 	if !filepath.IsAbs(cfg.DataDir) || !strings.HasSuffix(cfg.DataDir, filepath.Join("workspace", "data")) {
 		t.Fatalf("DataDir = %q, want absolute data path", cfg.DataDir)
@@ -102,13 +94,6 @@ func TestNormalizeRejectsInvalidWorkspaceConfigurations(t *testing.T) {
 					{ID: "dup", Cwd: "."},
 					{ID: "dup", Cwd: "./other"},
 				},
-			},
-		},
-		{
-			name: "invalid app server idle ttl",
-			cfg: &Config{
-				Codex:      CodexConfig{AppServerIdleTTL: "later"},
-				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
 			},
 		},
 		{

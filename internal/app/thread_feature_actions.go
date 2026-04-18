@@ -143,7 +143,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 		"model", effectiveModel,
 	)
 	var result codexrpc.ThreadStartResult
-	if err := a.codex.Call(withCodexWorkspace(context.Background(), workspaceID), "thread/resume", params, &result); err != nil {
+	if err := a.codex.Call(context.Background(), "thread/resume", params, &result); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	sess.ActiveThreadApprovalPolicy = ""

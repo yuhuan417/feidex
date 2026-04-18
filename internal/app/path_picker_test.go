@@ -541,7 +541,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 	if err := os.MkdirAll(parentDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(parentDir) error = %v", err)
 	}
-	a.cfg.Codex.AppServerIdleTTL = "bad-duration"
+	a.cfg.Log.Level = "trace"
 
 	origClone := workspaceGitClone
 	defer func() { workspaceGitClone = origClone }()
@@ -597,7 +597,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 	if !strings.Contains(body, "仓库已拉取，可手动接管") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("manual hint body = %q", body)
 	}
-	if !strings.Contains(body, "/workspace new") || !strings.Contains(body, "bad-duration") {
+	if !strings.Contains(body, "/workspace new") || !strings.Contains(body, "unsupported log.level") {
 		t.Fatalf("manual hint body = %q, want workspace new guidance and underlying error", body)
 	}
 	if cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "接管为工作区") {

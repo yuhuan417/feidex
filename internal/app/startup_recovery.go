@@ -123,7 +123,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			"model", effectiveModel,
 		)
 		resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err := a.codex.Call(withCodexWorkspace(resumeCtx, workspaceID), "thread/resume", resumeParams, &resumeResp)
+		err := a.codex.Call(resumeCtx, "thread/resume", resumeParams, &resumeResp)
 		resumeCancel()
 		if err == nil {
 			setSessionThreadContext(sess,
@@ -168,7 +168,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			"model", effectiveModel,
 		)
 		threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err = a.codex.Call(withCodexWorkspace(threadCtx, workspaceID), "thread/start", threadParams, &threadResp)
+		err = a.codex.Call(threadCtx, "thread/start", threadParams, &threadResp)
 		threadCancel()
 		if err != nil {
 			slog.Error("startup thread/start failed; clearing thread lineage",

@@ -813,7 +813,7 @@ func (a *App) startSubmissionReview(ctx context.Context, threadID string, sub *s
 		"target":   reviewTargetParams(target),
 	}
 	var reviewResp codexrpc.ReviewStartResult
-	if err := a.codex.Call(withCodexWorkspace(ctx, sub.WorkspaceID), "review/start", params, &reviewResp); err != nil {
+	if err := a.codex.Call(ctx, "review/start", params, &reviewResp); err != nil {
 		return "", err
 	}
 	turnID := strings.TrimSpace(reviewResp.Turn.ID)

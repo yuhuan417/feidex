@@ -140,8 +140,7 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
-	if err := a.codex.Call(withCodexWorkspace(ctx, workspaceID), "turn/steer", map[string]any{
+	if err := a.codex.Call(ctx, "turn/steer", map[string]any{
 		"threadId":       threadID,
 		"expectedTurnId": turnID,
 		"input":          inputs,
