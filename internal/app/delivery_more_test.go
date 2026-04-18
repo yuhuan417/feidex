@@ -11,6 +11,7 @@ import (
 
 func TestDeliveryAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	if got := a.workspaceCwd(a.cfg.Workspaces[0].ID); got != a.cfg.Workspaces[0].Cwd {

@@ -41,11 +41,11 @@ var quietModeOptions = []quietModeOption{
 
 func (a *App) quietMode() config.QuietMode {
 	if a == nil || a.cfg == nil {
-		return config.QuietModeVerbose
+		return config.QuietModeProgress
 	}
 	mode, err := config.ParseQuietMode(a.cfg.Feishu.Quiet)
 	if err != nil {
-		return config.QuietModeVerbose
+		return config.QuietModeProgress
 	}
 	return mode
 }

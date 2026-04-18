@@ -51,8 +51,8 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	if cfg.Log.Level != "warn" {
 		t.Fatalf("Log.Level = %q, want warn", cfg.Log.Level)
 	}
-	if cfg.Feishu.Quiet != QuietModeVerbose {
-		t.Fatalf("Feishu.Quiet = %q, want verbose", cfg.Feishu.Quiet)
+	if cfg.Feishu.Quiet != QuietModeProgress {
+		t.Fatalf("Feishu.Quiet = %q, want progress", cfg.Feishu.Quiet)
 	}
 	if cfg.Workspaces[0].ID != "default" {
 		t.Fatalf("Workspace.ID = %q, want default", cfg.Workspaces[0].ID)
@@ -239,7 +239,7 @@ func TestLoadLegacyConfigWithoutDaemonSectionKeepsDefaultDaemonServiceName(t *te
 }
 
 func TestQuietModeValidationAndConfigFallback(t *testing.T) {
-	if got, err := NormalizeQuietMode(""); err != nil || got != QuietModeVerbose {
+	if got, err := NormalizeQuietMode(""); err != nil || got != QuietModeProgress {
 		t.Fatalf("NormalizeQuietMode(empty) = %q, %v", got, err)
 	}
 	if got, err := NormalizeQuietMode("progress"); err != nil || got != QuietModeProgress {

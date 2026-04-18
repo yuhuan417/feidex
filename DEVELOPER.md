@@ -311,7 +311,7 @@ Semantics:
 
 Config behavior:
 
-- Missing or empty quiet value normalizes to `verbose`.
+- Missing or empty quiet value normalizes to `progress`.
 - Invalid configured quiet values fall back to `normal` instead of aborting startup.
 
 Implementation rule:

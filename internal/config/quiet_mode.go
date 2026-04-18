@@ -16,7 +16,9 @@ const (
 
 func ParseQuietMode(value QuietMode) (QuietMode, error) {
 	switch strings.ToLower(strings.TrimSpace(string(value))) {
-	case "", string(QuietModeVerbose):
+	case "":
+		return QuietModeProgress, nil
+	case string(QuietModeVerbose):
 		return QuietModeVerbose, nil
 	case string(QuietModeProgress):
 		return QuietModeProgress, nil
@@ -36,7 +38,7 @@ func NormalizeQuietMode(value QuietMode) (QuietMode, error) {
 func (m QuietMode) String() string {
 	normalized, err := ParseQuietMode(m)
 	if err != nil {
-		return string(QuietModeVerbose)
+		return string(QuietModeProgress)
 	}
 	return string(normalized)
 }

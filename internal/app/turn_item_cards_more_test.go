@@ -90,6 +90,7 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 
 func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	if got := a.sendTurnEventCardWithReuse(context.Background(), sub, "任务状态", "blue", "body", "turn_terminal", "item-1", "reuse-event"); got != "reuse-event" {

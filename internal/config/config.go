@@ -77,7 +77,7 @@ func Default() *Config {
 			GroupAtOnly:   true,
 			CardEnabled:   true,
 			ReplyInThread: true,
-			Quiet:         QuietModeVerbose,
+			Quiet:         QuietModeProgress,
 		},
 		Codex: CodexConfig{
 			Command:          "codex",

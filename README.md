@@ -127,7 +127,7 @@ group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
 reply_in_thread = true
-quiet = "verbose"
+quiet = "progress"
 
 [codex]
 command = "codex"
@@ -218,7 +218,7 @@ Feidex 会把这些状态写进去：
 - `reply_in_thread`
   - 群聊是否在线程内回复
 - `quiet`
-  - Quiet 模式默认值
+  - Quiet 模式默认值，默认 `progress`
 
 ### `[codex]`
 
