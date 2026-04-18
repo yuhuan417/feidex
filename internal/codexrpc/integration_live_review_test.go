@@ -174,6 +174,13 @@ func initTinyReviewRepo(t *testing.T) string {
 	t.Helper()
 
 	repo := t.TempDir()
+	initTinyReviewRepoInto(t, repo)
+	return repo
+}
+
+func initTinyReviewRepoInto(t *testing.T, repo string) {
+	t.Helper()
+
 	runGitIntegration(t, repo, "init")
 	runGitIntegration(t, repo, "config", "user.email", "feidex-test@example.com")
 	runGitIntegration(t, repo, "config", "user.name", "Feidex Test")
@@ -197,7 +204,6 @@ func Add(a, b int) int {
 	return a - b
 }
 `)+"\n")
-	return repo
 }
 
 func writeIntegrationFile(t *testing.T, path, content string) {
