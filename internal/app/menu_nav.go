@@ -30,6 +30,7 @@ var menuNodes = map[string]menuNode{
 	"menu.fast":              {Label: "响应速度", Parent: "menu.group.model"},
 	"menu.status":            {Label: "状态面板", Parent: "menu.group.system"},
 	"menu.debug.logs":        {Label: "查看日志", Parent: "menu.group.system"},
+	"menu.codex_upgrade":     {Label: "Codex 升级", Parent: "menu.group.system"},
 	"menu.upgrade":           {Label: "升级服务", Parent: "menu.group.system"},
 	"menu.help":              {Label: "命令帮助", Parent: "menu.group.system"},
 }

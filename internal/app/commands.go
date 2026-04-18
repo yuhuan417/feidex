@@ -14,6 +14,9 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	if len(fields) == 0 {
 		return nil
 	}
+	if err := a.codexUpgradeBlocksCommand(raw); err != nil {
+		return err
+	}
 	spec := findLocalCommandSpec(fields[0])
 	if spec == nil {
 		return fmt.Errorf("unknown command: %s", fields[0])

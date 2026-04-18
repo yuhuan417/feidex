@@ -90,6 +90,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"menu.history": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuHistory(action, actionSessionKey(action))
 	},
+	"menu.codex_upgrade": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuCodexUpgrade(action)
+	},
 	"menu.upgrade": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuUpgrade(action)
 	},
@@ -227,6 +230,21 @@ var cardActionHandlers = map[string]cardActionHandler{
 	},
 	"upgrade.dev": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeUpgradeDev(action)
+	},
+	"codex_upgrade.refresh": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexUpgradeRefresh(action)
+	},
+	"codex_upgrade.check": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexUpgradeCheck(action)
+	},
+	"codex_upgrade.prepare": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexUpgradePrepare(action)
+	},
+	"codex_upgrade.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexUpgradeAction(action, "codex_upgrade.confirm")
+	},
+	"codex_upgrade.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexUpgradeAction(action, "codex_upgrade.cancel")
 	},
 	"approval.command.accept": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeApprovalAction(action, "approval.command.accept")

@@ -87,6 +87,16 @@ func matchUpgradeCommand(fields []string) bool {
 	}
 }
 
+func matchCodexCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	if len(fields) != 2 {
+		return false
+	}
+	return commandArgInSet(fields[1], "check", "upgrade")
+}
+
 func matchWorkspaceCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true
@@ -366,6 +376,21 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/status", Summary: "查看当前会话、线程、工作区与模型状态。"},
+			},
+		},
+		{
+			Names: []string{"/codex"},
+			IsLocal: func(fields []string) bool {
+				return matchCodexCommand(fields)
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandCodex(msg, args)
+			},
+			HelpGroup: "system",
+			HelpEntries: []helpCommandSpec{
+				{Command: "/codex", Summary: "查看本机 Codex CLI 的安装与升级状态。"},
+				{Command: "/codex check", Summary: "检查 npm 官方最新稳定版。"},
+				{Command: "/codex upgrade", Summary: "准备升级到 npm 官方最新稳定版，并支持 smoke test 失败自动回滚。"},
 			},
 		},
 		{

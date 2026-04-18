@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"feidex/internal/buildinfo"
+	"feidex/internal/codexinstall"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -52,6 +53,12 @@ type releaseClient interface {
 	LinuxBinaryByVersion(context.Context, string, string) (*release.ReleaseInfo, error)
 }
 
+type codexInstallManager interface {
+	Probe(context.Context) (codexinstall.Probe, error)
+	LatestVersion(context.Context) (string, error)
+	InstallVersion(context.Context, string) error
+}
+
 var (
 	newCodexClient    = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
 	newAppCodexClient = func(cfg *config.Config) codexClient { return newWorkspaceCodexPool(cfg, newCodexClient) }
@@ -60,6 +67,7 @@ var (
 	newReleaseClient  = func() releaseClient {
 		return release.NewGitHubClient(release.DefaultRepoOwner, release.DefaultRepoName, nil)
 	}
+	newCodexInstallManager = func(command string) codexInstallManager { return codexinstall.New(command) }
 	startDaemonUpgrade = daemon.StartBackgroundUpgrade
 	currentVersion     = buildinfo.CurrentVersion
 	currentGOARCH      = func() string { return runtime.GOARCH }

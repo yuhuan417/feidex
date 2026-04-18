@@ -41,6 +41,8 @@ type App struct {
 	threadUsage       map[string]codexrpc.ThreadTokenUsage
 	skillsMu          sync.Mutex
 	pendingSkills     map[string]state.SubmissionSkill
+	codexUpgradeMu    sync.Mutex
+	codexUpgrade      codexUpgradeSnapshot
 }
 
 type turnBinding struct {

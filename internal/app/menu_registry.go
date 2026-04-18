@@ -1,5 +1,10 @@
 package app
 
+import (
+	"context"
+	"time"
+)
+
 type menuNodeRenderer func(a *App, sessionKey string) (map[string]any, bool)
 
 var menuNodeRenderers = map[string]menuNodeRenderer{
@@ -24,6 +29,15 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 	},
 	"menu.group.system": func(a *App, sessionKey string) (map[string]any, bool) {
 		return a.renderSystemMenuCard(sessionKey), true
+	},
+	"menu.codex_upgrade": func(a *App, sessionKey string) (map[string]any, bool) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		view, err := a.loadCodexUpgradeView(ctx, false)
+		if err != nil {
+			return nil, false
+		}
+		return a.renderCodexUpgradeStatusCard(sessionKey, view, false), true
 	},
 	"menu.thread": func(a *App, sessionKey string) (map[string]any, bool) {
 		card, err := a.renderThreadsCard(sessionKey, false)

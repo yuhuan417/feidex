@@ -89,6 +89,9 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			return nil
 		}
 	}
+	if a.codexUpgradeActive() {
+		return errString("Codex 正在升级中，当前只允许 `/codex`、`/status`、`/help`")
+	}
 	replyLink := a.replyRootTurnLink(msg)
 	if a.shouldStageInboundImages(msg) {
 		if err := a.stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
