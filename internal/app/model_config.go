@@ -13,6 +13,7 @@ import (
 )
 
 const modelConfigDefaultOptionValue = "__default__"
+const modelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default>"
 
 func configuredGlobalModel(cfg *config.Config) string {
 	if cfg == nil {
@@ -40,7 +41,7 @@ func defaultModelEntry(result codexrpc.ModelListResult) *codexrpc.ModelListEntry
 	return &result.Data[0]
 }
 
-func findModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
+func lookupModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
 		return defaultModelEntry(result)
@@ -49,6 +50,13 @@ func findModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.M
 		if result.Data[i].ID == modelID || result.Data[i].Model == modelID {
 			return &result.Data[i]
 		}
+	}
+	return nil
+}
+
+func findModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
+	if found := lookupModelEntry(result, modelID); found != nil {
+		return found
 	}
 	return defaultModelEntry(result)
 }
@@ -248,14 +256,62 @@ func (a *App) updateGlobalModelConfig(mutate func(*config.CodexConfig), result c
 	return config.Save(a.cfgPath, a.cfg)
 }
 
-func (a *App) commandModel(msg *feishu.InboundMessage) error {
+func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
+	sessionKey := a.makeSessionKey(msg)
+	if len(args) > 0 {
+		action := a.commandActionFromMessage(msg, map[string]any{
+			"menu_action": "menu.model",
+			"session_key": sessionKey,
+		})
+		switch strings.TrimSpace(args[0]) {
+		case "set":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: %s", modelCommandUsage)
+			}
+			modelID := strings.TrimSpace(args[1])
+			if modelID == "default" || modelID == modelConfigDefaultOptionValue {
+				modelID = ""
+			}
+			if modelID != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				result, err := a.fetchModelList(ctx)
+				if err != nil {
+					return err
+				}
+				if lookupModelEntry(result, modelID) == nil {
+					return a.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+				}
+			}
+			resp, err := a.completeGlobalModelSet(action, modelID)
+			if err != nil {
+				return err
+			}
+			return a.replyCommandActionResponse(msg, resp)
+		case "effort":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: %s", modelCommandUsage)
+			}
+			effort := strings.TrimSpace(args[1])
+			if effort == "default" || effort == modelConfigDefaultOptionValue {
+				effort = ""
+			}
+			resp, err := a.completeGlobalReasoningEffortSet(action, effort)
+			if err != nil {
+				return err
+			}
+			return a.replyCommandActionResponse(msg, resp)
+		default:
+			return fmt.Errorf("usage: %s", modelCommandUsage)
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	result, err := a.fetchModelList(ctx)
 	if err != nil {
 		return err
 	}
-	card := a.renderModelConfigCard(result, a.makeSessionKey(msg), "menu.model")
+	card := a.renderModelConfigCard(result, sessionKey, "menu.model")
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
 }

@@ -119,6 +119,38 @@ func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, us
 	return "", "", "", ""
 }
 
+func (a *App) commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
+	if actionValue == nil {
+		actionValue = map[string]any{}
+	}
+	if msg == nil {
+		return &feishu.CardAction{ActionValue: actionValue}
+	}
+	return &feishu.CardAction{
+		ActionValue: actionValue,
+		UserID:      strings.TrimSpace(msg.UserID),
+		ChatID:      strings.TrimSpace(msg.ChatID),
+		MessageID:   strings.TrimSpace(msg.MessageID),
+	}
+}
+
+func (a *App) replyCommandActionResponse(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+	if msg == nil || resp == nil {
+		return nil
+	}
+	replyInThread := msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread
+	if resp.Card != nil {
+		if card, ok := resp.Card.Data.(map[string]any); ok && len(card) > 0 {
+			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThread)
+			return err
+		}
+	}
+	if resp.Toast != nil && strings.TrimSpace(resp.Toast.Content) != "" {
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, strings.TrimSpace(resp.Toast.Content), replyInThread)
+	}
+	return nil
+}
+
 func (a *App) commandMessageFromAction(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
 	msg := &feishu.InboundMessage{
 		SessionKey: strings.TrimSpace(sessionKey),

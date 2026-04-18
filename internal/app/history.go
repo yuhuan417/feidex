@@ -14,6 +14,7 @@ import (
 )
 
 const historyPageSize = 50
+const historyCommandUsage = "/history | /history detail TURN_NUMBER"
 
 type historyTurnSummary struct {
 	Ordinal      int
@@ -28,7 +29,23 @@ type historyTurnSummary struct {
 
 func (a *App) commandHistory(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
-		return fmt.Errorf("usage: /history")
+		if len(args) != 2 || strings.TrimSpace(args[0]) != "detail" {
+			return fmt.Errorf("usage: %s", historyCommandUsage)
+		}
+		ordinal, err := strconv.Atoi(strings.TrimSpace(args[1]))
+		if err != nil || ordinal <= 0 {
+			return fmt.Errorf("usage: %s", historyCommandUsage)
+		}
+		index, err := a.historyIndexForOrdinal(a.makeSessionKey(msg), ordinal)
+		if err != nil {
+			return err
+		}
+		card, err := a.renderHistoryDetailCard(a.makeSessionKey(msg), index)
+		if err != nil {
+			return err
+		}
+		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return err
 	}
 	card, err := a.renderHistoryCard(a.makeSessionKey(msg), 0)
 	if err != nil {
@@ -36,6 +53,19 @@ func (a *App) commandHistory(msg *feishu.InboundMessage, args []string) error {
 	}
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
 	return err
+}
+
+func (a *App) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
+	_, _, turns, err := a.fetchCurrentThreadHistory(sessionKey)
+	if err != nil {
+		return 0, err
+	}
+	for idx, turn := range turns {
+		if turn.Ordinal == ordinal {
+			return idx, nil
+		}
+	}
+	return 0, fmt.Errorf("Turn #%d 不存在", ordinal)
 }
 
 func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {

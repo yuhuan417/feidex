@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"feidex/internal/feishu"
@@ -55,6 +56,32 @@ func matchReviewCommand(fields []string) bool {
 	}
 }
 
+func matchHistoryCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	if len(fields) != 3 || strings.TrimSpace(fields[1]) != "detail" {
+		return false
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(fields[2]))
+	return err == nil && value > 0
+}
+
+func matchModelCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	if len(fields) != 3 {
+		return false
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "set", "effort":
+		return strings.TrimSpace(fields[2]) != ""
+	default:
+		return false
+	}
+}
+
 func matchThreadCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true
@@ -62,8 +89,12 @@ func matchThreadCommand(fields []string) bool {
 	switch strings.TrimSpace(fields[1]) {
 	case "list":
 		return len(fields) == 2 || (len(fields) == 3 && strings.TrimSpace(fields[2]) == "all")
-	case "new", "fork", "sandbox", "policy":
+	case "new", "fork":
 		return len(fields) == 2
+	case "resume":
+		return len(fields) == 3
+	case "sandbox", "policy":
+		return len(fields) == 2 || len(fields) == 3
 	default:
 		return false
 	}
@@ -102,8 +133,10 @@ func matchWorkspaceCommand(fields []string) bool {
 		return true
 	}
 	switch strings.TrimSpace(fields[1]) {
-	case "list", "new", "sandbox", "policy":
+	case "list", "new":
 		return len(fields) == 2
+	case "sandbox", "policy":
+		return len(fields) == 2 || len(fields) == 3
 	case "clone":
 		_, _, _, err := parseWorkspaceCloneArgs(fields[1:])
 		return err == nil
@@ -143,7 +176,7 @@ func localCommandSpecList() []localCommandSpec {
 		{
 			Names: []string{"/history"},
 			IsLocal: func(fields []string) bool {
-				return exactCommand(fields)
+				return matchHistoryCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 				return a.commandHistory(msg, args)
@@ -151,6 +184,7 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
+				{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
 			},
 		},
 		{
@@ -184,14 +218,18 @@ func localCommandSpecList() []localCommandSpec {
 		{
 			Names: []string{"/model"},
 			IsLocal: func(fields []string) bool {
-				return exactCommand(fields)
+				return matchModelCommand(fields)
 			},
-			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-				return a.commandModel(msg)
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandModel(msg, args)
 			},
 			HelpGroup: "model",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/model", Summary: "打开模型选择与推理强度配置。"},
+				{Command: "/model set <model-id>", Summary: "直接设置全局 model。"},
+				{Command: "/model set default", Summary: "清空全局 model，跟随 app-server 默认。"},
+				{Command: "/model effort <effort>", Summary: "直接设置全局推理强度。"},
+				{Command: "/model effort default", Summary: "清空全局推理强度，跟随模型默认。"},
 			},
 		},
 		{
@@ -332,8 +370,11 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/thread list all", Summary: "查看更多来源的线程，仅保留命令入口。"},
 				{Command: "/thread new", Summary: "立即创建并切换到新的 thread。"},
 				{Command: "/thread fork", Summary: "复制当前 thread 为一个新分支，并立即切换过去。"},
+				{Command: "/thread resume THREAD_ID", Summary: "按 thread id 直接恢复线程。"},
 				{Command: "/thread sandbox", Summary: "配置当前线程的 sandbox。"},
+				{Command: "/thread sandbox MODE", Summary: "直接设置当前线程的 sandbox。"},
 				{Command: "/thread policy", Summary: "配置当前线程的 approval policy。"},
+				{Command: "/thread policy POLICY", Summary: "直接设置当前线程的 approval policy。"},
 			},
 		},
 		{
@@ -427,7 +468,9 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/workspace clone GIT_URL [ID] [--parent DIR]", Summary: "从 Git 仓库创建新工作区，可显式指定父目录。"},
 				{Command: "/workspace use ID", Summary: "切换到指定工作区。"},
 				{Command: "/workspace sandbox", Summary: "配置当前工作区默认 sandbox。"},
+				{Command: "/workspace sandbox MODE", Summary: "直接设置当前工作区默认 sandbox。"},
 				{Command: "/workspace policy", Summary: "配置当前工作区默认 approval policy。"},
+				{Command: "/workspace policy POLICY", Summary: "直接设置当前工作区默认 approval policy。"},
 			},
 		},
 	}

@@ -13,6 +13,8 @@ import (
 	"feidex/internal/state"
 )
 
+const threadCommandUsage = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY]"
+
 func (a *App) commandNew(msg *feishu.InboundMessage) error {
 	return a.commandThreadsNew(msg)
 }
@@ -103,15 +105,16 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
 		return a.commandThreads(msg, false)
 	}
+	sessionKey := a.makeSessionKey(msg)
 	switch strings.TrimSpace(args[0]) {
 	case "list":
 		includeAll := false
 		if len(args) > 2 {
-			return fmt.Errorf("usage: /thread | /thread list [all] | /thread new | /thread fork | /thread sandbox | /thread policy")
+			return fmt.Errorf("usage: %s", threadCommandUsage)
 		}
 		if len(args) == 2 {
 			if strings.TrimSpace(args[1]) != "all" {
-				return fmt.Errorf("usage: /thread | /thread list [all] | /thread new | /thread fork | /thread sandbox | /thread policy")
+				return fmt.Errorf("usage: %s", threadCommandUsage)
 			}
 			includeAll = true
 		}
@@ -126,18 +129,49 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 			return fmt.Errorf("usage: /thread fork")
 		}
 		return a.commandFork(msg, nil)
+	case "resume":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /thread resume THREAD_ID")
+		}
+		resp, err := a.completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
 	case "sandbox":
-		if len(args) != 1 {
-			return fmt.Errorf("usage: /thread sandbox")
+		if len(args) == 1 {
+			return a.showThreadSandboxMenu(msg)
 		}
-		return a.showThreadSandboxMenu(msg)
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /thread sandbox [MODE]")
+		}
+		_, _, _, threadID, err := a.currentThreadForMessage(msg)
+		if err != nil {
+			return err
+		}
+		resp, err := a.completeThreadSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
 	case "policy":
-		if len(args) != 1 {
-			return fmt.Errorf("usage: /thread policy")
+		if len(args) == 1 {
+			return a.showThreadPolicyMenu(msg)
 		}
-		return a.showThreadPolicyMenu(msg)
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /thread policy [POLICY]")
+		}
+		_, _, _, threadID, err := a.currentThreadForMessage(msg)
+		if err != nil {
+			return err
+		}
+		resp, err := a.completeThreadPolicySet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
 	default:
-		return fmt.Errorf("usage: /thread | /thread list [all] | /thread new | /thread fork | /thread sandbox | /thread policy")
+		return fmt.Errorf("usage: %s", threadCommandUsage)
 	}
 }
 

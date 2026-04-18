@@ -16,7 +16,7 @@ type workspaceSettingOption struct {
 	Label string
 }
 
-const workspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace sandbox | /workspace policy"
+const workspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace sandbox [MODE] | /workspace policy [POLICY]"
 
 func parseWorkspaceCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err error) {
 	if len(args) < 2 || strings.TrimSpace(args[0]) != "clone" {
@@ -53,6 +53,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 	if len(args) == 0 {
 		return a.showWorkspaceMenu(msg)
 	}
+	sessionKey := a.makeSessionKey(msg)
 	if args[0] == "list" {
 		return a.showWorkspaceMenu(msg)
 	}
@@ -70,10 +71,38 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		return a.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
 	}
 	if args[0] == "sandbox" {
-		return a.showWorkspaceSandboxMenu(msg)
+		if len(args) == 1 {
+			return a.showWorkspaceSandboxMenu(msg)
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /workspace sandbox [MODE]")
+		}
+		_, _, ws := a.currentWorkspaceForMessage(msg)
+		if ws == nil {
+			return fmt.Errorf("workspace not found")
+		}
+		resp, err := a.completeWorkspaceSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
 	}
 	if args[0] == "policy" {
-		return a.showWorkspacePolicyMenu(msg)
+		if len(args) == 1 {
+			return a.showWorkspacePolicyMenu(msg)
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /workspace policy [POLICY]")
+		}
+		_, _, ws := a.currentWorkspaceForMessage(msg)
+		if ws == nil {
+			return fmt.Errorf("workspace not found")
+		}
+		resp, err := a.completeWorkspacePolicySet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
 	}
 	if len(args) >= 2 && args[0] == "use" {
 		appState := a.appState()
@@ -81,7 +110,6 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		if ws == nil {
 			return fmt.Errorf("workspace %q not found", args[1])
 		}
-		sessionKey := a.makeSessionKey(msg)
 		sess := appState.session(sessionKey)
 		if sess == nil {
 			sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
