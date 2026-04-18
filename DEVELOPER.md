@@ -35,6 +35,12 @@ Dependency direction should stay simple:
 - `internal/app` may depend on lower-level packages.
 - Lower-level packages should not depend on `internal/app`.
 
+## Interaction Constraints
+
+- Any capability that is reachable from a Feishu menu must also be invocable directly from a slash command or equivalent command-line style entrypoint. Do not introduce menu-only product capabilities.
+- Feishu card callback handlers must stay short and non-blocking. Do not perform long-running business logic, external network calls, or other high-latency work directly inside a synchronous card callback.
+- If a card action needs slow work, acknowledge the callback quickly and continue via the asynchronous card update flow or another background path that can patch or replace the card later.
+
 ## Build Output Rules
 
 Do not scatter binaries around the repository. Use these locations consistently:
