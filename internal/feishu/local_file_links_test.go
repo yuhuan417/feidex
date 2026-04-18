@@ -124,17 +124,17 @@ func (f *fakePreviewAPI) DeleteFile(_ context.Context, token, _ string) error {
 	return nil
 }
 
-func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.T) {
+func TestDriveLocalFileLinkRewriterRewriteTextReplacesLocalMarkdownLinks(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Hello\n"), 0o644); err != nil {
 		t.Fatalf("write markdown: %v", err)
 	}
 	api := &fakePreviewAPI{}
-	previewer := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{
+	rewriter := NewDriveLocalFileLinkRewriter(api, LocalFileLinkConfig{
 		ProcessCWD: root,
 	})
 
-	got, err := previewer.RewriteText(context.Background(), MarkdownPreviewRequest{
+	got, err := rewriter.RewriteText(context.Background(), LocalFileLinkRewriteRequest{
 		Text:         "请看 [README](README.md) 和 [README2](README.md)",
 		WorkspaceCWD: root,
 		ChatID:       "oc_123",
@@ -153,7 +153,7 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 		t.Fatalf("expected user + chat permissions, got %#v", api.grantCalls)
 	}
 
-	gotAgain, err := previewer.RewriteText(context.Background(), MarkdownPreviewRequest{
+	gotAgain, err := rewriter.RewriteText(context.Background(), LocalFileLinkRewriteRequest{
 		Text:         "请看 [README](README.md)",
 		WorkspaceCWD: root,
 		ChatID:       "oc_123",
@@ -170,17 +170,44 @@ func TestDriveMarkdownPreviewerRewriteTextReplacesLocalMarkdownLinks(t *testing.
 	}
 }
 
-func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
+func TestDriveLocalFileLinkRewriterRewriteTextReplacesLocalNonMarkdownLinks(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("write go file: %v", err)
+	}
+	api := &fakePreviewAPI{}
+	rewriter := NewDriveLocalFileLinkRewriter(api, LocalFileLinkConfig{
+		ProcessCWD: root,
+	})
+
+	got, err := rewriter.RewriteText(context.Background(), LocalFileLinkRewriteRequest{
+		Text:         "请看 [Main](main.go:12) 和 [MainAgain](main.go:12)",
+		WorkspaceCWD: root,
+		ChatID:       "oc_123",
+		UserID:       "ou_123",
+	})
+	if err != nil {
+		t.Fatalf("RewriteText returned error: %v", err)
+	}
+	if !strings.Contains(got, "`main.go:12` [main.go](https://drive.example/file-1)") {
+		t.Fatalf("expected rewritten local file path + link, got %q", got)
+	}
+	if api.createFolderCalls != 2 || api.uploadCalls != 1 || api.queryCalls != 1 {
+		t.Fatalf("unexpected drive api usage for non-markdown link: %#v", api)
+	}
+}
+
+func TestDriveLocalFileLinkRewriterCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Hello\n"), 0o644); err != nil {
 		t.Fatalf("write markdown: %v", err)
 	}
 	api := &fakePreviewAPI{}
-	previewer := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{
+	rewriter := NewDriveLocalFileLinkRewriter(api, LocalFileLinkConfig{
 		ProcessCWD: root,
 	})
 
-	if _, err := previewer.RewriteText(context.Background(), MarkdownPreviewRequest{
+	if _, err := rewriter.RewriteText(context.Background(), LocalFileLinkRewriteRequest{
 		Text:         "请看 [README](README.md)",
 		WorkspaceCWD: root,
 		ChatID:       "oc_123",
@@ -199,7 +226,7 @@ func TestDriveMarkdownPreviewerCleanupBeforeDeletesExpiredFiles(t *testing.T) {
 	children[0].CreatedTime = time.Now().Add(-8 * 24 * time.Hour)
 	api.children["folder-1"] = children
 
-	result, err := previewer.CleanupBefore(context.Background(), time.Now().Add(-7*24*time.Hour))
+	result, err := rewriter.CleanupBefore(context.Background(), time.Now().Add(-7*24*time.Hour))
 	if err != nil {
 		t.Fatalf("CleanupBefore returned error: %v", err)
 	}

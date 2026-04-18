@@ -30,8 +30,8 @@ type feishuClient interface {
 	SetHandlers(func(*feishu.InboundMessage), func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), func(*feishu.BotMenuClick), func(*feishu.MessageRecall), func(*feishu.MessageReaction))
 	Start(context.Context) error
 	Stop()
-	ConfigureMarkdownPreview(string, string)
-	RewriteMarkdownPreview(context.Context, feishu.MarkdownPreviewRequest) (string, error)
+	ConfigureLocalFileLinks(string, string)
+	RewriteLocalFileLinks(context.Context, feishu.LocalFileLinkRewriteRequest) (string, error)
 	CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
 	AddReaction(context.Context, string, string) error
 	RemoveReaction(context.Context, string, string) error
@@ -68,7 +68,7 @@ var (
 		return release.NewGitHubClient(release.DefaultRepoOwner, release.DefaultRepoName, nil)
 	}
 	newCodexInstallManager = func(command string) codexInstallManager { return codexinstall.New(command) }
-	startDaemonUpgrade = daemon.StartBackgroundUpgrade
-	currentVersion     = buildinfo.CurrentVersion
-	currentGOARCH      = func() string { return runtime.GOARCH }
+	startDaemonUpgrade     = daemon.StartBackgroundUpgrade
+	currentVersion         = buildinfo.CurrentVersion
+	currentGOARCH          = func() string { return runtime.GOARCH }
 )

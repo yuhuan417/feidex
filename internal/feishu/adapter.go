@@ -107,11 +107,11 @@ type Adapter struct {
 	onRecall     func(*MessageRecall)
 	onReaction   func(*MessageReaction)
 
-	previewMu         sync.Mutex
-	previewStatePath  string
-	previewProcessCWD string
-	artifactStore     *DriveArtifactStore
-	previewer         *DriveMarkdownPreviewer
+	artifactMu              sync.Mutex
+	localFileLinkStatePath  string
+	localFileLinkProcessCWD string
+	artifactStore           *DriveArtifactStore
+	localFileLinkRewriter   *DriveLocalFileLinkRewriter
 
 	wsMu                sync.Mutex
 	wsWriteMu           sync.Mutex
@@ -382,13 +382,13 @@ func cardActionFromCallbackEvent(event *callback.CardActionTriggerEvent) *CardAc
 	return cardAction
 }
 
-func (a *Adapter) ConfigureMarkdownPreview(statePath, processCWD string) {
-	a.previewMu.Lock()
-	defer a.previewMu.Unlock()
-	a.previewStatePath = strings.TrimSpace(statePath)
-	a.previewProcessCWD = strings.TrimSpace(processCWD)
+func (a *Adapter) ConfigureLocalFileLinks(statePath, processCWD string) {
+	a.artifactMu.Lock()
+	defer a.artifactMu.Unlock()
+	a.localFileLinkStatePath = strings.TrimSpace(statePath)
+	a.localFileLinkProcessCWD = strings.TrimSpace(processCWD)
 	a.artifactStore = nil
-	a.previewer = nil
+	a.localFileLinkRewriter = nil
 }
 
 func logWithLevel(level slog.Level, message string, attrs ...any) {

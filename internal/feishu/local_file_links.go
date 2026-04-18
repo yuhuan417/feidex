@@ -31,17 +31,17 @@ const (
 	previewListPageSize          = 200
 )
 
-var markdownPreviewLinkRe = regexp.MustCompile(`\[[^\]]+\]\(([^)\n]+)\)`)
-var markdownPreviewLineSuffixRe = regexp.MustCompile(`^(.*\.md)(:\d+(?::\d+)?)$`)
+var localFileLinkRe = regexp.MustCompile(`\[[^\]]+\]\(([^)\n]+)\)`)
+var previewLineSuffixRe = regexp.MustCompile(`^(.*?)(:\d+(?::\d+)?)$`)
 
-type MarkdownPreviewRequest struct {
+type LocalFileLinkRewriteRequest struct {
 	Text         string
 	WorkspaceCWD string
 	ChatID       string
 	UserID       string
 }
 
-type MarkdownPreviewConfig struct {
+type LocalFileLinkConfig struct {
 	StatePath      string
 	RootFolderName string
 	ProcessCWD     string
@@ -53,9 +53,9 @@ type PreviewDriveCleanupResult struct {
 	DeletedEstimatedBytes int64 `json:"deleted_estimated_bytes"`
 }
 
-type DriveMarkdownPreviewer struct {
+type DriveLocalFileLinkRewriter struct {
 	store  *DriveArtifactStore
-	config MarkdownPreviewConfig
+	config LocalFileLinkConfig
 	mu     sync.Mutex
 }
 
@@ -111,14 +111,14 @@ func (e *driveAPIError) PermissionIssue() *PermissionIssue {
 	return e.Issue
 }
 
-func NewDriveMarkdownPreviewer(api previewDriveAPI, cfg MarkdownPreviewConfig) *DriveMarkdownPreviewer {
+func NewDriveLocalFileLinkRewriter(api previewDriveAPI, cfg LocalFileLinkConfig) *DriveLocalFileLinkRewriter {
 	if cfg.RootFolderName == "" {
 		cfg.RootFolderName = defaultPreviewRootFolderName
 	}
 	if cfg.MaxFileBytes < 0 {
 		cfg.MaxFileBytes = defaultPreviewMaxFileBytes
 	}
-	return &DriveMarkdownPreviewer{
+	return &DriveLocalFileLinkRewriter{
 		store: NewDriveArtifactStore(api, ArtifactStoreConfig{
 			RootFolderName: cfg.RootFolderName,
 			MaxFileBytes:   cfg.MaxFileBytes,
@@ -127,39 +127,39 @@ func NewDriveMarkdownPreviewer(api previewDriveAPI, cfg MarkdownPreviewConfig) *
 	}
 }
 
-func (a *Adapter) RewriteMarkdownPreview(ctx context.Context, req MarkdownPreviewRequest) (string, error) {
-	previewer := a.ensureMarkdownPreviewer()
-	if previewer == nil {
+func (a *Adapter) RewriteLocalFileLinks(ctx context.Context, req LocalFileLinkRewriteRequest) (string, error) {
+	rewriter := a.ensureLocalFileLinkRewriter()
+	if rewriter == nil {
 		return req.Text, nil
 	}
-	return previewer.RewriteText(ctx, req)
+	return rewriter.RewriteText(ctx, req)
 }
 
-func (a *Adapter) CleanupMarkdownPreviewsBefore(ctx context.Context, cutoff time.Time) (PreviewDriveCleanupResult, error) {
-	previewer := a.ensureMarkdownPreviewer()
-	if previewer == nil {
+func (a *Adapter) CleanupLocalFileLinksBefore(ctx context.Context, cutoff time.Time) (PreviewDriveCleanupResult, error) {
+	rewriter := a.ensureLocalFileLinkRewriter()
+	if rewriter == nil {
 		return PreviewDriveCleanupResult{}, nil
 	}
-	return previewer.CleanupBefore(ctx, cutoff)
+	return rewriter.CleanupBefore(ctx, cutoff)
 }
 
-func (a *Adapter) ensureMarkdownPreviewer() *DriveMarkdownPreviewer {
-	a.previewMu.Lock()
-	defer a.previewMu.Unlock()
+func (a *Adapter) ensureLocalFileLinkRewriter() *DriveLocalFileLinkRewriter {
+	a.artifactMu.Lock()
+	defer a.artifactMu.Unlock()
 	if a.client == nil {
 		return nil
 	}
-	if a.previewer != nil {
-		return a.previewer
+	if a.localFileLinkRewriter != nil {
+		return a.localFileLinkRewriter
 	}
-	a.previewer = NewDriveMarkdownPreviewer(NewLarkDrivePreviewAPI(a.client), MarkdownPreviewConfig{
-		ProcessCWD:     a.previewProcessCWD,
+	a.localFileLinkRewriter = NewDriveLocalFileLinkRewriter(NewLarkDrivePreviewAPI(a.client), LocalFileLinkConfig{
+		ProcessCWD:     a.localFileLinkProcessCWD,
 		RootFolderName: defaultPreviewRootFolderName,
 	})
-	return a.previewer
+	return a.localFileLinkRewriter
 }
 
-func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPreviewRequest) (string, error) {
+func (p *DriveLocalFileLinkRewriter) RewriteText(ctx context.Context, req LocalFileLinkRewriteRequest) (string, error) {
 	text := strings.TrimSpace(req.Text)
 	if p == nil || p.store == nil || strings.TrimSpace(text) == "" {
 		return req.Text, nil
@@ -172,7 +172,7 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	matches := markdownPreviewLinkRe.FindAllStringSubmatchIndex(req.Text, -1)
+	matches := localFileLinkRe.FindAllStringSubmatchIndex(req.Text, -1)
 	if len(matches) == 0 {
 		return req.Text, nil
 	}
@@ -200,7 +200,7 @@ func (p *DriveMarkdownPreviewer) RewriteText(ctx context.Context, req MarkdownPr
 				changed = true
 			}
 		} else {
-			url, ok, err := p.materializeMarkdownTargetLocked(ctx, rawTarget, req, principals)
+			url, ok, err := p.materializePreviewTargetLocked(ctx, rawTarget, req, principals)
 			switch {
 			case err != nil:
 				errs = append(errs, err.Error())
@@ -254,7 +254,7 @@ func previewDisplayPath(rawTarget, workspaceCWD string) string {
 
 func previewClickableName(displayPath string) string {
 	target := strings.TrimSpace(displayPath)
-	if matched := markdownPreviewLineSuffixRe.FindStringSubmatch(target); len(matched) == 3 {
+	if matched := previewLineSuffixRe.FindStringSubmatch(target); len(matched) == 3 {
 		target = matched[1]
 	}
 	target = filepath.Clean(strings.TrimSpace(target))
@@ -278,30 +278,30 @@ func sanitizeMarkdownLinkLabel(value string) string {
 	return value
 }
 
-func (p *DriveMarkdownPreviewer) CleanupBefore(ctx context.Context, cutoff time.Time) (PreviewDriveCleanupResult, error) {
+func (p *DriveLocalFileLinkRewriter) CleanupBefore(ctx context.Context, cutoff time.Time) (PreviewDriveCleanupResult, error) {
 	if p == nil {
 		return PreviewDriveCleanupResult{}, nil
 	}
 	if p.store == nil {
-		return PreviewDriveCleanupResult{}, fmt.Errorf("preview drive api is not available")
+		return PreviewDriveCleanupResult{}, fmt.Errorf("local file link drive api is not available")
 	}
 	return p.store.CleanupBefore(ctx, cutoff)
 }
 
-func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Context, rawTarget string, req MarkdownPreviewRequest, principals []previewPrincipal) (string, bool, error) {
-	resolvedPath, ok, err := p.resolveMarkdownPath(rawTarget, req)
+func (p *DriveLocalFileLinkRewriter) materializePreviewTargetLocked(ctx context.Context, rawTarget string, req LocalFileLinkRewriteRequest, principals []previewPrincipal) (string, bool, error) {
+	resolvedPath, ok, err := p.resolvePreviewPath(rawTarget, req)
 	if err != nil || !ok {
 		return "", ok, err
 	}
 	info, err := os.Stat(resolvedPath)
 	if err != nil {
-		return "", true, fmt.Errorf("stat markdown preview source %s: %w", resolvedPath, err)
+		return "", true, fmt.Errorf("stat local file link source %s: %w", resolvedPath, err)
 	}
 	if info.Size() == 0 {
-		return "", true, fmt.Errorf("skip empty markdown preview source %s", resolvedPath)
+		return "", true, fmt.Errorf("skip empty local file link source %s", resolvedPath)
 	}
 	if p.config.MaxFileBytes > 0 && info.Size() > p.config.MaxFileBytes {
-		return "", true, fmt.Errorf("markdown preview source exceeds %d bytes: %s", p.config.MaxFileBytes, resolvedPath)
+		return "", true, fmt.Errorf("local file link source exceeds %d bytes: %s", p.config.MaxFileBytes, resolvedPath)
 	}
 	_ = principals
 	result, err := p.store.UploadLocalFile(ctx, ArtifactUploadRequest{
@@ -310,21 +310,21 @@ func (p *DriveMarkdownPreviewer) materializeMarkdownTargetLocked(ctx context.Con
 		UserID:    req.UserID,
 	})
 	if err != nil {
-		return "", true, fmt.Errorf("upload markdown preview for %s: %w", resolvedPath, err)
+		return "", true, fmt.Errorf("upload local file link for %s: %w", resolvedPath, err)
 	}
 	return result.URL, true, nil
 }
 
-func (p *DriveMarkdownPreviewer) ensureRootFolderLocked(ctx context.Context) (*previewFolderRecord, error) {
+func (p *DriveLocalFileLinkRewriter) ensureRootFolderLocked(ctx context.Context) (*previewFolderRecord, error) {
 	if p == nil || p.store == nil {
-		return nil, fmt.Errorf("preview drive api is not available")
+		return nil, fmt.Errorf("local file link drive api is not available")
 	}
 	p.store.mu.Lock()
 	defer p.store.mu.Unlock()
 	return p.store.ensureRootFolderLocked(ctx)
 }
 
-func (p *DriveMarkdownPreviewer) listRootFoldersLocked(ctx context.Context) ([]*previewFolderRecord, error) {
+func (p *DriveLocalFileLinkRewriter) listRootFoldersLocked(ctx context.Context) ([]*previewFolderRecord, error) {
 	if p == nil || p.store == nil {
 		return nil, nil
 	}
@@ -333,7 +333,7 @@ func (p *DriveMarkdownPreviewer) listRootFoldersLocked(ctx context.Context) ([]*
 	return p.store.listRootFoldersLocked(ctx)
 }
 
-func (p *DriveMarkdownPreviewer) resolveMarkdownPath(rawTarget string, req MarkdownPreviewRequest) (string, bool, error) {
+func (p *DriveLocalFileLinkRewriter) resolvePreviewPath(rawTarget string, req LocalFileLinkRewriteRequest) (string, bool, error) {
 	target := strings.TrimSpace(rawTarget)
 	target = strings.Trim(target, "\"'")
 	if target == "" {
@@ -345,13 +345,10 @@ func (p *DriveMarkdownPreviewer) resolveMarkdownPath(rawTarget string, req Markd
 	if idx := strings.IndexByte(target, '#'); idx >= 0 {
 		target = target[:idx]
 	}
-	if matched := markdownPreviewLineSuffixRe.FindStringSubmatch(target); len(matched) == 3 {
+	if matched := previewLineSuffixRe.FindStringSubmatch(target); len(matched) == 3 {
 		target = matched[1]
 	}
 	target = filepath.Clean(strings.TrimSpace(target))
-	if !strings.EqualFold(filepath.Ext(target), ".md") {
-		return "", false, nil
-	}
 
 	roots := previewAllowedRoots(req.WorkspaceCWD, p.config.ProcessCWD)
 	candidates := previewPathCandidates(target, roots)

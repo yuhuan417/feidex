@@ -102,11 +102,11 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 	}
 }
 
-func (a *App) startMarkdownPreviewGCLoop(ctx context.Context) {
+func (a *App) startDriveArtifactGCLoop(ctx context.Context) {
 	if a == nil || a.feishu == nil {
 		return
 	}
-	go a.runMarkdownPreviewGC("startup")
+	go a.runDriveArtifactGC("startup")
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -115,7 +115,7 @@ func (a *App) startMarkdownPreviewGCLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				a.runMarkdownPreviewGC("ticker")
+				a.runDriveArtifactGC("ticker")
 			}
 		}
 	}()
@@ -178,7 +178,7 @@ func (a *App) busyCodexWorkspaceIDs() map[string]struct{} {
 	return busy
 }
 
-func (a *App) runMarkdownPreviewGC(source string) {
+func (a *App) runDriveArtifactGC(source string) {
 	if a == nil || a.feishu == nil {
 		return
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestMarkdownPreviewAdditionalHelpers(t *testing.T) {
+func TestLocalFileLinkAdditionalHelpers(t *testing.T) {
 	if got := (*driveAPIError)(nil).Error(); got != "" {
 		t.Fatalf("nil driveAPIError Error() = %q", got)
 	}
@@ -20,7 +20,7 @@ func TestMarkdownPreviewAdditionalHelpers(t *testing.T) {
 	}
 
 	api := &fakePreviewAPI{}
-	p := NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{})
+	p := NewDriveLocalFileLinkRewriter(api, LocalFileLinkConfig{})
 	p.store.root = &previewFolderRecord{Token: "folder-1", URL: "https://drive.example/folder-1"}
 	root, err := p.ensureRootFolderLocked(context.Background())
 	if err != nil || root.Token != "folder-1" {
@@ -30,7 +30,7 @@ func TestMarkdownPreviewAdditionalHelpers(t *testing.T) {
 		t.Fatalf("listRootFoldersLocked() = %+v, %v", got, err)
 	}
 	api.root = &previewRemoteNode{Token: "folder-2", URL: "https://drive.example/folder-2", Type: previewFolderType, Name: defaultPreviewRootFolderName}
-	p = NewDriveMarkdownPreviewer(api, MarkdownPreviewConfig{})
+	p = NewDriveLocalFileLinkRewriter(api, LocalFileLinkConfig{})
 	root, err = p.ensureRootFolderLocked(context.Background())
 	if err != nil || root.Token != "folder-2" {
 		t.Fatalf("ensureRootFolderLocked(list existing) = %+v, %v", root, err)

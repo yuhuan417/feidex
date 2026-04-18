@@ -61,7 +61,7 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 			TurnID:       sub.TurnID,
 		})
 		if result.CardID != "" {
-			a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
+			a.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 		}
 	}
 	return ids

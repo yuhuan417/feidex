@@ -29,12 +29,12 @@ func (c *commandCaptureClient) Stop() {
 	c.base.Stop()
 }
 
-func (c *commandCaptureClient) ConfigureMarkdownPreview(statePath, processCWD string) {
-	c.base.ConfigureMarkdownPreview(statePath, processCWD)
+func (c *commandCaptureClient) ConfigureLocalFileLinks(statePath, processCWD string) {
+	c.base.ConfigureLocalFileLinks(statePath, processCWD)
 }
 
-func (c *commandCaptureClient) RewriteMarkdownPreview(ctx context.Context, req feishu.MarkdownPreviewRequest) (string, error) {
-	return c.base.RewriteMarkdownPreview(ctx, req)
+func (c *commandCaptureClient) RewriteLocalFileLinks(ctx context.Context, req feishu.LocalFileLinkRewriteRequest) (string, error) {
+	return c.base.RewriteLocalFileLinks(ctx, req)
 }
 
 func (c *commandCaptureClient) CleanupArtifactsBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {

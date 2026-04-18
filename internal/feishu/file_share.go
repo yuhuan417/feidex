@@ -69,8 +69,8 @@ func (a *Adapter) CleanupArtifactsBefore(ctx context.Context, cutoff time.Time) 
 }
 
 func (a *Adapter) ensureDriveArtifactStore() *DriveArtifactStore {
-	a.previewMu.Lock()
-	defer a.previewMu.Unlock()
+	a.artifactMu.Lock()
+	defer a.artifactMu.Unlock()
 	if a.client == nil {
 		return nil
 	}

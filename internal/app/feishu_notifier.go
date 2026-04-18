@@ -50,12 +50,12 @@ func (n *notifyingFeishuClient) Stop() {
 	n.base.Stop()
 }
 
-func (n *notifyingFeishuClient) ConfigureMarkdownPreview(statePath, processCWD string) {
-	n.base.ConfigureMarkdownPreview(statePath, processCWD)
+func (n *notifyingFeishuClient) ConfigureLocalFileLinks(statePath, processCWD string) {
+	n.base.ConfigureLocalFileLinks(statePath, processCWD)
 }
 
-func (n *notifyingFeishuClient) RewriteMarkdownPreview(ctx context.Context, req feishu.MarkdownPreviewRequest) (string, error) {
-	text, err := n.base.RewriteMarkdownPreview(ctx, req)
+func (n *notifyingFeishuClient) RewriteLocalFileLinks(ctx context.Context, req feishu.LocalFileLinkRewriteRequest) (string, error) {
+	text, err := n.base.RewriteLocalFileLinks(ctx, req)
 	if err != nil {
 		n.notifyPermissionIssue(feishuNotifyTarget{ChatID: req.ChatID}, err)
 	}

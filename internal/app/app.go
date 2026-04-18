@@ -87,7 +87,7 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	}
 	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
-	app.feishu.ConfigureMarkdownPreview("", "")
+	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }
 
@@ -101,7 +101,7 @@ func (a *App) Start(ctx context.Context) error {
 		return err
 	}
 	a.startCodexAppServerGCLoop(ctx)
-	a.startMarkdownPreviewGCLoop(ctx)
+	a.startDriveArtifactGCLoop(ctx)
 	go a.sendStartupReadyNotifications()
 	return nil
 }

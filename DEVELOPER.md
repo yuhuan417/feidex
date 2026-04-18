@@ -20,7 +20,7 @@ Use these boundaries when placing code:
 | `cmd/feidex` | CLI entrypoints and command parsing | Keep business logic out of `cmd/`; call into `internal/*`. |
 | `cmd/feishu_card_demo` | Card rendering demo binary | Demo-only; do not couple production paths to it. |
 | `internal/app` | Main product logic | Orchestrates sessions, submissions, menus, approvals, rendering, delivery, and protocol reactions. |
-| `internal/feishu` | Feishu adapter layer | Owns SDK calls, outbound pacing, markdown preview, file sharing, and permission issue handling. Do not put app policy here. |
+| `internal/feishu` | Feishu adapter layer | Owns SDK calls, outbound pacing, local file link rewrite, file sharing, and permission issue handling. Do not put app policy here. |
 | `internal/codexrpc` | Codex App Server client and protocol types | Keep this transport/protocol-focused. No Feishu or app orchestration here. |
 | `internal/config` | Config parsing, normalization, Feishu setup flows | Owns config file semantics and setup helpers. |
 | `internal/state` | Persistent local state | Store and retrieval only; no UI logic. |

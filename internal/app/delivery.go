@@ -48,7 +48,7 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 				TurnID:       sub.TurnID,
 			})
 			if strings.TrimSpace(kind) == "final_message" && result.CardID != "" {
-				a.scheduleMarkdownPreviewPatch(sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
+				a.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
 			}
 		}
 		return ids
@@ -75,7 +75,7 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	})
 	if strings.TrimSpace(kind) == "final_message" {
 		if cardID != "" {
-			a.scheduleMarkdownPreviewPatch(sub, cardID, title, color, showHeader, text, nil)
+			a.scheduleLocalFileLinkPatch(sub, cardID, title, color, showHeader, text, nil)
 		}
 	}
 	return []string{id}

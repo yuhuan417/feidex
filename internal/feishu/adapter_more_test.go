@@ -41,9 +41,9 @@ func TestNewConfiguresAllowListAndLifecycleHelpers(t *testing.T) {
 		t.Fatal("Stop() did not invoke cancel")
 	}
 
-	a.ConfigureMarkdownPreview(" state.json ", " /repo ")
-	if a.previewStatePath != "state.json" || a.previewProcessCWD != "/repo" || a.previewer != nil {
-		t.Fatalf("ConfigureMarkdownPreview() did not trim/reset fields: %+v", a)
+	a.ConfigureLocalFileLinks(" state.json ", " /repo ")
+	if a.localFileLinkStatePath != "state.json" || a.localFileLinkProcessCWD != "/repo" || a.localFileLinkRewriter != nil {
+		t.Fatalf("ConfigureLocalFileLinks() did not trim/reset fields: %+v", a)
 	}
 }
 

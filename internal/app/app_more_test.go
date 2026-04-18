@@ -199,42 +199,42 @@ func (f *fakeCodexClient) ReplyError(id json.RawMessage, code int, msg string) e
 }
 
 type fakeFeishuClient struct {
-	startErr                error
-	replyTextErr            error
-	sendTextErr             error
-	replyCardErr            error
-	sendCardErr             error
-	patchCardErr            error
-	rewritePreviewErr       error
-	addReactionErr          error
-	removeReactionErr       error
-	downloadErr             error
-	shareFileErr            error
-	cleanupResult           feishu.PreviewDriveCleanupResult
-	cleanupErr              error
-	started                 bool
-	stopped                 bool
-	replyTexts              []string
-	sentTexts               []string
-	replyCards              []map[string]any
-	sendCards               []map[string]any
-	patchedCards            []map[string]any
-	replyCardInThread       []bool
-	replyTextWithIDs        []string
-	replyCardID             string
-	replyCardIDs            []string
-	replyTextIDs            []string
-	sendCardID              string
-	previewStatePath        string
-	previewProcessCWD       string
-	rewritePreviewOut       string
-	downloadPath            string
-	downloadName            string
-	mergeForwardText        string
-	mergeForwardAttachments []feishu.Attachment
-	mergeForwardErr         error
-	resolveMergeForwardHook func(context.Context, string, []string) (string, []feishu.Attachment, error)
-	mergeForwardCalls       []struct {
+	startErr                 error
+	replyTextErr             error
+	sendTextErr              error
+	replyCardErr             error
+	sendCardErr              error
+	patchCardErr             error
+	rewriteLocalFileLinksErr error
+	addReactionErr           error
+	removeReactionErr        error
+	downloadErr              error
+	shareFileErr             error
+	cleanupResult            feishu.PreviewDriveCleanupResult
+	cleanupErr               error
+	started                  bool
+	stopped                  bool
+	replyTexts               []string
+	sentTexts                []string
+	replyCards               []map[string]any
+	sendCards                []map[string]any
+	patchedCards             []map[string]any
+	replyCardInThread        []bool
+	replyTextWithIDs         []string
+	replyCardID              string
+	replyCardIDs             []string
+	replyTextIDs             []string
+	sendCardID               string
+	localFileLinkStatePath   string
+	localFileLinkProcessCWD  string
+	rewriteLocalFileLinksOut string
+	downloadPath             string
+	downloadName             string
+	mergeForwardText         string
+	mergeForwardAttachments  []feishu.Attachment
+	mergeForwardErr          error
+	resolveMergeForwardHook  func(context.Context, string, []string) (string, []feishu.Attachment, error)
+	mergeForwardCalls        []struct {
 		messageID string
 		ids       []string
 	}
@@ -256,13 +256,13 @@ func (f *fakeFeishuClient) Stop() {
 	f.stopped = true
 }
 
-func (f *fakeFeishuClient) ConfigureMarkdownPreview(statePath, processCWD string) {
-	f.previewStatePath = statePath
-	f.previewProcessCWD = processCWD
+func (f *fakeFeishuClient) ConfigureLocalFileLinks(statePath, processCWD string) {
+	f.localFileLinkStatePath = statePath
+	f.localFileLinkProcessCWD = processCWD
 }
 
-func (f *fakeFeishuClient) RewriteMarkdownPreview(context.Context, feishu.MarkdownPreviewRequest) (string, error) {
-	return f.rewritePreviewOut, f.rewritePreviewErr
+func (f *fakeFeishuClient) RewriteLocalFileLinks(context.Context, feishu.LocalFileLinkRewriteRequest) (string, error) {
+	return f.rewriteLocalFileLinksOut, f.rewriteLocalFileLinksErr
 }
 
 func (f *fakeFeishuClient) CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
@@ -505,8 +505,8 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if ff.onMessage == nil {
 		t.Fatal("expected feishu handlers to be configured")
 	}
-	if ff.previewStatePath != "" {
-		t.Fatalf("preview state path = %q, want empty for stateless preview management", ff.previewStatePath)
+	if ff.localFileLinkStatePath != "" {
+		t.Fatalf("local file link state path = %q, want empty for stateless link management", ff.localFileLinkStatePath)
 	}
 }
 

@@ -152,12 +152,12 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 	}
 
 	base := &fakeFeishuClient{
-		rewritePreviewOut: "preview",
-		cleanupResult:     feishu.PreviewDriveCleanupResult{DeletedFileCount: 2},
-		downloadPath:      "/tmp/file",
-		downloadName:      "file.txt",
-		sharedFileResult:  feishu.SharedFileResult{FileName: "file.txt", URL: "https://example.test/file"},
-		mergeForwardText:  "merged",
+		rewriteLocalFileLinksOut: "preview",
+		cleanupResult:            feishu.PreviewDriveCleanupResult{DeletedFileCount: 2},
+		downloadPath:             "/tmp/file",
+		downloadName:             "file.txt",
+		sharedFileResult:         feishu.SharedFileResult{FileName: "file.txt", URL: "https://example.test/file"},
+		mergeForwardText:         "merged",
 		mergeForwardAttachments: []feishu.Attachment{
 			{Kind: "file", ResourceKey: "fk-1"},
 		},
@@ -176,12 +176,12 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 	if !called {
 		t.Fatal("delegated onMessage handler was not wired")
 	}
-	client.ConfigureMarkdownPreview("/tmp/state.json", "/repo")
-	if base.previewStatePath != "/tmp/state.json" || base.previewProcessCWD != "/repo" {
-		t.Fatalf("ConfigureMarkdownPreview() = %q %q", base.previewStatePath, base.previewProcessCWD)
+	client.ConfigureLocalFileLinks("/tmp/state.json", "/repo")
+	if base.localFileLinkStatePath != "/tmp/state.json" || base.localFileLinkProcessCWD != "/repo" {
+		t.Fatalf("ConfigureLocalFileLinks() = %q %q", base.localFileLinkStatePath, base.localFileLinkProcessCWD)
 	}
-	if text, err := client.RewriteMarkdownPreview(context.Background(), feishu.MarkdownPreviewRequest{Text: "x"}); err != nil || text != "preview" {
-		t.Fatalf("RewriteMarkdownPreview() = %q, %v", text, err)
+	if text, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{Text: "x"}); err != nil || text != "preview" {
+		t.Fatalf("RewriteLocalFileLinks() = %q, %v", text, err)
 	}
 	if result, err := client.CleanupArtifactsBefore(context.Background(), time.Now()); err != nil || result.DeletedFileCount != 2 {
 		t.Fatalf("CleanupArtifactsBefore() = %+v, %v", result, err)
@@ -223,13 +223,13 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 
 func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	base := &fakeFeishuClient{
-		startErr:          context.Canceled,
-		rewritePreviewOut: "preview",
-		cleanupResult:     feishu.PreviewDriveCleanupResult{DeletedFileCount: 1},
-		downloadPath:      "/tmp/file",
-		downloadName:      "name.txt",
-		sharedFileResult:  feishu.SharedFileResult{FileName: "name.txt", URL: "https://example.test/file"},
-		mergeForwardText:  "merged",
+		startErr:                 context.Canceled,
+		rewriteLocalFileLinksOut: "preview",
+		cleanupResult:            feishu.PreviewDriveCleanupResult{DeletedFileCount: 1},
+		downloadPath:             "/tmp/file",
+		downloadName:             "name.txt",
+		sharedFileResult:         feishu.SharedFileResult{FileName: "name.txt", URL: "https://example.test/file"},
+		mergeForwardText:         "merged",
 	}
 	capture := &commandCaptureClient{base: base, replyMessageID: "reply-1"}
 
@@ -246,12 +246,12 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	if !base.stopped {
 		t.Fatal("Stop() should delegate")
 	}
-	capture.ConfigureMarkdownPreview("/tmp/state", "/repo")
-	if base.previewStatePath != "/tmp/state" || base.previewProcessCWD != "/repo" {
-		t.Fatalf("ConfigureMarkdownPreview() = %q %q", base.previewStatePath, base.previewProcessCWD)
+	capture.ConfigureLocalFileLinks("/tmp/state", "/repo")
+	if base.localFileLinkStatePath != "/tmp/state" || base.localFileLinkProcessCWD != "/repo" {
+		t.Fatalf("ConfigureLocalFileLinks() = %q %q", base.localFileLinkStatePath, base.localFileLinkProcessCWD)
 	}
-	if text, err := capture.RewriteMarkdownPreview(context.Background(), feishu.MarkdownPreviewRequest{Text: "x"}); err != nil || text != "preview" {
-		t.Fatalf("RewriteMarkdownPreview() = %q, %v", text, err)
+	if text, err := capture.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{Text: "x"}); err != nil || text != "preview" {
+		t.Fatalf("RewriteLocalFileLinks() = %q, %v", text, err)
 	}
 	if result, err := capture.CleanupArtifactsBefore(context.Background(), time.Now()); err != nil || result.DeletedFileCount != 1 {
 		t.Fatalf("CleanupArtifactsBefore() = %+v, %v", result, err)

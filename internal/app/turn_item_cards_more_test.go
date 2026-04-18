@@ -185,11 +185,11 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 	}
 }
 
-func TestTurnItemFinalAnswerSchedulesMarkdownPreviewPatch(t *testing.T) {
+func TestTurnItemFinalAnswerSchedulesLocalFileLinkPatch(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardID = "final-card-id"
-	ff.rewritePreviewOut = "patched preview body"
+	ff.rewriteLocalFileLinksOut = "patched preview body"
 
 	if got := a.sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
 		ItemType:      "agent_message",
@@ -206,7 +206,7 @@ func TestTurnItemFinalAnswerSchedulesMarkdownPreviewPatch(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if len(ff.patchedCards) == 0 {
-		t.Fatal("expected final turn item to patch markdown preview asynchronously")
+		t.Fatal("expected final turn item to patch local file links asynchronously")
 	}
 	if body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]); !strings.Contains(body, "patched preview body") {
 		t.Fatalf("patched final turn item body = %q, want rewritten preview content", body)

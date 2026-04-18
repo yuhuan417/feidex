@@ -11,7 +11,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) rewriteMarkdownPreviewText(ctx context.Context, sub *state.Submission, text string) string {
+func (a *App) rewriteLocalFileLinksText(ctx context.Context, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if a == nil || a.feishu == nil || sub == nil || text == "" {
 		return text
@@ -20,14 +20,14 @@ func (a *App) rewriteMarkdownPreviewText(ctx context.Context, sub *state.Submiss
 	if ws == nil {
 		return text
 	}
-	rewritten, err := a.feishu.RewriteMarkdownPreview(ctx, feishu.MarkdownPreviewRequest{
+	rewritten, err := a.feishu.RewriteLocalFileLinks(ctx, feishu.LocalFileLinkRewriteRequest{
 		Text:         text,
 		WorkspaceCWD: ws.Cwd,
 		ChatID:       sub.ChatID,
 		UserID:       sub.UserID,
 	})
 	if err != nil {
-		slog.Warn("markdown preview rewrite failed", "submission_id", sub.ID, "workspace_id", sub.WorkspaceID, "error", err)
+		slog.Warn("local file link rewrite failed", "submission_id", sub.ID, "workspace_id", sub.WorkspaceID, "error", err)
 	}
 	if strings.TrimSpace(rewritten) == "" {
 		return text
@@ -51,7 +51,7 @@ func (a *App) prepareReplyCardMarkdown(ctx context.Context, sub *state.Submissio
 	return a.prepareCardMarkdown(sub, text)
 }
 
-func (a *App) scheduleMarkdownPreviewPatch(sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
+func (a *App) scheduleLocalFileLinkPatch(sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
 	messageID = strings.TrimSpace(messageID)
 	body = strings.TrimSpace(body)
 	if a == nil || a.feishu == nil || sub == nil || messageID == "" || body == "" {
@@ -60,7 +60,7 @@ func (a *App) scheduleMarkdownPreviewPatch(sub *state.Submission, messageID, tit
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		rewritten := a.rewriteMarkdownPreviewText(ctx, sub, body)
+		rewritten := a.rewriteLocalFileLinksText(ctx, sub, body)
 		if strings.TrimSpace(rewritten) == "" || strings.TrimSpace(rewritten) == body {
 			return
 		}
@@ -69,7 +69,7 @@ func (a *App) scheduleMarkdownPreviewPatch(sub *state.Submission, messageID, tit
 		patchCtx, patchCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer patchCancel()
 		if err := a.feishu.PatchCard(patchCtx, messageID, card); err != nil {
-			slog.Warn("markdown preview patch failed",
+			slog.Warn("local file link patch failed",
 				"submission_id", sub.ID,
 				"workspace_id", sub.WorkspaceID,
 				"message_id", messageID,

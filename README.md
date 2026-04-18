@@ -445,6 +445,7 @@ Feidex 会把这些状态写进去：
 - 路径选择器只允许浏览当前 workspace 根目录之内的路径
 - 确认后会通过飞书云盘中转生成下载链接
 - markdown 预览与本地文件分享共用同一套 artifact 流程
+- final message 里引用的 workspace 本地文件会异步补成飞书云盘链接，不再只限 `.md`
 
 ## 诊断与可观测性
 

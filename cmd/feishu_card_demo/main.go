@@ -130,7 +130,7 @@ func parseOptions(args []string) (options, error) {
 	fs.StringVar(&opts.ChatID, "chat-id", "", "target Feishu open chat id")
 	fs.StringVar(&opts.Kind, "kind", "agent", "card demo kind: agent/turn_output, final/final_message, turn_reasoning, turn_command_execution, turn_file_change, turn_plan, turn_queued, turn_terminal, plain, command, file, permissions")
 	fs.StringVar(&opts.Workspace, "workspace", "", "workspace id used when rendering current outbound message cards")
-	fs.StringVar(&opts.UserID, "user-id", "", "optional user id used by markdown preview rewrite")
+	fs.StringVar(&opts.UserID, "user-id", "", "optional user id used by local file link rewrite")
 	fs.StringVar(&opts.Title, "title", "", "card title override")
 	fs.StringVar(&opts.Body, "body", "", "card markdown body override")
 	fs.StringVar(&opts.Color, "color", "orange", "card color template")

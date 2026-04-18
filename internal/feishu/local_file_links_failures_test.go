@@ -58,13 +58,13 @@ func (failingPreviewAPI) DeleteFile(context.Context, string, string) error {
 	return errors.New("delete failed")
 }
 
-func TestDrivePreviewerFailurePaths(t *testing.T) {
-	p := NewDriveMarkdownPreviewer(failingPreviewAPI{}, MarkdownPreviewConfig{})
+func TestDriveLocalFileLinkRewriterFailurePaths(t *testing.T) {
+	p := NewDriveLocalFileLinkRewriter(failingPreviewAPI{}, LocalFileLinkConfig{})
 	if _, err := p.CleanupBefore(context.Background(), time.Now()); err == nil || !strings.Contains(err.Error(), "list failed") {
 		t.Fatalf("CleanupBefore(list failure) error = %v", err)
 	}
-	if _, ok, err := p.materializeMarkdownTargetLocked(context.Background(), "missing.md", MarkdownPreviewRequest{WorkspaceCWD: t.TempDir()}, nil); err != nil || ok {
-		t.Fatalf("materializeMarkdownTargetLocked(missing) = %v, %v", ok, err)
+	if _, ok, err := p.materializePreviewTargetLocked(context.Background(), "missing.md", LocalFileLinkRewriteRequest{WorkspaceCWD: t.TempDir()}, nil); err != nil || ok {
+		t.Fatalf("materializePreviewTargetLocked(missing) = %v, %v", ok, err)
 	}
 }
 

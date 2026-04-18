@@ -81,7 +81,7 @@ func TestNotifyingFeishuClientRepliesPermissionCardForMessageTarget(t *testing.T
 
 func TestNotifyingFeishuClientSendsPermissionCardForChatTarget(t *testing.T) {
 	base := &fakeFeishuClient{
-		rewritePreviewErr: &permissionIssueTestError{
+		rewriteLocalFileLinksErr: &permissionIssueTestError{
 			err: errors.New("drive no permission"),
 			issue: &feishu.PermissionIssue{
 				API:     "drive.permission_member.create",
@@ -96,8 +96,8 @@ func TestNotifyingFeishuClientSendsPermissionCardForChatTarget(t *testing.T) {
 	}
 	client := wrapFeishuClient(base)
 
-	if _, err := client.RewriteMarkdownPreview(context.Background(), feishu.MarkdownPreviewRequest{Text: "hello", ChatID: "chat-1"}); err == nil {
-		t.Fatal("expected RewriteMarkdownPreview to return error")
+	if _, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{Text: "hello", ChatID: "chat-1"}); err == nil {
+		t.Fatal("expected RewriteLocalFileLinks to return error")
 	}
 	if len(base.sendCards) != 1 {
 		t.Fatalf("permission diagnostic send cards = %d, want 1", len(base.sendCards))
