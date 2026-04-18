@@ -33,33 +33,51 @@ func (a *App) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, 
 		"当前工作区: `" + currentID + "`",
 		"当前工作区不可删除，请先切换到其他工作区。",
 	}
-	buttons := make([]feishu.Button, 0, len(a.cfg.Workspaces))
+	deleteOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
 	for _, ws := range a.cfg.Workspaces {
 		if strings.TrimSpace(ws.ID) == "" || ws.ID == currentID {
 			continue
 		}
-		buttons = append(buttons, feishu.Button{
-			Text: "删除 " + ws.ID,
-			Type: "default",
-			Value: map[string]any{
-				"action":       "workspace.delete.prompt",
-				"session_key":  sessionKey,
-				"workspace_id": ws.ID,
-			},
+		label := ws.ID
+		if name := strings.TrimSpace(ws.Name); name != "" && name != ws.ID {
+			label = name + " · " + ws.ID
+		}
+		label += " · " + strings.TrimSpace(ws.Cwd)
+		deleteOptions = append(deleteOptions, selectStaticOption{
+			Text:  label,
+			Value: ws.ID,
 		})
 	}
-	if len(buttons) == 0 {
+	if len(deleteOptions) == 0 {
 		lines = append(lines, "", "当前没有可删除的其他工作区。")
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+	card := newMarkdownBodyCard("删除工作区", "orange")
+	appendMarkdownBodyCardElement(card, map[string]any{
+		"tag":     "markdown",
+		"content": menuCardBody("workspace.delete.menu", strings.Join(lines, "\n")),
 	})
-	return a.feishu.SimpleStatusCard("删除工作区", "orange", menuCardBody("workspace.delete.menu", strings.Join(lines, "\n")), buttons), nil
+	if len(deleteOptions) > 0 {
+		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+			"workspace_delete_select",
+			"选择要删除的 workspace",
+			map[string]any{"action": "workspace.delete.prompt", "session_key": sessionKey},
+			deleteOptions,
+			"",
+		))
+	}
+	for _, row := range buildMarkdownBodyCardActionElements([]feishu.Button{
+		{
+			Text: commandLabel("返回工作区", "/workspace"),
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.workspace",
+				"session_key": sessionKey,
+			},
+		},
+	}) {
+		appendMarkdownBodyCardElement(card, row)
+	}
+	return card, nil
 }
 
 func (a *App) renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID string) (map[string]any, error) {
@@ -111,6 +129,7 @@ func (a *App) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey 
 }
 
 func (a *App) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	workspaceID = firstNonEmpty(strings.TrimSpace(workspaceID), strings.TrimSpace(action.Option))
 	if err := a.validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
 		card, renderErr := a.renderWorkspaceDeleteMenuCard(sessionKey)
 		if renderErr != nil {

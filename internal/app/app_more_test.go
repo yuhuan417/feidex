@@ -1366,6 +1366,43 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	currentDir := t.TempDir()
+	dropDir := t.TempDir()
+	a.cfg.Workspaces = []config.Workspace{
+		{ID: "default", Name: "Default", Cwd: currentDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
+		{ID: "drop", Name: "Drop", Cwd: dropDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
+	}
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	card, err := a.renderWorkspaceDeleteMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderWorkspaceDeleteMenuCard() error = %v", err)
+	}
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("workspace delete menu selects = %+v, want 1", selects)
+	}
+	if got, _ := selects[0]["name"].(string); got != "workspace_delete_select" {
+		t.Fatalf("workspace delete select name = %q, want workspace_delete_select", got)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 1 {
+		t.Fatalf("workspace delete select options = %+v, want 1 removable workspace", options)
+	}
+	if got, _ := options[0]["value"].(string); got != "drop" {
+		t.Fatalf("workspace delete select option value = %q, want drop", got)
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "当前工作区不可删除") {
+		t.Fatalf("workspace delete menu body = %q", body)
+	}
+}
+
 func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sessionKey := "feishu:p2p:chat:user"

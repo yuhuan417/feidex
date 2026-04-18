@@ -452,7 +452,7 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 		"当前工作区: `"+workspaceID+"`\n"+
 			"已选父目录: `"+firstNonEmpty(parentDir, "-")+"`\n"+
 			"浏览根目录: `"+firstNonEmpty(rootPath, "-")+"`\n\n"+
-			"可以先选父目录，再填写 Git 地址和可选 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。",
+			"先填写 Git 地址，再按需调整父目录和可选 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。",
 	)
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
 		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
