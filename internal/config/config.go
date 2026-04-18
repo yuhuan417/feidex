@@ -120,6 +120,9 @@ func (c *Config) Normalize(baseDir string) error {
 	if c.Codex.Command == "" {
 		c.Codex.Command = "codex"
 	}
+	c.Codex.Transport = strings.TrimSpace(c.Codex.Transport)
+	c.Codex.WSURL = strings.TrimSpace(c.Codex.WSURL)
+	c.Codex.WSBearerToken = strings.TrimSpace(c.Codex.WSBearerToken)
 	c.Codex.ServiceName = strings.TrimSpace(c.Codex.ServiceName)
 	if c.Codex.ServiceName == "" {
 		c.Codex.ServiceName = "feidex"
@@ -146,12 +149,17 @@ func (c *Config) Normalize(baseDir string) error {
 		return err
 	}
 	c.Log.Level = level
-	if strings.TrimSpace(c.Codex.Transport) == "" {
-		if strings.TrimSpace(c.Codex.WSURL) != "" {
-			c.Codex.Transport = "ws"
-		} else {
-			c.Codex.Transport = "stdio"
-		}
+	switch {
+	case c.Codex.WSURL != "" || c.Codex.WSBearerToken != "":
+		return errors.New("codex websocket transport has been removed; use stdio only")
+	case c.Codex.Transport == "":
+		c.Codex.Transport = "stdio"
+	case strings.EqualFold(c.Codex.Transport, "ws"):
+		return errors.New("codex websocket transport has been removed; use stdio only")
+	case strings.EqualFold(c.Codex.Transport, "stdio"):
+		c.Codex.Transport = "stdio"
+	default:
+		return fmt.Errorf("unsupported codex.transport %q; only stdio is supported", c.Codex.Transport)
 	}
 	quietMode, err := ParseQuietMode(c.Feishu.Quiet)
 	if err != nil {

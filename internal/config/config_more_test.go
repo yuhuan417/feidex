@@ -15,7 +15,6 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 			Level: " warning ",
 		},
 		Codex: CodexConfig{
-			WSURL:            "wss://example.test/ws",
 			AppServerDir:     "./codex-home",
 			AppServerIdleTTL: "20m",
 			Model:            " gpt-5 ",
@@ -37,8 +36,8 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	if cfg.Codex.Command != "codex" {
 		t.Fatalf("Codex.Command = %q, want codex", cfg.Codex.Command)
 	}
-	if cfg.Codex.Transport != "ws" {
-		t.Fatalf("Codex.Transport = %q, want ws", cfg.Codex.Transport)
+	if cfg.Codex.Transport != "stdio" {
+		t.Fatalf("Codex.Transport = %q, want stdio", cfg.Codex.Transport)
 	}
 	if cfg.Codex.Model != "gpt-5" || cfg.Codex.ReasoningEffort != "high" {
 		t.Fatalf("unexpected codex trimming result: %+v", cfg.Codex)
@@ -109,6 +108,20 @@ func TestNormalizeRejectsInvalidWorkspaceConfigurations(t *testing.T) {
 			name: "invalid app server idle ttl",
 			cfg: &Config{
 				Codex:      CodexConfig{AppServerIdleTTL: "later"},
+				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+			},
+		},
+		{
+			name: "removed websocket transport",
+			cfg: &Config{
+				Codex:      CodexConfig{Transport: "ws"},
+				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+			},
+		},
+		{
+			name: "removed websocket url",
+			cfg: &Config{
+				Codex:      CodexConfig{WSURL: "wss://example.test/ws"},
 				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
 			},
 		},

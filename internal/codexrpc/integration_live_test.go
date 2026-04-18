@@ -17,18 +17,15 @@ func liveCodexConfigFromEnv(t *testing.T) (config.CodexConfig, string) {
 
 	cfg := config.CodexConfig{
 		Command:         firstNonEmptyEnv("FEIDEX_CODEX_COMMAND", "codex"),
-		Transport:       strings.TrimSpace(os.Getenv("FEIDEX_CODEX_TRANSPORT")),
-		WSURL:           strings.TrimSpace(os.Getenv("FEIDEX_CODEX_WS_URL")),
-		WSBearerToken:   strings.TrimSpace(os.Getenv("FEIDEX_CODEX_WS_BEARER_TOKEN")),
+		Transport:       "stdio",
 		ExperimentalAPI: true,
 		ServiceName:     "feidex-integration",
 	}
-	if strings.TrimSpace(cfg.Transport) == "" {
-		if strings.TrimSpace(cfg.WSURL) != "" {
-			cfg.Transport = "ws"
-		} else {
-			cfg.Transport = "stdio"
-		}
+	if transport := strings.TrimSpace(os.Getenv("FEIDEX_CODEX_TRANSPORT")); transport != "" && !strings.EqualFold(transport, "stdio") {
+		t.Fatalf("FEIDEX_CODEX_TRANSPORT=%q is not supported; only stdio is supported", transport)
+	}
+	if strings.TrimSpace(os.Getenv("FEIDEX_CODEX_WS_URL")) != "" || strings.TrimSpace(os.Getenv("FEIDEX_CODEX_WS_BEARER_TOKEN")) != "" {
+		t.Fatal("websocket Codex env vars are no longer supported; use stdio only")
 	}
 	cwd := strings.TrimSpace(os.Getenv("FEIDEX_CODEX_CWD"))
 	if cwd == "" {

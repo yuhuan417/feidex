@@ -13,8 +13,6 @@ import (
 	"feidex/internal/config"
 )
 
-const sharedCodexClientKey = "__shared__"
-
 type codexWorkspaceContextKey struct{}
 
 type workspaceCodexPool struct {
@@ -88,13 +86,8 @@ func (p *workspaceCodexPool) Start(ctx context.Context, experimentalAPI bool) er
 	p.mu.Lock()
 	p.started = true
 	p.experimentalAPI = experimentalAPI
-	shared := p.usesSharedClientLocked()
 	p.mu.Unlock()
-	if !shared {
-		return nil
-	}
-	_, err := p.clientForKey(ctx, sharedCodexClientKey)
-	return err
+	return nil
 }
 
 func (p *workspaceCodexPool) Close() error {
@@ -160,15 +153,8 @@ func (p *workspaceCodexPool) replyByRequestID(id json.RawMessage, fn func(codexC
 	p.mu.Lock()
 	key := p.requestClients[requestKey]
 	entry := p.clients[key]
-	shared := p.usesSharedClientLocked()
 	p.mu.Unlock()
-	if shared && key == "" {
-		var err error
-		entry, err = p.clientForKey(context.Background(), sharedCodexClientKey)
-		if err != nil {
-			return err
-		}
-	} else if entry == nil {
+	if entry == nil {
 		if key == "" {
 			return fmt.Errorf("no codex client route for request %s", requestKey)
 		}
@@ -190,10 +176,6 @@ func (p *workspaceCodexPool) CloseIdleClients(now time.Time, ttl time.Duration, 
 		return 0
 	}
 	p.mu.Lock()
-	if p.usesSharedClientLocked() {
-		p.mu.Unlock()
-		return 0
-	}
 	entries := make([]*workspaceCodexPoolClient, 0, len(p.clients))
 	for key, entry := range p.clients {
 		if entry == nil || entry.client == nil {
@@ -230,9 +212,6 @@ func (p *workspaceCodexPool) CloseIdleClients(now time.Time, ttl time.Duration, 
 func (p *workspaceCodexPool) resolveClientRoute(ctx context.Context, params any) (key string, workspaceID string, threadID string) {
 	if p == nil {
 		return "", "", ""
-	}
-	if p.usesSharedClient() {
-		return sharedCodexClientKey, "", routeThreadIDFromParams(params)
 	}
 	threadID = routeThreadIDFromParams(params)
 	if threadID != "" {
@@ -440,18 +419,12 @@ func (p *workspaceCodexPool) defaultWorkspaceID() string {
 
 func (p *workspaceCodexPool) codexConfigForKeyLocked(key string) config.CodexConfig {
 	cfg := p.cfg.Codex
-	if p.usesSharedClientLocked() {
-		return cfg
-	}
 	workspaceID := p.workspaceIDForKeyLocked(key)
 	cfg.AppServerDir = p.appServerDirForWorkspaceLocked(workspaceID)
 	return cfg
 }
 
 func (p *workspaceCodexPool) workspaceIDForKeyLocked(key string) string {
-	if strings.TrimSpace(key) == sharedCodexClientKey {
-		return ""
-	}
 	if strings.TrimSpace(key) != "" {
 		return strings.TrimSpace(key)
 	}
@@ -472,19 +445,6 @@ func (p *workspaceCodexPool) appServerDirForWorkspaceLocked(workspaceID string) 
 		return strings.TrimSpace(ws.Cwd)
 	}
 	return strings.TrimSpace(p.cfg.Codex.AppServerDir)
-}
-
-func (p *workspaceCodexPool) usesSharedClient() bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.usesSharedClientLocked()
-}
-
-func (p *workspaceCodexPool) usesSharedClientLocked() bool {
-	if p == nil || p.cfg == nil {
-		return true
-	}
-	return strings.EqualFold(strings.TrimSpace(p.cfg.Codex.Transport), "ws") || strings.TrimSpace(p.cfg.Codex.WSURL) != ""
 }
 
 func (p *workspaceCodexPool) clientHasOpenRequestsLocked(key string) bool {

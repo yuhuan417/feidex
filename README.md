@@ -225,9 +225,7 @@ Feidex 会把这些状态写进去：
 - `command`
   - 默认是 `codex`
 - `transport`
-  - `stdio` 或 `ws`
-- `ws_url` / `ws_bearer_token`
-  - 使用 websocket 连接远端 app-server 时启用
+  - 当前只支持 `stdio`
 - `experimental_api`
   - 当前建议保持 `true`
 - `service_name`
@@ -261,7 +259,7 @@ Feidex 会把这些状态写进去：
 
 说明：
 
-- `transport=stdio` 时，Feidex 会按 workspace 懒启动独立的 `codex app-server`
+- Feidex 会按 workspace 懒启动独立的 `codex app-server`
 - workspace 的启动目录优先级是：
   - `workspace.app_server_dir`
   - `codex.app_server_dir`

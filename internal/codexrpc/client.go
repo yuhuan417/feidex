@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -15,8 +14,6 @@ import (
 	"sync/atomic"
 
 	"feidex/internal/config"
-
-	"github.com/gorilla/websocket"
 )
 
 type Client struct {
@@ -24,7 +21,6 @@ type Client struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
-	wsConn websocketConn
 
 	nextID    atomic.Int64
 	writeMu   sync.Mutex
@@ -33,20 +29,6 @@ type Client struct {
 
 	onNotification func(string, json.RawMessage)
 	onRequest      func(RequestEnvelope)
-}
-
-type websocketConn interface {
-	ReadMessage() (messageType int, p []byte, err error)
-	WriteMessage(messageType int, data []byte) error
-	Close() error
-}
-
-var websocketDial = func(ctx context.Context, url string, headers http.Header) (websocketConn, error) {
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, headers)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
 }
 
 type responseEnvelope struct {
@@ -87,15 +69,11 @@ func (c *Client) SetHandlers(onNotification func(string, json.RawMessage), onReq
 }
 
 func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
-	switch codexTransportMode(c.cfg) {
-	case "ws":
-		if err := c.startWebSocket(ctx); err != nil {
-			return err
-		}
-	default:
-		if err := c.startStdio(ctx); err != nil {
-			return err
-		}
+	if err := validateTransportConfig(c.cfg); err != nil {
+		return err
+	}
+	if err := c.startStdio(ctx); err != nil {
+		return err
 	}
 
 	var initResp struct {
@@ -129,9 +107,6 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 }
 
 func (c *Client) Close() error {
-	if c.wsConn != nil {
-		return c.wsConn.Close()
-	}
 	if c.stdin != nil {
 		_ = c.stdin.Close()
 	}
@@ -191,9 +166,6 @@ func (c *Client) send(v any) error {
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
-	if c.wsConn != nil {
-		return c.wsConn.WriteMessage(websocket.TextMessage, b)
-	}
 	if c.stdin == nil {
 		return errors.New("client not started")
 	}
@@ -202,10 +174,6 @@ func (c *Client) send(v any) error {
 }
 
 func (c *Client) readLoop() {
-	if c.wsConn != nil {
-		c.readWebSocketLoop()
-		return
-	}
 	scanner := bufio.NewScanner(c.stdout)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 8*1024*1024)
@@ -235,34 +203,6 @@ func (c *Client) startStdio(ctx context.Context) error {
 	}
 	go c.readLoop()
 	return nil
-}
-
-func (c *Client) startWebSocket(ctx context.Context) error {
-	url := strings.TrimSpace(c.cfg.WSURL)
-	if url == "" {
-		return fmt.Errorf("codex ws_url is required when transport=ws")
-	}
-	headers := http.Header{}
-	if token := strings.TrimSpace(c.cfg.WSBearerToken); token != "" {
-		headers.Set("Authorization", "Bearer "+token)
-	}
-	conn, err := websocketDial(ctx, url, headers)
-	if err != nil {
-		return err
-	}
-	c.wsConn = conn
-	go c.readLoop()
-	return nil
-}
-
-func (c *Client) readWebSocketLoop() {
-	for {
-		_, message, err := c.wsConn.ReadMessage()
-		if err != nil {
-			return
-		}
-		c.handleIncoming(message)
-	}
 }
 
 func (c *Client) handleIncoming(line []byte) {
@@ -299,9 +239,16 @@ func (c *Client) handleIncoming(line []byte) {
 	}
 }
 
-func codexTransportMode(cfg config.CodexConfig) string {
-	if strings.EqualFold(strings.TrimSpace(cfg.Transport), "ws") || strings.TrimSpace(cfg.WSURL) != "" {
-		return "ws"
+func validateTransportConfig(cfg config.CodexConfig) error {
+	transport := strings.TrimSpace(cfg.Transport)
+	switch {
+	case strings.TrimSpace(cfg.WSURL) != "" || strings.TrimSpace(cfg.WSBearerToken) != "":
+		return errors.New("codex websocket transport has been removed; use stdio only")
+	case transport == "", strings.EqualFold(transport, "stdio"):
+		return nil
+	case strings.EqualFold(transport, "ws"):
+		return errors.New("codex websocket transport has been removed; use stdio only")
+	default:
+		return fmt.Errorf("unsupported codex transport %q; only stdio is supported", transport)
 	}
-	return "stdio"
 }

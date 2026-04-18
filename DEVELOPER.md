@@ -116,10 +116,6 @@ Required environment variables:
 - Codex stdio path:
   - `FEIDEX_CODEX_COMMAND` (optional, defaults to `codex`)
   - `FEIDEX_CODEX_CWD` (optional, defaults to the package working directory)
-- Codex WebSocket mode:
-  - `FEIDEX_CODEX_TRANSPORT=ws`
-  - `FEIDEX_CODEX_WS_URL`
-  - `FEIDEX_CODEX_WS_BEARER_TOKEN` when the endpoint requires bearer auth
 
 Run them as separate commands. Do not fold them into the default `go test ./...` verification step.
 
@@ -133,30 +129,10 @@ export FEIDEX_CODEX_CWD=/absolute/path/to/a/worktree
 
 The smoke test above is intentionally cheap because it avoids `turn/start`, `turn/steer`, and `review/start`.
 
-Codex smoke boundary over WebSocket:
-
-```bash
-export FEIDEX_CODEX_TRANSPORT=ws
-export FEIDEX_CODEX_WS_URL=wss://example.com/codex
-export FEIDEX_CODEX_WS_BEARER_TOKEN=token
-export FEIDEX_CODEX_CWD=/absolute/path/to/a/worktree
-./scripts/with_tmp_go_cache.sh go test -tags=integration ./internal/codexrpc -run TestLiveCodexInitializeModelListAndThreadRead
-```
-
 Expensive Codex review lifecycle over stdio:
 
 ```bash
 export FEIDEX_CODEX_COMMAND=codex
-export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
-./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
-```
-
-Expensive Codex review lifecycle over WebSocket:
-
-```bash
-export FEIDEX_CODEX_TRANSPORT=ws
-export FEIDEX_CODEX_WS_URL=wss://example.com/codex
-export FEIDEX_CODEX_WS_BEARER_TOKEN=token
 export FEIDEX_CODEX_RUN_TOKEN_TESTS=1
 ./scripts/with_tmp_go_cache.sh go test -count=1 -tags=integration ./internal/codexrpc -run TestLiveCodexInlineReviewLifecycleOnTinyRepo
 ```

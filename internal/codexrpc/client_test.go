@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -22,13 +20,6 @@ type recordingWriteCloser struct {
 	mu     sync.Mutex
 	writes [][]byte
 	closed bool
-}
-
-type fakeWebsocketConn struct {
-	mu      sync.Mutex
-	readCh  chan []byte
-	writeCh chan []byte
-	closed  bool
 }
 
 func (w *recordingWriteCloser) Write(p []byte) (int, error) {
@@ -56,55 +47,13 @@ func (w *recordingWriteCloser) String() string {
 	return b.String()
 }
 
-func (f *fakeWebsocketConn) ReadMessage() (int, []byte, error) {
-	msg, ok := <-f.readCh
-	if !ok {
-		return 0, nil, io.EOF
-	}
-	return 1, msg, nil
-}
-
-func (f *fakeWebsocketConn) WriteMessage(_ int, data []byte) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.closed {
-		return io.EOF
-	}
-	select {
-	case f.writeCh <- append([]byte(nil), data...):
-	default:
-	}
-	return nil
-}
-
-func (f *fakeWebsocketConn) Close() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.closed {
-		return nil
-	}
-	f.closed = true
-	close(f.readCh)
-	return nil
-}
-
-func TestNewDefaultsAndTransportMode(t *testing.T) {
+func TestNewDefaults(t *testing.T) {
 	client := New(config.CodexConfig{})
 	if client.cfg.Command != "codex" {
 		t.Fatalf("default command = %q, want codex", client.cfg.Command)
 	}
 	if client.pending == nil {
 		t.Fatal("pending map was not initialized")
-	}
-
-	if got := codexTransportMode(config.CodexConfig{}); got != "stdio" {
-		t.Fatalf("codexTransportMode(stdio) = %q, want stdio", got)
-	}
-	if got := codexTransportMode(config.CodexConfig{Transport: " WS "}); got != "ws" {
-		t.Fatalf("codexTransportMode(explicit ws) = %q, want ws", got)
-	}
-	if got := codexTransportMode(config.CodexConfig{WSURL: "wss://example.test/ws"}); got != "ws" {
-		t.Fatalf("codexTransportMode(url) = %q, want ws", got)
 	}
 }
 
@@ -329,91 +278,17 @@ done
 	}
 }
 
-func TestStartWebSocketInitializesClientAndUsesBearerToken(t *testing.T) {
-	origDial := websocketDial
-	defer func() { websocketDial = origDial }()
-
-	conn := &fakeWebsocketConn{readCh: make(chan []byte, 4), writeCh: make(chan []byte, 4)}
-	authCh := make(chan string, 1)
-	initCh := make(chan map[string]any, 1)
-	initializedCh := make(chan map[string]any, 1)
-
-	websocketDial = func(ctx context.Context, url string, headers http.Header) (websocketConn, error) {
-		authCh <- headers.Get("Authorization")
-		go func() {
-			var initReq map[string]any
-			first, ok := <-conn.writeCh
-			if ok {
-				_ = json.Unmarshal(first, &initReq)
-				initCh <- initReq
-			}
-			conn.readCh <- []byte(`{"id":1,"result":{"userAgent":"ua","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}`)
-			var initialized map[string]any
-			second, ok := <-conn.writeCh
-			if ok {
-				_ = json.Unmarshal(second, &initialized)
-				initializedCh <- initialized
-			}
-			_ = conn.Close()
-		}()
-		return conn, nil
-	}
-
-	client := New(config.CodexConfig{
-		Transport:     "ws",
-		WSURL:         "ws://example.test/ws",
-		WSBearerToken: "secret-token",
-	})
-	if err := client.Start(context.Background(), false); err != nil {
-		t.Fatalf("Start(websocket) error = %v", err)
-	}
-	defer func() {
-		if err := client.Close(); err != nil {
-			t.Fatalf("Close(websocket) error = %v", err)
-		}
-	}()
-
-	if auth := <-authCh; auth != "Bearer secret-token" {
-		t.Fatalf("Authorization header = %q, want Bearer secret-token", auth)
-	}
-	initReq := <-initCh
-	if initReq["method"] != "initialize" {
-		t.Fatalf("first ws message = %+v, want initialize", initReq)
-	}
-	params, _ := initReq["params"].(map[string]any)
-	capabilities, _ := params["capabilities"].(map[string]any)
-	if capabilities["experimentalApi"] != false {
-		t.Fatalf("initialize capabilities = %+v, want experimentalApi false", capabilities)
-	}
-	optOutRaw, _ := capabilities["optOutNotificationMethods"].([]any)
-	gotOptOut := make([]string, 0, len(optOutRaw))
-	for _, item := range optOutRaw {
-		gotOptOut = append(gotOptOut, fmt.Sprint(item))
-	}
-	wantOptOut := []string{
-		"item/agentMessage/delta",
-		"item/plan/delta",
-		"item/commandExecution/outputDelta",
-		"item/fileChange/outputDelta",
-		"item/reasoning/summaryTextDelta",
-		"item/reasoning/summaryPartAdded",
-		"item/reasoning/textDelta",
-	}
-	if !reflect.DeepEqual(gotOptOut, wantOptOut) {
-		t.Fatalf("initialize optOutNotificationMethods = %+v, want %+v", gotOptOut, wantOptOut)
-	}
-
-	second := <-initializedCh
-	if second["method"] != "initialized" {
-		t.Fatalf("second ws message = %+v, want initialized", second)
-	}
-}
-
-func TestStartWebSocketRequiresURL(t *testing.T) {
+func TestStartRejectsRemovedWebSocketTransport(t *testing.T) {
 	client := New(config.CodexConfig{Transport: "ws"})
 	err := client.Start(context.Background(), true)
-	if err == nil || !strings.Contains(err.Error(), "ws_url is required") {
-		t.Fatalf("Start(websocket without url) error = %v, want missing ws_url", err)
+	if err == nil || !strings.Contains(err.Error(), "stdio only") {
+		t.Fatalf("Start(removed websocket transport) error = %v, want stdio-only failure", err)
+	}
+
+	client = New(config.CodexConfig{WSURL: "ws://example.test/ws"})
+	err = client.Start(context.Background(), true)
+	if err == nil || !strings.Contains(err.Error(), "stdio only") {
+		t.Fatalf("Start(removed websocket url) error = %v, want stdio-only failure", err)
 	}
 }
 
