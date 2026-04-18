@@ -22,3 +22,5 @@ Read these documents before making non-trivial changes:
 - Keep Feidex behavior conservative around approvals and lifecycle transitions.
 - Treat protocol correctness as a product requirement, not optional cleanup.
 - If there is tension between local convenience and the documented contracts, follow the documented contracts.
+
+@RTK.md
