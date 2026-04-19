@@ -175,6 +175,122 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 	}
 }
 
+func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStartsQueuedFollowup(t *testing.T) {
+	a, _, fc := newTestApp(t)
+
+	msg1 := &feishu.InboundMessage{
+		MessageID: "msg-complete-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+		Text:      "first task",
+	}
+	sessionKey := a.makeSessionKey(msg1)
+
+	var mu sync.Mutex
+	var methods []string
+	turnStartCalls := 0
+	secondTurnStarted := make(chan struct{}, 1)
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		mu.Lock()
+		methods = append(methods, method)
+		callNum := 0
+		if method == "turn/start" {
+			turnStartCalls++
+			callNum = turnStartCalls
+		}
+		mu.Unlock()
+
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+		case "turn/start":
+			if callNum == 1 {
+				return context.DeadlineExceeded
+			}
+			if callNum != 2 {
+				t.Fatalf("unexpected turn/start call #%d", callNum)
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-2"
+			select {
+			case secondTurnStarted <- struct{}{}:
+			default:
+			}
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		return nil
+	}
+
+	a.handleFeishuMessage(msg1)
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "" || sess.ActiveSubmissionID == "" || sess.Status != "turn_starting" {
+		t.Fatalf("session after timed-out turn/start = %+v", sess)
+	}
+	firstSubID := sess.ActiveSubmissionID
+
+	msg2 := &feishu.InboundMessage{
+		MessageID: "msg-complete-2",
+		ChatID:    msg1.ChatID,
+		ChatType:  msg1.ChatType,
+		UserID:    msg1.UserID,
+		Text:      "queued follow-up",
+	}
+	a.handleFeishuMessage(msg2)
+
+	sess = a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 1 || sess.ActiveSubmissionID != firstSubID {
+		t.Fatalf("session after queued follow-up = %+v", sess)
+	}
+	queuedSubID := sess.Queue[0]
+
+	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+
+	select {
+	case <-secondTurnStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected queued follow-up to start after completion without prior turn/started")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sess = a.store.GetSession(sessionKey)
+		queuedSub := a.store.GetSubmission(queuedSubID)
+		if sess != nil &&
+			queuedSub != nil &&
+			sess.ActiveSubmissionID == queuedSubID &&
+			sess.ActiveTurnID == "turn-2" &&
+			sess.Status == "turn_in_progress" &&
+			queuedSub.ThreadID == "thread-1" &&
+			queuedSub.TurnID == "turn-2" &&
+			queuedSub.Status == "running" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if firstSub := a.store.GetSubmission(firstSubID); firstSub != nil {
+		t.Fatalf("first submission after completion = %+v, want runtime cleanup", firstSub)
+	}
+	sess = a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveSubmissionID != queuedSubID || sess.ActiveTurnID != "turn-2" || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after queued follow-up started = %+v", sess)
+	}
+	queuedSub := a.store.GetSubmission(queuedSubID)
+	if queuedSub == nil || queuedSub.ThreadID != "thread-1" || queuedSub.TurnID != "turn-2" || queuedSub.Status != "running" {
+		t.Fatalf("queued submission after completion fallback = %+v", queuedSub)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(methods) != 3 || methods[0] != "thread/start" || methods[1] != "turn/start" || methods[2] != "turn/start" {
+		t.Fatalf("methods = %+v, want thread/start then two turn/start calls", methods)
+	}
+}
+
 func TestToolUserInputFormFlowRepliesByTextAndResumesAfterServerResolution(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 

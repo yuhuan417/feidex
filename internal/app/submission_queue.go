@@ -118,6 +118,79 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 }
 
 func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
+	return w.startNextSubmissionWithFailureNotice(sessionKey, false)
+}
+
+func (w *submissionWorkflow) notifySubmissionStartFailure(ctx context.Context, sub *state.Submission, err error, willContinue bool) {
+	a := w.app
+	if a == nil || a.feishu == nil || sub == nil || err == nil {
+		return
+	}
+	body := "任务启动失败: " + strings.TrimSpace(err.Error())
+	if willContinue {
+		body += "\n\n本条消息已跳过，正在继续处理后续排队消息。"
+	} else {
+		body += "\n\n本条消息未开始执行，可稍后重试。"
+	}
+	inThread := a.replyInThreadForSubmission(sub)
+	if strings.TrimSpace(sub.TriggerMessageID) != "" {
+		if replyErr := a.feishu.ReplyText(ctx, sub.TriggerMessageID, body, inThread); replyErr == nil {
+			return
+		}
+	}
+	if strings.TrimSpace(sub.ChatID) != "" {
+		_ = a.feishu.SendText(ctx, sub.ChatID, body)
+	}
+}
+
+func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
+	a := w.app
+	appState := a.appState()
+	a.clearPendingTurnBinding(threadID)
+	a.clearSubmissionProcessingReactions(sub)
+	if sub != nil {
+		_ = appState.finalizeSubmission(sub.ID, "failed")
+	}
+	sess := appState.session(sessionKey)
+	shouldStartNext := false
+	if sess != nil {
+		if sub != nil && strings.TrimSpace(sess.ActiveSubmissionID) == sub.ID {
+			sess.ActiveTurnID = ""
+			sess.ActiveSubmissionID = ""
+		}
+		if !sessionHasInFlightSubmission(sess) {
+			if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
+				sess.Status = "queued"
+			} else {
+				sess.Status = "idle"
+			}
+		}
+		if saveErr := appState.saveSession(sess); saveErr != nil {
+			slog.Error("submission start failure session cleanup failed",
+				"session_key", sessionKey,
+				"submission_id", func() string {
+					if sub == nil {
+						return ""
+					}
+					return sub.ID
+				}(),
+				"thread_id", threadID,
+				"error", saveErr,
+			)
+		} else {
+			shouldStartNext = len(sess.Queue) > 0
+		}
+	}
+	if notifyFailure && sub != nil {
+		w.notifySubmissionStartFailure(context.Background(), sub, err, shouldStartNext)
+	}
+	a.cleanupSubmissionRuntimeState(sub)
+	if shouldStartNext {
+		go w.startNextSubmissionAsync(sessionKey, "turnStartFailed")
+	}
+}
+
+func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey string, notifyFailure bool) error {
 	a := w.app
 	appState := a.appState()
 	sess := appState.session(sessionKey)
@@ -216,6 +289,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 		err := a.codex.Call(threadCtx, "thread/start", threadParams, &threadResp)
 		threadCancel()
 		if err != nil {
+			w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
 			slog.Error("thread/start failed",
 				"session_key", sessionKey,
 				"submission_id", sub.ID,
@@ -276,8 +350,7 @@ func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
 			logSessionState("startNextSubmission awaiting turn-start-notification", sessionKey, appState.session(sessionKey))
 			return nil
 		}
-		a.clearPendingTurnBinding(threadID)
-		a.clearSubmissionProcessingReactions(sub)
+		w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
 		slog.Error("turn start chain failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -328,7 +401,7 @@ func (w *submissionWorkflow) startNextSubmissionAsync(sessionKey, source string)
 	if strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	if err := w.startNextSubmission(sessionKey); err != nil {
+	if err := w.startNextSubmissionWithFailureNotice(sessionKey, true); err != nil {
 		slog.Error("async startNextSubmission failed",
 			"session_key", sessionKey,
 			"source", source,

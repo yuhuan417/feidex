@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -242,6 +245,124 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}
 	if sess := a.store.GetSession(sessionKey); sess == nil || sess.ActiveSubmissionID != "sub-2" || sess.Status != "turn_starting" {
 		t.Fatalf("session after timeout = %+v", sess)
+	}
+}
+
+func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	sessionKey := "sess-failed-start"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: "default",
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		Status:      "idle",
+		Queue:       []string{"sub-1", "sub-2"},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-1",
+		SessionKey:       sessionKey,
+		WorkspaceID:      "default",
+		InputText:        "first",
+		TriggerMessageID: "m-1",
+		Status:           "queued",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-2",
+		SessionKey:       sessionKey,
+		WorkspaceID:      "default",
+		InputText:        "second",
+		TriggerMessageID: "m-2",
+		Status:           "queued",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(sub-2) error = %v", err)
+	}
+
+	var mu sync.Mutex
+	var methods []string
+	turnStartCalls := 0
+	secondStarted := make(chan struct{}, 1)
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		mu.Lock()
+		methods = append(methods, method)
+		callNum := 0
+		if method == "turn/start" {
+			turnStartCalls++
+			callNum = turnStartCalls
+		}
+		mu.Unlock()
+
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			if callNum == 1 {
+				return errors.New("upstream unavailable")
+			}
+			if callNum != 2 {
+				t.Fatalf("unexpected turn/start call #%d", callNum)
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-2"
+			select {
+			case secondStarted <- struct{}{}:
+			default:
+			}
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	a.startNextSubmissionAsync(sessionKey, "test")
+
+	select {
+	case <-secondStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected queued second submission to start after first start failure cleanup")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sess := a.store.GetSession(sessionKey)
+		sub2 := a.store.GetSubmission("sub-2")
+		if sess != nil &&
+			sub2 != nil &&
+			sess.ActiveSubmissionID == "sub-2" &&
+			sess.ActiveTurnID == "turn-2" &&
+			sess.Status == "turn_in_progress" &&
+			sub2.ThreadID == "thread-1" &&
+			sub2.TurnID == "turn-2" &&
+			sub2.Status == "running" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if sub1 := a.store.GetSubmission("sub-1"); sub1 != nil {
+		t.Fatalf("sub-1 after failed start = %+v, want runtime cleanup", sub1)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveSubmissionID != "sub-2" || sess.ActiveTurnID != "turn-2" || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after failed start recovery = %+v", sess)
+	}
+	if len(sess.Queue) != 0 {
+		t.Fatalf("session queue after failed start recovery = %+v, want empty", sess.Queue)
+	}
+	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "任务启动失败: upstream unavailable") || !strings.Contains(ff.replyTexts[0], "正在继续处理后续排队消息") {
+		t.Fatalf("start failure user feedback = %+v, want explicit queued failure notice", ff.replyTexts)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(methods) != 3 || methods[0] != "thread/start" || methods[1] != "turn/start" || methods[2] != "turn/start" {
+		t.Fatalf("methods = %+v, want thread/start then two turn/start calls", methods)
 	}
 }
 

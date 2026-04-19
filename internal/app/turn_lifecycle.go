@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"feidex/internal/state"
 )
 
 func (w *submissionWorkflow) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
@@ -139,10 +141,85 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	logSessionState("turn started notification session snapshot", sessionKey, appState.session(sessionKey))
 }
 
+func (w *submissionWorkflow) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
+	a := w.app
+	appState := a.appState()
+	threadID = strings.TrimSpace(threadID)
+	turnID = strings.TrimSpace(turnID)
+	if threadID == "" || turnID == "" {
+		return "", nil
+	}
+
+	sessionKey, sub := a.pendingSubmissionForThread(threadID)
+	if sub == nil || strings.TrimSpace(sub.TurnID) != "" || sub.Finalized {
+		return "", nil
+	}
+	sess := appState.session(sessionKey)
+	if sess == nil {
+		return "", nil
+	}
+	if strings.TrimSpace(sess.ActiveThreadID) != threadID {
+		return "", nil
+	}
+	if strings.TrimSpace(sess.ActiveSubmissionID) != sub.ID {
+		return "", nil
+	}
+	if strings.TrimSpace(sess.ActiveTurnID) != "" {
+		return "", nil
+	}
+
+	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	a.markTurnStartedAt(turnID, time.Now())
+	a.clearPendingTurnBinding(threadID)
+
+	sess.ActiveSubmissionID = sub.ID
+	sess.ActiveTurnID = turnID
+	sess.Status = "turn_in_progress"
+	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+	if err := appState.saveSession(sess); err != nil {
+		slog.Error("turn completed fallback session bind failed",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"error", err,
+		)
+		return "", nil
+	}
+	if err := appState.markSubmissionRunning(sub.ID, threadID, turnID); err != nil {
+		slog.Error("turn completed fallback submission bind failed",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"error", err,
+		)
+		return "", nil
+	}
+	sub = appState.submission(sub.ID)
+	if sub == nil {
+		return "", nil
+	}
+	a.recordSubmissionSourceLinks(sub)
+	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	a.noteTurnStarted(sessionKey, sub)
+	a.markSessionThreadLive(sessionKey, threadID)
+	slog.Debug("turn completed rebound pending submission without prior turn start notification",
+		"session_key", sessionKey,
+		"submission_id", sub.ID,
+		"thread_id", threadID,
+		"turn_id", turnID,
+	)
+	return sessionKey, sub
+}
+
 func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 	a := w.app
 	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		sessionKey, sub = w.bindPendingSubmissionForTurnCompletion(threadID, turnID)
+	}
 	if sub == nil {
 		if a.finishStandaloneCompactTurn(threadID, turnID, status) {
 			return
