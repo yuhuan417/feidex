@@ -326,6 +326,53 @@ func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
 	}
 }
 
+func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	existingDir := t.TempDir()
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-existing-1",
+		Kind:        "workspace_new",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceNewPayload{
+			RootPath:    "/",
+			SelectedCWD: existingDir,
+			DraftID:     "repo",
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-existing-1) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceNewSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"request_id": "workspace-existing-1"},
+		FormValue: map[string]any{
+			"workspace_id":   "repo",
+			"workspace_name": "Repo",
+		},
+	})
+	if err != nil || resp == nil || resp.Card == nil || resp.Toast == nil {
+		t.Fatalf("completeWorkspaceNewSubmit() = %#v, %v", resp, err)
+	}
+	if resp.Toast.Type != "info" || !strings.Contains(resp.Toast.Content, "目录一致") {
+		t.Fatalf("workspace new existing workspace toast = %#v, want switch hint", resp.Toast)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if body := cardMarkdownContent(t, cardData); !strings.Contains(body, existingDir) || !strings.Contains(body, "是否直接切换到这个工作区") {
+		t.Fatalf("workspace existing switch body = %q", body)
+	}
+	if !cardHasButtonText(cardData, "切换到该工作区") {
+		t.Fatalf("workspace existing switch card buttons = %#v", cardButtonsForTest(cardData))
+	}
+	if pending := a.store.PendingByID("workspace-existing-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("workspace new pending after existing workspace hint = %+v, want resolved", pending)
+	}
+}
+
 func TestWorkspaceFormOrdering(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
@@ -582,7 +629,7 @@ func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T
 	if err != nil || resp == nil || resp.Card == nil || resp.Toast == nil {
 		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
 	}
-	if resp.Toast.Type != "info" || !strings.Contains(resp.Toast.Content, "转为新建工作区") {
+	if resp.Toast.Type != "info" || !strings.Contains(resp.Toast.Content, "预填好的新建工作区") {
 		t.Fatalf("clone existing dir toast = %#v, want takeover hint", resp.Toast)
 	}
 	cardData, _ := resp.Card.Data.(map[string]any)
@@ -609,6 +656,59 @@ func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T
 	}
 	if !foundNewPending {
 		t.Fatal("expected a new workspace_new pending request for takeover")
+	}
+}
+
+func TestWorkspaceCloneSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	existingDir := filepath.Join(baseDir, "repo")
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(existingDir) error = %v", err)
+	}
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-existing-workspace",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: baseDir,
+			RepoURL:           "git@github.com:example/repo.git",
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-existing-workspace) error = %v", err)
+	}
+
+	resp, err := a.completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-existing-workspace"},
+		FormValue:   map[string]any{"repo_url": "git@github.com:example/repo.git"},
+	})
+	if err != nil || resp == nil || resp.Card == nil || resp.Toast == nil {
+		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
+	}
+	if resp.Toast.Type != "info" || !strings.Contains(resp.Toast.Content, "现有工作区") {
+		t.Fatalf("clone existing workspace toast = %#v, want switch hint", resp.Toast)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if body := cardMarkdownContent(t, cardData); !strings.Contains(body, existingDir) || !strings.Contains(body, "是否直接切换到这个工作区") {
+		t.Fatalf("workspace existing switch body = %q", body)
+	}
+	if !cardHasButtonText(cardData, "切换到该工作区") {
+		t.Fatalf("workspace existing switch card buttons = %#v", cardButtonsForTest(cardData))
+	}
+	if pending := a.store.PendingByID("workspace-clone-existing-workspace"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("clone pending after existing workspace hint = %+v, want resolved", pending)
+	}
+	for _, req := range a.store.AllPendingRequests() {
+		if req != nil && req.Kind == "workspace_new" {
+			t.Fatalf("did not expect workspace_new pending request, got %+v", req)
+		}
 	}
 }
 

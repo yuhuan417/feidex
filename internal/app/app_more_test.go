@@ -954,6 +954,43 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 }
 
+func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	existingDir := t.TempDir()
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "repo Repo Name"}
+	pending := &state.PendingRequest{
+		ID:          "req-existing-1",
+		Kind:        "workspace_new",
+		FeishuMsgID: "card-1",
+		SessionKey:  a.makeSessionKey(msg),
+		PayloadJSON: mustJSON(workspaceNewPayload{
+			RootPath:    "/",
+			SelectedCWD: existingDir,
+		}),
+	}
+	if err := a.store.UpsertPending(pending); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	if err := a.completeWorkspaceNewText(msg, pending); err != nil {
+		t.Fatalf("completeWorkspaceNewText() error = %v", err)
+	}
+	if pending := a.store.PendingByID("req-existing-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after existing workspace prompt = %+v, want resolved", pending)
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patchedCards = %d, want 1", len(ff.patchedCards))
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, existingDir) || !strings.Contains(body, "是否直接切换到这个工作区") {
+		t.Fatalf("patched switch body = %q", body)
+	}
+	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "工作区已存在且目录一致") {
+		t.Fatalf("replyTexts = %+v, want existing workspace hint", ff.replyTexts)
+	}
+}
+
 func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	baseDir := t.TempDir()
@@ -1040,6 +1077,35 @@ func TestCommandWorkspaceCloneExistingDirectoryOpensWorkspaceNewCard(t *testing.
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, existingDir) {
 		t.Fatalf("workspace new takeover body = %q, want target dir %q", body, existingDir)
+	}
+}
+
+func TestCommandWorkspaceCloneExistingWorkspacePromptsSwitch(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	existingDir := filepath.Join(baseDir, "repo")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(existingDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	if err := a.commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+		t.Fatalf("commandWorkspace(clone existing workspace) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, existingDir) || !strings.Contains(body, "是否直接切换到这个工作区") {
+		t.Fatalf("workspace existing switch body = %q", body)
+	}
+	if !cardHasButtonText(ff.replyCards[0], "切换到该工作区") {
+		t.Fatalf("workspace existing switch buttons = %#v", cardButtonsForTest(ff.replyCards[0]))
 	}
 }
 

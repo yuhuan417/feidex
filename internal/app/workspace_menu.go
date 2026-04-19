@@ -10,6 +10,8 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type workspaceSettingOption struct {
@@ -73,7 +75,14 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		}
 		var existingDirErr *workspaceCloneExistingDirError
 		if errors.As(err, &existingDirErr) {
-			return a.beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayload(existingDirErr.WorkspaceID, existingDirErr.TargetDir))
+			return a.beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir)))
+		}
+		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
+		if errors.As(err, &existingWorkspaceErr) {
+			return a.replyCommandActionResponse(msg, &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
+				Card:  rawCard(a.renderWorkspaceCloneSwitchExistingCard(sessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
+			})
 		}
 		return err
 	}

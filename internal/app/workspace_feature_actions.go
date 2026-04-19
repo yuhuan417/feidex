@@ -55,6 +55,10 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 	}, nil
 }
 
+func (a *App) completeWorkspaceUseExisting(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeWorkspaceUse(action, sessionKey, workspaceID)
+}
+
 func (a *App) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return a.completeMenuCommand(action, sessionKey, "/workspace new", "menu.workspace")
 }
@@ -91,6 +95,10 @@ func (a *App) completeWorkspaceClone(action *feishu.CardAction, sessionKey strin
 }
 
 func workspaceNewTakeoverPayload(workspaceID, targetDir string) workspaceNewPayload {
+	return workspaceNewTakeoverPayloadWithNotice(workspaceID, targetDir, workspaceNewTakeoverNotice(targetDir))
+}
+
+func workspaceNewTakeoverPayloadWithNotice(workspaceID, targetDir, notice string) workspaceNewPayload {
 	targetDir = strings.TrimSpace(targetDir)
 	suggestedID := firstNonEmpty(strings.TrimSpace(workspaceID), workspaceSuggestedIDFromDir(targetDir))
 	return workspaceNewPayload{
@@ -98,6 +106,7 @@ func workspaceNewTakeoverPayload(workspaceID, targetDir string) workspaceNewPayl
 		SelectedCWD: targetDir,
 		DraftID:     suggestedID,
 		AutoDraftID: suggestedID,
+		Notice:      strings.TrimSpace(notice),
 	}
 }
 
@@ -111,9 +120,13 @@ func (a *App) completeWorkspaceNewTakeover(action *feishu.CardAction, sessionKey
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "目录已存在，已转为新建工作区"},
+		Toast: &callback.Toast{Type: "info", Content: "clone 目标目录已存在，已转为预填好的新建工作区"},
 		Card:  rawCard(a.renderWorkspaceNewCard(sessionKey, requestID, payload)),
 	}, nil
+}
+
+func (a *App) completeWorkspaceCloneUseExisting(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeWorkspaceUse(action, sessionKey, workspaceID)
 }
 
 func (a *App) completeWorkspaceClonePickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -232,6 +245,17 @@ func (a *App) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.C
 	if name == "" {
 		name = id
 	}
+	if existingWS := a.workspaceByIDAndCWD(id, cwd); existingWS != nil {
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = "resolved"
+			req.PayloadJSON = mustJSON(payload)
+			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+		})
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "工作区已存在且目录一致，可直接切换"},
+			Card:  rawCard(a.renderWorkspaceSwitchExistingCard(pending.SessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice())),
+		}, nil
+	}
 	sess := appState.session(pending.SessionKey)
 	chatID := action.ChatID
 	chatType := ""
@@ -295,6 +319,18 @@ func (a *App) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback
 		}, nil
 	}
 	if _, err := a.prepareWorkspaceClone(payload.RepoURL, payload.DraftID, parentDir); err != nil {
+		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
+		if errors.As(err, &existingWorkspaceErr) {
+			_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+				req.Status = "resolved"
+				req.PayloadJSON = mustJSON(payload)
+				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+			})
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
+				Card:  rawCard(a.renderWorkspaceCloneSwitchExistingCard(pending.SessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
+			}, nil
+		}
 		var existingDirErr *workspaceCloneExistingDirError
 		if errors.As(err, &existingDirErr) {
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
@@ -302,7 +338,15 @@ func (a *App) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback
 				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
-			return a.completeWorkspaceNewTakeover(action, pending.SessionKey, existingDirErr.WorkspaceID, existingDirErr.TargetDir)
+			takeoverPayload := workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir))
+			newRequestID, createErr := a.createWorkspaceNewPending(pending.SessionKey, action.UserID, "", takeoverPayload)
+			if createErr != nil {
+				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: createErr.Error()}}, nil
+			}
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "info", Content: "clone 目标目录已存在，已打开预填好的新建工作区"},
+				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, newRequestID, takeoverPayload)),
+			}, nil
 		}
 		payload.ErrorMessage = err.Error()
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {

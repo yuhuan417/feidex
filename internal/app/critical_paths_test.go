@@ -158,7 +158,15 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		sess = a.store.GetSession(sessionKey)
-		if sess != nil && sess.ActiveSubmissionID == queuedSubID && sess.ActiveTurnID == "turn-2" && sess.Status == "turn_in_progress" {
+		queuedSub = a.store.GetSubmission(queuedSubID)
+		if sess != nil &&
+			queuedSub != nil &&
+			sess.ActiveSubmissionID == queuedSubID &&
+			sess.ActiveTurnID == "turn-2" &&
+			sess.Status == "turn_in_progress" &&
+			queuedSub.ThreadID == "thread-1" &&
+			queuedSub.TurnID == "turn-2" &&
+			queuedSub.Status == "running" {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)

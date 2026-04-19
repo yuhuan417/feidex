@@ -131,6 +131,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"workspace.use.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceUse(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 	},
+	"workspace.use.existing": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+	},
 	"workspace.new": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceNew(action, actionSessionKey(action))
 	},
@@ -139,6 +142,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	},
 	"workspace.clone": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceClone(action, actionSessionKey(action))
+	},
+	"workspace.clone.use_existing": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeWorkspaceCloneUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
 	"workspace.clone.pickdir": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeWorkspaceClonePickDir(action)

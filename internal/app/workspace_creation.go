@@ -107,6 +107,7 @@ type workspaceNewPayload struct {
 	DraftID     string             `json:"draft_id,omitempty"`
 	AutoDraftID string             `json:"auto_draft_id,omitempty"`
 	DraftName   string             `json:"draft_name,omitempty"`
+	Notice      string             `json:"notice,omitempty"`
 	Picker      *pathPickerPayload `json:"picker,omitempty"`
 }
 
@@ -126,6 +127,11 @@ type workspaceCloneTakeoverError struct {
 }
 
 type workspaceCloneExistingDirError struct {
+	WorkspaceID string
+	TargetDir   string
+}
+
+type workspaceCloneExistingWorkspaceError struct {
 	WorkspaceID string
 	TargetDir   string
 }
@@ -172,6 +178,13 @@ func (e *workspaceCloneExistingDirError) Error() string {
 		return ""
 	}
 	return fmt.Sprintf("目标目录已存在: %s", e.TargetDir)
+}
+
+func (e *workspaceCloneExistingWorkspaceError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("目标目录 %q 已由工作区 %q 接管", e.TargetDir, e.WorkspaceID)
 }
 
 func newWorkspaceCloneOperation(cancel context.CancelFunc) *workspaceCloneOperation {
@@ -363,6 +376,9 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
 		"可以先选目录，再填写 `workspace_id` 和可选的 `name`。选完目录后会按目录名自动建议 `workspace_id`。点“确认”时才会校验 `workspace_id`。"
+	if notice := strings.TrimSpace(payload.Notice); notice != "" {
+		body = notice + "\n\n" + body
+	}
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
 		{
@@ -565,13 +581,35 @@ func (a *App) renderWorkspaceClonePreparingCard(requestID string, payload worksp
 func (a *App) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
 	buttons := []feishu.Button{
 		{
-			Text: "转为新建工作区",
+			Text: "返回工作区管理",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.workspace",
+				"session_key": sessionKey,
+			},
+		},
+	}
+	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
+	return a.feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
+}
+
+func (a *App) renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice string) map[string]any {
+	body := strings.TrimSpace(notice)
+	if body == "" {
+		body = "该目录已经由现有工作区接管。"
+	}
+	body += "\n\n" +
+		"目录: `" + firstNonEmpty(strings.TrimSpace(targetDir), "-") + "`\n" +
+		"workspace_id: `" + firstNonEmpty(strings.TrimSpace(workspaceID), "-") + "`\n\n" +
+		"是否直接切换到这个工作区？"
+	buttons := []feishu.Button{
+		{
+			Text: "切换到该工作区",
 			Type: "primary",
 			Value: map[string]any{
-				"action":       "workspace.new.takeover",
+				"action":       "workspace.use.existing",
 				"session_key":  sessionKey,
 				"workspace_id": strings.TrimSpace(workspaceID),
-				"target_dir":   strings.TrimSpace(targetDir),
 			},
 		},
 		{
@@ -583,8 +621,11 @@ func (a *App) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir
 			},
 		},
 	}
-	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
-	return a.feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
+	return a.feishu.SimpleStatusCard("工作区已存在", "blue", body, buttons)
+}
+
+func (a *App) renderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir string) map[string]any {
+	return a.renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, "clone 目标目录已存在，并且已经由现有工作区接管。")
 }
 
 func (a *App) renderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText string) map[string]any {
@@ -947,6 +988,15 @@ func workspaceSuggestedID(raw string) string {
 	return strings.Trim(out.String(), "-")
 }
 
+func workspaceNewTakeoverNotice(targetDir string) string {
+	targetDir = firstNonEmpty(strings.TrimSpace(targetDir), "-")
+	return "clone 目标目录已存在，可直接新建工作区接管。\n\n目录已预填为 `" + targetDir + "`，并已带上建议的 `workspace_id`。"
+}
+
+func workspaceNewExistingWorkspaceNotice() string {
+	return "该 workspace_id 已存在，并且目录与现有工作区一致。"
+}
+
 func updateWorkspaceNewSuggestedID(payload workspaceNewPayload, selectedDir string) workspaceNewPayload {
 	nextAuto := workspaceSuggestedIDFromDir(selectedDir)
 	currentDraft := strings.TrimSpace(payload.DraftID)
@@ -968,6 +1018,29 @@ func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
 	return "."
 }
 
+func (a *App) workspaceByCWD(targetDir string) *config.Workspace {
+	targetDir = strings.TrimSpace(targetDir)
+	if targetDir == "" || a == nil || a.cfg == nil {
+		return nil
+	}
+	cleanTarget := filepath.Clean(targetDir)
+	for i := range a.cfg.Workspaces {
+		ws := &a.cfg.Workspaces[i]
+		if filepath.Clean(strings.TrimSpace(ws.Cwd)) == cleanTarget {
+			return ws
+		}
+	}
+	return nil
+}
+
+func (a *App) workspaceByIDAndCWD(workspaceID, targetDir string) *config.Workspace {
+	ws := config.FindWorkspace(a.cfg, strings.TrimSpace(workspaceID))
+	if ws == nil || !sameWorkspaceCWD(targetDir, ws.Cwd) {
+		return nil
+	}
+	return ws
+}
+
 func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*workspaceClonePlan, error) {
 	repoName, err := workspaceCloneRepoName(repoURL)
 	if err != nil {
@@ -980,9 +1053,6 @@ func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*wor
 			return nil, fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
 		}
 	}
-	if config.FindWorkspace(a.cfg, workspaceID) != nil {
-		return nil, fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
-	}
 	parentDir = strings.TrimSpace(parentDir)
 	if parentDir == "" {
 		return nil, fmt.Errorf("请先选择父目录")
@@ -993,12 +1063,21 @@ func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*wor
 	}
 	targetDir := filepath.Join(parentDir, targetName)
 	if _, statErr := os.Stat(targetDir); statErr == nil {
+		if existingWS := a.workspaceByCWD(targetDir); existingWS != nil {
+			return nil, &workspaceCloneExistingWorkspaceError{
+				WorkspaceID: existingWS.ID,
+				TargetDir:   targetDir,
+			}
+		}
 		return nil, &workspaceCloneExistingDirError{
 			WorkspaceID: workspaceID,
 			TargetDir:   targetDir,
 		}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
+	}
+	if config.FindWorkspace(a.cfg, workspaceID) != nil {
+		return nil, fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
 	}
 	return &workspaceClonePlan{
 		RepoName:    repoName,
@@ -1133,6 +1212,19 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 		return fmt.Errorf("请先选择目录")
 	}
 	sessionKey := a.makeSessionKey(msg)
+	if existingWS := a.workspaceByIDAndCWD(id, cwd); existingWS != nil {
+		payload.DraftID = id
+		payload.DraftName = name
+		_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) {
+			req.Status = "resolved"
+			req.PayloadJSON = mustJSON(payload)
+			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+		})
+		if pending.FeishuMsgID != "" {
+			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
+		}
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	}
 	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
