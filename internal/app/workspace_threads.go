@@ -225,6 +225,9 @@ func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *c
 			Resumed:  false,
 		}, nil
 	}
+	if a == nil || a.codex == nil {
+		return nil, fmt.Errorf("codex client not initialized")
+	}
 	appState := a.appState()
 	effectiveModel := configuredGlobalModel(a.cfg)
 	threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)

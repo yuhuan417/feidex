@@ -1,0 +1,112 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"feidex/internal/state"
+)
+
+type replyChunkRenderSpec struct {
+	Title         string
+	Color         string
+	Body          string
+	FooterLines   []string
+	ShowHeader    bool
+	EnablePreview bool
+}
+
+func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, enablePreview bool) []replyChunkRenderSpec {
+	if a == nil {
+		return nil
+	}
+	chunks = a.fitReplyCardChunks(ctx, sub, title, color, chunks, enablePreview)
+	if len(chunks) == 0 {
+		return nil
+	}
+	specs := make([]replyChunkRenderSpec, 0, len(chunks))
+	for i, chunk := range chunks {
+		effectiveTitle := title
+		showHeader := chunk.ShowHeader
+		if strings.TrimSpace(title) == "最终答复" && len(chunks) > 1 {
+			effectiveTitle = fmt.Sprintf("%s %d/%d", strings.TrimSpace(title), i+1, len(chunks))
+			showHeader = true
+		}
+		specs = append(specs, replyChunkRenderSpec{
+			Title:         effectiveTitle,
+			Color:         color,
+			Body:          chunk.Body,
+			FooterLines:   append([]string(nil), chunk.FooterLines...),
+			ShowHeader:    showHeader,
+			EnablePreview: enablePreview,
+		})
+	}
+	return specs
+}
+
+func (a *App) sendReplyChunk(ctx context.Context, sub *state.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (sentReplyChunk, bool) {
+	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+		return sentReplyChunk{}, false
+	}
+
+	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, spec.Title, spec.Color, spec.ShowHeader, spec.Body, nil, spec.EnablePreview)
+	appendReplyCardFooter(card, spec.FooterLines)
+
+	cardID := ""
+	id := ""
+	var err error
+	if strings.TrimSpace(reuseMessageID) != "" {
+		id = strings.TrimSpace(reuseMessageID)
+		err = a.feishu.PatchCard(ctx, id, card)
+		if err == nil {
+			cardID = id
+		} else {
+			id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+			if err == nil && strings.TrimSpace(id) != "" {
+				cardID = strings.TrimSpace(id)
+			}
+		}
+	} else {
+		id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+		if err == nil && strings.TrimSpace(id) != "" {
+			cardID = strings.TrimSpace(id)
+		}
+	}
+	if err != nil || strings.TrimSpace(id) == "" {
+		fallback := appendFooterText(strings.TrimSpace(spec.Body), spec.FooterLines)
+		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
+	}
+	if err != nil || strings.TrimSpace(id) == "" {
+		return sentReplyChunk{}, false
+	}
+	return sentReplyChunk{
+		MessageID:   strings.TrimSpace(id),
+		CardID:      cardID,
+		Title:       spec.Title,
+		Body:        spec.Body,
+		FooterLines: append([]string(nil), spec.FooterLines...),
+		ShowHeader:  spec.ShowHeader,
+	}, true
+}
+
+func sentReplyChunkMatchesSpec(chunk sentReplyChunk, spec replyChunkRenderSpec) bool {
+	if strings.TrimSpace(chunk.Title) != strings.TrimSpace(spec.Title) {
+		return false
+	}
+	if strings.TrimSpace(chunk.Body) != strings.TrimSpace(spec.Body) {
+		return false
+	}
+	if chunk.ShowHeader != spec.ShowHeader {
+		return false
+	}
+	if len(chunk.FooterLines) != len(spec.FooterLines) {
+		return false
+	}
+	for i := range chunk.FooterLines {
+		if strings.TrimSpace(chunk.FooterLines[i]) != strings.TrimSpace(spec.FooterLines[i]) {
+			return false
+		}
+	}
+	return true
+}

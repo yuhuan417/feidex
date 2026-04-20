@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"feidex/internal/config"
@@ -89,53 +88,18 @@ func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submi
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	chunks = a.fitReplyCardChunks(ctx, sub, title, color, chunks, enablePreview)
-	results := make([]sentReplyChunk, 0, len(chunks))
-	for i, chunk := range chunks {
-		effectiveTitle := title
-		showHeader := chunk.ShowHeader
-		if strings.TrimSpace(title) == "最终答复" && len(chunks) > 1 {
-			effectiveTitle = fmt.Sprintf("%s %d/%d", strings.TrimSpace(title), i+1, len(chunks))
-			showHeader = true
+	specs := a.prepareReplyChunkRenderSpecs(ctx, sub, title, color, chunks, enablePreview)
+	results := make([]sentReplyChunk, 0, len(specs))
+	for i, spec := range specs {
+		currentReuse := ""
+		if i == 0 {
+			currentReuse = reuseMessageID
 		}
-		card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, effectiveTitle, color, showHeader, chunk.Body, nil, enablePreview)
-		appendReplyCardFooter(card, chunk.FooterLines)
-
-		cardID := ""
-		id := ""
-		var err error
-		if i == 0 && strings.TrimSpace(reuseMessageID) != "" {
-			id = strings.TrimSpace(reuseMessageID)
-			err = a.feishu.PatchCard(ctx, id, card)
-			if err == nil {
-				cardID = id
-			} else {
-				id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
-				if err == nil && strings.TrimSpace(id) != "" {
-					cardID = strings.TrimSpace(id)
-				}
-			}
-		} else {
-			id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
-			if err == nil && strings.TrimSpace(id) != "" {
-				cardID = strings.TrimSpace(id)
-			}
-		}
-		if err != nil || strings.TrimSpace(id) == "" {
-			fallback := appendFooterText(strings.TrimSpace(chunk.Body), chunk.FooterLines)
-			id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
-		}
-		if err != nil || strings.TrimSpace(id) == "" {
+		result, ok := a.sendReplyChunk(ctx, sub, spec, inThread, currentReuse)
+		if !ok {
 			break
 		}
-		results = append(results, sentReplyChunk{
-			MessageID:   strings.TrimSpace(id),
-			CardID:      cardID,
-			Title:       effectiveTitle,
-			Body:        chunk.Body,
-			FooterLines: append([]string(nil), chunk.FooterLines...),
-			ShowHeader:  showHeader,
-		})
+		results = append(results, result)
 	}
 	return results
 }

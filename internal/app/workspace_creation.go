@@ -1148,7 +1148,12 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 	if config.FindWorkspace(a.cfg, id) != nil {
 		return fmt.Errorf("workspace %q 已存在", id)
 	}
+	backend := a.workspaceBackendByID(a.defaultWorkspaceID())
+	if current := appState.session(sessionKey); current != nil && strings.TrimSpace(current.WorkspaceID) != "" {
+		backend = a.workspaceBackendByID(current.WorkspaceID)
+	}
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{
+		Backend:        backend,
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,

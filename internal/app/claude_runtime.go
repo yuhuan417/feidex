@@ -18,6 +18,7 @@ import (
 )
 
 const claudePlanModePendingKind = "claude_exit_plan_mode"
+const claudePartialUpdateMinInterval = 400 * time.Millisecond
 
 type claudeRuntime struct {
 	app *App
@@ -53,6 +54,9 @@ type claudeTurnState struct {
 	FullText   string
 	Thinking   string
 
+	SegmentTextBase          int
+	LastRenderedText         string
+	LastRenderedAt           time.Time
 	SuppressFailedCompletion bool
 }
 
@@ -116,12 +120,27 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 	r.mu.Lock()
 	current := r.sessions[sessionKey]
 	if current != nil && current.workspaceID == ws.ID {
-		r.mu.Unlock()
 		current.mu.Lock()
 		currentID := strings.TrimSpace(current.sessionID)
 		current.mu.Unlock()
-		if resumeID == "" || currentID == "" || resumeID == currentID {
-			return firstNonEmpty(currentID, resumeID), nil
+		currentStopped := current.session != nil && current.session.Stopped()
+		currentExitErr := error(nil)
+		if current.session != nil {
+			currentExitErr = current.session.ExitError()
+		}
+		r.mu.Unlock()
+		if currentStopped {
+			slog.Warn("discarding stopped Claude session before ensure",
+				"session_key", sessionKey,
+				"workspace_id", ws.ID,
+				"resume_id", resumeID,
+				"session_id", currentID,
+				"exit_error", currentExitErr,
+			)
+		} else {
+			if resumeID == "" || currentID == "" || resumeID == currentID {
+				return firstNonEmpty(currentID, resumeID), nil
+			}
 		}
 	} else {
 		r.mu.Unlock()
@@ -148,6 +167,17 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 		claudecli.WithWorkDir(ws.Cwd),
 		claudecli.WithModel(model),
 		claudecli.WithPermissionMode(permissionMode),
+		claudecli.WithStderrHandler(func(buf []byte) {
+			text := strings.TrimSpace(string(buf))
+			if text == "" {
+				return
+			}
+			slog.Debug("Claude CLI stderr",
+				"session_key", sessionKey,
+				"workspace_id", ws.ID,
+				"output", text,
+			)
+		}),
 		claudecli.WithPermissionHandler(claudecli.PermissionHandlerFunc(func(reqCtx context.Context, req *claudecli.PermissionRequest) (*claudecli.PermissionResponse, error) {
 			return r.handlePermission(reqCtx, state, req)
 		})),
@@ -391,14 +421,7 @@ func (r *claudeRuntime) runSession(state *claudeSessionState) {
 				r.app.bindClaudeSessionThread(sessionKey, turnID, threadID)
 			}
 		case claudecli.TextEvent:
-			state.mu.Lock()
-			turn := state.turns[e.TurnNumber]
-			if turn == nil {
-				turn = &claudeTurnState{TurnNumber: e.TurnNumber}
-				state.turns[e.TurnNumber] = turn
-			}
-			turn.FullText = e.FullText
-			state.mu.Unlock()
+			r.handleTextEvent(state, e)
 		case claudecli.ThinkingEvent:
 			state.mu.Lock()
 			turn := state.turns[e.TurnNumber]
@@ -461,7 +484,140 @@ func (r *claudeRuntime) claudeSessionStoppedError(state *claudeSessionState, thr
 	return &claudecli.ProcessError{Message: message}
 }
 
+func claudeTurnSegmentText(turn *claudeTurnState) string {
+	if turn == nil {
+		return ""
+	}
+	base := turn.SegmentTextBase
+	if base < 0 {
+		base = 0
+	}
+	if base > len(turn.FullText) {
+		base = len(turn.FullText)
+	}
+	return turn.FullText[base:]
+}
+
+func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
+	var (
+		threadID    string
+		turnID      string
+		body        string
+		shouldFlush bool
+	)
+
+	state.mu.Lock()
+	turn := state.turns[event.TurnNumber]
+	if turn == nil {
+		turn = &claudeTurnState{TurnNumber: event.TurnNumber}
+		state.turns[event.TurnNumber] = turn
+	}
+	turn.FullText = event.FullText
+	body = strings.TrimSpace(claudeTurnSegmentText(turn))
+	if body != "" && body != turn.LastRenderedText {
+		if turn.LastRenderedText == "" || time.Since(turn.LastRenderedAt) >= claudePartialUpdateMinInterval {
+			threadID = strings.TrimSpace(state.sessionID)
+			turnID = strings.TrimSpace(turn.TurnID)
+			shouldFlush = true
+		}
+	}
+	state.mu.Unlock()
+
+	if !shouldFlush || turnID == "" {
+		return
+	}
+	if !r.app.updateClaudeOutputSegment(context.Background(), threadID, turnID, body) {
+		return
+	}
+
+	state.mu.Lock()
+	if turn := state.turns[event.TurnNumber]; turn != nil {
+		turn.LastRenderedText = body
+		turn.LastRenderedAt = time.Now()
+	}
+	state.mu.Unlock()
+}
+
+func (r *claudeRuntime) flushClaudeTurnSegment(state *claudeSessionState, turnNumber int, final bool) bool {
+	var (
+		threadID string
+		turnID   string
+		body     string
+	)
+
+	state.mu.Lock()
+	turn := state.turns[turnNumber]
+	if turn == nil {
+		state.mu.Unlock()
+		return false
+	}
+	threadID = strings.TrimSpace(state.sessionID)
+	turnID = strings.TrimSpace(turn.TurnID)
+	body = strings.TrimSpace(claudeTurnSegmentText(turn))
+	if !final && (body == "" || body == turn.LastRenderedText) {
+		state.mu.Unlock()
+		return body != ""
+	}
+	state.mu.Unlock()
+
+	if turnID == "" || body == "" {
+		return false
+	}
+
+	var ok bool
+	if final {
+		ok = r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turnID, body)
+	} else {
+		ok = r.app.updateClaudeOutputSegment(context.Background(), threadID, turnID, body)
+	}
+	if !ok {
+		return false
+	}
+
+	state.mu.Lock()
+	if turn := state.turns[turnNumber]; turn != nil {
+		turn.LastRenderedText = body
+		turn.LastRenderedAt = time.Now()
+	}
+	state.mu.Unlock()
+	return true
+}
+
+func (r *claudeRuntime) closeClaudeTurnSegment(state *claudeSessionState, turnNumber int) {
+	var (
+		threadID string
+		turnID   string
+	)
+
+	state.mu.Lock()
+	turn := state.turns[turnNumber]
+	if turn == nil {
+		state.mu.Unlock()
+		return
+	}
+	threadID = strings.TrimSpace(state.sessionID)
+	turnID = strings.TrimSpace(turn.TurnID)
+	turn.SegmentTextBase = len(turn.FullText)
+	turn.LastRenderedText = ""
+	turn.LastRenderedAt = time.Time{}
+	state.mu.Unlock()
+
+	if turnID != "" {
+		r.app.closeClaudeOutputSegment(threadID, turnID)
+	}
+}
+
+func (r *claudeRuntime) flushAndCloseClaudeTurnSegment(state *claudeSessionState, turnNumber int) {
+	if turnNumber == 0 {
+		return
+	}
+	r.flushClaudeTurnSegment(state, turnNumber, false)
+	r.closeClaudeTurnSegment(state, turnNumber)
+}
+
 func (r *claudeRuntime) handleToolComplete(state *claudeSessionState, event claudecli.ToolCompleteEvent) {
+	r.flushAndCloseClaudeTurnSegment(state, event.TurnNumber)
+
 	state.mu.Lock()
 	if planFilePath := claudePlanFilePathFromTool(event.Name, event.Input); planFilePath != "" {
 		state.lastPlanFilePath = planFilePath
@@ -487,8 +643,8 @@ func (r *claudeRuntime) handleToolComplete(state *claudeSessionState, event clau
 
 func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event claudecli.TurnCompleteEvent) {
 	state.mu.Lock()
-	threadID := strings.TrimSpace(state.sessionID)
 	turn := state.turns[event.TurnNumber]
+	threadID := strings.TrimSpace(state.sessionID)
 	turnID := ""
 	suppressFailedCompletion := false
 	if turn != nil {
@@ -511,7 +667,15 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		)
 		return
 	}
+	state.mu.Unlock()
+
+	renderedFinal := r.flushClaudeTurnSegment(state, event.TurnNumber, true)
+
+	state.mu.Lock()
+	threadID = strings.TrimSpace(state.sessionID)
+	turn = state.turns[event.TurnNumber]
 	interruptPending := state.interruptPending
+	finalSegmentText := strings.TrimSpace(claudeTurnSegmentText(turn))
 	delete(state.turns, event.TurnNumber)
 	if state.currentTurnNumber == event.TurnNumber {
 		state.currentTurnNumber = 0
@@ -525,11 +689,11 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	if event.Error != nil {
 		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
-	if text := strings.TrimSpace(turn.FullText); text != "" {
+	if !renderedFinal && finalSegmentText != "" {
 		r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 			"type":  "agent_message",
 			"id":    "claude-agent-" + turn.TurnID,
-			"text":  text,
+			"text":  finalSegmentText,
 			"phase": "final_answer",
 		})
 	}
@@ -546,9 +710,22 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 
 func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event claudecli.ErrorEvent) {
 	state.mu.Lock()
+	sessionKey := strings.TrimSpace(state.sessionKey)
 	threadID := strings.TrimSpace(state.sessionID)
 	turn := state.turns[event.TurnNumber]
+	turnID := ""
+	if turn != nil {
+		turnID = strings.TrimSpace(turn.TurnID)
+	}
 	state.mu.Unlock()
+	slog.Warn("Claude session event error",
+		"session_key", sessionKey,
+		"thread_id", threadID,
+		"turn_id", turnID,
+		"turn_number", event.TurnNumber,
+		"context", event.Context,
+		"error", event.Error,
+	)
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
@@ -561,6 +738,11 @@ func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessi
 	if state == nil || req == nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "invalid permission request"}, nil
 	}
+	state.mu.Lock()
+	currentTurnNumber := state.currentTurnNumber
+	state.mu.Unlock()
+	r.flushAndCloseClaudeTurnSegment(state, currentTurnNumber)
+
 	state.mu.Lock()
 	if state.allowTools[claudeSessionApprovalKey(req.ToolName)] {
 		state.mu.Unlock()
@@ -604,6 +786,11 @@ func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessi
 }
 
 func (r *claudeRuntime) handleAskUserQuestion(ctx context.Context, state *claudeSessionState, questions []claudecli.Question) (map[string]string, error) {
+	state.mu.Lock()
+	currentTurnNumber := state.currentTurnNumber
+	state.mu.Unlock()
+	r.flushAndCloseClaudeTurnSegment(state, currentTurnNumber)
+
 	state.mu.Lock()
 	threadID := strings.TrimSpace(state.sessionID)
 	turnID := ""
@@ -658,6 +845,11 @@ func (r *claudeRuntime) handleAskUserQuestion(ctx context.Context, state *claude
 }
 
 func (r *claudeRuntime) handleExitPlanMode(ctx context.Context, state *claudeSessionState, plan claudecli.PlanInfo) (string, error) {
+	state.mu.Lock()
+	currentTurnNumber := state.currentTurnNumber
+	state.mu.Unlock()
+	r.flushAndCloseClaudeTurnSegment(state, currentTurnNumber)
+
 	state.mu.Lock()
 	threadID := strings.TrimSpace(state.sessionID)
 	turnID := ""
