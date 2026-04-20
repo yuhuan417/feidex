@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -171,7 +172,14 @@ func (a *App) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state
 	if strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return false, nil
 	}
-	if err := a.enqueueSubmissionWithSessionKey(msg, sessionKey, true); err != nil {
+	sub, err := a.buildClaudeContinuationSubmissionFromMessage(msg, sessionKey, sess, true)
+	if err != nil {
+		return false, err
+	}
+	if sub == nil {
+		return false, nil
+	}
+	if err := a.startClaudeContinuationSubmission(sessionKey, sub, false); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -206,11 +214,69 @@ func (a *App) continueClaudeSessionWithText(sessionKey, text string) error {
 	if err != nil {
 		return err
 	}
-	if err := appState.queueSubmission(sessionKey, id); err != nil {
-		return err
+	sub.ID = id
+	return a.startClaudeContinuationSubmission(sessionKey, sub, false)
+}
+
+func (a *App) buildClaudeContinuationSubmissionFromMessage(msg *feishu.InboundMessage, sessionKey string, sess *state.Session, bindOnlyCurrentRoot bool) (*state.Submission, error) {
+	if a == nil || msg == nil || sess == nil {
+		return nil, nil
+	}
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
+	bucketSessionKey := a.pendingInputSessionKey(msg)
+	inboundAttachments, err := a.resolveInboundAttachments(msg, workspaceID, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
+	sourceMessageIDs := uniqueStrings(append([]string{msg.MessageID}, stagedImageSourceMessageIDs(stagedImages)...))
+	currentRootMessageID := firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))
+	sourceRootMessageIDs := []string{currentRootMessageID}
+	if !bindOnlyCurrentRoot {
+		sourceRootMessageIDs = uniqueStrings(append(sourceRootMessageIDs, stagedImageRootMessageIDs(stagedImages)...))
+	}
+	sub := &state.Submission{
+		SessionKey:           sessionKey,
+		WorkspaceID:          workspaceID,
+		UserID:               msg.UserID,
+		ChatID:               msg.ChatID,
+		TriggerMessageID:     msg.MessageID,
+		SourceMessageIDs:     sourceMessageIDs,
+		SourceRootMessageIDs: sourceRootMessageIDs,
+		InputText:            msg.Text,
+		Attachments:          append(stagedImageAttachments(stagedImages), inboundAttachments...),
+		Status:               "queued",
+	}
+	if strings.TrimSpace(sub.InputText) == "" && len(sub.Attachments) == 0 {
+		return nil, nil
+	}
+	id, err := a.appState().createSubmission(sub)
+	if err != nil {
+		return nil, err
 	}
 	sub.ID = id
-	return a.startNextSubmission(sessionKey)
+	if len(stagedImages) > 0 {
+		if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
+			return nil, err
+		}
+	}
+	return sub, nil
+}
+
+func (a *App) startClaudeContinuationSubmission(sessionKey string, sub *state.Submission, notifyFailure bool) error {
+	if a == nil || sub == nil {
+		return nil
+	}
+	appState := a.appState()
+	sess := appState.session(sessionKey)
+	if sess == nil {
+		return fmt.Errorf("session %q missing", sessionKey)
+	}
+	ws := config.FindWorkspace(a.cfg, sub.WorkspaceID)
+	if ws == nil {
+		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
+	}
+	return newSubmissionWorkflow(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 func (a *App) recordSubmissionSourceLinks(sub *state.Submission) {

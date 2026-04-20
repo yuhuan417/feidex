@@ -250,6 +250,105 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	}
 }
 
+func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Workspaces[0].Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
+	a.claude = claude
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "claude-thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "claude-turn-current",
+		ActiveSubmissionID:      "sub-running",
+		OwnerUserID:             "user",
+		ChatID:                  "chat",
+		ChatType:                "p2p",
+		RootMessageID:           "root-1",
+		Status:                  "turn_in_progress",
+		ActiveOperations: []state.SessionActiveOperation{{
+			Kind:         sessionOpKindSubmission,
+			SubmissionID: "sub-running",
+			ThreadID:     "claude-thread-1",
+			TurnID:       "claude-turn-current",
+		}},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-running",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "claude-thread-1",
+		TurnID:           "claude-turn-current",
+		UserID:           "user",
+		ChatID:           "chat",
+		TriggerMessageID: "msg-running",
+		InputText:        "running",
+		Status:           "running",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
+	}
+
+	a.handleFeishuMessage(&feishu.InboundMessage{
+		MessageID: "msg-queued",
+		ChatID:    "chat",
+		ChatType:  "p2p",
+		UserID:    "user",
+		Text:      "follow-up task",
+	})
+
+	if len(claude.startTurnCalls) != 0 {
+		t.Fatalf("ordinary follow-up should not start immediately, startTurnCalls = %#v", claude.startTurnCalls)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 1 || sess.ActiveSubmissionID != "sub-running" || sess.ActiveTurnID != "claude-turn-current" || sess.Status != "queued" {
+		t.Fatalf("session after queued Claude follow-up = %+v", sess)
+	}
+	queuedSubID := strings.TrimSpace(sess.Queue[0])
+	queuedSub := a.store.GetSubmission(queuedSubID)
+	if queuedSub == nil || queuedSub.InputText != "follow-up task" || queuedSub.Status != "queued" {
+		t.Fatalf("queued Claude submission = %+v", queuedSub)
+	}
+	if len(ff.replyCards) == 0 || !strings.Contains(cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]), "已加入队列") {
+		t.Fatalf("queued notice cards = %+v", ff.replyCards)
+	}
+
+	a.finishTurn("claude-thread-1", "claude-turn-current", "completed")
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sess = a.store.GetSession(sessionKey)
+		queuedSub = a.store.GetSubmission(queuedSubID)
+		if len(claude.startTurnCalls) == 1 &&
+			sess != nil &&
+			queuedSub != nil &&
+			sess.ActiveSubmissionID == queuedSubID &&
+			sess.ActiveTurnID == queuedSub.TurnID &&
+			sess.Status == "turn_in_progress" &&
+			queuedSub.ThreadID == "claude-thread-1" &&
+			queuedSub.Status == "running" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if len(claude.ensureCalls) != 1 || claude.ensureCalls[0].resumeID != "claude-thread-1" {
+		t.Fatalf("ensure calls after queued Claude follow-up = %#v", claude.ensureCalls)
+	}
+	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "follow-up task") {
+		t.Fatalf("startTurn calls after queued Claude follow-up = %#v", claude.startTurnCalls)
+	}
+	sess = a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveSubmissionID != queuedSubID || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after queued Claude follow-up start = %+v", sess)
+	}
+}
+
 func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Workspaces[0].Backend = backendClaude
@@ -543,7 +642,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 	}
 }
 
-func TestStartNextSubmissionClaudeAllowsAdditionalInflightAndPreservesForeground(t *testing.T) {
+func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Workspaces[0].Backend = backendClaude
 	a.codex = nil
@@ -603,30 +702,24 @@ func TestStartNextSubmissionClaudeAllowsAdditionalInflightAndPreservesForeground
 	if err := a.startNextSubmission(sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
-	if len(claude.ensureCalls) != 1 || claude.ensureCalls[0].resumeID != "claude-thread-1" {
-		t.Fatalf("ensure calls = %#v", claude.ensureCalls)
+	if len(claude.ensureCalls) != 0 {
+		t.Fatalf("ensure calls = %#v, want no start while another turn is active", claude.ensureCalls)
 	}
-	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "follow up") {
-		t.Fatalf("startTurn calls = %#v", claude.startTurnCalls)
+	if len(claude.startTurnCalls) != 0 {
+		t.Fatalf("startTurn calls = %#v, want queued follow-up to remain pending", claude.startTurnCalls)
 	}
 
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {
-		t.Fatal("session missing after additional start")
+		t.Fatal("session missing after queued start check")
 	}
-	if len(sess.Queue) != 0 || len(sess.ActiveOperations) != 2 || sess.ActiveTurnID != "claude-turn-1" || sess.ActiveSubmissionID != "sub-running" || sess.Status != "turn_in_progress" {
-		t.Fatalf("session after additional Claude start = %+v", sess)
-	}
-	if got := sess.ActiveOperations[0].SubmissionID; got != subID {
-		t.Fatalf("first active operation submission = %q, want %q", got, subID)
-	}
-	if got := sess.ActiveOperations[1].SubmissionID; got != "sub-running" {
-		t.Fatalf("foreground active operation submission = %q, want sub-running", got)
+	if len(sess.Queue) != 1 || sess.ActiveTurnID != "claude-turn-1" || sess.ActiveSubmissionID != "sub-running" || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after queued Claude follow-up check = %+v", sess)
 	}
 
 	sub := a.store.GetSubmission(subID)
-	if sub == nil || sub.ThreadID != "claude-thread-1" || sub.TurnID == "" || sub.Status != "running" {
-		t.Fatalf("submission after additional Claude start = %+v", sub)
+	if sub == nil || sub.ThreadID != "" || sub.TurnID != "" || sub.Status != "queued" {
+		t.Fatalf("submission after queued Claude follow-up check = %+v", sub)
 	}
 }
 

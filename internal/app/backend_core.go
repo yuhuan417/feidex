@@ -54,8 +54,6 @@ func workspaceBackend(ws *config.Workspace) string {
 
 func workspaceSessionInflightMode(ws *config.Workspace) sessionInflightMode {
 	switch workspaceBackend(ws) {
-	case backendClaude:
-		return sessionInflightSerialized
 	default:
 		return sessionInflightSingle
 	}
