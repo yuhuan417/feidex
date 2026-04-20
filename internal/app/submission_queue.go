@@ -53,7 +53,8 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	if !bindOnlyCurrentRoot {
 		sourceRootMessageIDs = uniqueStrings(append(sourceRootMessageIDs, stagedImageRootMessageIDs(stagedImages)...))
 	}
-	if sessionHasInFlightSubmission(sess) {
+	mode := a.workspaceSessionInflightModeByID(sess.WorkspaceID)
+	if sessionHasInFlightSubmission(sess) && !sessionInflightAllowsAdditional(mode) {
 		sess.Status = "queued"
 	}
 	slog.Debug("submission enqueue begin",
@@ -105,7 +106,7 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		"active_turn_id", sess.ActiveTurnID,
 	)
 	logSessionState("submission queued session snapshot", sessionKey, appState.session(sessionKey))
-	if !sessionHasInFlightSubmission(sess) {
+	if !sessionHasInFlightSubmission(sess) || sessionInflightAllowsAdditional(mode) {
 		slog.Debug("submission starting immediately",
 			"submission_id", id,
 			"session_key", sessionKey,
@@ -146,40 +147,42 @@ func (w *submissionWorkflow) notifySubmissionStartFailure(ctx context.Context, s
 func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
 	a := w.app
 	appState := a.appState()
-	a.clearPendingTurnBinding(threadID)
+	if sub != nil {
+		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+	}
 	a.clearSubmissionProcessingReactions(sub)
 	if sub != nil {
 		_ = appState.finalizeSubmission(sub.ID, "failed")
 	}
-	sess := appState.session(sessionKey)
 	shouldStartNext := false
-	if sess != nil {
-		if sub != nil && strings.TrimSpace(sess.ActiveSubmissionID) == sub.ID {
-			sess.ActiveTurnID = ""
-			sess.ActiveSubmissionID = ""
+	if sess, saveErr := appState.updateSession(sessionKey, func(sess *state.Session) {
+		if sess == nil {
+			return
 		}
-		if !sessionHasInFlightSubmission(sess) {
+		if sub != nil {
+			sessionRemoveActiveOperation(sess, sub.ID, "")
+		}
+		if !sessionHasActiveOperations(sess) {
 			if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 				sess.Status = "queued"
 			} else {
 				sess.Status = "idle"
 			}
 		}
-		if saveErr := appState.saveSession(sess); saveErr != nil {
-			slog.Error("submission start failure session cleanup failed",
-				"session_key", sessionKey,
-				"submission_id", func() string {
-					if sub == nil {
-						return ""
-					}
-					return sub.ID
-				}(),
-				"thread_id", threadID,
-				"error", saveErr,
-			)
-		} else {
-			shouldStartNext = len(sess.Queue) > 0
-		}
+	}); saveErr != nil {
+		slog.Error("submission start failure session cleanup failed",
+			"session_key", sessionKey,
+			"submission_id", func() string {
+				if sub == nil {
+					return ""
+				}
+				return sub.ID
+			}(),
+			"thread_id", threadID,
+			"error", saveErr,
+		)
+	} else if sess != nil {
+		shouldStartNext = len(sess.Queue) > 0
 	}
 	if notifyFailure && sub != nil {
 		w.notifySubmissionStartFailure(context.Background(), sub, err, shouldStartNext)
@@ -195,14 +198,21 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 	appState := a.appState()
 	sess := appState.session(sessionKey)
 	logSessionState("startNextSubmission entry", sessionKey, sess)
-	if sess == nil || sessionHasInFlightSubmission(sess) {
+	if sess == nil {
+		slog.Debug("startNextSubmission skipped", "session_key", sessionKey, "has_session", false)
+		return nil
+	}
+	nextMode := a.workspaceSessionInflightModeByID(sess.WorkspaceID)
+	if len(sess.Queue) > 0 {
+		if nextSub := appState.submission(sess.Queue[0]); nextSub != nil {
+			nextMode = a.workspaceSessionInflightModeByID(nextSub.WorkspaceID)
+		}
+	}
+	if sessionHasInFlightSubmission(sess) && !sessionInflightAllowsAdditional(nextMode) {
 		slog.Debug("startNextSubmission skipped",
 			"session_key", sessionKey,
-			"has_session", sess != nil,
+			"has_session", true,
 			"active_turn_id", func() string {
-				if sess == nil {
-					return ""
-				}
 				return sess.ActiveTurnID
 			}(),
 		)
@@ -247,6 +257,9 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		"thread_id", sess.ActiveThreadID,
 	)
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
+	if workspaceBackend(ws) == backendClaude {
+		return w.startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	}
 	if !sessionCanResumeThreadForSubmission(sess, sub) {
 		if strings.TrimSpace(sess.ActiveThreadID) != "" {
 			slog.Debug("dropping session thread lineage for new submission",
@@ -316,17 +329,21 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 	if threadID != "" {
 		a.markSessionThreadLive(sessionKey, threadID)
 	}
-	sess.ActiveSubmissionID = sub.ID
+	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
+		Kind:         sessionOpKindSubmission,
+		SubmissionID: sub.ID,
+		ThreadID:     threadID,
+	})
 	sess.Status = "turn_starting"
 	sub.ThreadID = threadID
 	sub.Status = "running"
 	a.notePendingTurnBinding(threadID, sessionKey, sub.ID)
 	if err := appState.saveSession(sess); err != nil {
-		a.clearPendingTurnBinding(threadID)
+		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 		return err
 	}
 	if err := appState.markSubmissionRunning(sub.ID, threadID, ""); err != nil {
-		a.clearPendingTurnBinding(threadID)
+		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 		return err
 	}
 	a.markSubmissionRunningReactions(sub)
@@ -367,12 +384,16 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		"thread_id", threadID,
 		"turn_id", turnID,
 	)
-	sess.ActiveSubmissionID = sub.ID
-	sess.ActiveTurnID = turnID
+	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
+		Kind:         sessionOpKindSubmission,
+		SubmissionID: sub.ID,
+		ThreadID:     threadID,
+		TurnID:       turnID,
+	})
 	sess.Status = "turn_in_progress"
 	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBinding(threadID)
+	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"

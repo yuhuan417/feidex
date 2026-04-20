@@ -17,7 +17,7 @@ func renderPermissionsApprovalBody(params map[string]any) string {
 		lines = append(lines, "说明:", reason)
 	}
 	permissions, _ := params["permissions"].(map[string]any)
-	sections := permissionSummarySections(permissions)
+	sections := append(permissionRequestSections(params), permissionSummarySections(permissions)...)
 	if len(sections) > 0 {
 		if len(lines) > 1 {
 			lines = append(lines, "")
@@ -48,7 +48,19 @@ func renderPermissionsApprovalBody(params map[string]any) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
+func permissionRequestSections(params map[string]any) []permissionSummarySection {
+	if len(params) == 0 {
+		return nil
+	}
+	lines := summarizePermissionRequest(params)
+	if len(lines) == 0 {
+		return nil
+	}
+	return []permissionSummarySection{{Title: "工具请求", Lines: lines}}
+}
+
 func permissionSummarySections(permissions map[string]any) []permissionSummarySection {
+	permissions = filterPermissionSummaryPayload(permissions)
 	if len(permissions) == 0 {
 		return nil
 	}
@@ -72,10 +84,112 @@ func permissionSummarySections(permissions map[string]any) []permissionSummarySe
 }
 
 func summarizePermissions(permissions map[string]any) []string {
+	permissions = filterPermissionSummaryPayload(permissions)
 	if summary := summarizePermissionMetadata(permissions); len(summary) > 0 {
 		return summary
 	}
 	return summarizePermissionsFallback(permissions)
+}
+
+func summarizePermissionRequest(params map[string]any) []string {
+	if len(params) == 0 {
+		return nil
+	}
+	lines := []string{}
+	seen := map[string]struct{}{}
+	add := func(label string, values ...string) {
+		if _, ok := seen[label]; ok {
+			return
+		}
+		value := strings.TrimSpace(firstNonEmpty(values...))
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		seen[label] = struct{}{}
+		lines = append(lines, label+": `"+strings.ReplaceAll(truncate(value, 180), "`", "'")+"`")
+	}
+
+	tool := strings.TrimSpace(firstNonEmpty(
+		stringValue(params["tool"]),
+		stringValue(params["toolName"]),
+		stringValue(params["tool_name"]),
+	))
+	if tool == "" {
+		if permissions, ok := params["permissions"].(map[string]any); ok {
+			tool = strings.TrimSpace(firstNonEmpty(
+				stringValue(permissions["tool"]),
+				stringValue(permissions["toolName"]),
+				stringValue(permissions["tool_name"]),
+			))
+		}
+	}
+	add("tool", tool)
+
+	if toolInput, ok := params["tool_input"].(map[string]any); ok && len(toolInput) > 0 {
+		add("url", firstNonEmpty(
+			stringValue(toolInput["url"]),
+			stringValuesSummary(toolInput["urls"], 4),
+		))
+		add("query", firstNonEmpty(
+			stringValue(toolInput["query"]),
+			stringValue(toolInput["searchTerm"]),
+			stringValue(toolInput["search_term"]),
+		))
+		add("prompt", stringValue(toolInput["prompt"]))
+		add("description", stringValue(toolInput["description"]))
+		add("command", firstNonEmpty(
+			stringValue(toolInput["command"]),
+			stringValue(toolInput["cmd"]),
+		))
+		add("path", firstNonEmpty(
+			stringValue(toolInput["path"]),
+			stringValue(toolInput["file_path"]),
+			stringValue(toolInput["notebook_path"]),
+		))
+		add("cwd", stringValue(toolInput["cwd"]))
+		add("pattern", firstNonEmpty(
+			stringValue(toolInput["pattern"]),
+			stringValue(toolInput["regex"]),
+		))
+		add("glob", stringValue(toolInput["glob"]))
+		add("domain", firstNonEmpty(
+			stringValue(toolInput["domain"]),
+			stringValuesSummary(toolInput["domains"], 4),
+		))
+		add("target", firstNonEmpty(
+			stringValue(toolInput["target"]),
+			stringValue(toolInput["resource"]),
+			stringValue(toolInput["file"]),
+		))
+		for _, item := range flattenPermissionScalars("", toolInput, 0) {
+			parts := strings.SplitN(item, " = ", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			label := strings.TrimSpace(parts[0])
+			if label == "" {
+				continue
+			}
+			add(label, strings.Trim(parts[1], "`"))
+			if len(lines) >= 7 {
+				break
+			}
+		}
+	}
+
+	add("blocked_path", firstNonEmpty(
+		stringValue(params["blockedPath"]),
+		stringValue(params["blocked_path"]),
+		func() string {
+			if permissions, ok := params["permissions"].(map[string]any); ok {
+				return firstNonEmpty(stringValue(permissions["blockedPath"]), stringValue(permissions["blocked_path"]))
+			}
+			return ""
+		}(),
+	))
+
+	return lines
 }
 
 func summarizePermissionMetadata(permissions map[string]any) []string {
@@ -182,6 +296,7 @@ func permissionBoolLabel(enabled bool) string {
 }
 
 func summarizePermissionsFallback(permissions map[string]any) []string {
+	permissions = filterPermissionSummaryPayload(permissions)
 	flat := flattenPermissionScalars("", permissions, 0)
 	if len(flat) == 0 {
 		return nil
@@ -313,4 +428,74 @@ func flattenPermissionScalars(prefix string, value any, depth int) []string {
 		lines = append(lines, fmt.Sprintf("%s = %v", prefix, x))
 	}
 	return lines
+}
+
+func filterPermissionSummaryPayload(permissions map[string]any) map[string]any {
+	if len(permissions) == 0 {
+		return nil
+	}
+	filtered := map[string]any{}
+	for key, value := range permissions {
+		switch key {
+		case "tool", "toolName", "tool_name", "blockedPath", "blocked_path":
+			continue
+		default:
+			filtered[key] = value
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
+func stringValuesSummary(value any, limit int) string {
+	values := collectStringValues(value, limit)
+	if len(values) == 0 {
+		return ""
+	}
+	if limit > 0 && len(values) > limit {
+		values = values[:limit]
+	}
+	return strings.Join(values, ", ")
+}
+
+func collectStringValues(value any, limit int) []string {
+	out := []string{}
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		out = append(out, v)
+	}
+	var walk func(any)
+	walk = func(current any) {
+		if current == nil {
+			return
+		}
+		if limit > 0 && len(out) >= limit {
+			return
+		}
+		switch x := current.(type) {
+		case string:
+			add(x)
+		case []string:
+			for _, item := range x {
+				add(item)
+				if limit > 0 && len(out) >= limit {
+					return
+				}
+			}
+		case []any:
+			for _, item := range x {
+				walk(item)
+				if limit > 0 && len(out) >= limit {
+					return
+				}
+			}
+		}
+	}
+	walk(value)
+	return out
 }

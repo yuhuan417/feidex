@@ -49,11 +49,16 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 			return sessionKey, sub
 		}
 		for _, sess := range appState.sessions() {
-			if turnID != "" && sess.ActiveTurnID == turnID {
-				sub := appState.submission(sess.ActiveSubmissionID)
-				if sub != nil {
-					return sess.Key, sub
-				}
+			if sess == nil {
+				continue
+			}
+			op := sessionFindActiveOperationByTurn(sess, turnID)
+			if op == nil || strings.TrimSpace(op.SubmissionID) == "" {
+				continue
+			}
+			sub := appState.submission(op.SubmissionID)
+			if sub != nil {
+				return sess.Key, sub
 			}
 		}
 		return "", nil
@@ -63,16 +68,11 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 			if sess == nil {
 				continue
 			}
-			if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
+			op := sessionFindActiveOperationByThread(sess, threadID)
+			if op == nil || strings.TrimSpace(op.SubmissionID) == "" {
 				continue
 			}
-			if strings.TrimSpace(sess.ActiveSubmissionID) == "" {
-				continue
-			}
-			if strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(turnID) != "" && sess.ActiveTurnID != turnID {
-				continue
-			}
-			sub := appState.submission(sess.ActiveSubmissionID)
+			sub := appState.submission(op.SubmissionID)
 			if sub != nil {
 				return sess.Key, sub
 			}

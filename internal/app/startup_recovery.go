@@ -25,7 +25,7 @@ func (a *App) recoverRuntimeState() {
 				"workspace_id", sess.WorkspaceID,
 			)
 		}
-		if sess.ActiveTurnID == "" && sess.ActiveSubmissionID == "" && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && sess.Status == "idle" {
+		if !sessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && sess.Status == "idle" {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 				clearSessionThreadContext(sess)
 			}
@@ -40,8 +40,7 @@ func (a *App) recoverRuntimeState() {
 			"queue_len", len(sess.Queue),
 			"status", sess.Status,
 		)
-		sess.ActiveTurnID = ""
-		sess.ActiveSubmissionID = ""
+		sessionResetActiveOperations(sess)
 		sess.Queue = nil
 		sess.StagedImages = nil
 		sess.Status = "idle"
@@ -84,7 +83,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 		if strings.TrimSpace(firstNonEmpty(sess.Status, "idle")) != "idle" {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+		if sessionHasInFlightSubmission(sess) {
 			continue
 		}
 		if len(sess.Queue) != 0 || len(sess.StagedImages) != 0 {
@@ -104,6 +103,15 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			sess.Status = "idle"
 			_ = appState.saveSession(sess)
 			a.clearSessionLiveThread(sessionKey)
+			continue
+		}
+		if workspaceBackend(ws) == backendClaude {
+			a.markSessionThreadLive(sessionKey, sess.ActiveThreadID)
+			slog.Debug("startup Claude session lineage preserved",
+				"session_key", sessionKey,
+				"thread_id", sess.ActiveThreadID,
+				"workspace_id", workspaceID,
+			)
 			continue
 		}
 

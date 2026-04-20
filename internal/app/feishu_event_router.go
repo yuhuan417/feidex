@@ -89,10 +89,14 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			return nil
 		}
 	}
-	if a.codexMaintenanceActive() {
+	if a.codexMaintenanceActive() && a.currentWorkspaceBackendForMessage(msg) == backendCodex {
 		return errString("Codex 正在维护中，当前只允许 `/codex`、`/status`、`/help`")
 	}
 	replyLink := a.replyRootTurnLink(msg)
+	targetSessionKey := a.makeSessionKey(msg)
+	if replyLink != nil {
+		targetSessionKey = a.sessionKeyForInboundMessage(msg, replyLink)
+	}
 	if a.shouldStageInboundImages(msg) {
 		if err := a.stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
 			return err
@@ -115,7 +119,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			)
 		}
 	}
-	if err := a.enqueueSubmissionWithSessionKey(msg, a.makeSessionKey(msg), replyLink != nil); err != nil {
+	if err := a.enqueueSubmissionWithSessionKey(msg, targetSessionKey, replyLink != nil); err != nil {
 		return err
 	}
 	return nil

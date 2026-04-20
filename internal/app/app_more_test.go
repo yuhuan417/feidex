@@ -438,7 +438,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		turnStreams:  map[string]*turnStream{},
 		liveThreads:  map[string]string{},
 		turnBindings: map[string]turnBinding{},
-		pendingTurns: map[string]turnBinding{},
+		pendingTurns: map[string][]turnBinding{},
 	}
 	return a, ff, fc
 }
@@ -2942,8 +2942,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	sess := a.store.GetSession(sessionKey)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
+	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)

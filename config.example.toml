@@ -23,12 +23,21 @@ service_name = "feidex"
 # model = "gpt-5.4"
 # reasoning_effort = "medium"
 
+[claude]
+command = "claude"
+model = "sonnet"
+permission_mode = "default"
+permission_prompt_tool_stdio = true
+# disable_plugins = true
+# system_prompt = "..."
+
 [daemon]
 service_name = "feidex"
 
 [[workspace]]
 id = "default"
 name = "Default"
+backend = "codex"
 cwd = "."
 model = "gpt-5.4"
 approval_policy = "on-request"

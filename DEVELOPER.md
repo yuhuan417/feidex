@@ -5,7 +5,7 @@ Prefer following this document over ad hoc local habits.
 
 ## Scope
 
-Feidex is not a general chat bot. It is a bridge between Feishu message flows and a locally or remotely running Codex App Server. Most changes should preserve three properties:
+Feidex is not a general chat bot. It is a bridge between Feishu message flows and a locally or remotely running agent backend. Today the production protocol contract is Codex App Server. Any non-Codex backend must be introduced behind a backend adapter without weakening the Codex path. Most changes should preserve three properties:
 
 - Feishu-side interaction remains thread-aware and approval-safe.
 - Codex-side protocol handling stays explicit and conservative.
@@ -27,6 +27,7 @@ Use these boundaries when placing code:
 | `internal/daemon` | User-service install/run/upgrade | Keep daemon and systemd concerns isolated here. |
 | `internal/release` | GitHub release metadata lookup/version selection | No CLI or Feishu logic here. |
 | `internal/buildinfo` | Build-time version metadata | Only build/version helpers. |
+| `claude-cli-protocol/` | Local reference material for Claude CLI stream-json protocol | Documentation/reference only. Do not wire `internal/app` directly to this protocol, and do not depend on the bundled Go SDK as a runtime integration layer; use this directory only to design Feidex-owned backend adapters. |
 | `tmp/appserver-schema`, `tmp/appserver-ts` | Generated reference material | Reference only. Not runtime inputs and not release outputs. |
 
 Dependency direction should stay simple:
@@ -254,6 +255,20 @@ The usual files to touch for new item types are:
 - `internal/app/turn_item_cards.go`
 - `internal/app/quiet_working_card.go`
 - relevant tests under `internal/app/*test.go`
+
+### Multi-Backend Boundary
+
+If Feidex adds another backend, keep these rules:
+
+- `docs/codex-app-server-state-machine-audit.md` remains the authoritative protocol contract for the Codex backend path.
+- A Claude backend is a separate backend, not a partial implementation of the Codex app-server protocol.
+- `internal/app` should target backend-neutral product semantics such as conversation binding, turn started/completed, output deltas, tool lifecycle, approvals, user-input requests, and usage updates.
+- Raw protocol method names, envelopes, and transport semantics belong in backend-specific adapters, not in `internal/app`.
+- `claude-cli-protocol/` is reference material only. Do not build Feidex's Claude backend by depending on its bundled Go SDK; Feidex should own its Claude stream-json adapter and parsers locally.
+- Do not collapse the product to the lowest common denominator. Shared abstractions should cover the common lifecycle, while backend-specific capabilities remain first-class product features.
+- Do not make one backend the semantic parent of the other. Backend-neutral types are for shared orchestration only; backend-native capabilities should live behind explicit extension points.
+- Capability differences must be explicit. If a backend does not support review, compaction, thread history, skills catalog, or model catalog parity, gate the product surface instead of allowing protocol errors to leak through.
+- Use [docs/claude-cli-backend-design.md](/home/yuhuan/feidex/docs/claude-cli-backend-design.md) as the current design reference for the Claude dual-backend direction.
 
 ### Feishu
 

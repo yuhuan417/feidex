@@ -106,7 +106,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
-	if sess.ActiveTurnID != "" {
+	if sessionHasInFlightSubmission(sess) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
 		}, nil
@@ -150,8 +150,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	sess.ActiveThreadSandboxMode = ""
 	setSessionThreadContext(sess, workspaceID, threadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	a.markSessionThreadLive(sessionKey, threadID)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
+	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
 	_ = appState.saveSession(sess)
 	includeAll, _ := action.ActionValue["include_all"].(bool)

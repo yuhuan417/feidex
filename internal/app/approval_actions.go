@@ -58,19 +58,40 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 	if strings.TrimSpace(warning) != "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: warning}}, nil
 	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
-		slog.Error("approval reply to codex failed",
-			"request_id", requestID,
-			"pending_kind", pending.Kind,
-			"action", actionName,
-			"user_id", action.UserID,
-			"error", err,
-		)
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
-		}, nil
+	if pendingBackend(a, pending) == backendClaude {
+		resolution, resolutionWarning := claudeApprovalResolutionForAction(actionName)
+		if strings.TrimSpace(resolutionWarning) != "" {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: resolutionWarning}}, nil
+		}
+		if err := a.claude.ResolveApproval(requestID, resolution); err != nil {
+			slog.Error("approval reply to Claude failed",
+				"request_id", requestID,
+				"pending_kind", pending.Kind,
+				"action", actionName,
+				"user_id", action.UserID,
+				"error", err,
+			)
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
+			}, nil
+		}
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		a.resumeSubmissionAfterRequest(pending)
+	} else {
+		if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
+			slog.Error("approval reply to codex failed",
+				"request_id", requestID,
+				"pending_kind", pending.Kind,
+				"action", actionName,
+				"user_id", action.UserID,
+				"error", err,
+			)
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
+			}, nil
+		}
+		_ = a.markPendingRequestReplied(requestID)
 	}
-	_ = a.markPendingRequestReplied(requestID)
 	card := a.renderResolvedApprovalCard(pending, action, actionName)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "审批已提交"},

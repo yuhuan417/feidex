@@ -79,8 +79,7 @@ func (a *App) startThreadFork(sessionKey string) (int, error) {
 	}
 	setSessionThreadContext(sess, workspaceID, newThreadID, result.Thread.Name, result.Thread.Preview)
 	a.markSessionThreadLive(sessionKey, newThreadID)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
+	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
 	sess.Queue = nil
 	sess.StagedImages = nil

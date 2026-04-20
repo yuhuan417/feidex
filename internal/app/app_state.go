@@ -37,6 +37,13 @@ func (s *appStateFacade) saveSession(sess *state.Session) error {
 	return s.store.UpsertSession(sess)
 }
 
+func (s *appStateFacade) updateSession(key string, mutate func(*state.Session)) (*state.Session, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	return s.store.UpdateSession(strings.TrimSpace(key), mutate)
+}
+
 func (s *appStateFacade) createSubmission(sub *state.Submission) (string, error) {
 	if s == nil || s.store == nil {
 		return "", nil

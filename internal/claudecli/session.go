@@ -1,0 +1,840 @@
+package claudecli
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os/exec"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+)
+
+type Session struct {
+	mu sync.Mutex
+
+	cfg    SessionConfig
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	stderr io.ReadCloser
+	reader *ndjsonReader
+	writer *ndjsonWriter
+
+	started bool
+	stopped bool
+
+	done       chan struct{}
+	doneOnce   sync.Once
+	eventsOnce sync.Once
+	events     chan Event
+	turnNumber int
+	current    *turnState
+	pending    []int
+	turns      map[int]*turnState
+	info       *SessionInfo
+
+	blocks map[int]*blockState
+}
+
+type turnState struct {
+	Number       int
+	StartTime    time.Time
+	FullText     string
+	FullThinking string
+	Tools        map[string]*toolState
+}
+
+type toolState struct {
+	ID           string
+	Name         string
+	PartialInput string
+	Input        map[string]any
+}
+
+type blockState struct {
+	BlockType   string
+	ToolID      string
+	ToolName    string
+	PartialJSON string
+}
+
+func NewSession(opts ...SessionOption) *Session {
+	cfg := defaultConfig()
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return &Session{
+		cfg:     cfg,
+		done:    make(chan struct{}),
+		events:  make(chan Event, cfg.EventBufferSize),
+		turns:   map[int]*turnState{},
+		pending: []int{},
+		blocks:  map[int]*blockState{},
+	}
+}
+
+func (s *Session) Start(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.started {
+		return ErrAlreadyStarted
+	}
+
+	args := s.cliArgs()
+	command := strings.TrimSpace(s.cfg.CLIPath)
+	if command == "" {
+		command = "claude"
+	}
+
+	cmd := exec.CommandContext(ctx, command, args...)
+	if s.cfg.WorkDir != "" {
+		cmd.Dir = s.cfg.WorkDir
+	}
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return &ProcessError{Message: "failed to create stdin pipe", Cause: err}
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return &ProcessError{Message: "failed to create stdout pipe", Cause: err}
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return &ProcessError{Message: "failed to create stderr pipe", Cause: err}
+	}
+	if err := cmd.Start(); err != nil {
+		return &ProcessError{Message: "failed to start Claude CLI", Cause: err}
+	}
+
+	s.cmd = cmd
+	s.stdin = stdin
+	s.stdout = stdout
+	s.stderr = stderr
+	s.reader = newNDJSONReader(stdout)
+	s.writer = newNDJSONWriter(stdin)
+	s.started = true
+
+	go s.readLoop()
+	if s.cfg.StderrHandler != nil {
+		go s.stderrLoop()
+	}
+	return nil
+}
+
+func (s *Session) Stop() error {
+	s.mu.Lock()
+	if !s.started || s.stopped {
+		s.mu.Unlock()
+		return nil
+	}
+	s.stopped = true
+	stdin := s.stdin
+	cmd := s.cmd
+	s.mu.Unlock()
+
+	s.closeDone()
+	if stdin != nil {
+		_ = stdin.Close()
+	}
+	if cmd == nil || cmd.Process == nil {
+		s.closeEvents()
+		return nil
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case <-done:
+		s.closeEvents()
+		return nil
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	_ = cmd.Process.Signal(syscall.SIGTERM)
+
+	select {
+	case <-done:
+		s.closeEvents()
+		return nil
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	_ = cmd.Process.Kill()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+	}
+	s.closeEvents()
+	return nil
+}
+
+func (s *Session) Events() <-chan Event {
+	return s.events
+}
+
+func (s *Session) SendMessage(ctx context.Context, content string) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return 0, ErrNotStarted
+	}
+	if s.stopped {
+		return 0, ErrStopping
+	}
+
+	s.turnNumber++
+	turn := &turnState{
+		Number:    s.turnNumber,
+		StartTime: time.Now(),
+		Tools:     map[string]*toolState{},
+	}
+	s.turns[turn.Number] = turn
+	if s.current == nil {
+		s.current = turn
+	} else {
+		s.pending = append(s.pending, turn.Number)
+	}
+
+	msg := wireUserMessageToSend{
+		Type: "user",
+		Message: wireUserMessageInner{
+			Role:    "user",
+			Content: content,
+		},
+	}
+	if err := s.writer.Write(msg); err != nil {
+		return 0, err
+	}
+	return turn.Number, nil
+}
+
+func (s *Session) Interrupt(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return ErrNotStarted
+	}
+	if s.stopped {
+		return ErrStopping
+	}
+
+	return s.writer.Write(wireControlRequestToSend{
+		Type:      "control_request",
+		RequestID: generateRequestID(),
+		Request: wireInterruptRequest{
+			Subtype: "interrupt",
+		},
+	})
+}
+
+func (s *Session) cliArgs() []string {
+	args := []string{
+		"--print",
+		"--input-format", "stream-json",
+		"--output-format", "stream-json",
+		"--verbose",
+	}
+	if strings.TrimSpace(s.cfg.Model) != "" {
+		args = append(args, "--model", strings.TrimSpace(s.cfg.Model))
+	}
+	if strings.TrimSpace(string(s.cfg.PermissionMode)) != "" {
+		args = append(args, "--permission-mode", string(s.cfg.PermissionMode))
+	}
+	if s.cfg.DisablePlugins {
+		args = append(args, "--plugin-dir", "/dev/null")
+	}
+	if s.cfg.PermissionPromptToolStdio {
+		args = append(args, "--permission-prompt-tool", "stdio")
+	}
+	if strings.TrimSpace(s.cfg.SystemPrompt) != "" {
+		args = append(args, "--system-prompt", strings.TrimSpace(s.cfg.SystemPrompt))
+	}
+	if strings.TrimSpace(s.cfg.Resume) != "" {
+		args = append(args, "--resume", strings.TrimSpace(s.cfg.Resume))
+	}
+	args = append(args, "--include-partial-messages")
+	return args
+}
+
+func (s *Session) readLoop() {
+	defer s.closeEvents()
+	for {
+		select {
+		case <-s.done:
+			return
+		default:
+		}
+
+		line, err := s.reader.ReadLine()
+		if err != nil {
+			if err != io.EOF && !s.isStopped() {
+				s.emitError(err, "read_line")
+			}
+			return
+		}
+		s.handleLine(line)
+	}
+}
+
+func (s *Session) stderrLoop() {
+	buf := make([]byte, 4096)
+	for {
+		select {
+		case <-s.done:
+			return
+		default:
+		}
+		n, err := s.stderr.Read(buf)
+		if err != nil {
+			return
+		}
+		if n > 0 {
+			s.cfg.StderrHandler(buf[:n])
+		}
+	}
+}
+
+func (s *Session) handleLine(line []byte) {
+	msg, err := parseWireMessage(line)
+	if err != nil {
+		s.emitError(&ProtocolError{Message: "failed to parse message", Line: string(line), Cause: err}, "parse_message")
+		return
+	}
+
+	switch value := msg.(type) {
+	case wireSystemMessage:
+		s.handleSystemMessage(value)
+	case wireStreamMessage:
+		s.handleStreamMessage(value)
+	case wireAssistantMessage:
+		s.handleAssistantMessage(value)
+	case wireResultMessage:
+		s.handleResultMessage(value)
+	case wireControlRequest:
+		s.handleControlRequest(value)
+	}
+}
+
+func (s *Session) handleSystemMessage(msg wireSystemMessage) {
+	if msg.Subtype != "init" {
+		return
+	}
+	info := &SessionInfo{
+		SessionID:      strings.TrimSpace(msg.SessionID),
+		Model:          strings.TrimSpace(msg.Model),
+		WorkDir:        strings.TrimSpace(msg.CWD),
+		Tools:          append([]string(nil), msg.Tools...),
+		PermissionMode: PermissionMode(strings.TrimSpace(msg.PermissionMode)),
+	}
+	s.mu.Lock()
+	s.info = info
+	s.mu.Unlock()
+	s.emit(ReadyEvent{Info: *info})
+}
+
+func (s *Session) handleStreamMessage(msg wireStreamMessage) {
+	event, err := parseWireStreamEvent(msg.Event)
+	if err != nil {
+		s.emitError(err, "parse_stream_event")
+		return
+	}
+	switch value := event.(type) {
+	case wireMessageStartEvent:
+		s.mu.Lock()
+		if s.current == nil && len(s.pending) > 0 {
+			nextNumber := s.pending[0]
+			s.pending = append([]int(nil), s.pending[1:]...)
+			s.current = s.turns[nextNumber]
+		}
+		turnNumber := 0
+		if s.current != nil {
+			turnNumber = s.current.Number
+		}
+		s.blocks = map[int]*blockState{}
+		s.mu.Unlock()
+		if turnNumber != 0 {
+			s.emit(TurnStartedEvent{TurnNumber: turnNumber})
+		}
+	case wireContentBlockStartEvent:
+		s.handleContentBlockStart(value)
+	case wireContentBlockDeltaEvent:
+		s.handleContentBlockDelta(value)
+	case wireContentBlockStopEvent:
+		s.handleContentBlockStop(value)
+	}
+}
+
+func (s *Session) handleContentBlockStart(event wireContentBlockStartEvent) {
+	var base struct {
+		Type string `json:"type"`
+		ID   string `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	}
+	if err := json.Unmarshal(event.ContentBlock, &base); err != nil {
+		s.emitError(err, "parse_content_block_start")
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state := &blockState{BlockType: base.Type}
+	if base.Type == "tool_use" {
+		state.ToolID = base.ID
+		state.ToolName = base.Name
+		if s.current != nil {
+			if s.current.Tools == nil {
+				s.current.Tools = map[string]*toolState{}
+			}
+			s.current.Tools[base.ID] = &toolState{ID: base.ID, Name: base.Name}
+		}
+	}
+	s.blocks[event.Index] = state
+}
+
+func (s *Session) handleContentBlockDelta(event wireContentBlockDeltaEvent) {
+	var base struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(event.Delta, &base); err != nil {
+		return
+	}
+
+	switch base.Type {
+	case "text_delta":
+		var delta struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(event.Delta, &delta); err != nil {
+			return
+		}
+		s.mu.Lock()
+		turn := s.current
+		if turn == nil {
+			s.mu.Unlock()
+			return
+		}
+		turn.FullText += delta.Text
+		fullText := turn.FullText
+		turnNumber := turn.Number
+		s.mu.Unlock()
+		s.emit(TextEvent{TurnNumber: turnNumber, Text: delta.Text, FullText: fullText})
+	case "thinking_delta":
+		var delta struct {
+			Thinking string `json:"thinking"`
+		}
+		if err := json.Unmarshal(event.Delta, &delta); err != nil {
+			return
+		}
+		s.mu.Lock()
+		turn := s.current
+		if turn == nil {
+			s.mu.Unlock()
+			return
+		}
+		turn.FullThinking += delta.Thinking
+		fullThinking := turn.FullThinking
+		turnNumber := turn.Number
+		s.mu.Unlock()
+		s.emit(ThinkingEvent{TurnNumber: turnNumber, Thinking: delta.Thinking, FullThinking: fullThinking})
+	case "input_json_delta":
+		var delta struct {
+			PartialJSON string `json:"partial_json"`
+		}
+		if err := json.Unmarshal(event.Delta, &delta); err != nil {
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		block := s.blocks[event.Index]
+		if block == nil {
+			return
+		}
+		block.PartialJSON += delta.PartialJSON
+		if s.current != nil {
+			if tool := s.current.Tools[block.ToolID]; tool != nil {
+				tool.PartialInput = block.PartialJSON
+			}
+		}
+	}
+}
+
+func (s *Session) handleContentBlockStop(event wireContentBlockStopEvent) {
+	s.mu.Lock()
+	block := s.blocks[event.Index]
+	turn := s.current
+	if block == nil || turn == nil || block.BlockType != "tool_use" {
+		delete(s.blocks, event.Index)
+		s.mu.Unlock()
+		return
+	}
+
+	input := map[string]any{}
+	if strings.TrimSpace(block.PartialJSON) != "" {
+		if err := json.Unmarshal([]byte(block.PartialJSON), &input); err != nil {
+			input = map[string]any{}
+		}
+	}
+	if tool := turn.Tools[block.ToolID]; tool != nil {
+		tool.Input = input
+	}
+	turnNumber := turn.Number
+	toolID := block.ToolID
+	toolName := block.ToolName
+	delete(s.blocks, event.Index)
+	s.mu.Unlock()
+
+	s.emit(ToolCompleteEvent{
+		TurnNumber: turnNumber,
+		ID:         toolID,
+		Name:       toolName,
+		Input:      input,
+		Timestamp:  time.Now(),
+	})
+}
+
+func (s *Session) handleAssistantMessage(msg wireAssistantMessage) {
+	blocks, ok, err := msg.Message.Content.AsBlocks()
+	if err != nil || !ok {
+		return
+	}
+
+	for _, block := range blocks {
+		switch value := block.(type) {
+		case wireTextBlock:
+			s.handleAssistantTextBlock(value)
+		case wireThinkingBlock:
+			s.handleAssistantThinkingBlock(value)
+		case wireToolUseBlock:
+			s.handleAssistantToolUseBlock(value)
+		}
+	}
+}
+
+func (s *Session) handleAssistantTextBlock(block wireTextBlock) {
+	s.mu.Lock()
+	turn := s.current
+	if turn == nil {
+		s.mu.Unlock()
+		return
+	}
+	current := turn.FullText
+	if len(block.Text) <= len(current) {
+		s.mu.Unlock()
+		return
+	}
+	delta := block.Text[len(current):]
+	turn.FullText = block.Text
+	turnNumber := turn.Number
+	fullText := turn.FullText
+	s.mu.Unlock()
+
+	if delta != "" {
+		s.emit(TextEvent{TurnNumber: turnNumber, Text: delta, FullText: fullText})
+	}
+}
+
+func (s *Session) handleAssistantThinkingBlock(block wireThinkingBlock) {
+	s.mu.Lock()
+	turn := s.current
+	if turn == nil {
+		s.mu.Unlock()
+		return
+	}
+	current := turn.FullThinking
+	if len(block.Thinking) <= len(current) {
+		s.mu.Unlock()
+		return
+	}
+	delta := block.Thinking[len(current):]
+	turn.FullThinking = block.Thinking
+	turnNumber := turn.Number
+	fullThinking := turn.FullThinking
+	s.mu.Unlock()
+
+	if delta != "" {
+		s.emit(ThinkingEvent{TurnNumber: turnNumber, Thinking: delta, FullThinking: fullThinking})
+	}
+}
+
+func (s *Session) handleAssistantToolUseBlock(block wireToolUseBlock) {
+	s.mu.Lock()
+	turn := s.current
+	if turn == nil {
+		s.mu.Unlock()
+		return
+	}
+	if turn.Tools == nil {
+		turn.Tools = map[string]*toolState{}
+	}
+	tool := turn.Tools[block.ID]
+	if tool != nil && tool.Input != nil {
+		s.mu.Unlock()
+		return
+	}
+	turn.Tools[block.ID] = &toolState{ID: block.ID, Name: block.Name, Input: block.Input}
+	turnNumber := turn.Number
+	s.mu.Unlock()
+
+	s.emit(ToolCompleteEvent{
+		TurnNumber: turnNumber,
+		ID:         block.ID,
+		Name:       block.Name,
+		Input:      copyMap(block.Input),
+		Timestamp:  time.Now(),
+	})
+}
+
+func (s *Session) handleResultMessage(msg wireResultMessage) {
+	s.mu.Lock()
+	turn := s.current
+	if turn == nil {
+		s.mu.Unlock()
+		return
+	}
+	turnNumber := turn.Number
+	delete(s.turns, turnNumber)
+	s.current = nil
+	if len(s.pending) > 0 {
+		nextNumber := s.pending[0]
+		s.pending = append([]int(nil), s.pending[1:]...)
+		s.current = s.turns[nextNumber]
+	}
+	durationMs := msg.DurationMs
+	if durationMs == 0 {
+		durationMs = time.Since(turn.StartTime).Milliseconds()
+	}
+	s.mu.Unlock()
+
+	var err error
+	if msg.IsError {
+		err = fmt.Errorf("%s", msg.Result)
+	}
+	s.emit(TurnCompleteEvent{
+		TurnNumber: turnNumber,
+		Success:    !msg.IsError,
+		DurationMs: durationMs,
+		Usage: TurnUsage{
+			InputTokens:     msg.Usage.InputTokens,
+			OutputTokens:    msg.Usage.OutputTokens,
+			CacheReadTokens: msg.Usage.CacheReadInputTokens,
+			CostUSD:         msg.TotalCostUSD,
+		},
+		Error: err,
+	})
+}
+
+func (s *Session) handleControlRequest(msg wireControlRequest) {
+	ctx := context.Background()
+
+	toolReq, err := parseToolUseRequest(msg.Request)
+	if err != nil {
+		s.emitError(err, "parse_control_request")
+		return
+	}
+	if toolReq == nil {
+		return
+	}
+
+	switch toolReq.ToolName {
+	case "AskUserQuestion":
+		if s.cfg.InteractiveToolHandler != nil {
+			resp := s.buildAskUserQuestionResponse(ctx, msg.RequestID, toolReq)
+			s.writeControlResponse(resp, "send_control_response")
+			return
+		}
+	case "ExitPlanMode":
+		if s.cfg.InteractiveToolHandler != nil {
+			resp := s.buildExitPlanModeResponse(ctx, msg.RequestID, toolReq)
+			s.writeControlResponse(resp, "send_control_response")
+			return
+		}
+	}
+
+	resp := s.buildPermissionResponse(ctx, msg.RequestID, toolReq)
+	s.writeControlResponse(resp, "send_permission_response")
+}
+
+func (s *Session) buildAskUserQuestionResponse(ctx context.Context, requestID string, toolReq *wireToolUseRequest) *wireControlResponse {
+	questions, err := ParseQuestionsFromInput(toolReq.Input)
+	if err != nil {
+		return denyControlResponse(requestID, err.Error(), false)
+	}
+	answers, err := s.cfg.InteractiveToolHandler.HandleAskUserQuestion(ctx, questions)
+	if err != nil {
+		return denyControlResponse(requestID, err.Error(), false)
+	}
+	updatedInput := copyMap(toolReq.Input)
+	updatedInput["answers"] = answers
+	return allowControlResponse(requestID, updatedInput, nil)
+}
+
+func (s *Session) buildExitPlanModeResponse(ctx context.Context, requestID string, toolReq *wireToolUseRequest) *wireControlResponse {
+	info, err := ParsePlanInfoFromInput(toolReq.Input)
+	if err != nil {
+		return denyControlResponse(requestID, err.Error(), false)
+	}
+	feedback, err := s.cfg.InteractiveToolHandler.HandleExitPlanMode(ctx, info)
+	if err != nil {
+		return denyControlResponse(requestID, err.Error(), false)
+	}
+	updatedInput := copyMap(toolReq.Input)
+	updatedInput["feedback"] = feedback
+	return allowControlResponse(requestID, updatedInput, nil)
+}
+
+func (s *Session) buildPermissionResponse(ctx context.Context, requestID string, toolReq *wireToolUseRequest) *wireControlResponse {
+	if s.cfg.PermissionHandler == nil {
+		return denyControlResponse(requestID, "No permission handler configured", false)
+	}
+	resp, err := s.cfg.PermissionHandler.HandlePermission(ctx, &PermissionRequest{
+		RequestID:   requestID,
+		ToolName:    toolReq.ToolName,
+		Input:       copyMap(toolReq.Input),
+		BlockedPath: toolReq.BlockedPath,
+	})
+	if err != nil {
+		s.emitError(err, "permission_handling")
+		return denyControlResponse(requestID, "Permission handler error", false)
+	}
+	if resp == nil {
+		return denyControlResponse(requestID, "Permission response missing", false)
+	}
+	if resp.Behavior == PermissionAllow {
+		updatedInput := copyMap(resp.UpdatedInput)
+		if updatedInput == nil {
+			updatedInput = copyMap(toolReq.Input)
+		}
+		if updatedInput == nil {
+			updatedInput = map[string]any{}
+		}
+		return allowControlResponse(requestID, updatedInput, resp.UpdatedPermissions)
+	}
+	return denyControlResponse(requestID, resp.Message, resp.Interrupt)
+}
+
+func (s *Session) writeControlResponse(resp *wireControlResponse, contextLabel string) {
+	if resp == nil {
+		return
+	}
+	s.mu.Lock()
+	writer := s.writer
+	s.mu.Unlock()
+	if writer == nil {
+		return
+	}
+	if err := writer.Write(resp); err != nil {
+		s.emitError(err, contextLabel)
+	}
+}
+
+func allowControlResponse(requestID string, updatedInput map[string]any, updates []map[string]any) *wireControlResponse {
+	if updatedInput == nil {
+		updatedInput = map[string]any{}
+	}
+	return &wireControlResponse{
+		Type: "control_response",
+		Response: wireControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response: wirePermissionAllow{
+				Behavior:           "allow",
+				UpdatedInput:       updatedInput,
+				UpdatedPermissions: updates,
+			},
+		},
+	}
+}
+
+func denyControlResponse(requestID, message string, interrupt bool) *wireControlResponse {
+	return &wireControlResponse{
+		Type: "control_response",
+		Response: wireControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response: wirePermissionDeny{
+				Behavior:  "deny",
+				Message:   message,
+				Interrupt: interrupt,
+			},
+		},
+	}
+}
+
+func (s *Session) emit(event Event) {
+	select {
+	case <-s.done:
+		return
+	default:
+	}
+
+	select {
+	case s.events <- event:
+	case <-s.done:
+	default:
+	}
+}
+
+func (s *Session) emitError(err error, contextLabel string) {
+	s.mu.Lock()
+	turnNumber := 0
+	if s.current != nil {
+		turnNumber = s.current.Number
+	}
+	s.mu.Unlock()
+	s.emit(ErrorEvent{
+		TurnNumber: turnNumber,
+		Error:      err,
+		Context:    contextLabel,
+	})
+}
+
+func (s *Session) closeDone() {
+	s.doneOnce.Do(func() {
+		close(s.done)
+	})
+}
+
+func (s *Session) closeEvents() {
+	s.eventsOnce.Do(func() {
+		s.closeDone()
+		s.mu.Lock()
+		s.stopped = true
+		s.mu.Unlock()
+		close(s.events)
+	})
+}
+
+func (s *Session) isStopped() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stopped
+}
+
+func copyMap(in map[string]any) map[string]any {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}

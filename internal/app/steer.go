@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -120,6 +121,9 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
+	if a.workspaceBackendByID(sess.WorkspaceID) == backendClaude {
+		return a.tryClaudeReplyContinuation(msg, link, sessionKey, sess)
+	}
 	bucketSessionKey := a.pendingInputSessionKey(msg)
 	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
@@ -155,6 +159,58 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 		return false, err
 	}
 	return true, nil
+}
+
+func (a *App) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+	if a == nil || msg == nil || link == nil || sess == nil {
+		return false, nil
+	}
+	if !sessionHasInFlightSubmission(sess) {
+		return false, nil
+	}
+	if strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return false, nil
+	}
+	if err := a.enqueueSubmissionWithSessionKey(msg, sessionKey, true); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (a *App) continueClaudeSessionWithText(sessionKey, text string) error {
+	if a == nil {
+		return fmt.Errorf("app not initialized")
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return fmt.Errorf("当前没有可补充的任务")
+	}
+	appState := a.appState()
+	sess := appState.session(sessionKey)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
+		return fmt.Errorf("当前没有可补充的任务")
+	}
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
+	sub := &state.Submission{
+		SessionKey:  strings.TrimSpace(sessionKey),
+		WorkspaceID: workspaceID,
+		UserID:      strings.TrimSpace(sess.OwnerUserID),
+		ChatID:      strings.TrimSpace(sess.ChatID),
+		InputText:   text,
+		Status:      "queued",
+	}
+	if rootMessageID := strings.TrimSpace(sess.RootMessageID); rootMessageID != "" {
+		sub.SourceRootMessageIDs = []string{rootMessageID}
+	}
+	id, err := appState.createSubmission(sub)
+	if err != nil {
+		return err
+	}
+	if err := appState.queueSubmission(sessionKey, id); err != nil {
+		return err
+	}
+	sub.ID = id
+	return a.startNextSubmission(sessionKey)
 }
 
 func (a *App) recordSubmissionSourceLinks(sub *state.Submission) {

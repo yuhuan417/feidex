@@ -102,6 +102,20 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 }
 
 func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
+	if a.currentWorkspaceBackendForMessage(msg) == backendClaude {
+		if len(args) == 0 {
+			return a.commandThreads(msg, false)
+		}
+		switch strings.TrimSpace(args[0]) {
+		case "new":
+			if len(args) != 1 {
+				return fmt.Errorf("usage: /thread new")
+			}
+			return a.commandThreadsNew(msg)
+		default:
+			return backendUnsupportedError("/thread " + strings.TrimSpace(args[0]))
+		}
+	}
 	if len(args) == 0 {
 		return a.commandThreads(msg, false)
 	}
@@ -182,6 +196,9 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {
 			workspace = *ws
 		}
+	}
+	if workspaceBackend(&workspace) == backendClaude {
+		return a.renderClaudeThreadsCard(sessionKey, sess, &workspace), nil
 	}
 	items, err := a.listWorkspaceThreads(sessionKey, &workspace, includeAll)
 	if err != nil {
@@ -324,11 +341,17 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "turn/interrupt", map[string]any{
-		"threadId": sess.ActiveThreadID,
-		"turnId":   sess.ActiveTurnID,
-	}, nil); err != nil {
-		return err
+	if a.currentWorkspaceBackendForSessionKey(sessionKey) == backendClaude {
+		if err := a.claude.Interrupt(ctx, sessionKey); err != nil {
+			return err
+		}
+	} else {
+		if err := a.codex.Call(ctx, "turn/interrupt", map[string]any{
+			"threadId": sess.ActiveThreadID,
+			"turnId":   sess.ActiveTurnID,
+		}, nil); err != nil {
+			return err
+		}
 	}
 	reply := "已请求中断当前任务。"
 	if discarded > 0 {
@@ -342,6 +365,9 @@ func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
 	sess := a.appState().session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
+	}
+	if a.currentWorkspaceBackendForSessionKey(sessionKey) == backendClaude {
+		return a.continueClaudeSessionWithText(sessionKey, text)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

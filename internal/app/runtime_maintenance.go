@@ -96,8 +96,8 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 		a.clearTurnBinding(turnID)
 		a.clearTurnItemStates(turnID)
 	}
-	if threadID != "" {
-		a.clearPendingTurnBinding(threadID)
+	if submissionID != "" && threadID != "" {
+		a.clearPendingTurnBindingForSubmission(threadID, submissionID)
 	}
 }
 

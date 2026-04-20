@@ -55,6 +55,21 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err != nil {
 		return err
 	}
+	if pendingBackend(a, pending) == backendClaude {
+		answers, _, err := parseClaudeToolUserInputResponse(strings.TrimSpace(msg.Text), payload)
+		if err != nil {
+			return err
+		}
+		if err := a.claude.ResolveUserInput(pending.ID, answers); err != nil {
+			return err
+		}
+		_ = a.appState().updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		a.resumeSubmissionAfterRequest(pending)
+		if pending.FeishuMsgID != "" {
+			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
+		}
+		return nil
+	}
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), response); err != nil {
 		return err
 	}

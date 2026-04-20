@@ -41,6 +41,9 @@ func sessionHasInFlightSubmission(sess *state.Session) bool {
 	if sess == nil {
 		return false
 	}
+	if sessionHasActiveOperations(sess) {
+		return true
+	}
 	return strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != ""
 }
 
@@ -108,7 +111,7 @@ func switchSessionWorkspace(sess *state.Session, workspaceID string) {
 	}
 	previousWorkspaceID := strings.TrimSpace(sess.WorkspaceID)
 	sess.WorkspaceID = strings.TrimSpace(workspaceID)
-	if sess.ActiveTurnID == "" && sess.ActiveSubmissionID == "" {
+	if !sessionHasInFlightSubmission(sess) {
 		clearSessionThreadContext(sess)
 		return
 	}

@@ -22,6 +22,7 @@ type App struct {
 	cfgPath string
 	store   *state.Store
 	codex   codexClient
+	claude  claudeCore
 	feishu  feishuClient
 	started time.Time
 	deduper *inboundDeduper
@@ -36,7 +37,7 @@ type App struct {
 	liveThreads       map[string]string
 	turnBindMu        sync.Mutex
 	turnBindings      map[string]turnBinding
-	pendingTurns      map[string]turnBinding
+	pendingTurns      map[string][]turnBinding
 	threadUsage       map[string]codexrpc.ThreadTokenUsage
 	skillsMu          sync.Mutex
 	pendingSkills     map[string]state.SubmissionSkill
@@ -62,7 +63,10 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	codexClient := newCodexClient(cfg.Codex)
+	var codexClient codexClient
+	if configHasBackend(cfg, config.WorkspaceBackendCodex) {
+		codexClient = newCodexClient(cfg.Codex)
+	}
 	feishuClient := wrapFeishuClient(newFeishuClient(cfg.Feishu))
 	app := &App{
 		cfg:               cfg,
@@ -77,19 +81,26 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 		workspaceCloneOps: map[string]*workspaceCloneOperation{},
 		liveThreads:       map[string]string{},
 		turnBindings:      map[string]turnBinding{},
-		pendingTurns:      map[string]turnBinding{},
+		pendingTurns:      map[string][]turnBinding{},
 		threadUsage:       map[string]codexrpc.ThreadTokenUsage{},
 		pendingSkills:     map[string]state.SubmissionSkill{},
 	}
-	codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
+	if codexClient != nil {
+		codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
+	}
+	if configHasBackend(cfg, config.WorkspaceBackendClaude) {
+		app.claude = newClaudeCore(app, cfg.Claude)
+	}
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
 	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }
 
 func (a *App) Start(ctx context.Context) error {
-	if err := a.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
-		return err
+	if a.codex != nil {
+		if err := a.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
+			return err
+		}
 	}
 	a.startInboundDeduperLoop(ctx)
 	a.recoverRuntimeState()
@@ -103,7 +114,13 @@ func (a *App) Start(ctx context.Context) error {
 
 func (a *App) Stop(ctx context.Context) error {
 	a.feishu.Stop()
-	return a.codex.Close()
+	if a.claude != nil {
+		_ = a.claude.Close()
+	}
+	if a.codex != nil {
+		return a.codex.Close()
+	}
+	return nil
 }
 
 func (a *App) buildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {

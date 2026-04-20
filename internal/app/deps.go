@@ -26,6 +26,18 @@ type codexClient interface {
 	ReplyError(json.RawMessage, int, string) error
 }
 
+type claudeCore interface {
+	EnsureSession(context.Context, string, *config.Workspace, string, string) (string, error)
+	ResetSession(string) error
+	StartTurn(context.Context, string, string, string, string) error
+	Interrupt(context.Context, string) error
+	ResolveApproval(string, claudeApprovalResolution) error
+	ResolveUserInput(string, map[string]string) error
+	ResolvePlanFeedback(string, string) error
+	CancelPending(string, string) error
+	Close() error
+}
+
 type feishuClient interface {
 	SetHandlers(func(*feishu.InboundMessage), func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), func(*feishu.BotMenuClick), func(*feishu.MessageRecall), func(*feishu.MessageReaction))
 	Start(context.Context) error
@@ -61,6 +73,7 @@ type codexInstallManager interface {
 
 var (
 	newCodexClient   = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
+	newClaudeCore    = func(app *App, cfg config.ClaudeConfig) claudeCore { return newClaudeRuntime(app, cfg) }
 	newFeishuClient  = func(cfg config.FeishuConfig) feishuClient { return feishu.New(cfg) }
 	newDaemonManager = daemon.NewManager
 	newReleaseClient = func() releaseClient {

@@ -47,6 +47,39 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 	if values := summarizePermissions(map[string]any{"nested": map[string]any{"enabled": true}}); len(values) == 0 {
 		t.Fatalf("summarizePermissions(flatten) = %+v, want fallback values", values)
 	}
+	claudeWebFetchBody := renderPermissionsApprovalBody(map[string]any{
+		"tool": "WebFetch",
+		"tool_input": map[string]any{
+			"url":    "https://docs.anthropic.com/en/docs/claude-code/sdk",
+			"prompt": "read the sdk docs",
+		},
+		"permissions": map[string]any{
+			"tool": "WebFetch",
+		},
+	})
+	if !strings.Contains(claudeWebFetchBody, "工具请求") ||
+		!strings.Contains(claudeWebFetchBody, "tool: `WebFetch`") ||
+		!strings.Contains(claudeWebFetchBody, "url: `https://docs.anthropic.com/en/docs/claude-code/sdk`") ||
+		!strings.Contains(claudeWebFetchBody, "prompt: `read the sdk docs`") {
+		t.Fatalf("renderPermissionsApprovalBody(claude webfetch) = %q", claudeWebFetchBody)
+	}
+	claudeGrepBody := renderPermissionsApprovalBody(map[string]any{
+		"tool": "Grep",
+		"tool_input": map[string]any{
+			"path":    "README.md",
+			"pattern": "sdk",
+			"glob":    "*.md",
+		},
+		"permissions": map[string]any{
+			"tool": "Grep",
+		},
+	})
+	if !strings.Contains(claudeGrepBody, "tool: `Grep`") ||
+		!strings.Contains(claudeGrepBody, "path: `README.md`") ||
+		!strings.Contains(claudeGrepBody, "pattern: `sdk`") ||
+		!strings.Contains(claudeGrepBody, "glob: `*.md`") {
+		t.Fatalf("renderPermissionsApprovalBody(claude grep) = %q", claudeGrepBody)
+	}
 	if values := collectPermissionPaths(map[string]any{"roots": []any{"/tmp/b", "/tmp/a", "/tmp/a"}}); len(values) != 2 || values[0] != "/tmp/a" {
 		t.Fatalf("collectPermissionPaths() = %+v, want sorted unique paths", values)
 	}
@@ -63,7 +96,7 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 			"README.md",
 		},
 		"grantRoot": "/repo/tmp",
-		"reason": "review",
+		"reason":    "review",
 	})
 	if !strings.Contains(fileBody, "2 个文件") ||
 		!strings.Contains(fileBody, "a.txt -> b.txt (rename)") ||

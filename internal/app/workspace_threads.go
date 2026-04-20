@@ -27,6 +27,9 @@ func (a *App) listWorkspaceThreads(sessionKey string, ws *config.Workspace, incl
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
+	if workspaceBackend(ws) == backendClaude {
+		return nil, backendUnsupportedError("/thread list")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	queries := []map[string]any{
@@ -90,6 +93,37 @@ func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Sessio
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
+	if workspaceBackend(ws) == backendClaude {
+		if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
+			model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			threadID, err := a.claude.EnsureSession(ctx, sessionKey, ws, sess.ActiveThreadID, model)
+			if err == nil {
+				setSessionThreadContext(sess, ws.ID, threadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
+				sessionResetActiveOperations(sess)
+				sess.Status = "idle"
+				if saveErr := a.appState().saveSession(sess); saveErr != nil {
+					return nil, saveErr
+				}
+				a.markSessionThreadLive(sessionKey, threadID)
+				return &workspaceThreadBinding{
+					ThreadID: threadID,
+					Name:     sess.ActiveThreadName,
+					Preview:  sess.ActiveThreadPreview,
+					Resumed:  true,
+				}, nil
+			}
+			slog.Warn("Claude workspace session resume failed; starting fresh session",
+				"session_key", sessionKey,
+				"workspace_id", ws.ID,
+				"thread_id", sess.ActiveThreadID,
+				"cwd", ws.Cwd,
+				"error", err,
+			)
+		}
+		return a.startWorkspaceThread(sessionKey, sess, ws)
+	}
 
 	items, err := a.listWorkspaceThreads(sessionKey, ws, false)
 	if err != nil {
@@ -149,8 +183,7 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 		firstNonEmpty(strings.TrimSpace(result.Thread.Name), strings.TrimSpace(entry.Name)),
 		firstNonEmpty(strings.TrimSpace(result.Thread.Preview), strings.TrimSpace(entry.Preview)),
 	)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
+	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
 	if err := appState.saveSession(sess); err != nil {
 		return nil, err
@@ -165,6 +198,33 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 }
 
 func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
+	if workspaceBackend(ws) == backendClaude {
+		if a == nil || a.claude == nil {
+			return nil, fmt.Errorf("claude backend not initialized")
+		}
+		_ = a.claude.ResetSession(sessionKey)
+		model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		threadID, err := a.claude.EnsureSession(ctx, sessionKey, ws, "", model)
+		if err != nil {
+			return nil, err
+		}
+		clearSessionThreadContext(sess)
+		setSessionThreadContext(sess, ws.ID, threadID, "Claude", firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
+		sessionResetActiveOperations(sess)
+		sess.Status = "idle"
+		if err := a.appState().saveSession(sess); err != nil {
+			return nil, err
+		}
+		a.markSessionThreadLive(sessionKey, threadID)
+		return &workspaceThreadBinding{
+			ThreadID: threadID,
+			Name:     sess.ActiveThreadName,
+			Preview:  sess.ActiveThreadPreview,
+			Resumed:  false,
+		}, nil
+	}
 	appState := a.appState()
 	effectiveModel := configuredGlobalModel(a.cfg)
 	threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
@@ -180,8 +240,7 @@ func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *c
 	}
 	clearSessionThreadContext(sess)
 	setSessionThreadContext(sess, ws.ID, threadID, result.Thread.Name, result.Thread.Preview)
-	sess.ActiveTurnID = ""
-	sess.ActiveSubmissionID = ""
+	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
 	if err := appState.saveSession(sess); err != nil {
 		return nil, err

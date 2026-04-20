@@ -56,26 +56,35 @@ type storedSession struct {
 }
 
 type Session struct {
-	Key                        string               `json:"key"`
-	WorkspaceID                string               `json:"workspace_id"`
-	ActiveThreadID             string               `json:"active_thread_id"`
-	ActiveThreadWorkspaceID    string               `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy string               `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode    string               `json:"active_thread_sandbox_mode"`
-	ActiveThreadServiceTier    string               `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadName           string               `json:"active_thread_name"`
-	ActiveThreadPreview        string               `json:"active_thread_preview"`
-	ActiveTurnID               string               `json:"active_turn_id"`
-	ActiveSubmissionID         string               `json:"active_submission_id"`
-	OwnerUserID                string               `json:"owner_user_id"`
-	ChatID                     string               `json:"chat_id"`
-	ChatType                   string               `json:"chat_type"`
-	RootMessageID              string               `json:"root_message_id"`
-	ModelOverride              string               `json:"model_override"`
-	Status                     string               `json:"status"`
-	Queue                      []string             `json:"queue"`
-	StagedImages               []SessionStagedImage `json:"staged_images,omitempty"`
-	UpdatedAt                  int64                `json:"updated_at"`
+	Key                        string                   `json:"key"`
+	WorkspaceID                string                   `json:"workspace_id"`
+	ActiveThreadID             string                   `json:"active_thread_id"`
+	ActiveThreadWorkspaceID    string                   `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy string                   `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode    string                   `json:"active_thread_sandbox_mode"`
+	ActiveThreadServiceTier    string                   `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadName           string                   `json:"active_thread_name"`
+	ActiveThreadPreview        string                   `json:"active_thread_preview"`
+	ActiveTurnID               string                   `json:"active_turn_id"`
+	ActiveSubmissionID         string                   `json:"active_submission_id"`
+	OwnerUserID                string                   `json:"owner_user_id"`
+	ChatID                     string                   `json:"chat_id"`
+	ChatType                   string                   `json:"chat_type"`
+	RootMessageID              string                   `json:"root_message_id"`
+	ModelOverride              string                   `json:"model_override"`
+	Status                     string                   `json:"status"`
+	Queue                      []string                 `json:"queue"`
+	ActiveOperations           []SessionActiveOperation `json:"active_operations,omitempty"`
+	StagedImages               []SessionStagedImage     `json:"staged_images,omitempty"`
+	UpdatedAt                  int64                    `json:"updated_at"`
+}
+
+type SessionActiveOperation struct {
+	Kind         string `json:"kind,omitempty"`
+	SubmissionID string `json:"submission_id,omitempty"`
+	ThreadID     string `json:"thread_id,omitempty"`
+	TurnID       string `json:"turn_id,omitempty"`
+	StartedAt    int64  `json:"started_at,omitempty"`
 }
 
 type SessionStagedImage struct {
@@ -126,6 +135,7 @@ type Submission struct {
 type PendingRequest struct {
 	ID           string `json:"id"`
 	RequestIDRaw string `json:"request_id_raw,omitempty"`
+	Backend      string `json:"backend,omitempty"`
 	Kind         string `json:"kind"`
 	SessionKey   string `json:"session_key"`
 	ThreadID     string `json:"thread_id"`
@@ -222,6 +232,28 @@ func (s *Store) UpsertSession(sess *Session) error {
 	s.runtime.Sessions[sess.Key] = cp
 	s.syncPersistentSessionLocked(cp)
 	return s.saveLocked()
+}
+
+func (s *Store) UpdateSession(key string, mutate func(*Session)) (*Session, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil, os.ErrNotExist
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.runtime.Sessions[key]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	if mutate != nil {
+		mutate(sess)
+	}
+	sess.UpdatedAt = time.Now().Unix()
+	s.syncPersistentSessionLocked(sess)
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
+	return cloneSession(sess), nil
 }
 
 func (s *Store) CreateSubmission(sub *Submission) (string, error) {
@@ -383,6 +415,7 @@ func cloneSession(sess *Session) *Session {
 	cp := *sess
 	normalizeSessionValues(&cp)
 	cp.Queue = append([]string(nil), sess.Queue...)
+	cp.ActiveOperations = append([]SessionActiveOperation(nil), sess.ActiveOperations...)
 	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
 	return &cp
 }

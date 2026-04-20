@@ -13,19 +13,25 @@ func (a *App) notePendingTurnBinding(threadID, sessionKey, submissionID string) 
 		return
 	}
 	threadID = strings.TrimSpace(threadID)
+	submissionID = strings.TrimSpace(submissionID)
 	if threadID == "" {
 		return
 	}
 	a.turnBindMu.Lock()
 	defer a.turnBindMu.Unlock()
 	if a.pendingTurns == nil {
-		a.pendingTurns = map[string]turnBinding{}
+		a.pendingTurns = map[string][]turnBinding{}
 	}
-	a.pendingTurns[threadID] = turnBinding{
+	for _, binding := range a.pendingTurns[threadID] {
+		if strings.TrimSpace(binding.SubmissionID) == submissionID {
+			return
+		}
+	}
+	a.pendingTurns[threadID] = append(a.pendingTurns[threadID], turnBinding{
 		ThreadID:     threadID,
 		SessionKey:   strings.TrimSpace(sessionKey),
-		SubmissionID: strings.TrimSpace(submissionID),
-	}
+		SubmissionID: submissionID,
+	})
 }
 
 func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submission) {
@@ -36,17 +42,37 @@ func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submis
 	if threadID == "" {
 		return "", nil
 	}
+	appState := a.appState()
 	a.turnBindMu.Lock()
-	binding, ok := a.pendingTurns[threadID]
+	bindings := append([]turnBinding(nil), a.pendingTurns[threadID]...)
+	next := make([]turnBinding, 0, len(bindings))
+	var matched turnBinding
+	found := false
+	for _, binding := range bindings {
+		sub := appState.submission(binding.SubmissionID)
+		if sub == nil || sub.Finalized {
+			continue
+		}
+		next = append(next, binding)
+		if !found {
+			matched = binding
+			found = true
+		}
+	}
+	if len(next) == 0 {
+		delete(a.pendingTurns, threadID)
+	} else {
+		a.pendingTurns[threadID] = next
+	}
 	a.turnBindMu.Unlock()
-	if !ok {
+	if !found {
 		return "", nil
 	}
-	sub := a.appState().submission(binding.SubmissionID)
+	sub := appState.submission(matched.SubmissionID)
 	if sub == nil {
 		return "", nil
 	}
-	return binding.SessionKey, sub
+	return matched.SessionKey, sub
 }
 
 func (a *App) clearPendingTurnBinding(threadID string) {
@@ -60,6 +86,35 @@ func (a *App) clearPendingTurnBinding(threadID string) {
 	a.turnBindMu.Lock()
 	defer a.turnBindMu.Unlock()
 	delete(a.pendingTurns, threadID)
+}
+
+func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string) {
+	if a == nil {
+		return
+	}
+	threadID = strings.TrimSpace(threadID)
+	submissionID = strings.TrimSpace(submissionID)
+	if threadID == "" || submissionID == "" {
+		return
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	bindings := a.pendingTurns[threadID]
+	if len(bindings) == 0 {
+		return
+	}
+	next := make([]turnBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.SubmissionID) == submissionID {
+			continue
+		}
+		next = append(next, binding)
+	}
+	if len(next) == 0 {
+		delete(a.pendingTurns, threadID)
+		return
+	}
+	a.pendingTurns[threadID] = next
 }
 
 func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID string) {
@@ -80,6 +135,25 @@ func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID stri
 		SessionKey:   strings.TrimSpace(sessionKey),
 		SubmissionID: strings.TrimSpace(submissionID),
 	}
+}
+
+func (a *App) rebindTurnThreadID(turnID, threadID string) {
+	if a == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	threadID = strings.TrimSpace(threadID)
+	if turnID == "" || threadID == "" {
+		return
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	binding, ok := a.turnBindings[turnID]
+	if !ok {
+		return
+	}
+	binding.ThreadID = threadID
+	a.turnBindings[turnID] = binding
 }
 
 func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) {

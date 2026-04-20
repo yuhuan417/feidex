@@ -20,7 +20,7 @@ func sessionHasActiveWork(sess *state.Session) bool {
 	if sess == nil {
 		return false
 	}
-	if strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+	if sessionHasActiveOperations(sess) {
 		return true
 	}
 	switch strings.TrimSpace(sess.Status) {
@@ -84,22 +84,26 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 		if sess == nil {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+		if currentTurn := sessionFindActiveOperationByTurn(sess, turnID); currentTurn != nil && strings.TrimSpace(currentTurn.SubmissionID) == "" {
+			return true
+		}
+		if sessionHasInFlightSubmission(sess) {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if currentTurnID := strings.TrimSpace(sess.ActiveTurnID); currentTurnID != "" && currentTurnID != turnID {
+		if currentTurn := sessionForegroundOperation(sess); currentTurn != nil && strings.TrimSpace(currentTurn.TurnID) != "" && strings.TrimSpace(currentTurn.TurnID) != turnID {
 			continue
 		}
-		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && strings.TrimSpace(sess.ActiveTurnID) != turnID {
+		if strings.TrimSpace(sess.Status) != sessionStatusCompacting {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveTurnID) == turnID {
-			return true
-		}
-		sess.ActiveTurnID = turnID
+		sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
+			Kind:     sessionOpKindTurn,
+			ThreadID: threadID,
+			TurnID:   turnID,
+		})
 		sess.Status = sessionStatusCompacting
 		return appState.saveSession(sess) == nil
 	}
@@ -124,20 +128,30 @@ func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 		if sess == nil {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+		if op := sessionFindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if currentTurnID := strings.TrimSpace(sess.ActiveTurnID); currentTurnID != "" && turnID != "" && currentTurnID != turnID {
+		if turnID != "" && sessionFindActiveOperationByTurn(sess, turnID) == nil && sessionHasActiveOperations(sess) {
 			continue
 		}
-		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && strings.TrimSpace(sess.ActiveTurnID) == "" {
+		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && sessionFindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
-		sess.ActiveTurnID = ""
-		sess.Status = "idle"
+		resolvedTurnID := strings.TrimSpace(turnID)
+		if resolvedTurnID == "" {
+			if op := sessionFindActiveOperationByThread(sess, threadID); op != nil && strings.TrimSpace(op.SubmissionID) == "" {
+				resolvedTurnID = strings.TrimSpace(op.TurnID)
+			}
+		}
+		sessionRemoveActiveOperation(sess, "", resolvedTurnID)
+		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
+			sess.Status = "queued"
+		} else {
+			sess.Status = "idle"
+		}
 		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
@@ -172,17 +186,21 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool 
 		if sess == nil {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+		if op := sessionFindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveTurnID) != turnID {
+		if sessionFindActiveOperationByTurn(sess, turnID) == nil {
 			continue
 		}
-		sess.ActiveTurnID = ""
-		sess.Status = "idle"
+		sessionRemoveActiveOperation(sess, "", turnID)
+		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
+			sess.Status = "queued"
+		} else {
+			sess.Status = "idle"
+		}
 		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
@@ -204,20 +222,30 @@ func (a *App) failStandaloneCompactTurn(threadID, turnID, message string) bool {
 		if sess == nil {
 			continue
 		}
-		if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+		if op := sessionFindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if currentTurnID := strings.TrimSpace(sess.ActiveTurnID); currentTurnID != "" && turnID != "" && currentTurnID != turnID {
+		if turnID != "" && sessionFindActiveOperationByTurn(sess, turnID) == nil && sessionHasActiveOperations(sess) {
 			continue
 		}
-		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && strings.TrimSpace(sess.ActiveTurnID) == "" {
+		if strings.TrimSpace(sess.Status) != sessionStatusCompacting && sessionFindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
-		sess.ActiveTurnID = ""
-		sess.Status = "idle"
+		resolvedTurnID := strings.TrimSpace(turnID)
+		if resolvedTurnID == "" {
+			if op := sessionFindActiveOperationByThread(sess, threadID); op != nil && strings.TrimSpace(op.SubmissionID) == "" {
+				resolvedTurnID = strings.TrimSpace(op.TurnID)
+			}
+		}
+		sessionRemoveActiveOperation(sess, "", resolvedTurnID)
+		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
+			sess.Status = "queued"
+		} else {
+			sess.Status = "idle"
+		}
 		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
@@ -243,7 +271,7 @@ func (a *App) restoreStandaloneCompactSession(sessionKey, threadID, previousStat
 	if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return
 	}
-	if strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != "" {
+	if sessionHasActiveOperations(sess) {
 		return
 	}
 	if strings.TrimSpace(sess.Status) != sessionStatusCompacting {

@@ -14,8 +14,16 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	if err := a.codexMaintenanceBlocksCommand(raw); err != nil {
-		return err
+	backend := a.currentWorkspaceBackendForMessage(msg)
+	if backend == backendCodex {
+		if err := a.codexMaintenanceBlocksCommand(raw); err != nil {
+			return err
+		}
+	}
+	if backend == backendClaude {
+		if err := a.claudeUnsupportedCommand(raw); err != nil {
+			return err
+		}
 	}
 	spec := findLocalCommandSpec(fields[0])
 	if spec == nil {

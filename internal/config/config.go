@@ -20,6 +20,7 @@ type Config struct {
 	Log        LogConfig    `toml:"log"`
 	Feishu     FeishuConfig `toml:"feishu"`
 	Codex      CodexConfig  `toml:"codex"`
+	Claude     ClaudeConfig `toml:"claude"`
 	Daemon     DaemonConfig `toml:"daemon"`
 	Workspaces []Workspace  `toml:"workspace"`
 }
@@ -52,6 +53,15 @@ type CodexConfig struct {
 	ReasoningEffort string `toml:"reasoning_effort"`
 }
 
+type ClaudeConfig struct {
+	Command                  string `toml:"command"`
+	Model                    string `toml:"model"`
+	PermissionMode           string `toml:"permission_mode"`
+	DisablePlugins           bool   `toml:"disable_plugins"`
+	SystemPrompt             string `toml:"system_prompt"`
+	PermissionPromptToolStdio bool  `toml:"permission_prompt_tool_stdio"`
+}
+
 type DaemonConfig struct {
 	ServiceName string `toml:"service_name"`
 }
@@ -59,11 +69,17 @@ type DaemonConfig struct {
 type Workspace struct {
 	ID             string `toml:"id"`
 	Name           string `toml:"name"`
+	Backend        string `toml:"backend"`
 	Cwd            string `toml:"cwd"`
 	Model          string `toml:"model"`
 	ApprovalPolicy string `toml:"approval_policy"`
 	SandboxMode    string `toml:"sandbox_mode"`
 }
+
+const (
+	WorkspaceBackendCodex  = "codex"
+	WorkspaceBackendClaude = "claude"
+)
 
 func Default() *Config {
 	return &Config{
@@ -83,6 +99,12 @@ func Default() *Config {
 			ExperimentalAPI: true,
 			ServiceName:     "feidex",
 		},
+		Claude: ClaudeConfig{
+			Command:                   "claude",
+			Model:                     "sonnet",
+			PermissionMode:            "default",
+			PermissionPromptToolStdio: true,
+		},
 		Daemon: DaemonConfig{
 			ServiceName: "feidex",
 		},
@@ -90,6 +112,7 @@ func Default() *Config {
 			{
 				ID:             "default",
 				Name:           "Default",
+				Backend:        WorkspaceBackendCodex,
 				Cwd:            ".",
 				Model:          "",
 				ApprovalPolicy: "on-request",
@@ -134,6 +157,16 @@ func (c *Config) Normalize(baseDir string) error {
 	}
 	c.Codex.Model = strings.TrimSpace(c.Codex.Model)
 	c.Codex.ReasoningEffort = strings.TrimSpace(c.Codex.ReasoningEffort)
+	c.Claude.Command = strings.TrimSpace(c.Claude.Command)
+	if c.Claude.Command == "" {
+		c.Claude.Command = "claude"
+	}
+	c.Claude.Model = strings.TrimSpace(c.Claude.Model)
+	if c.Claude.Model == "" {
+		c.Claude.Model = "sonnet"
+	}
+	c.Claude.PermissionMode = normalizeClaudePermissionMode(c.Claude.PermissionMode)
+	c.Claude.SystemPrompt = strings.TrimSpace(c.Claude.SystemPrompt)
 	level, err := NormalizeLogLevel(c.Log.Level)
 	if err != nil {
 		return err
@@ -164,6 +197,7 @@ func (c *Config) Normalize(baseDir string) error {
 		ws := &c.Workspaces[i]
 		ws.ID = strings.TrimSpace(ws.ID)
 		ws.Name = strings.TrimSpace(ws.Name)
+		ws.Backend = normalizeWorkspaceBackend(ws.Backend)
 		ws.Cwd = strings.TrimSpace(ws.Cwd)
 		if ws.ID == "" {
 			return errors.New("workspace.id is required")
@@ -252,4 +286,26 @@ func FindWorkspace(cfg *Config, id string) *Workspace {
 		}
 	}
 	return nil
+}
+
+func normalizeWorkspaceBackend(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", WorkspaceBackendCodex:
+		return WorkspaceBackendCodex
+	case WorkspaceBackendClaude:
+		return WorkspaceBackendClaude
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+}
+
+func normalizeClaudePermissionMode(value string) string {
+	switch strings.TrimSpace(value) {
+	case "", "default":
+		return "default"
+	case "acceptEdits", "plan", "bypassPermissions":
+		return strings.TrimSpace(value)
+	default:
+		return strings.TrimSpace(value)
+	}
 }

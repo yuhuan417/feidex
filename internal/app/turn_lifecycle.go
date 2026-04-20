@@ -26,14 +26,18 @@ func (w *submissionWorkflow) bindPendingSubmissionTurn(threadID, turnID string, 
 	}
 	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBinding(threadID)
+	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		return false
 	}
-	sess.ActiveSubmissionID = sub.ID
-	sess.ActiveTurnID = turnID
+	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
+		Kind:         sessionOpKindSubmission,
+		SubmissionID: sub.ID,
+		ThreadID:     threadID,
+		TurnID:       turnID,
+	})
 	sess.Status = "turn_in_progress"
 	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := appState.saveSession(sess); err != nil {
@@ -67,23 +71,23 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	}
 
 	sessionKey := ""
+	submissionID := ""
 	for _, candidate := range appState.sessions() {
 		if candidate == nil {
 			continue
 		}
-		if strings.TrimSpace(candidate.ActiveThreadID) != threadID {
-			continue
-		}
-		if strings.TrimSpace(candidate.ActiveTurnID) == turnID {
+		if sessionFindActiveOperationByTurn(candidate, turnID) != nil {
 			return
 		}
-		if strings.TrimSpace(candidate.ActiveTurnID) != "" {
+		op := sessionFindPendingSubmissionOperationByThread(candidate, threadID)
+		if op == nil {
 			continue
 		}
-		if strings.TrimSpace(candidate.ActiveSubmissionID) == "" {
+		if strings.TrimSpace(op.SubmissionID) == "" {
 			continue
 		}
 		sessionKey = candidate.Key
+		submissionID = strings.TrimSpace(op.SubmissionID)
 		break
 	}
 	if sessionKey == "" {
@@ -98,18 +102,22 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 		)
 		return
 	}
-	sub := appState.submission(sess.ActiveSubmissionID)
+	sub := appState.submission(submissionID)
 	if sub == nil {
 		slog.Warn("turn started notification missing submission",
 			"session_key", sessionKey,
-			"submission_id", sess.ActiveSubmissionID,
+			"submission_id", submissionID,
 			"thread_id", threadID,
 			"turn_id", turnID,
 		)
 		return
 	}
-	sess.ActiveSubmissionID = sub.ID
-	sess.ActiveTurnID = turnID
+	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
+		Kind:         sessionOpKindSubmission,
+		SubmissionID: sub.ID,
+		ThreadID:     threadID,
+		TurnID:       turnID,
+	})
 	sess.Status = "turn_in_progress"
 	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := appState.saveSession(sess); err != nil {
@@ -128,6 +136,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	sub.Status = "running"
 	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.markTurnStartedAt(turnID, time.Now())
+	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	a.noteTurnStarted(sessionKey, sub)
@@ -158,22 +167,27 @@ func (w *submissionWorkflow) bindPendingSubmissionForTurnCompletion(threadID, tu
 	if sess == nil {
 		return "", nil
 	}
-	if strings.TrimSpace(sess.ActiveThreadID) != threadID {
+	op := sessionFindPendingSubmissionOperationByThread(sess, threadID)
+	if op == nil {
 		return "", nil
 	}
-	if strings.TrimSpace(sess.ActiveSubmissionID) != sub.ID {
+	if strings.TrimSpace(op.SubmissionID) != sub.ID {
 		return "", nil
 	}
-	if strings.TrimSpace(sess.ActiveTurnID) != "" {
+	if strings.TrimSpace(op.TurnID) != "" {
 		return "", nil
 	}
 
 	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBinding(threadID)
+	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 
-	sess.ActiveSubmissionID = sub.ID
-	sess.ActiveTurnID = turnID
+	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
+		Kind:         sessionOpKindSubmission,
+		SubmissionID: sub.ID,
+		ThreadID:     threadID,
+		TurnID:       turnID,
+	})
 	sess.Status = "turn_in_progress"
 	setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := appState.saveSession(sess); err != nil {
@@ -270,19 +284,38 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 			a.replaceTurnEventCardWithReuse(context.Background(), sub, "任务状态", "grey", terminalText, "turn_terminal", "", reuseMessageID)
 		}
 	}
-	sess := appState.session(sessionKey)
-	if sess != nil {
-		logSessionState("finishTurn before session clear", sessionKey, sess)
-		sess.ActiveTurnID = ""
-		sess.ActiveSubmissionID = ""
-		sess.Status = "idle"
-		_ = appState.saveSession(sess)
-		logSessionState("finishTurn after session clear", sessionKey, appState.session(sessionKey))
-		slog.Debug("finishTurn scheduling next submission asynchronously",
-			"session_key", sessionKey,
-			"thread_id", sess.ActiveThreadID,
-		)
-		go w.startNextSubmissionAsync(sessionKey, "finishTurn")
+	if sess := appState.session(sessionKey); sess != nil {
+		logSessionState("finishTurn before session cleanup", sessionKey, sess)
+	}
+	updatedSess, _ := appState.updateSession(sessionKey, func(sess *state.Session) {
+		if sess == nil {
+			return
+		}
+		sessionRemoveActiveOperation(sess, sub.ID, turnID)
+		switch {
+		case sessionHasActiveOperations(sess):
+			sess.Status = "turn_starting"
+			for _, op := range sess.ActiveOperations {
+				if strings.TrimSpace(op.TurnID) != "" {
+					sess.Status = "turn_in_progress"
+					break
+				}
+			}
+		case len(sess.Queue) > 0 || len(sess.StagedImages) > 0:
+			sess.Status = "queued"
+		default:
+			sess.Status = "idle"
+		}
+	})
+	if updatedSess != nil {
+		logSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
+		if !sessionHasActiveOperations(updatedSess) {
+			slog.Debug("finishTurn scheduling next submission asynchronously",
+				"session_key", sessionKey,
+				"thread_id", updatedSess.ActiveThreadID,
+			)
+			go w.startNextSubmissionAsync(sessionKey, "finishTurn")
+		}
 	}
 	a.cleanupSubmissionRuntimeState(sub)
 }

@@ -61,7 +61,7 @@ func (a *App) pendingTextRequest(sessionKey, userID string) *state.PendingReques
 			continue
 		}
 		switch req.Kind {
-		case "tool_request_user_input_form", "mcp_elicitation_form", "workspace_new":
+		case "tool_request_user_input_form", "mcp_elicitation_form", "workspace_new", claudePlanModePendingKind:
 			return req
 		}
 	}
@@ -101,6 +101,8 @@ func (a *App) handlePendingTextResponse(msg *feishu.InboundMessage, pending *sta
 		return a.completeElicitationFormText(msg, pending)
 	case "workspace_new":
 		return a.completeWorkspaceNewText(msg, pending)
+	case claudePlanModePendingKind:
+		return a.completeClaudePlanModeText(msg, pending)
 	default:
 		return nil
 	}
@@ -117,14 +119,18 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
 	var replyErr error
-	switch pending.Kind {
-	case "tool_request_user_input_form":
-		replyErr = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
-	case "mcp_elicitation_form":
-		replyErr = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
+	if pendingBackend(a, pending) == backendClaude {
+		replyErr = a.claude.CancelPending(requestID, "cancelled by user")
+	} else {
+		switch pending.Kind {
+		case "tool_request_user_input_form":
+			replyErr = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
+		case "mcp_elicitation_form":
+			replyErr = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
+		}
 	}
 	if replyErr != nil {
-		slog.Error("pending form cancel reply to codex failed",
+		slog.Error("pending form cancel reply failed",
 			"request_id", requestID,
 			"pending_kind", pending.Kind,
 			"user_id", action.UserID,
@@ -134,7 +140,10 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			Toast: &callback.Toast{Type: "warning", Content: "取消提交失败，请重试"},
 		}, nil
 	}
-	if isServerResolvedPendingKind(pending.Kind) {
+	if pendingBackend(a, pending) == backendClaude {
+		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		a.resumeSubmissionAfterRequest(pending)
+	} else if isServerResolvedPendingKind(pending.Kind) {
 		_ = a.markPendingRequestReplied(requestID)
 	} else {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -146,10 +155,94 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			Card:  rawCard(a.renderWorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	}
+	if body := a.cancelledPendingBody(pending); body != "" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "已取消"},
+			Card:  rawCard(a.feishu.SimpleStatusCard(a.cancelledPendingTitle(pending), "grey", body, nil)),
+		}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已取消"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已取消", "grey", "该请求已取消。", nil)),
 	}, nil
+}
+
+func (a *App) cancelledPendingTitle(pending *state.PendingRequest) string {
+	if pending == nil {
+		return "已取消"
+	}
+	switch pending.Kind {
+	case claudePlanModePendingKind:
+		return "计划确认已取消"
+	case "tool_request_user_input_form":
+		return "输入请求已取消"
+	case "mcp_elicitation_form":
+		return "表单请求已取消"
+	case pendingKindReview:
+		return "Review 已取消"
+	default:
+		return "已取消"
+	}
+}
+
+func (a *App) cancelledPendingBody(pending *state.PendingRequest) string {
+	if pending == nil {
+		return ""
+	}
+	switch pending.Kind {
+	case claudePlanModePendingKind:
+		return claudePlanCancelledBody(pending)
+	case "tool_request_user_input_form":
+		var payload toolUserInputPayload
+		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+			return ""
+		}
+		return strings.TrimSpace(strings.Join([]string{
+			"已取消本次补充输入。",
+			"",
+			"原请求：",
+			renderToolUserInputBody(payload),
+		}, "\n"))
+	case "mcp_elicitation_form":
+		var payload elicitationFormPayload
+		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+			return ""
+		}
+		return strings.TrimSpace(strings.Join([]string{
+			"已取消本次表单请求。",
+			"",
+			"原请求：",
+			renderElicitationFormBody(payload),
+		}, "\n"))
+	case pendingKindReview:
+		payload := reviewPendingPayloadFromPending(pending)
+		lines := []string{"已取消本次 review 请求。", "", "原请求："}
+		switch payload.Mode {
+		case reviewFormModeBase:
+			lines = append(lines, "模式: base branch")
+			if branch := strings.TrimSpace(payload.Branch); branch != "" {
+				lines = append(lines, "当前选择: `"+branch+"`")
+			}
+		case reviewFormModeCommit:
+			lines = append(lines, "模式: commit")
+			if sha := strings.TrimSpace(payload.CommitSHA); sha != "" {
+				lines = append(lines, "当前选择: `"+shortReviewCommitSHA(sha)+"`")
+			}
+			if title := strings.TrimSpace(payload.CommitTitle); title != "" {
+				lines = append(lines, title)
+			}
+		case reviewFormModeCustom:
+			lines = append(lines, "模式: custom")
+			if instructions := strings.TrimSpace(payload.Instructions); instructions != "" {
+				lines = append(lines, "Instructions:", instructions)
+			}
+		default:
+			return ""
+		}
+		return strings.TrimSpace(strings.Join(lines, "\n"))
+	default:
+		return ""
+	}
 }
 
 func parseStructuredLines(text string) map[string]string {
