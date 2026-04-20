@@ -155,3 +155,73 @@ func TestPendingInputReactionWrappersAndDiscardSession(t *testing.T) {
 		t.Fatalf("discardStagedImageByMessageID() = %+v", session)
 	}
 }
+
+func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("Open(store) error = %v", err)
+	}
+	a := &App{store: store}
+
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                "sess-1",
+		WorkspaceID:        "default",
+		ActiveThreadID:     "thread-1",
+		ActiveTurnID:       "turn-running",
+		ActiveSubmissionID: "sub-running",
+		Status:             "queued",
+		Queue:              []string{"sub-queued"},
+		ActiveOperations: []state.SessionActiveOperation{
+			{
+				Kind:         sessionOpKindSubmission,
+				SubmissionID: "sub-running",
+				ThreadID:     "thread-1",
+				TurnID:       "turn-running",
+				StartedAt:    time.Now().Unix(),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-queued",
+		SessionKey:       "sess-1",
+		WorkspaceID:      "default",
+		TriggerMessageID: "msg-queued",
+		SourceMessageIDs: []string{"msg-queued"},
+		Status:           "queued",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+
+	staleSnapshot := a.store.GetSession("sess-1")
+	queuedSub := a.store.GetSubmission("sub-queued")
+	if staleSnapshot == nil || queuedSub == nil {
+		t.Fatalf("missing stale snapshot or queued submission: %+v / %+v", staleSnapshot, queuedSub)
+	}
+
+	if _, err := a.store.UpdateSession("sess-1", func(current *state.Session) {
+		sessionResetActiveOperations(current)
+		current.Status = "idle"
+	}); err != nil {
+		t.Fatalf("UpdateSession() error = %v", err)
+	}
+
+	if !a.discardQueuedSubmissionFromSessionSnapshot(staleSnapshot, "sub-queued", queuedSub) {
+		t.Fatal("discardQueuedSubmissionFromSessionSnapshot() should discard queued submission")
+	}
+
+	sess := a.store.GetSession("sess-1")
+	if sess == nil {
+		t.Fatal("expected session")
+	}
+	if sessionHasInFlightSubmission(sess) {
+		t.Fatalf("session should not restore in-flight state: %+v", sess)
+	}
+	if len(sess.Queue) != 0 || sess.Status != "idle" {
+		t.Fatalf("session after discard = %+v, want idle with empty queue", sess)
+	}
+	if got := a.store.GetSubmission("sub-queued"); got != nil {
+		t.Fatalf("queued submission after discard = %+v, want runtime cleanup", got)
+	}
+}

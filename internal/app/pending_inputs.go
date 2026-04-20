@@ -126,48 +126,83 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 		return false
 	}
 	appState := a.appState()
-	for _, sess := range appState.sessions() {
-		if sess == nil {
+	for _, snapshot := range appState.sessions() {
+		if snapshot == nil {
 			continue
 		}
-		if discarded := discardStagedImageByMessageID(sess, messageID); discarded {
-			if updateErr := appState.saveSession(sess); updateErr != nil {
-				slog.Error("discard staged image session update failed", "session_key", sess.Key, "message_id", messageID, "error", updateErr)
-				return false
-			}
-			a.markMessagesDiscardedReactions([]string{messageID})
+		if a.discardStagedImageFromSessionSnapshot(snapshot, messageID) {
 			return true
 		}
-		for _, submissionID := range append([]string(nil), sess.Queue...) {
+		for _, submissionID := range append([]string(nil), snapshot.Queue...) {
 			sub := appState.submission(submissionID)
 			if !submissionHasSourceMessage(sub, messageID) {
 				continue
 			}
-			sess.Queue = removeString(sess.Queue, submissionID)
-			if !sessionHasInFlightSubmission(sess) {
-				if len(sess.Queue) == 0 && len(sess.StagedImages) == 0 {
-					sess.Status = "idle"
-				} else {
-					sess.Status = "queued"
-				}
-			}
-			if err := appState.saveSession(sess); err != nil {
-				slog.Error("discard queued submission session update failed", "session_key", sess.Key, "submission_id", submissionID, "error", err)
+			if !a.discardQueuedSubmissionFromSessionSnapshot(snapshot, submissionID, sub) {
 				return false
 			}
-			if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
-				value.Status = "discarded"
-				value.Finalized = true
-			}); err != nil {
-				slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
-				return false
-			}
-			a.markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
-			a.cleanupSubmissionRuntimeState(sub)
 			return true
 		}
 	}
 	return false
+}
+
+func (a *App) discardStagedImageFromSessionSnapshot(snapshot *state.Session, messageID string) bool {
+	if a == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
+		return false
+	}
+	appState := a.appState()
+	discarded := false
+	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
+		if current == nil {
+			return
+		}
+		discarded = discardStagedImageByMessageID(current, messageID)
+	}); err != nil {
+		slog.Error("discard staged image session update failed", "session_key", snapshot.Key, "message_id", messageID, "error", err)
+		return false
+	}
+	if !discarded {
+		return false
+	}
+	a.markMessagesDiscardedReactions([]string{messageID})
+	return true
+}
+
+func (a *App) discardQueuedSubmissionFromSessionSnapshot(snapshot *state.Session, submissionID string, sub *state.Submission) bool {
+	if a == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
+		return false
+	}
+	appState := a.appState()
+	discarded := false
+	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
+		if current == nil {
+			return
+		}
+		nextQueue := removeString(current.Queue, submissionID)
+		if len(nextQueue) == len(current.Queue) {
+			return
+		}
+		current.Queue = nextQueue
+		sessionRefreshPendingStatus(current)
+		discarded = true
+	}); err != nil {
+		slog.Error("discard queued submission session update failed", "session_key", snapshot.Key, "submission_id", submissionID, "error", err)
+		return false
+	}
+	if !discarded {
+		return false
+	}
+	if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
+		value.Status = "discarded"
+		value.Finalized = true
+	}); err != nil {
+		slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
+		return false
+	}
+	a.markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
+	a.cleanupSubmissionRuntimeState(sub)
+	return true
 }
 
 func (a *App) discardSessionPendingInputs(sessionKey string) int {
@@ -223,9 +258,7 @@ func discardStagedImageByMessageID(sess *state.Session, messageID string) bool {
 		return false
 	}
 	sess.StagedImages = next
-	if !sessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 {
-		sess.Status = "idle"
-	}
+	sessionRefreshPendingStatus(sess)
 	return true
 }
 

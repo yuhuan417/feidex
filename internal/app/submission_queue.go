@@ -224,7 +224,20 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 			"session_key", sessionKey,
 			"error", err,
 		)
-		logSessionState("startNextSubmission empty-after-dequeue", sessionKey, appState.session(sessionKey))
+		if err == nil {
+			updatedSess, updateErr := appState.updateSession(sessionKey, func(current *state.Session) {
+				if current == nil {
+					return
+				}
+				sessionRefreshPendingStatus(current)
+			})
+			if updateErr != nil {
+				return updateErr
+			}
+			logSessionState("startNextSubmission empty-after-dequeue", sessionKey, updatedSess)
+		} else {
+			logSessionState("startNextSubmission empty-after-dequeue", sessionKey, appState.session(sessionKey))
+		}
 		return err
 	}
 	logSessionState("startNextSubmission after dequeue", sessionKey, appState.session(sessionKey))
@@ -234,6 +247,19 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 			"session_key", sessionKey,
 			"submission_id", subID,
 		)
+		updatedSess, updateErr := appState.updateSession(sessionKey, func(current *state.Session) {
+			if current == nil {
+				return
+			}
+			sessionRefreshPendingStatus(current)
+		})
+		if updateErr != nil {
+			return updateErr
+		}
+		logSessionState("startNextSubmission after missing queued item", sessionKey, updatedSess)
+		if updatedSess != nil && !sessionHasInFlightSubmission(updatedSess) && len(updatedSess.Queue) > 0 {
+			return w.startNextSubmissionWithFailureNotice(sessionKey, notifyFailure)
+		}
 		return nil
 	}
 	ws := config.FindWorkspace(a.cfg, sub.WorkspaceID)

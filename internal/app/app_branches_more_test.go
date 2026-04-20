@@ -366,6 +366,94 @@ func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *te
 	}
 }
 
+func TestStartNextSubmissionNormalizesIdleAfterMissingQueuedSubmission(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sessionKey := "sess-ghost-only"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		Status:      "queued",
+		Queue:       []string{"ghost-sub"},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	if err := a.startNextSubmission(sessionKey); err != nil {
+		t.Fatalf("startNextSubmission() error = %v", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 0 || sess.Status != "idle" {
+		t.Fatalf("session after missing queued submission = %+v, want idle empty queue", sess)
+	}
+}
+
+func TestStartNextSubmissionSkipsMissingQueuedSubmissionAndStartsNext(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-ghost-then-real"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		Queue:       []string{"ghost-sub", "sub-2"},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-2",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		UserID:           "user-1",
+		ChatID:           "chat-1",
+		TriggerMessageID: "m-2",
+		InputText:        "second",
+		Status:           "queued",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+
+	var methods []string
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		methods = append(methods, method)
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-2"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if err := a.startNextSubmission(sessionKey); err != nil {
+		t.Fatalf("startNextSubmission() error = %v", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveSubmissionID != "sub-2" || sess.ActiveTurnID != "turn-2" || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after ghost skip = %+v, want sub-2 turn_in_progress", sess)
+	}
+	if len(sess.Queue) != 0 {
+		t.Fatalf("session queue after ghost skip = %+v, want empty", sess.Queue)
+	}
+	sub := a.store.GetSubmission("sub-2")
+	if sub == nil || sub.ThreadID != "thread-1" || sub.TurnID != "turn-2" || sub.Status != "running" {
+		t.Fatalf("sub-2 after ghost skip = %+v, want running on thread-1/turn-2", sub)
+	}
+	if len(methods) != 2 || methods[0] != "thread/start" || methods[1] != "turn/start" {
+		t.Fatalf("methods = %+v, want thread/start then turn/start", methods)
+	}
+}
+
 func TestHandleFeishuMessageMergeForwardPrefetchesInBackgroundAndSubmitsImageOnly(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	downloadPath := filepath.Join(t.TempDir(), "merge-forward.png")
