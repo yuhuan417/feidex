@@ -150,3 +150,118 @@ func TestSessionStoppedAndExitErrorAccessors(t *testing.T) {
 		t.Fatalf("ExitError() = %v, want deadline exceeded", got)
 	}
 }
+
+func TestSessionIgnoresContentBlockStreamEvents(t *testing.T) {
+	session := NewSession()
+	session.current = &turnState{
+		Number: 1,
+		Tools:  map[string]*toolState{},
+	}
+
+	session.handleStreamMessage(wireStreamMessage{
+		Type:  "stream_event",
+		Event: []byte(`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"hello"}}`),
+	})
+	session.handleStreamMessage(wireStreamMessage{
+		Type:  "stream_event",
+		Event: []byte(`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}`),
+	})
+	session.handleStreamMessage(wireStreamMessage{
+		Type:  "stream_event",
+		Event: []byte(`{"type":"content_block_stop","index":0}`),
+	})
+
+	if got := session.current.FullText; got != "" {
+		t.Fatalf("FullText after ignored content blocks = %q, want empty", got)
+	}
+	assertNoExtraSessionEvents(t, session.Events())
+}
+
+func TestSessionEmitsToolCompleteOnceForRepeatedAssistantSnapshots(t *testing.T) {
+	session := NewSession()
+	session.current = &turnState{
+		Number: 1,
+		Tools:  map[string]*toolState{},
+	}
+	session.handleAssistantToolUseBlock(wireToolUseBlock{
+		Type:  "tool_use",
+		ID:    "tool-1",
+		Name:  "Edit",
+		Input: map[string]any{"file_path": "demo.go"},
+	})
+	session.handleAssistantToolUseBlock(wireToolUseBlock{
+		Type:  "tool_use",
+		ID:    "tool-1",
+		Name:  "Edit",
+		Input: map[string]any{"file_path": "demo.go"},
+	})
+
+	event := readToolCompleteEvent(t, session.Events())
+	if event.ID != "tool-1" || event.Name != "Edit" {
+		t.Fatalf("ToolCompleteEvent = %#v", event)
+	}
+	assertNoExtraSessionEvents(t, session.Events())
+}
+
+func TestSessionEmitsTextFromAssistantSnapshots(t *testing.T) {
+	session := NewSession()
+	session.current = &turnState{Number: 1}
+
+	session.handleAssistantTextBlock(wireTextBlock{
+		Type: "text",
+		Text: "hello",
+	})
+	session.handleAssistantTextBlock(wireTextBlock{
+		Type: "text",
+		Text: "hello world",
+	})
+
+	first := readTextEvent(t, session.Events())
+	if first.Text != "hello" || first.FullText != "hello" {
+		t.Fatalf("first TextEvent = %#v", first)
+	}
+	second := readTextEvent(t, session.Events())
+	if second.Text != " world" || second.FullText != "hello world" {
+		t.Fatalf("second TextEvent = %#v", second)
+	}
+	assertNoExtraSessionEvents(t, session.Events())
+}
+
+func readToolCompleteEvent(t *testing.T, events <-chan Event) ToolCompleteEvent {
+	t.Helper()
+	select {
+	case raw := <-events:
+		event, ok := raw.(ToolCompleteEvent)
+		if !ok {
+			t.Fatalf("event = %#v, want ToolCompleteEvent", raw)
+		}
+		return event
+	default:
+		t.Fatal("expected ToolCompleteEvent")
+	}
+	return ToolCompleteEvent{}
+}
+
+func readTextEvent(t *testing.T, events <-chan Event) TextEvent {
+	t.Helper()
+	select {
+	case raw := <-events:
+		event, ok := raw.(TextEvent)
+		if !ok {
+			t.Fatalf("event = %#v, want TextEvent", raw)
+		}
+		return event
+	default:
+		t.Fatal("expected TextEvent")
+	}
+	return TextEvent{}
+}
+
+func assertNoExtraSessionEvents(t *testing.T, events <-chan Event) {
+	t.Helper()
+	select {
+	case raw := <-events:
+		t.Fatalf("unexpected extra event: %#v", raw)
+	default:
+	}
+}

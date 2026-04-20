@@ -14,14 +14,12 @@ type turnStream struct {
 	SessionKey   string
 	WorkspaceID  string
 
-	PendingPlan        string
-	LastSentPlan       string
-	LastError          string
-	SentFinal          bool
-	ReviewFinal        bool
-	QuietWorking       *quietWorkingCard
-	ClaudeSegment      *claudeStreamingSegment
-	ClaudeSegmentCount int
+	PendingPlan  string
+	LastSentPlan string
+	LastError    string
+	SentFinal    bool
+	ReviewFinal  bool
+	QuietWorking *quietWorkingCard
 }
 
 type turnStreamFlushResult struct {

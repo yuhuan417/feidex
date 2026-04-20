@@ -18,7 +18,6 @@ import (
 )
 
 const claudePlanModePendingKind = "claude_exit_plan_mode"
-const claudePartialUpdateMinInterval = 400 * time.Millisecond
 
 type claudeRuntime struct {
 	app *App
@@ -55,8 +54,7 @@ type claudeTurnState struct {
 	Thinking   string
 
 	SegmentTextBase          int
-	LastRenderedText         string
-	LastRenderedAt           time.Time
+	LastFlushedText          string
 	SuppressFailedCompletion bool
 }
 
@@ -499,13 +497,6 @@ func claudeTurnSegmentText(turn *claudeTurnState) string {
 }
 
 func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
-	var (
-		threadID    string
-		turnID      string
-		body        string
-		shouldFlush bool
-	)
-
 	state.mu.Lock()
 	turn := state.turns[event.TurnNumber]
 	if turn == nil {
@@ -513,28 +504,6 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 		state.turns[event.TurnNumber] = turn
 	}
 	turn.FullText = event.FullText
-	body = strings.TrimSpace(claudeTurnSegmentText(turn))
-	if body != "" && body != turn.LastRenderedText {
-		if turn.LastRenderedText == "" || time.Since(turn.LastRenderedAt) >= claudePartialUpdateMinInterval {
-			threadID = strings.TrimSpace(state.sessionID)
-			turnID = strings.TrimSpace(turn.TurnID)
-			shouldFlush = true
-		}
-	}
-	state.mu.Unlock()
-
-	if !shouldFlush || turnID == "" {
-		return
-	}
-	if !r.app.updateClaudeOutputSegment(context.Background(), threadID, turnID, body) {
-		return
-	}
-
-	state.mu.Lock()
-	if turn := state.turns[event.TurnNumber]; turn != nil {
-		turn.LastRenderedText = body
-		turn.LastRenderedAt = time.Now()
-	}
 	state.mu.Unlock()
 }
 
@@ -543,6 +512,8 @@ func (r *claudeRuntime) flushClaudeTurnSegment(state *claudeSessionState, turnNu
 		threadID string
 		turnID   string
 		body     string
+		prevBody string
+		skipBody string
 	)
 
 	state.mu.Lock()
@@ -554,15 +525,18 @@ func (r *claudeRuntime) flushClaudeTurnSegment(state *claudeSessionState, turnNu
 	threadID = strings.TrimSpace(state.sessionID)
 	turnID = strings.TrimSpace(turn.TurnID)
 	body = strings.TrimSpace(claudeTurnSegmentText(turn))
-	if !final && (body == "" || body == turn.LastRenderedText) {
+	prevBody = strings.TrimSpace(turn.LastFlushedText)
+	skipBody = strings.TrimSpace(turn.LastFlushedText)
+	if !final && (body == "" || body == skipBody) {
 		state.mu.Unlock()
-		return body != ""
-	}
-	state.mu.Unlock()
-
-	if turnID == "" || body == "" {
 		return false
 	}
+	if body == "" || turnID == "" {
+		state.mu.Unlock()
+		return false
+	}
+	turn.LastFlushedText = body
+	state.mu.Unlock()
 
 	var ok bool
 	if final {
@@ -571,40 +545,26 @@ func (r *claudeRuntime) flushClaudeTurnSegment(state *claudeSessionState, turnNu
 		ok = r.app.updateClaudeOutputSegment(context.Background(), threadID, turnID, body)
 	}
 	if !ok {
+		state.mu.Lock()
+		if turn := state.turns[turnNumber]; turn != nil && strings.TrimSpace(turn.LastFlushedText) == body {
+			turn.LastFlushedText = prevBody
+		}
+		state.mu.Unlock()
 		return false
 	}
-
-	state.mu.Lock()
-	if turn := state.turns[turnNumber]; turn != nil {
-		turn.LastRenderedText = body
-		turn.LastRenderedAt = time.Now()
-	}
-	state.mu.Unlock()
 	return true
 }
 
 func (r *claudeRuntime) closeClaudeTurnSegment(state *claudeSessionState, turnNumber int) {
-	var (
-		threadID string
-		turnID   string
-	)
-
 	state.mu.Lock()
 	turn := state.turns[turnNumber]
 	if turn == nil {
 		state.mu.Unlock()
 		return
 	}
-	threadID = strings.TrimSpace(state.sessionID)
-	turnID = strings.TrimSpace(turn.TurnID)
 	turn.SegmentTextBase = len(turn.FullText)
-	turn.LastRenderedText = ""
-	turn.LastRenderedAt = time.Time{}
+	turn.LastFlushedText = ""
 	state.mu.Unlock()
-
-	if turnID != "" {
-		r.app.closeClaudeOutputSegment(threadID, turnID)
-	}
 }
 
 func (r *claudeRuntime) flushAndCloseClaudeTurnSegment(state *claudeSessionState, turnNumber int) {

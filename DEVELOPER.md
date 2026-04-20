@@ -39,6 +39,7 @@ Dependency direction should stay simple:
 ## Interaction Constraints
 
 - Any capability that is reachable from a Feishu menu must also be invocable directly from a slash command or equivalent command-line style entrypoint. Do not introduce menu-only product capabilities.
+- Feishu-side user experience should stay as consistent as practical across different backends. If a backend-specific user-visible behavior must differ, confirm that difference with the user first and document the reason and constraint in the repository.
 - Feishu card callback handlers must stay short and non-blocking. Do not perform long-running business logic, external network calls, or other high-latency work directly inside a synchronous card callback.
 - If a card action needs slow work, acknowledge the callback quickly and continue via the asynchronous card update flow or another background path that can patch or replace the card later.
 

@@ -2,7 +2,6 @@ package claudecli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
@@ -37,8 +36,6 @@ type Session struct {
 	pending    []int
 	turns      map[int]*turnState
 	info       *SessionInfo
-
-	blocks map[int]*blockState
 }
 
 type turnState struct {
@@ -50,17 +47,10 @@ type turnState struct {
 }
 
 type toolState struct {
-	ID           string
-	Name         string
-	PartialInput string
-	Input        map[string]any
-}
-
-type blockState struct {
-	BlockType   string
-	ToolID      string
-	ToolName    string
-	PartialJSON string
+	ID        string
+	Name      string
+	Input     map[string]any
+	Completed bool
 }
 
 func NewSession(opts ...SessionOption) *Session {
@@ -75,7 +65,6 @@ func NewSession(opts ...SessionOption) *Session {
 		waitDone: make(chan struct{}),
 		turns:    map[int]*turnState{},
 		pending:  []int{},
-		blocks:   map[int]*blockState{},
 	}
 }
 
@@ -374,7 +363,7 @@ func (s *Session) handleStreamMessage(msg wireStreamMessage) {
 		s.emitError(err, "parse_stream_event")
 		return
 	}
-	switch value := event.(type) {
+	switch event.(type) {
 	case wireMessageStartEvent:
 		s.mu.Lock()
 		if s.current == nil && len(s.pending) > 0 {
@@ -386,147 +375,11 @@ func (s *Session) handleStreamMessage(msg wireStreamMessage) {
 		if s.current != nil {
 			turnNumber = s.current.Number
 		}
-		s.blocks = map[int]*blockState{}
 		s.mu.Unlock()
 		if turnNumber != 0 {
 			s.emit(TurnStartedEvent{TurnNumber: turnNumber})
 		}
-	case wireContentBlockStartEvent:
-		s.handleContentBlockStart(value)
-	case wireContentBlockDeltaEvent:
-		s.handleContentBlockDelta(value)
-	case wireContentBlockStopEvent:
-		s.handleContentBlockStop(value)
 	}
-}
-
-func (s *Session) handleContentBlockStart(event wireContentBlockStartEvent) {
-	var base struct {
-		Type string `json:"type"`
-		ID   string `json:"id,omitempty"`
-		Name string `json:"name,omitempty"`
-	}
-	if err := json.Unmarshal(event.ContentBlock, &base); err != nil {
-		s.emitError(err, "parse_content_block_start")
-		return
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state := &blockState{BlockType: base.Type}
-	if base.Type == "tool_use" {
-		state.ToolID = base.ID
-		state.ToolName = base.Name
-		if s.current != nil {
-			if s.current.Tools == nil {
-				s.current.Tools = map[string]*toolState{}
-			}
-			s.current.Tools[base.ID] = &toolState{ID: base.ID, Name: base.Name}
-		}
-	}
-	s.blocks[event.Index] = state
-}
-
-func (s *Session) handleContentBlockDelta(event wireContentBlockDeltaEvent) {
-	var base struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(event.Delta, &base); err != nil {
-		return
-	}
-
-	switch base.Type {
-	case "text_delta":
-		var delta struct {
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal(event.Delta, &delta); err != nil {
-			return
-		}
-		s.mu.Lock()
-		turn := s.current
-		if turn == nil {
-			s.mu.Unlock()
-			return
-		}
-		turn.FullText += delta.Text
-		fullText := turn.FullText
-		turnNumber := turn.Number
-		s.mu.Unlock()
-		s.emit(TextEvent{TurnNumber: turnNumber, Text: delta.Text, FullText: fullText})
-	case "thinking_delta":
-		var delta struct {
-			Thinking string `json:"thinking"`
-		}
-		if err := json.Unmarshal(event.Delta, &delta); err != nil {
-			return
-		}
-		s.mu.Lock()
-		turn := s.current
-		if turn == nil {
-			s.mu.Unlock()
-			return
-		}
-		turn.FullThinking += delta.Thinking
-		fullThinking := turn.FullThinking
-		turnNumber := turn.Number
-		s.mu.Unlock()
-		s.emit(ThinkingEvent{TurnNumber: turnNumber, Thinking: delta.Thinking, FullThinking: fullThinking})
-	case "input_json_delta":
-		var delta struct {
-			PartialJSON string `json:"partial_json"`
-		}
-		if err := json.Unmarshal(event.Delta, &delta); err != nil {
-			return
-		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		block := s.blocks[event.Index]
-		if block == nil {
-			return
-		}
-		block.PartialJSON += delta.PartialJSON
-		if s.current != nil {
-			if tool := s.current.Tools[block.ToolID]; tool != nil {
-				tool.PartialInput = block.PartialJSON
-			}
-		}
-	}
-}
-
-func (s *Session) handleContentBlockStop(event wireContentBlockStopEvent) {
-	s.mu.Lock()
-	block := s.blocks[event.Index]
-	turn := s.current
-	if block == nil || turn == nil || block.BlockType != "tool_use" {
-		delete(s.blocks, event.Index)
-		s.mu.Unlock()
-		return
-	}
-
-	input := map[string]any{}
-	if strings.TrimSpace(block.PartialJSON) != "" {
-		if err := json.Unmarshal([]byte(block.PartialJSON), &input); err != nil {
-			input = map[string]any{}
-		}
-	}
-	if tool := turn.Tools[block.ToolID]; tool != nil {
-		tool.Input = input
-	}
-	turnNumber := turn.Number
-	toolID := block.ToolID
-	toolName := block.ToolName
-	delete(s.blocks, event.Index)
-	s.mu.Unlock()
-
-	s.emit(ToolCompleteEvent{
-		TurnNumber: turnNumber,
-		ID:         toolID,
-		Name:       toolName,
-		Input:      input,
-		Timestamp:  time.Now(),
-	})
 }
 
 func (s *Session) handleAssistantMessage(msg wireAssistantMessage) {
@@ -604,11 +457,16 @@ func (s *Session) handleAssistantToolUseBlock(block wireToolUseBlock) {
 		turn.Tools = map[string]*toolState{}
 	}
 	tool := turn.Tools[block.ID]
-	if tool != nil && tool.Input != nil {
+	if tool != nil && tool.Completed {
 		s.mu.Unlock()
 		return
 	}
-	turn.Tools[block.ID] = &toolState{ID: block.ID, Name: block.Name, Input: block.Input}
+	turn.Tools[block.ID] = &toolState{
+		ID:        block.ID,
+		Name:      block.Name,
+		Input:     block.Input,
+		Completed: true,
+	}
 	turnNumber := turn.Number
 	s.mu.Unlock()
 
