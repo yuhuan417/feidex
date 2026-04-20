@@ -54,7 +54,11 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		sourceRootMessageIDs = uniqueStrings(append(sourceRootMessageIDs, stagedImageRootMessageIDs(stagedImages)...))
 	}
 	mode := a.workspaceSessionInflightModeByID(sess.WorkspaceID)
-	if sessionHasInFlightSubmission(sess) && !sessionInflightAllowsAdditional(mode) {
+	hasInFlight := sessionHasInFlightSubmission(sess)
+	queueLenBefore := len(sess.Queue)
+	shouldAttemptStart := !hasInFlight || sessionInflightAllowsAdditional(mode)
+	willWaitInQueue := queueLenBefore > 0 || (hasInFlight && !sessionInflightAllowsAdditional(mode))
+	if willWaitInQueue {
 		sess.Status = "queued"
 	}
 	slog.Debug("submission enqueue begin",
@@ -82,6 +86,7 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		Skills:               skillResolution.Skills,
 		Attachments:          attachments,
 		Status:               "queued",
+		WaitedInQueue:        willWaitInQueue,
 	}
 	id, err := appState.createSubmission(sub)
 	if err != nil {
@@ -106,12 +111,17 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 		"active_turn_id", sess.ActiveTurnID,
 	)
 	logSessionState("submission queued session snapshot", sessionKey, appState.session(sessionKey))
-	if !sessionHasInFlightSubmission(sess) || sessionInflightAllowsAdditional(mode) {
+	if shouldAttemptStart {
 		slog.Debug("submission starting immediately",
 			"submission_id", id,
 			"session_key", sessionKey,
 		)
-		return w.startNextSubmission(sessionKey)
+		if err := w.startNextSubmission(sessionKey); err != nil {
+			return err
+		}
+		if !willWaitInQueue {
+			return nil
+		}
 	}
 	a.markSubmissionQueuedReactions(sub)
 	a.sendSubmissionQueuedNotice(context.Background(), sub)

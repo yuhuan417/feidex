@@ -18,18 +18,18 @@ func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
 	}{
 		{
 			mode:    config.QuietModeProgress,
-			allowed: []string{"final_message", "turn_output", "turn_plan", "turn_queued", "turn_terminal"},
+			allowed: []string{"final_message", "turn_output", "turn_plan", "turn_queued", "turn_started", "turn_terminal"},
 			blocked: []string{"turn_reasoning", "turn_command_execution", "turn_file_change", "turn_item"},
 		},
 		{
 			mode:    config.QuietModeNormal,
-			allowed: []string{"final_message", "turn_output", "turn_plan"},
+			allowed: []string{"final_message", "turn_output", "turn_plan", "turn_started"},
 			blocked: []string{"turn_reasoning", "turn_command_execution", "turn_file_change", "turn_item", "turn_queued", "turn_terminal"},
 		},
 		{
 			mode:    config.QuietModeFinal,
 			allowed: []string{"final_message"},
-			blocked: []string{"turn_output", "turn_plan", "turn_reasoning", "turn_terminal"},
+			blocked: []string{"turn_output", "turn_plan", "turn_reasoning", "turn_started", "turn_terminal"},
 		},
 	}
 

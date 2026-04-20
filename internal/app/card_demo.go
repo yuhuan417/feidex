@@ -64,7 +64,7 @@ func normalizeOutboundCardDemoKind(kind string) string {
 		return "turn_output"
 	case "final", "final_agent", "final_message":
 		return "final_message"
-	case "turn_reasoning", "turn_command_execution", "turn_file_change", "turn_plan", "turn_queued", "turn_terminal":
+	case "turn_reasoning", "turn_command_execution", "turn_file_change", "turn_plan", "turn_queued", "turn_started", "turn_terminal":
 		return strings.ToLower(strings.TrimSpace(kind))
 	default:
 		return ""
@@ -87,6 +87,8 @@ func defaultOutboundCardDemoBody(kind string) string {
 		return "- [in_progress] 验证卡片样式\n- [pending] 调整细节"
 	case "turn_queued":
 		return "任务正在排队。"
+	case "turn_started":
+		return "任务已开始处理。"
 	case "turn_terminal":
 		return "任务已结束。"
 	default:

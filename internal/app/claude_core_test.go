@@ -347,6 +347,9 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 	if sess == nil || sess.ActiveSubmissionID != queuedSubID || sess.Status != "turn_in_progress" {
 		t.Fatalf("session after queued Claude follow-up start = %+v", sess)
 	}
+	if len(ff.replyCards) < 2 || !strings.Contains(cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]), "已轮到这条消息") {
+		t.Fatalf("started notice cards = %+v", ff.replyCards)
+	}
 }
 
 func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t *testing.T) {

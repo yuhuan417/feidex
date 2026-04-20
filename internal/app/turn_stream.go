@@ -34,9 +34,32 @@ func (a *App) noteTurnStarted(sessionKey string, sub *state.Submission) {
 	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
 		return
 	}
+	a.maybeSendSubmissionStartedNotice(context.Background(), sub)
 	a.turnStreamsMu.Lock()
 	defer a.turnStreamsMu.Unlock()
 	a.ensureTurnStreamLocked(sessionKey, sub)
+}
+
+func (a *App) maybeSendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
+	if a == nil || sub == nil || strings.TrimSpace(sub.ID) == "" {
+		return
+	}
+	appState := a.appState()
+	shouldSend := false
+	if err := appState.updateSubmission(sub.ID, func(current *state.Submission) {
+		if current == nil || !current.WaitedInQueue || current.StartNoticeSent {
+			return
+		}
+		current.StartNoticeSent = true
+		shouldSend = true
+	}); err != nil || !shouldSend {
+		return
+	}
+	updated := appState.submission(sub.ID)
+	if updated != nil {
+		sub = updated
+	}
+	a.sendSubmissionStartedNotice(ctx, sub)
 }
 
 func (a *App) updatePendingPlan(turnID, plan string) {

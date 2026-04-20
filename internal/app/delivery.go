@@ -120,6 +120,8 @@ func outboundMessageCardMeta(kind string) (title, color string, replyClass bool,
 		return "计划更新", "blue", false, true
 	case "turn_queued":
 		return "排队中", "grey", false, true
+	case "turn_started":
+		return "开始处理", "blue", false, true
 	case "turn_terminal":
 		return "任务状态", "grey", false, true
 	default:

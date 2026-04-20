@@ -23,6 +23,13 @@ func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submiss
 	a.sendTurnEventMessages(ctx, sub, "已加入队列，等待当前任务结束后开始处理。", a.replyInThreadForSubmission(sub), "turn_queued")
 }
 
+func (a *App) sendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
+	if sub == nil {
+		return
+	}
+	a.sendTurnEventMessages(ctx, sub, "已轮到这条消息，开始处理。", a.replyInThreadForSubmission(sub), "turn_started")
+}
+
 func (a *App) sendPlanCard(ctx context.Context, sub *state.Submission, planText string) string {
 	return a.sendPlanCardWithReuse(ctx, sub, planText, "")
 }

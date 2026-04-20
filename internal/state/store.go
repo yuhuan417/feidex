@@ -127,6 +127,8 @@ type Submission struct {
 	ReviewCommitTitle    string                 `json:"review_commit_title,omitempty"`
 	ReviewInstructions   string                 `json:"review_instructions,omitempty"`
 	Status               string                 `json:"status"`
+	WaitedInQueue        bool                   `json:"waited_in_queue,omitempty"`
+	StartNoticeSent      bool                   `json:"start_notice_sent,omitempty"`
 	Finalized            bool                   `json:"finalized"`
 	CreatedAt            int64                  `json:"created_at"`
 	UpdatedAt            int64                  `json:"updated_at"`

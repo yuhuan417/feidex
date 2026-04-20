@@ -9,6 +9,7 @@ import (
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/state"
 )
 
 func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
@@ -137,6 +138,33 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "已加入队列") {
 		t.Fatalf("sendSubmissionQueuedNotice() body = %q", body)
+	}
+
+	if err := a.store.UpdateSubmission(sub.ID, func(current *state.Submission) {
+		current.WaitedInQueue = true
+		current.StartNoticeSent = false
+	}); err != nil {
+		t.Fatalf("UpdateSubmission(waited in queue) error = %v", err)
+	}
+	sub = a.store.GetSubmission(sub.ID)
+	if sub == nil {
+		t.Fatal("submission missing after queue flag update")
+	}
+	before = len(ff.replyCards)
+	a.noteTurnStarted("sess-1", sub)
+	if len(ff.replyCards) != before+1 {
+		t.Fatalf("noteTurnStarted(waited in queue) replyCards = %d, want %d", len(ff.replyCards), before+1)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "已轮到这条消息") {
+		t.Fatalf("noteTurnStarted(waited in queue) body = %q", body)
+	}
+	updatedSub := a.store.GetSubmission(sub.ID)
+	if updatedSub == nil || !updatedSub.StartNoticeSent {
+		t.Fatalf("submission after started notice = %+v, want StartNoticeSent", updatedSub)
+	}
+	a.noteTurnStarted("sess-1", updatedSub)
+	if len(ff.replyCards) != before+1 {
+		t.Fatalf("noteTurnStarted() should not duplicate started notice, replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}
 }
 

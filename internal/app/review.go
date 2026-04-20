@@ -597,6 +597,16 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 			return err
 		}
 	}
+	hasInFlight := sessionHasInFlightSubmission(sess)
+	queueLenBefore := len(sess.Queue)
+	shouldAttemptStart := !hasInFlight
+	willWaitInQueue := queueLenBefore > 0 || hasInFlight
+	if willWaitInQueue {
+		sess.Status = "queued"
+		if err := appState.saveSession(sess); err != nil {
+			return err
+		}
+	}
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          ws.ID,
@@ -614,6 +624,7 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 		ReviewCommitTitle:    strings.TrimSpace(target.CommitTitle),
 		ReviewInstructions:   strings.TrimSpace(target.Instructions),
 		Status:               "queued",
+		WaitedInQueue:        willWaitInQueue,
 	}
 	id, err := appState.createSubmission(sub)
 	if err != nil {
@@ -623,8 +634,13 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 	if err := appState.queueSubmission(sessionKey, id); err != nil {
 		return err
 	}
-	if !sessionHasInFlightSubmission(sess) {
-		return a.startNextSubmission(sessionKey)
+	if shouldAttemptStart {
+		if err := a.startNextSubmission(sessionKey); err != nil {
+			return err
+		}
+		if !willWaitInQueue {
+			return nil
+		}
 	}
 	a.markSubmissionQueuedReactions(sub)
 	a.sendSubmissionQueuedNotice(context.Background(), sub)

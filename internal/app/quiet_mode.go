@@ -75,14 +75,14 @@ func shouldDeliverTurnKindInQuiet(mode config.QuietMode, kind string) bool {
 	switch mode {
 	case config.QuietModeProgress:
 		switch strings.TrimSpace(kind) {
-		case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_terminal":
+		case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_started", "turn_terminal":
 			return true
 		default:
 			return false
 		}
 	case config.QuietModeNormal:
 		switch strings.TrimSpace(kind) {
-		case "final_message", "turn_output", "turn_plan":
+		case "final_message", "turn_output", "turn_plan", "turn_started":
 			return true
 		default:
 			return false
