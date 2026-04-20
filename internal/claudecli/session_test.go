@@ -137,3 +137,16 @@ func TestSessionQueuesPendingTurnsWithoutReplacingCurrent(t *testing.T) {
 		t.Fatalf("pending turns after first result = %#v, want empty", session.pending)
 	}
 }
+
+func TestSessionStoppedAndExitErrorAccessors(t *testing.T) {
+	session := NewSession()
+	session.stopped = true
+	session.exitErr = context.DeadlineExceeded
+
+	if !session.Stopped() {
+		t.Fatal("Stopped() = false, want true")
+	}
+	if got := session.ExitError(); got != context.DeadlineExceeded {
+		t.Fatalf("ExitError() = %v, want deadline exceeded", got)
+	}
+}

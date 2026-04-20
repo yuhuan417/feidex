@@ -25,11 +25,13 @@ type Session struct {
 
 	started bool
 	stopped bool
+	exitErr error
 
 	done       chan struct{}
 	doneOnce   sync.Once
 	eventsOnce sync.Once
 	events     chan Event
+	waitDone   chan struct{}
 	turnNumber int
 	current    *turnState
 	pending    []int
@@ -67,12 +69,13 @@ func NewSession(opts ...SessionOption) *Session {
 		opt(&cfg)
 	}
 	return &Session{
-		cfg:     cfg,
-		done:    make(chan struct{}),
-		events:  make(chan Event, cfg.EventBufferSize),
-		turns:   map[int]*turnState{},
-		pending: []int{},
-		blocks:  map[int]*blockState{},
+		cfg:      cfg,
+		done:     make(chan struct{}),
+		events:   make(chan Event, cfg.EventBufferSize),
+		waitDone: make(chan struct{}),
+		turns:    map[int]*turnState{},
+		pending:  []int{},
+		blocks:   map[int]*blockState{},
 	}
 }
 
@@ -119,6 +122,7 @@ func (s *Session) Start(ctx context.Context) error {
 	s.writer = newNDJSONWriter(stdin)
 	s.started = true
 
+	go s.waitLoop(cmd)
 	go s.readLoop()
 	if s.cfg.StderrHandler != nil {
 		go s.stderrLoop()
@@ -146,37 +150,37 @@ func (s *Session) Stop() error {
 		return nil
 	}
 
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-
-	select {
-	case <-done:
+	if s.waitForExit(500 * time.Millisecond) {
 		s.closeEvents()
 		return nil
-	case <-time.After(500 * time.Millisecond):
 	}
 
 	_ = cmd.Process.Signal(syscall.SIGTERM)
 
-	select {
-	case <-done:
+	if s.waitForExit(500 * time.Millisecond) {
 		s.closeEvents()
 		return nil
-	case <-time.After(500 * time.Millisecond):
 	}
 
 	_ = cmd.Process.Kill()
 
-	select {
-	case <-done:
-	case <-time.After(100 * time.Millisecond):
-	}
+	_ = s.waitForExit(100 * time.Millisecond)
 	s.closeEvents()
 	return nil
 }
 
 func (s *Session) Events() <-chan Event {
 	return s.events
+}
+
+func (s *Session) Stopped() bool {
+	return s.isStopped()
+}
+
+func (s *Session) ExitError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exitErr
 }
 
 func (s *Session) SendMessage(ctx context.Context, content string) (int, error) {
@@ -284,12 +288,27 @@ func (s *Session) readLoop() {
 
 		line, err := s.reader.ReadLine()
 		if err != nil {
-			if err != io.EOF && !s.isStopped() {
-				s.emitError(err, "read_line")
+			if !s.isStopped() {
+				if err == io.EOF {
+					s.emitProcessExit("stdout_eof")
+				} else {
+					s.emitError(err, "read_line")
+				}
 			}
 			return
 		}
 		s.handleLine(line)
+	}
+}
+
+func (s *Session) waitLoop(cmd *exec.Cmd) {
+	err := cmd.Wait()
+	s.mu.Lock()
+	s.exitErr = err
+	waitDone := s.waitDone
+	s.mu.Unlock()
+	if waitDone != nil {
+		close(waitDone)
 	}
 }
 
@@ -806,6 +825,22 @@ func (s *Session) emitError(err error, contextLabel string) {
 	})
 }
 
+func (s *Session) emitProcessExit(contextLabel string) {
+	waited := s.waitForExit(250 * time.Millisecond)
+	s.mu.Lock()
+	exitErr := s.exitErr
+	s.mu.Unlock()
+	if waited {
+		if exitErr != nil {
+			s.emitError(&ProcessError{Message: "Claude CLI process exited", Cause: exitErr}, contextLabel)
+			return
+		}
+		s.emitError(&ProcessError{Message: "Claude CLI process exited"}, contextLabel)
+		return
+	}
+	s.emitError(&ProcessError{Message: "Claude CLI process exited before wait completed"}, contextLabel)
+}
+
 func (s *Session) closeDone() {
 	s.doneOnce.Do(func() {
 		close(s.done)
@@ -826,6 +861,31 @@ func (s *Session) isStopped() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.stopped
+}
+
+func (s *Session) waitForExit(timeout time.Duration) bool {
+	s.mu.Lock()
+	waitDone := s.waitDone
+	s.mu.Unlock()
+	if waitDone == nil {
+		return true
+	}
+	if timeout <= 0 {
+		select {
+		case <-waitDone:
+			return true
+		default:
+			return false
+		}
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-waitDone:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 func copyMap(in map[string]any) map[string]any {

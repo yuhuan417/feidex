@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -26,6 +28,9 @@ type fakeClaudeCore struct {
 
 	resetCalls int
 	closed     bool
+
+	ensureResults    []fakeClaudeEnsureResult
+	startTurnResults []error
 
 	ensureCalls []struct {
 		sessionKey  string
@@ -58,6 +63,11 @@ type fakeClaudeCore struct {
 	}
 }
 
+type fakeClaudeEnsureResult struct {
+	id  string
+	err error
+}
+
 func (f *fakeClaudeCore) EnsureSession(_ context.Context, sessionKey string, ws *config.Workspace, resumeID, model string) (string, error) {
 	f.ensureCalls = append(f.ensureCalls, struct {
 		sessionKey  string
@@ -70,6 +80,11 @@ func (f *fakeClaudeCore) EnsureSession(_ context.Context, sessionKey string, ws 
 		resumeID:    resumeID,
 		model:       model,
 	})
+	if len(f.ensureResults) > 0 {
+		result := f.ensureResults[0]
+		f.ensureResults = append([]fakeClaudeEnsureResult(nil), f.ensureResults[1:]...)
+		return strings.TrimSpace(result.id), result.err
+	}
 	if f.ensureSessionErr != nil {
 		return "", f.ensureSessionErr
 	}
@@ -99,6 +114,11 @@ func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turn
 		turnID:     turnID,
 		prompt:     prompt,
 	})
+	if len(f.startTurnResults) > 0 {
+		result := f.startTurnResults[0]
+		f.startTurnResults = append([]error(nil), f.startTurnResults[1:]...)
+		return result
+	}
 	return f.startTurnErr
 }
 
@@ -227,6 +247,167 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	}
 	if sub.ThreadID != "claude-session-42" || sub.TurnID == "" || sub.Status != "running" {
 		t.Fatalf("submission after Claude start = %+v", sub)
+	}
+}
+
+func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces[0].Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{
+		ensureResults: []fakeClaudeEnsureResult{
+			{id: "claude-stale"},
+			{id: "claude-fresh"},
+		},
+		startTurnResults: []error{
+			errors.New("process error: Claude resume session became unavailable: exit status 1"),
+			nil,
+		},
+	}
+	a.claude = claude
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "claude-stale",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		OwnerUserID:             "user",
+		ChatID:                  "chat",
+		ChatType:                "p2p",
+		RootMessageID:           "root-1",
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	subID, err := a.store.CreateSubmission(&state.Submission{
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		UserID:           "user",
+		ChatID:           "chat",
+		TriggerMessageID: "msg-1",
+		InputText:        "hello Claude",
+		Status:           "queued",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	if err := a.store.QueueSubmission(sessionKey, subID); err != nil {
+		t.Fatalf("QueueSubmission() error = %v", err)
+	}
+
+	if err := a.startNextSubmission(sessionKey); err != nil {
+		t.Fatalf("startNextSubmission() error = %v", err)
+	}
+	if len(claude.ensureCalls) != 2 {
+		t.Fatalf("ensure calls = %d, want 2", len(claude.ensureCalls))
+	}
+	if claude.ensureCalls[0].resumeID != "claude-stale" {
+		t.Fatalf("first resumeID = %q, want claude-stale", claude.ensureCalls[0].resumeID)
+	}
+	if claude.ensureCalls[1].resumeID != "" {
+		t.Fatalf("second resumeID = %q, want empty for fresh retry", claude.ensureCalls[1].resumeID)
+	}
+	if len(claude.startTurnCalls) != 2 {
+		t.Fatalf("startTurn calls = %d, want 2", len(claude.startTurnCalls))
+	}
+	if claude.startTurnCalls[0].threadID != "claude-stale" {
+		t.Fatalf("first startTurn threadID = %q, want claude-stale", claude.startTurnCalls[0].threadID)
+	}
+	if claude.startTurnCalls[1].threadID != "claude-fresh" {
+		t.Fatalf("second startTurn threadID = %q, want claude-fresh", claude.startTurnCalls[1].threadID)
+	}
+	if claude.startTurnCalls[0].turnID == claude.startTurnCalls[1].turnID {
+		t.Fatalf("retry reused Claude turnID %q, want a fresh local turn id", claude.startTurnCalls[0].turnID)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil {
+		t.Fatal("session missing after retry")
+	}
+	if sess.ActiveThreadID != "claude-fresh" || sess.ActiveTurnID == "" || sess.ActiveSubmissionID != subID || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after retry = %+v", sess)
+	}
+
+	sub := a.store.GetSubmission(subID)
+	if sub == nil {
+		t.Fatal("submission missing after retry")
+	}
+	if sub.ThreadID != "claude-fresh" || sub.TurnID == "" || sub.Status != "running" {
+		t.Fatalf("submission after retry = %+v", sub)
+	}
+	if sub.TurnID != claude.startTurnCalls[1].turnID {
+		t.Fatalf("submission turnID = %q, want retried turn id %q", sub.TurnID, claude.startTurnCalls[1].turnID)
+	}
+}
+
+func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces[0].Backend = backendClaude
+	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "claude-stale",
+		ActiveTurnID:       "claude-turn-1",
+		ActiveSubmissionID: "sub-1",
+		OwnerUserID:        "user",
+		ChatID:             "chat",
+		ChatType:           "p2p",
+		Status:             "turn_in_progress",
+		ActiveOperations: []state.SessionActiveOperation{{
+			Kind:         sessionOpKindSubmission,
+			SubmissionID: "sub-1",
+			ThreadID:     "claude-stale",
+			TurnID:       "claude-turn-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-1",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "claude-stale",
+		TurnID:           "claude-turn-1",
+		UserID:           "user",
+		ChatID:           "chat",
+		TriggerMessageID: "msg-1",
+		InputText:        "hello Claude",
+		Status:           "running",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	a.bindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
+
+	state := &claudeSessionState{
+		sessionKey: sessionKey,
+		sessionID:  "claude-stale",
+		turns: map[int]*claudeTurnState{
+			1: {
+				TurnNumber:               1,
+				TurnID:                   "claude-turn-1",
+				SuppressFailedCompletion: true,
+			},
+		},
+	}
+
+	runtime.handleTurnComplete(state, claudecli.TurnCompleteEvent{
+		TurnNumber: 1,
+		Success:    false,
+		Error:      errors.New("No conversation found with session ID: stale"),
+	})
+
+	sub := a.store.GetSubmission("sub-1")
+	if sub == nil || sub.Finalized || sub.Status != "running" {
+		t.Fatalf("submission after suppressed completion = %+v", sub)
+	}
+	if _, bound := a.boundSubmissionForTurn("claude-turn-1"); bound == nil {
+		t.Fatalf("turn binding should remain until retry cleanup")
+	}
+	if state.turns[1] != nil {
+		t.Fatalf("turn state should be cleared after suppressed completion: %+v", state.turns[1])
 	}
 }
 

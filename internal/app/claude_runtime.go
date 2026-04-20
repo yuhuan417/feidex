@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,8 @@ type claudeTurnState struct {
 	TurnID     string
 	FullText   string
 	Thinking   string
+
+	SuppressFailedCompletion bool
 }
 
 type claudePendingInteraction struct {
@@ -206,8 +209,16 @@ func (r *claudeRuntime) StartTurn(ctx context.Context, sessionKey, threadID, tur
 		state.turns[turnNumber] = turn
 	}
 	turn.TurnID = strings.TrimSpace(turnID)
+	turn.SuppressFailedCompletion = true
 	state.mu.Unlock()
-	_ = threadID
+	if err := r.waitForTurnReady(ctx, state, threadID); err != nil {
+		return err
+	}
+	state.mu.Lock()
+	if turn := state.turns[turnNumber]; turn != nil {
+		turn.SuppressFailedCompletion = false
+	}
+	state.mu.Unlock()
 	return nil
 }
 
@@ -408,6 +419,48 @@ func (r *claudeRuntime) runSession(state *claudeSessionState) {
 	state.readyOnce.Do(func() { close(state.readyCh) })
 }
 
+func (r *claudeRuntime) waitForTurnReady(ctx context.Context, state *claudeSessionState, threadID string) error {
+	if state == nil {
+		return fmt.Errorf("claude session state missing")
+	}
+	state.mu.Lock()
+	readyCh := state.readyCh
+	state.mu.Unlock()
+	if readyCh == nil {
+		return nil
+	}
+	select {
+	case <-readyCh:
+	case <-ctx.Done():
+		if state.session != nil && state.session.Stopped() {
+			return r.claudeSessionStoppedError(state, threadID)
+		}
+		return ctx.Err()
+	}
+	if state.session != nil && state.session.Stopped() {
+		return r.claudeSessionStoppedError(state, threadID)
+	}
+	return nil
+}
+
+func (r *claudeRuntime) claudeSessionStoppedError(state *claudeSessionState, threadID string) error {
+	if state == nil || state.session == nil {
+		return fmt.Errorf("claude session stopped")
+	}
+	state.mu.Lock()
+	sessionID := strings.TrimSpace(state.sessionID)
+	state.mu.Unlock()
+	exitErr := state.session.ExitError()
+	message := "Claude session stopped before initialization"
+	if strings.TrimSpace(threadID) != "" && strings.TrimSpace(sessionID) == strings.TrimSpace(threadID) {
+		message = "Claude resume session became unavailable"
+	}
+	if exitErr != nil {
+		return &claudecli.ProcessError{Message: message, Cause: exitErr}
+	}
+	return &claudecli.ProcessError{Message: message}
+}
+
 func (r *claudeRuntime) handleToolComplete(state *claudeSessionState, event claudecli.ToolCompleteEvent) {
 	state.mu.Lock()
 	if planFilePath := claudePlanFilePathFromTool(event.Name, event.Input); planFilePath != "" {
@@ -436,6 +489,28 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	state.mu.Lock()
 	threadID := strings.TrimSpace(state.sessionID)
 	turn := state.turns[event.TurnNumber]
+	turnID := ""
+	suppressFailedCompletion := false
+	if turn != nil {
+		turnID = strings.TrimSpace(turn.TurnID)
+		suppressFailedCompletion = turn.SuppressFailedCompletion && !event.Success
+	}
+	if suppressFailedCompletion {
+		delete(state.turns, event.TurnNumber)
+		if state.currentTurnNumber == event.TurnNumber {
+			state.currentTurnNumber = 0
+		}
+		state.interruptPending = false
+		state.mu.Unlock()
+		slog.Warn("suppressing Claude failed completion during turn start",
+			"session_key", state.sessionKey,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"turn_number", event.TurnNumber,
+			"error", event.Error,
+		)
+		return
+	}
 	interruptPending := state.interruptPending
 	delete(state.turns, event.TurnNumber)
 	if state.currentTurnNumber == event.TurnNumber {
