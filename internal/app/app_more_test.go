@@ -210,6 +210,8 @@ type fakeFeishuClient struct {
 	removeReactionErr         error
 	downloadErr               error
 	shareFileErr              error
+	urgentAppErr              error
+	lookupMessageSenderErr    error
 	cleanupResult             feishu.PreviewDriveCleanupResult
 	cleanupErr                error
 	started                   bool
@@ -240,9 +242,12 @@ type fakeFeishuClient struct {
 		messageID string
 		ids       []string
 	}
-	sharedFileResult   feishu.SharedFileResult
-	sharedFileRequests []feishu.SharedFileRequest
-	onMessage          func(*feishu.InboundMessage)
+	sharedFileResult         feishu.SharedFileResult
+	sharedFileRequests       []feishu.SharedFileRequest
+	urgentAppCalls           []struct{ messageID, userID string }
+	lookupMessageSenderCalls []string
+	lookupMessageSenderOpen  string
+	onMessage                func(*feishu.InboundMessage)
 }
 
 func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
@@ -353,6 +358,16 @@ func (f *fakeFeishuClient) ShareLocalFile(_ context.Context, req feishu.SharedFi
 
 func (f *fakeFeishuClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
 	return (&feishu.Adapter{}).SimpleStatusCard(title, color, body, buttons)
+}
+
+func (f *fakeFeishuClient) UrgentApp(_ context.Context, messageID, userID string) error {
+	f.urgentAppCalls = append(f.urgentAppCalls, struct{ messageID, userID string }{messageID: messageID, userID: userID})
+	return f.urgentAppErr
+}
+
+func (f *fakeFeishuClient) LookupMessageSenderOpenID(_ context.Context, messageID string) (string, error) {
+	f.lookupMessageSenderCalls = append(f.lookupMessageSenderCalls, messageID)
+	return f.lookupMessageSenderOpen, f.lookupMessageSenderErr
 }
 
 func cardMarkdownContent(t *testing.T, card map[string]any) string {

@@ -101,6 +101,14 @@ func (c *commandCaptureClient) SimpleStatusCard(title, color, body string, butto
 	return c.base.SimpleStatusCard(title, color, body, buttons)
 }
 
+func (c *commandCaptureClient) UrgentApp(ctx context.Context, messageID, userID string) error {
+	return c.base.UrgentApp(ctx, messageID, userID)
+}
+
+func (c *commandCaptureClient) LookupMessageSenderOpenID(ctx context.Context, messageID string) (string, error) {
+	return c.base.LookupMessageSenderOpenID(ctx, messageID)
+}
+
 func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, userID string) {
 	_, chatType, chatID, rootMessageID, userID = parseSessionKey(sessionKey)
 	return chatType, chatID, rootMessageID, userID

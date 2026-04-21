@@ -686,6 +686,49 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 	return nil
 }
 
+func (a *Adapter) UrgentApp(ctx context.Context, messageID, userID string) error {
+	if a == nil || a.client == nil {
+		return fmt.Errorf("feishu adapter not initialized")
+	}
+	messageID = strings.TrimSpace(messageID)
+	userID = strings.TrimSpace(userID)
+	if messageID == "" || userID == "" {
+		return fmt.Errorf("urgent_app: message_id and user_id required")
+	}
+	req := larkim.NewUrgentAppMessageReqBuilder().
+		MessageId(messageID).
+		UserIdType(larkim.UserIdTypeUrgentAppMessageOpenId).
+		UrgentReceivers(larkim.NewUrgentReceiversBuilder().
+			UserIdList([]string{userID}).
+			Build()).
+		Build()
+	resp, err := a.client.Im.Message.UrgentApp(ctx, req)
+	if err != nil {
+		return err
+	}
+	if !resp.Success() {
+		return fmt.Errorf("urgent_app failed code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	return nil
+}
+
+func (a *Adapter) LookupMessageSenderOpenID(ctx context.Context, messageID string) (string, error) {
+	msg, err := a.fetchMessageByID(ctx, messageID)
+	if err != nil {
+		return "", err
+	}
+	if msg == nil || msg.Sender == nil || msg.Sender.Id == nil {
+		return "", nil
+	}
+	if msg.Sender.SenderType != nil && strings.TrimSpace(*msg.Sender.SenderType) != "" && strings.TrimSpace(*msg.Sender.SenderType) != "user" {
+		return "", nil
+	}
+	if msg.Sender.IdType != nil && strings.TrimSpace(*msg.Sender.IdType) != "" && strings.TrimSpace(*msg.Sender.IdType) != larkim.UserIdTypeGetMessageOpenId {
+		return "", nil
+	}
+	return strings.TrimSpace(*msg.Sender.Id), nil
+}
+
 func (a *Adapter) replyLocalImage(ctx context.Context, messageID, path string, inThread bool) error {
 	body, err := larkim.NewCreateImagePathReqBodyBuilder().
 		ImageType("message").
@@ -1278,24 +1321,43 @@ func (a *Adapter) resolveForwardedMessage(ctx context.Context, messageID string,
 		}
 	}()
 
+	msg, err := a.fetchMessageByID(ctx, messageID)
+	if err != nil {
+		return "", nil, err
+	}
+	if msg == nil {
+		return "", nil, fmt.Errorf("feishu get message returned no items for %s", messageID)
+	}
+	return a.resolveFetchedMessage(ctx, msg, depth, path)
+}
+
+func (a *Adapter) fetchMessageByID(ctx context.Context, messageID string) (*larkim.Message, error) {
+	if a == nil || a.client == nil {
+		return nil, fmt.Errorf("feishu adapter not initialized")
+	}
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil, fmt.Errorf("message_id required")
+	}
 	resp, err := a.client.Im.Message.Get(ctx, larkim.NewGetMessageReqBuilder().
 		MessageId(messageID).
+		UserIdType(larkim.UserIdTypeGetMessageOpenId).
 		Build())
 	if err != nil {
-		logFeishuFailure("feishu merge_forward message get failed", err, 0, "", "message_id", messageID)
-		return "", nil, wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.get", err))
+		logFeishuFailure("feishu message get failed", err, 0, "", "message_id", messageID)
+		return nil, wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.get", err))
 	}
 	if !resp.Success() {
-		logFeishuFailure("feishu merge_forward message get failed", nil, resp.Code, resp.Msg, "message_id", messageID)
-		return "", nil, wrapPermissionIssue(
+		logFeishuFailure("feishu message get failed", nil, resp.Code, resp.Msg, "message_id", messageID)
+		return nil, wrapPermissionIssue(
 			fmt.Errorf("feishu get message failed code=%d msg=%s", resp.Code, resp.Msg),
 			permissionIssueFromCodeError("im.message.get", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
 		)
 	}
 	if resp.Data == nil || len(resp.Data.Items) == 0 || resp.Data.Items[0] == nil {
-		return "", nil, fmt.Errorf("feishu get message returned no items for %s", messageID)
+		return nil, nil
 	}
-	return a.resolveFetchedMessage(ctx, resp.Data.Items[0], depth, path)
+	return resp.Data.Items[0], nil
 }
 
 func (a *Adapter) resolveFetchedMessage(ctx context.Context, msg *larkim.Message, depth int, path map[string]int) (string, []Attachment, error) {

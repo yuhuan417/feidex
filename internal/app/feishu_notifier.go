@@ -19,6 +19,7 @@ type feishuNotifyTarget struct {
 	ChatID    string
 	MessageID string
 	InThread  bool
+	UserID    string
 }
 
 type notifyingFeishuClient struct {
@@ -57,7 +58,7 @@ func (n *notifyingFeishuClient) ConfigureLocalFileLinks(statePath, processCWD st
 func (n *notifyingFeishuClient) RewriteLocalFileLinks(ctx context.Context, req feishu.LocalFileLinkRewriteRequest) (string, error) {
 	text, err := n.base.RewriteLocalFileLinks(ctx, req)
 	if err != nil {
-		n.notifyPermissionIssue(feishuNotifyTarget{ChatID: req.ChatID}, err)
+		n.notifyPermissionIssue(feishuNotifyTarget{ChatID: req.ChatID, UserID: req.UserID}, err)
 	}
 	return text, err
 }
@@ -149,13 +150,21 @@ func (n *notifyingFeishuClient) ResolveMergeForward(ctx context.Context, message
 func (n *notifyingFeishuClient) ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
 	result, err := n.base.ShareLocalFile(ctx, req)
 	if err != nil {
-		n.notifyPermissionIssue(feishuNotifyTarget{ChatID: req.ChatID}, err)
+		n.notifyPermissionIssue(feishuNotifyTarget{ChatID: req.ChatID, UserID: req.UserID}, err)
 	}
 	return result, err
 }
 
 func (n *notifyingFeishuClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
 	return n.base.SimpleStatusCard(title, color, body, buttons)
+}
+
+func (n *notifyingFeishuClient) UrgentApp(ctx context.Context, messageID, userID string) error {
+	return n.base.UrgentApp(ctx, messageID, userID)
+}
+
+func (n *notifyingFeishuClient) LookupMessageSenderOpenID(ctx context.Context, messageID string) (string, error) {
+	return n.base.LookupMessageSenderOpenID(ctx, messageID)
 }
 
 func (n *notifyingFeishuClient) notifyPermissionIssue(target feishuNotifyTarget, err error) {
@@ -168,6 +177,7 @@ func (n *notifyingFeishuClient) notifyPermissionIssue(target feishuNotifyTarget,
 	}
 	target.ChatID = strings.TrimSpace(target.ChatID)
 	target.MessageID = strings.TrimSpace(target.MessageID)
+	target.UserID = strings.TrimSpace(target.UserID)
 	if target.ChatID == "" && target.MessageID == "" {
 		return
 	}
@@ -182,12 +192,15 @@ func (n *notifyingFeishuClient) notifyPermissionIssue(target feishuNotifyTarget,
 	card := n.base.SimpleStatusCard("飞书权限错误", "red", body, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	var sendErr error
+	var (
+		sentMessageID string
+		sendErr       error
+	)
 	switch {
 	case target.MessageID != "":
-		_, sendErr = n.base.ReplyCard(ctx, target.MessageID, card, target.InThread)
+		sentMessageID, sendErr = n.base.ReplyCard(ctx, target.MessageID, card, target.InThread)
 	case target.ChatID != "":
-		_, sendErr = n.base.SendCard(ctx, target.ChatID, card)
+		sentMessageID, sendErr = n.base.SendCard(ctx, target.ChatID, card)
 	}
 	if sendErr != nil {
 		slog.Warn("send feishu permission diagnostic failed",
@@ -195,7 +208,44 @@ func (n *notifyingFeishuClient) notifyPermissionIssue(target feishuNotifyTarget,
 			"chat_id", target.ChatID,
 			"error", sendErr,
 		)
+		return
 	}
+	if sentMessageID == "" {
+		return
+	}
+	urgentUserID := n.resolveUrgentUserID(ctx, target)
+	if urgentUserID == "" {
+		return
+	}
+	if urgentErr := n.base.UrgentApp(ctx, sentMessageID, urgentUserID); urgentErr != nil {
+		slog.Warn("feishu permission urgent_app failed",
+			"message_id", sentMessageID,
+			"user_id", urgentUserID,
+			"error", urgentErr,
+		)
+	}
+}
+
+func (n *notifyingFeishuClient) resolveUrgentUserID(ctx context.Context, target feishuNotifyTarget) string {
+	if n == nil || n.base == nil {
+		return ""
+	}
+	if userID := strings.TrimSpace(target.UserID); userID != "" {
+		return userID
+	}
+	messageID := strings.TrimSpace(target.MessageID)
+	if messageID == "" {
+		return ""
+	}
+	userID, err := n.base.LookupMessageSenderOpenID(ctx, messageID)
+	if err != nil {
+		slog.Warn("lookup feishu permission urgent user failed",
+			"message_id", messageID,
+			"error", err,
+		)
+		return ""
+	}
+	return strings.TrimSpace(userID)
 }
 
 func (n *notifyingFeishuClient) permissionIssueKey(target feishuNotifyTarget, issue *feishu.PermissionIssue) string {

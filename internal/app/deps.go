@@ -57,6 +57,8 @@ type feishuClient interface {
 	ResolveMergeForward(context.Context, string, []string) (string, []feishu.Attachment, error)
 	ShareLocalFile(context.Context, feishu.SharedFileRequest) (feishu.SharedFileResult, error)
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+	UrgentApp(context.Context, string, string) error
+	LookupMessageSenderOpenID(context.Context, string) (string, error)
 }
 
 type releaseClient interface {

@@ -107,6 +107,95 @@ func TestNotifyingFeishuClientSendsPermissionCardForChatTarget(t *testing.T) {
 	}
 }
 
+func TestNotifyingFeishuClientUrgentAppUsesExplicitUserID(t *testing.T) {
+	base := &fakeFeishuClient{
+		sendCardID: "sent-card-1",
+		rewriteLocalFileLinksErr: &permissionIssueTestError{
+			err: errors.New("drive no permission"),
+			issue: &feishu.PermissionIssue{
+				API:     "drive.permission_member.create",
+				Code:    99991663,
+				Message: "no permission",
+			},
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	if _, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{
+		Text:   "hello",
+		ChatID: "chat-1",
+		UserID: "ou-user-1",
+	}); err == nil {
+		t.Fatal("expected RewriteLocalFileLinks to return error")
+	}
+	if len(base.urgentAppCalls) != 1 {
+		t.Fatalf("urgent app calls = %+v, want 1", base.urgentAppCalls)
+	}
+	if got := base.urgentAppCalls[0]; got.messageID != "sent-card-1" || got.userID != "ou-user-1" {
+		t.Fatalf("urgent app call = %+v, want sent-card-1/ou-user-1", got)
+	}
+	if len(base.lookupMessageSenderCalls) != 0 {
+		t.Fatalf("lookup sender calls = %+v, want none for explicit user id", base.lookupMessageSenderCalls)
+	}
+}
+
+func TestNotifyingFeishuClientUrgentAppLooksUpMessageSender(t *testing.T) {
+	base := &fakeFeishuClient{
+		replyCardID:             "reply-card-1",
+		lookupMessageSenderOpen: "ou-msg-owner",
+		addReactionErr: &permissionIssueTestError{
+			err: errors.New("permission denied"),
+			issue: &feishu.PermissionIssue{
+				API:     "im.message_reaction.create",
+				Code:    99991668,
+				Message: "permission denied",
+			},
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	if err := client.AddReaction(context.Background(), "msg-1", "SMILE"); err == nil {
+		t.Fatal("expected AddReaction to return error")
+	}
+	if len(base.lookupMessageSenderCalls) != 1 || base.lookupMessageSenderCalls[0] != "msg-1" {
+		t.Fatalf("lookup sender calls = %+v, want [msg-1]", base.lookupMessageSenderCalls)
+	}
+	if len(base.urgentAppCalls) != 1 {
+		t.Fatalf("urgent app calls = %+v, want 1", base.urgentAppCalls)
+	}
+	if got := base.urgentAppCalls[0]; got.messageID != "reply-card-1" || got.userID != "ou-msg-owner" {
+		t.Fatalf("urgent app call = %+v, want reply-card-1/ou-msg-owner", got)
+	}
+}
+
+func TestNotifyingFeishuClientSkipsUrgentAppWithoutUserID(t *testing.T) {
+	base := &fakeFeishuClient{
+		sendCardID: "sent-card-1",
+		rewriteLocalFileLinksErr: &permissionIssueTestError{
+			err: errors.New("drive no permission"),
+			issue: &feishu.PermissionIssue{
+				API:     "drive.permission_member.create",
+				Code:    99991663,
+				Message: "no permission",
+			},
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	if _, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{
+		Text:   "hello",
+		ChatID: "chat-1",
+	}); err == nil {
+		t.Fatal("expected RewriteLocalFileLinks to return error")
+	}
+	if len(base.urgentAppCalls) != 0 {
+		t.Fatalf("urgent app calls = %+v, want none", base.urgentAppCalls)
+	}
+	if len(base.lookupMessageSenderCalls) != 0 {
+		t.Fatalf("lookup sender calls = %+v, want none", base.lookupMessageSenderCalls)
+	}
+}
+
 func TestNotifyingFeishuClientDeduplicatesRecentPermissionCards(t *testing.T) {
 	base := &fakeFeishuClient{
 		removeReactionErr: &permissionIssueTestError{

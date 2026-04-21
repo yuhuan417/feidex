@@ -259,6 +259,65 @@ func TestAdapterOutboundMethodsAgainstHTTPAPI(t *testing.T) {
 	}
 }
 
+func TestAdapterLookupMessageSenderAndUrgentAppUseOpenID(t *testing.T) {
+	var (
+		lookupUserIDType string
+		urgentUserIDType string
+	)
+	client := lark.NewClient(
+		"app-id",
+		"app-secret",
+		lark.WithOpenBaseUrl("https://mock.feishu.test"),
+		lark.WithEnableTokenCache(true),
+		lark.WithHttpClient(&http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			jsonResponse := func(status int, body string) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: status,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(body)),
+					Request:    req,
+				}, nil
+			}
+			switch req.URL.Path {
+			case "/open-apis/auth/v3/tenant_access_token/internal":
+				return jsonResponse(http.StatusOK, `{"code":0,"tenant_access_token":"tenant-token","expire":7200}`)
+			case "/open-apis/im/v1/messages/msg-lookup":
+				lookupUserIDType = req.URL.Query().Get("user_id_type")
+				return jsonResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"items":[{"message_id":"msg-lookup","sender":{"id":"ou_lookup","id_type":"open_id","sender_type":"user"}}]}}`)
+			case "/open-apis/im/v1/messages/msg-urgent/urgent_app":
+				urgentUserIDType = req.URL.Query().Get("user_id_type")
+				return jsonResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{}}`)
+			default:
+				return jsonResponse(http.StatusNotFound, `{"code":404,"msg":"not found"}`)
+			}
+		})}),
+	)
+	a := &Adapter{
+		client:    client,
+		allowAll:  true,
+		seen:      map[string]time.Time{},
+		reactions: map[string]string{},
+	}
+
+	userID, err := a.LookupMessageSenderOpenID(context.Background(), "msg-lookup")
+	if err != nil {
+		t.Fatalf("LookupMessageSenderOpenID() error = %v", err)
+	}
+	if userID != "ou_lookup" {
+		t.Fatalf("LookupMessageSenderOpenID() = %q, want ou_lookup", userID)
+	}
+	if lookupUserIDType != larkim.UserIdTypeGetMessageOpenId {
+		t.Fatalf("LookupMessageSenderOpenID() user_id_type = %q, want %q", lookupUserIDType, larkim.UserIdTypeGetMessageOpenId)
+	}
+
+	if err := a.UrgentApp(context.Background(), "msg-urgent", "ou_lookup"); err != nil {
+		t.Fatalf("UrgentApp() error = %v", err)
+	}
+	if urgentUserIDType != larkim.UserIdTypeUrgentAppMessageOpenId {
+		t.Fatalf("UrgentApp() user_id_type = %q, want %q", urgentUserIDType, larkim.UserIdTypeUrgentAppMessageOpenId)
+	}
+}
+
 func TestAdapterFileAndDownloadValidationErrors(t *testing.T) {
 	a, _ := newHTTPBackedAdapter(t)
 
