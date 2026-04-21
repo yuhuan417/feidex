@@ -166,6 +166,8 @@ func buildQuietWorkingCardLines(itemID string, item map[string]any, workspaceCwd
 		return quietWorkingItemKey(itemID), buildQuietFileChangeLines(item)
 	case "web_search":
 		return quietWorkingItemKey(itemID), buildQuietWebSearchLines(item)
+	case "dynamic_tool_call":
+		return quietWorkingItemKey(itemID), buildClaudeQuietDynamicToolLines(stringValue(item["tool"]), item["input"], workspaceCwd)
 	case "context_compaction":
 		return quietWorkingItemKey(itemID), []string{"Context compaction..."}
 	default:

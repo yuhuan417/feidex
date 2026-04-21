@@ -151,6 +151,12 @@ func TestBuildTurnItemCardPayloadToolCallUsesCodeBlockDetail(t *testing.T) {
 	if !strings.Contains(normalizeCardMarkdown(got.SummaryText), "````\ngithub/search_repos\n````") {
 		t.Fatalf("expected tool summary code block, got: %q", got.SummaryText)
 	}
+	if !strings.Contains(got.SummaryText, "- query: `feidex`") {
+		t.Fatalf("expected tool summary query line, got: %q", got.SummaryText)
+	}
+	if !strings.Contains(got.SummaryText, "- limit: `5`") {
+		t.Fatalf("expected tool summary limit line, got: %q", got.SummaryText)
+	}
 	if !strings.Contains(normalizeCardMarkdown(got.DetailText), "```") {
 		t.Fatalf("expected tool detail code block, got: %q", got.DetailText)
 	}

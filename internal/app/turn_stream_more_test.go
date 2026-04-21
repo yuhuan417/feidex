@@ -16,7 +16,7 @@ func TestTurnStreamHelperFunctions(t *testing.T) {
 	if got := normalizeCardMarkdown(formatTurnCommandOutput(" /tmp ")); got != "输出:\n````\n/tmp\n````" {
 		t.Fatalf("formatTurnCommandOutput() = %q", got)
 	}
-	if summary, detail := summarizeGenericTurnItem("web_search", map[string]any{"query": "golang"}); !strings.Contains(summary, "golang") || detail == "" {
+	if summary, detail := summarizeGenericTurnItem("web_search", map[string]any{"query": "golang"}, ""); !strings.Contains(summary, "golang") || detail == "" {
 		t.Fatalf("summarizeGenericTurnItem(web_search) = %q / %q", summary, detail)
 	}
 	if got := turnItemLabel(""); got != "事件" {

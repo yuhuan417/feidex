@@ -49,22 +49,40 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 	}
 
 	if summary, detail := summarizeGenericTurnItem("dynamic_tool_call", map[string]any{
-		"tool":   "search",
+		"tool":   "TodoWrite",
 		"status": "completed",
-	}); !strings.Contains(normalizeCardMarkdown(summary), "search") || !strings.Contains(summary, "status=completed") || !strings.Contains(detail, "search") {
+		"input": map[string]any{
+			"todos": []any{
+				map[string]any{"content": "核对日志", "status": "in_progress"},
+				map[string]any{"content": "补卡片摘要", "status": "pending"},
+			},
+		},
+	}, ""); !strings.Contains(normalizeCardMarkdown(summary), "TodoWrite") ||
+		!strings.Contains(summary, "- todos: 2") ||
+		!strings.Contains(summary, "[in_progress] 核对日志") ||
+		!strings.Contains(summary, "status=completed") ||
+		!strings.Contains(detail, `"todos"`) {
 		t.Fatalf("summarizeGenericTurnItem(dynamic) = %q / %q", summary, detail)
 	}
 
 	if summary, detail := summarizeGenericTurnItem("collab_agent_tool_call", map[string]any{
 		"tool":   "delegate",
 		"status": "queued",
-	}); !strings.Contains(normalizeCardMarkdown(summary), "delegate") || !strings.Contains(summary, "status=queued") || !strings.Contains(detail, "delegate") {
+		"input": map[string]any{
+			"description": "让子代理排查卡片渲染",
+			"task_id":     "task-123",
+		},
+	}, ""); !strings.Contains(normalizeCardMarkdown(summary), "delegate") ||
+		!strings.Contains(summary, "task-123") ||
+		!strings.Contains(summary, "排查卡片渲染") ||
+		!strings.Contains(summary, "status=queued") ||
+		!strings.Contains(detail, "delegate") {
 		t.Fatalf("summarizeGenericTurnItem(collab) = %q / %q", summary, detail)
 	}
 
 	if summary, detail := summarizeGenericTurnItem("command_execution", map[string]any{
 		"output": "ls -la",
-	}); !strings.Contains(summary, "命令执行:") || !strings.Contains(normalizeCardMarkdown(detail), "````\nls -la\n````") {
+	}, ""); !strings.Contains(summary, "命令执行:") || !strings.Contains(normalizeCardMarkdown(detail), "````\nls -la\n````") {
 		t.Fatalf("summarizeGenericTurnItem(code styled default) = %q / %q", summary, detail)
 	}
 
