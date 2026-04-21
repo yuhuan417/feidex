@@ -636,6 +636,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
+	r.app.recordClaudeThreadUsage(threadID, event.Usage)
 	r.app.recordTurnTokenUsage(threadID, turn.TurnID, claudeTurnUsageAsThreadUsage(event.Usage))
 	if percentage, ok := claudeTurnContextUsagePercent(event.Usage); ok {
 		r.app.recordTurnContextUsagePercent(turn.TurnID, percentage)
@@ -945,10 +946,24 @@ func claudeTurnUsageAsThreadUsage(usage claudecli.TurnUsage) codexrpc.ThreadToke
 		OutputTokens:      int64(usage.OutputTokens),
 	}
 	last.TotalTokens = last.InputTokens + last.CachedInputTokens + last.OutputTokens
-	return codexrpc.ThreadTokenUsage{
-		Total: last,
+	total := last
+	if usage.HasCumulativeUsage {
+		total = codexrpc.TokenUsageBreakdown{
+			InputTokens:       int64(usage.CumulativeInputTokens),
+			CachedInputTokens: int64(usage.CumulativeCacheReadTokens + usage.CumulativeCacheCreationTokens),
+			OutputTokens:      int64(usage.CumulativeOutputTokens),
+		}
+		total.TotalTokens = total.InputTokens + total.CachedInputTokens + total.OutputTokens
+	}
+	threadUsage := codexrpc.ThreadTokenUsage{
+		Total: total,
 		Last:  last,
 	}
+	if usage.ContextWindow > 0 {
+		contextWindow := int64(usage.ContextWindow)
+		threadUsage.ModelContextWindow = &contextWindow
+	}
+	return threadUsage
 }
 
 func claudeTurnContextUsagePercent(usage claudecli.TurnUsage) (float64, bool) {

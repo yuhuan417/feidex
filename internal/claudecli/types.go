@@ -117,12 +117,17 @@ type SessionInfo struct {
 }
 
 type TurnUsage struct {
-	InputTokens         int
-	OutputTokens        int
-	CacheReadTokens     int
-	CacheCreationTokens int
-	ContextWindow       int
-	CostUSD             float64
+	InputTokens                   int
+	OutputTokens                  int
+	CacheReadTokens               int
+	CacheCreationTokens           int
+	CumulativeInputTokens         int
+	CumulativeOutputTokens        int
+	CumulativeCacheReadTokens     int
+	CumulativeCacheCreationTokens int
+	HasCumulativeUsage            bool
+	ContextWindow                 int
+	CostUSD                       float64
 }
 
 type EventType int

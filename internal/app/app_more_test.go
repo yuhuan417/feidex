@@ -461,6 +461,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		liveThreads:  map[string]string{},
 		turnBindings: map[string]turnBinding{},
 		pendingTurns: map[string][]turnBinding{},
+		claudeUsage:  map[string]claudeThreadUsageSnapshot{},
 	}
 	return a, ff, fc
 }

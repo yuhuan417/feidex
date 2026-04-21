@@ -43,6 +43,7 @@ type App struct {
 	turnBindings      map[string]turnBinding
 	pendingTurns      map[string][]turnBinding
 	threadUsage       map[string]codexrpc.ThreadTokenUsage
+	claudeUsage       map[string]claudeThreadUsageSnapshot
 	finalCardPatchMu  sync.Mutex
 	finalCardPatches  map[string]*finalCardPatchState
 	skillsMu          sync.Mutex
@@ -64,6 +65,17 @@ type turnBinding struct {
 	HasLastUsage           bool
 	ContextUsagePercent    float64
 	HasContextUsagePercent bool
+}
+
+type claudeThreadUsageSnapshot struct {
+	TotalInputTokens         int64
+	TotalOutputTokens        int64
+	TotalCacheReadTokens     int64
+	TotalCacheCreationTokens int64
+	TotalCostUSD             float64
+	ContextWindow            int64
+	ContextUsagePercent      float64
+	HasContextUsagePercent   bool
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {
@@ -112,6 +124,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		turnBindings:        map[string]turnBinding{},
 		pendingTurns:        map[string][]turnBinding{},
 		threadUsage:         map[string]codexrpc.ThreadTokenUsage{},
+		claudeUsage:         map[string]claudeThreadUsageSnapshot{},
 		finalCardPatches:    map[string]*finalCardPatchState{},
 		pendingSkills:       map[string]state.SubmissionSkill{},
 	}

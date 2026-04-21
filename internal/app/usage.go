@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
@@ -21,6 +22,10 @@ func formatUsageRatio(part, whole int64) string {
 		return "-"
 	}
 	return fmt.Sprintf("%.1f%%", float64(part)*100/float64(whole))
+}
+
+func formatUsageCost(value float64) string {
+	return fmt.Sprintf("$%.6f", value)
 }
 
 func formatTurnUsageLine(usage codexrpc.TokenUsageBreakdown) string {
@@ -117,6 +122,76 @@ func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.Thre
 	return strings.Join(lines, "\n")
 }
 
+func renderClaudeThreadUsageCardBody(threadLabel, threadID string, usage claudeThreadUsageSnapshot) string {
+	totalTokens := usage.TotalInputTokens + usage.TotalCacheReadTokens + usage.TotalCacheCreationTokens + usage.TotalOutputTokens
+	lines := []string{
+		"当前线程: " + firstNonEmpty(strings.TrimSpace(threadLabel), "-"),
+		"thread: `" + firstNonEmpty(strings.TrimSpace(threadID), "-") + "`",
+		"",
+		"累计 token usage (`modelUsage`):",
+		"- total: `" + formatUsageInt(totalTokens) + "`",
+		"- input: `" + formatUsageInt(usage.TotalInputTokens) + "`",
+		"- cache read: `" + formatUsageInt(usage.TotalCacheReadTokens) + "`",
+		"- cache write: `" + formatUsageInt(usage.TotalCacheCreationTokens) + "`",
+		"- output: `" + formatUsageInt(usage.TotalOutputTokens) + "`",
+		"- cost: `" + formatUsageCost(usage.TotalCostUSD) + "`",
+	}
+	if usage.HasContextUsagePercent {
+		lines = append(lines, "", formatContextUsedLine(usage.ContextUsagePercent))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (a *App) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage) {
+	if a == nil {
+		return
+	}
+	threadID = strings.TrimSpace(threadID)
+	if threadID == "" {
+		return
+	}
+	snapshot := claudeThreadUsageSnapshot{
+		TotalCostUSD:  usage.CostUSD,
+		ContextWindow: int64(usage.ContextWindow),
+	}
+	if usage.HasCumulativeUsage {
+		snapshot.TotalInputTokens = int64(usage.CumulativeInputTokens)
+		snapshot.TotalOutputTokens = int64(usage.CumulativeOutputTokens)
+		snapshot.TotalCacheReadTokens = int64(usage.CumulativeCacheReadTokens)
+		snapshot.TotalCacheCreationTokens = int64(usage.CumulativeCacheCreationTokens)
+	} else {
+		snapshot.TotalInputTokens = int64(usage.InputTokens)
+		snapshot.TotalOutputTokens = int64(usage.OutputTokens)
+		snapshot.TotalCacheReadTokens = int64(usage.CacheReadTokens)
+		snapshot.TotalCacheCreationTokens = int64(usage.CacheCreationTokens)
+	}
+	if percentage, ok := claudeTurnContextUsagePercent(usage); ok {
+		snapshot.ContextUsagePercent = percentage
+		snapshot.HasContextUsagePercent = true
+	}
+
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	if a.claudeUsage == nil {
+		a.claudeUsage = map[string]claudeThreadUsageSnapshot{}
+	}
+	a.claudeUsage[threadID] = snapshot
+}
+
+func (a *App) currentClaudeThreadUsage(threadID string) (claudeThreadUsageSnapshot, bool) {
+	if a == nil {
+		return claudeThreadUsageSnapshot{}, false
+	}
+	threadID = strings.TrimSpace(threadID)
+	if threadID == "" {
+		return claudeThreadUsageSnapshot{}, false
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	usage, ok := a.claudeUsage[threadID]
+	return usage, ok
+}
+
 func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /usage")
@@ -130,13 +205,20 @@ func (a *App) renderUsageCard(sessionKey string) map[string]any {
 	sess := a.appState().session(sessionKey)
 	body := "当前没有活动线程。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		body = "当前线程暂无 token usage 数据。"
-		if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
-			contextLine := ""
-			if usage.ModelContextWindow != nil {
-				contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
+		if a.isClaudeBackend() {
+			body = "当前线程暂无 Claude usage 数据。"
+			if usage, ok := a.currentClaudeThreadUsage(sess.ActiveThreadID); ok {
+				body = renderClaudeThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage)
 			}
-			body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
+		} else {
+			body = "当前线程暂无 token usage 数据。"
+			if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
+				contextLine := ""
+				if usage.ModelContextWindow != nil {
+					contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
+				}
+				body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
+			}
 		}
 	}
 	return a.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{

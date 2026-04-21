@@ -534,17 +534,23 @@ func (s *Session) handleResultMessage(msg wireResultMessage) {
 	if msg.IsError {
 		err = fmt.Errorf("%s", msg.Result)
 	}
+	cumulativeModelUsage, hasCumulativeModelUsage := aggregateWireModelUsage(msg.ModelUsage)
 	s.emit(TurnCompleteEvent{
 		TurnNumber: turnNumber,
 		Success:    !msg.IsError,
 		DurationMs: durationMs,
 		Usage: TurnUsage{
-			InputTokens:         msg.Usage.InputTokens,
-			OutputTokens:        msg.Usage.OutputTokens,
-			CacheReadTokens:     msg.Usage.CacheReadInputTokens,
-			CacheCreationTokens: msg.Usage.CacheCreationInputTokens,
-			ContextWindow:       msg.contextWindow(),
-			CostUSD:             msg.TotalCostUSD,
+			InputTokens:                   msg.Usage.InputTokens,
+			OutputTokens:                  msg.Usage.OutputTokens,
+			CacheReadTokens:               msg.Usage.CacheReadInputTokens,
+			CacheCreationTokens:           msg.Usage.CacheCreationInputTokens,
+			CumulativeInputTokens:         cumulativeModelUsage.InputTokens,
+			CumulativeOutputTokens:        cumulativeModelUsage.OutputTokens,
+			CumulativeCacheReadTokens:     cumulativeModelUsage.CacheReadInputTokens,
+			CumulativeCacheCreationTokens: cumulativeModelUsage.CacheCreationInputTokens,
+			HasCumulativeUsage:            hasCumulativeModelUsage,
+			ContextWindow:                 msg.contextWindow(),
+			CostUSD:                       msg.TotalCostUSD,
 		},
 		Error:  err,
 		Result: msg.Result,

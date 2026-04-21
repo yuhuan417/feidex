@@ -220,6 +220,25 @@ func (m wireResultMessage) contextWindow() int {
 	return best.ContextWindow
 }
 
+func aggregateWireModelUsage(usages map[string]wireModelUsage) (wireModelUsage, bool) {
+	if len(usages) == 0 {
+		return wireModelUsage{}, false
+	}
+
+	var total wireModelUsage
+	for _, usage := range usages {
+		total.InputTokens += usage.InputTokens
+		total.OutputTokens += usage.OutputTokens
+		total.CacheReadInputTokens += usage.CacheReadInputTokens
+		total.CacheCreationInputTokens += usage.CacheCreationInputTokens
+		total.CostUSD += usage.CostUSD
+		if usage.ContextWindow > total.ContextWindow {
+			total.ContextWindow = usage.ContextWindow
+		}
+	}
+	return total, true
+}
+
 func selectWireResultModelUsage(usages map[string]wireModelUsage, usage wireUsage) (wireModelUsage, bool) {
 	if len(usages) == 0 {
 		return wireModelUsage{}, false

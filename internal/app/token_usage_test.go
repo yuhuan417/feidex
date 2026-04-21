@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -85,6 +86,53 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 	}
 	if strings.Contains(body, "最近一次 turn (`last`)") {
 		t.Fatalf("renderUsageCard() should not include last usage section:\n%s", body)
+	}
+}
+
+func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            sessionKey,
+		WorkspaceID:    "default",
+		ActiveThreadID: "thread-1",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	a.recordClaudeThreadUsage("thread-1", claudecli.TurnUsage{
+		InputTokens:                   20,
+		CacheCreationTokens:           10,
+		CacheReadTokens:               100,
+		CumulativeInputTokens:         7835,
+		CumulativeCacheReadTokens:     28672,
+		CumulativeCacheCreationTokens: 4096,
+		CumulativeOutputTokens:        68,
+		HasCumulativeUsage:            true,
+		ContextWindow:                 1000,
+		CostUSD:                       0.054077,
+	})
+
+	card := a.renderUsageCard(sessionKey)
+	body := cardMarkdownContent(t, card)
+	for _, want := range []string{
+		"累计 token usage (`modelUsage`):",
+		"- total: `40671`",
+		"- input: `7835`",
+		"- cache read: `28672`",
+		"- cache write: `4096`",
+		"- output: `68`",
+		"- cost: `$0.054077`",
+		"context used: 13.0%",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("renderUsageCard() missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "cache ratio") {
+		t.Fatalf("Claude usage card should not render codex cache ratio fields:\n%s", body)
 	}
 }
 

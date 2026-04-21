@@ -295,6 +295,12 @@ func TestSessionHandleResultMessageIncludesContextWindow(t *testing.T) {
 		if event.Usage.InputTokens != 3 || event.Usage.CacheCreationTokens != 4603 || event.Usage.CacheReadTokens != 18841 || event.Usage.OutputTokens != 122 {
 			t.Fatalf("usage = %#v", event.Usage)
 		}
+		if !event.Usage.HasCumulativeUsage {
+			t.Fatalf("expected cumulative model usage in %#v", event.Usage)
+		}
+		if event.Usage.CumulativeInputTokens != 212 || event.Usage.CumulativeOutputTokens != 140 || event.Usage.CumulativeCacheReadTokens != 18841 || event.Usage.CumulativeCacheCreationTokens != 4603 {
+			t.Fatalf("cumulative usage = %#v", event.Usage)
+		}
 		if event.Usage.ContextWindow != 200000 {
 			t.Fatalf("context window = %d, want 200000", event.Usage.ContextWindow)
 		}
