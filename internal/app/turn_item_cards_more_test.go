@@ -65,6 +65,21 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 		t.Fatalf("summarizeGenericTurnItem(dynamic) = %q / %q", summary, detail)
 	}
 
+	if summary, _ := summarizeGenericTurnItem("dynamic_tool_call", map[string]any{
+		"tool": "TodoWrite",
+		"input": map[string]any{
+			"todos": []any{
+				map[string]any{"content": "待办1", "status": "completed"},
+				map[string]any{"content": "待办2", "status": "completed"},
+				map[string]any{"content": "待办3", "status": "in_progress"},
+				map[string]any{"content": "待办4", "status": "pending"},
+				map[string]any{"content": "待办5", "status": "pending"},
+			},
+		},
+	}, ""); !strings.Contains(summary, "[pending] 待办5") || strings.Contains(summary, "还有 1 项待办") {
+		t.Fatalf("summarizeGenericTurnItem(todo expanded) = %q", summary)
+	}
+
 	if summary, detail := summarizeGenericTurnItem("collab_agent_tool_call", map[string]any{
 		"tool":   "delegate",
 		"status": "queued",

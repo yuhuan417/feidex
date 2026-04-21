@@ -330,12 +330,7 @@ func summarizeTodoInputLines(input map[string]any) []string {
 		return nil
 	}
 	lines := []string{fmt.Sprintf("- todos: %d", len(items))}
-	const maxTodos = 4
-	for i, raw := range items {
-		if i >= maxTodos {
-			lines = append(lines, fmt.Sprintf("- 还有 %d 项待办", len(items)-maxTodos))
-			break
-		}
+	for _, raw := range items {
 		todo, _ := raw.(map[string]any)
 		content := strings.TrimSpace(firstNonEmpty(
 			stringValue(todo["content"]),
