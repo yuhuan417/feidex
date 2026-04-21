@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -17,26 +18,27 @@ func renderFileApprovalBody(params map[string]any) string {
 func renderFileApprovalBodyWithWorkspace(params map[string]any, workspaceCwd string) string {
 	lines := []string{"文件变更审批"}
 	entries := collectFileApprovalEntriesWithWorkspace(params, workspaceCwd)
+	summaryLines := []string{}
 	if len(entries) > 0 {
-		lines = append(lines, fmt.Sprintf("%d 个文件：", len(entries)))
+		summaryLines = append(summaryLines, fmt.Sprintf("- 文件数: %d", len(entries)))
+	}
+	if grantRoot := fileApprovalGrantRootSummary(params["grantRoot"], workspaceCwd); grantRoot != "" {
+		summaryLines = append(summaryLines, "- 授权根目录: "+grantRoot)
+	}
+	if len(summaryLines) > 0 {
+		lines = append(lines, "", "变更摘要:")
+		lines = append(lines, summaryLines...)
+	}
+	if len(entries) > 0 {
+		lines = append(lines, "", "文件列表:")
 		const maxEntries = 8
 		for i, entry := range entries {
 			if i >= maxEntries {
 				lines = append(lines, fmt.Sprintf("- 还有 %d 个文件未展开", len(entries)-maxEntries))
 				break
 			}
-			line := entry.Path
-			if strings.TrimSpace(entry.Kind) != "" {
-				line += " (" + entry.Kind + ")"
-			}
-			lines = append(lines, "- "+line)
+			lines = append(lines, renderApprovalFileEntryLine(entry))
 		}
-	}
-	if grantRoot := fileApprovalGrantRootSummary(params["grantRoot"], workspaceCwd); grantRoot != "" {
-		if len(lines) > 1 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, "grantRoot:", grantRoot)
 	}
 	if reason := strings.TrimSpace(stringValue(params["reason"])); reason != "" {
 		if len(lines) > 1 {
@@ -53,6 +55,38 @@ func renderFileApprovalBodyWithWorkspace(params map[string]any, workspaceCwd str
 		}
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func renderApprovalFileEntryLine(entry approvalFileEntry) string {
+	path := strings.TrimSpace(entry.Path)
+	if path == "" {
+		return ""
+	}
+	path = "`" + strings.ReplaceAll(path, "`", "'") + "`"
+	if kind := approvalFileKindLabel(entry.Kind); kind != "" {
+		return "- " + path + " · " + kind
+	}
+	return "- " + path
+}
+
+func approvalFileKindLabel(kind string) string {
+	kind = strings.TrimSpace(kind)
+	switch strings.ToLower(kind) {
+	case "":
+		return ""
+	case "write", "create", "created", "new":
+		return "写入"
+	case "add", "added":
+		return "新增"
+	case "edit", "edited", "modify", "modified", "update", "updated", "notebookedit":
+		return "修改"
+	case "delete", "deleted", "remove", "removed":
+		return "删除"
+	case "rename", "renamed", "move", "moved":
+		return "重命名"
+	default:
+		return kind
+	}
 }
 
 func fileApprovalGrantRootSummary(value any, workspaceCwd string) string {
@@ -127,17 +161,13 @@ func collectFileApprovalEntriesWithWorkspace(value any, workspaceCwd string) []a
 		switch x := current.(type) {
 		case string:
 			add(approvalFileEntry{Path: renderWorkspaceDisplayPath(x, workspaceCwd)})
-		case []any:
-			for _, item := range x {
-				add(parseApprovalFileEntryWithWorkspace(item, workspaceCwd))
-			}
 		case map[string]any:
 			for _, key := range []string{"changes", "fileChanges", "file_changes", "files", "paths", "filePaths", "file_paths"} {
-				if arr, ok := x[key].([]any); ok {
-					walk(arr, depth+1)
+				if nested, ok := x[key]; ok {
+					walk(nested, depth+1)
 				}
 			}
-			for _, key := range []string{"path", "file", "filePath", "file_path", "targetPath", "target_path"} {
+			for _, key := range []string{"path", "file", "filePath", "file_path", "targetPath", "target_path", "oldPath", "old_path", "newPath", "new_path"} {
 				if path := strings.TrimSpace(stringValue(x[key])); path != "" {
 					add(parseApprovalFileEntryWithWorkspace(x, workspaceCwd))
 					break
@@ -146,6 +176,17 @@ func collectFileApprovalEntriesWithWorkspace(value any, workspaceCwd string) []a
 			for _, key := range []string{"item", "payload", "change", "fileChange", "file_change", "details", "result"} {
 				if nested, ok := x[key]; ok {
 					walk(nested, depth+1)
+				}
+			}
+		default:
+			rv := reflect.ValueOf(current)
+			if !rv.IsValid() {
+				return
+			}
+			switch rv.Kind() {
+			case reflect.Slice, reflect.Array:
+				for i := 0; i < rv.Len(); i++ {
+					walk(rv.Index(i).Interface(), depth+1)
 				}
 			}
 		}

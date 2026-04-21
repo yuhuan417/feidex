@@ -98,9 +98,11 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 		"grantRoot": "/repo/tmp",
 		"reason":    "review",
 	})
-	if !strings.Contains(fileBody, "2 个文件") ||
-		!strings.Contains(fileBody, "a.txt -> b.txt (rename)") ||
-		!strings.Contains(fileBody, "grantRoot") ||
+	if !strings.Contains(fileBody, "变更摘要") ||
+		!strings.Contains(fileBody, "文件数: 2") ||
+		!strings.Contains(fileBody, "文件列表") ||
+		!strings.Contains(fileBody, "`a.txt -> b.txt` · 重命名") ||
+		!strings.Contains(fileBody, "授权根目录") ||
 		!strings.Contains(fileBody, "/repo/tmp") {
 		t.Fatalf("renderFileApprovalBody() = %q", fileBody)
 	}
@@ -111,8 +113,16 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 			map[string]any{"path": "/tmp/outside.go", "kind": "modified"},
 		},
 	}, workspace)
-	if !strings.Contains(fileBody, "internal/app/main.go (modified)") || !strings.Contains(fileBody, "/tmp/outside.go (modified)") {
+	if !strings.Contains(fileBody, "`internal/app/main.go` · 修改") || !strings.Contains(fileBody, "`/tmp/outside.go` · 修改") {
 		t.Fatalf("renderFileApprovalBodyWithWorkspace() = %q", fileBody)
+	}
+	fileBody = renderFileApprovalBodyWithWorkspace(map[string]any{
+		"changes": []map[string]any{
+			{"path": filepath.Join(workspace, "static", "shared.css"), "kind": "Write"},
+		},
+	}, workspace)
+	if strings.Contains(fileBody, `"changes"`) || !strings.Contains(fileBody, "`static/shared.css` · 写入") {
+		t.Fatalf("renderFileApprovalBodyWithWorkspace(typed slice) = %q", fileBody)
 	}
 	entries := collectFileApprovalEntries(map[string]any{
 		"payload": map[string]any{
@@ -121,6 +131,12 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 	})
 	if len(entries) != 1 || entries[0].Path != "main.go" {
 		t.Fatalf("collectFileApprovalEntries() = %+v", entries)
+	}
+	entries = collectFileApprovalEntries(map[string]any{
+		"changes": []map[string]any{{"path": "static/shared.css", "kind": "Write"}},
+	})
+	if len(entries) != 1 || entries[0].Path != "static/shared.css" || entries[0].Kind != "Write" {
+		t.Fatalf("collectFileApprovalEntries(typed slice) = %+v", entries)
 	}
 	if got := parseApprovalFileEntry(map[string]any{"filePath": "go.mod", "changeType": "modified"}); got.Path != "go.mod" || got.Kind != "modified" {
 		t.Fatalf("parseApprovalFileEntry() = %+v", got)

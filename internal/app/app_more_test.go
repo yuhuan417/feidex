@@ -3058,7 +3058,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected file approval to send a card")
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "2 个文件") || !strings.Contains(got, "internal/app/notifications.go") || !strings.Contains(got, "README.md") {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "文件列表") || !strings.Contains(got, "`internal/app/notifications.go` · 修改") || !strings.Contains(got, "`README.md` · 新增") {
 		t.Fatalf("file approval card body = %q", got)
 	}
 

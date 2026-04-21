@@ -39,7 +39,7 @@ func TestFileApprovalHydratesFromStartedItem(t *testing.T) {
 	if entries[0].Path != "dir/main.go" || entries[0].Kind != "update" {
 		t.Fatalf("approval entry = %+v, want relative hydrated file change", entries[0])
 	}
-	if got := renderFileApprovalBodyWithWorkspace(request, a.cfg.Workspaces[0].Cwd); !strings.Contains(got, "grantRoot") || !strings.Contains(got, "`dir`") {
+	if got := renderFileApprovalBodyWithWorkspace(request, a.cfg.Workspaces[0].Cwd); !strings.Contains(got, "授权根目录") || !strings.Contains(got, "`dir`") {
 		t.Fatalf("approval body = %q, want relative grantRoot", got)
 	}
 }
