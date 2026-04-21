@@ -16,6 +16,15 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	if got := formatUsageRatio(0, 0); got != "-" {
 		t.Fatalf("formatUsageRatio(0,0) = %q, want -", got)
 	}
+	if got := formatContextUsedLine(73.25); got != "context used: 73.2%" {
+		t.Fatalf("formatContextUsedLine(73.25) = %q", got)
+	}
+	if got := pendingContextUsedLine(); got != "context used: calculating..." {
+		t.Fatalf("pendingContextUsedLine() = %q", got)
+	}
+	if got := withPendingContextUsedFooterLines([]string{"elapsed: 2s"}); len(got) != 2 || got[0] != "context used: calculating..." || got[1] != "elapsed: 2s" {
+		t.Fatalf("withPendingContextUsedFooterLines() = %#v", got)
+	}
 	if got := formatContextLeftLine(0, 1000); got != "context left: 100.0%" {
 		t.Fatalf("formatContextLeftLine(zero total) = %q", got)
 	}
@@ -148,5 +157,42 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	a.finishTurn("thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != beforeComplete {
 		t.Fatalf("expected completion not to replay final answer, got %d -> %d cards", beforeComplete, len(ff.replyCards))
+	}
+}
+
+func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+
+	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
+		"threadId":"thread-1",
+		"turnId":"turn-1",
+		"tokenUsage":{
+			"last":{"totalTokens":200,"inputTokens":150,"cachedInputTokens":90,"outputTokens":50,"reasoningOutputTokens":20},
+			"total":{"totalTokens":500,"inputTokens":400,"cachedInputTokens":200,"outputTokens":100,"reasoningOutputTokens":40},
+			"modelContextWindow":1000
+		}
+	}`))
+	a.recordTurnContextUsagePercent("turn-1", 73.25)
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+		"type":  "agent_message",
+		"text":  "final text",
+		"phase": "final_answer",
+	})
+
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected final card to be sent immediately")
+	}
+	card := ff.replyCards[len(ff.replyCards)-1]
+	bodyMap := card["body"].(map[string]any)
+	elements := bodyMap["elements"].([]map[string]any)
+	footerText := elements[len(elements)-1]["text"].(map[string]any)["content"].(string)
+	if !strings.Contains(footerText, "context used: 73.2%") {
+		t.Fatalf("context footer = %q", footerText)
+	}
+	if strings.Contains(footerText, "context left:") {
+		t.Fatalf("footer should prefer exact context usage over derived context left: %q", footerText)
 	}
 }

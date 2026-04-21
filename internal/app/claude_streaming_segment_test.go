@@ -283,6 +283,69 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	}
 }
 
+func TestClaudeRuntimeTurnCompletePatchesContextUsageAsynchronously(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeVerbose
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.noteTurnStarted("sess-1", sub)
+	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+
+	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	session := &claudeSessionState{
+		sessionID: "thread-1",
+		getContextUsage: func(context.Context) (claudecli.ContextUsage, error) {
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+			<-release
+			return claudecli.ContextUsage{Percentage: 13}, nil
+		},
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+		TurnNumber: 1,
+		Success:    true,
+		Result:     "final answer",
+	})
+
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after final fallback = %d, want 1", len(ff.replyCards))
+	}
+	initialFooter := cardFooterTextForTest(ff.replyCards[0])
+	if !strings.Contains(initialFooter, "context used: calculating...") {
+		t.Fatalf("initial footer should include pending context usage: %q", initialFooter)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("expected async context usage fetch to start")
+	}
+	close(release)
+
+	deadline := time.Now().Add(time.Second)
+	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected final card to be patched with context usage")
+	}
+	lastFooter := cardFooterTextForTest(ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(lastFooter, "context used: 13.0%") {
+		t.Fatalf("patched footer = %q", lastFooter)
+	}
+	if !strings.Contains(lastFooter, "elapsed:") {
+		t.Fatalf("patched footer should keep elapsed: %q", lastFooter)
+	}
+}
+
 func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress

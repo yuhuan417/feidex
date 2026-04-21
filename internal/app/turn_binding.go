@@ -236,6 +236,25 @@ func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.Threa
 	a.turnBindings[turnID] = binding
 }
 
+func (a *App) recordTurnContextUsagePercent(turnID string, percentage float64) {
+	if a == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	a.turnBindMu.Lock()
+	defer a.turnBindMu.Unlock()
+	binding, ok := a.turnBindings[turnID]
+	if !ok {
+		return
+	}
+	binding.ContextUsagePercent = percentage
+	binding.HasContextUsagePercent = true
+	a.turnBindings[turnID] = binding
+}
+
 func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, contextLine, elapsedLine string) {
 	if a == nil {
 		return "", "", ""
@@ -251,7 +270,9 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 		usageLine = formatTurnUsageLine(binding.LastUsage)
 	}
 	if ok {
-		if usage, found := a.currentThreadUsage(binding.ThreadID); found {
+		if binding.HasContextUsagePercent {
+			contextLine = formatContextUsedLine(binding.ContextUsagePercent)
+		} else if usage, found := a.currentThreadUsage(binding.ThreadID); found {
 			if usage.ModelContextWindow != nil {
 				contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
 			}

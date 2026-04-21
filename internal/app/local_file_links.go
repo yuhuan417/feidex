@@ -158,11 +158,18 @@ func (a *App) scheduleLocalFileLinkPatch(sub *state.Submission, messageID, title
 	if a == nil || a.feishu == nil || sub == nil || messageID == "" || body == "" {
 		return
 	}
+	managed := a.markFinalCardPreviewPending(messageID)
 	go func() {
+		if managed {
+			defer a.markFinalCardPreviewDone(messageID)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		rewritten := a.rewriteLocalFileLinksText(ctx, sub, body)
 		if strings.TrimSpace(rewritten) == "" || strings.TrimSpace(rewritten) == body {
+			return
+		}
+		if managed && a.updateFinalCardPatchBody(messageID, rewritten) {
 			return
 		}
 		card := a.renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, rewritten, nil, true)

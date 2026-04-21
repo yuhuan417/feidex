@@ -43,6 +43,8 @@ type App struct {
 	turnBindings      map[string]turnBinding
 	pendingTurns      map[string][]turnBinding
 	threadUsage       map[string]codexrpc.ThreadTokenUsage
+	finalCardPatchMu  sync.Mutex
+	finalCardPatches  map[string]*finalCardPatchState
 	skillsMu          sync.Mutex
 	pendingSkills     map[string]state.SubmissionSkill
 	codexUpgradeMu    sync.Mutex
@@ -51,12 +53,14 @@ type App struct {
 }
 
 type turnBinding struct {
-	SessionKey   string
-	SubmissionID string
-	ThreadID     string
-	StartedAt    time.Time
-	LastUsage    codexrpc.TokenUsageBreakdown
-	HasLastUsage bool
+	SessionKey             string
+	SubmissionID           string
+	ThreadID               string
+	StartedAt              time.Time
+	LastUsage              codexrpc.TokenUsageBreakdown
+	HasLastUsage           bool
+	ContextUsagePercent    float64
+	HasContextUsagePercent bool
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {
@@ -105,6 +109,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		turnBindings:        map[string]turnBinding{},
 		pendingTurns:        map[string][]turnBinding{},
 		threadUsage:         map[string]codexrpc.ThreadTokenUsage{},
+		finalCardPatches:    map[string]*finalCardPatchState{},
 		pendingSkills:       map[string]state.SubmissionSkill{},
 	}
 	if codexClient != nil {

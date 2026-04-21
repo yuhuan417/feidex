@@ -36,6 +36,7 @@ type Session struct {
 	pending    []int
 	turns      map[int]*turnState
 	info       *SessionInfo
+	pendingCtl map[string]chan wireControlResponsePayload
 }
 
 type turnState struct {
@@ -58,12 +59,13 @@ func NewSession(opts ...SessionOption) *Session {
 		opt(&cfg)
 	}
 	return &Session{
-		cfg:      cfg,
-		done:     make(chan struct{}),
-		events:   make(chan Event, cfg.EventBufferSize),
-		waitDone: make(chan struct{}),
-		turns:    map[int]*turnState{},
-		pending:  []int{},
+		cfg:        cfg,
+		done:       make(chan struct{}),
+		events:     make(chan Event, cfg.EventBufferSize),
+		waitDone:   make(chan struct{}),
+		turns:      map[int]*turnState{},
+		pending:    []int{},
+		pendingCtl: map[string]chan wireControlResponsePayload{},
 	}
 }
 
@@ -237,6 +239,69 @@ func (s *Session) Interrupt(ctx context.Context) error {
 	})
 }
 
+func (s *Session) GetContextUsage(ctx context.Context) (ContextUsage, error) {
+	if err := ctx.Err(); err != nil {
+		return ContextUsage{}, err
+	}
+
+	requestID := generateRequestID()
+	respCh := make(chan wireControlResponsePayload, 1)
+
+	s.mu.Lock()
+	if !s.started {
+		s.mu.Unlock()
+		return ContextUsage{}, ErrNotStarted
+	}
+	if s.stopped {
+		s.mu.Unlock()
+		return ContextUsage{}, ErrStopping
+	}
+	if s.writer == nil {
+		s.mu.Unlock()
+		return ContextUsage{}, &ProcessError{Message: "Claude CLI session writer unavailable"}
+	}
+	if s.pendingCtl == nil {
+		s.pendingCtl = map[string]chan wireControlResponsePayload{}
+	}
+	s.pendingCtl[requestID] = respCh
+	if err := s.writer.Write(wireControlRequestToSend{
+		Type:      "control_request",
+		RequestID: requestID,
+		Request: wireGetContextUsageRequest{
+			Subtype: "get_context_usage",
+		},
+	}); err != nil {
+		delete(s.pendingCtl, requestID)
+		s.mu.Unlock()
+		return ContextUsage{}, err
+	}
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingCtl, requestID)
+		s.mu.Unlock()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ContextUsage{}, ctx.Err()
+	case <-s.done:
+		s.mu.Lock()
+		exitErr := s.exitErr
+		s.mu.Unlock()
+		if exitErr != nil {
+			return ContextUsage{}, &ProcessError{Message: "Claude CLI process exited", Cause: exitErr}
+		}
+		return ContextUsage{}, ErrStopping
+	case resp := <-respCh:
+		if strings.TrimSpace(resp.Subtype) == "error" {
+			return ContextUsage{}, fmt.Errorf("%s", strings.TrimSpace(resp.Error))
+		}
+		return parseContextUsage(resp.Response)
+	}
+}
+
 func (s *Session) cliArgs() []string {
 	args := []string{
 		"--print",
@@ -337,6 +402,8 @@ func (s *Session) handleLine(line []byte) {
 		s.handleResultMessage(value)
 	case wireControlRequest:
 		s.handleControlRequest(value)
+	case wireControlResponse:
+		s.handleControlResponse(value)
 	}
 }
 
@@ -576,6 +643,25 @@ func (s *Session) handleControlRequest(msg wireControlRequest) {
 	s.writeControlResponse(resp, "send_permission_response")
 }
 
+func (s *Session) handleControlResponse(msg wireControlResponse) {
+	requestID := strings.TrimSpace(msg.Response.RequestID)
+	if requestID == "" {
+		return
+	}
+
+	s.mu.Lock()
+	respCh := s.pendingCtl[requestID]
+	s.mu.Unlock()
+	if respCh == nil {
+		return
+	}
+
+	select {
+	case respCh <- msg.Response:
+	default:
+	}
+}
+
 func (s *Session) buildAskUserQuestionResponse(ctx context.Context, requestID string, toolReq *wireToolUseRequest) *wireControlResponse {
 	questions, err := ParseQuestionsFromInput(toolReq.Input)
 	if err != nil {
@@ -782,4 +868,61 @@ func copyMap(in map[string]any) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+func parseContextUsage(raw any) (ContextUsage, error) {
+	value, ok := raw.(map[string]any)
+	if !ok {
+		return ContextUsage{}, fmt.Errorf("unexpected context usage payload type %T", raw)
+	}
+
+	percentage, ok := floatValue(value["percentage"])
+	if !ok {
+		return ContextUsage{}, fmt.Errorf("context usage payload missing percentage")
+	}
+
+	usage := ContextUsage{
+		Percentage: percentage,
+	}
+	if totalTokens, ok := intValue(value["totalTokens"]); ok {
+		usage.TotalTokens = totalTokens
+	}
+	if maxTokens, ok := intValue(value["maxTokens"]); ok {
+		usage.MaxTokens = maxTokens
+	}
+	return usage, nil
+}
+
+func floatValue(raw any) (float64, bool) {
+	switch value := raw.(type) {
+	case float64:
+		return value, true
+	case float32:
+		return float64(value), true
+	case int:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case int32:
+		return float64(value), true
+	default:
+		return 0, false
+	}
+}
+
+func intValue(raw any) (int, bool) {
+	switch value := raw.(type) {
+	case int:
+		return value, true
+	case int64:
+		return int(value), true
+	case int32:
+		return int(value), true
+	case float64:
+		return int(value), true
+	case float32:
+		return int(value), true
+	default:
+		return 0, false
+	}
 }

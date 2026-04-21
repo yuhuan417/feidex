@@ -3,8 +3,10 @@ package claudecli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestParseQuestionsFromInput(t *testing.T) {
@@ -248,6 +250,58 @@ func TestSessionIgnoresContentBlockStreamEventsForDelivery(t *testing.T) {
 		Event: []byte(`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"hello"}}`),
 	})
 	assertNoExtraSessionEvents(t, session.Events())
+}
+
+func TestSessionGetContextUsage(t *testing.T) {
+	session := NewSession()
+	session.started = true
+
+	var stdout bytes.Buffer
+	session.writer = newNDJSONWriter(&stdout)
+
+	type result struct {
+		usage ContextUsage
+		err   error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		usage, err := session.GetContextUsage(context.Background())
+		resultCh <- result{usage: usage, err: err}
+	}()
+
+	var request wireControlRequestToSend
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		payload := bytes.TrimSpace(stdout.Bytes())
+		if len(payload) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if err := json.Unmarshal(payload, &request); err != nil {
+			t.Fatalf("unmarshal outbound request: %v", err)
+		}
+		break
+	}
+	if request.Type != "control_request" {
+		t.Fatalf("request type = %q, want control_request", request.Type)
+	}
+	if request.RequestID == "" {
+		t.Fatal("request id should not be empty")
+	}
+
+	session.handleLine([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"` + request.RequestID + `","response":{"totalTokens":2048,"maxTokens":8192,"percentage":25.0}}}`))
+
+	select {
+	case got := <-resultCh:
+		if got.err != nil {
+			t.Fatalf("GetContextUsage() error = %v", got.err)
+		}
+		if got.usage.TotalTokens != 2048 || got.usage.MaxTokens != 8192 || got.usage.Percentage != 25.0 {
+			t.Fatalf("GetContextUsage() = %#v, want total=2048 max=8192 percentage=25.0", got.usage)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for GetContextUsage result")
+	}
 }
 
 func readToolCompleteEvent(t *testing.T, events <-chan Event) ToolCompleteEvent {

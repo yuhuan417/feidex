@@ -123,6 +123,12 @@ type TurnUsage struct {
 	CostUSD         float64
 }
 
+type ContextUsage struct {
+	TotalTokens int
+	MaxTokens   int
+	Percentage  float64
+}
+
 type EventType int
 
 const (

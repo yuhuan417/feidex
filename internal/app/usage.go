@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -82,6 +83,58 @@ func formatContextLeftLine(lastInputTokens, modelContextWindow int64) string {
 		left = 100
 	}
 	return fmt.Sprintf("context left: %.1f%%", left)
+}
+
+func formatContextUsedLine(percentage float64) string {
+	if math.IsNaN(percentage) || math.IsInf(percentage, 0) {
+		return ""
+	}
+	if percentage < 0 {
+		percentage = 0
+	}
+	if percentage > 100 {
+		percentage = 100
+	}
+	return fmt.Sprintf("context used: %.1f%%", percentage)
+}
+
+func pendingContextUsedLine() string {
+	return "context used: calculating..."
+}
+
+func withPendingContextUsedFooterLines(base []string) []string {
+	lines := make([]string, 0, len(base)+1)
+	lines = append(lines, pendingContextUsedLine())
+	for _, line := range base {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "context left:") || strings.HasPrefix(line, "context used:") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func mergeContextUsedFooterLines(base []string, percentage float64) []string {
+	contextLine := strings.TrimSpace(formatContextUsedLine(percentage))
+	lines := make([]string, 0, len(base)+1)
+	if contextLine != "" {
+		lines = append(lines, contextLine)
+	}
+	for _, line := range base {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "context left:") || strings.HasPrefix(line, "context used:") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.ThreadTokenUsage, contextLine string) string {
