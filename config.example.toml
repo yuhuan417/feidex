@@ -3,7 +3,12 @@ data_dir = ".feidex-data"
 [log]
 level = "info"
 
+# ── Default feishu frontend (used when no [[frontend]] sections exist) ──
+# The "backend" field selects which coding agent this frontend talks to.
+# Valid values: "codex" | "claude"
+# Leave unset to get an interactive backend-chooser card on first message.
 [feishu]
+# backend = ""
 app_id = "cli_xxx"
 app_secret = "sec_xxx"
 allow_from = []
@@ -14,15 +19,41 @@ card_enabled = true
 reply_in_thread = true
 quiet = "progress"
 
+# ── Multi-frontend support (optional) ──
+# Define multiple [[frontend]] sections to run several feishu bots
+# from one process, each pointing at its own backend.
+#
+# [[frontend]]
+# id = "feishu-codex"
+# backend = "codex"
+# app_id = "cli_xxx"
+# app_secret = "sec_xxx"
+# allow_from = []
+# card_enabled = true
+# reply_in_thread = true
+# quiet = "progress"
+#
+# [[frontend]]
+# id = "feishu-claude"
+# backend = "claude"
+# app_id = "cli_yyy"
+# app_secret = "sec_yyy"
+# allow_from = []
+# card_enabled = true
+# reply_in_thread = true
+# quiet = "progress"
+
+# ── Codex backend settings ──
 [codex]
 command = "codex"
 transport = "stdio"
-# app_server_dir = "/srv/shared-codex-dir"
 experimental_api = true
 service_name = "feidex"
 # model = "gpt-5.4"
 # reasoning_effort = "medium"
+# app_server_dir = "/srv/shared-codex-dir"
 
+# ── Claude backend settings ──
 [claude]
 command = "claude"
 model = "sonnet"
@@ -37,8 +68,6 @@ service_name = "feidex"
 [[workspace]]
 id = "default"
 name = "Default"
-backend = "codex"
 cwd = "."
-model = "gpt-5.4"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
