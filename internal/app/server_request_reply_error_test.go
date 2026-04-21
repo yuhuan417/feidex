@@ -41,6 +41,43 @@ func TestCompleteUserInputAnswerKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	}
 }
 
+func TestCompleteUserInputFormAnswerKeepsPendingWhenCodexReplyFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "input-form-1",
+		RequestIDRaw: `"input-form-1"`,
+		Kind:         "tool_request_user_input_form",
+		SessionKey:   "sess-1",
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		PayloadJSON: mustJSON(toolUserInputPayload{
+			Questions: []toolUserInputQuestion{
+				{ID: "mode", Question: "Choose mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			},
+		}),
+		Status: "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
+	}
+	fc.replyErr = errors.New("write failed")
+
+	resp, err := a.completeUserInputAnswer(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "input-form-1"},
+		FormValue:   map[string]any{"mode": "Fast"},
+	})
+	if err != nil {
+		t.Fatalf("completeUserInputAnswer(form) error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("completeUserInputAnswer(form) = %#v, want warning toast", resp)
+	}
+	if pending := a.store.PendingByID("input-form-1"); pending == nil || pending.Status != "pending" {
+		t.Fatalf("pending after failed user input form reply = %+v, want pending", pending)
+	}
+}
+
 func TestCompleteElicitationURLActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	if err := a.store.UpsertPending(&state.PendingRequest{

@@ -941,6 +941,13 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if pending := a.store.PendingByID("input-2"); pending == nil || pending.Kind != "tool_request_user_input_form" {
 		t.Fatalf("tool user input form pending = %+v, want form request", pending)
 	}
+	if len(ff.sendCards) != 1 {
+		t.Fatalf("tool user input form cards = %d, want 1", len(ff.sendCards))
+	}
+	form := toolUserInputFormForTest(t, ff.sendCards[0])
+	if inputs := toolUserInputFormInputsForTest(t, form); len(inputs) != 2 {
+		t.Fatalf("tool user input form inputs = %+v, want 2", inputs)
+	}
 
 	ff.sendCards = nil
 	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"visit","url":"https://example.test"}`)})
@@ -1552,7 +1559,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		{ID: "command-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "命令审批\n`ls`\nneed approval"})},
 		{ID: "file-1", Kind: "file", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"})},
 		{ID: "perm-1", Kind: "permissions", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "权限审批\n需要写权限", "permissions": map[string]any{"mode": "write"}})},
-		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending"},
+		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(toolUserInputPayload{Questions: []toolUserInputQuestion{{ID: "q-1", Question: "Choose", Options: []toolUserInputOption{{Label: "A"}, {Label: "B"}}}}})},
 	} {
 		if err := a.store.UpsertPending(req); err != nil {
 			t.Fatalf("UpsertPending(%s) error = %v", req.ID, err)
@@ -1729,6 +1736,74 @@ func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
 	}
 	if len(fc.replies) != 0 {
 		t.Fatalf("expired command approval should not reply, got %d replies", len(fc.replies))
+	}
+}
+
+func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	payload := toolUserInputPayload{
+		Questions: []toolUserInputQuestion{
+			{
+				ID:       "mode",
+				Question: "Choose mode",
+				Options:  []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+			},
+			{
+				ID:       "secret",
+				Question: "Provide secret",
+				IsSecret: true,
+			},
+		},
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "input-form-1",
+		RequestIDRaw: `"input-form-1"`,
+		Kind:         "tool_request_user_input_form",
+		SessionKey:   "sess-1",
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		PayloadJSON:  mustJSON(payload),
+		Status:       "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
+	}
+
+	resp, err := a.completeUserInputAnswer(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "input-form-1"},
+		FormValue: map[string]any{
+			"mode":   "Safe",
+			"secret": "top-secret",
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeUserInputAnswer(form) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 1 {
+		t.Fatalf("codex form replies = %+v, want 1", fc.replies)
+	}
+	replyPayload, _ := fc.replies[0].result.(map[string]any)
+	answers, _ := replyPayload["answers"].(map[string]any)
+	modeEntry, _ := answers["mode"].(map[string]any)
+	modeAnswers, _ := modeEntry["answers"].([]string)
+	if len(modeAnswers) != 1 || modeAnswers[0] != "Safe" {
+		t.Fatalf("mode answers = %+v, want Safe", modeAnswers)
+	}
+	secretEntry, _ := answers["secret"].(map[string]any)
+	secretAnswers, _ := secretEntry["answers"].([]string)
+	if len(secretAnswers) != 1 || secretAnswers[0] != "top-secret" {
+		t.Fatalf("secret answers = %+v, want top-secret", secretAnswers)
+	}
+	if pending := a.store.PendingByID("input-form-1"); pending == nil || pending.Status != "replied" {
+		t.Fatalf("pending after form submit = %+v, want replied", pending)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected submitted status card")
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "`mode`: Safe") || !strings.Contains(got, "`secret`: [redacted]") {
+		t.Fatalf("form submitted card body = %q", got)
 	}
 }
 

@@ -135,9 +135,7 @@ func (a *App) sendClaudeUserInputFormCard(requestID, sessionKey string, sub *sta
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
 	}
-	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", renderToolUserInputBody(payload), []feishu.Button{
-		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
-	})
+	card := renderToolUserInputFormCard(requestKey, payload, nil)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err != nil {
 		return err

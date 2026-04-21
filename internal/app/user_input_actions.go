@@ -13,9 +13,9 @@ import (
 
 func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := a.appState()
-	requestID, _ := action.ActionValue["request_id"].(string)
-	questionID, _ := action.ActionValue["question_id"].(string)
-	answer, _ := action.ActionValue["answer"].(string)
+	requestID := actionStringValue(action, "request_id")
+	questionID := actionStringValue(action, "question_id")
+	answer := actionStringValue(action, "answer")
 	pending := appState.pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
@@ -23,11 +23,22 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限回答这个问题"}}, nil
 	}
+
+	var payload toolUserInputPayload
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "问题内容已损坏"}}, nil
+	}
+
+	if strings.TrimSpace(questionID) != "" || strings.TrimSpace(answer) != "" {
+		return a.completeUserInputQuickAnswer(action, pending, payload, questionID, answer)
+	}
+	return a.completeUserInputFormSubmit(action, pending, payload)
+}
+
+func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload, questionID, answer string) (*callback.CardActionTriggerResponse, error) {
+	requestID := strings.TrimSpace(pending.ID)
+	selectionSummary := strings.TrimSpace(answer)
 	if pendingBackend(a, pending) == backendClaude {
-		var payload toolUserInputPayload
-		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "问题内容已损坏"}}, nil
-		}
 		answers, _, err := claudeAnswersFromSelections(payload, map[string]string{
 			strings.TrimSpace(questionID): strings.TrimSpace(answer),
 		})
@@ -44,24 +55,22 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 				Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
 			}, nil
 		}
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = a.appState().updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 		a.resumeSubmissionAfterRequest(pending)
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已提交"},
-			Card: &callback.Card{
-				Type: "raw",
-				Data: a.feishu.SimpleStatusCard("已提交", "green", answer, nil),
-			},
+			Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", selectionSummary, nil)),
 		}, nil
 	}
-	payload := map[string]any{
+
+	replyPayload := map[string]any{
 		"answers": map[string]any{
 			questionID: map[string]any{
 				"answers": []string{answer},
 			},
 		},
 	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), payload); err != nil {
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
 		slog.Error("tool user input reply to codex failed",
 			"request_id", requestID,
 			"user_id", action.UserID,
@@ -74,9 +83,61 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 	_ = a.markPendingRequestReplied(requestID)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
-		Card: &callback.Card{
-			Type: "raw",
-			Data: a.feishu.SimpleStatusCard("已提交", "green", answer, nil),
-		},
+		Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", selectionSummary, nil)),
+	}, nil
+}
+
+func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload) (*callback.CardActionTriggerResponse, error) {
+	requestID := strings.TrimSpace(pending.ID)
+	selections := toolUserInputSelectionsFromFormValues(payload, action.FormValue)
+	if pendingBackend(a, pending) == backendClaude {
+		answers, summary, err := claudeAnswersFromSelections(payload, selections)
+		if err != nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+			}, nil
+		}
+		if err := a.claude.ResolveUserInput(requestID, answers); err != nil {
+			slog.Error("tool user input reply to Claude failed",
+				"request_id", requestID,
+				"user_id", action.UserID,
+				"error", err,
+			)
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
+				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+			}, nil
+		}
+		_ = a.appState().updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		a.resumeSubmissionAfterRequest(pending)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "已提交"},
+			Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", summary, nil)),
+		}, nil
+	}
+
+	replyPayload, summary, err := buildToolUserInputResponseFromSelections(payload, selections)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+		}, nil
+	}
+	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
+		slog.Error("tool user input reply to codex failed",
+			"request_id", requestID,
+			"user_id", action.UserID,
+			"error", err,
+		)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
+			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+		}, nil
+	}
+	_ = a.markPendingRequestReplied(requestID)
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已提交"},
+		Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", summary, nil)),
 	}, nil
 }

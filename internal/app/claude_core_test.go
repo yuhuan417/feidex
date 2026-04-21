@@ -816,6 +816,63 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	}
 }
 
+func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Workspaces[0].Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	a.feishu = ff
+
+	payload := toolUserInputPayload{
+		ThreadID: "claude-thread-1",
+		TurnID:   "claude-turn-1",
+		ItemID:   "item-1",
+		Questions: []toolUserInputQuestion{
+			{ID: "q1", Question: "Choose a mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			{ID: "q2", Question: "Provide secret", IsSecret: true},
+		},
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "question-form-1",
+		Backend:     backendClaude,
+		Kind:        "tool_request_user_input_form",
+		OwnerUserID: "user-1",
+		PayloadJSON: mustJSON(payload),
+		Status:      "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	resp, err := a.completeUserInputAnswer(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "question-form-1"},
+		FormValue: map[string]any{
+			"q1": "Safe",
+			"q2": "hidden",
+		},
+	})
+	if err != nil {
+		t.Fatalf("completeUserInputAnswer(form) error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("user input form response = %#v, want success toast", resp)
+	}
+	if len(claude.userInputCalls) != 1 {
+		t.Fatalf("user input calls = %d, want 1", len(claude.userInputCalls))
+	}
+	if got := claude.userInputCalls[0].answers["Choose a mode"]; got != "Safe" {
+		t.Fatalf("resolved Claude form answer = %q, want Safe", got)
+	}
+	if got := claude.userInputCalls[0].answers["Provide secret"]; got != "hidden" {
+		t.Fatalf("resolved Claude secret answer = %q, want hidden", got)
+	}
+	pending := a.store.PendingByID("question-form-1")
+	if pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after form answer = %+v, want resolved", pending)
+	}
+}
+
 func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Workspaces[0].Backend = backendClaude

@@ -113,8 +113,8 @@ func TestRenderToolUserInputBodyAndParsingHelpers(t *testing.T) {
 	if !strings.Contains(body, "Choose environment (`env`)") || !strings.Contains(body, "可选值: dev, prod") {
 		t.Fatalf("renderToolUserInputBody() missing expected question text:\n%s", body)
 	}
-	if !strings.Contains(body, "注意: 此答案会按敏感输入处理") || !strings.Contains(body, "question_id: answer") {
-		t.Fatalf("renderToolUserInputBody() missing secret or multi-question hint:\n%s", body)
+	if !strings.Contains(body, "注意: 此答案会按敏感输入处理") || !strings.Contains(body, "表单中的每个输入框对应一道题") {
+		t.Fatalf("renderToolUserInputBody() missing secret or form hint:\n%s", body)
 	}
 
 	if got := parseStructuredLines("env: prod\npassword: secret"); got["env"] != "prod" || got["password"] != "secret" {
@@ -192,6 +192,103 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 	if !strings.Contains(singleSummary, "`text`: just one answer") {
 		t.Fatalf("single-question summary = %q, want raw answer", singleSummary)
 	}
+}
+
+func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
+	payload := toolUserInputPayload{
+		Questions: []toolUserInputQuestion{
+			{
+				ID:       "mode",
+				Question: "Choose mode",
+				Options:  []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+				IsOther:  true,
+			},
+			{
+				ID:       "note",
+				Question: "Extra note",
+				IsSecret: true,
+			},
+		},
+	}
+
+	card := renderToolUserInputFormCard("req-1", payload, map[string]string{"mode": "Safe"})
+	form := toolUserInputFormForTest(t, card)
+	inputs := toolUserInputFormInputsForTest(t, form)
+	if len(inputs) != 2 {
+		t.Fatalf("tool user input form inputs = %+v, want 2", inputs)
+	}
+	if placeholder, _ := inputs["mode"]["placeholder"].(map[string]any); !strings.Contains(placeholder["content"].(string), "Fast") {
+		t.Fatalf("mode placeholder = %+v, want option hint", placeholder)
+	}
+	if got, _ := inputs["mode"]["default_value"].(string); got != "Safe" {
+		t.Fatalf("mode default_value = %q, want Safe", got)
+	}
+	buttons := toolUserInputFormButtonsForTest(t, form)
+	if submit := buttons["user_input_submit"]; submit == nil || submit["form_action_type"] != "submit" {
+		t.Fatalf("submit button = %+v, want form submit", submit)
+	}
+	if cancel := buttons["user_input_cancel"]; cancel == nil {
+		t.Fatalf("cancel button missing from form: %+v", buttons)
+	}
+
+	selections := toolUserInputSelectionsFromFormValues(payload, map[string]any{
+		"mode": []any{"Fast", map[string]any{"value": "Other"}},
+		"note": "hidden",
+	})
+	if selections["mode"] != "Fast, Other" || selections["note"] != "hidden" {
+		t.Fatalf("toolUserInputSelectionsFromFormValues() = %+v", selections)
+	}
+}
+
+func toolUserInputFormForTest(t *testing.T, card map[string]any) map[string]any {
+	t.Helper()
+	for _, elem := range cardElements(card) {
+		if tag, _ := elem["tag"].(string); tag == "form" {
+			name, _ := elem["name"].(string)
+			if name == "tool_user_input_form" {
+				return elem
+			}
+		}
+	}
+	t.Fatalf("tool user input card missing form: %#v", card)
+	return nil
+}
+
+func toolUserInputFormInputsForTest(t *testing.T, form map[string]any) map[string]map[string]any {
+	t.Helper()
+	elements, _ := form["elements"].([]map[string]any)
+	inputs := make(map[string]map[string]any)
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag != "input" {
+			continue
+		}
+		name, _ := elem["name"].(string)
+		inputs[name] = elem
+	}
+	return inputs
+}
+
+func toolUserInputFormButtonsForTest(t *testing.T, form map[string]any) map[string]map[string]any {
+	t.Helper()
+	elements, _ := form["elements"].([]map[string]any)
+	buttons := make(map[string]map[string]any)
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag != "column_set" {
+			continue
+		}
+		columns, _ := elem["columns"].([]map[string]any)
+		for _, column := range columns {
+			columnElems, _ := column["elements"].([]map[string]any)
+			for _, child := range columnElems {
+				if tag, _ := child["tag"].(string); tag != "button" {
+					continue
+				}
+				name, _ := child["name"].(string)
+				buttons[name] = child
+			}
+		}
+	}
+	return buttons
 }
 
 func TestRenderAndParseElicitationForms(t *testing.T) {
