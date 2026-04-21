@@ -135,7 +135,7 @@ func (a *App) sendClaudeUserInputFormCard(requestID, sessionKey string, sub *sta
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
 	}
-	card := renderToolUserInputFormCard(requestKey, payload, nil)
+	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{})
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err != nil {
 		return err

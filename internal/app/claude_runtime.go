@@ -709,7 +709,7 @@ func (r *claudeRuntime) handleAskUserQuestion(ctx context.Context, state *claude
 	if len(payload.Questions) == 0 {
 		return nil, fmt.Errorf("Claude question payload was empty")
 	}
-	if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 {
+	if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 && !payload.Questions[0].MultiSelect && !payload.Questions[0].IsOther {
 		if err := r.app.sendClaudeUserInputCard(requestID, sessionKey, sub, payload); err != nil {
 			return nil, err
 		}
@@ -846,11 +846,11 @@ func claudeQuestionsAsToolUserInput(questions []claudecli.Question) []toolUserIn
 			opts = append(opts, toolUserInputOption{Label: strings.TrimSpace(opt.Label)})
 		}
 		out = append(out, toolUserInputQuestion{
-			Header:   id,
-			ID:       id,
-			Question: strings.TrimSpace(question.Text),
-			Options:  opts,
-			IsOther:  len(opts) > 0,
+			Header:      id,
+			ID:          id,
+			Question:    strings.TrimSpace(question.Text),
+			Options:     opts,
+			MultiSelect: question.MultiSelect,
 		})
 	}
 	return out

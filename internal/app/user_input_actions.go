@@ -89,13 +89,14 @@ func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *s
 
 func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload) (*callback.CardActionTriggerResponse, error) {
 	requestID := strings.TrimSpace(pending.ID)
-	selections := toolUserInputSelectionsFromFormValues(payload, action.FormValue)
+	drafts := toolUserInputDraftsFromCardAction(payload, action)
+	selections := toolUserInputSelectionsFromDrafts(payload, drafts)
 	if pendingBackend(a, pending) == backendClaude {
 		answers, summary, err := claudeAnswersFromSelections(payload, selections)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
 			}, nil
 		}
 		if err := a.claude.ResolveUserInput(requestID, answers); err != nil {
@@ -106,7 +107,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 			)
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
-				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
 			}, nil
 		}
 		_ = a.appState().updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -121,7 +122,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 	if err != nil {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
 		}, nil
 	}
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
@@ -132,12 +133,35 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 		)
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
-			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, selections)),
+			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
 		}, nil
 	}
 	_ = a.markPendingRequestReplied(requestID)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", summary, nil)),
+	}, nil
+}
+
+func (a *App) completeUserInputMultiToggle(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := a.appState()
+	requestID := actionStringValue(action, "request_id")
+	questionID := actionStringValue(action, "question_id")
+	optionLabel := actionStringValue(action, "option_label")
+	pending := appState.pending(requestID)
+	if pending == nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限回答这个问题"}}, nil
+	}
+	var payload toolUserInputPayload
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "问题内容已损坏"}}, nil
+	}
+	drafts := toolUserInputDraftsFromCardAction(payload, action)
+	drafts = toggleToolUserInputMultiDraft(drafts, questionID, optionLabel)
+	return &callback.CardActionTriggerResponse{
+		Card: rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
 	}, nil
 }

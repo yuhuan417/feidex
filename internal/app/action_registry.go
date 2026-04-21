@@ -219,6 +219,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"user_input.answer": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeUserInputAnswer(action)
 	},
+	"user_input.toggle_multi": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeUserInputMultiToggle(action)
+	},
 	"path_picker.dropdown": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completePathPickerAction(action, "path_picker.dropdown")
 	},

@@ -209,7 +209,7 @@ func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
 		_ = a.codex.ReplyError(req.ID, -32602, "invalid params")
 		return
 	}
-	if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 {
+	if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 && !p.Questions[0].MultiSelect && !p.Questions[0].IsOther {
 		a.sendUserInputCard(req.ID, p)
 		return
 	}

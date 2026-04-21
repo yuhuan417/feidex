@@ -113,7 +113,7 @@ func TestRenderToolUserInputBodyAndParsingHelpers(t *testing.T) {
 	if !strings.Contains(body, "Choose environment (`env`)") || !strings.Contains(body, "可选值: dev, prod") {
 		t.Fatalf("renderToolUserInputBody() missing expected question text:\n%s", body)
 	}
-	if !strings.Contains(body, "注意: 此答案会按敏感输入处理") || !strings.Contains(body, "表单中的每个输入框对应一道题") {
+	if !strings.Contains(body, "注意: 此答案会按敏感输入处理") || !strings.Contains(body, "单选题会显示下拉选择，多选题会显示可切换按钮") {
 		t.Fatalf("renderToolUserInputBody() missing secret or form hint:\n%s", body)
 	}
 
@@ -136,12 +136,23 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 		ID:      "mode",
 		Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
 	}
-	answers, err := parseQuestionAnswers("fast, safe", question)
+	answers, err := parseQuestionAnswers("fast", question)
 	if err != nil {
 		t.Fatalf("parseQuestionAnswers(options) error = %v", err)
 	}
-	if len(answers) != 2 || answers[0] != "Fast" || answers[1] != "Safe" {
-		t.Fatalf("parseQuestionAnswers(options) = %+v, want canonical labels", answers)
+	if len(answers) != 1 || answers[0] != "Fast" {
+		t.Fatalf("parseQuestionAnswers(options) = %+v, want canonical label", answers)
+	}
+	if _, err := parseQuestionAnswers("fast, safe", question); err == nil {
+		t.Fatal("expected single-select question to reject multiple answers")
+	}
+	multiAnswers, err := parseQuestionAnswers("fast, safe", toolUserInputQuestion{
+		ID:          "targets",
+		Options:     []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+		MultiSelect: true,
+	})
+	if err != nil || len(multiAnswers) != 2 {
+		t.Fatalf("parseQuestionAnswers(multi) = %+v, %v", multiAnswers, err)
 	}
 
 	otherAnswers, err := parseQuestionAnswers("custom", toolUserInputQuestion{
@@ -201,7 +212,6 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 				ID:       "mode",
 				Question: "Choose mode",
 				Options:  []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
-				IsOther:  true,
 			},
 			{
 				ID:       "note",
@@ -211,17 +221,20 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 		},
 	}
 
-	card := renderToolUserInputFormCard("req-1", payload, map[string]string{"mode": "Safe"})
+	card := renderToolUserInputFormCard("req-1", payload, toolUserInputFormDrafts{
+		Values: map[string]string{"mode": "Safe"},
+	})
 	form := toolUserInputFormForTest(t, card)
 	inputs := toolUserInputFormInputsForTest(t, form)
-	if len(inputs) != 2 {
-		t.Fatalf("tool user input form inputs = %+v, want 2", inputs)
+	if len(inputs) != 1 || inputs["note"] == nil {
+		t.Fatalf("tool user input form inputs = %+v, want only note input", inputs)
 	}
-	if placeholder, _ := inputs["mode"]["placeholder"].(map[string]any); !strings.Contains(placeholder["content"].(string), "Fast") {
-		t.Fatalf("mode placeholder = %+v, want option hint", placeholder)
+	selects := toolUserInputFormSelectsForTest(t, form)
+	if len(selects) != 1 || selects["mode"] == nil {
+		t.Fatalf("tool user input form selects = %+v, want mode select", selects)
 	}
-	if got, _ := inputs["mode"]["default_value"].(string); got != "Safe" {
-		t.Fatalf("mode default_value = %q, want Safe", got)
+	if got, _ := selects["mode"]["initial_option"].(string); got != "Safe" {
+		t.Fatalf("mode initial_option = %q, want Safe", got)
 	}
 	buttons := toolUserInputFormButtonsForTest(t, form)
 	if submit := buttons["user_input_submit"]; submit == nil || submit["form_action_type"] != "submit" {
@@ -231,12 +244,57 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 		t.Fatalf("cancel button missing from form: %+v", buttons)
 	}
 
-	selections := toolUserInputSelectionsFromFormValues(payload, map[string]any{
-		"mode": []any{"Fast", map[string]any{"value": "Other"}},
-		"note": "hidden",
+	drafts := toolUserInputDraftsFromCardAction(payload, &feishu.CardAction{
+		ActionValue: map[string]any{
+			"multi_drafts": map[string]any{"extra": []any{"A", "B"}},
+		},
+		FormValue: map[string]any{
+			"mode": "Fast",
+			"note": "hidden",
+		},
 	})
-	if selections["mode"] != "Fast, Other" || selections["note"] != "hidden" {
-		t.Fatalf("toolUserInputSelectionsFromFormValues() = %+v", selections)
+	selections := toolUserInputSelectionsFromDrafts(payload, drafts)
+	if selections["mode"] != "Fast" || selections["note"] != "hidden" {
+		t.Fatalf("toolUserInputSelectionsFromDrafts() = %+v", selections)
+	}
+
+	multiPayload := toolUserInputPayload{
+		Questions: []toolUserInputQuestion{
+			{
+				ID:          "targets",
+				Question:    "Pick targets",
+				Options:     []toolUserInputOption{{Label: "A"}, {Label: "B"}, {Label: "C"}},
+				MultiSelect: true,
+				IsOther:     true,
+			},
+		},
+	}
+	multiCard := renderToolUserInputFormCard("req-2", multiPayload, toolUserInputFormDrafts{
+		Values: map[string]string{toolUserInputOtherFieldName(multiPayload.Questions[0]): "custom"},
+		Multi:  map[string][]string{"targets": []string{"A", "C"}},
+	})
+	multiForm := toolUserInputFormForTest(t, multiCard)
+	multiButtons := toolUserInputFormButtonsForTest(t, multiForm)
+	if multiButtons["user_input_submit"] == nil {
+		t.Fatalf("multi-select submit button missing: %+v", multiButtons)
+	}
+	if toggle := toolUserInputToggleButtonsForTest(t, multiForm); len(toggle) != 3 {
+		t.Fatalf("multi-select toggle buttons = %+v, want 3", toggle)
+	}
+	if otherInput := toolUserInputFormInputsForTest(t, multiForm)[toolUserInputOtherFieldName(multiPayload.Questions[0])]; otherInput == nil {
+		t.Fatalf("multi-select other input missing: %+v", toolUserInputFormInputsForTest(t, multiForm))
+	}
+	multiDrafts := toolUserInputDraftsFromCardAction(multiPayload, &feishu.CardAction{
+		ActionValue: map[string]any{
+			"multi_drafts": map[string]any{"targets": []any{"A", "C"}},
+		},
+		FormValue: map[string]any{
+			toolUserInputOtherFieldName(multiPayload.Questions[0]): "custom",
+		},
+	})
+	multiSelections := toolUserInputSelectionsFromDrafts(multiPayload, multiDrafts)
+	if multiSelections["targets"] != "A, C, custom" {
+		t.Fatalf("toolUserInputSelectionsFromDrafts(multi) = %+v", multiSelections)
 	}
 }
 
@@ -268,6 +326,20 @@ func toolUserInputFormInputsForTest(t *testing.T, form map[string]any) map[strin
 	return inputs
 }
 
+func toolUserInputFormSelectsForTest(t *testing.T, form map[string]any) map[string]map[string]any {
+	t.Helper()
+	elements, _ := form["elements"].([]map[string]any)
+	selects := make(map[string]map[string]any)
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag != "select_static" {
+			continue
+		}
+		name, _ := elem["name"].(string)
+		selects[name] = elem
+	}
+	return selects
+}
+
 func toolUserInputFormButtonsForTest(t *testing.T, form map[string]any) map[string]map[string]any {
 	t.Helper()
 	elements, _ := form["elements"].([]map[string]any)
@@ -289,6 +361,19 @@ func toolUserInputFormButtonsForTest(t *testing.T, form map[string]any) map[stri
 		}
 	}
 	return buttons
+}
+
+func toolUserInputToggleButtonsForTest(t *testing.T, form map[string]any) []map[string]any {
+	t.Helper()
+	all := toolUserInputFormButtonsForTest(t, form)
+	out := make([]map[string]any, 0, len(all))
+	for name, button := range all {
+		if !strings.HasPrefix(name, "toggle_") {
+			continue
+		}
+		out = append(out, button)
+	}
+	return out
 }
 
 func TestRenderAndParseElicitationForms(t *testing.T) {

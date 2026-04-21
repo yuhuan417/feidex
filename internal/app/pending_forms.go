@@ -18,12 +18,13 @@ type toolUserInputOption struct {
 }
 
 type toolUserInputQuestion struct {
-	Header   string                `json:"header"`
-	ID       string                `json:"id"`
-	Question string                `json:"question"`
-	IsOther  bool                  `json:"isOther"`
-	IsSecret bool                  `json:"isSecret"`
-	Options  []toolUserInputOption `json:"options"`
+	Header      string                `json:"header"`
+	ID          string                `json:"id"`
+	Question    string                `json:"question"`
+	IsOther     bool                  `json:"isOther"`
+	IsSecret    bool                  `json:"isSecret"`
+	MultiSelect bool                  `json:"multiSelect,omitempty"`
+	Options     []toolUserInputOption `json:"options"`
 }
 
 type toolUserInputPayload struct {

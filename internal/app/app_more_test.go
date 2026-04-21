@@ -950,6 +950,16 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
+	a.onToolUserInput(codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-3"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-5","questions":[{"id":"q1","question":"Pick targets","multiSelect":true,"options":[{"label":"A"},{"label":"B"},{"label":"C"}]}]}`)})
+	if pending := a.store.PendingByID("input-3"); pending == nil || pending.Kind != "tool_request_user_input_form" {
+		t.Fatalf("tool user input multi-select pending = %+v, want form request", pending)
+	}
+	form = toolUserInputFormForTest(t, ff.sendCards[0])
+	if toggle := toolUserInputToggleButtonsForTest(t, form); len(toggle) != 3 {
+		t.Fatalf("tool user input multi-select toggle buttons = %+v, want 3", toggle)
+	}
+
+	ff.sendCards = nil
 	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"visit","url":"https://example.test"}`)})
 	if pending := a.store.PendingByID("elicit-1"); pending == nil || pending.Kind != "mcp_elicitation_url" {
 		t.Fatalf("elicitation url pending = %+v, want url request", pending)
@@ -1804,6 +1814,55 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 	cardData, _ := resp.Card.Data.(map[string]any)
 	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "`mode`: Safe") || !strings.Contains(got, "`secret`: [redacted]") {
 		t.Fatalf("form submitted card body = %q", got)
+	}
+}
+
+func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	payload := toolUserInputPayload{
+		Questions: []toolUserInputQuestion{
+			{
+				ID:          "targets",
+				Question:    "Pick targets",
+				Options:     []toolUserInputOption{{Label: "A"}, {Label: "B"}},
+				MultiSelect: true,
+			},
+		},
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "input-toggle-1",
+		Kind:        "tool_request_user_input_form",
+		SessionKey:  "sess-1",
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		PayloadJSON: mustJSON(payload),
+		Status:      "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(input-toggle-1) error = %v", err)
+	}
+
+	resp, err := a.completeUserInputMultiToggle(&feishu.CardAction{
+		UserID: "user-1",
+		ActionValue: map[string]any{
+			"request_id":   "input-toggle-1",
+			"question_id":  "targets",
+			"option_label": "A",
+			"multi_drafts": map[string]any{},
+		},
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeUserInputMultiToggle() = %#v, %v", resp, err)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	form := toolUserInputFormForTest(t, cardData)
+	buttons := toolUserInputFormButtonsForTest(t, form)
+	toggle := buttons["toggle_targets_a"]
+	if toggle == nil {
+		t.Fatalf("toggle button missing from patched card: %+v", buttons)
+	}
+	if got := toggle["type"]; got != "primary" {
+		t.Fatalf("toggle button type = %#v, want primary", got)
 	}
 }
 

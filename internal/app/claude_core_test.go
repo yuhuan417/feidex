@@ -873,6 +873,26 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	}
 }
 
+func TestClaudeQuestionsAsToolUserInputPreservesMultiSelect(t *testing.T) {
+	questions := []claudecli.Question{
+		{
+			Text:        "Pick targets",
+			Options:     []claudecli.QuestionOption{{Label: "A"}, {Label: "B"}},
+			MultiSelect: true,
+		},
+	}
+	got := claudeQuestionsAsToolUserInput(questions)
+	if len(got) != 1 {
+		t.Fatalf("claudeQuestionsAsToolUserInput() len = %d, want 1", len(got))
+	}
+	if !got[0].MultiSelect {
+		t.Fatalf("claudeQuestionsAsToolUserInput() = %+v, want multiSelect=true", got[0])
+	}
+	if got[0].IsOther {
+		t.Fatalf("claudeQuestionsAsToolUserInput() = %+v, want isOther=false", got[0])
+	}
+}
+
 func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Workspaces[0].Backend = backendClaude
