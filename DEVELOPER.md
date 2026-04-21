@@ -11,6 +11,19 @@ Feidex is not a general chat bot. It is a bridge between Feishu message flows an
 - Codex-side protocol handling stays explicit and conservative.
 - Build, release, and upgrade flows stay reproducible.
 
+## Frontend Topology
+
+Treat `frontend` as the runtime isolation boundary.
+
+- One Feishu frontend maps to one active backend runtime at a time.
+- A frontend backend may start unset; Feidex should force an explicit backend selection before queuing user work.
+- One frontend must not multiplex between Codex and Claude concurrently at thread, session, or workspace scope.
+- Backend switching is a frontend-level operation. It is allowed only when that frontend is fully idle: no active work, no queued/staged inputs, and no open pending approvals/forms.
+- Switching backend must preserve backend-scoped session lineage. If a user switches `codex -> claude -> codex`, the earlier Codex thread context for that frontend session should be restorable.
+- If two frontends both use Codex, each frontend still owns its own Codex runtime process; do not share a single Codex app-server across multiple Feishu frontends.
+- Workspace config is for repository path, sandbox, approval policy, model overrides, and similar worktree concerns. Backend selection must not be modeled as a workspace or thread switch.
+- Shared persistent state must scope frontend-sensitive runtime keys, such as session keys, pending server requests, and message-link caches, so different frontends do not collide.
+
 ## Repository Layout
 
 Use these boundaries when placing code:

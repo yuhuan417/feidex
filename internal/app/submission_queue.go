@@ -42,7 +42,7 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	skillResolution := a.resolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
 		a.setSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
-		if err := a.feishu.ReplyText(context.Background(), msg.MessageID, skillPendingConfirmationText(skillResolution.PendingReplacement.Name), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread); err != nil {
+		if err := a.feishu.ReplyText(context.Background(), msg.MessageID, skillPendingConfirmationText(skillResolution.PendingReplacement.Name), a.replyInThreadEnabled(msg.ChatType)); err != nil {
 			return err
 		}
 		return nil
@@ -53,7 +53,7 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	if !bindOnlyCurrentRoot {
 		sourceRootMessageIDs = uniqueStrings(append(sourceRootMessageIDs, stagedImageRootMessageIDs(stagedImages)...))
 	}
-	mode := a.workspaceSessionInflightModeByID(sess.WorkspaceID)
+	mode := a.configuredSessionInflightMode()
 	hasInFlight := sessionHasInFlightSubmission(sess)
 	queueLenBefore := len(sess.Queue)
 	shouldAttemptStart := !hasInFlight || sessionInflightAllowsAdditional(mode)
@@ -192,7 +192,7 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 			"error", saveErr,
 		)
 	} else if sess != nil {
-		shouldStartNext = len(sess.Queue) > 0
+		shouldStartNext = sessionShouldStartNextSubmissionAsync(sess)
 	}
 	if notifyFailure && sub != nil {
 		w.notifySubmissionStartFailure(context.Background(), sub, err, shouldStartNext)
@@ -212,10 +212,10 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		slog.Debug("startNextSubmission skipped", "session_key", sessionKey, "has_session", false)
 		return nil
 	}
-	nextMode := a.workspaceSessionInflightModeByID(sess.WorkspaceID)
+	nextMode := a.configuredSessionInflightMode()
 	if len(sess.Queue) > 0 {
 		if nextSub := appState.submission(sess.Queue[0]); nextSub != nil {
-			nextMode = a.workspaceSessionInflightModeByID(nextSub.WorkspaceID)
+			nextMode = a.configuredSessionInflightMode()
 		}
 	}
 	if sessionHasInFlightSubmission(sess) && !sessionInflightAllowsAdditional(nextMode) {
@@ -293,7 +293,7 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		"thread_id", sess.ActiveThreadID,
 	)
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	if workspaceBackend(ws) == backendClaude {
+	if a.isClaudeBackend() {
 		return w.startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 	}
 	if !sessionCanResumeThreadForSubmission(sess, sub) {
@@ -456,6 +456,9 @@ func (w *submissionWorkflow) startNextSubmissionAsync(sessionKey, source string)
 	a := w.app
 	appState := a.appState()
 	if strings.TrimSpace(sessionKey) == "" {
+		return
+	}
+	if !sessionShouldStartNextSubmissionAsync(appState.session(sessionKey)) {
 		return
 	}
 	if err := w.startNextSubmissionWithFailureNotice(sessionKey, true); err != nil {

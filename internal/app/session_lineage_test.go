@@ -14,6 +14,9 @@ func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
 		ActiveThreadWorkspaceID: "ws-old",
 		ActiveThreadName:        "thread name",
 		ActiveThreadPreview:     "thread preview",
+		BackendThreads: map[string]state.SessionBackendThread{
+			backendCodex: {ThreadID: "thread-1", WorkspaceID: "ws-old"},
+		},
 	}
 
 	switchSessionWorkspace(sess, "ws-new")
@@ -26,6 +29,9 @@ func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
 	}
 	if sess.ActiveThreadName != "" || sess.ActiveThreadPreview != "" {
 		t.Fatalf("expected idle workspace switch to clear thread labels, got %#v", sess)
+	}
+	if len(sess.BackendThreads) != 0 {
+		t.Fatalf("expected idle workspace switch to clear backend snapshots, got %#v", sess.BackendThreads)
 	}
 }
 
@@ -111,5 +117,32 @@ func TestEffectiveThreadDefaultsPreferThreadOverride(t *testing.T) {
 	}
 	if got := effectiveThreadSandboxMode(sess, ws); got != "read-only" {
 		t.Fatalf("sandbox mode = %q, want read-only", got)
+	}
+}
+
+func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
+	sess := &state.Session{
+		WorkspaceID:                "ws-codex",
+		ActiveThreadID:             "codex-thread-1",
+		ActiveThreadWorkspaceID:    "ws-codex",
+		ActiveThreadApprovalPolicy: "never",
+		ActiveThreadSandboxMode:    "read-only",
+		ActiveThreadServiceTier:    serviceTierFast,
+		ActiveThreadName:           "Codex Thread",
+		ActiveThreadPreview:        "preview",
+	}
+
+	sessionStoreBackendThread(sess, backendCodex)
+	clearSessionThreadContext(sess)
+	sess.WorkspaceID = "ws-claude"
+
+	if !sessionRestoreBackendThread(sess, backendCodex) {
+		t.Fatal("expected codex backend thread snapshot to restore")
+	}
+	if sess.WorkspaceID != "ws-codex" || sess.ActiveThreadID != "codex-thread-1" {
+		t.Fatalf("restored session = %+v", sess)
+	}
+	if sess.ActiveThreadSandboxMode != "read-only" || sess.ActiveThreadApprovalPolicy != "never" || sess.ActiveThreadServiceTier != serviceTierFast {
+		t.Fatalf("restored thread defaults = %+v", sess)
 	}
 }

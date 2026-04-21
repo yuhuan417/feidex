@@ -67,6 +67,7 @@ func (a *App) statusCardBody(sess *state.Session) string {
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
+		"backend: `" + firstNonEmpty(a.configuredBackend(), "unset") + "`",
 		"版本: `" + currentVersion() + "`",
 		"log level: " + renderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -88,6 +89,6 @@ func (a *App) statusCardBody(sess *state.Session) string {
 
 func (a *App) commandStatus(msg *feishu.InboundMessage) error {
 	card := a.renderStatusCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }

@@ -134,7 +134,7 @@ func minimalConfig() *config.Config {
 
 func resetMainStubs() {
 	loadConfig = config.Load
-	newApp = func(cfg *config.Config, cfgPath string) (appService, error) { return app.New(cfg, cfgPath) }
+	newApp = func(cfg *config.Config, cfgPath string) (appService, error) { return app.NewService(cfg, cfgPath) }
 	notifyCtx = signalNotifyContext
 	resolveDaemonConfig = daemon.Resolve
 	enableLingerUser = daemon.EnableLingerCurrentUser

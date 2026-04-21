@@ -280,7 +280,7 @@ func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
 					return err
 				}
 				if lookupModelEntry(result, modelID) == nil {
-					return a.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+					return a.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, a.replyInThreadEnabled(msg.ChatType))
 				}
 			}
 			resp, err := a.completeGlobalModelSet(action, modelID)
@@ -312,6 +312,6 @@ func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
 		return err
 	}
 	card := a.renderModelConfigCard(result, sessionKey, "menu.model")
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }

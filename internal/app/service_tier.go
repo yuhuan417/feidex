@@ -128,7 +128,7 @@ func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
 		if err := appState.saveSession(sess); err != nil {
 			return err
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", a.replyInThreadEnabled(msg.ChatType))
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast toggle | /fast config")
@@ -144,7 +144,7 @@ func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
 	sessionKey := a.makeSessionKey(msg)
 	if strings.TrimSpace(args[0]) == "config" {
 		card := a.renderServiceTierMenuCard(sessionKey)
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	appState := a.appState()
@@ -165,5 +165,5 @@ func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
 	if err := appState.saveSession(sess); err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", a.replyInThreadEnabled(msg.ChatType))
 }

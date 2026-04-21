@@ -13,6 +13,11 @@ import (
 )
 
 func (a *App) recoverRuntimeState() {
+	a.recoverSharedRuntimeState()
+	a.recoverFrontendRuntimeState()
+}
+
+func (a *App) recoverSharedRuntimeState() {
 	a.resetLiveThreadState()
 	appState := a.appState()
 	sessions := appState.sessions()
@@ -55,6 +60,13 @@ func (a *App) recoverRuntimeState() {
 	}
 	a.expirePendingRequestsOnStartup()
 	a.cleanupExpiredAttachments()
+}
+
+func (a *App) recoverFrontendRuntimeState() {
+	a.resetLiveThreadState()
+	if !a.hasConfiguredBackend() {
+		return
+	}
 	a.recoverSessionThreadsOnStartup()
 }
 
@@ -75,6 +87,9 @@ func (a *App) recoverSessionThreadsOnStartup() {
 	effectiveModel := configuredGlobalModel(a.cfg)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
+			continue
+		}
+		if !a.sessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
@@ -105,7 +120,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			a.clearSessionLiveThread(sessionKey)
 			continue
 		}
-		if workspaceBackend(ws) == backendClaude {
+		if a.isClaudeBackend() {
 			a.markSessionThreadLive(sessionKey, sess.ActiveThreadID)
 			slog.Debug("startup Claude session lineage preserved",
 				"session_key", sessionKey,
@@ -234,11 +249,25 @@ func startupReadyChatIDs(sessions []*state.Session) []string {
 	return chatIDs
 }
 
+func (a *App) startupReadyChatIDs(sessions []*state.Session) []string {
+	if a == nil {
+		return startupReadyChatIDs(sessions)
+	}
+	filtered := make([]*state.Session, 0, len(sessions))
+	for _, sess := range sessions {
+		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
+			continue
+		}
+		filtered = append(filtered, sess)
+	}
+	return startupReadyChatIDs(filtered)
+}
+
 func (a *App) sendStartupReadyNotifications() {
 	if a == nil || a.feishu == nil || a.store == nil {
 		return
 	}
-	chatIDs := startupReadyChatIDs(a.appState().sessions())
+	chatIDs := a.startupReadyChatIDs(a.appState().sessions())
 	if len(chatIDs) == 0 {
 		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return

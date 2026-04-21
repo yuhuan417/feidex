@@ -309,7 +309,7 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 	})
 	if updatedSess != nil {
 		logSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
-		if !sessionHasActiveOperations(updatedSess) {
+		if sessionShouldStartNextSubmissionAsync(updatedSess) {
 			slog.Debug("finishTurn scheduling next submission asynchronously",
 				"session_key", sessionKey,
 				"thread_id", updatedSess.ActiveThreadID,

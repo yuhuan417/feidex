@@ -27,7 +27,7 @@ func (a *App) listWorkspaceThreads(sessionKey string, ws *config.Workspace, incl
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
-	if workspaceBackend(ws) == backendClaude {
+	if a.isClaudeBackend() {
 		return nil, backendUnsupportedError("/thread list")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -93,7 +93,7 @@ func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Sessio
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
-	if workspaceBackend(ws) == backendClaude {
+	if a.isClaudeBackend() {
 		if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
 			model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -198,7 +198,7 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 }
 
 func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	if workspaceBackend(ws) == backendClaude {
+	if a.isClaudeBackend() {
 		if a == nil || a.claude == nil {
 			return nil, fmt.Errorf("claude backend not initialized")
 		}

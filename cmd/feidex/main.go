@@ -24,7 +24,7 @@ type appService interface {
 
 var (
 	loadConfig = config.Load
-	newApp     = func(cfg *config.Config, cfgPath string) (appService, error) { return app.New(cfg, cfgPath) }
+	newApp     = func(cfg *config.Config, cfgPath string) (appService, error) { return app.NewService(cfg, cfgPath) }
 	notifyCtx  = signal.NotifyContext
 )
 

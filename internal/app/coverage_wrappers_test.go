@@ -302,6 +302,40 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:p2p:chat-1:user-1"); chatType != "p2p" || chatID != "chat-1" || rootID != "" || userID != "user-1" {
 		t.Fatalf("parseSessionKeyMeta(p2p) = %q %q %q %q", chatType, chatID, rootID, userID)
 	}
+	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:frontend:codex-main:group:chat-2:root:root-2"); chatType != "group" || chatID != "chat-2" || rootID != "root-2" || userID != "" {
+		t.Fatalf("parseSessionKeyMeta(frontend group) = %q %q %q %q", chatType, chatID, rootID, userID)
+	}
+	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:frontend:claude-main:p2p:chat-2:user-2"); chatType != "p2p" || chatID != "chat-2" || rootID != "" || userID != "user-2" {
+		t.Fatalf("parseSessionKeyMeta(frontend p2p) = %q %q %q %q", chatType, chatID, rootID, userID)
+	}
+}
+
+func TestAppStateFacadeScopesPendingAndMessageLinksByFrontend(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	facade := &appStateFacade{store: a.store, frontendID: "frontend-a"}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{FrontendID: "frontend-a", ID: "req-1", Status: "pending"}); err != nil {
+		t.Fatalf("UpsertPending(frontend-a) error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{FrontendID: "frontend-b", ID: "req-1", Status: "pending"}); err != nil {
+		t.Fatalf("UpsertPending(frontend-b) error = %v", err)
+	}
+	if got := facade.pending("req-1"); got == nil || got.FrontendID != "frontend-a" {
+		t.Fatalf("pending(req-1) = %+v, want frontend-a", got)
+	}
+	if got := facade.pendingRequests(); len(got) != 1 || got[0].FrontendID != "frontend-a" {
+		t.Fatalf("pendingRequests() = %+v, want only frontend-a", got)
+	}
+
+	if err := a.store.UpsertMessageLink(&state.MessageLink{FrontendID: "frontend-a", MessageID: "msg-1", TurnID: "turn-a"}); err != nil {
+		t.Fatalf("UpsertMessageLink(frontend-a) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{FrontendID: "frontend-b", MessageID: "msg-1", TurnID: "turn-b"}); err != nil {
+		t.Fatalf("UpsertMessageLink(frontend-b) error = %v", err)
+	}
+	if got := facade.messageLink("msg-1"); got == nil || got.TurnID != "turn-a" {
+		t.Fatalf("messageLink(msg-1) = %+v, want frontend-a link", got)
+	}
 }
 
 func TestAdditionalCardAndThreadWrappers(t *testing.T) {

@@ -38,7 +38,7 @@ func (a *App) commandDownload(msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}

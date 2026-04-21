@@ -98,7 +98,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 			return err
 		}
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
@@ -151,7 +151,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		reply := "已切换工作区到 " + ws.ID
 		if sessionHasInFlightSubmission(sess) {
 			reply += "。当前运行中的任务仍归属原线程；后续新任务会使用新工作区。"
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 		}
 		binding, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
@@ -162,21 +162,21 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 				"error", err,
 			)
 			reply += "。自动绑定 thread 失败，可稍后重试。"
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 		}
 		if binding.Resumed {
 			reply += "。已自动恢复该工作区最近使用的线程。"
 		} else {
 			reply += "。已自动创建新线程。"
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 	}
 	return fmt.Errorf("usage: %s", workspaceCommandUsage)
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
 	card := a.renderWorkspaceMenuCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -311,7 +311,7 @@ func (a *App) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -364,7 +364,7 @@ func (a *App) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 

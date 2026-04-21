@@ -17,7 +17,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store}
+	a := &App{store: store, cfg: testCodexConfig()}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-new",
@@ -44,7 +44,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store}
+	a := &App{store: store, cfg: testCodexConfig()}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-1",
@@ -68,7 +68,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store, cfg: config.Default()}
+	a := &App{store: store, cfg: testCodexConfig()}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            "sess-1",
 		WorkspaceID:    "default",
@@ -93,7 +93,7 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	cfg.Workspaces = append(cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
 	if err := a.store.UpsertSession(&state.Session{
@@ -261,7 +261,7 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 }
 
 func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
@@ -289,7 +289,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 }
 
 func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
@@ -317,7 +317,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 }
 
 func TestCompleteWorkspacePolicySetAcceptsUntrusted(t *testing.T) {
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
@@ -342,7 +342,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-1",
@@ -374,7 +374,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-1",

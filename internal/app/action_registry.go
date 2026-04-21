@@ -84,6 +84,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	"menu.debug.logs": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuDebugLogs(action, actionSessionKey(action))
 	},
+	"menu.backend": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuBackend(action, actionSessionKey(action))
+	},
 	"menu.help": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuHelp(action, actionSessionKey(action))
 	},
@@ -215,6 +218,9 @@ var cardActionHandlers = map[string]cardActionHandler{
 	},
 	"skills.reload": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeSkillsReload(action, actionSessionKey(action))
+	},
+	"backend.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))
 	},
 	"user_input.answer": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeUserInputAnswer(action)

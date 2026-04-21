@@ -223,6 +223,189 @@ func TestLoadLegacyConfigWithoutDaemonSectionKeepsDefaultDaemonServiceName(t *te
 	}
 }
 
+func TestResolvedFrontendsSupportsLegacyAndMultiFrontendConfigs(t *testing.T) {
+	legacy := Default()
+	legacy.Workspaces[0].Cwd = t.TempDir()
+	legacyFrontends := legacy.ResolvedFrontends()
+	if len(legacyFrontends) != 1 {
+		t.Fatalf("legacy ResolvedFrontends() = %+v, want single frontend", legacyFrontends)
+	}
+	if legacyFrontends[0].ID != DefaultFrontendID || legacyFrontends[0].Backend != "" {
+		t.Fatalf("legacy ResolvedFrontends()[0] = %+v", legacyFrontends[0])
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := strings.Join([]string{
+		`data_dir = ".feidex-data"`,
+		``,
+		`[log]`,
+		`level = "info"`,
+		``,
+		`[codex]`,
+		`command = "codex"`,
+		`transport = "stdio"`,
+		``,
+		`[claude]`,
+		`command = "claude"`,
+		``,
+		`[[frontend]]`,
+		`id = "codex-main"`,
+		`backend = "codex"`,
+		`app_id = "cli_codex"`,
+		`app_secret = "secret-1"`,
+		`reply_in_thread = true`,
+		`quiet = "progress"`,
+		``,
+		`[[frontend]]`,
+		`id = "claude-main"`,
+		`backend = "claude"`,
+		`app_id = "cli_claude"`,
+		`app_secret = "secret-2"`,
+		`reply_in_thread = true`,
+		`quiet = "final"`,
+		``,
+		`[[workspace]]`,
+		`id = "default"`,
+		`cwd = "."`,
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(multi frontend) error = %v", err)
+	}
+	frontends := cfg.ResolvedFrontends()
+	if len(frontends) != 2 {
+		t.Fatalf("ResolvedFrontends() len = %d, want 2", len(frontends))
+	}
+	if frontends[0].ID != "codex-main" || frontends[0].Backend != RuntimeBackendCodex || frontends[0].ConfigIndex != 0 {
+		t.Fatalf("frontends[0] = %+v", frontends[0])
+	}
+	if frontends[1].ID != "claude-main" || frontends[1].Backend != RuntimeBackendClaude || frontends[1].ConfigIndex != 1 {
+		t.Fatalf("frontends[1] = %+v", frontends[1])
+	}
+	if frontends[1].Feishu.Quiet != QuietModeFinal {
+		t.Fatalf("frontends[1].Feishu.Quiet = %q, want final", frontends[1].Feishu.Quiet)
+	}
+
+	roundTripPath := filepath.Join(dir, "roundtrip.toml")
+	roundTrip := &Config{
+		DataDir: ".feidex-data",
+		Frontends: []FrontendConfig{
+			{
+				ID: "codex-main",
+				FeishuConfig: FeishuConfig{
+					Backend:       RuntimeBackendCodex,
+					AppID:         "cli_codex",
+					AppSecret:     "secret-1",
+					ReplyInThread: true,
+					Quiet:         QuietModeProgress,
+				},
+			},
+			{
+				ID: "claude-main",
+				FeishuConfig: FeishuConfig{
+					Backend:       RuntimeBackendClaude,
+					AppID:         "cli_claude",
+					AppSecret:     "secret-2",
+					ReplyInThread: true,
+					Quiet:         QuietModeFinal,
+				},
+			},
+		},
+		Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+	}
+	if err := Save(roundTripPath, roundTrip); err != nil {
+		t.Fatalf("Save(roundtrip frontend config) error = %v", err)
+	}
+	loadedRoundTrip, err := Load(roundTripPath)
+	if err != nil {
+		t.Fatalf("Load(roundtrip frontend config) error = %v", err)
+	}
+	if got := loadedRoundTrip.ResolvedFrontends(); len(got) != 2 || got[0].Backend != RuntimeBackendCodex || got[1].Backend != RuntimeBackendClaude {
+		t.Fatalf("roundtrip ResolvedFrontends() = %+v", got)
+	}
+}
+
+func TestResolvedFrontendsPreservesUnsetBackend(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	cfg.Frontends = []FrontendConfig{{
+		ID: "unset-main",
+		FeishuConfig: FeishuConfig{
+			AppID:         "cli_unset",
+			AppSecret:     "secret-1",
+			ReplyInThread: true,
+			Quiet:         QuietModeProgress,
+		},
+	}}
+	if err := cfg.Normalize(t.TempDir()); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+	frontends := cfg.ResolvedFrontends()
+	if len(frontends) != 1 {
+		t.Fatalf("ResolvedFrontends() len = %d, want 1", len(frontends))
+	}
+	if frontends[0].Backend != "" {
+		t.Fatalf("ResolvedFrontends()[0].Backend = %q, want empty", frontends[0].Backend)
+	}
+}
+
+func TestLoadIgnoresLegacyWorkspaceBackendField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := strings.Join([]string{
+		`data_dir = ".feidex-data"`,
+		``,
+		`[log]`,
+		`level = "info"`,
+		``,
+		`[feishu]`,
+		`backend = "claude"`,
+		`app_id = "legacy-app"`,
+		`app_secret = "legacy-secret"`,
+		``,
+		`[codex]`,
+		`command = "codex"`,
+		`transport = "stdio"`,
+		``,
+		`[[workspace]]`,
+		`id = "default"`,
+		`cwd = "."`,
+		`backend = "legacy-workspace-only"`,
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(legacy workspace backend config) error = %v", err)
+	}
+	frontends := cfg.ResolvedFrontends()
+	if len(frontends) != 1 {
+		t.Fatalf("ResolvedFrontends() len = %d, want 1", len(frontends))
+	}
+	if frontends[0].ID != DefaultFrontendID || frontends[0].Backend != RuntimeBackendClaude {
+		t.Fatalf("ResolvedFrontends()[0] = %+v", frontends[0])
+	}
+
+	roundTripPath := filepath.Join(dir, "roundtrip.toml")
+	if err := Save(roundTripPath, cfg); err != nil {
+		t.Fatalf("Save(roundtrip legacy workspace backend config) error = %v", err)
+	}
+	saved, err := os.ReadFile(roundTripPath)
+	if err != nil {
+		t.Fatalf("ReadFile(roundtrip config) error = %v", err)
+	}
+	if strings.Contains(string(saved), "legacy-workspace-only") {
+		t.Fatalf("roundtrip config should not persist legacy workspace backend field:\n%s", string(saved))
+	}
+}
+
 func TestQuietModeValidationAndConfigFallback(t *testing.T) {
 	if got, err := NormalizeQuietMode(""); err != nil || got != QuietModeProgress {
 		t.Fatalf("NormalizeQuietMode(empty) = %q, %v", got, err)

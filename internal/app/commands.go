@@ -14,7 +14,14 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	backend := a.currentWorkspaceBackendForMessage(msg)
+	spec := findLocalCommandSpec(fields[0])
+	if spec == nil {
+		return fmt.Errorf("unknown command: %s", fields[0])
+	}
+	if !a.hasConfiguredBackend() && fields[0] != "/backend" {
+		return a.replyBackendSelectionCard(msg, "")
+	}
+	backend := a.configuredBackend()
 	if backend == backendCodex {
 		if err := a.codexMaintenanceBlocksCommand(raw); err != nil {
 			return err
@@ -24,10 +31,6 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		if err := a.claudeUnsupportedCommand(raw); err != nil {
 			return err
 		}
-	}
-	spec := findLocalCommandSpec(fields[0])
-	if spec == nil {
-		return fmt.Errorf("unknown command: %s", fields[0])
 	}
 	return spec.Handle(a, msg, fields[1:])
 }
@@ -50,7 +53,7 @@ func (a *App) commandHelp(msg *feishu.InboundMessage, args []string) error {
 		return fmt.Errorf("usage: /help")
 	}
 	card := a.renderHelpCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -91,7 +94,8 @@ func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
 
 func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
-	body := spec.Description + "\n\n当前 slog 日志级别: " + renderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
+	backend := firstNonEmpty(a.configuredBackend(), "unset")
+	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + renderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
 	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(spec.Action, sessionKey))
 }
 

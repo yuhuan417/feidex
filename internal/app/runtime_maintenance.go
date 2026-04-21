@@ -15,12 +15,14 @@ const attachmentRetention = 7 * 24 * time.Hour
 const artifactRetention = 3 * 24 * time.Hour
 
 func (a *App) expirePendingRequestsOnStartup() {
-	appState := a.appState()
-	for _, req := range appState.pendingRequests() {
+	if a == nil || a.store == nil {
+		return
+	}
+	for _, req := range a.store.AllPendingRequests() {
 		if req == nil || (req.Status != "pending" && req.Status != "replied") {
 			continue
 		}
-		_ = appState.updatePending(req.ID, func(p *state.PendingRequest) {
+		_ = a.store.UpdateScopedPending(req.FrontendID, req.ID, func(p *state.PendingRequest) {
 			p.Status = "expired"
 			if p.ExpiresAt < time.Now().Unix() {
 				return

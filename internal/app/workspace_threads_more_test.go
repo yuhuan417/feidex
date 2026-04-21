@@ -9,9 +9,9 @@ import (
 	"feidex/internal/state"
 )
 
-func TestCreateWorkspaceAndSwitchInheritsCurrentClaudeBackend(t *testing.T) {
+func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenFrontendBackendIsClaude(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-new"}
 	a.claude = claude
@@ -36,9 +36,6 @@ func TestCreateWorkspaceAndSwitchInheritsCurrentClaudeBackend(t *testing.T) {
 	ws := config.FindWorkspace(a.cfg, "claude-created")
 	if ws == nil {
 		t.Fatal("created workspace missing from config")
-	}
-	if got := workspaceBackend(ws); got != backendClaude {
-		t.Fatalf("created workspace backend = %q, want %q", got, backendClaude)
 	}
 	if len(claude.ensureCalls) != 1 || claude.ensureCalls[0].workspaceID != "claude-created" {
 		t.Fatalf("Claude EnsureSession calls = %#v", claude.ensureCalls)

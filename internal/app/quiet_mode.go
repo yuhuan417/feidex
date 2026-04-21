@@ -40,10 +40,11 @@ var quietModeOptions = []quietModeOption{
 }
 
 func (a *App) quietMode() config.QuietMode {
-	if a == nil || a.cfg == nil {
+	cfg := a.feishuConfig()
+	if cfg == nil {
 		return config.QuietModeProgress
 	}
-	mode, err := config.ParseQuietMode(a.cfg.Feishu.Quiet)
+	mode, err := config.ParseQuietMode(cfg.Quiet)
 	if err != nil {
 		return config.QuietModeProgress
 	}
@@ -164,11 +165,15 @@ func (a *App) updateQuietMode(mode config.QuietMode) error {
 	if a == nil || a.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
+	cfg := a.feishuConfig()
+	if cfg == nil {
+		return fmt.Errorf("nil feishu config")
+	}
 	normalized, err := config.ParseQuietMode(mode)
 	if err != nil {
 		return err
 	}
-	a.cfg.Feishu.Quiet = normalized
+	cfg.Quiet = normalized
 	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
 		return err
 	}
@@ -184,7 +189,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			return nil
 		}
 		card := a.renderQuietModeMenuCard(a.makeSessionKey(msg))
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	arg := strings.TrimSpace(args[0])
@@ -195,7 +200,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 				return nil
 			}
 			card := a.renderQuietModeMenuCard(a.makeSessionKey(msg))
-			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 			return err
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))
@@ -208,7 +213,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			if err := a.updateQuietMode(mode); err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", a.replyInThreadEnabled(msg.ChatType))
 		}
 	}
 	return nil

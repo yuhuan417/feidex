@@ -89,7 +89,7 @@ func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
@@ -97,12 +97,12 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
 func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
-	if a.currentWorkspaceBackendForMessage(msg) == backendClaude {
+	if a.configuredBackend() == backendClaude {
 		if len(args) == 0 {
 			return a.commandThreads(msg, false)
 		}
@@ -197,7 +197,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			workspace = *ws
 		}
 	}
-	if workspaceBackend(&workspace) == backendClaude {
+	if a.isClaudeBackend() {
 		return a.renderClaudeThreadsCard(sessionKey, sess, &workspace), nil
 	}
 	items, err := a.listWorkspaceThreads(sessionKey, &workspace, includeAll)
@@ -335,13 +335,13 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	discarded := a.discardSessionPendingInputs(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		if discarded > 0 {
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), a.replyInThreadEnabled(msg.ChatType))
 		}
 		return fmt.Errorf("当前没有运行中的任务")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if a.currentWorkspaceBackendForSessionKey(sessionKey) == backendClaude {
+	if a.configuredBackend() == backendClaude {
 		if err := a.claude.Interrupt(ctx, sessionKey); err != nil {
 			return err
 		}
@@ -357,7 +357,7 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
@@ -366,7 +366,7 @@ func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	if a.currentWorkspaceBackendForSessionKey(sessionKey) == backendClaude {
+	if a.configuredBackend() == backendClaude {
 		return a.continueClaudeSessionWithText(sessionKey, text)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -448,7 +448,7 @@ func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -500,7 +500,7 @@ func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 

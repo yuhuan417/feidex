@@ -842,7 +842,7 @@ func (a *App) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKe
 		return err
 	}
 	card := a.renderWorkspaceNewCard(sessionKey, requestID, payload)
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -1140,7 +1140,7 @@ func (a *App) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage
 		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
@@ -1148,12 +1148,7 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 	if config.FindWorkspace(a.cfg, id) != nil {
 		return fmt.Errorf("workspace %q 已存在", id)
 	}
-	backend := a.workspaceBackendByID(a.defaultWorkspaceID())
-	if current := appState.session(sessionKey); current != nil && strings.TrimSpace(current.WorkspaceID) != "" {
-		backend = a.workspaceBackendByID(current.WorkspaceID)
-	}
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{
-		Backend:        backend,
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
@@ -1228,7 +1223,7 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 		if pending.FeishuMsgID != "" {
 			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, a.replyInThreadEnabled(msg.ChatType))
 	}
 	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
@@ -1237,5 +1232,5 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, a.replyInThreadEnabled(msg.ChatType))
 }

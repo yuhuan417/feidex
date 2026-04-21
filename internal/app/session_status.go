@@ -12,3 +12,7 @@ func sessionRefreshPendingStatus(sess *state.Session) {
 	}
 	sess.Status = "idle"
 }
+
+func sessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
+	return sess != nil && !sessionHasInFlightSubmission(sess) && len(sess.Queue) > 0
+}

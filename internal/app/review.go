@@ -216,7 +216,7 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -540,7 +540,7 @@ func (a *App) startInlineReviewFromMessage(msg *feishu.InboundMessage, target re
 	if err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, confirmation, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, confirmation, a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) startInlineReview(msg *feishu.InboundMessage, target reviewTargetSpec) (string, error) {

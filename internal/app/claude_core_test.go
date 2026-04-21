@@ -182,7 +182,7 @@ func (f *fakeClaudeCore) Close() error {
 
 func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-session-42"}
 	a.claude = claude
@@ -252,7 +252,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 
 func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
@@ -354,7 +354,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 
 func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{
 		ensureResults: []fakeClaudeEnsureResult{
@@ -444,7 +444,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 
 func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
 
 	sessionKey := "feishu:p2p:chat:user"
@@ -515,7 +515,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 
 func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionSet: true}
 	a.claude = claude
@@ -595,7 +595,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 
 func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 
 	sessionKey := "feishu:group:chat-1:root:root-1"
 	subID, err := a.store.CreateSubmission(&state.Submission{
@@ -647,7 +647,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 
 func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
@@ -728,7 +728,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 
 func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
@@ -769,7 +769,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 
 func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
@@ -818,7 +818,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 
 func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
@@ -895,7 +895,7 @@ func TestClaudeQuestionsAsToolUserInputPreservesMultiSelect(t *testing.T) {
 
 func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
@@ -966,7 +966,7 @@ func TestReadClaudePlanTextFallsBackToLatestHomePlan(t *testing.T) {
 
 func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
@@ -1011,7 +1011,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 
 func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
@@ -1058,7 +1058,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 
 func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
@@ -1132,7 +1132,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 
 func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
@@ -1201,7 +1201,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 
 func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Workspaces[0].Backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude

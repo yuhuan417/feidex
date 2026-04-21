@@ -4,13 +4,12 @@ import (
 	"strings"
 
 	"feidex/internal/config"
-	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
 const (
-	backendCodex  = config.WorkspaceBackendCodex
-	backendClaude = config.WorkspaceBackendClaude
+	backendCodex  = config.RuntimeBackendCodex
+	backendClaude = config.RuntimeBackendClaude
 )
 
 type sessionInflightMode string
@@ -32,108 +31,74 @@ func configHasBackend(cfg *config.Config, backend string) bool {
 	if cfg == nil {
 		return false
 	}
-	for i := range cfg.Workspaces {
-		if workspaceBackend(&cfg.Workspaces[i]) == strings.TrimSpace(backend) {
+	backend = normalizeRuntimeBackend(backend)
+	if backend == "" {
+		return false
+	}
+	for _, frontend := range cfg.ResolvedFrontends() {
+		if normalizeRuntimeBackend(frontend.Backend) == backend {
 			return true
 		}
 	}
 	return false
 }
 
-func workspaceBackend(ws *config.Workspace) string {
-	if ws == nil {
-		return backendCodex
-	}
-	switch strings.TrimSpace(ws.Backend) {
+func normalizeRuntimeBackend(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return ""
 	case backendClaude:
 		return backendClaude
-	default:
+	case backendCodex:
 		return backendCodex
+	default:
+		return ""
 	}
 }
 
-func workspaceSessionInflightMode(ws *config.Workspace) sessionInflightMode {
-	switch workspaceBackend(ws) {
-	default:
-		return sessionInflightSingle
-	}
+func sessionInflightModeForBackend(string) sessionInflightMode {
+	return sessionInflightSingle
 }
 
 func sessionInflightAllowsAdditional(mode sessionInflightMode) bool {
 	return mode == sessionInflightSerialized || mode == sessionInflightParallel
 }
 
-func (a *App) workspaceBackendByID(workspaceID string) string {
-	if a == nil || a.cfg == nil {
-		return backendCodex
-	}
-	if ws := config.FindWorkspace(a.cfg, strings.TrimSpace(workspaceID)); ws != nil {
-		return workspaceBackend(ws)
-	}
-	return backendCodex
-}
-
-func (a *App) workspaceSessionInflightModeByID(workspaceID string) sessionInflightMode {
-	if a == nil || a.cfg == nil {
-		return sessionInflightSingle
-	}
-	if ws := config.FindWorkspace(a.cfg, strings.TrimSpace(workspaceID)); ws != nil {
-		return workspaceSessionInflightMode(ws)
-	}
-	return sessionInflightSingle
-}
-
-func (a *App) currentWorkspaceBackendForSessionKey(sessionKey string) string {
+func (a *App) configuredBackend() string {
 	if a == nil {
-		return backendCodex
+		return ""
 	}
-	sess := a.appState().session(strings.TrimSpace(sessionKey))
-	if sess == nil {
-		return backendCodex
+	if backend := normalizeRuntimeBackend(a.backend); strings.TrimSpace(a.backend) != "" {
+		return backend
 	}
-	return a.workspaceBackendByID(sess.WorkspaceID)
+	if cfg := a.feishuConfig(); cfg != nil {
+		return normalizeRuntimeBackend(cfg.Backend)
+	}
+	return ""
 }
 
-func (a *App) currentWorkspaceBackendForMessage(msg *feishu.InboundMessage) string {
-	if a == nil || msg == nil {
-		return backendCodex
-	}
-	sessionKey := a.makeSessionKey(msg)
-	sess := a.appState().session(sessionKey)
-	if sess == nil {
-		return a.workspaceBackendByID(a.defaultWorkspaceID())
-	}
-	return a.workspaceBackendByID(sess.WorkspaceID)
+func (a *App) hasConfiguredBackend() bool {
+	return strings.TrimSpace(a.configuredBackend()) != ""
 }
 
-func submissionBackend(a *App, sub *state.Submission) string {
-	if a == nil || sub == nil {
-		return backendCodex
-	}
-	return a.workspaceBackendByID(sub.WorkspaceID)
+func (a *App) isClaudeBackend() bool {
+	return a.configuredBackend() == backendClaude
+}
+
+func (a *App) configuredSessionInflightMode() sessionInflightMode {
+	return sessionInflightModeForBackend(a.configuredBackend())
 }
 
 func pendingBackend(a *App, pending *state.PendingRequest) string {
-	if pending == nil {
-		return backendCodex
-	}
-	if strings.TrimSpace(pending.Backend) != "" {
-		if strings.TrimSpace(pending.Backend) == backendClaude {
-			return backendClaude
+	if a != nil {
+		if backend := a.configuredBackend(); backend != "" {
+			return backend
 		}
-		return backendCodex
 	}
-	if a == nil {
-		return backendCodex
+	if pending != nil && strings.TrimSpace(pending.Backend) != "" {
+		return normalizeRuntimeBackend(pending.Backend)
 	}
-	if _, sub := a.findSubmissionByTurn(pending.ThreadID, pending.TurnID); sub != nil {
-		return submissionBackend(a, sub)
-	}
-	sess := a.appState().session(pending.SessionKey)
-	if sess != nil {
-		return a.workspaceBackendByID(sess.WorkspaceID)
-	}
-	return backendCodex
+	return ""
 }
 
 func backendUnsupportedError(label string) error {

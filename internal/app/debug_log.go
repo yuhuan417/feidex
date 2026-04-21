@@ -53,7 +53,7 @@ func (a *App) commandDebug(msg *feishu.InboundMessage, args []string) error {
 	}
 	if !a.debugAccessAllowed(msg.UserID) {
 		card := a.renderDebugAccessDeniedCard(a.makeSessionKey(msg), msg.UserID)
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	enabled, err := desiredDebugEnabled(args)
@@ -61,7 +61,7 @@ func (a *App) commandDebug(msg *feishu.InboundMessage, args []string) error {
 		return err
 	}
 	level := a.setRuntimeDebug(enabled)
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -77,11 +77,11 @@ func (a *App) commandDebugLogs(msg *feishu.InboundMessage, args []string) error 
 	}
 	if !a.debugAccessAllowed(msg.UserID) {
 		card := a.renderDebugAccessDeniedCard(a.makeSessionKey(msg), msg.UserID)
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	card := a.renderDebugLogsCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -93,7 +93,7 @@ func (a *App) debugAccessAllowed(userID string) bool {
 	if a == nil || a.cfg == nil {
 		return false
 	}
-	return debugUserAllowed(userID, a.cfg.Feishu.DebugAllowFrom)
+	return debugUserAllowed(userID, a.debugAllowFrom())
 }
 
 func debugUserAllowed(userID string, allowFrom []string) bool {

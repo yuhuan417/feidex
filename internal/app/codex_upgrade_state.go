@@ -199,7 +199,7 @@ func (a *App) codexUpgradeRuntimeBusyReason() string {
 	}
 	activeSessions := 0
 	for _, sess := range a.appState().sessions() {
-		if sess != nil && sessionHasActiveWork(sess) {
+		if sess != nil && a.sessionBelongsToFrontend(sess.Key) && sessionHasActiveWork(sess) {
 			activeSessions++
 		}
 	}

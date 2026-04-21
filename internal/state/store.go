@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 2
+const currentSnapshotVersion = 3
 
 type Store struct {
 	path    string
@@ -41,42 +41,54 @@ type Counters struct {
 }
 
 type storedSession struct {
-	Key                        string `json:"key"`
-	WorkspaceID                string `json:"workspace_id"`
-	ActiveThreadID             string `json:"active_thread_id"`
-	ActiveThreadWorkspaceID    string `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy string `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode    string `json:"active_thread_sandbox_mode"`
-	ActiveThreadServiceTier    string `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadName           string `json:"active_thread_name"`
-	ActiveThreadPreview        string `json:"active_thread_preview"`
-	OwnerUserID                string `json:"owner_user_id"`
-	ModelOverride              string `json:"model_override"`
-	UpdatedAt                  int64  `json:"updated_at"`
+	Key                        string                          `json:"key"`
+	WorkspaceID                string                          `json:"workspace_id"`
+	ActiveThreadID             string                          `json:"active_thread_id"`
+	ActiveThreadWorkspaceID    string                          `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy string                          `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode    string                          `json:"active_thread_sandbox_mode"`
+	ActiveThreadServiceTier    string                          `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadName           string                          `json:"active_thread_name"`
+	ActiveThreadPreview        string                          `json:"active_thread_preview"`
+	BackendThreads             map[string]SessionBackendThread `json:"backend_threads,omitempty"`
+	OwnerUserID                string                          `json:"owner_user_id"`
+	ModelOverride              string                          `json:"model_override"`
+	UpdatedAt                  int64                           `json:"updated_at"`
+}
+
+type SessionBackendThread struct {
+	ThreadID       string `json:"thread_id,omitempty"`
+	WorkspaceID    string `json:"workspace_id,omitempty"`
+	ApprovalPolicy string `json:"approval_policy,omitempty"`
+	SandboxMode    string `json:"sandbox_mode,omitempty"`
+	ServiceTier    string `json:"service_tier,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Preview        string `json:"preview,omitempty"`
 }
 
 type Session struct {
-	Key                        string                   `json:"key"`
-	WorkspaceID                string                   `json:"workspace_id"`
-	ActiveThreadID             string                   `json:"active_thread_id"`
-	ActiveThreadWorkspaceID    string                   `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy string                   `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode    string                   `json:"active_thread_sandbox_mode"`
-	ActiveThreadServiceTier    string                   `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadName           string                   `json:"active_thread_name"`
-	ActiveThreadPreview        string                   `json:"active_thread_preview"`
-	ActiveTurnID               string                   `json:"active_turn_id"`
-	ActiveSubmissionID         string                   `json:"active_submission_id"`
-	OwnerUserID                string                   `json:"owner_user_id"`
-	ChatID                     string                   `json:"chat_id"`
-	ChatType                   string                   `json:"chat_type"`
-	RootMessageID              string                   `json:"root_message_id"`
-	ModelOverride              string                   `json:"model_override"`
-	Status                     string                   `json:"status"`
-	Queue                      []string                 `json:"queue"`
-	ActiveOperations           []SessionActiveOperation `json:"active_operations,omitempty"`
-	StagedImages               []SessionStagedImage     `json:"staged_images,omitempty"`
-	UpdatedAt                  int64                    `json:"updated_at"`
+	Key                        string                          `json:"key"`
+	WorkspaceID                string                          `json:"workspace_id"`
+	ActiveThreadID             string                          `json:"active_thread_id"`
+	ActiveThreadWorkspaceID    string                          `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy string                          `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode    string                          `json:"active_thread_sandbox_mode"`
+	ActiveThreadServiceTier    string                          `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadName           string                          `json:"active_thread_name"`
+	ActiveThreadPreview        string                          `json:"active_thread_preview"`
+	BackendThreads             map[string]SessionBackendThread `json:"backend_threads,omitempty"`
+	ActiveTurnID               string                          `json:"active_turn_id"`
+	ActiveSubmissionID         string                          `json:"active_submission_id"`
+	OwnerUserID                string                          `json:"owner_user_id"`
+	ChatID                     string                          `json:"chat_id"`
+	ChatType                   string                          `json:"chat_type"`
+	RootMessageID              string                          `json:"root_message_id"`
+	ModelOverride              string                          `json:"model_override"`
+	Status                     string                          `json:"status"`
+	Queue                      []string                        `json:"queue"`
+	ActiveOperations           []SessionActiveOperation        `json:"active_operations,omitempty"`
+	StagedImages               []SessionStagedImage            `json:"staged_images,omitempty"`
+	UpdatedAt                  int64                           `json:"updated_at"`
 }
 
 type SessionActiveOperation struct {
@@ -135,6 +147,7 @@ type Submission struct {
 }
 
 type PendingRequest struct {
+	FrontendID   string `json:"frontend_id,omitempty"`
 	ID           string `json:"id"`
 	RequestIDRaw string `json:"request_id_raw,omitempty"`
 	Backend      string `json:"backend,omitempty"`
@@ -152,6 +165,8 @@ type PendingRequest struct {
 }
 
 type MessageLink struct {
+	FrontendID   string `json:"frontend_id,omitempty"`
+	Backend      string `json:"backend,omitempty"`
 	MessageID    string `json:"message_id"`
 	SessionKey   string `json:"session_key,omitempty"`
 	SubmissionID string `json:"submission_id,omitempty"`
@@ -349,9 +364,13 @@ func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
 }
 
 func (s *Store) PendingByID(id string) *PendingRequest {
+	return s.PendingByScopedID("", id)
+}
+
+func (s *Store) PendingByScopedID(frontendID, id string) *PendingRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	req, ok := s.runtime.PendingRequests[id]
+	req, ok := s.runtime.PendingRequests[pendingStoreKey(frontendID, id)]
 	if !ok {
 		return nil
 	}
@@ -366,14 +385,18 @@ func (s *Store) UpsertPending(req *PendingRequest) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *req
-	s.runtime.PendingRequests[req.ID] = &cp
+	s.runtime.PendingRequests[pendingStoreKey(cp.FrontendID, cp.ID)] = &cp
 	return nil
 }
 
 func (s *Store) UpdatePending(id string, mutate func(*PendingRequest)) error {
+	return s.UpdateScopedPending("", id, mutate)
+}
+
+func (s *Store) UpdateScopedPending(frontendID, id string, mutate func(*PendingRequest)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	req, ok := s.runtime.PendingRequests[id]
+	req, ok := s.runtime.PendingRequests[pendingStoreKey(frontendID, id)]
 	if !ok {
 		return os.ErrNotExist
 	}
@@ -382,9 +405,13 @@ func (s *Store) UpdatePending(id string, mutate func(*PendingRequest)) error {
 }
 
 func (s *Store) DeletePending(id string) {
+	s.DeleteScopedPending("", id)
+}
+
+func (s *Store) DeleteScopedPending(frontendID, id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.runtime.PendingRequests, strings.TrimSpace(id))
+	delete(s.runtime.PendingRequests, pendingStoreKey(frontendID, id))
 }
 
 func (s *Store) DeletePendingRequests(match func(*PendingRequest) bool) {
@@ -419,6 +446,7 @@ func cloneSession(sess *Session) *Session {
 	cp.Queue = append([]string(nil), sess.Queue...)
 	cp.ActiveOperations = append([]SessionActiveOperation(nil), sess.ActiveOperations...)
 	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
+	cp.BackendThreads = cloneSessionBackendThreads(sess.BackendThreads)
 	return &cp
 }
 
@@ -427,11 +455,14 @@ func normalizeSessionValues(sess *Session) bool {
 		return false
 	}
 	normalizedServiceTier := normalizeStoredServiceTier(sess.ActiveThreadServiceTier)
-	if sess.ActiveThreadServiceTier == normalizedServiceTier {
-		return false
-	}
+	changed := sess.ActiveThreadServiceTier != normalizedServiceTier
 	sess.ActiveThreadServiceTier = normalizedServiceTier
-	return true
+	normalizedThreads := normalizeSessionBackendThreads(sess.BackendThreads)
+	if !sessionBackendThreadsEqual(sess.BackendThreads, normalizedThreads) {
+		changed = true
+	}
+	sess.BackendThreads = normalizedThreads
+	return changed
 }
 
 func storedSessionFromSession(sess *Session) *storedSession {
@@ -453,6 +484,7 @@ func storedSessionFromSession(sess *Session) *storedSession {
 		ActiveThreadServiceTier:    cp.ActiveThreadServiceTier,
 		ActiveThreadName:           cp.ActiveThreadName,
 		ActiveThreadPreview:        cp.ActiveThreadPreview,
+		BackendThreads:             cloneSessionBackendThreads(cp.BackendThreads),
 		OwnerUserID:                cp.OwnerUserID,
 		ModelOverride:              cp.ModelOverride,
 		UpdatedAt:                  cp.UpdatedAt,
@@ -473,6 +505,7 @@ func sessionFromStored(sess *storedSession) *Session {
 		ActiveThreadServiceTier:    sess.ActiveThreadServiceTier,
 		ActiveThreadName:           sess.ActiveThreadName,
 		ActiveThreadPreview:        sess.ActiveThreadPreview,
+		BackendThreads:             cloneSessionBackendThreads(sess.BackendThreads),
 		OwnerUserID:                sess.OwnerUserID,
 		ModelOverride:              sess.ModelOverride,
 		Status:                     "idle",
@@ -493,7 +526,64 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 	}
 	cp := *sess
 	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
+	cp.BackendThreads = normalizeSessionBackendThreads(cp.BackendThreads)
 	return &cp
+}
+
+func cloneSessionBackendThreads(src map[string]SessionBackendThread) map[string]SessionBackendThread {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]SessionBackendThread, len(src))
+	for key, value := range src {
+		dst[key] = normalizeSessionBackendThread(value)
+	}
+	return dst
+}
+
+func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendThread {
+	thread.ThreadID = strings.TrimSpace(thread.ThreadID)
+	thread.WorkspaceID = strings.TrimSpace(thread.WorkspaceID)
+	thread.ApprovalPolicy = strings.TrimSpace(thread.ApprovalPolicy)
+	thread.SandboxMode = strings.TrimSpace(thread.SandboxMode)
+	thread.ServiceTier = normalizeStoredServiceTier(thread.ServiceTier)
+	thread.Name = strings.TrimSpace(thread.Name)
+	thread.Preview = strings.TrimSpace(thread.Preview)
+	return thread
+}
+
+func normalizeSessionBackendThreads(src map[string]SessionBackendThread) map[string]SessionBackendThread {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]SessionBackendThread, len(src))
+	for key, value := range src {
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key == "" {
+			continue
+		}
+		normalized := normalizeSessionBackendThread(value)
+		if normalized == (SessionBackendThread{}) {
+			continue
+		}
+		dst[key] = normalized
+	}
+	if len(dst) == 0 {
+		return nil
+	}
+	return dst
+}
+
+func sessionBackendThreadsEqual(a, b map[string]SessionBackendThread) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for key, value := range a {
+		if b[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func storedSessionsEqual(a, b *storedSession) bool {
@@ -510,19 +600,25 @@ func storedSessionsEqual(a, b *storedSession) bool {
 
 func sessionContextFromKey(key string) (chatType, chatID, rootMessageID string, ok bool) {
 	key = strings.TrimSpace(key)
-	switch {
-	case strings.HasPrefix(key, "feishu:group:"):
-		parts := strings.SplitN(key, ":", 5)
-		if len(parts) != 5 || strings.TrimSpace(parts[2]) == "" || parts[3] != "root" {
+	parts := strings.Split(key, ":")
+	if len(parts) < 4 || parts[0] != "feishu" {
+		return "", "", "", false
+	}
+	offset := 1
+	if len(parts) >= 6 && parts[1] == "frontend" {
+		offset = 3
+	}
+	switch parts[offset] {
+	case "group":
+		if len(parts) <= offset+3 || strings.TrimSpace(parts[offset+1]) == "" || parts[offset+2] != "root" {
 			return "", "", "", false
 		}
-		return "group", strings.TrimSpace(parts[2]), strings.TrimSpace(parts[4]), true
-	case strings.HasPrefix(key, "feishu:p2p:"):
-		parts := strings.SplitN(key, ":", 4)
-		if len(parts) != 4 || strings.TrimSpace(parts[2]) == "" {
+		return "group", strings.TrimSpace(parts[offset+1]), strings.TrimSpace(parts[offset+3]), true
+	case "p2p":
+		if len(parts) <= offset+2 || strings.TrimSpace(parts[offset+1]) == "" {
 			return "", "", "", false
 		}
-		return "p2p", strings.TrimSpace(parts[2]), "", true
+		return "p2p", strings.TrimSpace(parts[offset+1]), "", true
 	default:
 		return "", "", "", false
 	}
@@ -577,18 +673,22 @@ func (s *Store) UpsertMessageLink(link *MessageLink) error {
 		return nil
 	}
 	cp := *link
-	s.runtime.MessageLinks[cp.MessageID] = &cp
+	s.runtime.MessageLinks[messageLinkStoreKey(cp.FrontendID, cp.MessageID)] = &cp
 	return nil
 }
 
 func (s *Store) GetMessageLink(messageID string) *MessageLink {
+	return s.GetScopedMessageLink("", messageID)
+}
+
+func (s *Store) GetScopedMessageLink(frontendID, messageID string) *MessageLink {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return nil
 	}
-	if link, ok := s.runtime.MessageLinks[messageID]; ok {
+	if link, ok := s.runtime.MessageLinks[messageLinkStoreKey(frontendID, messageID)]; ok {
 		cp := *link
 		return &cp
 	}
@@ -653,4 +753,28 @@ func formatID(v int64) string {
 
 func strconvFormat(v int64) string {
 	return fmt.Sprintf("%06d", v)
+}
+
+func pendingStoreKey(frontendID, id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	frontendID = strings.TrimSpace(frontendID)
+	if frontendID == "" {
+		return id
+	}
+	return "frontend:" + frontendID + ":pending:" + id
+}
+
+func messageLinkStoreKey(frontendID, messageID string) string {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return ""
+	}
+	frontendID = strings.TrimSpace(frontendID)
+	if frontendID == "" {
+		return messageID
+	}
+	return "frontend:" + frontendID + ":message:" + messageID
 }

@@ -13,7 +13,7 @@ func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
 		return false
 	}
 	sess := a.appState().session(sub.SessionKey)
-	return sess != nil && sess.ChatType == "group" && a.cfg.Feishu.ReplyInThread
+	return sess != nil && sess.ChatType == "group" && a.replyInThreadEnabled(sess.ChatType)
 }
 
 func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {

@@ -200,7 +200,7 @@ func (a *App) replyUpgradeCard(msg *feishu.InboundMessage, targetVersion string)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -212,7 +212,7 @@ func (a *App) replyUpgradeDevCard(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -229,7 +229,7 @@ func (a *App) commandUpgradeLocalPick(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (a *App) commandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string
 		return err
 	}
 	card := a.renderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, upgradeLocalConfirmLines(payload.BinaryPath))
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}

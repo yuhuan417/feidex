@@ -73,6 +73,12 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		a.startMergeForwardPrefetch(msg)
 		return nil
 	}
+	if !a.hasConfiguredBackend() {
+		if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
+			return nil
+		}
+		return a.replyBackendSelectionCard(msg, "")
+	}
 	if !msg.ExpandedMergeForward {
 		if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
 			if err := a.handlePendingTextResponse(msg, pending); err != nil {
@@ -89,7 +95,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			return nil
 		}
 	}
-	if a.codexMaintenanceActive() && a.currentWorkspaceBackendForMessage(msg) == backendCodex {
+	if a.codexMaintenanceActive() && a.configuredBackend() == backendCodex {
 		return errString("Codex 正在维护中，当前只允许 `/codex`、`/status`、`/help`")
 	}
 	replyLink := a.replyRootTurnLink(msg)

@@ -44,14 +44,14 @@ func (a *App) commandHistory(msg *feishu.InboundMessage, args []string) error {
 		if err != nil {
 			return err
 		}
-		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	card, err := a.renderHistoryCard(a.makeSessionKey(msg), 0)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 

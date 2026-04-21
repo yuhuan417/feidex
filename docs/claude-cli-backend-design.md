@@ -178,7 +178,7 @@ backend-neutral 抽象只覆盖共享的产品骨架，不代表最终产品能�
 internal/
   backend/
     types.go          # backend-neutral event/request/capability model
-    factory.go        # 按 workspace/session 选择 backend
+    factory.go        # 按 frontend/runtime 选择 backend
     extensions.go     # backend-specific feature descriptors / handlers
     codex/
       adapter.go      # 包装 internal/codexrpc
@@ -299,7 +299,7 @@ McpElicitation
 1. 共享主入口
    例如发送消息、查看进行中状态、中断、审批、基本历史。
 2. backend-aware 入口
-   根据当前 workspace/session backend 展示“Codex 工具”或“Claude 工具”分组。
+   根据当前 frontend 绑定的 backend 展示“Codex 工具”或“Claude 工具”分组。
 3. 扩展命令入口
    允许 backend 注册自己的命令和菜单动作，而不是把所有行为都塞进共享命令集合。
 
@@ -437,8 +437,10 @@ McpElicitation
 
 - 保留 `[codex]`
 - 新增 `[claude]`
-- 每个 `[[workspace]]` 声明 `backend = "codex" | "claude"`
-- Feishu session 在首次绑定 workspace 时固化 backend kind，避免中途漂移
+- `[[frontend]]` 的 `backend` 可以为空，表示该 frontend 启动后先不绑定 runtime，等首次消息或 `/backend` 显式选择。
+- 每个 frontend 在任一时刻只绑定一个 active backend runtime；不能并发复用两个 backend。
+- frontend backend 切换只能发生在该 frontend 完全空闲时。
+- Feishu session 需要保留 backend-scoped thread lineage，这样 `codex -> claude -> codex` 可以恢复原来的 Codex thread。
 
 示意:
 
@@ -454,14 +456,19 @@ permission_mode = "default"
 disable_plugins = false
 permission_prompt_tool_stdio = true
 
-[[workspace]]
-id = "repo-codex"
-backend = "codex"
-cwd = "/path/to/repo"
+[[frontend]]
+id = "codex-main"
+app_id = "cli_codex"
+app_secret = "secret-1"
+
+[[frontend]]
+id = "claude-main"
+backend = "claude"
+app_id = "cli_claude"
+app_secret = "secret-2"
 
 [[workspace]]
-id = "repo-claude"
-backend = "claude"
+id = "repo"
 cwd = "/path/to/repo"
 ```
 
@@ -502,7 +509,7 @@ cwd = "/path/to/repo"
 
 目标:
 
-- workspace 级 backend 选择
+- frontend 级 backend 选择与 active runtime 绑定
 - Claude 会话启动 / resume
 - 基础聊天 turn
 - 文本流式输出

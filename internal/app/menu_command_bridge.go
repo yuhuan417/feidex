@@ -102,21 +102,8 @@ func (c *commandCaptureClient) SimpleStatusCard(title, color, body string, butto
 }
 
 func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, userID string) {
-	parts := strings.Split(strings.TrimSpace(sessionKey), ":")
-	if len(parts) < 4 || parts[0] != "feishu" {
-		return "", "", "", ""
-	}
-	switch parts[1] {
-	case "group":
-		if len(parts) >= 5 && parts[3] == "root" {
-			return "group", parts[2], parts[4], ""
-		}
-	case "p2p":
-		if len(parts) >= 4 {
-			return "p2p", parts[2], "", parts[3]
-		}
-	}
-	return "", "", "", ""
+	_, chatType, chatID, rootMessageID, userID = parseSessionKey(sessionKey)
+	return chatType, chatID, rootMessageID, userID
 }
 
 func (a *App) commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
@@ -138,7 +125,7 @@ func (a *App) replyCommandActionResponse(msg *feishu.InboundMessage, resp *callb
 	if msg == nil || resp == nil {
 		return nil
 	}
-	replyInThread := msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread
+	replyInThread := a.replyInThreadEnabled(msg.ChatType)
 	if resp.Card != nil {
 		if card, ok := resp.Card.Data.(map[string]any); ok && len(card) > 0 {
 			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThread)

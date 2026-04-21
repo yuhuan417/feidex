@@ -41,7 +41,7 @@ func (a *App) commandCompact(msg *feishu.InboundMessage, args []string) error {
 	if _, err := a.startThreadCompaction(a.makeSessionKey(msg)); err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
@@ -315,7 +315,7 @@ func (a *App) sendSessionTextNotice(sess *state.Session, text string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if strings.TrimSpace(sess.ChatType) == "group" && a.cfg.Feishu.ReplyInThread && strings.TrimSpace(sess.RootMessageID) != "" {
+	if strings.TrimSpace(sess.ChatType) == "group" && a.replyInThreadEnabled(sess.ChatType) && strings.TrimSpace(sess.RootMessageID) != "" {
 		_ = a.feishu.ReplyText(ctx, sess.RootMessageID, text, true)
 		return
 	}

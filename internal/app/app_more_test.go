@@ -413,6 +413,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	t.Helper()
 
 	cfg := config.Default()
+	cfg.Feishu.Backend = backendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
@@ -490,6 +491,7 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	newFeishuClient = func(config.FeishuConfig) feishuClient { return ff }
 
 	cfg := config.Default()
+	cfg.Feishu.Backend = backendCodex
 	cfg.DataDir = t.TempDir()
 	app, err := New(cfg, filepath.Join(t.TempDir(), "config.toml"))
 	if err != nil {
@@ -729,6 +731,13 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 	sessionKey = a.makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"})
 	if sessionKey != "feishu:p2p:chat:user" {
 		t.Fatalf("makeSessionKey(p2p) = %q", sessionKey)
+	}
+	a.frontendID = "frontend-a"
+	if got := a.makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:group:chat:root:root" {
+		t.Fatalf("makeSessionKey(frontend group) = %q", got)
+	}
+	if got := a.makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:p2p:chat:user" {
+		t.Fatalf("makeSessionKey(frontend p2p) = %q", got)
 	}
 }
 
@@ -2797,6 +2806,7 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 		t.Fatalf("UpsertSession(target) error = %v", err)
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		Backend:    backendCodex,
 		MessageID:  "root-msg",
 		SessionKey: targetSessionKey,
 		ThreadID:   "thread-old",
@@ -2958,6 +2968,7 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		Backend:    backendCodex,
 		MessageID:  "reply-root",
 		SessionKey: replySessionKey,
 		ThreadID:   "thread-old",

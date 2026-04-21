@@ -11,12 +11,12 @@ import (
 	"feidex/internal/feishu"
 )
 
-func TestWorkspaceSessionInflightModeCodexWSRemainsSingle(t *testing.T) {
+func TestConfiguredSessionInflightModeCodexWSRemainsSingle(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Codex.Transport = "ws"
 
-	if got := a.workspaceSessionInflightModeByID(a.cfg.Workspaces[0].ID); got != sessionInflightSingle {
-		t.Fatalf("workspaceSessionInflightModeByID(ws) = %q, want %q", got, sessionInflightSingle)
+	if got := a.configuredSessionInflightMode(); got != sessionInflightSingle {
+		t.Fatalf("configuredSessionInflightMode() = %q, want %q", got, sessionInflightSingle)
 	}
 }
 

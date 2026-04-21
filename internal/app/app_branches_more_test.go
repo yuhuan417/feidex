@@ -27,6 +27,7 @@ func (s *appDownloadFeishuStub) DownloadMessageResource(context.Context, string,
 
 func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	cfg := config.Default()
+	cfg.Feishu.Backend = backendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
@@ -119,7 +120,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
 	bad := &App{
-		cfg:         &config.Config{},
+		cfg:         &config.Config{Feishu: config.FeishuConfig{Backend: backendCodex}},
 		store:       store,
 		feishu:      ff,
 		codex:       fc,

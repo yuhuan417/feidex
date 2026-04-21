@@ -18,14 +18,18 @@ import (
 )
 
 type App struct {
-	cfg     *config.Config
-	cfgPath string
-	store   *state.Store
-	codex   codexClient
-	claude  claudeCore
-	feishu  feishuClient
-	started time.Time
-	deduper *inboundDeduper
+	cfg                 *config.Config
+	cfgPath             string
+	store               *state.Store
+	frontendID          string
+	frontendConfigIndex int
+	backend             string
+	codex               codexClient
+	claude              claudeCore
+	feishu              feishuClient
+	started             time.Time
+	deduper             *inboundDeduper
+	backendSwitchMu     sync.Mutex
 
 	turnStreamsMu     sync.Mutex
 	turnStreams       map[string]*turnStream
@@ -63,32 +67,50 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	frontends := cfg.ResolvedFrontends()
+	if len(frontends) == 0 {
+		return nil, fmt.Errorf("no frontend configured")
+	}
+	return newFrontendApp(cfg, cfgPath, store, frontends[0])
+}
+
+func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, frontend config.ResolvedFrontend) (*App, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("nil config")
+	}
+	if store == nil {
+		return nil, fmt.Errorf("nil store")
+	}
 	var codexClient codexClient
-	if configHasBackend(cfg, config.WorkspaceBackendCodex) {
+	backend := normalizeRuntimeBackend(frontend.Backend)
+	if backend == backendCodex {
 		codexClient = newCodexClient(cfg.Codex)
 	}
-	feishuClient := wrapFeishuClient(newFeishuClient(cfg.Feishu))
+	feishuClient := wrapFeishuClient(newFeishuClient(frontend.Feishu))
 	app := &App{
-		cfg:               cfg,
-		cfgPath:           cfgPath,
-		store:             store,
-		codex:             codexClient,
-		feishu:            feishuClient,
-		started:           time.Now(),
-		deduper:           newInboundDeduper(),
-		turnStreams:       map[string]*turnStream{},
-		turnItems:         map[string]*turnItemState{},
-		workspaceCloneOps: map[string]*workspaceCloneOperation{},
-		liveThreads:       map[string]string{},
-		turnBindings:      map[string]turnBinding{},
-		pendingTurns:      map[string][]turnBinding{},
-		threadUsage:       map[string]codexrpc.ThreadTokenUsage{},
-		pendingSkills:     map[string]state.SubmissionSkill{},
+		cfg:                 cfg,
+		cfgPath:             cfgPath,
+		store:               store,
+		frontendID:          strings.TrimSpace(frontend.ID),
+		frontendConfigIndex: frontend.ConfigIndex,
+		backend:             backend,
+		codex:               codexClient,
+		feishu:              feishuClient,
+		started:             time.Now(),
+		deduper:             newInboundDeduper(),
+		turnStreams:         map[string]*turnStream{},
+		turnItems:           map[string]*turnItemState{},
+		workspaceCloneOps:   map[string]*workspaceCloneOperation{},
+		liveThreads:         map[string]string{},
+		turnBindings:        map[string]turnBinding{},
+		pendingTurns:        map[string][]turnBinding{},
+		threadUsage:         map[string]codexrpc.ThreadTokenUsage{},
+		pendingSkills:       map[string]state.SubmissionSkill{},
 	}
 	if codexClient != nil {
 		codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
 	}
-	if configHasBackend(cfg, config.WorkspaceBackendClaude) {
+	if backend == backendClaude {
 		app.claude = newClaudeCore(app, cfg.Claude)
 	}
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
@@ -97,14 +119,13 @@ func New(cfg *config.Config, cfgPath string) (*App, error) {
 }
 
 func (a *App) Start(ctx context.Context) error {
-	if a.codex != nil {
-		if err := a.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
-			return err
-		}
+	if err := a.startBackend(ctx); err != nil {
+		return err
 	}
 	a.startInboundDeduperLoop(ctx)
-	a.recoverRuntimeState()
-	if err := a.feishu.Start(ctx); err != nil {
+	a.recoverSharedRuntimeState()
+	a.recoverFrontendRuntimeState()
+	if err := a.startFrontend(ctx); err != nil {
 		return err
 	}
 	a.startDriveArtifactGCLoop(ctx)
@@ -252,14 +273,21 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 
 func (a *App) makeSessionKey(msg *feishu.InboundMessage) string {
 	if msg != nil && strings.TrimSpace(msg.SessionKey) != "" {
-		return strings.TrimSpace(msg.SessionKey)
+		return a.normalizeSessionKey(msg.SessionKey)
 	}
+	frontendID := strings.TrimSpace(a.frontendID)
 	if msg.ChatType == "group" {
 		root := msg.RootMessageID
 		if root == "" {
 			root = msg.MessageID
 		}
+		if frontendID != "" {
+			return fmt.Sprintf("feishu:frontend:%s:group:%s:root:%s", frontendID, msg.ChatID, root)
+		}
 		return fmt.Sprintf("feishu:group:%s:root:%s", msg.ChatID, root)
+	}
+	if frontendID != "" {
+		return fmt.Sprintf("feishu:frontend:%s:p2p:%s:%s", frontendID, msg.ChatID, msg.UserID)
 	}
 	return fmt.Sprintf("feishu:p2p:%s:%s", msg.ChatID, msg.UserID)
 }
@@ -285,14 +313,14 @@ func (a *App) replyError(msg *feishu.InboundMessage, err error) error {
 		return nil
 	}
 	if msg.MessageID != "" {
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "执行失败: "+err.Error(), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "执行失败: "+err.Error(), a.replyInThreadEnabled(msg.ChatType))
 	}
 	return a.feishu.SendText(context.Background(), msg.ChatID, "执行失败: "+err.Error())
 }
 
 func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
 	card := a.renderCommandMenuCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 

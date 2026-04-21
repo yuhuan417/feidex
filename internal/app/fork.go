@@ -28,7 +28,7 @@ func (a *App) commandFork(msg *feishu.InboundMessage, args []string) error {
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) startThreadFork(sessionKey string) (int, error) {

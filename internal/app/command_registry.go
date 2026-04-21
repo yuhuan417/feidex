@@ -176,6 +176,19 @@ func localCommandSpecList() []localCommandSpec {
 			},
 		},
 		{
+			Names: []string{"/backend"},
+			IsLocal: func(fields []string) bool {
+				return exactCommand(fields)
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandBackend(msg, args)
+			},
+			HelpGroup: "system",
+			HelpEntries: []helpCommandSpec{
+				{Command: "/backend", Summary: "查看本 frontend 当前可用的 backend，并在空闲态切换。"},
+			},
+		},
+		{
 			Names: []string{"/history"},
 			IsLocal: func(fields []string) bool {
 				return matchHistoryCommand(fields)

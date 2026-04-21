@@ -69,14 +69,14 @@ func (a *App) commandCodex(msg *feishu.InboundMessage, args []string) error {
 	}
 	if !prepareUpgrade {
 		card := a.renderCodexUpgradeStatusCard(sessionKey, view, includeLatest)
-		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	card, pendingID, err := a.prepareCodexUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -742,7 +742,7 @@ func (a *App) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, a.renderCodexRestartOperationCard(sessionKey, snapshot), msg.ChatType == "group" && a.cfg.Feishu.ReplyInThread)
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, a.renderCodexRestartOperationCard(sessionKey, snapshot), a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		a.finishCodexRestart("failed", "启动重启卡片失败: "+err.Error())
 		return err

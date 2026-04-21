@@ -133,7 +133,7 @@ func TestOpenHandlesEmptyLegacyAndInvalidFiles(t *testing.T) {
 			t.Fatalf("persisted snapshot should drop legacy runtime field %q:\n%s", forbidden, text)
 		}
 	}
-	if !strings.Contains(text, `"version": 2`) {
+	if !strings.Contains(text, `"version": 3`) {
 		t.Fatalf("persisted snapshot should be rewritten to current version:\n%s", text)
 	}
 

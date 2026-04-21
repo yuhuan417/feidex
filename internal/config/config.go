@@ -16,13 +16,14 @@ import (
 const DefaultShutdownTimeout = 10 * time.Second
 
 type Config struct {
-	DataDir    string       `toml:"data_dir"`
-	Log        LogConfig    `toml:"log"`
-	Feishu     FeishuConfig `toml:"feishu"`
-	Codex      CodexConfig  `toml:"codex"`
-	Claude     ClaudeConfig `toml:"claude"`
-	Daemon     DaemonConfig `toml:"daemon"`
-	Workspaces []Workspace  `toml:"workspace"`
+	DataDir    string           `toml:"data_dir"`
+	Log        LogConfig        `toml:"log"`
+	Feishu     FeishuConfig     `toml:"feishu"`
+	Frontends  []FrontendConfig `toml:"frontend"`
+	Codex      CodexConfig      `toml:"codex"`
+	Claude     ClaudeConfig     `toml:"claude"`
+	Daemon     DaemonConfig     `toml:"daemon"`
+	Workspaces []Workspace      `toml:"workspace"`
 }
 
 type LogConfig struct {
@@ -30,6 +31,7 @@ type LogConfig struct {
 }
 
 type FeishuConfig struct {
+	Backend             string    `toml:"backend"`
 	AppID               string    `toml:"app_id"`
 	AppSecret           string    `toml:"app_secret"`
 	AllowFrom           []string  `toml:"allow_from"`
@@ -39,6 +41,18 @@ type FeishuConfig struct {
 	CardEnabled         bool      `toml:"card_enabled"`
 	ReplyInThread       bool      `toml:"reply_in_thread"`
 	Quiet               QuietMode `toml:"quiet"`
+}
+
+type FrontendConfig struct {
+	ID string `toml:"id"`
+	FeishuConfig
+}
+
+type ResolvedFrontend struct {
+	ID          string
+	Backend     string
+	Feishu      FeishuConfig
+	ConfigIndex int
 }
 
 type CodexConfig struct {
@@ -54,12 +68,12 @@ type CodexConfig struct {
 }
 
 type ClaudeConfig struct {
-	Command                  string `toml:"command"`
-	Model                    string `toml:"model"`
-	PermissionMode           string `toml:"permission_mode"`
-	DisablePlugins           bool   `toml:"disable_plugins"`
-	SystemPrompt             string `toml:"system_prompt"`
-	PermissionPromptToolStdio bool  `toml:"permission_prompt_tool_stdio"`
+	Command                   string `toml:"command"`
+	Model                     string `toml:"model"`
+	PermissionMode            string `toml:"permission_mode"`
+	DisablePlugins            bool   `toml:"disable_plugins"`
+	SystemPrompt              string `toml:"system_prompt"`
+	PermissionPromptToolStdio bool   `toml:"permission_prompt_tool_stdio"`
 }
 
 type DaemonConfig struct {
@@ -69,7 +83,6 @@ type DaemonConfig struct {
 type Workspace struct {
 	ID             string `toml:"id"`
 	Name           string `toml:"name"`
-	Backend        string `toml:"backend"`
 	Cwd            string `toml:"cwd"`
 	Model          string `toml:"model"`
 	ApprovalPolicy string `toml:"approval_policy"`
@@ -77,8 +90,9 @@ type Workspace struct {
 }
 
 const (
-	WorkspaceBackendCodex  = "codex"
-	WorkspaceBackendClaude = "claude"
+	RuntimeBackendCodex  = "codex"
+	RuntimeBackendClaude = "claude"
+	DefaultFrontendID    = "default"
 )
 
 func Default() *Config {
@@ -87,12 +101,7 @@ func Default() *Config {
 		Log: LogConfig{
 			Level: "info",
 		},
-		Feishu: FeishuConfig{
-			GroupAtOnly:   true,
-			CardEnabled:   true,
-			ReplyInThread: true,
-			Quiet:         QuietModeProgress,
-		},
+		Feishu: defaultFeishuConfig(),
 		Codex: CodexConfig{
 			Command:         "codex",
 			Transport:       "stdio",
@@ -112,7 +121,6 @@ func Default() *Config {
 			{
 				ID:             "default",
 				Name:           "Default",
-				Backend:        WorkspaceBackendCodex,
 				Cwd:            ".",
 				Model:          "",
 				ApprovalPolicy: "on-request",
@@ -184,11 +192,28 @@ func (c *Config) Normalize(baseDir string) error {
 	default:
 		return fmt.Errorf("unsupported codex.transport %q; only stdio is supported", c.Codex.Transport)
 	}
-	quietMode, err := ParseQuietMode(c.Feishu.Quiet)
-	if err != nil {
-		quietMode = QuietModeNormal
+	if err := normalizeFeishuConfig(&c.Feishu); err != nil {
+		return err
 	}
-	c.Feishu.Quiet = quietMode
+	seenFrontends := map[string]struct{}{}
+	for i := range c.Frontends {
+		frontend := &c.Frontends[i]
+		frontend.ID = strings.TrimSpace(frontend.ID)
+		if frontend.ID == "" {
+			return errors.New("frontend.id is required")
+		}
+		if strings.Contains(frontend.ID, ":") {
+			return fmt.Errorf("frontend %q id must not contain ':'", frontend.ID)
+		}
+		if _, ok := seenFrontends[frontend.ID]; ok {
+			return fmt.Errorf("duplicate frontend id %q", frontend.ID)
+		}
+		seenFrontends[frontend.ID] = struct{}{}
+		frontend.FeishuConfig.Backend = normalizeBackendName(frontend.FeishuConfig.Backend)
+		if err := normalizeFeishuConfig(&frontend.FeishuConfig); err != nil {
+			return fmt.Errorf("frontend %q: %w", frontend.ID, err)
+		}
+	}
 	if len(c.Workspaces) == 0 {
 		return errors.New("at least one [[workspace]] is required")
 	}
@@ -197,7 +222,6 @@ func (c *Config) Normalize(baseDir string) error {
 		ws := &c.Workspaces[i]
 		ws.ID = strings.TrimSpace(ws.ID)
 		ws.Name = strings.TrimSpace(ws.Name)
-		ws.Backend = normalizeWorkspaceBackend(ws.Backend)
 		ws.Cwd = strings.TrimSpace(ws.Cwd)
 		if ws.ID == "" {
 			return errors.New("workspace.id is required")
@@ -226,6 +250,64 @@ func (c *Config) Normalize(baseDir string) error {
 		c.DataDir = filepath.Clean(filepath.Join(baseDir, c.DataDir))
 	}
 	return nil
+}
+
+func defaultFeishuConfig() FeishuConfig {
+	return FeishuConfig{
+		GroupAtOnly:   true,
+		CardEnabled:   true,
+		ReplyInThread: true,
+		Quiet:         QuietModeProgress,
+	}
+}
+
+func normalizeFeishuConfig(cfg *FeishuConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	cfg.Backend = normalizeBackendName(cfg.Backend)
+	quietMode, err := ParseQuietMode(cfg.Quiet)
+	if err != nil {
+		quietMode = QuietModeNormal
+	}
+	cfg.Quiet = quietMode
+	return nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func (c *Config) ResolvedFrontends() []ResolvedFrontend {
+	if c == nil {
+		return nil
+	}
+	if len(c.Frontends) == 0 {
+		feishuCfg := c.Feishu
+		return []ResolvedFrontend{{
+			ID:          DefaultFrontendID,
+			Backend:     normalizeBackendName(feishuCfg.Backend),
+			Feishu:      feishuCfg,
+			ConfigIndex: -1,
+		}}
+	}
+	out := make([]ResolvedFrontend, 0, len(c.Frontends))
+	for i := range c.Frontends {
+		frontend := c.Frontends[i]
+		frontend.FeishuConfig.Backend = normalizeBackendName(frontend.FeishuConfig.Backend)
+		out = append(out, ResolvedFrontend{
+			ID:          strings.TrimSpace(frontend.ID),
+			Backend:     frontend.FeishuConfig.Backend,
+			Feishu:      frontend.FeishuConfig,
+			ConfigIndex: i,
+		})
+	}
+	return out
 }
 
 func NormalizeLogLevel(value string) (string, error) {
@@ -288,12 +370,14 @@ func FindWorkspace(cfg *Config, id string) *Workspace {
 	return nil
 }
 
-func normalizeWorkspaceBackend(value string) string {
+func normalizeBackendName(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", WorkspaceBackendCodex:
-		return WorkspaceBackendCodex
-	case WorkspaceBackendClaude:
-		return WorkspaceBackendClaude
+	case "":
+		return ""
+	case RuntimeBackendCodex:
+		return RuntimeBackendCodex
+	case RuntimeBackendClaude:
+		return RuntimeBackendClaude
 	default:
 		return strings.ToLower(strings.TrimSpace(value))
 	}

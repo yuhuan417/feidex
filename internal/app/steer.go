@@ -23,7 +23,33 @@ func (a *App) replyRootTurnLink(msg *feishu.InboundMessage) *state.MessageLink {
 	if root == "" || root == strings.TrimSpace(msg.MessageID) {
 		return nil
 	}
-	return a.appState().messageLink(root)
+	link := a.appState().messageLink(root)
+	if !a.messageLinkMatchesCurrentBackend(link) {
+		return nil
+	}
+	return link
+}
+
+func (a *App) messageLinkMatchesCurrentBackend(link *state.MessageLink) bool {
+	if a == nil || link == nil {
+		return false
+	}
+	currentBackend := a.configuredBackend()
+	linkBackend := normalizeRuntimeBackend(link.Backend)
+	switch {
+	case currentBackend == "":
+		return linkBackend == ""
+	case linkBackend != "":
+		return linkBackend == currentBackend
+	}
+	if strings.TrimSpace(link.SessionKey) == "" || strings.TrimSpace(link.ThreadID) == "" {
+		return false
+	}
+	sess := a.appState().session(link.SessionKey)
+	if sess == nil {
+		return false
+	}
+	return strings.TrimSpace(sess.ActiveThreadID) == strings.TrimSpace(link.ThreadID)
 }
 
 func (a *App) sessionKeyForInboundMessage(msg *feishu.InboundMessage, link *state.MessageLink) string {
@@ -37,10 +63,14 @@ func (a *App) pendingInputSessionKey(msg *feishu.InboundMessage) string {
 	if msg == nil {
 		return ""
 	}
-	if strings.TrimSpace(msg.ChatType) == "group" {
-		return "feishu:group:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
+	prefix := "feishu:"
+	if strings.TrimSpace(a.frontendID) != "" {
+		prefix += "frontend:" + strings.TrimSpace(a.frontendID) + ":"
 	}
-	return "feishu:p2p:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
+	if strings.TrimSpace(msg.ChatType) == "group" {
+		return prefix + "group:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
+	}
+	return prefix + "p2p:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
 }
 
 func (a *App) collectPendingStagedImages(targetSessionKey, bucketSessionKey string) []state.SessionStagedImage {
@@ -122,7 +152,7 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
-	if a.workspaceBackendByID(sess.WorkspaceID) == backendClaude {
+	if a.isClaudeBackend() {
 		return a.tryClaudeReplyContinuation(msg, link, sessionKey, sess)
 	}
 	bucketSessionKey := a.pendingInputSessionKey(msg)

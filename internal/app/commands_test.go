@@ -14,6 +14,12 @@ import (
 	"feidex/internal/state"
 )
 
+func testCodexConfig() *config.Config {
+	cfg := config.Default()
+	cfg.Feishu.Backend = backendCodex
+	return cfg
+}
+
 func TestCommandNewRejectsRunningTurn(t *testing.T) {
 	store, err := state.Open(t.TempDir() + "/state.json")
 	if err != nil {
@@ -49,7 +55,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store, codex: codexrpc.New(config.CodexConfig{})}
+	a := &App{store: store, codex: codexrpc.New(config.CodexConfig{}), cfg: testCodexConfig()}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            "feishu:p2p:chat:user",
 		WorkspaceID:    "default",
@@ -94,6 +100,7 @@ func TestIsLocalCommand(t *testing.T) {
 	cases := map[string]bool{
 		"/menu":                     true,
 		"/help":                     true,
+		"/backend":                  true,
 		"/history":                  true,
 		"/history detail 1":         true,
 		"/skills":                   true,
@@ -240,7 +247,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	}
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
-	a := &App{store: store, codex: fc, feishu: ff, cfg: config.Default()}
+	a := &App{store: store, codex: fc, feishu: ff, cfg: testCodexConfig()}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            "feishu:p2p:chat:user",
 		WorkspaceID:    "default",
@@ -280,7 +287,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	fc := &fakeCodexClient{callErr: context.DeadlineExceeded}
-	a := &App{store: store, codex: fc, feishu: &fakeFeishuClient{}, cfg: config.Default()}
+	a := &App{store: store, codex: fc, feishu: &fakeFeishuClient{}, cfg: testCodexConfig()}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            "feishu:p2p:chat:user",
 		WorkspaceID:    "default",
@@ -307,7 +314,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
-	cfg := config.Default()
+	cfg := testCodexConfig()
 	a := &App{store: store, codex: fc, feishu: ff, cfg: cfg}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                        "feishu:p2p:chat:user",
@@ -367,7 +374,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 
 func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{feishu: ff, cfg: config.Default()}
+	a := &App{feishu: ff, cfg: testCodexConfig()}
 	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
 	prev := runtimeLogLevelText()
 	t.Cleanup(func() {
@@ -399,7 +406,7 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 
 func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{feishu: ff, cfg: config.Default()}
+	a := &App{feishu: ff, cfg: testCodexConfig()}
 	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
 	prevLevel := runtimeLogLevelText()
 	oldLogger := slog.Default()
@@ -439,7 +446,7 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 
 func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{feishu: ff, cfg: config.Default(), cfgPath: "/etc/feidex/config.toml"}
+	a := &App{feishu: ff, cfg: testCodexConfig(), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
@@ -458,7 +465,7 @@ func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 }
 
 func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
-	a := &App{cfg: config.Default(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
+	a := &App{cfg: testCodexConfig(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := a.completeMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
@@ -482,7 +489,7 @@ func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 
 func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{feishu: ff, cfg: config.Default(), cfgPath: "/etc/feidex/config.toml"}
+	a := &App{feishu: ff, cfg: testCodexConfig(), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
@@ -499,7 +506,7 @@ func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 }
 
 func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
-	a := &App{cfg: config.Default(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
+	a := &App{cfg: testCodexConfig(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := a.completeMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
