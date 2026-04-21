@@ -183,6 +183,7 @@ type TurnCompleteEvent struct {
 	DurationMs int64
 	Usage      TurnUsage
 	Error      error
+	Result     string
 }
 
 func (e TurnCompleteEvent) Type() EventType { return EventTypeTurnComplete }

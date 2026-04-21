@@ -107,6 +107,7 @@ func (c wireFlexibleContent) AsBlocks() ([]wireContentBlock, bool, error) {
 }
 
 type wireMessageContent struct {
+	ID      string              `json:"id,omitempty"`
 	Role    string              `json:"role"`
 	Content wireFlexibleContent `json:"content"`
 }

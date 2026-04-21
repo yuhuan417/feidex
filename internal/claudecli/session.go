@@ -39,11 +39,10 @@ type Session struct {
 }
 
 type turnState struct {
-	Number       int
-	StartTime    time.Time
-	FullText     string
-	FullThinking string
-	Tools        map[string]*toolState
+	Number        int
+	StartTime     time.Time
+	Tools         map[string]*toolState
+	SeenAssistant map[string]bool
 }
 
 type toolState struct {
@@ -189,9 +188,10 @@ func (s *Session) SendMessage(ctx context.Context, content string) (int, error) 
 
 	s.turnNumber++
 	turn := &turnState{
-		Number:    s.turnNumber,
-		StartTime: time.Now(),
-		Tools:     map[string]*toolState{},
+		Number:        s.turnNumber,
+		StartTime:     time.Now(),
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
 	}
 	s.turns[turn.Number] = turn
 	if s.current == nil {
@@ -383,72 +383,100 @@ func (s *Session) handleStreamMessage(msg wireStreamMessage) {
 }
 
 func (s *Session) handleAssistantMessage(msg wireAssistantMessage) {
+	role := strings.TrimSpace(msg.Message.Role)
+	if role != "" && role != "assistant" {
+		return
+	}
+
 	blocks, ok, err := msg.Message.Content.AsBlocks()
-	if err != nil || !ok {
+	if err != nil {
+		s.emitError(err, "parse_assistant_message")
+		return
+	}
+	if !ok || len(blocks) == 0 {
 		return
 	}
 
-	for _, block := range blocks {
-		switch value := block.(type) {
+	s.mu.Lock()
+	turn := s.current
+	turnNumber := 0
+	if turn != nil {
+		turnNumber = turn.Number
+	}
+	s.mu.Unlock()
+	if turnNumber == 0 {
+		return
+	}
+
+	messageID := strings.TrimSpace(msg.Message.ID)
+	for i := 0; i < len(blocks); {
+		switch value := blocks[i].(type) {
 		case wireTextBlock:
-			s.handleAssistantTextBlock(value)
+			text := value.Text
+			for j := i + 1; j < len(blocks); j++ {
+				next, ok := blocks[j].(wireTextBlock)
+				if !ok {
+					break
+				}
+				text += next.Text
+				i = j
+			}
+			if text != "" && s.markAssistantBlockSeen(turnNumber, assistantBlockSeenKey(messageID, "text", i, text)) {
+				s.emit(TextEvent{TurnNumber: turnNumber, Text: text, FullText: text})
+			}
 		case wireThinkingBlock:
-			s.handleAssistantThinkingBlock(value)
+			thinking := value.Thinking
+			for j := i + 1; j < len(blocks); j++ {
+				next, ok := blocks[j].(wireThinkingBlock)
+				if !ok {
+					break
+				}
+				thinking += next.Thinking
+				i = j
+			}
+			if thinking != "" && s.markAssistantBlockSeen(turnNumber, assistantBlockSeenKey(messageID, "thinking", i, thinking)) {
+				s.emit(ThinkingEvent{TurnNumber: turnNumber, Thinking: thinking, FullThinking: thinking})
+			}
 		case wireToolUseBlock:
-			s.handleAssistantToolUseBlock(value)
+			s.completeToolFromAssistant(turnNumber, value)
 		}
+		i++
 	}
 }
 
-func (s *Session) handleAssistantTextBlock(block wireTextBlock) {
+func (s *Session) markAssistantBlockSeen(turnNumber int, key string) bool {
+	if strings.TrimSpace(key) == "" {
+		return true
+	}
 	s.mu.Lock()
-	turn := s.current
+	defer s.mu.Unlock()
+	turn := s.turns[turnNumber]
 	if turn == nil {
-		s.mu.Unlock()
-		return
+		return false
 	}
-	current := turn.FullText
-	if len(block.Text) <= len(current) {
-		s.mu.Unlock()
-		return
+	if turn.SeenAssistant == nil {
+		turn.SeenAssistant = map[string]bool{}
 	}
-	delta := block.Text[len(current):]
-	turn.FullText = block.Text
-	turnNumber := turn.Number
-	fullText := turn.FullText
-	s.mu.Unlock()
-
-	if delta != "" {
-		s.emit(TextEvent{TurnNumber: turnNumber, Text: delta, FullText: fullText})
+	if turn.SeenAssistant[key] {
+		return false
 	}
+	turn.SeenAssistant[key] = true
+	return true
 }
 
-func (s *Session) handleAssistantThinkingBlock(block wireThinkingBlock) {
-	s.mu.Lock()
-	turn := s.current
-	if turn == nil {
-		s.mu.Unlock()
-		return
+func assistantBlockSeenKey(messageID, blockType string, index int, content string) string {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return ""
 	}
-	current := turn.FullThinking
-	if len(block.Thinking) <= len(current) {
-		s.mu.Unlock()
-		return
-	}
-	delta := block.Thinking[len(current):]
-	turn.FullThinking = block.Thinking
-	turnNumber := turn.Number
-	fullThinking := turn.FullThinking
-	s.mu.Unlock()
-
-	if delta != "" {
-		s.emit(ThinkingEvent{TurnNumber: turnNumber, Thinking: delta, FullThinking: fullThinking})
-	}
+	return fmt.Sprintf("%s:%s:%d:%s", messageID, strings.TrimSpace(blockType), index, content)
 }
 
-func (s *Session) handleAssistantToolUseBlock(block wireToolUseBlock) {
+func (s *Session) completeToolFromAssistant(turnNumber int, block wireToolUseBlock) {
+	input := copyMap(block.Input)
+
 	s.mu.Lock()
-	turn := s.current
+	turn := s.turns[turnNumber]
 	if turn == nil {
 		s.mu.Unlock()
 		return
@@ -456,25 +484,23 @@ func (s *Session) handleAssistantToolUseBlock(block wireToolUseBlock) {
 	if turn.Tools == nil {
 		turn.Tools = map[string]*toolState{}
 	}
-	tool := turn.Tools[block.ID]
-	if tool != nil && tool.Completed {
+	if tool := turn.Tools[block.ID]; tool != nil && tool.Completed {
 		s.mu.Unlock()
 		return
 	}
 	turn.Tools[block.ID] = &toolState{
 		ID:        block.ID,
 		Name:      block.Name,
-		Input:     block.Input,
+		Input:     input,
 		Completed: true,
 	}
-	turnNumber := turn.Number
 	s.mu.Unlock()
 
 	s.emit(ToolCompleteEvent{
 		TurnNumber: turnNumber,
 		ID:         block.ID,
 		Name:       block.Name,
-		Input:      copyMap(block.Input),
+		Input:      copyMap(input),
 		Timestamp:  time.Now(),
 	})
 }
@@ -514,7 +540,8 @@ func (s *Session) handleResultMessage(msg wireResultMessage) {
 			CacheReadTokens: msg.Usage.CacheReadInputTokens,
 			CostUSD:         msg.TotalCostUSD,
 		},
-		Error: err,
+		Error:  err,
+		Result: msg.Result,
 	})
 }
 

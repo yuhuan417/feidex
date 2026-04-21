@@ -151,49 +151,80 @@ func TestSessionStoppedAndExitErrorAccessors(t *testing.T) {
 	}
 }
 
-func TestSessionIgnoresContentBlockStreamEvents(t *testing.T) {
+func TestSessionEmitsTextFromAssistantMessage(t *testing.T) {
 	session := NewSession()
 	session.current = &turnState{
-		Number: 1,
-		Tools:  map[string]*toolState{},
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
 	}
 
-	session.handleStreamMessage(wireStreamMessage{
-		Type:  "stream_event",
-		Event: []byte(`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"hello"}}`),
-	})
-	session.handleStreamMessage(wireStreamMessage{
-		Type:  "stream_event",
-		Event: []byte(`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}`),
-	})
-	session.handleStreamMessage(wireStreamMessage{
-		Type:  "stream_event",
-		Event: []byte(`{"type":"content_block_stop","index":0}`),
+	session.turns[1] = session.current
+	session.handleAssistantMessage(wireAssistantMessage{
+		Type: "assistant",
+		Message: wireMessageContent{
+			ID:   "msg-1",
+			Role: "assistant",
+			Content: wireFlexibleContent{
+				raw: []byte(`[{"type":"text","text":"hello world"}]`),
+			},
+		},
 	})
 
-	if got := session.current.FullText; got != "" {
-		t.Fatalf("FullText after ignored content blocks = %q, want empty", got)
+	event := readTextEvent(t, session.Events())
+	if event.Text != "hello world" || event.FullText != "hello world" {
+		t.Fatalf("TextEvent = %#v, want hello world", event)
 	}
 	assertNoExtraSessionEvents(t, session.Events())
 }
 
-func TestSessionEmitsToolCompleteOnceForRepeatedAssistantSnapshots(t *testing.T) {
+func TestSessionDeduplicatesRepeatedAssistantTextForSameMessageBlock(t *testing.T) {
 	session := NewSession()
 	session.current = &turnState{
-		Number: 1,
-		Tools:  map[string]*toolState{},
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
 	}
-	session.handleAssistantToolUseBlock(wireToolUseBlock{
-		Type:  "tool_use",
-		ID:    "tool-1",
-		Name:  "Edit",
-		Input: map[string]any{"file_path": "demo.go"},
-	})
-	session.handleAssistantToolUseBlock(wireToolUseBlock{
-		Type:  "tool_use",
-		ID:    "tool-1",
-		Name:  "Edit",
-		Input: map[string]any{"file_path": "demo.go"},
+	session.turns[1] = session.current
+
+	msg := wireAssistantMessage{
+		Type: "assistant",
+		Message: wireMessageContent{
+			ID:   "msg-1",
+			Role: "assistant",
+			Content: wireFlexibleContent{
+				raw: []byte(`[{"type":"text","text":"hello"}]`),
+			},
+		},
+	}
+	session.handleAssistantMessage(msg)
+	session.handleAssistantMessage(msg)
+
+	event := readTextEvent(t, session.Events())
+	if event.Text != "hello" {
+		t.Fatalf("TextEvent = %#v, want hello", event)
+	}
+	assertNoExtraSessionEvents(t, session.Events())
+}
+
+func TestSessionEmitsToolCompleteFromAssistantMessage(t *testing.T) {
+	session := NewSession()
+	session.current = &turnState{
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
+	}
+	session.turns[1] = session.current
+
+	session.handleAssistantMessage(wireAssistantMessage{
+		Type: "assistant",
+		Message: wireMessageContent{
+			ID:   "msg-1",
+			Role: "assistant",
+			Content: wireFlexibleContent{
+				raw: []byte(`[{"type":"tool_use","id":"tool-1","name":"Edit","input":{"file_path":"demo.go"}}]`),
+			},
+		},
 	})
 
 	event := readToolCompleteEvent(t, session.Events())
@@ -203,27 +234,19 @@ func TestSessionEmitsToolCompleteOnceForRepeatedAssistantSnapshots(t *testing.T)
 	assertNoExtraSessionEvents(t, session.Events())
 }
 
-func TestSessionEmitsTextFromAssistantSnapshots(t *testing.T) {
+func TestSessionIgnoresContentBlockStreamEventsForDelivery(t *testing.T) {
 	session := NewSession()
-	session.current = &turnState{Number: 1}
-
-	session.handleAssistantTextBlock(wireTextBlock{
-		Type: "text",
-		Text: "hello",
-	})
-	session.handleAssistantTextBlock(wireTextBlock{
-		Type: "text",
-		Text: "hello world",
-	})
-
-	first := readTextEvent(t, session.Events())
-	if first.Text != "hello" || first.FullText != "hello" {
-		t.Fatalf("first TextEvent = %#v", first)
+	session.current = &turnState{
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
 	}
-	second := readTextEvent(t, session.Events())
-	if second.Text != " world" || second.FullText != "hello world" {
-		t.Fatalf("second TextEvent = %#v", second)
-	}
+	session.turns[1] = session.current
+
+	session.handleStreamMessage(wireStreamMessage{
+		Type:  "stream_event",
+		Event: []byte(`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"hello"}}`),
+	})
 	assertNoExtraSessionEvents(t, session.Events())
 }
 
