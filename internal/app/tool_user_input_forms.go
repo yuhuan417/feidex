@@ -25,7 +25,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{})
+	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
 		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
@@ -115,11 +115,11 @@ func renderToolUserInputBody(payload toolUserInputPayload) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderToolUserInputFormCard(requestID string, payload toolUserInputPayload, drafts toolUserInputFormDrafts) map[string]any {
+func renderToolUserInputFormCard(requestID string, payload toolUserInputPayload, drafts toolUserInputFormDrafts, attentionUserID string) map[string]any {
 	card := newMarkdownBodyCard("需要补充输入", "orange")
 	appendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
-		"content": renderToolUserInputBody(payload),
+		"content": prependAttentionMentionMarkdown(renderToolUserInputBody(payload), attentionUserID),
 	})
 	formElements := make([]map[string]any, 0, len(payload.Questions)+4)
 	for _, q := range payload.Questions {

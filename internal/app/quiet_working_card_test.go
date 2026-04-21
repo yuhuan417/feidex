@@ -293,6 +293,9 @@ func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
 	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
 		t.Fatalf("patched card title = %q, want 最终答复", got)
 	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("patched final card body = %q, want attention mention", body)
+	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after finishTurn = %d, want 1 because lingering card should be reused", len(ff.replyCards))
 	}
@@ -330,7 +333,7 @@ func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
 	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "任务状态" {
 		t.Fatalf("patched card title = %q, want 任务状态", got)
 	}
-	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "任务失败。") {
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, `<at id=user-1></at>`) || !strings.Contains(body, "任务失败。") {
 		t.Fatalf("patched terminal card body = %q", body)
 	}
 }

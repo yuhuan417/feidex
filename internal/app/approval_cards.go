@@ -123,7 +123,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", q.Question, buttons)
+	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err == nil {
 		requestKey := requestIDKey(requestID)

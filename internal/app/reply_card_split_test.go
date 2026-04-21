@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"feidex/internal/state"
 )
 
 func markdownTestTable(name string) string {
@@ -128,6 +130,12 @@ func TestSendFinalMessagesWithFooterSplitsReplyCardsByTableLimit(t *testing.T) {
 	if tables := countTablesInMarkdown(cardMarkdownContent(t, ff.replyCards[1])); tables != 1 {
 		t.Fatalf("second reply card tables = %d, want 1", tables)
 	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("first split card missing attention mention: %q", body)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[1]); strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("second split card should not repeat attention mention: %q", body)
+	}
 	if body := cardMarkdownContent(t, ff.replyCards[0]); strings.Contains(body, "footer line") {
 		t.Fatalf("first split card should not include footer: %q", body)
 	}
@@ -136,6 +144,29 @@ func TestSendFinalMessagesWithFooterSplitsReplyCardsByTableLimit(t *testing.T) {
 	}
 	if updated := a.store.GetSubmission(sub.ID); updated == nil {
 		t.Fatalf("updated submission = %+v, want retained runtime submission", updated)
+	}
+}
+
+func TestSendFinalMessagesWithFooterSkipsAttentionWhenQueuePending(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	ff.replyCardIDs = []string{"card-1"}
+	if _, err := a.store.UpdateSession("sess-1", func(sess *state.Session) {
+		if sess == nil {
+			return
+		}
+		sess.Queue = []string{"sub-queued"}
+		sess.Status = "queued"
+	}); err != nil {
+		t.Fatalf("UpdateSession() error = %v", err)
+	}
+
+	got := a.sendFinalMessagesWithFooter(context.Background(), sub, "final answer", nil, false)
+	if len(got) != 1 || got[0] != "card-1" {
+		t.Fatalf("sendFinalMessagesWithFooter() ids = %#v, want single final card", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("queued final card should not mention user: %q", body)
 	}
 }
 

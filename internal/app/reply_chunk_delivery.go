@@ -21,6 +21,11 @@ func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submi
 	if a == nil {
 		return nil
 	}
+	if strings.TrimSpace(title) == "最终答复" && len(chunks) > 0 {
+		copied := append([]replyCardChunk(nil), chunks...)
+		copied[0].Body = prependAttentionMentionMarkdown(copied[0].Body, a.turnStopAttentionUserID(sub, sub.TurnID))
+		chunks = copied
+	}
 	chunks = a.fitReplyCardChunks(ctx, sub, title, color, chunks, enablePreview)
 	if len(chunks) == 0 {
 		return nil

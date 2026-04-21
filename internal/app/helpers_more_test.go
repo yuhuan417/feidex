@@ -223,7 +223,7 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 
 	card := renderToolUserInputFormCard("req-1", payload, toolUserInputFormDrafts{
 		Values: map[string]string{"mode": "Safe"},
-	})
+	}, "")
 	form := toolUserInputFormForTest(t, card)
 	inputs := toolUserInputFormInputsForTest(t, form)
 	if len(inputs) != 1 || inputs["note"] == nil {
@@ -272,7 +272,7 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 	multiCard := renderToolUserInputFormCard("req-2", multiPayload, toolUserInputFormDrafts{
 		Values: map[string]string{toolUserInputOtherFieldName(multiPayload.Questions[0]): "custom"},
 		Multi:  map[string][]string{"targets": []string{"A", "C"}},
-	})
+	}, "")
 	multiForm := toolUserInputFormForTest(t, multiCard)
 	multiButtons := toolUserInputFormButtonsForTest(t, multiForm)
 	if multiButtons["user_input_submit"] == nil {

@@ -65,8 +65,12 @@ func approvalButtons(kind, requestKey string, requestPayload ...map[string]any) 
 	}
 }
 
-func (a *App) renderApprovalCard(_ string, _ *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-	return a.feishu.SimpleStatusCard(title, color, strings.TrimSpace(body), buttons)
+func (a *App) renderApprovalCard(_ string, sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+	attentionUserID := ""
+	if sub != nil {
+		attentionUserID = sub.UserID
+	}
+	return a.feishu.SimpleStatusCard(title, color, prependAttentionMentionMarkdown(strings.TrimSpace(body), attentionUserID), buttons)
 }
 
 func commandApprovalNetworkTarget(params map[string]any) string {

@@ -917,7 +917,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if got, _ := ff.sendCards[0]["schema"].(string); got != "2.0" {
 		t.Fatalf("approval card schema = %#v, want 2.0", ff.sendCards[0]["schema"])
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "命令审批") || !strings.Contains(got, "ls -la") || !strings.Contains(got, "/repo") {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "命令审批") || !strings.Contains(got, "ls -la") || !strings.Contains(got, "/repo") {
 		t.Fatalf("command approval card body = %q", got)
 	}
 	if len(ff.replyTexts) != 0 {
@@ -938,7 +938,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if got, _ := ff.sendCards[0]["schema"].(string); got != "2.0" {
 		t.Fatalf("permissions card schema = %#v, want 2.0", ff.sendCards[0]["schema"])
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); strings.Contains(got, `<at `) || !strings.Contains(got, "权限审批") || !strings.Contains(got, "mode") || !strings.Contains(got, "network") || !strings.Contains(got, "/repo") {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "权限审批") || !strings.Contains(got, "mode") || !strings.Contains(got, "network") || !strings.Contains(got, "/repo") {
 		t.Fatalf("permissions approval card body = %q", got)
 	}
 	if len(ff.replyTexts) != 0 {
@@ -950,6 +950,9 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" {
 		t.Fatalf("tool user input pending = %+v, want quick-pick request", pending)
 	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "Choose") {
+		t.Fatalf("tool user input quick-pick body = %q", got)
+	}
 
 	ff.sendCards = nil
 	a.onToolUserInput(codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-2"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"A"},{"id":"q2","question":"B"}]}`)})
@@ -958,6 +961,9 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 	if len(ff.sendCards) != 1 {
 		t.Fatalf("tool user input form cards = %d, want 1", len(ff.sendCards))
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) {
+		t.Fatalf("tool user input form body = %q", got)
 	}
 	form := toolUserInputFormForTest(t, ff.sendCards[0])
 	if inputs := toolUserInputFormInputsForTest(t, form); len(inputs) != 2 {
@@ -979,10 +985,16 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if pending := a.store.PendingByID("elicit-1"); pending == nil || pending.Kind != "mcp_elicitation_url" {
 		t.Fatalf("elicitation url pending = %+v, want url request", pending)
 	}
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "visit") {
+		t.Fatalf("elicitation url body = %q", got)
+	}
 
 	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-2"`), Params: json.RawMessage(`{"mode":"form","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"fill","requestedSchema":{"properties":{"name":{"type":"string"}}}}`)})
 	if pending := a.store.PendingByID("elicit-2"); pending == nil || pending.Kind != "mcp_elicitation_form" {
 		t.Fatalf("elicitation form pending = %+v, want form request", pending)
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[1]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "fill") {
+		t.Fatalf("elicitation form body = %q", got)
 	}
 }
 
@@ -1215,7 +1227,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 	if len(ff.sendCards) != 1 {
 		t.Fatalf("approval card count = %d, want 1", len(ff.sendCards))
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "命令审批") || strings.Contains(got, `<at `) {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "命令审批") || !strings.Contains(got, `<at id=user-1></at>`) {
 		t.Fatalf("approval card in p2p body = %q", got)
 	}
 	if pending := a.store.PendingByID("req-p2p"); pending == nil || pending.FeishuMsgID == "" {

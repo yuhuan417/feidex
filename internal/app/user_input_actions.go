@@ -96,7 +96,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 		if err != nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
+				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 			}, nil
 		}
 		if err := a.claude.ResolveUserInput(requestID, answers); err != nil {
@@ -107,7 +107,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 			)
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
-				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
+				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 			}, nil
 		}
 		_ = a.appState().updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -122,7 +122,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 	if err != nil {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
+			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 		}, nil
 	}
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
@@ -133,7 +133,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 		)
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
-			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
+			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 		}, nil
 	}
 	_ = a.markPendingRequestReplied(requestID)
@@ -162,6 +162,6 @@ func (a *App) completeUserInputMultiToggle(action *feishu.CardAction) (*callback
 	drafts := toolUserInputDraftsFromCardAction(payload, action)
 	drafts = toggleToolUserInputMultiDraft(drafts, questionID, optionLabel)
 	return &callback.CardActionTriggerResponse{
-		Card: rawCard(renderToolUserInputFormCard(requestID, payload, drafts)),
+		Card: rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 	}, nil
 }

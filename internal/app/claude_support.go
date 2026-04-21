@@ -100,7 +100,7 @@ func (a *App) sendClaudeUserInputCard(requestID, sessionKey string, sub *state.S
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", q.Question, buttons)
+	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err != nil {
 		return err
@@ -135,7 +135,7 @@ func (a *App) sendClaudeUserInputFormCard(requestID, sessionKey string, sub *sta
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
 	}
-	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{})
+	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
 	if err != nil {
 		return err
@@ -170,7 +170,7 @@ func (a *App) sendClaudePlanModeCard(requestID, sessionKey string, sub *state.Su
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
 	}
-	card := a.feishu.SimpleStatusCard("Claude 计划确认", "orange", strings.TrimSpace(body), []feishu.Button{
+	card := a.feishu.SimpleStatusCard("Claude 计划确认", "orange", prependAttentionMentionMarkdown(strings.TrimSpace(body), sub.UserID), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)

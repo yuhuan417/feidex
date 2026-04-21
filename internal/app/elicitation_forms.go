@@ -24,7 +24,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	card := a.feishu.SimpleStatusCard("需要补充表单", "orange", renderElicitationFormBody(payload), []feishu.Button{
+	card := a.feishu.SimpleStatusCard("需要补充表单", "orange", prependAttentionMentionMarkdown(renderElicitationFormBody(payload), sub.UserID), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
 	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
@@ -62,7 +62,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 	if strings.TrimSpace(payload.URL) != "" {
 		body += "\n\n打开链接：<" + payload.URL + ">"
 	}
-	card := a.feishu.SimpleStatusCard("外部表单", "orange", body, []feishu.Button{
+	card := a.feishu.SimpleStatusCard("外部表单", "orange", prependAttentionMentionMarkdown(body, sub.UserID), []feishu.Button{
 		{Text: "已完成", Type: "primary", Value: map[string]any{"action": "elicitation_url.accept", "request_id": requestKey}},
 		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "elicitation_url.decline", "request_id": requestKey}},
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "elicitation_url.cancel", "request_id": requestKey}},
