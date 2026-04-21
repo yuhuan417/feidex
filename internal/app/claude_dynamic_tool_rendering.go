@@ -137,8 +137,6 @@ func buildClaudeQuietDynamicToolLines(toolName string, input any, workspaceCwd s
 		return buildClaudeShellToolProgressLines(toolName, input, workspaceCwd)
 	case claudeDynamicToolWebCategory:
 		return buildClaudeWebToolProgressLines(toolName, input)
-	case claudeDynamicToolTodoCategory:
-		return buildClaudeTodoToolProgressLines(input)
 	case claudeDynamicToolPlanCategory:
 		return buildClaudePlanToolProgressLines(toolName, input)
 	case claudeDynamicToolTaskCategory:
@@ -295,28 +293,6 @@ func buildClaudeWebToolProgressLines(toolName string, input any) []string {
 	default:
 		return nil
 	}
-}
-
-func buildClaudeTodoToolProgressLines(input any) []string {
-	m := toolInputMap(input)
-	if len(m) == 0 {
-		return nil
-	}
-	lines := []string{}
-	todoLines := summarizeTodoInputLines(m)
-	if len(todoLines) == 0 {
-		return nil
-	}
-	if count := len(toolInputSequence(m["todos"])); count > 0 {
-		lines = append(lines, fmt.Sprintf("Update todo list (%d items)", count))
-	}
-	for _, line := range todoLines {
-		line = strings.TrimPrefix(strings.TrimSpace(line), "- ")
-		if line != "" && !strings.HasPrefix(line, "todos:") {
-			lines = append(lines, "Todo "+line)
-		}
-	}
-	return trimmedNonEmptyStrings(lines)
 }
 
 func buildClaudePlanToolProgressLines(toolName string, input any) []string {

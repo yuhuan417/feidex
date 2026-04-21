@@ -116,6 +116,25 @@ func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFina
 	}
 }
 
+func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnItemCardPayload) bool {
+	if shouldDeliverTurnItemInQuiet(mode, payload.ItemType, payload.IsFinalAnswer) {
+		return true
+	}
+	if !isClaudeTodoToolPayload(payload) {
+		return false
+	}
+	switch mode {
+	case config.QuietModeProgress, config.QuietModeNormal:
+		return true
+	default:
+		return false
+	}
+}
+
+func isClaudeTodoToolPayload(payload turnItemCardPayload) bool {
+	return normalizeTurnItemType(payload.ProtocolItemType) == "dynamic_tool_call" && strings.TrimSpace(payload.ToolName) == "TodoWrite"
+}
+
 func (a *App) renderQuietModeCard() map[string]any {
 	return a.renderQuietModeMenuCard("")
 }

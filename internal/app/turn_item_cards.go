@@ -42,6 +42,7 @@ type turnItemCardPayload struct {
 	ItemID           string `json:"item_id"`
 	ItemType         string `json:"item_type"`
 	ProtocolItemType string `json:"protocol_item_type"`
+	ToolName         string `json:"tool_name"`
 	Title            string `json:"title"`
 	Color            string `json:"color"`
 	SummaryText      string `json:"summary_text"`
@@ -63,7 +64,7 @@ func (a *App) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submissi
 	if payload.Title == "" || payload.Color == "" {
 		payload.Title, payload.Color = turnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnItemInQuiet(a.quietMode(), payload.ItemType, payload.IsFinalAnswer) {
+	if a.quietModeEnabled() && !shouldDeliverTurnItemPayloadInQuiet(a.quietMode(), payload) {
 		return ""
 	}
 	kind := turnItemEventKind(payload.ItemType)

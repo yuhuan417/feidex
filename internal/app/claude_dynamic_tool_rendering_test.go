@@ -121,9 +121,8 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 			},
 		},
 	}, workspace)
-	joinedTodo := strings.Join(todoLines, "\n")
-	if !strings.Contains(joinedTodo, "Update todo list (2 items)") || !strings.Contains(joinedTodo, "Todo [in_progress] 核对日志") {
-		t.Fatalf("todo progress lines = %q", joinedTodo)
+	if todoLines != nil {
+		t.Fatalf("todo progress lines should be disabled once TodoWrite is rendered as a normal card, got %#v", todoLines)
 	}
 
 	_, taskLines := buildQuietWorkingCardLines("item-task", map[string]any{
@@ -202,5 +201,68 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 	})
 	if len(ff.replyCards) != replyCount || len(ff.patchedCards) != patchCount {
 		t.Fatalf("unknown dynamic tool should not change progress cards, reply=%d patch=%d", len(ff.replyCards), len(ff.patchedCards))
+	}
+}
+
+func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	a.noteTurnStarted("sess-1", sub)
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+		"id":   "item-read",
+		"type": "dynamic_tool_call",
+		"tool": "Read",
+		"input": map[string]any{
+			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after initial read = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != quietWorkingCardTitle {
+		t.Fatalf("initial card title = %q, want %q", got, quietWorkingCardTitle)
+	}
+
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
+		"id":   "item-todo",
+		"type": "dynamic_tool_call",
+		"tool": "TodoWrite",
+		"input": map[string]any{
+			"todos": []any{
+				map[string]any{"content": "核对日志", "status": "in_progress"},
+				map[string]any{"content": "补消息卡片", "status": "pending"},
+			},
+		},
+	})
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after TodoWrite = %d, want 2", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[1]); got != "待办更新" {
+		t.Fatalf("TodoWrite card title = %q, want 待办更新", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "[in_progress] 核对日志") || !strings.Contains(body, "[pending] 补消息卡片") {
+		t.Fatalf("TodoWrite card body = %q", body)
+	}
+
+	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+		"id":   "item-task",
+		"type": "dynamic_tool_call",
+		"tool": "TaskUpdate",
+		"input": map[string]any{
+			"taskId": "7",
+			"status": "in_progress",
+		},
+	})
+	if len(ff.replyCards) != 3 {
+		t.Fatalf("reply card count after TodoWrite-following task update = %d, want 3", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[2]); got != quietWorkingCardTitle {
+		t.Fatalf("expected a fresh working card after TodoWrite, got title %q", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
+		t.Fatalf("fresh working card body = %q", body)
 	}
 }

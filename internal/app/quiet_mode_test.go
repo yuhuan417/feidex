@@ -65,6 +65,23 @@ func TestShouldDeliverTurnItemInQuiet(t *testing.T) {
 	}
 }
 
+func TestShouldDeliverTurnItemPayloadInQuietSupportsClaudeTodoWrite(t *testing.T) {
+	payload := turnItemCardPayload{
+		ItemType:         "dynamic_tool_call",
+		ProtocolItemType: "dynamic_tool_call",
+		ToolName:         "TodoWrite",
+	}
+	if !shouldDeliverTurnItemPayloadInQuiet(config.QuietModeProgress, payload) {
+		t.Fatal("expected TodoWrite payload to be allowed in progress mode")
+	}
+	if !shouldDeliverTurnItemPayloadInQuiet(config.QuietModeNormal, payload) {
+		t.Fatal("expected TodoWrite payload to be allowed in normal mode")
+	}
+	if shouldDeliverTurnItemPayloadInQuiet(config.QuietModeFinal, payload) {
+		t.Fatal("expected TodoWrite payload to be blocked in final mode")
+	}
+}
+
 func TestUpdateQuietModePersistsConfig(t *testing.T) {
 	cfg := config.Default()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")

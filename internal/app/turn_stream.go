@@ -142,7 +142,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 			}
 		}
 	}
-	if hasPayload && isQuietBoundaryTurnItem(payload.ItemType) {
+	if hasPayload && isQuietBoundaryTurnPayload(payload) {
 		if stream.QuietWorking != nil {
 			itemBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
 			itemReuseMessage = itemBoundary.ReuseMessageID
@@ -160,7 +160,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	if a.quietWorkingCardEnabled() {
 		a.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
-	if hasPayload && !skipPayload && (!a.quietModeEnabled() || shouldDeliverTurnItemInQuiet(a.quietMode(), payload.ItemType, payload.IsFinalAnswer)) {
+	if hasPayload && !skipPayload && (!a.quietModeEnabled() || shouldDeliverTurnItemPayloadInQuiet(a.quietMode(), payload)) {
 		a.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
 }
@@ -230,4 +230,8 @@ func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *
 	}
 	a.turnStreams[sub.TurnID] = stream
 	return stream
+}
+
+func isQuietBoundaryTurnPayload(payload turnItemCardPayload) bool {
+	return isQuietBoundaryTurnItem(payload.ItemType) || isClaudeTodoToolPayload(payload)
 }

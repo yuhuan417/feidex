@@ -66,6 +66,7 @@ func buildTurnItemCardPayloadWithWorkspace(itemID string, item map[string]any, w
 	case "file_change":
 		payload.SummaryText, payload.DetailText = summarizeFileChangeItem(item, workspaceCwd)
 	case "dynamic_tool_call":
+		payload.ToolName = strings.TrimSpace(stringValue(item["tool"]))
 		template := buildClaudeDynamicToolCardTemplate(item, workspaceCwd)
 		payload.SummaryText = template.Summary
 		payload.DetailText = template.Detail
