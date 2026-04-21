@@ -13,6 +13,9 @@ func (a *App) frontendIdleBlockedReason() string {
 	if a.codexMaintenanceActive() {
 		return "当前正在执行 Codex 维护，请稍后再切换 backend"
 	}
+	if a.claudeMaintenanceActive() {
+		return "当前正在执行 Claude 维护，请稍后再切换 backend"
+	}
 	for _, sess := range a.appState().sessions() {
 		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
 			continue

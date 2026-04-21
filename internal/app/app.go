@@ -50,6 +50,9 @@ type App struct {
 	codexUpgradeMu    sync.Mutex
 	codexUpgrade      codexUpgradeSnapshot
 	codexRestart      codexRestartSnapshot
+	claudeUpgradeMu   sync.Mutex
+	claudeUpgrade     claudeUpgradeSnapshot
+	claudeRestart     claudeRestartSnapshot
 }
 
 type turnBinding struct {

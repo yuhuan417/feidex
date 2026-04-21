@@ -98,6 +98,9 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if a.codexMaintenanceActive() && a.configuredBackend() == backendCodex {
 		return errString("Codex 正在维护中，当前只允许 `/codex`、`/status`、`/help`")
 	}
+	if a.claudeMaintenanceActive() && a.configuredBackend() == backendClaude {
+		return errString("Claude 正在维护中，当前只允许 `/claude`、`/status`、`/help`")
+	}
 	replyLink := a.replyRootTurnLink(msg)
 	targetSessionKey := a.makeSessionKey(msg)
 	if replyLink != nil {

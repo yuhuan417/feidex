@@ -28,6 +28,9 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		}
 	}
 	if backend == backendClaude {
+		if err := a.claudeMaintenanceBlocksCommand(raw); err != nil {
+			return err
+		}
 		if err := a.claudeUnsupportedCommand(raw); err != nil {
 			return err
 		}

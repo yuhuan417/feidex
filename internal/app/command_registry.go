@@ -128,6 +128,16 @@ func matchCodexCommand(fields []string) bool {
 	return commandArgInSet(fields[1], "check", "upgrade", "restart")
 }
 
+func matchClaudeCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	if len(fields) != 2 {
+		return false
+	}
+	return commandArgInSet(fields[1], "check", "upgrade", "restart")
+}
+
 func matchWorkspaceCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true
@@ -448,6 +458,22 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/codex check", Summary: "检查 npm 官方最新稳定版。"},
 				{Command: "/codex upgrade", Summary: "准备升级到 npm 官方最新稳定版，并支持 smoke test 失败自动回滚。"},
 				{Command: "/codex restart", Summary: "在空闲态原地重启 Codex runtime，适合刷新新安装的 Skill。"},
+			},
+		},
+		{
+			Names: []string{"/claude"},
+			IsLocal: func(fields []string) bool {
+				return matchClaudeCommand(fields)
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandClaude(msg, args)
+			},
+			HelpGroup: "system",
+			HelpEntries: []helpCommandSpec{
+				{Command: "/claude", Summary: "查看本机 Claude CLI 的安装与升级状态。"},
+				{Command: "/claude check", Summary: "检查 npm 官方最新稳定版。"},
+				{Command: "/claude upgrade", Summary: "准备升级到 npm 官方最新稳定版，失败自动回滚。"},
+				{Command: "/claude restart", Summary: "在空闲态原地重启 Claude runtime。"},
 			},
 		},
 		{

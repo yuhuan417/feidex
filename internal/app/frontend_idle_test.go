@@ -63,6 +63,14 @@ func TestFrontendIdleState(t *testing.T) {
 			want: "当前正在执行 Codex 维护，请稍后再切换 backend",
 		},
 		{
+			name: "claude maintenance blocks idle",
+			seed: func(t *testing.T, a *App, _ *state.Store) {
+				t.Helper()
+				a.claudeUpgrade = claudeUpgradeSnapshot{Running: true}
+			},
+			want: "当前正在执行 Claude 维护，请稍后再切换 backend",
+		},
+		{
 			name: "active work blocks idle",
 			seed: func(t *testing.T, _ *App, store *state.Store) {
 				t.Helper()

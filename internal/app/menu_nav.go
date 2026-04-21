@@ -33,6 +33,7 @@ var menuNodes = map[string]menuNode{
 	"menu.status":              {Label: "状态面板", Parent: "menu.group.system"},
 	"menu.debug.logs":          {Label: "查看日志", Parent: "menu.group.system"},
 	"menu.codex_upgrade":       {Label: "Codex 管理", Parent: "menu.group.system"},
+	"menu.claude_upgrade":      {Label: "Claude 管理", Parent: "menu.group.system"},
 	"menu.upgrade":             {Label: "升级服务", Parent: "menu.group.system"},
 	"menu.help":                {Label: "命令帮助", Parent: "menu.group.system"},
 }

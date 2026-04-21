@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"feidex/internal/buildinfo"
+	"feidex/internal/claudeinstall"
 	"feidex/internal/codexinstall"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -73,6 +74,12 @@ type codexInstallManager interface {
 	InstallVersion(context.Context, string) error
 }
 
+type claudeInstallManager interface {
+	Probe(context.Context) (claudeinstall.Probe, error)
+	LatestVersion(context.Context) (string, error)
+	InstallVersion(context.Context, string) error
+}
+
 var (
 	newCodexClient   = func(cfg config.CodexConfig) codexClient { return codexrpc.New(cfg) }
 	newClaudeCore    = func(app *App, cfg config.ClaudeConfig) claudeCore { return newClaudeRuntime(app, cfg) }
@@ -81,8 +88,10 @@ var (
 	newReleaseClient = func() releaseClient {
 		return release.NewGitHubClient(release.DefaultRepoOwner, release.DefaultRepoName, nil)
 	}
-	newCodexInstallManager = func(command string) codexInstallManager { return codexinstall.New(command) }
-	startDaemonUpgrade     = daemon.StartBackgroundUpgrade
-	currentVersion         = buildinfo.CurrentVersion
-	currentGOARCH          = func() string { return runtime.GOARCH }
+	newCodexInstallManager  = func(command string) codexInstallManager { return codexinstall.New(command) }
+	newClaudeInstallManager = func(command string) claudeInstallManager { return claudeinstall.New(command) }
+	runClaudeSmokeTest      = func(a *App, ctx context.Context) error { return a.claudeSmokeTest(ctx) }
+	startDaemonUpgrade      = daemon.StartBackgroundUpgrade
+	currentVersion          = buildinfo.CurrentVersion
+	currentGOARCH           = func() string { return runtime.GOARCH }
 )
