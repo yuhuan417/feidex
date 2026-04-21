@@ -7,52 +7,83 @@ import (
 )
 
 func (a *App) updateClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
-	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, "")
+	_, ok := a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, "")
+	return ok
 }
 
-func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) bool {
+func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]sentReplyChunk, bool) {
 	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, reuseMessageID)
 }
 
 func (a *App) finalizeClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
-	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true, "")
+	_, ok := a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true, "")
+	return ok
 }
 
 func (a *App) closeClaudeOutputSegment(threadID, turnID string) {
 }
 
-func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) bool {
+func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]sentReplyChunk, bool) {
 	if a == nil {
-		return false
+		return nil, false
 	}
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return false
+		return nil, false
 	}
 	_, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		return false
+		return nil, false
 	}
 	kind := "turn_output"
 	if final {
 		kind = "final_message"
 	}
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), kind) {
-		return true
+		return nil, true
 	}
 
 	if final {
-		ids := a.sendFinalMessagesWithFooter(ctx, sub, body, a.turnFinalFooterLines(turnID, time.Now()), a.replyInThreadForSubmission(sub))
-		if len(ids) == 0 {
-			return false
+		results := a.sendFinalMessagesWithFooterAndReuse(ctx, sub, body, a.turnFinalFooterLines(turnID, time.Now()), a.replyInThreadForSubmission(sub), nil)
+		if len(results) == 0 {
+			return nil, false
 		}
 		a.turnStreamsMu.Lock()
 		if stream := a.turnStreams[turnID]; stream != nil {
 			stream.SentFinal = true
 		}
 		a.turnStreamsMu.Unlock()
-		return true
+		return results, true
 	}
 
-	return len(a.sendReplyMessagesWithReuse(ctx, sub, body, a.replyInThreadForSubmission(sub), kind, reuseMessageID)) > 0
+	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
+	if !replyClass {
+		ids := a.sendReplyMessagesWithReuse(ctx, sub, body, a.replyInThreadForSubmission(sub), kind, reuseMessageID)
+		if len(ids) == 0 {
+			return nil, false
+		}
+		return []sentReplyChunk{{MessageID: ids[0], Body: body, Title: title, ShowHeader: showHeader}}, true
+	}
+	results := a.sendReplyCardChunksWithReuseIDs(
+		ctx,
+		sub,
+		title,
+		color,
+		buildReplyCardChunks(body, showHeader, nil),
+		a.replyInThreadForSubmission(sub),
+		false,
+		func() []string {
+			if strings.TrimSpace(reuseMessageID) == "" {
+				return nil
+			}
+			return []string{strings.TrimSpace(reuseMessageID)}
+		}(),
+	)
+	if len(results) == 0 {
+		return nil, false
+	}
+	for _, result := range results {
+		a.recordMessageLink(result.MessageID, kind, sub, "")
+	}
+	return results, true
 }

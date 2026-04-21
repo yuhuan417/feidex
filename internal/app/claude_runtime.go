@@ -53,6 +53,7 @@ type claudeTurnState struct {
 	Thinking   string
 
 	LastAssistantText        string
+	LastTextChunks           []sentReplyChunk
 	DeliveredAnyText         bool
 	SuppressFailedCompletion bool
 }
@@ -523,12 +524,16 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 	if sub != nil {
 		r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
 	}
-	if !r.app.updateClaudeOutputSegmentWithReuse(context.Background(), threadID, turnID, body, boundary.ReuseMessageID) {
+	chunks, ok := r.app.updateClaudeOutputSegmentWithReuse(context.Background(), threadID, turnID, body, boundary.ReuseMessageID)
+	if !ok {
 		return
 	}
 	state.mu.Lock()
 	if turn := state.turns[event.TurnNumber]; turn != nil {
-		turn.DeliveredAnyText = true
+		if len(chunks) > 0 {
+			turn.DeliveredAnyText = true
+			turn.LastTextChunks = append([]sentReplyChunk(nil), chunks...)
+		}
 	}
 	state.mu.Unlock()
 }
@@ -565,11 +570,13 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	suppressFailedCompletion := false
 	deliveredAnyText := false
 	lastAssistantText := ""
+	lastTextChunks := []sentReplyChunk(nil)
 	if turn != nil {
 		turnID = strings.TrimSpace(turn.TurnID)
 		suppressFailedCompletion = turn.SuppressFailedCompletion && !event.Success
 		deliveredAnyText = turn.DeliveredAnyText
 		lastAssistantText = strings.TrimSpace(turn.LastAssistantText)
+		lastTextChunks = append([]sentReplyChunk(nil), turn.LastTextChunks...)
 	}
 	if suppressFailedCompletion {
 		delete(state.turns, event.TurnNumber)
@@ -602,11 +609,33 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 	if deliveredAnyText && event.Success {
-		r.app.turnStreamsMu.Lock()
-		if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
-			stream.SentFinal = true
+		finalText := strings.TrimSpace(firstNonEmpty(lastAssistantText, strings.TrimSpace(event.Result)))
+		if finalText != "" {
+			_, sub := r.app.findSubmissionByTurn(threadID, turn.TurnID)
+			if sub != nil {
+				reuseMessageIDs := make([]string, 0, len(lastTextChunks))
+				for _, chunk := range lastTextChunks {
+					if id := strings.TrimSpace(chunk.MessageID); id != "" {
+						reuseMessageIDs = append(reuseMessageIDs, id)
+					}
+				}
+				footerLines := r.app.turnFinalFooterLines(turn.TurnID, time.Now())
+				if len(r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)) > 0 {
+					r.app.turnStreamsMu.Lock()
+					if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
+						stream.SentFinal = true
+					}
+					r.app.turnStreamsMu.Unlock()
+				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+					r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+						"type":  "agent_message",
+						"id":    "claude-agent-" + turn.TurnID,
+						"text":  finalText,
+						"phase": "final_answer",
+					})
+				}
+			}
 		}
-		r.app.turnStreamsMu.Unlock()
 	}
 	if !deliveredAnyText {
 		finalText := strings.TrimSpace(firstNonEmpty(strings.TrimSpace(event.Result), lastAssistantText))

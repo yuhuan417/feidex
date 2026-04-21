@@ -92,6 +92,15 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
 	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after completion = %d, want 1 final patch", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
+		t.Fatalf("patched final title = %q, want 最终答复", got)
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, second) {
+		t.Fatalf("patched final body = %q, want second message", body)
+	}
 }
 
 func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.T) {
@@ -248,5 +257,48 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "after plan"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after completion = %d, want 1 final patch", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
+		t.Fatalf("patched final title = %q, want 最终答复", got)
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "after plan") {
+		t.Fatalf("patched final body = %q, want after plan", body)
+	}
+}
+
+func TestClaudeRuntimeQuietFinalSuppressesIntermediateTextButStillDeliversFinalAnswer(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeFinal
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.noteTurnStarted("sess-1", sub)
+
+	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	session := &claudeSessionState{
+		sessionID: "thread-1",
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "intermediate answer"})
+	if len(ff.replyCards) != 0 || len(ff.patchedCards) != 0 {
+		t.Fatalf("quiet final should suppress intermediate text, replies=%d patches=%d", len(ff.replyCards), len(ff.patchedCards))
+	}
+
+	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "final answer"})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after final completion = %d, want 1", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched card count after final completion = %d, want 0", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "最终答复" {
+		t.Fatalf("final reply title = %q, want 最终答复", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "final answer") {
+		t.Fatalf("final reply body = %q, want final answer", body)
 	}
 }

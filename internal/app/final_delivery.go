@@ -39,6 +39,18 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 }
 
 func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {
+	results := a.sendFinalMessagesWithFooterAndReuse(ctx, sub, text, footerLines, inThread, nil)
+	if len(results) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(results))
+	for _, result := range results {
+		ids = append(ids, result.MessageID)
+	}
+	return ids
+}
+
+func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []sentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
@@ -46,25 +58,17 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 		return nil
 	}
 	chunks := buildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
-	results := a.sendReplyCardChunks(ctx, sub, "最终答复", "green", chunks, inThread, true)
+	results := a.sendReplyCardChunksWithReuseIDs(ctx, sub, "最终答复", "green", chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil
 	}
-	ids := make([]string, 0, len(results))
 	for _, result := range results {
-		ids = append(ids, result.MessageID)
-		_ = a.appState().saveMessageLink(&state.MessageLink{
-			MessageID:    result.MessageID,
-			SessionKey:   sub.SessionKey,
-			SubmissionID: sub.ID,
-			ThreadID:     sub.ThreadID,
-			TurnID:       sub.TurnID,
-		})
+		a.recordMessageLink(result.MessageID, "final_message", sub, "")
 		if result.CardID != "" {
 			a.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 		}
 	}
-	return ids
+	return results
 }
 
 func appendReplyCardFooter(card map[string]any, footerLines []string) {

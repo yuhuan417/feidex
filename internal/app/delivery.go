@@ -101,6 +101,14 @@ func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, ti
 }
 
 func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []sentReplyChunk {
+	reuseMessageIDs := []string(nil)
+	if strings.TrimSpace(reuseMessageID) != "" {
+		reuseMessageIDs = []string{strings.TrimSpace(reuseMessageID)}
+	}
+	return a.sendReplyCardChunksWithReuseIDs(ctx, sub, title, color, chunks, inThread, enablePreview, reuseMessageIDs)
+}
+
+func (a *App) sendReplyCardChunksWithReuseIDs(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool, reuseMessageIDs []string) []sentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
@@ -108,8 +116,8 @@ func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submi
 	results := make([]sentReplyChunk, 0, len(specs))
 	for i, spec := range specs {
 		currentReuse := ""
-		if i == 0 {
-			currentReuse = reuseMessageID
+		if i < len(reuseMessageIDs) {
+			currentReuse = strings.TrimSpace(reuseMessageIDs[i])
 		}
 		result, ok := a.sendReplyChunk(ctx, sub, spec, inThread, currentReuse)
 		if !ok {
