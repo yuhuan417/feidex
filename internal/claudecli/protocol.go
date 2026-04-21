@@ -60,18 +60,29 @@ type wireSystemMessage struct {
 }
 
 type wireUsage struct {
-	InputTokens          int `json:"input_tokens"`
-	CacheReadInputTokens int `json:"cache_read_input_tokens"`
-	OutputTokens         int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+}
+
+type wireModelUsage struct {
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens"`
+	CostUSD                  float64 `json:"costUSD"`
+	ContextWindow            int     `json:"contextWindow"`
 }
 
 type wireResultMessage struct {
-	Type         string    `json:"type"`
-	IsError      bool      `json:"is_error"`
-	DurationMs   int64     `json:"duration_ms"`
-	Result       string    `json:"result"`
-	TotalCostUSD float64   `json:"total_cost_usd"`
-	Usage        wireUsage `json:"usage"`
+	Type         string                    `json:"type"`
+	IsError      bool                      `json:"is_error"`
+	DurationMs   int64                     `json:"duration_ms"`
+	Result       string                    `json:"result"`
+	TotalCostUSD float64                   `json:"total_cost_usd"`
+	Usage        wireUsage                 `json:"usage"`
+	ModelUsage   map[string]wireModelUsage `json:"modelUsage"`
 }
 
 type wireFlexibleContent struct {
@@ -177,10 +188,6 @@ type wireInterruptRequest struct {
 	Subtype string `json:"subtype"`
 }
 
-type wireGetContextUsageRequest struct {
-	Subtype string `json:"subtype"`
-}
-
 type wireToolUseRequest struct {
 	Subtype     string         `json:"subtype"`
 	ToolName    string         `json:"tool_name"`
@@ -203,6 +210,55 @@ func parseToolUseRequest(raw json.RawMessage) (*wireToolUseRequest, error) {
 		return nil, err
 	}
 	return &req, nil
+}
+
+func (m wireResultMessage) contextWindow() int {
+	best, ok := selectWireResultModelUsage(m.ModelUsage, m.Usage)
+	if !ok || best.ContextWindow <= 0 {
+		return 0
+	}
+	return best.ContextWindow
+}
+
+func selectWireResultModelUsage(usages map[string]wireModelUsage, usage wireUsage) (wireModelUsage, bool) {
+	if len(usages) == 0 {
+		return wireModelUsage{}, false
+	}
+
+	best := wireModelUsage{}
+	bestSet := false
+	bestExactMatches := -1
+	bestTotalTokens := -1
+	bestContextWindow := -1
+
+	for _, candidate := range usages {
+		exactMatches := 0
+		if candidate.InputTokens == usage.InputTokens {
+			exactMatches++
+		}
+		if candidate.OutputTokens == usage.OutputTokens {
+			exactMatches++
+		}
+		if candidate.CacheReadInputTokens == usage.CacheReadInputTokens {
+			exactMatches++
+		}
+		if candidate.CacheCreationInputTokens == usage.CacheCreationInputTokens {
+			exactMatches++
+		}
+		totalTokens := candidate.InputTokens + candidate.OutputTokens + candidate.CacheReadInputTokens + candidate.CacheCreationInputTokens
+		if !bestSet ||
+			exactMatches > bestExactMatches ||
+			(exactMatches == bestExactMatches && totalTokens > bestTotalTokens) ||
+			(exactMatches == bestExactMatches && totalTokens == bestTotalTokens && candidate.ContextWindow > bestContextWindow) {
+			best = candidate
+			bestSet = true
+			bestExactMatches = exactMatches
+			bestTotalTokens = totalTokens
+			bestContextWindow = candidate.ContextWindow
+		}
+	}
+
+	return best, bestSet
 }
 
 type wireStreamEventType string

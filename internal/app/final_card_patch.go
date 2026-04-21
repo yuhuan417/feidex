@@ -21,7 +21,6 @@ type finalCardPatchState struct {
 	Patching       bool
 	Dirty          bool
 	PreviewPending bool
-	ContextPending bool
 	PruneScheduled bool
 }
 
@@ -86,14 +85,6 @@ func (a *App) markFinalCardPreviewDone(messageID string) {
 	_ = a.setFinalCardPatchPending(messageID, "preview", false)
 }
 
-func (a *App) markFinalCardContextPending(messageID string) bool {
-	return a.setFinalCardPatchPending(messageID, "context", true)
-}
-
-func (a *App) markFinalCardContextDone(messageID string) {
-	_ = a.setFinalCardPatchPending(messageID, "context", false)
-}
-
 func (a *App) setFinalCardPatchPending(messageID, kind string, pending bool) bool {
 	if a == nil {
 		return false
@@ -111,8 +102,6 @@ func (a *App) setFinalCardPatchPending(messageID, kind string, pending bool) boo
 	switch strings.TrimSpace(kind) {
 	case "preview":
 		current.PreviewPending = pending
-	case "context":
-		current.ContextPending = pending
 	default:
 		return false
 	}
@@ -230,7 +219,7 @@ func (a *App) pruneFinalCardPatchLocked(messageID string, current *finalCardPatc
 		delete(a.finalCardPatches, messageID)
 		return
 	}
-	if current.Patching || current.Dirty || current.PreviewPending || current.ContextPending {
+	if current.Patching || current.Dirty || current.PreviewPending {
 		return
 	}
 	if current.PruneScheduled {
@@ -257,7 +246,7 @@ func (a *App) tryPruneFinalCardPatch(messageID string) {
 		return
 	}
 	current.PruneScheduled = false
-	if current.Patching || current.Dirty || current.PreviewPending || current.ContextPending {
+	if current.Patching || current.Dirty || current.PreviewPending {
 		return
 	}
 	delete(a.finalCardPatches, messageID)

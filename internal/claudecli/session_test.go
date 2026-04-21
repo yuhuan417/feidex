@@ -3,7 +3,6 @@ package claudecli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -252,55 +251,55 @@ func TestSessionIgnoresContentBlockStreamEventsForDelivery(t *testing.T) {
 	assertNoExtraSessionEvents(t, session.Events())
 }
 
-func TestSessionGetContextUsage(t *testing.T) {
+func TestSessionHandleResultMessageIncludesContextWindow(t *testing.T) {
 	session := NewSession()
-	session.started = true
-
-	var stdout bytes.Buffer
-	session.writer = newNDJSONWriter(&stdout)
-
-	type result struct {
-		usage ContextUsage
-		err   error
+	session.current = &turnState{
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
 	}
-	resultCh := make(chan result, 1)
-	go func() {
-		usage, err := session.GetContextUsage(context.Background())
-		resultCh <- result{usage: usage, err: err}
-	}()
+	session.turns[1] = session.current
 
-	var request wireControlRequestToSend
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		payload := bytes.TrimSpace(stdout.Bytes())
-		if len(payload) == 0 {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-		if err := json.Unmarshal(payload, &request); err != nil {
-			t.Fatalf("unmarshal outbound request: %v", err)
-		}
-		break
-	}
-	if request.Type != "control_request" {
-		t.Fatalf("request type = %q, want control_request", request.Type)
-	}
-	if request.RequestID == "" {
-		t.Fatal("request id should not be empty")
-	}
-
-	session.handleLine([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"` + request.RequestID + `","response":{"totalTokens":2048,"maxTokens":8192,"percentage":25.0}}}`))
+	session.handleResultMessage(wireResultMessage{
+		Type: "result",
+		Usage: wireUsage{
+			InputTokens:              3,
+			CacheCreationInputTokens: 4603,
+			CacheReadInputTokens:     18841,
+			OutputTokens:             122,
+		},
+		ModelUsage: map[string]wireModelUsage{
+			"claude-haiku-4-5-20251001": {
+				InputTokens:              209,
+				OutputTokens:             18,
+				CacheReadInputTokens:     0,
+				CacheCreationInputTokens: 0,
+				ContextWindow:            200000,
+			},
+			"claude-sonnet-4-5-20250929": {
+				InputTokens:              3,
+				OutputTokens:             122,
+				CacheReadInputTokens:     18841,
+				CacheCreationInputTokens: 4603,
+				ContextWindow:            200000,
+			},
+		},
+	})
 
 	select {
-	case got := <-resultCh:
-		if got.err != nil {
-			t.Fatalf("GetContextUsage() error = %v", got.err)
+	case raw := <-session.Events():
+		event, ok := raw.(TurnCompleteEvent)
+		if !ok {
+			t.Fatalf("event = %#v, want TurnCompleteEvent", raw)
 		}
-		if got.usage.TotalTokens != 2048 || got.usage.MaxTokens != 8192 || got.usage.Percentage != 25.0 {
-			t.Fatalf("GetContextUsage() = %#v, want total=2048 max=8192 percentage=25.0", got.usage)
+		if event.Usage.InputTokens != 3 || event.Usage.CacheCreationTokens != 4603 || event.Usage.CacheReadTokens != 18841 || event.Usage.OutputTokens != 122 {
+			t.Fatalf("usage = %#v", event.Usage)
+		}
+		if event.Usage.ContextWindow != 200000 {
+			t.Fatalf("context window = %d, want 200000", event.Usage.ContextWindow)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for GetContextUsage result")
+		t.Fatal("expected TurnCompleteEvent")
 	}
 }
 

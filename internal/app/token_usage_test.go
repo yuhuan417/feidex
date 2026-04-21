@@ -19,12 +19,6 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	if got := formatContextUsedLine(73.25); got != "context used: 73.2%" {
 		t.Fatalf("formatContextUsedLine(73.25) = %q", got)
 	}
-	if got := pendingContextUsedLine(); got != "context used: calculating..." {
-		t.Fatalf("pendingContextUsedLine() = %q", got)
-	}
-	if got := withPendingContextUsedFooterLines([]string{"elapsed: 2s"}); len(got) != 2 || got[0] != "context used: calculating..." || got[1] != "elapsed: 2s" {
-		t.Fatalf("withPendingContextUsedFooterLines() = %#v", got)
-	}
 	if got := formatContextLeftLine(0, 1000); got != "context left: 100.0%" {
 		t.Fatalf("formatContextLeftLine(zero total) = %q", got)
 	}

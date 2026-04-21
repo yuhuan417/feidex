@@ -14,9 +14,6 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 	if !a.markFinalCardPreviewPending("card-1") {
 		t.Fatal("expected preview patch state to exist")
 	}
-	if !a.markFinalCardContextPending("card-1") {
-		t.Fatal("expected context patch state to exist")
-	}
 	if !a.updateFinalCardPatchFooterLines("card-1", []string{"context used: 13.0%", "elapsed: 1s"}) {
 		t.Fatal("expected footer update to be accepted")
 	}
@@ -24,7 +21,6 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 		t.Fatal("expected body update to be accepted")
 	}
 	a.markFinalCardPreviewDone("card-1")
-	a.markFinalCardContextDone("card-1")
 
 	deadline := time.Now().Add(time.Second)
 	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {

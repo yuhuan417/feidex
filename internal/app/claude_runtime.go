@@ -18,7 +18,6 @@ import (
 )
 
 const claudePlanModePendingKind = "claude_exit_plan_mode"
-const claudeContextUsageTimeout = 20 * time.Second
 
 type claudeRuntime struct {
 	app *App
@@ -30,13 +29,12 @@ type claudeRuntime struct {
 }
 
 type claudeSessionState struct {
-	sessionKey      string
-	workspaceID     string
-	session         *claudecli.Session
-	ctx             context.Context
-	cancel          context.CancelFunc
-	startedAt       time.Time
-	getContextUsage func(context.Context) (claudecli.ContextUsage, error)
+	sessionKey  string
+	workspaceID string
+	session     *claudecli.Session
+	ctx         context.Context
+	cancel      context.CancelFunc
+	startedAt   time.Time
 
 	mu                sync.Mutex
 	sessionID         string
@@ -639,6 +637,9 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		return
 	}
 	r.app.recordTurnTokenUsage(threadID, turn.TurnID, claudeTurnUsageAsThreadUsage(event.Usage))
+	if percentage, ok := claudeTurnContextUsagePercent(event.Usage); ok {
+		r.app.recordTurnContextUsagePercent(turn.TurnID, percentage)
+	}
 	if event.Error != nil {
 		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
@@ -659,10 +660,9 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 						}
 					}
 				}
-				footerLines := withPendingContextUsedFooterLines(r.app.turnFinalFooterLines(turn.TurnID, completedAt))
+				footerLines := r.app.turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
-					r.scheduleClaudeContextUsageFooterPatch(state, event.TurnNumber, finalFooterCardID(results), footerLines)
 					r.app.turnStreamsMu.Lock()
 					if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
 						stream.SentFinal = true
@@ -689,10 +689,9 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
-				footerLines := withPendingContextUsedFooterLines(r.app.turnFinalFooterLines(turn.TurnID, completedAt))
+				footerLines := r.app.turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
-					r.scheduleClaudeContextUsageFooterPatch(state, event.TurnNumber, finalFooterCardID(results), footerLines)
 					r.app.turnStreamsMu.Lock()
 					if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
 						stream.SentFinal = true
@@ -725,46 +724,6 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		}
 	}
 	r.app.finishTurn(threadID, turn.TurnID, status)
-}
-
-func (r *claudeRuntime) scheduleClaudeContextUsageFooterPatch(state *claudeSessionState, turnNumber int, messageID string, baseFooterLines []string) {
-	if r == nil || state == nil {
-		return
-	}
-	messageID = strings.TrimSpace(messageID)
-	if messageID == "" {
-		return
-	}
-	fetchUsage := state.getContextUsage
-	if fetchUsage == nil && state.session != nil {
-		fetchUsage = state.session.GetContextUsage
-	}
-	if fetchUsage == nil {
-		return
-	}
-	if !r.app.markFinalCardContextPending(messageID) {
-		return
-	}
-
-	go func() {
-		defer r.app.markFinalCardContextDone(messageID)
-		usageCtx, usageCancel := context.WithTimeout(context.Background(), claudeContextUsageTimeout)
-		contextUsage, err := fetchUsage(usageCtx)
-		usageCancel()
-		if err != nil {
-			return
-		}
-		_ = r.app.updateFinalCardPatchFooterLines(messageID, mergeContextUsedFooterLines(baseFooterLines, contextUsage.Percentage))
-	}()
-}
-
-func finalFooterCardID(results []sentReplyChunk) string {
-	for i := len(results) - 1; i >= 0; i-- {
-		if id := strings.TrimSpace(results[i].CardID); id != "" {
-			return id
-		}
-	}
-	return ""
 }
 
 func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event claudecli.ErrorEvent) {
@@ -982,7 +941,7 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 func claudeTurnUsageAsThreadUsage(usage claudecli.TurnUsage) codexrpc.ThreadTokenUsage {
 	last := codexrpc.TokenUsageBreakdown{
 		InputTokens:       int64(usage.InputTokens),
-		CachedInputTokens: int64(usage.CacheReadTokens),
+		CachedInputTokens: int64(usage.CacheReadTokens + usage.CacheCreationTokens),
 		OutputTokens:      int64(usage.OutputTokens),
 	}
 	last.TotalTokens = last.InputTokens + last.CachedInputTokens + last.OutputTokens
@@ -990,6 +949,24 @@ func claudeTurnUsageAsThreadUsage(usage claudecli.TurnUsage) codexrpc.ThreadToke
 		Total: last,
 		Last:  last,
 	}
+}
+
+func claudeTurnContextUsagePercent(usage claudecli.TurnUsage) (float64, bool) {
+	if usage.ContextWindow <= 0 {
+		return 0, false
+	}
+	usedTokens := usage.InputTokens + usage.CacheCreationTokens + usage.CacheReadTokens
+	if usedTokens < 0 {
+		usedTokens = 0
+	}
+	percentage := float64(usedTokens) * 100 / float64(usage.ContextWindow)
+	if percentage < 0 {
+		percentage = 0
+	}
+	if percentage > 100 {
+		percentage = 100
+	}
+	return percentage, true
 }
 
 func claudeQuestionsAsToolUserInput(questions []claudecli.Question) []toolUserInputQuestion {
