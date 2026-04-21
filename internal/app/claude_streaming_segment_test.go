@@ -167,6 +167,88 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	}
 }
 
+func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.noteTurnStarted("sess-1", sub)
+
+	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	session := &claudeSessionState{
+		sessionID: "thread-1",
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+		TurnNumber:   1,
+		Thinking:     "private chain of thought",
+		FullThinking: "private chain of thought",
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after thinking = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != quietWorkingCardTitle {
+		t.Fatalf("thinking working card title = %q, want %q", got, quietWorkingCardTitle)
+	}
+	thinkingBody := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(thinkingBody, "思考中...") {
+		t.Fatalf("thinking working card body = %q, want 思考中...", thinkingBody)
+	}
+	if strings.Contains(thinkingBody, "private chain of thought") {
+		t.Fatalf("thinking working card should not expose raw reasoning: %q", thinkingBody)
+	}
+
+	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "visible answer"})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after assistant text = %d, want 1 because the thinking card should be reused", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after assistant text = %d, want 1", len(ff.patchedCards))
+	}
+	patchedBody := cardMarkdownContent(t, ff.patchedCards[0])
+	if !strings.Contains(patchedBody, "visible answer") {
+		t.Fatalf("patched assistant body = %q, want visible answer", patchedBody)
+	}
+	if strings.Contains(patchedBody, "思考中...") {
+		t.Fatalf("patched assistant body should remove thinking placeholder: %q", patchedBody)
+	}
+}
+
+func TestClaudeRuntimeThinkingRemainsHiddenOutsideProgress(t *testing.T) {
+	modes := []config.QuietMode{
+		config.QuietModeVerbose,
+		config.QuietModeNormal,
+		config.QuietModeFinal,
+	}
+	for _, mode := range modes {
+		t.Run(mode.String(), func(t *testing.T) {
+			a, ff, _ := newTestApp(t)
+			a.cfg.Feishu.Quiet = mode
+			sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+			a.noteTurnStarted("sess-1", sub)
+
+			runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+			session := &claudeSessionState{
+				sessionID: "thread-1",
+				turns: map[int]*claudeTurnState{
+					1: {TurnNumber: 1, TurnID: "turn-1"},
+				},
+			}
+
+			runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+				TurnNumber:   1,
+				Thinking:     "private chain of thought",
+				FullThinking: "private chain of thought",
+			})
+			if len(ff.replyCards) != 0 || len(ff.patchedCards) != 0 {
+				t.Fatalf("thinking should stay hidden in %s, replies=%d patches=%d", mode, len(ff.replyCards), len(ff.patchedCards))
+			}
+		})
+	}
+}
+
 func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
@@ -198,6 +280,102 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "final answer") {
 		t.Fatalf("final fallback body = %q, want final answer", body)
+	}
+}
+
+func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.noteTurnStarted("sess-1", sub)
+
+	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	session := &claudeSessionState{
+		sessionID: "thread-1",
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+		TurnNumber:   1,
+		Thinking:     "private chain of thought",
+		FullThinking: "private chain of thought",
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after thinking = %d, want 1", len(ff.replyCards))
+	}
+
+	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+		TurnNumber: 1,
+		Success:    true,
+		Result:     "final answer",
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after final fallback = %d, want 1 because the thinking card should be reused", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after final fallback = %d, want 1", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
+		t.Fatalf("patched final title = %q, want 最终答复", got)
+	}
+	patchedBody := cardMarkdownContent(t, ff.patchedCards[0])
+	if !strings.Contains(patchedBody, "final answer") {
+		t.Fatalf("patched final body = %q, want final answer", patchedBody)
+	}
+	if strings.Contains(patchedBody, "思考中...") {
+		t.Fatalf("patched final body should remove thinking placeholder: %q", patchedBody)
+	}
+}
+
+func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.noteTurnStarted("sess-1", sub)
+
+	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	session := &claudeSessionState{
+		sessionID: "thread-1",
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "draft answer"})
+	runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+		TurnNumber:   1,
+		Thinking:     "private chain of thought",
+		FullThinking: "private chain of thought",
+	})
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count before completion = %d, want 2", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[1]); got != quietWorkingCardTitle {
+		t.Fatalf("thinking card title = %q, want %q", got, quietWorkingCardTitle)
+	}
+
+	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+		TurnNumber: 1,
+		Success:    true,
+		Result:     "draft answer",
+	})
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after completion = %d, want 2 because the latest thinking card should be reused", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after completion = %d, want 1", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
+		t.Fatalf("patched final title = %q, want 最终答复", got)
+	}
+	patchedBody := cardMarkdownContent(t, ff.patchedCards[0])
+	if !strings.Contains(patchedBody, "draft answer") {
+		t.Fatalf("patched final body = %q, want draft answer", patchedBody)
+	}
+	if strings.Contains(patchedBody, "思考中...") {
+		t.Fatalf("patched final body should remove thinking placeholder: %q", patchedBody)
 	}
 }
 

@@ -421,14 +421,7 @@ func (r *claudeRuntime) runSession(state *claudeSessionState) {
 		case claudecli.TextEvent:
 			r.handleTextEvent(state, e)
 		case claudecli.ThinkingEvent:
-			state.mu.Lock()
-			turn := state.turns[e.TurnNumber]
-			if turn == nil {
-				turn = &claudeTurnState{TurnNumber: e.TurnNumber}
-				state.turns[e.TurnNumber] = turn
-			}
-			turn.Thinking = e.FullThinking
-			state.mu.Unlock()
+			r.handleThinkingEvent(state, e)
 		case claudecli.ToolCompleteEvent:
 			r.handleToolComplete(state, e)
 		case claudecli.TurnCompleteEvent:
@@ -494,6 +487,44 @@ func (r *claudeRuntime) prepareClaudeQuietWorkingBoundary(threadID, turnID strin
 	boundary := r.app.prepareQuietWorkingCardBoundaryLocked(r.app.turnStreams[turnID])
 	r.app.turnStreamsMu.Unlock()
 	return sub, boundary
+}
+
+func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event claudecli.ThinkingEvent) {
+	var (
+		threadID string
+		turnID   string
+	)
+
+	state.mu.Lock()
+	turn := state.turns[event.TurnNumber]
+	if turn == nil {
+		turn = &claudeTurnState{TurnNumber: event.TurnNumber}
+		state.turns[event.TurnNumber] = turn
+	}
+	turn.Thinking = strings.TrimSpace(event.FullThinking)
+	threadID = strings.TrimSpace(state.sessionID)
+	turnID = strings.TrimSpace(turn.TurnID)
+	state.mu.Unlock()
+
+	if r == nil || r.app == nil || !r.app.quietWorkingCardEnabled() || turnID == "" {
+		return
+	}
+	sessionKey, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return
+	}
+	workspaceCwd := r.app.workspaceCwd(sub.WorkspaceID)
+	var op quietWorkingCardOp
+	r.app.turnStreamsMu.Lock()
+	stream := r.app.ensureTurnStreamLocked(sessionKey, sub)
+	if threadID != "" {
+		stream.ThreadID = threadID
+	}
+	op = r.app.prepareQuietWorkingCardUpdateLocked(stream, "claude-thinking-"+turnID, map[string]any{
+		"type": "reasoning",
+	}, workspaceCwd)
+	r.app.turnStreamsMu.Unlock()
+	r.app.executeQuietWorkingCardOp(context.Background(), sub, op)
 }
 
 func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
@@ -611,12 +642,18 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	if deliveredAnyText && event.Success {
 		finalText := strings.TrimSpace(firstNonEmpty(lastAssistantText, strings.TrimSpace(event.Result)))
 		if finalText != "" {
-			_, sub := r.app.findSubmissionByTurn(threadID, turn.TurnID)
+			sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				reuseMessageIDs := make([]string, 0, len(lastTextChunks))
-				for _, chunk := range lastTextChunks {
-					if id := strings.TrimSpace(chunk.MessageID); id != "" {
-						reuseMessageIDs = append(reuseMessageIDs, id)
+				r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
+				reuseMessageIDs := []string(nil)
+				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
+					reuseMessageIDs = append(reuseMessageIDs, id)
+				} else {
+					reuseMessageIDs = make([]string, 0, len(lastTextChunks))
+					for _, chunk := range lastTextChunks {
+						if id := strings.TrimSpace(chunk.MessageID); id != "" {
+							reuseMessageIDs = append(reuseMessageIDs, id)
+						}
 					}
 				}
 				footerLines := r.app.turnFinalFooterLines(turn.TurnID, time.Now())
@@ -639,13 +676,36 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	}
 	if !deliveredAnyText {
 		finalText := strings.TrimSpace(firstNonEmpty(strings.TrimSpace(event.Result), lastAssistantText))
-		if finalText != "" && !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-			r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
-				"type":  "agent_message",
-				"id":    "claude-agent-" + turn.TurnID,
-				"text":  finalText,
-				"phase": "final_answer",
-			})
+		if finalText != "" {
+			sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turn.TurnID)
+			if sub != nil {
+				r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
+				reuseMessageIDs := []string(nil)
+				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
+					reuseMessageIDs = append(reuseMessageIDs, id)
+				}
+				if len(r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, r.app.turnFinalFooterLines(turn.TurnID, time.Now()), r.app.replyInThreadForSubmission(sub), reuseMessageIDs)) > 0 {
+					r.app.turnStreamsMu.Lock()
+					if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
+						stream.SentFinal = true
+					}
+					r.app.turnStreamsMu.Unlock()
+				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+					r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+						"type":  "agent_message",
+						"id":    "claude-agent-" + turn.TurnID,
+						"text":  finalText,
+						"phase": "final_answer",
+					})
+				}
+			} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+				r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+					"type":  "agent_message",
+					"id":    "claude-agent-" + turn.TurnID,
+					"text":  finalText,
+					"phase": "final_answer",
+				})
+			}
 		}
 	}
 	status := "completed"
