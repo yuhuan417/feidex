@@ -13,6 +13,10 @@ func (a *App) sendTurnEventMessages(ctx context.Context, sub *state.Submission, 
 }
 
 func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
+	return a.sendReplyMessagesWithReuse(ctx, sub, text, inThread, kind, "")
+}
+
+func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, inThread bool, kind, reuseMessageID string) []string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
@@ -32,7 +36,7 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	}
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
 	if replyClass {
-		results := a.sendReplyCardChunks(ctx, sub, title, color, buildReplyCardChunks(text, showHeader, nil), inThread, enablePreview)
+		results := a.sendReplyCardChunksWithReuse(ctx, sub, title, color, buildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
 		if len(results) == 0 {
 			return nil
 		}
@@ -54,6 +58,18 @@ func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text
 	}
 
 	card := a.renderCompactMarkdownCard(sub, title, color, "", text, nil)
+	if strings.TrimSpace(reuseMessageID) != "" {
+		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+			_ = appState.saveMessageLink(&state.MessageLink{
+				MessageID:    reuseMessageID,
+				SessionKey:   sub.SessionKey,
+				SubmissionID: sub.ID,
+				ThreadID:     sub.ThreadID,
+				TurnID:       sub.TurnID,
+			})
+			return []string{reuseMessageID}
+		}
+	}
 	cardID := ""
 	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
 	if err == nil {

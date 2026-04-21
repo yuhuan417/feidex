@@ -7,17 +7,21 @@ import (
 )
 
 func (a *App) updateClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
-	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false)
+	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, "")
+}
+
+func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) bool {
+	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, reuseMessageID)
 }
 
 func (a *App) finalizeClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
-	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true)
+	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true, "")
 }
 
 func (a *App) closeClaudeOutputSegment(threadID, turnID string) {
 }
 
-func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool) bool {
+func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) bool {
 	if a == nil {
 		return false
 	}
@@ -50,5 +54,5 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 		return true
 	}
 
-	return len(a.sendReplyMessages(ctx, sub, body, a.replyInThreadForSubmission(sub), kind)) > 0
+	return len(a.sendReplyMessagesWithReuse(ctx, sub, body, a.replyInThreadForSubmission(sub), kind, reuseMessageID)) > 0
 }

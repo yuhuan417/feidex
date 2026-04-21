@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +91,70 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: second})
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
+	}
+}
+
+func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.noteTurnStarted("sess-1", sub)
+
+	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	session := &claudeSessionState{
+		sessionID: "thread-1",
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.handleToolComplete(session, claudecli.ToolCompleteEvent{
+		TurnNumber: 1,
+		ID:         "tool-1",
+		Name:       "Read",
+		Input: map[string]any{
+			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after first tool = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != quietWorkingCardTitle {
+		t.Fatalf("first working card title = %q, want %q", got, quietWorkingCardTitle)
+	}
+
+	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "first reply"})
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after assistant text = %d, want 2", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched card count after assistant text = %d, want 0", len(ff.patchedCards))
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "first reply") {
+		t.Fatalf("assistant reply body = %q, want first reply", body)
+	}
+
+	runtime.handleToolComplete(session, claudecli.ToolCompleteEvent{
+		TurnNumber: 1,
+		ID:         "tool-2",
+		Name:       "TaskUpdate",
+		Input: map[string]any{
+			"taskId": "7",
+			"status": "in_progress",
+		},
+	})
+	if len(ff.replyCards) != 3 {
+		t.Fatalf("reply card count after second tool = %d, want 3 for a new working card", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched card count after second tool = %d, want 0 because the old working card should be closed", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[2]); got != quietWorkingCardTitle {
+		t.Fatalf("second working card title = %q, want %q", got, quietWorkingCardTitle)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
+		t.Fatalf("second working card body = %q", body)
 	}
 }
 

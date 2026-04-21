@@ -481,6 +481,20 @@ func (r *claudeRuntime) claudeSessionStoppedError(state *claudeSessionState, thr
 	return &claudecli.ProcessError{Message: message}
 }
 
+func (r *claudeRuntime) prepareClaudeQuietWorkingBoundary(threadID, turnID string) (*state.Submission, quietWorkingBoundary) {
+	if r == nil || r.app == nil || strings.TrimSpace(turnID) == "" {
+		return nil, quietWorkingBoundary{}
+	}
+	_, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return nil, quietWorkingBoundary{}
+	}
+	r.app.turnStreamsMu.Lock()
+	boundary := r.app.prepareQuietWorkingCardBoundaryLocked(r.app.turnStreams[turnID])
+	r.app.turnStreamsMu.Unlock()
+	return sub, boundary
+}
+
 func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
 	body := strings.TrimSpace(event.Text)
 	if body == "" {
@@ -505,7 +519,11 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 	if turnID == "" {
 		return
 	}
-	if !r.app.updateClaudeOutputSegment(context.Background(), threadID, turnID, body) {
+	sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turnID)
+	if sub != nil {
+		r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
+	}
+	if !r.app.updateClaudeOutputSegmentWithReuse(context.Background(), threadID, turnID, body, boundary.ReuseMessageID) {
 		return
 	}
 	state.mu.Lock()
