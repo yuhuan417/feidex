@@ -307,6 +307,39 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 	}
 }
 
+func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	cfg := testCodexConfig()
+	cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a := &App{store: store, claude: claude, feishu: &fakeFeishuClient{}, cfg: cfg}
+
+	msg := &feishu.InboundMessage{
+		MessageID: "m-1",
+		ChatID:    "chat",
+		ChatType:  "p2p",
+		UserID:    "user",
+		Text:      "/compact",
+	}
+	if err := a.handleCommand(msg, "/compact"); err != nil {
+		t.Fatalf("handleCommand(/compact) error = %v", err)
+	}
+	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "/compact") {
+		t.Fatalf("Claude startTurn calls = %#v", claude.startTurnCalls)
+	}
+	sess := a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveSubmissionID) == "" {
+		t.Fatalf("session after Claude /compact = %+v", sess)
+	}
+	sub := a.store.GetSubmission(strings.TrimSpace(sess.ActiveSubmissionID))
+	if sub == nil || sub.InputText != "/compact" {
+		t.Fatalf("Claude compact submission = %+v", sub)
+	}
+}
+
 func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	store, err := state.Open(t.TempDir() + "/state.json")
 	if err != nil {

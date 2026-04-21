@@ -38,6 +38,19 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 	return spec.Handle(a, msg, fields[1:])
 }
 
+func (a *App) enqueuePassthroughCommand(msg *feishu.InboundMessage, raw string) error {
+	if a == nil || msg == nil {
+		return nil
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	cloned := *msg
+	cloned.Text = raw
+	return a.enqueueSubmission(&cloned)
+}
+
 func isLocalCommand(raw string) bool {
 	raw = strings.TrimSpace(raw)
 	fields := strings.Fields(raw)

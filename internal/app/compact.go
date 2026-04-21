@@ -38,6 +38,9 @@ func (a *App) commandCompact(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
+	if a.configuredBackend() == backendClaude {
+		return a.enqueuePassthroughCommand(msg, "/compact")
+	}
 	if _, err := a.startThreadCompaction(a.makeSessionKey(msg)); err != nil {
 		return err
 	}
