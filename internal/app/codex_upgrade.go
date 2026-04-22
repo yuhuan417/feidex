@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -502,56 +501,35 @@ func (a *App) completeCodexUpgradePrepare(action *feishu.CardAction) (*callback.
 }
 
 func (a *App) completeCodexRestartRun(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := actionSessionKey(action)
-	snapshot, err := a.beginCodexRestartOperation()
-	if err != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		view, viewErr := a.loadCodexUpgradeView(ctx, false)
-		if viewErr == nil {
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-				Card:  rawCard(a.renderCodexUpgradeStatusCard(sessionKey, view, false)),
-			}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(a.renderCodexUpgradeFailedCard(sessionKey, viewErr.Error())),
-		}, nil
-	}
-	messageID := strings.TrimSpace(action.MessageID)
-	go a.runCodexRestartOperation(messageID, sessionKey)
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "正在重启 Codex runtime"},
-		Card:  rawCard(a.renderCodexRestartOperationCard(sessionKey, snapshot)),
-	}, nil
+	return completeMaintenanceRestartRun(
+		a,
+		action,
+		a.beginCodexRestartOperation,
+		a.runCodexRestartOperation,
+		a.renderCodexRestartOperationCard,
+		func(ctx context.Context) (map[string]any, error) {
+			view, err := a.loadCodexUpgradeView(ctx, false)
+			if err != nil {
+				return nil, err
+			}
+			return a.renderCodexUpgradeStatusCard(actionSessionKey(action), view, false), nil
+		},
+		a.renderCodexUpgradeFailedCard,
+		"正在重启 Codex runtime",
+	)
 }
 
 func (a *App) completeCodexUpgradeAsyncAction(action *feishu.CardAction, rawCommand, toastText, preparingText string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := actionSessionKey(action)
-	messageID := strings.TrimSpace(action.MessageID)
-	if messageID == "" {
-		return a.completeMenuCommand(action, sessionKey, rawCommand, "menu.group.system")
-	}
-	go func() {
-		_, card, err := a.runCommandFromCardAction(action, sessionKey, rawCommand)
-		if err != nil {
-			card = a.renderCodexUpgradeFailedCard(sessionKey, err.Error())
-		} else if card == nil {
-			card = a.renderCodexUpgradeFailedCard(sessionKey, "命令没有返回卡片")
-		}
-		if patchErr := a.feishu.PatchCard(context.Background(), messageID, card); patchErr != nil {
-			slog.Warn("codex upgrade panel patch failed",
-				"session_key", sessionKey,
-				"message_id", messageID,
-				"error", patchErr,
-			)
-		}
-	}()
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: toastText},
-		Card:  rawCard(a.renderCodexUpgradePreparingCard(sessionKey, preparingText)),
-	}, nil
+	return a.completeMaintenanceAsyncAction(
+		action,
+		rawCommand,
+		toastText,
+		func(sessionKey string) map[string]any {
+			return a.renderCodexUpgradePreparingCard(sessionKey, preparingText)
+		},
+		a.renderCodexUpgradeFailedCard,
+		"codex upgrade panel patch failed",
+	)
 }
 
 func (a *App) completeCodexUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
@@ -621,29 +599,19 @@ func (a *App) completeCodexUpgradeAction(action *feishu.CardAction, actionName s
 
 func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload codexUpgradePendingPayload) {
 	manager := newCodexInstallManager(a.cfg.Codex.Command)
-	patch := func(snapshot codexUpgradeSnapshot) {
-		if strings.TrimSpace(messageID) == "" {
-			return
-		}
-		if err := a.feishu.PatchCard(context.Background(), messageID, a.renderCodexUpgradeOperationCard(sessionKey, snapshot)); err != nil {
-			slog.Warn("codex upgrade progress patch failed",
-				"message_id", messageID,
-				"phase", snapshot.Phase,
-				"error", err,
-			)
-		}
-	}
-	update := func(phase, message string) codexUpgradeSnapshot {
-		snapshot := a.updateCodexUpgrade(func(snapshot *codexUpgradeSnapshot) {
+	_, update, finalize := maintenanceSnapshotLifecycle(
+		a,
+		messageID,
+		sessionKey,
+		"codex upgrade progress patch failed",
+		a.renderCodexUpgradeOperationCard,
+		a.updateCodexUpgrade,
+		a.finishCodexUpgrade,
+		func(snapshot *codexUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
-		})
-		patch(snapshot)
-		return snapshot
-	}
-	finalize := func(result, message string) {
-		patch(a.finishCodexUpgrade(result, message))
-	}
+		},
+	)
 	rollback := func(previousVersion string, cause error) {
 		update("rolling_back", "升级失败，正在回滚到 "+firstNonEmpty(previousVersion, "-"))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -766,21 +734,14 @@ func (a *App) refreshCodexRuntimeAfterMaintenance(ctx context.Context) (bool, er
 }
 
 func (a *App) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
-	if msg == nil {
-		return nil
-	}
-	sessionKey := a.makeSessionKey(msg)
-	snapshot, err := a.beginCodexRestartOperation()
-	if err != nil {
-		return err
-	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, a.renderCodexRestartOperationCard(sessionKey, snapshot), a.replyInThreadEnabled(msg.ChatType))
-	if err != nil {
-		a.finishCodexRestart("failed", "启动重启卡片失败: "+err.Error())
-		return err
-	}
-	go a.runCodexRestartOperation(msgID, sessionKey)
-	return nil
+	return startMaintenanceRestartFromMessage(
+		a,
+		msg,
+		a.beginCodexRestartOperation,
+		a.runCodexRestartOperation,
+		a.renderCodexRestartOperationCard,
+		func(message string) { a.finishCodexRestart("failed", message) },
+	)
 }
 
 func (a *App) beginCodexRestartOperation() (codexRestartSnapshot, error) {
@@ -828,29 +789,19 @@ func (a *App) renderCodexRestartOperationCard(sessionKey string, snapshot codexR
 }
 
 func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
-	patch := func(snapshot codexRestartSnapshot) {
-		if strings.TrimSpace(messageID) == "" {
-			return
-		}
-		if err := a.feishu.PatchCard(context.Background(), messageID, a.renderCodexRestartOperationCard(sessionKey, snapshot)); err != nil {
-			slog.Warn("codex restart progress patch failed",
-				"message_id", messageID,
-				"phase", snapshot.Phase,
-				"error", err,
-			)
-		}
-	}
-	update := func(phase, message string) codexRestartSnapshot {
-		snapshot := a.updateCodexRestart(func(snapshot *codexRestartSnapshot) {
+	_, update, finalize := maintenanceSnapshotLifecycle(
+		a,
+		messageID,
+		sessionKey,
+		"codex restart progress patch failed",
+		a.renderCodexRestartOperationCard,
+		a.updateCodexRestart,
+		a.finishCodexRestart,
+		func(snapshot *codexRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
-		})
-		patch(snapshot)
-		return snapshot
-	}
-	finalize := func(result, message string) {
-		patch(a.finishCodexRestart(result, message))
-	}
+		},
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	manager := newCodexInstallManager(a.cfg.Codex.Command)

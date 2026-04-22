@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -499,56 +498,35 @@ func (a *App) completeClaudeUpgradePrepare(action *feishu.CardAction) (*callback
 }
 
 func (a *App) completeClaudeRestartRun(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := actionSessionKey(action)
-	snapshot, err := a.beginClaudeRestartOperation()
-	if err != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		view, viewErr := a.loadClaudeUpgradeView(ctx, false)
-		if viewErr == nil {
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-				Card:  rawCard(a.renderClaudeUpgradeStatusCard(sessionKey, view, false)),
-			}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(a.renderClaudeUpgradeFailedCard(sessionKey, viewErr.Error())),
-		}, nil
-	}
-	messageID := strings.TrimSpace(action.MessageID)
-	go a.runClaudeRestartOperation(messageID, sessionKey)
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "正在重启 Claude runtime"},
-		Card:  rawCard(a.renderClaudeRestartOperationCard(sessionKey, snapshot)),
-	}, nil
+	return completeMaintenanceRestartRun(
+		a,
+		action,
+		a.beginClaudeRestartOperation,
+		a.runClaudeRestartOperation,
+		a.renderClaudeRestartOperationCard,
+		func(ctx context.Context) (map[string]any, error) {
+			view, err := a.loadClaudeUpgradeView(ctx, false)
+			if err != nil {
+				return nil, err
+			}
+			return a.renderClaudeUpgradeStatusCard(actionSessionKey(action), view, false), nil
+		},
+		a.renderClaudeUpgradeFailedCard,
+		"正在重启 Claude runtime",
+	)
 }
 
 func (a *App) completeClaudeUpgradeAsyncAction(action *feishu.CardAction, rawCommand, toastText, preparingText string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := actionSessionKey(action)
-	messageID := strings.TrimSpace(action.MessageID)
-	if messageID == "" {
-		return a.completeMenuCommand(action, sessionKey, rawCommand, "menu.group.system")
-	}
-	go func() {
-		_, card, err := a.runCommandFromCardAction(action, sessionKey, rawCommand)
-		if err != nil {
-			card = a.renderClaudeUpgradeFailedCard(sessionKey, err.Error())
-		} else if card == nil {
-			card = a.renderClaudeUpgradeFailedCard(sessionKey, "命令没有返回卡片")
-		}
-		if patchErr := a.feishu.PatchCard(context.Background(), messageID, card); patchErr != nil {
-			slog.Warn("claude upgrade panel patch failed",
-				"session_key", sessionKey,
-				"message_id", messageID,
-				"error", patchErr,
-			)
-		}
-	}()
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: toastText},
-		Card:  rawCard(a.renderClaudeUpgradePreparingCard(sessionKey, preparingText)),
-	}, nil
+	return a.completeMaintenanceAsyncAction(
+		action,
+		rawCommand,
+		toastText,
+		func(sessionKey string) map[string]any {
+			return a.renderClaudeUpgradePreparingCard(sessionKey, preparingText)
+		},
+		a.renderClaudeUpgradeFailedCard,
+		"claude upgrade panel patch failed",
+	)
 }
 
 func (a *App) completeClaudeUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
@@ -618,29 +596,19 @@ func (a *App) completeClaudeUpgradeAction(action *feishu.CardAction, actionName 
 
 func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload claudeUpgradePendingPayload) {
 	manager := newClaudeInstallManager(a.cfg.Claude.Command)
-	patch := func(snapshot claudeUpgradeSnapshot) {
-		if strings.TrimSpace(messageID) == "" {
-			return
-		}
-		if err := a.feishu.PatchCard(context.Background(), messageID, a.renderClaudeUpgradeOperationCard(sessionKey, snapshot)); err != nil {
-			slog.Warn("claude upgrade progress patch failed",
-				"message_id", messageID,
-				"phase", snapshot.Phase,
-				"error", err,
-			)
-		}
-	}
-	update := func(phase, message string) claudeUpgradeSnapshot {
-		snapshot := a.updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
+	_, update, finalize := maintenanceSnapshotLifecycle(
+		a,
+		messageID,
+		sessionKey,
+		"claude upgrade progress patch failed",
+		a.renderClaudeUpgradeOperationCard,
+		a.updateClaudeUpgrade,
+		a.finishClaudeUpgrade,
+		func(snapshot *claudeUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
-		})
-		patch(snapshot)
-		return snapshot
-	}
-	finalize := func(result, message string) {
-		patch(a.finishClaudeUpgrade(result, message))
-	}
+		},
+	)
 	rollback := func(previousVersion string, cause error) {
 		update("rolling_back", "升级失败，正在回滚到 "+firstNonEmpty(previousVersion, "-"))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -793,21 +761,14 @@ func (a *App) refreshClaudeRuntimeAfterMaintenance(ctx context.Context) (bool, e
 }
 
 func (a *App) startClaudeRestartFromMessage(msg *feishu.InboundMessage) error {
-	if msg == nil {
-		return nil
-	}
-	sessionKey := a.makeSessionKey(msg)
-	snapshot, err := a.beginClaudeRestartOperation()
-	if err != nil {
-		return err
-	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, a.renderClaudeRestartOperationCard(sessionKey, snapshot), a.replyInThreadEnabled(msg.ChatType))
-	if err != nil {
-		a.finishClaudeRestart("failed", "启动重启卡片失败: "+err.Error())
-		return err
-	}
-	go a.runClaudeRestartOperation(msgID, sessionKey)
-	return nil
+	return startMaintenanceRestartFromMessage(
+		a,
+		msg,
+		a.beginClaudeRestartOperation,
+		a.runClaudeRestartOperation,
+		a.renderClaudeRestartOperationCard,
+		func(message string) { a.finishClaudeRestart("failed", message) },
+	)
 }
 
 func (a *App) beginClaudeRestartOperation() (claudeRestartSnapshot, error) {
@@ -855,29 +816,19 @@ func (a *App) renderClaudeRestartOperationCard(sessionKey string, snapshot claud
 }
 
 func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
-	patch := func(snapshot claudeRestartSnapshot) {
-		if strings.TrimSpace(messageID) == "" {
-			return
-		}
-		if err := a.feishu.PatchCard(context.Background(), messageID, a.renderClaudeRestartOperationCard(sessionKey, snapshot)); err != nil {
-			slog.Warn("claude restart progress patch failed",
-				"message_id", messageID,
-				"phase", snapshot.Phase,
-				"error", err,
-			)
-		}
-	}
-	update := func(phase, message string) claudeRestartSnapshot {
-		snapshot := a.updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
+	_, update, finalize := maintenanceSnapshotLifecycle(
+		a,
+		messageID,
+		sessionKey,
+		"claude restart progress patch failed",
+		a.renderClaudeRestartOperationCard,
+		a.updateClaudeRestart,
+		a.finishClaudeRestart,
+		func(snapshot *claudeRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
-		})
-		patch(snapshot)
-		return snapshot
-	}
-	finalize := func(result, message string) {
-		patch(a.finishClaudeRestart(result, message))
-	}
+		},
+	)
 
 	update("restarting", "正在校验 Claude runtime 状态")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
