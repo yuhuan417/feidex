@@ -96,11 +96,7 @@ func menuGroupSpecForBackend(action, backend string) (commandMenuGroupSpec, bool
 	action = strings.TrimSpace(action)
 	for _, spec := range commandMenuGroupSpecs {
 		if spec.Action == action {
-			if action == "menu.thread" && normalizeRuntimeBackend(backend) == backendClaude {
-				spec.Label = "会话管理"
-				spec.Description = "查看当前会话状态，并通过下拉切换会话。"
-			}
-			return spec, true
+			return backendCapabilityForKind(backend).menuGroupSpec(action, spec), true
 		}
 	}
 	return commandMenuGroupSpec{}, false

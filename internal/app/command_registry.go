@@ -254,18 +254,7 @@ func claudeSessionHelpEntries() []helpCommandSpec {
 }
 
 func backendSpecificHelpEntries(backend string, specs []helpCommandSpec) []helpCommandSpec {
-	if normalizeRuntimeBackend(backend) != backendClaude {
-		return append([]helpCommandSpec(nil), specs...)
-	}
-	updated := make([]helpCommandSpec, 0, len(specs))
-	for _, spec := range specs {
-		item := spec
-		item.Command = strings.ReplaceAll(item.Command, "/thread", "/session")
-		item.Command = strings.ReplaceAll(item.Command, "THREAD_ID", "SESSION_ID")
-		item.Summary = backendSpecificThreadSummary(item.Summary, backend)
-		updated = append(updated, item)
-	}
-	return updated
+	return backendConversationHelpEntries(backend, specs)
 }
 
 func claudeWorkspaceHelpEntries() []helpCommandSpec {
@@ -335,12 +324,10 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
 				{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(matchHistoryCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
-					{Command: "/history", Summary: "查看当前 session 的 turn 历史记录，重点展示每个 turn 的输入。"},
-					{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
-				})),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(matchHistoryCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+				{Command: "/history", Summary: "查看当前 session 的 turn 历史记录，重点展示每个 turn 的输入。"},
+				{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
+			}))),
 		},
 		{
 			Names: []string{"/skills"},
@@ -356,9 +343,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/skills reload", Summary: "强制刷新当前工作区的 skill 列表。"},
 				{Command: "$skill-name <内容>", Summary: "以 skill 前缀显式指定本条消息使用的 skill。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: hiddenBackendCommand(),
-			},
+			Backends: backendPoliciesForUnsupportedFeature(backendFeatureSkills),
 		},
 		{
 			Names: []string{"/usage"},
@@ -372,11 +357,9 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/usage", Summary: "查看当前 thread 的累计 token usage。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
-					{Command: "/usage", Summary: "查看当前 session 的累计 token usage。"},
-				})),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+				{Command: "/usage", Summary: "查看当前 session 的累计 token usage。"},
+			}))),
 		},
 		{
 			Names: []string{"/model"},
@@ -460,9 +443,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/fast toggle", Summary: "切换当前线程的响应速度设置。"},
 				{Command: "/fast config", Summary: "打开当前线程的响应速度配置卡。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: hiddenBackendCommand(),
-			},
+			Backends: backendPoliciesForUnsupportedFeature(backendFeatureFastMode),
 		},
 		{
 			Names: []string{"/download"},
@@ -496,9 +477,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/review custom", Summary: "打开自定义 review instructions 卡。"},
 				{Command: "/review custom <instructions>", Summary: "按自定义 instructions 发起 review。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: hiddenBackendCommand(),
-			},
+			Backends: backendPoliciesForUnsupportedFeature(backendFeatureReview),
 		},
 		{
 			Names: []string{"/compact"},
@@ -512,11 +491,9 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
-					{Command: "/compact", Summary: "压缩当前会话的上下文，减少上下文占用。"},
-				})),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+				{Command: "/compact", Summary: "压缩当前会话的上下文，减少上下文占用。"},
+			}))),
 		},
 		{
 			Names: []string{"/fork"},
@@ -530,11 +507,9 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/fork", Summary: "等价于 `/thread fork`。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(exactCommand, []helpCommandSpec{
-					{Command: "/fork", Summary: "等价于 `/session fork`。"},
-				}),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, []helpCommandSpec{
+				{Command: "/fork", Summary: "等价于 `/session fork`。"},
+			})),
 		},
 		{
 			Names: []string{"/new"},
@@ -548,11 +523,9 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/new", Summary: "等价于 `/thread new`。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(exactCommand, []helpCommandSpec{
-					{Command: "/new", Summary: "等价于 `/session new`。"},
-				}),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, []helpCommandSpec{
+				{Command: "/new", Summary: "等价于 `/session new`。"},
+			})),
 		},
 		{
 			Names: []string{"/thread"},
@@ -575,9 +548,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/thread policy", Summary: "配置当前线程的 approval policy。"},
 				{Command: "/thread policy POLICY", Summary: "直接设置当前线程的 approval policy。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: hiddenBackendCommand(),
-			},
+			Backends: backendPoliciesForUnsupportedFeature(backendFeatureConversationThreadCommands),
 		},
 		{
 			Names: []string{"/session"},
@@ -589,9 +560,7 @@ func localCommandSpecList() []localCommandSpec {
 			},
 			HelpGroup:   "thread",
 			HelpEntries: claudeSessionHelpEntries(),
-			Backends: map[string]localCommandBackendSpec{
-				backendCodex: hiddenBackendCommand(),
-			},
+			Backends:    backendPoliciesForUnsupportedFeature(backendFeatureConversationSessionCommands),
 		},
 		{
 			Names: []string{"/threads"},
@@ -608,9 +577,7 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/threads", Summary: "等价于 `/thread list`。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: hiddenBackendCommand(),
-			},
+			Backends: backendPoliciesForUnsupportedFeature(backendFeatureConversationThreadCommands),
 		},
 		{
 			Names: []string{"/interrupt", "/stop"},
@@ -637,11 +604,9 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/status", Summary: "查看当前会话、线程、工作区与模型状态。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(exactCommand, []helpCommandSpec{
-					{Command: "/status", Summary: "查看当前会话、工作区、Claude 模型与权限状态。"},
-				}),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, []helpCommandSpec{
+				{Command: "/status", Summary: "查看当前会话、工作区、Claude 模型与权限状态。"},
+			})),
 		},
 		{
 			Names: []string{"/codex"},
@@ -714,9 +679,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/workspace policy", Summary: "配置当前工作区默认 approval policy。"},
 				{Command: "/workspace policy POLICY", Summary: "直接设置当前工作区默认 approval policy。"},
 			},
-			Backends: map[string]localCommandBackendSpec{
-				backendClaude: partialBackendCommand(matchClaudeWorkspaceCommand, claudeWorkspaceHelpEntries()),
-			},
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(matchClaudeWorkspaceCommand, claudeWorkspaceHelpEntries())),
 		},
 	}
 }
@@ -798,10 +761,7 @@ func renderHelpBodyFromRegistry(backend string) string {
 		if len(specs) == 0 {
 			continue
 		}
-		header := group
-		if normalizeRuntimeBackend(backend) == backendClaude && group == "thread" {
-			header = "session"
-		}
+		header := backendCapabilityForKind(backend).helpGroupLabel(group)
 		lines = append(lines, "", header+"：")
 		lines = appendHelpCommands(lines, specs)
 	}

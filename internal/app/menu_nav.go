@@ -81,19 +81,7 @@ func menuCardBodyForBackend(backend, action, body string) string {
 }
 
 func menuNodeLabelForBackend(action, label, backend string) string {
-	if normalizeRuntimeBackend(backend) != backendClaude {
-		return strings.TrimSpace(label)
-	}
-	switch strings.TrimSpace(action) {
-	case "menu.thread":
-		return "会话管理"
-	case "thread.permission_mode.menu":
-		return "会话权限"
-	case "workspace.permission_mode.menu":
-		return "默认权限"
-	default:
-		return strings.TrimSpace(label)
-	}
+	return backendCapabilityForKind(backend).menuNodeLabel(action, label)
 }
 
 func submenuLabel(label string) string {
