@@ -119,19 +119,11 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
-	var replyErr error
-	if pendingBackend(a, pending) == backendClaude {
-		replyErr = a.claude.CancelPending(requestID, "cancelled by user")
-	} else {
-		switch pending.Kind {
-		case "tool_request_user_input_form":
-			replyErr = a.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
-		case "mcp_elicitation_form":
-			replyErr = a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
-		}
-	}
+	adapter := a.serverRequestBackendAdapter(pending)
+	replyErr := adapter.cancelPending(pending)
 	if replyErr != nil {
 		slog.Error("pending form cancel reply failed",
+			"backend", adapter.kind(),
 			"request_id", requestID,
 			"pending_kind", pending.Kind,
 			"user_id", action.UserID,

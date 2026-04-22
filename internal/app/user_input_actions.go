@@ -37,40 +37,16 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 
 func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload, questionID, answer string) (*callback.CardActionTriggerResponse, error) {
 	requestID := strings.TrimSpace(pending.ID)
-	selectionSummary := strings.TrimSpace(answer)
-	if pendingBackend(a, pending) == backendClaude {
-		answers, _, err := claudeAnswersFromSelections(payload, map[string]string{
-			strings.TrimSpace(questionID): strings.TrimSpace(answer),
-		})
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-		if err := a.claude.ResolveUserInput(requestID, answers); err != nil {
-			slog.Error("tool user input reply to Claude failed",
-				"request_id", requestID,
-				"user_id", action.UserID,
-				"error", err,
-			)
+	adapter := a.serverRequestBackendAdapter(pending)
+	selectionSummary, err := adapter.replyQuickUserInput(pending, payload, questionID, answer)
+	if err != nil {
+		if isUIWarningError(err) {
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
+				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
 			}, nil
 		}
-		_ = a.finalizePendingReply(pending)
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已提交"},
-			Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", selectionSummary, nil)),
-		}, nil
-	}
-
-	replyPayload := map[string]any{
-		"answers": map[string]any{
-			questionID: map[string]any{
-				"answers": []string{answer},
-			},
-		},
-	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
-		slog.Error("tool user input reply to codex failed",
+		slog.Error("tool user input quick reply failed",
+			"backend", adapter.kind(),
 			"request_id", requestID,
 			"user_id", action.UserID,
 			"error", err,
@@ -90,41 +66,17 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 	requestID := strings.TrimSpace(pending.ID)
 	drafts := toolUserInputDraftsFromCardAction(payload, action)
 	selections := toolUserInputSelectionsFromDrafts(payload, drafts)
-	if pendingBackend(a, pending) == backendClaude {
-		answers, summary, err := claudeAnswersFromSelections(payload, selections)
-		if err != nil {
+	adapter := a.serverRequestBackendAdapter(pending)
+	summary, err := adapter.replyFormUserInput(pending, payload, selections)
+	if err != nil {
+		if isUIWarningError(err) {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: err.Error()},
 				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 			}, nil
 		}
-		if err := a.claude.ResolveUserInput(requestID, answers); err != nil {
-			slog.Error("tool user input reply to Claude failed",
-				"request_id", requestID,
-				"user_id", action.UserID,
-				"error", err,
-			)
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
-				Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
-			}, nil
-		}
-		_ = a.finalizePendingReply(pending)
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已提交"},
-			Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", summary, nil)),
-		}, nil
-	}
-
-	replyPayload, summary, err := buildToolUserInputResponseFromSelections(payload, selections)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
-		}, nil
-	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), replyPayload); err != nil {
-		slog.Error("tool user input reply to codex failed",
+		slog.Error("tool user input form reply failed",
+			"backend", adapter.kind(),
 			"request_id", requestID,
 			"user_id", action.UserID,
 			"error", err,

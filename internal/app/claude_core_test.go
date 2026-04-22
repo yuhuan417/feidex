@@ -820,6 +820,9 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	if len(claude.approvalCalls) != 1 {
 		t.Fatalf("approval calls = %d, want 1", len(claude.approvalCalls))
 	}
+	if claude.approvalCalls[0].requestID != "approve-1" {
+		t.Fatalf("approval request id = %q, want approve-1", claude.approvalCalls[0].requestID)
+	}
 	if claude.approvalCalls[0].resolution.Behavior != "allow" || claude.approvalCalls[0].resolution.Scope != "session" {
 		t.Fatalf("approval resolution = %+v", claude.approvalCalls[0].resolution)
 	}
@@ -1115,6 +1118,46 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 		if !strings.Contains(body, want) {
 			t.Fatalf("cancelled card body missing %q: %q", want, body)
 		}
+	}
+}
+
+func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "review-cancel-1",
+		Kind:        pendingKindReview,
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		PayloadJSON: mustJSON(reviewPendingPayload{
+			Mode:         reviewFormModeCustom,
+			Instructions: "focus on backend adapters",
+		}),
+		Status: "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	resp, err := a.completePendingFormCancel(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "review-cancel-1"},
+	})
+	if err != nil {
+		t.Fatalf("completePendingFormCancel() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" || resp.Card == nil {
+		t.Fatalf("completePendingFormCancel() = %#v", resp)
+	}
+	if len(claude.cancelCalls) != 0 {
+		t.Fatalf("cancel calls = %#v, want none", claude.cancelCalls)
+	}
+	card, _ := resp.Card.Data.(map[string]any)
+	if got := cardHeaderTitle(t, card); got != "Review 已取消" {
+		t.Fatalf("cancelled card title = %q", got)
 	}
 }
 
