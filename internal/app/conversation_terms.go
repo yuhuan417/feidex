@@ -31,7 +31,3 @@ func primaryConversationIDLabel(backend string) string {
 func primaryConversationSummaryLabel(backend string) string {
 	return backendCapabilityForKind(backend).conversation.SummaryLabel
 }
-
-func backendSpecificThreadSummary(text, backend string) string {
-	return backendCapabilityForKind(backend).rewriteConversationText(text)
-}

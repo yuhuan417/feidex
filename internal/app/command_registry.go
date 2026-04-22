@@ -253,10 +253,6 @@ func claudeSessionHelpEntries() []helpCommandSpec {
 	}
 }
 
-func backendSpecificHelpEntries(backend string, specs []helpCommandSpec) []helpCommandSpec {
-	return backendConversationHelpEntries(backend, specs)
-}
-
 func claudeWorkspaceHelpEntries() []helpCommandSpec {
 	return []helpCommandSpec{
 		{Command: "/workspace", Summary: "打开工作区菜单。"},
@@ -324,7 +320,7 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
 				{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
 			},
-			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(matchHistoryCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(matchHistoryCommand, backendConversationHelpEntries(backendClaude, []helpCommandSpec{
 				{Command: "/history", Summary: "查看当前 session 的 turn 历史记录，重点展示每个 turn 的输入。"},
 				{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
 			}))),
@@ -357,7 +353,7 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/usage", Summary: "查看当前 thread 的累计 token usage。"},
 			},
-			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, backendConversationHelpEntries(backendClaude, []helpCommandSpec{
 				{Command: "/usage", Summary: "查看当前 session 的累计 token usage。"},
 			}))),
 		},
@@ -491,7 +487,7 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"},
 			},
-			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+			Backends: backendCommandPolicy(backendClaude, partialBackendCommand(exactCommand, backendConversationHelpEntries(backendClaude, []helpCommandSpec{
 				{Command: "/compact", Summary: "压缩当前会话的上下文，减少上下文占用。"},
 			}))),
 		},
