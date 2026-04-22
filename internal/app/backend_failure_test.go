@@ -1,0 +1,106 @@
+package app
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"feidex/internal/claudecli"
+	"feidex/internal/state"
+)
+
+func TestFailSubmissionWithoutTerminalCompletionMentionsUserWhenQueueEmpty(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	if err := a.appState().savePending(&state.PendingRequest{
+		ID:         "req-1",
+		Kind:       "command",
+		SessionKey: "sess-1",
+		ThreadID:   "thread-1",
+		TurnID:     "turn-1",
+		Status:     "pending",
+	}); err != nil {
+		t.Fatalf("savePending() error = %v", err)
+	}
+
+	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
+
+	if got := a.store.GetSubmission(sub.ID); got != nil {
+		t.Fatalf("submission after forced failure = %+v, want deleted", got)
+	}
+	if pending := a.appState().pending("req-1"); pending != nil {
+		t.Fatalf("pending request after forced failure = %+v, want cleared", pending)
+	}
+	sess := a.store.GetSession("sess-1")
+	if sess == nil || sess.Status != "idle" || sessionHasActiveWork(sess) {
+		t.Fatalf("session after forced failure = %+v, want idle without active work", sess)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected terminal failure card")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	if !strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("terminal failure body should mention user: %q", body)
+	}
+	if !strings.Contains(body, "Codex 后端异常退出：stdio EOF") {
+		t.Fatalf("terminal failure body = %q, want transport error text", body)
+	}
+}
+
+func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	if _, err := a.store.UpdateSession("sess-1", func(sess *state.Session) {
+		sess.Queue = []string{"sub-queued"}
+		sess.Status = "queued"
+	}); err != nil {
+		t.Fatalf("UpdateSession() error = %v", err)
+	}
+
+	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Claude 会话异常结束：broken pipe")
+
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected terminal failure card")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	if strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("terminal failure body should not mention user while queue pending: %q", body)
+	}
+}
+
+func TestClaudeHandleSessionErrorFailsRunningSubmissionOnFatalProcessExit(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
+	runtime := &claudeRuntime{
+		app:      a,
+		sessions: map[string]*claudeSessionState{},
+		pending:  map[string]*claudePendingInteraction{},
+	}
+	session := &claudeSessionState{
+		sessionKey: "sess-1",
+		turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "claude-turn-1"},
+		},
+	}
+	session.sessionID = "claude-thread-1"
+
+	runtime.handleSessionError(session, claudecli.ErrorEvent{
+		TurnNumber: 1,
+		Error:      &claudecli.ProcessError{Message: "Claude CLI process exited", Cause: errors.New("exit status 1")},
+		Context:    "stdout_eof",
+	})
+
+	if got := a.store.GetSubmission(sub.ID); got != nil {
+		t.Fatalf("submission after Claude fatal error = %+v, want deleted", got)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected Claude terminal failure card")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	if !strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("Claude terminal failure should mention user: %q", body)
+	}
+	if !strings.Contains(body, "Claude 会话异常结束") {
+		t.Fatalf("Claude terminal failure body = %q, want fatal session text", body)
+	}
+}

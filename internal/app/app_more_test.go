@@ -40,6 +40,7 @@ type fakeCodexClient struct {
 	callHook       func(context.Context, string, any, any) error
 	onNotification func(string, json.RawMessage)
 	onRequest      func(codexrpc.RequestEnvelope)
+	onError        func(error)
 }
 
 type fakeReleaseClient struct {
@@ -159,6 +160,10 @@ func (f *fakeDaemonManagerForApp) Platform() string { return "test" }
 func (f *fakeCodexClient) SetHandlers(onNotification func(string, json.RawMessage), onRequest func(codexrpc.RequestEnvelope)) {
 	f.onNotification = onNotification
 	f.onRequest = onRequest
+}
+
+func (f *fakeCodexClient) SetErrorHandler(onError func(error)) {
+	f.onError = onError
 }
 
 func (f *fakeCodexClient) Start(context.Context, bool) error {

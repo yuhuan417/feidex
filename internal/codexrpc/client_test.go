@@ -191,6 +191,53 @@ func TestReadLoopProcessesScannerInput(t *testing.T) {
 	}
 }
 
+func TestReadLoopTransportFailureNotifiesAndFailsPendingCalls(t *testing.T) {
+	client := New(config.CodexConfig{})
+	client.waitDone = nil
+	writer := &recordingWriteCloser{}
+	client.stdin = writer
+	reader, pipeWriter := io.Pipe()
+	client.stdout = reader
+
+	errCh := make(chan error, 1)
+	client.SetErrorHandler(func(err error) {
+		errCh <- err
+	})
+
+	callDone := make(chan error, 1)
+	go func() {
+		callDone <- client.Call(context.Background(), "test/method", nil, nil)
+	}()
+
+	go client.readLoop()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(writer.String(), `"id":1`) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	_ = pipeWriter.Close()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("expected transport error callback")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for transport error callback")
+	}
+
+	select {
+	case err := <-callDone:
+		if err == nil || !strings.Contains(err.Error(), "EOF") {
+			t.Fatalf("pending Call() error = %v, want EOF-derived failure", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for pending call failure")
+	}
+}
+
 func TestStartStdioInitializesClient(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "rpc.log")

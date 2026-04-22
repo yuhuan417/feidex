@@ -158,6 +158,18 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 	a := w.app
 	appState := a.appState()
 	if sub != nil {
+		current := appState.submission(sub.ID)
+		switch {
+		case current == nil:
+			notifyFailure = false
+		case current.Finalized:
+			notifyFailure = false
+			sub = current
+		default:
+			sub = current
+		}
+	}
+	if sub != nil {
 		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	}
 	a.clearSubmissionProcessingReactions(sub)

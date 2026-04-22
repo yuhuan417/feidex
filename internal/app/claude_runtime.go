@@ -852,11 +852,34 @@ func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event clau
 		"error", event.Error,
 	)
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
+		if isFatalClaudeSessionError(state, event) {
+			r.app.failClaudeSessionActiveWork(sessionKey, threadID, event.Error)
+		}
 		return
 	}
 	if event.Error != nil {
 		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
+	if isFatalClaudeSessionError(state, event) {
+		r.app.failClaudeSessionActiveWork(sessionKey, threadID, event.Error)
+	}
+}
+
+func isFatalClaudeSessionError(state *claudeSessionState, event claudecli.ErrorEvent) bool {
+	if event.Error == nil {
+		return false
+	}
+	var procErr *claudecli.ProcessError
+	if errors.As(event.Error, &procErr) {
+		return true
+	}
+	if state == nil || state.session == nil {
+		return false
+	}
+	if state.session.Stopped() {
+		return true
+	}
+	return state.session.ExitError() != nil
 }
 
 func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessionState, req *claudecli.PermissionRequest) (*claudecli.PermissionResponse, error) {

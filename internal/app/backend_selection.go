@@ -331,7 +331,7 @@ func (a *App) prepareBackendRuntime(ctx context.Context, target string) (codexCl
 	switch normalizeRuntimeBackend(target) {
 	case backendCodex:
 		client := newCodexClient(a.cfg.Codex)
-		client.SetHandlers(a.handleNotification, a.handleServerRequest)
+		a.configureCodexClientRuntime(client)
 		startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		if err := client.Start(startCtx, a.cfg.Codex.ExperimentalAPI); err != nil {

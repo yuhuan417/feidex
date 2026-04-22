@@ -131,7 +131,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		pendingSkills:       map[string]state.SubmissionSkill{},
 	}
 	if codexClient != nil {
-		codexClient.SetHandlers(app.handleNotification, app.handleServerRequest)
+		app.configureCodexClientRuntime(codexClient)
 	}
 	if backend == backendClaude {
 		app.claude = newClaudeCore(app, cfg.Claude)

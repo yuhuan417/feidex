@@ -727,7 +727,7 @@ func (a *App) startVerifiedCodexClient(ctx context.Context) (codexClient, error)
 	if client == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
-	client.SetHandlers(a.handleNotification, a.handleServerRequest)
+	a.configureCodexClientRuntime(client)
 	if err := client.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
 		return nil, err
 	}
