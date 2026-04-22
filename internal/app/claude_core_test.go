@@ -57,8 +57,12 @@ type fakeClaudeCore struct {
 		turnID     string
 		prompt     string
 	}
-	interruptCalls []string
-	approvalCalls  []struct {
+	interruptCalls      []string
+	permissionModeCalls []struct {
+		sessionKey string
+		mode       string
+	}
+	approvalCalls []struct {
 		requestID  string
 		resolution claudeApprovalResolution
 	}
@@ -172,6 +176,17 @@ func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turn
 func (f *fakeClaudeCore) Interrupt(_ context.Context, sessionKey string) error {
 	f.interruptCalls = append(f.interruptCalls, sessionKey)
 	return f.interruptErr
+}
+
+func (f *fakeClaudeCore) SetPermissionMode(_ context.Context, sessionKey, mode string) error {
+	f.permissionModeCalls = append(f.permissionModeCalls, struct {
+		sessionKey string
+		mode       string
+	}{
+		sessionKey: sessionKey,
+		mode:       mode,
+	})
+	return nil
 }
 
 func (f *fakeClaudeCore) ResolveApproval(requestID string, resolution claudeApprovalResolution) error {

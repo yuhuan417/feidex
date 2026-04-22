@@ -14,6 +14,13 @@ type localCommandSpec struct {
 	Handle      func(a *App, msg *feishu.InboundMessage, args []string) error
 	HelpGroup   string
 	HelpEntries []helpCommandSpec
+	Backends    map[string]localCommandBackendSpec
+}
+
+type localCommandBackendSpec struct {
+	Match       func(fields []string) bool
+	HideInHelp  bool
+	HelpEntries []helpCommandSpec
 }
 
 func exactCommand(fields []string) bool {
@@ -107,6 +114,40 @@ func matchThreadCommand(fields []string) bool {
 	}
 }
 
+func matchClaudeThreadCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "list":
+		return len(fields) == 2 || (len(fields) == 3 && strings.TrimSpace(fields[2]) == "all")
+	case "new", "fork":
+		return len(fields) == 2
+	case "resume":
+		return len(fields) == 3
+	default:
+		return false
+	}
+}
+
+func matchSessionCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "list":
+		return len(fields) == 2 || (len(fields) == 3 && strings.TrimSpace(fields[2]) == "all")
+	case "new", "fork":
+		return len(fields) == 2
+	case "resume":
+		return len(fields) == 3
+	case "permissions":
+		return len(fields) == 2 || len(fields) == 3
+	default:
+		return false
+	}
+}
+
 func matchUpgradeCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true
@@ -166,6 +207,82 @@ func matchWorkspaceCommand(fields []string) bool {
 	}
 }
 
+func matchClaudeWorkspaceCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	switch strings.TrimSpace(fields[1]) {
+	case "list", "new":
+		return len(fields) == 2
+	case "delete":
+		return len(fields) == 2 || len(fields) == 3
+	case "clone":
+		_, _, _, err := parseWorkspaceCloneArgs(fields[1:])
+		return err == nil
+	case "use":
+		return len(fields) == 3
+	case "permissions":
+		return len(fields) == 2 || len(fields) == 3
+	default:
+		return false
+	}
+}
+
+func hiddenBackendCommand() localCommandBackendSpec {
+	return localCommandBackendSpec{HideInHelp: true}
+}
+
+func partialBackendCommand(match func([]string) bool, helpEntries []helpCommandSpec) localCommandBackendSpec {
+	return localCommandBackendSpec{
+		Match:       match,
+		HelpEntries: append([]helpCommandSpec(nil), helpEntries...),
+	}
+}
+
+func claudeSessionHelpEntries() []helpCommandSpec {
+	return []helpCommandSpec{
+		{Command: "/session", Summary: "打开 Claude 会话菜单。"},
+		{Command: "/session list", Summary: "查看当前工作区可恢复的 Claude 会话。"},
+		{Command: "/session list all", Summary: "查看更多来源的 Claude 会话。"},
+		{Command: "/session new", Summary: "立即创建并切换到新的 Claude 会话。"},
+		{Command: "/session fork", Summary: "基于当前 Claude 会话派生一个新分支，并立即切换过去。"},
+		{Command: "/session resume SESSION_ID", Summary: "按 session id 直接恢复 Claude 会话。"},
+		{Command: "/session permissions", Summary: "配置当前 Claude 会话的权限模式。"},
+		{Command: "/session permissions MODE", Summary: "直接设置当前 Claude 会话的权限模式。"},
+		{Command: "/session permissions inherit", Summary: "清除会话覆盖，恢复为跟随工作区。"},
+	}
+}
+
+func backendSpecificHelpEntries(backend string, specs []helpCommandSpec) []helpCommandSpec {
+	if normalizeRuntimeBackend(backend) != backendClaude {
+		return append([]helpCommandSpec(nil), specs...)
+	}
+	updated := make([]helpCommandSpec, 0, len(specs))
+	for _, spec := range specs {
+		item := spec
+		item.Command = strings.ReplaceAll(item.Command, "/thread", "/session")
+		item.Command = strings.ReplaceAll(item.Command, "THREAD_ID", "SESSION_ID")
+		item.Summary = backendSpecificThreadSummary(item.Summary, backend)
+		updated = append(updated, item)
+	}
+	return updated
+}
+
+func claudeWorkspaceHelpEntries() []helpCommandSpec {
+	return []helpCommandSpec{
+		{Command: "/workspace", Summary: "打开工作区菜单。"},
+		{Command: "/workspace list", Summary: "打开工作区列表并可直接切换。"},
+		{Command: "/workspace new", Summary: "创建新工作区。"},
+		{Command: "/workspace clone GIT_URL [ID] [--parent DIR]", Summary: "从 Git 仓库创建新工作区，可显式指定父目录。"},
+		{Command: "/workspace use ID", Summary: "切换到指定工作区。"},
+		{Command: "/workspace delete", Summary: "打开工作区删除菜单。"},
+		{Command: "/workspace delete ID", Summary: "删除指定工作区的配置，不删除磁盘目录。"},
+		{Command: "/workspace permissions", Summary: "配置当前工作区默认 Claude 权限模式。"},
+		{Command: "/workspace permissions MODE", Summary: "直接设置当前工作区默认 Claude 权限模式。"},
+		{Command: "/workspace permissions inherit", Summary: "清除工作区覆盖，恢复为跟随全局默认。"},
+	}
+}
+
 func localCommandSpecList() []localCommandSpec {
 	return []localCommandSpec{
 		{
@@ -218,6 +335,12 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/history", Summary: "查看当前 thread 的 turn 历史记录，重点展示每个 turn 的输入。"},
 				{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(matchHistoryCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+					{Command: "/history", Summary: "查看当前 session 的 turn 历史记录，重点展示每个 turn 的输入。"},
+					{Command: "/history detail TURN_NUMBER", Summary: "直接查看指定 Turn # 的详情。"},
+				})),
+			},
 		},
 		{
 			Names: []string{"/skills"},
@@ -233,6 +356,9 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/skills reload", Summary: "强制刷新当前工作区的 skill 列表。"},
 				{Command: "$skill-name <内容>", Summary: "以 skill 前缀显式指定本条消息使用的 skill。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: hiddenBackendCommand(),
+			},
 		},
 		{
 			Names: []string{"/usage"},
@@ -245,6 +371,11 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/usage", Summary: "查看当前 thread 的累计 token usage。"},
+			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+					{Command: "/usage", Summary: "查看当前 session 的累计 token usage。"},
+				})),
 			},
 		},
 		{
@@ -329,6 +460,9 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/fast toggle", Summary: "切换当前线程的响应速度设置。"},
 				{Command: "/fast config", Summary: "打开当前线程的响应速度配置卡。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: hiddenBackendCommand(),
+			},
 		},
 		{
 			Names: []string{"/download"},
@@ -362,6 +496,9 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/review custom", Summary: "打开自定义 review instructions 卡。"},
 				{Command: "/review custom <instructions>", Summary: "按自定义 instructions 发起 review。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: hiddenBackendCommand(),
+			},
 		},
 		{
 			Names: []string{"/compact"},
@@ -374,6 +511,11 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"},
+			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(exactCommand, backendSpecificHelpEntries(backendClaude, []helpCommandSpec{
+					{Command: "/compact", Summary: "压缩当前会话的上下文，减少上下文占用。"},
+				})),
 			},
 		},
 		{
@@ -388,6 +530,11 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/fork", Summary: "等价于 `/thread fork`。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(exactCommand, []helpCommandSpec{
+					{Command: "/fork", Summary: "等价于 `/session fork`。"},
+				}),
+			},
 		},
 		{
 			Names: []string{"/new"},
@@ -400,6 +547,11 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/new", Summary: "等价于 `/thread new`。"},
+			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(exactCommand, []helpCommandSpec{
+					{Command: "/new", Summary: "等价于 `/session new`。"},
+				}),
 			},
 		},
 		{
@@ -423,6 +575,23 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/thread policy", Summary: "配置当前线程的 approval policy。"},
 				{Command: "/thread policy POLICY", Summary: "直接设置当前线程的 approval policy。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: hiddenBackendCommand(),
+			},
+		},
+		{
+			Names: []string{"/session"},
+			IsLocal: func(fields []string) bool {
+				return matchSessionCommand(fields)
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandSession(msg, args)
+			},
+			HelpGroup:   "thread",
+			HelpEntries: claudeSessionHelpEntries(),
+			Backends: map[string]localCommandBackendSpec{
+				backendCodex: hiddenBackendCommand(),
+			},
 		},
 		{
 			Names: []string{"/threads"},
@@ -438,6 +607,9 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/threads", Summary: "等价于 `/thread list`。"},
+			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: hiddenBackendCommand(),
 			},
 		},
 		{
@@ -464,6 +636,11 @@ func localCommandSpecList() []localCommandSpec {
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/status", Summary: "查看当前会话、线程、工作区与模型状态。"},
+			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(exactCommand, []helpCommandSpec{
+					{Command: "/status", Summary: "查看当前会话、工作区、Claude 模型与权限状态。"},
+				}),
 			},
 		},
 		{
@@ -537,6 +714,9 @@ func localCommandSpecList() []localCommandSpec {
 				{Command: "/workspace policy", Summary: "配置当前工作区默认 approval policy。"},
 				{Command: "/workspace policy POLICY", Summary: "直接设置当前工作区默认 approval policy。"},
 			},
+			Backends: map[string]localCommandBackendSpec{
+				backendClaude: partialBackendCommand(matchClaudeWorkspaceCommand, claudeWorkspaceHelpEntries()),
+			},
 		},
 	}
 }
@@ -562,20 +742,55 @@ func findLocalCommandSpec(name string) *localCommandSpec {
 	return nil
 }
 
-func renderHelpBodyFromRegistry() string {
+func (s localCommandSpec) backendPolicy(backend string) localCommandBackendSpec {
+	backend = normalizeRuntimeBackend(backend)
+	if policy, ok := s.Backends[backend]; ok {
+		return policy
+	}
+	return localCommandBackendSpec{
+		Match: s.IsLocal,
+	}
+}
+
+func (s localCommandSpec) helpEntriesForBackend(backend string) []helpCommandSpec {
+	backend = normalizeRuntimeBackend(backend)
+	if policy, ok := s.Backends[backend]; ok {
+		if policy.HideInHelp {
+			return nil
+		}
+		if policy.HelpEntries != nil {
+			return append([]helpCommandSpec(nil), policy.HelpEntries...)
+		}
+	}
+	return append([]helpCommandSpec(nil), s.HelpEntries...)
+}
+
+func commandHandlesLocallyForBackend(spec *localCommandSpec, backend string, fields []string) bool {
+	if spec == nil {
+		return false
+	}
+	policy := spec.backendPolicy(backend)
+	if policy.Match == nil {
+		return false
+	}
+	return policy.Match(fields)
+}
+
+func renderHelpBodyFromRegistry(backend string) string {
 	lines := []string{"命令说明：", ""}
 	intro := make([]helpCommandSpec, 0, 2)
 	sections := map[string][]helpCommandSpec{}
 	for _, spec := range localCommandSpecList() {
-		if len(spec.HelpEntries) == 0 {
+		entries := spec.helpEntriesForBackend(backend)
+		if len(entries) == 0 {
 			continue
 		}
 		if strings.TrimSpace(spec.HelpGroup) == "" {
-			intro = append(intro, spec.HelpEntries...)
+			intro = append(intro, entries...)
 			continue
 		}
 		group := strings.TrimSpace(spec.HelpGroup)
-		sections[group] = append(sections[group], spec.HelpEntries...)
+		sections[group] = append(sections[group], entries...)
 	}
 	lines = appendHelpCommands(lines, intro)
 	for _, group := range helpGroupOrder {
@@ -583,7 +798,11 @@ func renderHelpBodyFromRegistry() string {
 		if len(specs) == 0 {
 			continue
 		}
-		lines = append(lines, "", group+"：")
+		header := group
+		if normalizeRuntimeBackend(backend) == backendClaude && group == "thread" {
+			header = "session"
+		}
+		lines = append(lines, "", header+"：")
 		lines = appendHelpCommands(lines, specs)
 	}
 	return strings.Join(lines, "\n")

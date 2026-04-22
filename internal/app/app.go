@@ -31,29 +31,31 @@ type App struct {
 	deduper             *inboundDeduper
 	backendSwitchMu     sync.Mutex
 
-	turnStreamsMu     sync.Mutex
-	turnStreams       map[string]*turnStream
-	turnItemsMu       sync.Mutex
-	turnItems         map[string]*turnItemState
-	workspaceCloneMu  sync.Mutex
-	workspaceCloneOps map[string]*workspaceCloneOperation
-	liveThreadMu      sync.Mutex
-	liveThreads       map[string]string
-	turnBindMu        sync.Mutex
-	turnBindings      map[string]turnBinding
-	pendingTurns      map[string][]turnBinding
-	threadUsage       map[string]codexrpc.ThreadTokenUsage
-	claudeUsage       map[string]claudeThreadUsageSnapshot
-	finalCardPatchMu  sync.Mutex
-	finalCardPatches  map[string]*finalCardPatchState
-	skillsMu          sync.Mutex
-	pendingSkills     map[string]state.SubmissionSkill
-	codexUpgradeMu    sync.Mutex
-	codexUpgrade      codexUpgradeSnapshot
-	codexRestart      codexRestartSnapshot
-	claudeUpgradeMu   sync.Mutex
-	claudeUpgrade     claudeUpgradeSnapshot
-	claudeRestart     claudeRestartSnapshot
+	turnStreamsMu      sync.Mutex
+	turnStreams        map[string]*turnStream
+	turnItemsMu        sync.Mutex
+	turnItems          map[string]*turnItemState
+	workspaceCloneMu   sync.Mutex
+	workspaceCloneOps  map[string]*workspaceCloneOperation
+	liveThreadMu       sync.Mutex
+	liveThreads        map[string]string
+	turnBindMu         sync.Mutex
+	turnBindings       map[string]turnBinding
+	pendingTurns       map[string][]turnBinding
+	threadUsage        map[string]codexrpc.ThreadTokenUsage
+	claudeUsage        map[string]claudeThreadUsageSnapshot
+	finalCardPatchMu   sync.Mutex
+	finalCardPatches   map[string]*finalCardPatchState
+	skillsMu           sync.Mutex
+	pendingSkills      map[string]state.SubmissionSkill
+	codexUpgradeMu     sync.Mutex
+	codexUpgrade       codexUpgradeSnapshot
+	codexRestart       codexRestartSnapshot
+	claudeUpgradeMu    sync.Mutex
+	claudeUpgrade      claudeUpgradeSnapshot
+	claudeRestart      claudeRestartSnapshot
+	claudeCapabilityMu sync.Mutex
+	claudeCapability   claudeCapabilitySnapshot
 }
 
 type turnBinding struct {
@@ -346,5 +348,5 @@ func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) renderCommandMenuCard(sessionKey string) map[string]any {
-	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(sessionKey))
+	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(a.configuredBackend(), sessionKey))
 }

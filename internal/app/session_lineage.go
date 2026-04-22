@@ -55,6 +55,7 @@ func clearSessionThreadContext(sess *state.Session) {
 	sess.ActiveThreadWorkspaceID = ""
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
+	sess.ActiveClaudePermissionMode = ""
 	sess.ActiveThreadServiceTier = ""
 	sess.ActiveThreadName = ""
 	sess.ActiveThreadPreview = ""
@@ -65,13 +66,14 @@ func sessionBackendThreadSnapshot(sess *state.Session) state.SessionBackendThrea
 		return state.SessionBackendThread{}
 	}
 	return state.SessionBackendThread{
-		ThreadID:       strings.TrimSpace(sess.ActiveThreadID),
-		WorkspaceID:    strings.TrimSpace(sess.ActiveThreadWorkspaceID),
-		ApprovalPolicy: strings.TrimSpace(sess.ActiveThreadApprovalPolicy),
-		SandboxMode:    strings.TrimSpace(sess.ActiveThreadSandboxMode),
-		ServiceTier:    strings.TrimSpace(sess.ActiveThreadServiceTier),
-		Name:           strings.TrimSpace(sess.ActiveThreadName),
-		Preview:        strings.TrimSpace(sess.ActiveThreadPreview),
+		ThreadID:             strings.TrimSpace(sess.ActiveThreadID),
+		WorkspaceID:          strings.TrimSpace(sess.ActiveThreadWorkspaceID),
+		ApprovalPolicy:       strings.TrimSpace(sess.ActiveThreadApprovalPolicy),
+		SandboxMode:          strings.TrimSpace(sess.ActiveThreadSandboxMode),
+		ClaudePermissionMode: strings.TrimSpace(sess.ActiveClaudePermissionMode),
+		ServiceTier:          strings.TrimSpace(sess.ActiveThreadServiceTier),
+		Name:                 strings.TrimSpace(sess.ActiveThreadName),
+		Preview:              strings.TrimSpace(sess.ActiveThreadPreview),
 	}
 }
 
@@ -131,6 +133,7 @@ func sessionRestoreBackendThread(sess *state.Session, backend string) bool {
 	setSessionThreadContext(sess, snapshot.WorkspaceID, snapshot.ThreadID, snapshot.Name, snapshot.Preview)
 	sess.ActiveThreadApprovalPolicy = strings.TrimSpace(snapshot.ApprovalPolicy)
 	sess.ActiveThreadSandboxMode = strings.TrimSpace(snapshot.SandboxMode)
+	sess.ActiveClaudePermissionMode = strings.TrimSpace(snapshot.ClaudePermissionMode)
 	sess.ActiveThreadServiceTier = normalizeServiceTier(snapshot.ServiceTier)
 	return true
 }
@@ -185,6 +188,33 @@ func effectiveThreadServiceTier(sess *state.Session) string {
 		return normalizeServiceTier(sess.ActiveThreadServiceTier)
 	}
 	return ""
+}
+
+func normalizeClaudePermissionModeValue(value string) string {
+	switch strings.TrimSpace(value) {
+	case "", "default":
+		return string(claudePermissionModeDefault)
+	case string(claudePermissionModeAcceptEdits):
+		return string(claudePermissionModeAcceptEdits)
+	case string(claudePermissionModeAuto):
+		return string(claudePermissionModeAuto)
+	case string(claudePermissionModeBypass):
+		return string(claudePermissionModeBypass)
+	case string(claudePermissionModePlan):
+		return string(claudePermissionModePlan)
+	default:
+		return strings.TrimSpace(value)
+	}
+}
+
+func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
+		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
+	}
+	if ws != nil && strings.TrimSpace(ws.ClaudePermissionMode) != "" {
+		return normalizeClaudePermissionModeValue(ws.ClaudePermissionMode)
+	}
+	return normalizeClaudePermissionModeValue(cfg.PermissionMode)
 }
 
 func switchSessionWorkspace(sess *state.Session, workspaceID string) {

@@ -193,11 +193,17 @@ type wireInitializeRequest struct {
 	Hooks   map[string]any `json:"hooks"`
 }
 
+type wireSetPermissionModeRequest struct {
+	Subtype string `json:"subtype"`
+	Mode    string `json:"mode"`
+}
+
 type wireToolUseRequest struct {
-	Subtype     string         `json:"subtype"`
-	ToolName    string         `json:"tool_name"`
-	Input       map[string]any `json:"input"`
-	BlockedPath *string        `json:"blocked_path,omitempty"`
+	Subtype               string           `json:"subtype"`
+	ToolName              string           `json:"tool_name"`
+	Input                 map[string]any   `json:"input"`
+	PermissionSuggestions []map[string]any `json:"permission_suggestions,omitempty"`
+	BlockedPath           *string          `json:"blocked_path,omitempty"`
 }
 
 func parseToolUseRequest(raw json.RawMessage) (*wireToolUseRequest, error) {

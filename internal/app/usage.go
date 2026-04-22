@@ -125,8 +125,8 @@ func renderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.Thre
 func renderClaudeThreadUsageCardBody(threadLabel, threadID string, usage claudeThreadUsageSnapshot) string {
 	totalTokens := usage.TotalInputTokens + usage.TotalCacheReadTokens + usage.TotalCacheCreationTokens + usage.TotalOutputTokens
 	lines := []string{
-		"当前线程: " + firstNonEmpty(strings.TrimSpace(threadLabel), "-"),
-		"thread: `" + firstNonEmpty(strings.TrimSpace(threadID), "-") + "`",
+		"当前会话: " + firstNonEmpty(strings.TrimSpace(threadLabel), "-"),
+		"session: `" + firstNonEmpty(strings.TrimSpace(threadID), "-") + "`",
 		"",
 		"累计 token usage (`modelUsage`):",
 		"- total: `" + formatUsageInt(totalTokens) + "`",
@@ -203,10 +203,10 @@ func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
 
 func (a *App) renderUsageCard(sessionKey string) map[string]any {
 	sess := a.appState().session(sessionKey)
-	body := "当前没有活动线程。"
+	body := primaryConversationMissingLabel(a.configuredBackend()) + "。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		if a.isClaudeBackend() {
-			body = "当前线程暂无 Claude usage 数据。"
+			body = "当前会话暂无 Claude usage 数据。"
 			if usage, ok := a.currentClaudeThreadUsage(sess.ActiveThreadID); ok {
 				body = renderClaudeThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage)
 			}

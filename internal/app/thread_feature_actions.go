@@ -15,11 +15,11 @@ import (
 )
 
 func (a *App) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/thread", "menu.root")
+	return a.completeMenuCommand(action, sessionKey, primaryConversationSlash(a.configuredBackend()), "menu.root")
 }
 
 func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/thread new", "menu.thread")
+	return a.completeMenuCommand(action, sessionKey, primaryConversationSlash(a.configuredBackend())+" new", "menu.thread")
 }
 
 func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
@@ -39,6 +39,10 @@ func (a *App) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey st
 
 func (a *App) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return a.completeMenuCommand(action, sessionKey, "/thread policy", "menu.thread")
+}
+
+func (a *App) completeClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeMenuCommand(action, sessionKey, "/session permissions", "menu.thread")
 }
 
 func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
@@ -143,7 +147,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 		}
 		if strings.TrimSpace(selectedCWD) != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "warning", Content: "该 session 不属于当前工作区，请先切换 workspace"},
+				Toast: &callback.Toast{Type: "warning", Content: "该会话不属于当前工作区，请先切换 workspace"},
 			}, nil
 		}
 		model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
@@ -170,10 +174,10 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 		includeAll, _ := action.ActionValue["include_all"].(bool)
 		card, err := a.renderThreadsCard(sessionKey, includeAll)
 		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复 Claude session"}}, nil
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复 Claude 会话"}}, nil
 		}
 		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已恢复 Claude session"},
+			Toast: &callback.Toast{Type: "success", Content: "已恢复 Claude 会话"},
 			Card:  rawCard(card),
 		}, nil
 	}
@@ -201,6 +205,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	}
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
+	sess.ActiveClaudePermissionMode = ""
 	setSessionThreadContext(sess, workspaceID, threadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	a.markSessionThreadLive(sessionKey, threadID)
 	sessionResetActiveOperations(sess)

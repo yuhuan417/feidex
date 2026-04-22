@@ -247,6 +247,23 @@ func (s *Session) Initialize(ctx context.Context) error {
 	return err
 }
 
+func (s *Session) SetPermissionMode(ctx context.Context, mode PermissionMode) error {
+	_, err := s.sendControlRequestAndWait(ctx, wireSetPermissionModeRequest{
+		Subtype: "set_permission_mode",
+		Mode:    string(mode),
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.info != nil {
+		s.info.PermissionMode = mode
+	}
+	s.cfg.PermissionMode = mode
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *Session) sendControlRequestAndWait(ctx context.Context, request any) (wireControlResponsePayload, error) {
 	if err := ctx.Err(); err != nil {
 		return wireControlResponsePayload{}, err
@@ -714,10 +731,11 @@ func (s *Session) buildPermissionResponse(ctx context.Context, requestID string,
 		return denyControlResponse(requestID, "No permission handler configured", false)
 	}
 	resp, err := s.cfg.PermissionHandler.HandlePermission(ctx, &PermissionRequest{
-		RequestID:   requestID,
-		ToolName:    toolReq.ToolName,
-		Input:       copyMap(toolReq.Input),
-		BlockedPath: toolReq.BlockedPath,
+		RequestID:             requestID,
+		ToolName:              toolReq.ToolName,
+		Input:                 copyMap(toolReq.Input),
+		BlockedPath:           toolReq.BlockedPath,
+		PermissionSuggestions: copyPermissionSuggestions(toolReq.PermissionSuggestions),
 	})
 	if err != nil {
 		s.emitError(err, "permission_handling")
@@ -885,6 +903,22 @@ func copyMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func copyPermissionSuggestions(in []map[string]any) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, item := range in {
+		if copied := copyMap(item); copied != nil {
+			out = append(out, copied)
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

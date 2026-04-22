@@ -42,11 +42,23 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			toast = "已切换工作区，自动绑定 thread 失败"
+			if a.isClaudeBackend() {
+				toast = "已切换工作区，自动绑定会话失败"
+			} else {
+				toast = "已切换工作区，自动绑定 thread 失败"
+			}
 		} else if binding.Resumed {
-			toast = "已切换工作区，并恢复最近线程"
+			if a.isClaudeBackend() {
+				toast = "已切换工作区，并恢复最近会话"
+			} else {
+				toast = "已切换工作区，并恢复最近线程"
+			}
 		} else {
-			toast = "已切换工作区，并创建新线程"
+			if a.isClaudeBackend() {
+				toast = "已切换工作区，并创建新会话"
+			} else {
+				toast = "已切换工作区，并创建新线程"
+			}
 		}
 	}
 	return &callback.CardActionTriggerResponse{
@@ -392,6 +404,10 @@ func (a *App) completeWorkspaceSandboxMenu(action *feishu.CardAction, sessionKey
 
 func (a *App) completeWorkspacePolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return a.completeMenuCommand(action, sessionKey, "/workspace policy", "menu.workspace")
+}
+
+func (a *App) completeClaudeWorkspacePermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeMenuCommand(action, sessionKey, "/workspace permissions", "menu.workspace")
 }
 
 func (a *App) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {

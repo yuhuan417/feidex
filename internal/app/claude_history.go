@@ -238,7 +238,7 @@ func (a *App) fetchClaudeCurrentSessionTurns(sessionKey string) (*state.Session,
 	}
 	sess := a.appState().session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
+		return nil, nil, nil, fmt.Errorf("当前没有活动会话")
 	}
 	filePath, meta, err := findClaudeSessionFile(strings.TrimSpace(sess.ActiveThreadID))
 	if err != nil {

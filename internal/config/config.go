@@ -82,12 +82,13 @@ type DaemonConfig struct {
 }
 
 type Workspace struct {
-	ID             string `toml:"id"`
-	Name           string `toml:"name"`
-	Cwd            string `toml:"cwd"`
-	Model          string `toml:"model"`
-	ApprovalPolicy string `toml:"approval_policy"`
-	SandboxMode    string `toml:"sandbox_mode"`
+	ID                   string `toml:"id"`
+	Name                 string `toml:"name"`
+	Cwd                  string `toml:"cwd"`
+	Model                string `toml:"model"`
+	ApprovalPolicy       string `toml:"approval_policy"`
+	SandboxMode          string `toml:"sandbox_mode"`
+	ClaudePermissionMode string `toml:"claude_permission_mode"`
 }
 
 const (
@@ -120,12 +121,13 @@ func Default() *Config {
 		},
 		Workspaces: []Workspace{
 			{
-				ID:             "default",
-				Name:           "Default",
-				Cwd:            ".",
-				Model:          "",
-				ApprovalPolicy: "on-request",
-				SandboxMode:    "workspace-write",
+				ID:                   "default",
+				Name:                 "Default",
+				Cwd:                  ".",
+				Model:                "",
+				ApprovalPolicy:       "on-request",
+				SandboxMode:          "workspace-write",
+				ClaudePermissionMode: "",
 			},
 		},
 	}
@@ -247,6 +249,7 @@ func (c *Config) Normalize(baseDir string) error {
 		if ws.SandboxMode == "" {
 			ws.SandboxMode = "workspace-write"
 		}
+		ws.ClaudePermissionMode = normalizeOptionalClaudePermissionMode(ws.ClaudePermissionMode)
 		if _, ok := seen[ws.ID]; ok {
 			return fmt.Errorf("duplicate workspace id %q", ws.ID)
 		}
@@ -393,11 +396,19 @@ func normalizeClaudePermissionMode(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":
 		return "default"
-	case "acceptEdits", "plan", "bypassPermissions":
+	case "acceptEdits", "auto", "plan", "bypassPermissions":
 		return strings.TrimSpace(value)
 	default:
 		return strings.TrimSpace(value)
 	}
+}
+
+func normalizeOptionalClaudePermissionMode(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return normalizeClaudePermissionMode(value)
 }
 
 var supportedClaudeEfforts = []string{"low", "medium", "high", "xhigh", "max"}

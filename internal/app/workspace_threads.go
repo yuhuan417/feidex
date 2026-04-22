@@ -28,7 +28,7 @@ func (a *App) listWorkspaceThreads(sessionKey string, ws *config.Workspace, incl
 		return nil, fmt.Errorf("workspace not found")
 	}
 	if a.isClaudeBackend() {
-		return nil, backendUnsupportedError("/thread list")
+		return nil, fmt.Errorf("listWorkspaceThreads is codex-only")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

@@ -172,10 +172,10 @@ func TestStatusCardBodyUsesClaudeModelAndEffortOnClaudeBackend(t *testing.T) {
 	a := &App{cfg: cfg, backend: backendClaude}
 
 	body := a.statusCardBody(&state.Session{WorkspaceID: "default"})
-	if !strings.Contains(body, "全局模型: `mimo-v2-pro`") {
+	if !strings.Contains(body, "Claude model: `mimo-v2-pro`") {
 		t.Fatalf("status body missing Claude model: %q", body)
 	}
-	if !strings.Contains(body, "全局推理强度: `max`") {
+	if !strings.Contains(body, "Claude effort: `max`") {
 		t.Fatalf("status body missing Claude effort: %q", body)
 	}
 }

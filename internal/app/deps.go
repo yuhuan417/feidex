@@ -34,6 +34,7 @@ type claudeCore interface {
 	ResetSession(string) error
 	StartTurn(context.Context, string, string, string, string) error
 	Interrupt(context.Context, string) error
+	SetPermissionMode(context.Context, string, string) error
 	ResolveApproval(string, claudeApprovalResolution) error
 	ResolveUserInput(string, map[string]string) error
 	ResolvePlanFeedback(string, string) error

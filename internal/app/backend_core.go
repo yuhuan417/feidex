@@ -21,11 +21,22 @@ const (
 )
 
 type claudeApprovalResolution struct {
-	Behavior  string
-	Scope     string
-	Message   string
-	Interrupt bool
+	Behavior           string
+	Scope              string
+	Message            string
+	Interrupt          bool
+	UpdatedPermissions []map[string]any
 }
+
+type claudePermissionMode string
+
+const (
+	claudePermissionModeDefault     claudePermissionMode = "default"
+	claudePermissionModeAcceptEdits claudePermissionMode = "acceptEdits"
+	claudePermissionModeAuto        claudePermissionMode = "auto"
+	claudePermissionModePlan        claudePermissionMode = "plan"
+	claudePermissionModeBypass      claudePermissionMode = "bypassPermissions"
+)
 
 func configHasBackend(cfg *config.Config, backend string) bool {
 	if cfg == nil {
@@ -99,12 +110,4 @@ func pendingBackend(a *App, pending *state.PendingRequest) string {
 		return normalizeRuntimeBackend(pending.Backend)
 	}
 	return ""
-}
-
-func backendUnsupportedError(label string) error {
-	label = strings.TrimSpace(label)
-	if label == "" {
-		label = "当前功能"
-	}
-	return errString(label + " 仅支持 Codex backend")
 }

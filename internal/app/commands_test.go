@@ -173,6 +173,120 @@ func TestIsLocalCommand(t *testing.T) {
 	}
 }
 
+func TestIsLocalCommandForClaudeBackend(t *testing.T) {
+	cases := map[string]bool{
+		"/history":                           true,
+		"/compact":                           true,
+		"/session":                           true,
+		"/session list":                      true,
+		"/session list all":                  true,
+		"/session new":                       true,
+		"/session fork":                      true,
+		"/session resume session-1":          true,
+		"/session permissions":               true,
+		"/session permissions default":       true,
+		"/workspace permissions":             true,
+		"/workspace permissions inherit":     true,
+		"/review":                            false,
+		"/review custom 请重点看":                false,
+		"/skills":                            false,
+		"/skills reload":                     false,
+		"/fast":                              false,
+		"/fast config":                       false,
+		"/thread":                            false,
+		"/thread list":                       false,
+		"/thread sandbox":                    false,
+		"/thread sandbox read-only":          false,
+		"/thread policy":                     false,
+		"/thread policy never":               false,
+		"/workspace sandbox":                 false,
+		"/workspace sandbox workspace-write": false,
+		"/workspace policy":                  false,
+		"/workspace policy never":            false,
+		"/workspace use default extra":       false,
+	}
+	for input, want := range cases {
+		if got := isLocalCommandForBackend(backendClaude, input); got != want {
+			t.Fatalf("isLocalCommandForBackend(claude, %q) = %v, want %v", input, got, want)
+		}
+	}
+}
+
+func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
+	body := renderHelpBodyFromRegistry(backendClaude)
+	for _, banned := range []string{
+		"/review",
+		"/skills",
+		"/fast",
+		"/thread",
+		"/threads",
+		"/workspace sandbox",
+		"/workspace policy",
+	} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("Claude help body should hide %q, got %q", banned, body)
+		}
+	}
+	for _, want := range []string{
+		"/history",
+		"/compact",
+		"/session fork",
+		"/session resume SESSION_ID",
+		"/session permissions",
+		"/workspace permissions",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("Claude help body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T) {
+	for _, raw := range []string{
+		"/review",
+		"/skills",
+		"/fast config",
+		"/thread",
+		"/thread sandbox read-only",
+		"/thread policy never",
+		"/workspace sandbox workspace-write",
+		"/workspace policy never",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			a, _, _ := newTestApp(t)
+			a.cfg.Feishu.Backend = backendClaude
+			a.codex = nil
+			claude := &fakeClaudeCore{}
+			a.claude = claude
+
+			msg := &feishu.InboundMessage{
+				MessageID: "m-1",
+				ChatID:    "chat",
+				ChatType:  "p2p",
+				UserID:    "user",
+				Text:      raw,
+			}
+			if err := a.handleCommand(msg, raw); err != nil {
+				t.Fatalf("handleCommand(%q) error = %v", raw, err)
+			}
+			if len(claude.startTurnCalls) != 1 {
+				t.Fatalf("Claude startTurn calls = %#v, want 1", claude.startTurnCalls)
+			}
+			if got := claude.startTurnCalls[0].prompt; got != raw {
+				t.Fatalf("Claude passthrough prompt = %q, want %q", got, raw)
+			}
+			sess := a.store.GetSession("feishu:p2p:chat:user")
+			if sess == nil || strings.TrimSpace(sess.ActiveSubmissionID) == "" {
+				t.Fatalf("session after Claude passthrough = %+v", sess)
+			}
+			sub := a.store.GetSubmission(strings.TrimSpace(sess.ActiveSubmissionID))
+			if sub == nil || sub.InputText != raw {
+				t.Fatalf("Claude passthrough submission = %+v, want input %q", sub, raw)
+			}
+		})
+	}
+}
+
 func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 	a := &App{feishu: feishu.New(config.Default().Feishu)}
 	msg := &feishu.InboundMessage{MessageID: "m1", ChatType: "p2p", ChatID: "chat", UserID: "user"}
@@ -442,7 +556,7 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 }
 
 func TestClaudeForkCommandsStartNewSession(t *testing.T) {
-	for _, raw := range []string{"/fork", "/thread fork"} {
+	for _, raw := range []string{"/fork", "/session fork"} {
 		t.Run(raw, func(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Backend = backendClaude
@@ -484,7 +598,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			if sess == nil || sess.ActiveThreadID != "claude-forked" || sess.ActiveThreadName != "Claude Parent" || sess.Status != "idle" {
 				t.Fatalf("session after %s = %+v", raw, sess)
 			}
-			if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前线程") {
+			if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前会话") {
 				t.Fatalf("fork reply = %#v, want success text", ff.replyTexts)
 			}
 		})

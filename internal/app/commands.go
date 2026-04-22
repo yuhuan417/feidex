@@ -31,9 +31,9 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		if err := a.claudeMaintenanceBlocksCommand(raw); err != nil {
 			return err
 		}
-		if err := a.claudeUnsupportedCommand(raw); err != nil {
-			return err
-		}
+	}
+	if !commandHandlesLocallyForBackend(spec, backend, fields) {
+		return a.enqueuePassthroughCommand(msg, raw)
 	}
 	return spec.Handle(a, msg, fields[1:])
 }
@@ -51,7 +51,7 @@ func (a *App) enqueuePassthroughCommand(msg *feishu.InboundMessage, raw string) 
 	return a.enqueueSubmission(&cloned)
 }
 
-func isLocalCommand(raw string) bool {
+func isLocalCommandForBackend(backend, raw string) bool {
 	raw = strings.TrimSpace(raw)
 	fields := strings.Fields(raw)
 	if len(fields) == 0 {
@@ -61,7 +61,11 @@ func isLocalCommand(raw string) bool {
 	if spec == nil {
 		return false
 	}
-	return spec.IsLocal(fields)
+	return commandHandlesLocallyForBackend(spec, backend, fields)
+}
+
+func isLocalCommand(raw string) bool {
+	return isLocalCommandForBackend(backendCodex, raw)
 }
 
 func (a *App) commandHelp(msg *feishu.InboundMessage, args []string) error {
@@ -75,7 +79,7 @@ func (a *App) commandHelp(msg *feishu.InboundMessage, args []string) error {
 
 func (a *App) renderToolsMenuCard(sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.tools")
-	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(spec.Action, sessionKey))
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(a.configuredBackend(), spec.Action, sessionKey))
 }
 
 func (a *App) renderSessionMenuCard(sessionKey string) map[string]any {
@@ -127,12 +131,12 @@ func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
 	backend := firstNonEmpty(a.configuredBackend(), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + renderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
-	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(spec.Action, sessionKey))
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(a.configuredBackend(), spec.Action, sessionKey))
 }
 
 func (a *App) renderHelpCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("帮助说明", "blue", menuCardBody("menu.help", renderHelpBodyFromRegistry()), buttons)
+	return a.feishu.SimpleStatusCard("帮助说明", "blue", menuCardBody("menu.help", renderHelpBodyFromRegistry(a.configuredBackend())), buttons)
 }

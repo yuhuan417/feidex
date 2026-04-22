@@ -24,9 +24,9 @@ func (a *App) commandFork(msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return err
 	}
-	reply := "已 fork 当前线程，并切换到新的分支线程。"
+	reply := "已 fork 当前" + primaryConversationNoun(a.configuredBackend()) + "，并切换到新的分支" + primaryConversationNoun(a.configuredBackend()) + "。"
 	if strings.TrimSpace(forkedID) == "" && a.isClaudeBackend() {
-		reply = "已准备 fork 当前线程。新的 Claude 分支线程会在下一条消息时创建并切换。"
+		reply = "已准备 fork 当前会话。新的 Claude 分支会话会在下一条消息时创建并切换。"
 	}
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
@@ -41,7 +41,7 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 	appState := a.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return 0, "", fmt.Errorf("当前没有活动线程，无法 fork")
+		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(a.configuredBackend()))
 	}
 	if sessionHasActiveWork(sess) {
 		return 0, "", fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
@@ -123,5 +123,5 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 }
 
 func (a *App) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/thread fork", "menu.thread")
+	return a.completeMenuCommand(action, sessionKey, primaryConversationSlash(a.configuredBackend())+" fork", "menu.thread")
 }

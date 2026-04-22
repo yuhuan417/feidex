@@ -19,7 +19,7 @@ func claudeRequestIDStored(requestID string) string {
 	return mustJSON(requestID)
 }
 
-func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any) error {
+func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude approval delivery unavailable")
 	}
@@ -30,7 +30,7 @@ func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey stri
 	}
 
 	title := "等待审批"
-	buttons := approvalButtons(kind, requestKey, requestPayload)
+	buttons := claudeApprovalButtons(kind, requestKey, sessionActionLabel)
 	payload := map[string]any{}
 	if strings.TrimSpace(body) != "" {
 		payload["body"] = body
@@ -38,13 +38,11 @@ func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey stri
 	if len(requestPayload) > 0 {
 		payload["request"] = requestPayload
 	}
+	if strings.TrimSpace(sessionActionLabel) != "" {
+		payload["session_action_label"] = strings.TrimSpace(sessionActionLabel)
+	}
 	if strings.TrimSpace(kind) == "permissions" {
 		title = "权限请求"
-		buttons = []feishu.Button{
-			{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
-			{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
-			{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.permissions.decline", "request_id": requestKey}},
-		}
 		if permissions, ok := requestPayload["permissions"]; ok {
 			payload["permissions"] = permissions
 		}
@@ -74,6 +72,119 @@ func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey stri
 	})
 	_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
 	return nil
+}
+
+func claudeApprovalButtons(kind, requestKey, sessionActionLabel string) []feishu.Button {
+	sessionActionLabel = strings.TrimSpace(sessionActionLabel)
+	switch strings.TrimSpace(kind) {
+	case "command":
+		buttons := []feishu.Button{
+			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval.command.accept", "request_id": requestKey}},
+		}
+		if sessionActionLabel != "" {
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval.command.accept_session", "request_id": requestKey}})
+		}
+		buttons = append(buttons,
+			feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.command.decline", "request_id": requestKey}},
+			feishu.Button{Text: "拒绝并中断", Type: "danger", Value: map[string]any{"action": "approval.command.cancel", "request_id": requestKey}},
+		)
+		return buttons
+	case "file":
+		buttons := []feishu.Button{
+			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval.file.accept", "request_id": requestKey}},
+		}
+		if sessionActionLabel != "" {
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval.file.accept_session", "request_id": requestKey}})
+		}
+		buttons = append(buttons,
+			feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.file.decline", "request_id": requestKey}},
+			feishu.Button{Text: "拒绝并中断", Type: "danger", Value: map[string]any{"action": "approval.file.cancel", "request_id": requestKey}},
+		)
+		return buttons
+	case "permissions":
+		buttons := []feishu.Button{
+			{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
+		}
+		if sessionActionLabel != "" {
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}})
+		}
+		buttons = append(buttons, feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.permissions.decline", "request_id": requestKey}})
+		return buttons
+	default:
+		buttons := []feishu.Button{
+			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval." + kind + ".accept", "request_id": requestKey}},
+		}
+		if sessionActionLabel != "" {
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval." + kind + ".accept_session", "request_id": requestKey}})
+		}
+		buttons = append(buttons, feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval." + kind + ".decline", "request_id": requestKey}})
+		return buttons
+	}
+}
+
+func safeClaudeSessionPermissionUpdates(suggestions []map[string]any) []map[string]any {
+	if len(suggestions) == 0 {
+		return nil
+	}
+	updates := make([]map[string]any, 0, len(suggestions))
+	for _, suggestion := range suggestions {
+		normalized, ok := normalizeClaudeSessionPermissionUpdate(suggestion)
+		if ok {
+			updates = append(updates, normalized)
+		}
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return updates
+}
+
+func normalizeClaudeSessionPermissionUpdate(update map[string]any) (map[string]any, bool) {
+	if len(update) == 0 {
+		return nil, false
+	}
+	if strings.TrimSpace(stringValue(update["destination"])) != "session" {
+		return nil, false
+	}
+	switch strings.TrimSpace(stringValue(update["type"])) {
+	case "setMode":
+		mode := normalizeClaudePermissionModeValue(stringValue(update["mode"]))
+		switch mode {
+		case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeAuto), string(claudePermissionModeBypass):
+		default:
+			return nil, false
+		}
+		out := copyPermissionUpdates([]map[string]any{update})
+		out[0]["mode"] = mode
+		return out[0], true
+	case "addRules":
+		if firstNonEmptyValue(update["rules"], update["rule"]) == nil {
+			return nil, false
+		}
+		out := copyPermissionUpdates([]map[string]any{update})
+		return out[0], true
+	default:
+		return nil, false
+	}
+}
+
+func describeClaudeSessionPermissionUpdates(updates []map[string]any) string {
+	if len(updates) == 0 {
+		return ""
+	}
+	if len(updates) == 1 {
+		update := updates[0]
+		switch strings.TrimSpace(stringValue(update["type"])) {
+		case "setMode":
+			mode := normalizeClaudePermissionModeValue(stringValue(update["mode"]))
+			if mode != "" {
+				return "切到 `" + mode + "`（当前会话）"
+			}
+		case "addRules":
+			return "当前会话允许同类操作"
+		}
+	}
+	return "应用建议（当前会话）"
 }
 
 func (a *App) sendClaudeUserInputCard(requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
@@ -310,26 +421,4 @@ func claudePlanOriginalBody(pending *state.PendingRequest) string {
 		return ""
 	}
 	return strings.TrimSpace(payload.Body)
-}
-
-func (a *App) claudeUnsupportedCommand(raw string) error {
-	fields := strings.Fields(strings.TrimSpace(raw))
-	if len(fields) == 0 {
-		return nil
-	}
-	switch fields[0] {
-	case "/skills", "/review", "/fast":
-		return backendUnsupportedError(fields[0])
-	case "/thread":
-		if len(fields) <= 1 {
-			return nil
-		}
-		switch strings.TrimSpace(fields[1]) {
-		case "list", "new", "fork", "resume":
-			return nil
-		default:
-			return backendUnsupportedError("/thread " + strings.TrimSpace(fields[1]))
-		}
-	}
-	return nil
 }

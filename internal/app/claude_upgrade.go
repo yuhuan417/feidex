@@ -10,7 +10,6 @@ import (
 
 	"feidex/internal/claudecli"
 	"feidex/internal/claudeinstall"
-	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -726,7 +725,7 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(a.cfg.Claude.Command), "claude")),
 		claudecli.WithWorkDir(workdir),
-		claudecli.WithPermissionMode(claudePermissionModeForWorkspace(a.cfg.Claude, &config.Workspace{})),
+		claudecli.WithPermissionMode(claudePermissionModeValue(a.cfg.Claude.PermissionMode)),
 		claudecli.WithEventBufferSize(16),
 	}
 	if model := strings.TrimSpace(a.cfg.Claude.Model); model != "" {

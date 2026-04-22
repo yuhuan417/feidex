@@ -15,6 +15,7 @@ type PermissionMode string
 const (
 	PermissionModeDefault     PermissionMode = "default"
 	PermissionModeAcceptEdits PermissionMode = "acceptEdits"
+	PermissionModeAuto        PermissionMode = "auto"
 	PermissionModePlan        PermissionMode = "plan"
 	PermissionModeBypass      PermissionMode = "bypassPermissions"
 )
@@ -214,10 +215,11 @@ type ErrorEvent struct {
 func (e ErrorEvent) Type() EventType { return EventTypeError }
 
 type PermissionRequest struct {
-	RequestID   string
-	ToolName    string
-	Input       map[string]any
-	BlockedPath *string
+	RequestID             string
+	ToolName              string
+	Input                 map[string]any
+	BlockedPath           *string
+	PermissionSuggestions []map[string]any
 }
 
 type PermissionResponse struct {

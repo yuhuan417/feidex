@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 3
+const currentSnapshotVersion = 4
 
 type Store struct {
 	path    string
@@ -47,6 +47,7 @@ type storedSession struct {
 	ActiveThreadWorkspaceID    string                          `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy string                          `json:"active_thread_approval_policy"`
 	ActiveThreadSandboxMode    string                          `json:"active_thread_sandbox_mode"`
+	ActiveClaudePermissionMode string                          `json:"active_claude_permission_mode,omitempty"`
 	ActiveThreadServiceTier    string                          `json:"active_thread_service_tier,omitempty"`
 	ActiveThreadName           string                          `json:"active_thread_name"`
 	ActiveThreadPreview        string                          `json:"active_thread_preview"`
@@ -57,13 +58,14 @@ type storedSession struct {
 }
 
 type SessionBackendThread struct {
-	ThreadID       string `json:"thread_id,omitempty"`
-	WorkspaceID    string `json:"workspace_id,omitempty"`
-	ApprovalPolicy string `json:"approval_policy,omitempty"`
-	SandboxMode    string `json:"sandbox_mode,omitempty"`
-	ServiceTier    string `json:"service_tier,omitempty"`
-	Name           string `json:"name,omitempty"`
-	Preview        string `json:"preview,omitempty"`
+	ThreadID             string `json:"thread_id,omitempty"`
+	WorkspaceID          string `json:"workspace_id,omitempty"`
+	ApprovalPolicy       string `json:"approval_policy,omitempty"`
+	SandboxMode          string `json:"sandbox_mode,omitempty"`
+	ClaudePermissionMode string `json:"claude_permission_mode,omitempty"`
+	ServiceTier          string `json:"service_tier,omitempty"`
+	Name                 string `json:"name,omitempty"`
+	Preview              string `json:"preview,omitempty"`
 }
 
 type Session struct {
@@ -73,6 +75,7 @@ type Session struct {
 	ActiveThreadWorkspaceID    string                          `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy string                          `json:"active_thread_approval_policy"`
 	ActiveThreadSandboxMode    string                          `json:"active_thread_sandbox_mode"`
+	ActiveClaudePermissionMode string                          `json:"active_claude_permission_mode,omitempty"`
 	ActiveThreadServiceTier    string                          `json:"active_thread_service_tier,omitempty"`
 	ActiveThreadName           string                          `json:"active_thread_name"`
 	ActiveThreadPreview        string                          `json:"active_thread_preview"`
@@ -481,6 +484,7 @@ func storedSessionFromSession(sess *Session) *storedSession {
 		ActiveThreadWorkspaceID:    cp.ActiveThreadWorkspaceID,
 		ActiveThreadApprovalPolicy: cp.ActiveThreadApprovalPolicy,
 		ActiveThreadSandboxMode:    cp.ActiveThreadSandboxMode,
+		ActiveClaudePermissionMode: cp.ActiveClaudePermissionMode,
 		ActiveThreadServiceTier:    cp.ActiveThreadServiceTier,
 		ActiveThreadName:           cp.ActiveThreadName,
 		ActiveThreadPreview:        cp.ActiveThreadPreview,
@@ -502,6 +506,7 @@ func sessionFromStored(sess *storedSession) *Session {
 		ActiveThreadWorkspaceID:    sess.ActiveThreadWorkspaceID,
 		ActiveThreadApprovalPolicy: sess.ActiveThreadApprovalPolicy,
 		ActiveThreadSandboxMode:    sess.ActiveThreadSandboxMode,
+		ActiveClaudePermissionMode: sess.ActiveClaudePermissionMode,
 		ActiveThreadServiceTier:    sess.ActiveThreadServiceTier,
 		ActiveThreadName:           sess.ActiveThreadName,
 		ActiveThreadPreview:        sess.ActiveThreadPreview,
@@ -525,6 +530,7 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 		return nil
 	}
 	cp := *sess
+	cp.ActiveClaudePermissionMode = strings.TrimSpace(cp.ActiveClaudePermissionMode)
 	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
 	cp.BackendThreads = normalizeSessionBackendThreads(cp.BackendThreads)
 	return &cp
@@ -546,6 +552,7 @@ func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendTh
 	thread.WorkspaceID = strings.TrimSpace(thread.WorkspaceID)
 	thread.ApprovalPolicy = strings.TrimSpace(thread.ApprovalPolicy)
 	thread.SandboxMode = strings.TrimSpace(thread.SandboxMode)
+	thread.ClaudePermissionMode = strings.TrimSpace(thread.ClaudePermissionMode)
 	thread.ServiceTier = normalizeStoredServiceTier(thread.ServiceTier)
 	thread.Name = strings.TrimSpace(thread.Name)
 	thread.Preview = strings.TrimSpace(thread.Preview)

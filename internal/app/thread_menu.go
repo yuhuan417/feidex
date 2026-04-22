@@ -82,9 +82,10 @@ func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	reply := "已创建新线程并切换过去。"
+	noun := primaryConversationNoun(a.configuredBackend())
+	reply := "已创建新" + noun + "并切换过去。"
 	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
-		reply += " thread: `" + binding.ThreadID + "`。"
+		reply += " " + primaryConversationSummaryLabel(a.configuredBackend()) + ": `" + binding.ThreadID + "`。"
 	}
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
@@ -102,47 +103,6 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 }
 
 func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
-	if a.configuredBackend() == backendClaude {
-		sessionKey := a.makeSessionKey(msg)
-		if len(args) == 0 {
-			return a.commandThreads(msg, false)
-		}
-		switch strings.TrimSpace(args[0]) {
-		case "list":
-			includeAll := false
-			if len(args) > 2 {
-				return fmt.Errorf("usage: %s", threadCommandUsage)
-			}
-			if len(args) == 2 {
-				if strings.TrimSpace(args[1]) != "all" {
-					return fmt.Errorf("usage: %s", threadCommandUsage)
-				}
-				includeAll = true
-			}
-			return a.commandThreads(msg, includeAll)
-		case "new":
-			if len(args) != 1 {
-				return fmt.Errorf("usage: /thread new")
-			}
-			return a.commandThreadsNew(msg)
-		case "fork":
-			if len(args) != 1 {
-				return fmt.Errorf("usage: /thread fork")
-			}
-			return a.commandFork(msg, nil)
-		case "resume":
-			if len(args) != 2 {
-				return fmt.Errorf("usage: /thread resume THREAD_ID")
-			}
-			resp, err := a.completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
-			if err != nil {
-				return err
-			}
-			return a.replyCommandActionResponse(msg, resp)
-		default:
-			return backendUnsupportedError("/thread " + strings.TrimSpace(args[0]))
-		}
-	}
 	if len(args) == 0 {
 		return a.commandThreads(msg, false)
 	}
@@ -216,6 +176,64 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 	}
 }
 
+func (a *App) commandSession(msg *feishu.InboundMessage, args []string) error {
+	if len(args) == 0 {
+		return a.commandThreads(msg, false)
+	}
+	sessionKey := a.makeSessionKey(msg)
+	switch strings.TrimSpace(args[0]) {
+	case "list":
+		includeAll := false
+		if len(args) > 2 {
+			return fmt.Errorf("usage: %s", claudeSessionCommandUsage)
+		}
+		if len(args) == 2 {
+			if strings.TrimSpace(args[1]) != "all" {
+				return fmt.Errorf("usage: %s", claudeSessionCommandUsage)
+			}
+			includeAll = true
+		}
+		return a.commandThreads(msg, includeAll)
+	case "new":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /session new")
+		}
+		return a.commandThreadsNew(msg)
+	case "fork":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /session fork")
+		}
+		return a.commandFork(msg, nil)
+	case "resume":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /session resume SESSION_ID")
+		}
+		resp, err := a.completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
+	case "permissions":
+		if len(args) == 1 {
+			return a.showClaudeSessionPermissionMenu(msg)
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /session permissions [MODE|inherit]")
+		}
+		_, _, _, threadID, err := a.currentThreadForMessage(msg)
+		if err != nil {
+			return err
+		}
+		resp, err := a.completeClaudeSessionPermissionModeSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		if err != nil {
+			return err
+		}
+		return a.replyCommandActionResponse(msg, resp)
+	default:
+		return fmt.Errorf("usage: %s", claudeSessionCommandUsage)
+	}
+}
+
 func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
 	sess := a.appState().session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
@@ -249,8 +267,8 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		scopeLabel = "全部来源（仅命令入口）"
 	}
 	lines := []string{
-		"当前线程: " + currentLabel,
-		"当前 thread id: `" + currentThreadID + "`",
+		primaryConversationCurrentLabel(a.configuredBackend()) + ": " + currentLabel,
+		"当前 " + primaryConversationIDLabel(a.configuredBackend()) + ": `" + currentThreadID + "`",
 		"工作区: `" + workspace.ID + "`",
 		"当前 thread sandbox: " + currentThreadSandbox,
 		"当前 thread policy: " + currentThreadPolicy,
@@ -331,8 +349,8 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		},
 	)
 	body := strings.Join(lines, "\n")
-	card := newMarkdownBodyCard("线程管理", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.thread", body)})
+	card := newMarkdownBodyCard(primaryConversationMenuLabel(a.configuredBackend()), "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBodyForBackend(a.configuredBackend(), "menu.thread", body)})
 	if len(selectOptions) > 0 {
 		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
 			"thread_resume_select",
@@ -360,36 +378,50 @@ func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws
 	}
 	currentLabel := "-"
 	currentThreadID := "-"
+	workspacePermission := "-"
+	sessionPermission := "跟随工作区"
+	effectivePermission := "-"
 	if sess != nil {
 		currentLabel = currentThreadLabel(sess)
 		if strings.TrimSpace(sess.ActiveThreadID) != "" {
 			currentThreadID = strings.TrimSpace(sess.ActiveThreadID)
 		}
 	}
+	if ws != nil {
+		workspacePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(nil, ws, a.cfg.Claude))
+		effectivePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(sess, ws, a.cfg.Claude))
+	}
+	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
+		sessionPermission = claudePermissionModeLabel(sess.ActiveClaudePermissionMode)
+	}
 	scopeLabel := "当前工作区"
 	if includeAll {
-		scopeLabel = "全部 Claude sessions"
+		scopeLabel = "全部 Claude 会话"
 	}
 	lines := []string{
 		"当前 backend: `claude`",
-		"当前 session: " + currentLabel,
+		"当前会话: " + currentLabel,
 		"当前 session id: `" + currentThreadID + "`",
 		"工作区: `" + workspaceID + "`",
+		"工作区默认权限: " + workspacePermission,
+		"会话覆盖: " + sessionPermission,
+		"当前生效权限: " + effectivePermission,
 		"list 范围: " + scopeLabel,
 		fmt.Sprintf("list 数量: `%d`", len(items)),
 	}
 	if len(items) == 0 {
-		lines = append(lines, "", "当前没有可切换的 Claude session。")
+		lines = append(lines, "", "当前没有可切换的 Claude 会话。")
 	} else {
-		lines = append(lines, "", "通过下拉 list 选择要切换的 Claude session。")
+		lines = append(lines, "", "通过下拉 list 选择要切换的 Claude 会话。")
 	}
+	lines = append(lines, "", "提示：`/session new` 和 `/session fork` 需要在开始对话后，才会生成真实的 Claude 会话和 session id。")
 	hasActiveSession := sess != nil && strings.TrimSpace(sess.ActiveThreadID) != ""
 	if !hasActiveSession {
-		lines = append(lines, "", "当前没有活动 Claude session，因此暂不显示 `/thread fork`。")
+		lines = append(lines, "", "当前没有活动 Claude 会话，因此暂不显示 `/session fork` 和 `/session permissions`。")
 	}
 	buttons := []feishu.Button{
 		{
-			Text: commandLabel("新建线程", "/thread new"),
+			Text: commandLabel("新建会话", "/session new"),
 			Type: "default",
 			Value: map[string]any{
 				"action":        "menu.new",
@@ -399,15 +431,25 @@ func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws
 		},
 	}
 	if hasActiveSession {
-		buttons = append(buttons, feishu.Button{
-			Text: commandLabel("派生线程", "/thread fork"),
-			Type: "default",
-			Value: map[string]any{
-				"action":        "menu.fork",
-				"session_key":   sessionKey,
-				"parent_action": "menu.thread",
+		buttons = append(buttons,
+			feishu.Button{
+				Text: commandLabel("派生会话", "/session fork"),
+				Type: "default",
+				Value: map[string]any{
+					"action":        "menu.fork",
+					"session_key":   sessionKey,
+					"parent_action": "menu.thread",
+				},
 			},
-		})
+			feishu.Button{
+				Text: submenuCommandLabel("会话权限", "/session permissions"),
+				Type: "default",
+				Value: map[string]any{
+					"action":      "thread.permission_mode.menu",
+					"session_key": sessionKey,
+				},
+			},
+		)
 	}
 	buttons = append(buttons, feishu.Button{
 		Text: "返回上一级",
@@ -430,8 +472,8 @@ func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws
 			Value: item.ID,
 		})
 	}
-	card := newMarkdownBodyCard("线程管理", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.thread", strings.Join(lines, "\n"))})
+	card := newMarkdownBodyCard("会话管理", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBodyForBackend(a.configuredBackend(), "menu.thread", strings.Join(lines, "\n"))})
 	if len(selectOptions) > 0 {
 		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
 			"thread_resume_select",

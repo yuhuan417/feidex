@@ -41,7 +41,8 @@ func (a *App) completeMenuGroupSystem(action *feishu.CardAction, sessionKey stri
 }
 
 func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
-	renderer := menuNodeRenderers[strings.TrimSpace(actionName)]
+	actionName = nearestVisibleMenuAction(actionName, a.configuredBackend())
+	renderer := menuNodeRenderers[actionName]
 	if renderer == nil {
 		return nil, false
 	}
@@ -53,6 +54,9 @@ func (a *App) completeMenuCompact(action *feishu.CardAction, sessionKey string) 
 }
 
 func (a *App) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if !menuActionVisibleForBackend("menu.review", a.configuredBackend()) {
+		return a.completeMenuCommand(action, sessionKey, "/review", "menu.tools")
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
 		Card:  rawCard(a.renderReviewMenuCard(sessionKey)),

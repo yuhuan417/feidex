@@ -89,29 +89,116 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 }
 
 func menuGroupSpec(action string) (commandMenuGroupSpec, bool) {
+	return menuGroupSpecForBackend(action, "")
+}
+
+func menuGroupSpecForBackend(action, backend string) (commandMenuGroupSpec, bool) {
 	action = strings.TrimSpace(action)
 	for _, spec := range commandMenuGroupSpecs {
 		if spec.Action == action {
+			if action == "menu.thread" && normalizeRuntimeBackend(backend) == backendClaude {
+				spec.Label = "会话管理"
+				spec.Description = "查看当前会话状态，并通过下拉切换会话。"
+			}
 			return spec, true
 		}
 	}
 	return commandMenuGroupSpec{}, false
 }
 
-func menuItemsForGroup(action string) []commandMenuItemSpec {
+func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
+	backend = firstNonEmpty(normalizeRuntimeBackend(backend), backendCodex)
+	if spec.Kind == menuItemBack {
+		return true
+	}
+	if strings.TrimSpace(spec.Slash) == "" {
+		return true
+	}
+	return isLocalCommandForBackend(backend, spec.Slash)
+}
+
+func menuItemSpecForAction(action string) (commandMenuItemSpec, bool) {
+	action = strings.TrimSpace(action)
+	for _, spec := range commandMenuItemSpecs {
+		if spec.Action == action {
+			return spec, true
+		}
+	}
+	return commandMenuItemSpec{}, false
+}
+
+func menuActionVisibleForBackend(action, backend string) bool {
+	action = strings.TrimSpace(action)
+	backend = firstNonEmpty(normalizeRuntimeBackend(backend), backendCodex)
+	if action == "" || action == "menu.root" {
+		return true
+	}
+	if _, ok := menuGroupSpec(action); ok {
+		return groupHasVisibleMenuItems(action, backend)
+	}
+	if spec, ok := menuItemSpecForAction(action); ok {
+		return menuItemVisibleForBackend(spec, backend)
+	}
+	return true
+}
+
+func nearestVisibleMenuAction(action, backend string) string {
+	action = strings.TrimSpace(action)
+	backend = firstNonEmpty(normalizeRuntimeBackend(backend), backendCodex)
+	if action == "" {
+		action = "menu.root"
+	}
+	for i := 0; action != "" && i < 16; i++ {
+		if menuActionVisibleForBackend(action, backend) {
+			return action
+		}
+		node, ok := menuNodes[action]
+		if !ok {
+			break
+		}
+		action = strings.TrimSpace(node.Parent)
+	}
+	if menuActionVisibleForBackend("menu.root", backend) {
+		return "menu.root"
+	}
+	return ""
+}
+
+func menuItemsForGroup(action, backend string) []commandMenuItemSpec {
 	action = strings.TrimSpace(action)
 	items := make([]commandMenuItemSpec, 0, 8)
 	for _, spec := range commandMenuItemSpecs {
-		if spec.GroupAction == action {
+		if spec.GroupAction == action && menuItemVisibleForBackend(spec, backend) {
 			items = append(items, spec)
 		}
 	}
 	return items
 }
 
-func renderRootMenuButtons(sessionKey string) []feishu.Button {
+func groupHasVisibleMenuItems(action, backend string) bool {
+	hasDeclaredItems := false
+	for _, spec := range commandMenuItemSpecs {
+		if spec.GroupAction != strings.TrimSpace(action) {
+			continue
+		}
+		hasDeclaredItems = true
+		if spec.Kind == menuItemBack {
+			continue
+		}
+		if menuItemVisibleForBackend(spec, backend) {
+			return true
+		}
+	}
+	return !hasDeclaredItems
+}
+
+func renderRootMenuButtons(backend, sessionKey string) []feishu.Button {
 	buttons := make([]feishu.Button, 0, len(commandMenuGroupSpecs))
 	for _, spec := range commandMenuGroupSpecs {
+		if !groupHasVisibleMenuItems(spec.Action, backend) {
+			continue
+		}
+		spec, _ = menuGroupSpecForBackend(spec.Action, backend)
 		buttons = append(buttons, feishu.Button{
 			Text:  submenuLabel(spec.Label),
 			Type:  "default",
@@ -121,8 +208,8 @@ func renderRootMenuButtons(sessionKey string) []feishu.Button {
 	return buttons
 }
 
-func renderGroupMenuButtons(groupAction, sessionKey string) []feishu.Button {
-	items := menuItemsForGroup(groupAction)
+func renderGroupMenuButtons(backend, groupAction, sessionKey string) []feishu.Button {
+	items := menuItemsForGroup(groupAction, backend)
 	buttons := make([]feishu.Button, 0, len(items))
 	for _, spec := range items {
 		buttons = append(buttons, renderMenuButtonSpec(spec, sessionKey))

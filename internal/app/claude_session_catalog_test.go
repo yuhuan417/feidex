@@ -53,7 +53,7 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	}
 }
 
-func TestHandleCommandThreadListClaudeShowsSessionCard(t *testing.T) {
+func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
@@ -64,19 +64,19 @@ func TestHandleCommandThreadListClaudeShowsSessionCard(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, "session-list-1", "List Session", "continue work", time.Unix(100, 0))
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := a.handleCommand(msg, "/threads"); err != nil {
-		t.Fatalf("handleCommand(/threads) error = %v", err)
+	if err := a.handleCommand(msg, "/session"); err != nil {
+		t.Fatalf("handleCommand(/session) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
-		t.Fatal("expected Claude thread list card to be sent")
+		t.Fatal("expected Claude session list card to be sent")
 	}
 	card := ff.replyCards[len(ff.replyCards)-1]
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "当前 backend: `claude`") || !strings.Contains(body, "通过下拉 list 选择要切换的 Claude session。") {
-		t.Fatalf("Claude thread list body = %q", body)
+	if !strings.Contains(body, "当前 backend: `claude`") || !strings.Contains(body, "通过下拉 list 选择要切换的 Claude 会话。") || !strings.Contains(body, "开始对话后") {
+		t.Fatalf("Claude session list body = %q", body)
 	}
 	if selects := cardSelectStaticForTest(card); len(selects) != 1 {
-		t.Fatalf("Claude thread list selects = %+v, want 1", selects)
+		t.Fatalf("Claude session list selects = %+v, want 1", selects)
 	}
 }
 
@@ -108,6 +108,10 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "开始对话后") {
+		t.Fatalf("Claude thread card body = %q, want warmup hint", body)
+	}
 	labels := cardButtonLabelsByAction(card)
 	if _, ok := labels["menu.fork"]; !ok {
 		t.Fatalf("Claude thread card missing fork button: %+v", labels)
@@ -133,7 +137,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 	}
 }
 
-func TestHandleCommandThreadResumeClaudeResumesSession(t *testing.T) {
+func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
@@ -157,8 +161,8 @@ func TestHandleCommandThreadResumeClaudeResumesSession(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := a.handleCommand(msg, "/thread resume session-resume-1"); err != nil {
-		t.Fatalf("handleCommand(/thread resume) error = %v", err)
+	if err := a.handleCommand(msg, "/session resume session-resume-1"); err != nil {
+		t.Fatalf("handleCommand(/session resume) error = %v", err)
 	}
 	if len(claude.ensureCalls) != 1 {
 		t.Fatalf("Claude EnsureSession calls = %#v, want 1", claude.ensureCalls)

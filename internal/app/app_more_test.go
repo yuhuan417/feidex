@@ -1623,6 +1623,63 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	}
 }
 
+func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	a.claude = &fakeClaudeCore{}
+	sessionKey := "feishu:p2p:chat:user"
+
+	toolsCard := a.renderToolsMenuCard(sessionKey)
+	toolsLabels := cardButtonLabelsByAction(toolsCard)
+	for _, actionName := range []string{"menu.review", "menu.skills"} {
+		if _, ok := toolsLabels[actionName]; ok {
+			t.Fatalf("unexpected Claude tools action %q in %+v", actionName, toolsLabels)
+		}
+	}
+	for _, actionName := range []string{"menu.history", "menu.usage", "menu.quiet"} {
+		if _, ok := toolsLabels[actionName]; !ok {
+			t.Fatalf("missing Claude tools action %q in %+v", actionName, toolsLabels)
+		}
+	}
+
+	modelCard := a.renderModelMenuCard(sessionKey)
+	modelLabels := cardButtonLabelsByAction(modelCard)
+	if _, ok := modelLabels["menu.fast"]; ok {
+		t.Fatalf("unexpected Claude model action menu.fast in %+v", modelLabels)
+	}
+	if _, ok := modelLabels["menu.model"]; !ok {
+		t.Fatalf("missing Claude model action menu.model in %+v", modelLabels)
+	}
+}
+
+func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	sessionKey := "feishu:p2p:chat:user"
+
+	resp, err := a.completeMenuReview(&feishu.CardAction{
+		ActionValue: map[string]any{"session_key": sessionKey},
+	}, sessionKey)
+	if err != nil {
+		t.Fatalf("completeMenuReview() error = %v", err)
+	}
+	if resp == nil || resp.Card == nil {
+		t.Fatalf("completeMenuReview() = %#v, want fallback card response", resp)
+	}
+	if len(claude.startTurnCalls) != 1 || claude.startTurnCalls[0].prompt != "/review" {
+		t.Fatalf("Claude startTurn calls = %#v, want /review passthrough", claude.startTurnCalls)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "当前位置：主菜单 / 常用工具") || strings.Contains(body, "当前位置：主菜单 / 常用工具 / 代码审查") {
+		t.Fatalf("stale review fallback body = %q", body)
+	}
+}
+
 func TestApprovalAndUserInputActions(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"

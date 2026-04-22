@@ -19,13 +19,13 @@ func (a *App) renderStatusCard(sessionKey string) map[string]any {
 		{Text: commandLabel("刷新", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBody("menu.status", a.statusCardBody(sess)), buttons)
+	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBodyForBackend(a.configuredBackend(), "menu.status", a.statusCardBody(sess)), buttons)
 }
 
 func (a *App) statusCardBody(sess *state.Session) string {
 	workspaceID := a.defaultWorkspaceID()
-	threadLabel := "-"
-	threadID := "-"
+	conversationLabel := "-"
+	conversationID := "-"
 	status := "idle"
 	queueLen := 0
 	var ws *config.Workspace
@@ -33,8 +33,8 @@ func (a *App) statusCardBody(sess *state.Session) string {
 		if strings.TrimSpace(sess.WorkspaceID) != "" {
 			workspaceID = sess.WorkspaceID
 		}
-		threadLabel = currentThreadLabel(sess)
-		threadID = firstNonEmpty(sess.ActiveThreadID, "-")
+		conversationLabel = currentThreadLabel(sess)
+		conversationID = firstNonEmpty(sess.ActiveThreadID, "-")
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
@@ -51,6 +51,34 @@ func (a *App) statusCardBody(sess *state.Session) string {
 		if effort == "" {
 			effort = "(follow model default)"
 		}
+	}
+	if a.isClaudeBackend() {
+		workspacePermission := "-"
+		sessionPermission := "跟随工作区"
+		effectivePermission := "-"
+		if ws != nil {
+			workspacePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(nil, ws, a.cfg.Claude))
+			effectivePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(sess, ws, a.cfg.Claude))
+		}
+		if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
+			sessionPermission = claudePermissionModeLabel(sess.ActiveClaudePermissionMode)
+		}
+		return strings.Join([]string{
+			"状态: `" + status + "`",
+			"backend: `" + firstNonEmpty(a.configuredBackend(), "unset") + "`",
+			"版本: `" + currentVersion() + "`",
+			"log level: " + renderRuntimeLogLevelValue(),
+			"工作区: `" + workspaceID + "`",
+			"会话: " + conversationLabel,
+			"session_id: `" + conversationID + "`",
+			"Claude model: `" + model + "`",
+			"Claude effort: `" + effort + "`",
+			"quiet: `" + quietModeStatusText(a.quietMode()) + "`",
+			"workspace permission mode: " + workspacePermission,
+			"session permission mode: " + sessionPermission,
+			"effective permission mode: " + effectivePermission,
+			"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
+		}, "\n")
 	}
 	workspaceSandbox := "-"
 	workspacePolicy := "-"
@@ -76,8 +104,8 @@ func (a *App) statusCardBody(sess *state.Session) string {
 		"版本: `" + currentVersion() + "`",
 		"log level: " + renderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
-		"线程: " + threadLabel,
-		"thread_id: `" + threadID + "`",
+		"线程: " + conversationLabel,
+		"thread_id: `" + conversationID + "`",
 		"全局模型: `" + model + "`",
 		"全局推理强度: `" + effort + "`",
 		"quiet: `" + quietModeStatusText(a.quietMode()) + "`",

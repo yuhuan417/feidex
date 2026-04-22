@@ -42,7 +42,6 @@ type claudeSessionState struct {
 	readyOnce         sync.Once
 	currentTurnNumber int
 	interruptPending  bool
-	allowTools        map[string]bool
 	turns             map[int]*claudeTurnState
 	lastPlanFilePath  string
 }
@@ -59,10 +58,11 @@ type claudeTurnState struct {
 }
 
 type claudePendingInteraction struct {
-	kind    string
-	session *claudeSessionState
-	tool    string
-	respCh  chan claudePendingResponse
+	kind                     string
+	session                  *claudeSessionState
+	tool                     string
+	sessionPermissionUpdates []map[string]any
+	respCh                   chan claudePendingResponse
 }
 
 type claudePendingResponse struct {
@@ -214,10 +214,9 @@ func (r *claudeRuntime) startSession(ctx context.Context, sessionKey string, ws 
 		startedAt:   time.Now(),
 		sessionID:   initialSessionID,
 		readyCh:     make(chan struct{}),
-		allowTools:  map[string]bool{},
 		turns:       map[int]*claudeTurnState{},
 	}
-	permissionMode := claudePermissionModeForWorkspace(runtimeCfg, ws)
+	permissionMode := r.permissionModeForSession(ctx, sessionKey, ws, runtimeCfg)
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
 		claudecli.WithWorkDir(ws.Cwd),
@@ -343,6 +342,32 @@ func (r *claudeRuntime) Interrupt(ctx context.Context, sessionKey string) error 
 	return state.session.Interrupt(ctx)
 }
 
+func (r *claudeRuntime) SetPermissionMode(ctx context.Context, sessionKey, mode string) error {
+	if r == nil {
+		return fmt.Errorf("claude runtime not initialized")
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return fmt.Errorf("missing session key")
+	}
+	state, err := r.sessionState(sessionKey)
+	if err != nil {
+		slog.Debug("skip Claude permission mode hot apply; runtime session not initialized",
+			"session_key", sessionKey,
+			"mode", strings.TrimSpace(mode),
+		)
+		return nil
+	}
+	if state.session == nil {
+		slog.Debug("skip Claude permission mode hot apply; session handle missing",
+			"session_key", sessionKey,
+			"mode", strings.TrimSpace(mode),
+		)
+		return nil
+	}
+	return state.session.SetPermissionMode(ctx, claudePermissionModeValue(mode))
+}
+
 func (r *claudeRuntime) ResetSession(sessionKey string) error {
 	sessionKey = strings.TrimSpace(sessionKey)
 	r.mu.Lock()
@@ -381,10 +406,9 @@ func (r *claudeRuntime) ResolveApproval(requestID string, resolution claudeAppro
 	switch strings.TrimSpace(resolution.Behavior) {
 	case "allow":
 		resp.Behavior = claudecli.PermissionAllow
-		if strings.TrimSpace(resolution.Scope) == "session" && pending.session != nil {
-			pending.session.mu.Lock()
-			pending.session.allowTools[claudeSessionApprovalKey(pending.tool)] = true
-			pending.session.mu.Unlock()
+		resp.UpdatedPermissions = copyPermissionUpdates(resolution.UpdatedPermissions)
+		if strings.TrimSpace(resolution.Scope) == "session" && len(resp.UpdatedPermissions) == 0 {
+			resp.UpdatedPermissions = copyPermissionUpdates(pending.sessionPermissionUpdates)
 		}
 	default:
 		resp.Behavior = claudecli.PermissionDeny
@@ -840,10 +864,6 @@ func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessi
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "invalid permission request"}, nil
 	}
 	state.mu.Lock()
-	if state.allowTools[claudeSessionApprovalKey(req.ToolName)] {
-		state.mu.Unlock()
-		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionAllow}, nil
-	}
 	threadID := strings.TrimSpace(state.sessionID)
 	turnID := ""
 	if turn := state.turns[state.currentTurnNumber]; turn != nil {
@@ -855,15 +875,18 @@ func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessi
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "no active submission for approval"}, nil
 	}
 	requestID := strings.TrimSpace(req.RequestID)
+	sessionUpdates := safeClaudeSessionPermissionUpdates(req.PermissionSuggestions)
+	sessionLabel := describeClaudeSessionPermissionUpdates(sessionUpdates)
 	kind, body, payload := r.claudeApprovalPresentation(sub.WorkspaceID, req)
-	if err := r.app.sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey, sub, threadID, turnID, requestID, body, payload); err != nil {
+	if err := r.app.sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey, sub, threadID, turnID, requestID, body, payload, sessionLabel); err != nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: err.Error()}, nil
 	}
 	pending := &claudePendingInteraction{
-		kind:    kind,
-		session: state,
-		tool:    req.ToolName,
-		respCh:  make(chan claudePendingResponse, 1),
+		kind:                     kind,
+		session:                  state,
+		tool:                     req.ToolName,
+		sessionPermissionUpdates: copyPermissionUpdates(sessionUpdates),
+		respCh:                   make(chan claudePendingResponse, 1),
 	}
 	r.storePending(requestID, pending)
 	select {
@@ -1021,6 +1044,63 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 	return kind, body, payload
 }
 
+func (r *claudeRuntime) permissionModeForSession(ctx context.Context, sessionKey string, ws *config.Workspace, cfg config.ClaudeConfig) claudecli.PermissionMode {
+	var sess *state.Session
+	if r != nil && r.app != nil && r.app.store != nil {
+		sess = r.app.appState().session(sessionKey)
+	}
+	mode := effectiveClaudePermissionMode(sess, ws, cfg)
+	if normalizeClaudePermissionModeValue(mode) == string(claudePermissionModeAuto) && !r.app.isClaudeAutoModeAvailable(ctx) {
+		slog.Warn("Claude auto permission mode unavailable; falling back to default",
+			"session_key", sessionKey,
+			"workspace_id", func() string {
+				if ws == nil {
+					return ""
+				}
+				return ws.ID
+			}(),
+		)
+		mode = string(claudePermissionModeDefault)
+	}
+	return claudePermissionModeValue(mode)
+}
+
+func claudePermissionModeValue(mode string) claudecli.PermissionMode {
+	switch normalizeClaudePermissionModeValue(mode) {
+	case string(claudePermissionModeAcceptEdits):
+		return claudecli.PermissionModeAcceptEdits
+	case string(claudePermissionModeAuto):
+		return claudecli.PermissionModeAuto
+	case string(claudePermissionModePlan):
+		return claudecli.PermissionModePlan
+	case string(claudePermissionModeBypass):
+		return claudecli.PermissionModeBypass
+	default:
+		return claudecli.PermissionModeDefault
+	}
+}
+
+func copyPermissionUpdates(in []map[string]any) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, item := range in {
+		if item == nil {
+			continue
+		}
+		copied := make(map[string]any, len(item))
+		for key, value := range item {
+			copied[key] = value
+		}
+		out = append(out, copied)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func claudeTurnUsageAsThreadUsage(usage claudecli.TurnUsage) codexrpc.ThreadTokenUsage {
 	last := codexrpc.TokenUsageBreakdown{
 		InputTokens:       int64(usage.InputTokens),
@@ -1104,27 +1184,6 @@ func claudePlanModeBody(plan claudecli.PlanInfo) string {
 		}
 	}
 	return strings.Join(lines, "\n")
-}
-
-func claudeSessionApprovalKey(tool string) string {
-	return strings.ToLower(strings.TrimSpace(tool))
-}
-
-func claudePermissionModeForWorkspace(cfg config.ClaudeConfig, ws *config.Workspace) claudecli.PermissionMode {
-	mode := strings.TrimSpace(cfg.PermissionMode)
-	if strings.TrimSpace(ws.ApprovalPolicy) == "never" {
-		mode = "bypassPermissions"
-	}
-	switch mode {
-	case string(claudecli.PermissionModeAcceptEdits):
-		return claudecli.PermissionModeAcceptEdits
-	case string(claudecli.PermissionModePlan):
-		return claudecli.PermissionModePlan
-	case string(claudecli.PermissionModeBypass):
-		return claudecli.PermissionModeBypass
-	default:
-		return claudecli.PermissionModeDefault
-	}
 }
 
 func isClaudeInternalTool(name string) bool {
