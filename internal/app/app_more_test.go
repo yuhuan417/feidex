@@ -420,6 +420,26 @@ func cardButtonsForTest(card map[string]any) []map[string]any {
 	return buttons
 }
 
+func cardButtonLabelsByAction(card map[string]any) map[string]string {
+	labels := map[string]string{}
+	for _, action := range cardButtonsForTest(card) {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		actionName, _ := value["action"].(string)
+		if actionName != "" {
+			labels[actionName] = label
+		}
+	}
+	return labels
+}
+
 func cardSelectStaticForTest(card map[string]any) []map[string]any {
 	var selects []map[string]any
 	for _, elem := range cardElementsForTest(card) {
@@ -3507,11 +3527,14 @@ func TestSmallHelperBranches(t *testing.T) {
 	if got := renderThreadButtonLabel("", "", "thread-id-1234567890"); got == "" {
 		t.Fatal("renderThreadButtonLabel(id fallback) should not be empty")
 	}
-	if got := renderThreadListEntry("name", "preview", "id"); !strings.Contains(got, "name") {
+	if got := renderThreadListEntry("name", "preview", "12345678abcdef"); !strings.Contains(got, "name") || !strings.Contains(got, "[12345678]") {
 		t.Fatalf("renderThreadListEntry(name+preview) = %q", got)
 	}
-	if got := renderThreadListEntry("", "", "thread-id"); !strings.Contains(got, "thread-id") {
+	if got := renderThreadListEntry("", "", "thread-1"); !strings.Contains(got, "thread-1") {
 		t.Fatalf("renderThreadListEntry(id fallback) = %q", got)
+	}
+	if got := shortThreadID("12345678abcdef"); got != "12345678" {
+		t.Fatalf("shortThreadID() = %q, want 12345678", got)
 	}
 }
 
@@ -3555,6 +3578,96 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 	}
 	if got := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1]); len(got) != 1 {
 		t.Fatalf("thread list selects = %+v, want 1 select", got)
+	}
+}
+
+func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "12345678abcdef",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadName:           "Current Thread",
+		ActiveThreadPreview:        "Current Preview",
+		ActiveThreadSandboxMode:    "workspace-write",
+		ActiveThreadApprovalPolicy: "on-request",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "12345678abcdef", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "older-thread-9999", Name: "Older", Preview: "Older Preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[0].Cwd},
+		}
+		return nil
+	}
+
+	card, err := a.renderThreadsCard(sessionKey, false)
+	if err != nil {
+		t.Fatalf("renderThreadsCard() error = %v", err)
+	}
+	labels := cardButtonLabelsByAction(card)
+	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu"} {
+		if _, ok := labels[actionName]; !ok {
+			t.Fatalf("expected thread action %q in %+v", actionName, labels)
+		}
+	}
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("thread card selects = %+v, want 1", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) < 1 {
+		t.Fatalf("thread card options = %+v, want at least 1", options)
+	}
+	text, _ := options[0]["text"].(map[string]any)
+	label, _ := text["content"].(string)
+	if !strings.Contains(label, "[12345678]") {
+		t.Fatalf("thread option label = %q, want short id", label)
+	}
+}
+
+func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "12345678abcdef", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+		}
+		return nil
+	}
+
+	card, err := a.renderThreadsCard(sessionKey, false)
+	if err != nil {
+		t.Fatalf("renderThreadsCard() error = %v", err)
+	}
+	labels := cardButtonLabelsByAction(card)
+	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu"} {
+		if _, ok := labels[actionName]; ok {
+			t.Fatalf("unexpected thread action %q in %+v", actionName, labels)
+		}
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "当前没有活动 thread，因此暂不显示") {
+		t.Fatalf("thread card body = %q, want missing-active-thread hint", body)
 	}
 }
 

@@ -42,6 +42,7 @@ type SessionConfig struct {
 	SystemPrompt              string
 	PermissionPromptToolStdio bool
 	Resume                    string
+	ForkSession               bool
 	EventBufferSize           int
 	StderrHandler             func([]byte)
 	PermissionHandler         PermissionHandler
@@ -91,6 +92,10 @@ func WithPermissionPromptToolStdio() SessionOption {
 
 func WithResume(sessionID string) SessionOption {
 	return func(c *SessionConfig) { c.Resume = strings.TrimSpace(sessionID) }
+}
+
+func WithForkSession() SessionOption {
+	return func(c *SessionConfig) { c.ForkSession = true }
 }
 
 func WithEventBufferSize(size int) SessionOption {

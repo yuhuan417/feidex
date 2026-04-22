@@ -441,6 +441,100 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	}
 }
 
+func TestClaudeForkCommandsStartNewSession(t *testing.T) {
+	for _, raw := range []string{"/fork", "/thread fork"} {
+		t.Run(raw, func(t *testing.T) {
+			a, ff, _ := newTestApp(t)
+			a.cfg.Feishu.Backend = backendClaude
+			a.cfg.Claude.Model = "mimo-v2-pro"
+			a.codex = nil
+			claude := &fakeClaudeCore{
+				forkSessionID:  "claude-forked",
+				forkSessionSet: true,
+			}
+			a.claude = claude
+
+			sessionKey := "feishu:p2p:chat:user"
+			if err := a.store.UpsertSession(&state.Session{
+				Key:                     sessionKey,
+				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ActiveThreadID:          "claude-parent",
+				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+				ActiveThreadName:        "Claude Parent",
+				ActiveThreadPreview:     "parent preview",
+				Status:                  "idle",
+			}); err != nil {
+				t.Fatalf("UpsertSession() error = %v", err)
+			}
+
+			msg := &feishu.InboundMessage{MessageID: "m-claude-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+			if err := a.handleCommand(msg, raw); err != nil {
+				t.Fatalf("handleCommand(%q) error = %v", raw, err)
+			}
+			if len(claude.forkCalls) != 1 {
+				t.Fatalf("ForkSession calls = %#v, want 1", claude.forkCalls)
+			}
+			if got := claude.forkCalls[0].sourceSessionID; got != "claude-parent" {
+				t.Fatalf("ForkSession sourceSessionID = %q, want claude-parent", got)
+			}
+			if got := claude.forkCalls[0].model; got != "mimo-v2-pro" {
+				t.Fatalf("ForkSession model = %q, want mimo-v2-pro", got)
+			}
+			sess := a.store.GetSession(sessionKey)
+			if sess == nil || sess.ActiveThreadID != "claude-forked" || sess.ActiveThreadName != "Claude Parent" || sess.Status != "idle" {
+				t.Fatalf("session after %s = %+v", raw, sess)
+			}
+			if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前线程") {
+				t.Fatalf("fork reply = %#v, want success text", ff.replyTexts)
+			}
+		})
+	}
+}
+
+func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Claude.Model = "mimo-v2-pro"
+	a.codex = nil
+	claude := &fakeClaudeCore{
+		forkSessionID:  "",
+		forkSessionSet: true,
+	}
+	a.claude = claude
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "claude-parent",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveThreadName:        "Claude Parent",
+		ActiveThreadPreview:     "parent preview",
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	a.markSessionThreadLive(sessionKey, "claude-parent")
+
+	msg := &feishu.InboundMessage{MessageID: "m-claude-fork-pending", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := a.handleCommand(msg, "/fork"); err != nil {
+		t.Fatalf("handleCommand(/fork) error = %v", err)
+	}
+	if len(claude.forkCalls) != 1 {
+		t.Fatalf("ForkSession calls = %#v, want 1", claude.forkCalls)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadName != "Claude Parent" || sess.Status != "idle" {
+		t.Fatalf("session after pending /fork = %+v", sess)
+	}
+	if a.sessionHasLiveThread(sessionKey, "claude-parent") {
+		t.Fatalf("expected old live thread binding to be cleared after pending /fork")
+	}
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "下一条消息") {
+		t.Fatalf("fork reply = %#v, want pending fork text", ff.replyTexts)
+	}
+}
+
 func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	a := &App{feishu: ff, cfg: testCodexConfig()}

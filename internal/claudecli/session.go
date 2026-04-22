@@ -239,6 +239,74 @@ func (s *Session) Interrupt(ctx context.Context) error {
 	})
 }
 
+func (s *Session) Initialize(ctx context.Context) error {
+	_, err := s.sendControlRequestAndWait(ctx, wireInitializeRequest{
+		Subtype: "initialize",
+		Hooks:   map[string]any{},
+	})
+	return err
+}
+
+func (s *Session) sendControlRequestAndWait(ctx context.Context, request any) (wireControlResponsePayload, error) {
+	if err := ctx.Err(); err != nil {
+		return wireControlResponsePayload{}, err
+	}
+
+	requestID := generateRequestID()
+	respCh := make(chan wireControlResponsePayload, 1)
+
+	s.mu.Lock()
+	if !s.started {
+		s.mu.Unlock()
+		return wireControlResponsePayload{}, ErrNotStarted
+	}
+	if s.stopped {
+		s.mu.Unlock()
+		return wireControlResponsePayload{}, ErrStopping
+	}
+	if s.pendingCtl == nil {
+		s.pendingCtl = map[string]chan wireControlResponsePayload{}
+	}
+	s.pendingCtl[requestID] = respCh
+	writer := s.writer
+	s.mu.Unlock()
+
+	cleanup := func() {
+		s.mu.Lock()
+		delete(s.pendingCtl, requestID)
+		s.mu.Unlock()
+	}
+
+	if writer == nil {
+		cleanup()
+		return wireControlResponsePayload{}, ErrNotStarted
+	}
+	if err := writer.Write(wireControlRequestToSend{
+		Type:      "control_request",
+		RequestID: requestID,
+		Request:   request,
+	}); err != nil {
+		cleanup()
+		return wireControlResponsePayload{}, err
+	}
+
+	select {
+	case <-ctx.Done():
+		cleanup()
+		return wireControlResponsePayload{}, ctx.Err()
+	case resp := <-respCh:
+		cleanup()
+		switch strings.TrimSpace(resp.Subtype) {
+		case "success":
+			return resp, nil
+		case "error":
+			return wireControlResponsePayload{}, fmt.Errorf("control request failed: %s", strings.TrimSpace(resp.Error))
+		default:
+			return wireControlResponsePayload{}, fmt.Errorf("unexpected control response subtype: %s", strings.TrimSpace(resp.Subtype))
+		}
+	}
+}
+
 func (s *Session) cliArgs() []string {
 	args := []string{
 		"--print",
@@ -266,6 +334,9 @@ func (s *Session) cliArgs() []string {
 	}
 	if strings.TrimSpace(s.cfg.Resume) != "" {
 		args = append(args, "--resume", strings.TrimSpace(s.cfg.Resume))
+	}
+	if s.cfg.ForkSession {
+		args = append(args, "--fork-session")
 	}
 	args = append(args, "--include-partial-messages")
 	return args

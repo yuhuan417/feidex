@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,6 +78,7 @@ func TestSessionCLIArgs(t *testing.T) {
 		WithPermissionPromptToolStdio(),
 		WithSystemPrompt("system prompt"),
 		WithResume("session-123"),
+		WithForkSession(),
 	)
 
 	got := session.cliArgs()
@@ -92,6 +94,7 @@ func TestSessionCLIArgs(t *testing.T) {
 		"--permission-prompt-tool", "stdio",
 		"--system-prompt", "system prompt",
 		"--resume", "session-123",
+		"--fork-session",
 		"--include-partial-messages",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -151,6 +154,58 @@ func TestSessionStoppedAndExitErrorAccessors(t *testing.T) {
 	}
 	if got := session.ExitError(); got != context.DeadlineExceeded {
 		t.Fatalf("ExitError() = %v, want deadline exceeded", got)
+	}
+}
+
+func TestSessionInitializeSendsControlInitializeAndWaitsForResponse(t *testing.T) {
+	session := NewSession()
+	session.started = true
+	var out bytes.Buffer
+	session.writer = newNDJSONWriter(&out)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Initialize(context.Background())
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	requestID := ""
+	for time.Now().Before(deadline) {
+		session.mu.Lock()
+		for id := range session.pendingCtl {
+			requestID = id
+			break
+		}
+		session.mu.Unlock()
+		if requestID != "" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if requestID == "" {
+		t.Fatal("Initialize() did not register a pending control request")
+	}
+
+	session.handleControlResponse(wireControlResponse{
+		Type: "control_response",
+		Response: wireControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+			Response:  map[string]any{"pid": 123},
+		},
+	})
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Initialize() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Initialize() did not return after control response")
+	}
+
+	if got := out.String(); !strings.Contains(got, `"subtype":"initialize"`) {
+		t.Fatalf("Initialize() wrote %q, want initialize control request", got)
 	}
 }
 

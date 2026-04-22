@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -319,57 +318,18 @@ func (a *App) claudeUnsupportedCommand(raw string) error {
 		return nil
 	}
 	switch fields[0] {
-	case "/history", "/skills", "/review", "/fork", "/fast":
+	case "/skills", "/review", "/fast":
 		return backendUnsupportedError(fields[0])
 	case "/thread":
 		if len(fields) <= 1 {
 			return nil
 		}
 		switch strings.TrimSpace(fields[1]) {
-		case "new":
+		case "list", "new", "fork", "resume":
 			return nil
 		default:
 			return backendUnsupportedError("/thread " + strings.TrimSpace(fields[1]))
 		}
 	}
 	return nil
-}
-
-func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws *config.Workspace) map[string]any {
-	workspaceID := "-"
-	if ws != nil {
-		workspaceID = firstNonEmpty(strings.TrimSpace(ws.ID), workspaceID)
-	}
-	threadID := "-"
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		threadID = strings.TrimSpace(sess.ActiveThreadID)
-	}
-	lines := []string{
-		"当前 backend: `claude`",
-		"当前工作区: `" + workspaceID + "`",
-		"当前 session: `" + threadID + "`",
-		"",
-		"Claude core 目前支持继续当前会话与新建会话。",
-		"暂不支持 `/thread list`、`/thread resume`、`/thread fork`、`/thread sandbox`、`/thread policy`。",
-	}
-	buttons := []feishu.Button{
-		{
-			Text: commandLabel("新建线程", "/thread new"),
-			Type: "default",
-			Value: map[string]any{
-				"action":        "menu.new",
-				"session_key":   sessionKey,
-				"parent_action": "menu.thread",
-			},
-		},
-		{
-			Text: "返回上一级",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.root",
-				"session_key": sessionKey,
-			},
-		},
-	}
-	return a.feishu.SimpleStatusCard("线程管理", "blue", menuCardBody("menu.thread", strings.Join(lines, "\n")), buttons)
 }

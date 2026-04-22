@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"time"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -117,14 +118,66 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	if strings.TrimSpace(sess.ChatID) == "" {
 		sess.ChatID = action.ChatID
 	}
-	selectedName, _ := action.ActionValue["thread_name"].(string)
-	selectedPreview, _ := action.ActionValue["thread_preview"].(string)
-	selectedCWD, _ := action.ActionValue["thread_cwd"].(string)
 	workspaceID := sess.WorkspaceID
 	if strings.TrimSpace(workspaceID) == "" {
 		workspaceID = a.defaultWorkspaceID()
 	}
-	if ws := config.FindWorkspace(a.cfg, workspaceID); ws != nil && strings.TrimSpace(selectedCWD) != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
+	ws := config.FindWorkspace(a.cfg, workspaceID)
+	if ws == nil {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "error", Content: "workspace not found"},
+		}, nil
+	}
+	selectedName, _ := action.ActionValue["thread_name"].(string)
+	selectedPreview, _ := action.ActionValue["thread_preview"].(string)
+	selectedCWD, _ := action.ActionValue["thread_cwd"].(string)
+	if a.isClaudeBackend() {
+		entry, err := a.findClaudeSessionEntry(threadID)
+		if err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+		}
+		if entry != nil {
+			selectedName = firstNonEmpty(selectedName, strings.TrimSpace(entry.Name))
+			selectedPreview = firstNonEmpty(selectedPreview, strings.TrimSpace(entry.Preview))
+			selectedCWD = firstNonEmpty(selectedCWD, strings.TrimSpace(entry.Cwd))
+		}
+		if strings.TrimSpace(selectedCWD) != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "warning", Content: "该 session 不属于当前工作区，请先切换 workspace"},
+			}, nil
+		}
+		model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		resumedID, err := a.claude.EnsureSession(ctx, sessionKey, ws, threadID, model)
+		if err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+		}
+		clearSessionThreadContext(sess)
+		setSessionThreadContext(
+			sess,
+			workspaceID,
+			resumedID,
+			firstNonEmpty(selectedName, "Claude"),
+			firstNonEmpty(selectedPreview, ws.Name),
+		)
+		sessionResetActiveOperations(sess)
+		sess.Status = "idle"
+		if err := appState.saveSession(sess); err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+		}
+		a.markSessionThreadLive(sessionKey, resumedID)
+		includeAll, _ := action.ActionValue["include_all"].(bool)
+		card, err := a.renderThreadsCard(sessionKey, includeAll)
+		if err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复 Claude session"}}, nil
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "已恢复 Claude session"},
+			Card:  rawCard(card),
+		}, nil
+	}
+	if strings.TrimSpace(selectedCWD) != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "该线程不属于当前工作区，请先切换 workspace"},
 		}, nil

@@ -29,6 +29,7 @@ type codexClient interface {
 
 type claudeCore interface {
 	EnsureSession(context.Context, string, *config.Workspace, string, string) (string, error)
+	ForkSession(context.Context, string, *config.Workspace, string, string) (string, error)
 	UpdateConfig(config.ClaudeConfig)
 	ResetSession(string) error
 	StartTurn(context.Context, string, string, string, string) error

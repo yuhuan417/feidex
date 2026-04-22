@@ -188,6 +188,11 @@ type wireInterruptRequest struct {
 	Subtype string `json:"subtype"`
 }
 
+type wireInitializeRequest struct {
+	Subtype string         `json:"subtype"`
+	Hooks   map[string]any `json:"hooks"`
+}
+
 type wireToolUseRequest struct {
 	Subtype     string         `json:"subtype"`
 	ToolName    string         `json:"tool_name"`

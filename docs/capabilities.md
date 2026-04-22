@@ -1,6 +1,6 @@
 # Claude Backend Menu / Slash Command 能力审计
 
-> 更新时间: 2026-04-21
+> 更新时间: 2026-04-22
 >
 > 审计口径:
 > - 只看“当前 frontend 已选择 `claude` backend，且不在维护模式”时的正常行为。
@@ -24,9 +24,9 @@
 
 ## 结论速览
 
-- Claude 当前真正不支持的不是“少量命令”，而是一整组 Codex 绑定能力: `/history`、`/skills`、`/model`、`/fast`、`/review`、`/compact`、`/fork`、`/threads`，以及 `/thread` 的大部分子命令。
+- Claude 当前真正不支持的主要还是 Codex 绑定能力: `/history`、`/skills`、`/model`、`/fast`、`/review`、`/compact`，以及 `/thread sandbox`、`/thread policy` 这类没有 Claude 语义对齐的子命令。
 - 现状最大的 UX 问题不是报错本身，而是菜单和 `/help` 没有按 backend 过滤。Claude 用户现在能看到很多 Codex-only 入口。
-- `/thread` 在 Claude 上是“部分支持”，不是完全不支持。当前只支持继续当前会话和 `/thread new`。
+- `/thread` 在 Claude 上是“部分支持”，不是完全不支持。当前已经支持 `/thread list`、`/thread list all`、`/thread resume THREAD_ID`、`/thread new`，底层依赖 Feidex 本地 session catalog。
 - `/skills` 当前是“实现路径耦合到 Codex”，不是“理论上 Claude 永远做不了”。`buildClaudePrompt()` 已经会把 `Submission.Skills` 注入 Claude prompt。
 - `/history`、`/compact`、`/review` 则是实打实依赖 Codex RPC，短期内不能靠 UI 小修补解决。
 
@@ -44,7 +44,13 @@
 | `/download` | ✅ | 可用。工作区文件下载是 Feidex 本地能力。 |
 | `/interrupt` / `/stop` | ✅ | 可用。中断当前运行任务。 |
 | `/new` | ✅ | 可用。等价于 `/thread new`。 |
+| `/threads` | ✅ | 可用。等价于 `/thread list`。 |
+| `/thread list` | ✅ | 可用。列出当前工作区最近的 Claude sessions。 |
+| `/thread list all` | ✅ | 可用。列出全部工作区最近的 Claude sessions。 |
+| `/thread resume THREAD_ID` | ✅ | 可用。按 session id 恢复 Claude 会话。 |
 | `/thread new` | ✅ | 可用。为当前 Claude frontend 新建会话。 |
+| `/fork` | ✅ | 可用。等价于 `/thread fork`，会 fork 当前 Claude session。 |
+| `/thread fork` | ✅ | 可用。基于 `--resume + --fork-session` fork 当前 Claude session。 |
 | `/workspace` 及其子命令 | ✅ | 可用。工作区管理没有被 Claude blocklist 拦截。 |
 | `/status` | ⚠️ | 可用，但卡片里有些字段仍是 Codex 口径。 |
 | `/help` | ⚠️ | 可用，但帮助内容没有按 backend 过滤。 |
@@ -57,7 +63,7 @@
 
 | 命令 | 当前行为 | 代码依据 |
 | --- | --- | --- |
-| `/thread` | 无参数时可打开 Claude 专用线程卡。卡片文案明确说明只支持继续当前会话与新建会话。 | `thread_menu.go`, `claude_support.go` |
+| `/thread` | 无参数时打开 Claude session 列表卡；支持 recent sessions 选择与 `/thread new`。 | `thread_menu.go`, `claude_session_catalog.go`, `thread_feature_actions.go` |
 | `/thread new` | 正常可用。 | `thread_menu.go` |
 | `/help` | 会列出全部本地命令，包括 Claude 实际不支持的命令。 | `command_registry.go` 的 `renderHelpBodyFromRegistry()` |
 | `/status` | 会显示 `全局模型`、`全局推理强度`、`thread service tier` 等 Codex 风格字段，Claude 下容易误导。 | `status_panel.go` |
@@ -78,12 +84,6 @@
 | `/review` | ❌ | 入口被拦截；主流程依赖 Codex `review/start`。 |
 | `/review ...` 所有子命令 | ❌ | 同上。 |
 | `/compact` | ❌ | 入口被拦截；实现依赖 Codex `thread/compact/start`。 |
-| `/fork` | ❌ | 入口被拦截；等价于 `/thread fork`。 |
-| `/threads` | ❌ | 实际会转发到 `/thread list`，而 Claude 不支持 `/thread list`。 |
-| `/thread list` | ❌ | Claude 线程菜单不支持列出可恢复 thread。 |
-| `/thread list all` | ❌ | 同上。 |
-| `/thread fork` | ❌ | Claude 线程菜单不支持 fork。 |
-| `/thread resume THREAD_ID` | ❌ | Claude 线程菜单不支持按 thread id 恢复。 |
 | `/thread sandbox [MODE]` | ❌ | Claude 线程菜单不支持 thread 级 sandbox。 |
 | `/thread policy [POLICY]` | ❌ | Claude 线程菜单不支持 thread 级 approval policy。 |
 
@@ -116,7 +116,7 @@
 | `menu.root` | ⚠️ | 根菜单不裁剪，仍显示 `常用工具`、`模型配置`、`线程管理`、`工作区管理`、`系统运维` 五组。 |
 | `menu.tools` | ⚠️ | 组本身能打开，但内部同时包含可用和不可用项。 |
 | `menu.group.model` | ⚠️ | 组本身能打开，但里面两个入口都不可用。 |
-| `menu.thread` | ⚠️ | 会切换到 Claude 专用线程卡，只支持继续当前会话和新建会话。 |
+| `menu.thread` | ⚠️ | 会切换到 Claude 专用线程卡，支持 recent sessions 选择、直接恢复和新建会话。 |
 | `menu.workspace` | ✅ | 当前是可用的。 |
 | `menu.group.system` | ✅ | 大部分可用，但其中的 `menu.help`、`menu.status` 内容不够 Claude-aware。 |
 
@@ -147,10 +147,10 @@
 
 | Action | 标题 | Claude 状态 | 当前行为 |
 | --- | --- | --- | --- |
-| `menu.thread` | 线程管理 | ⚠️ | 打开 Claude 专用线程卡。 |
+| `menu.thread` | 线程管理 | ⚠️ | 打开 Claude 专用线程卡，展示 recent sessions。 |
 | `menu.new` | 新建线程 | ✅ | 正常。 |
-| `menu.fork` | 派生线程 | ❌ | Claude 不支持。 |
-| `thread.resume.select` | 下拉恢复线程 | ❌ | Claude 卡片里不会提供这个选择器。 |
+| `menu.fork` | 派生线程 | ✅ | 调用 Claude session fork，并切换到新的 session。 |
+| `thread.resume.select` | 下拉恢复线程 | ✅ | 通过本地 Claude session catalog 选择并恢复会话。 |
 | `thread.sandbox.menu` | 配置线程沙箱 | ❌ | Claude 不支持。 |
 | `thread.policy.menu` | 配置审批策略 | ❌ | Claude 不支持。 |
 
@@ -187,15 +187,15 @@
   - `/compact`
   - `/fork`
   - `/fast`
-- 对 `/thread` 则额外只放行空命令和 `/thread new`。
+- 对 `/thread` 则额外放行空命令、`list`、`new`、`resume`，其余子命令继续拦截。
 
 这意味着“按钮可见”不等于“按钮可用”。
 
-### 2. `/threads` 不是显式 blocklist，但实际上也不可用
+### 2. `/threads` 仍然只是 `/thread list` 的别名
 
 - `/threads` 的 handler 会直接转发成 `/thread list`。
-- 而 Claude 又不支持 `/thread list`。
-- 所以它属于“间接不支持”。
+- 现在 Claude 这条路已经补了本地 session catalog，因此 `/threads` 也随之可用。
+- 它仍然不是 Claude 原生 RPC，而是 Feidex 本地目录扫描能力。
 
 ### 3. 帮助和菜单当前都没有 capability filter
 
@@ -238,35 +238,29 @@
 
 所以:
 
-- Claude 的“恢复会话”不是后端空白能力
-- 当前真正缺的是 Feidex 自己维护的 session catalog
+- Claude 的“恢复会话”不是后端空白能力。
+- Feidex 已经先做了第一版本地 session catalog，当前通过扫描 `~/.claude/projects` 支持 `/threads` 与 `/thread resume SESSION_ID`。
 
-建议:
+后续建议:
 
-- 先把 Claude UI 文案从 “thread” 改成 “session”，避免和 Codex thread 语义混淆。
-- 每次 Claude init 时持久化:
-  - `frontend_id`
-  - `workspace_id`
-  - `session_id`
-  - `started_at` / `updated_at`
-  - 最近一条用户输入摘要
-- 再用这份索引补 `/threads` 与 `/thread resume SESSION_ID`。
+- 继续把 Claude UI 文案从 “thread” 收敛到 “session”，避免和 Codex thread 语义混淆。
+- 把现在基于本地目录扫描的 catalog，逐步升级成 Feidex 自己的持久化索引，补 `started_at` / `updated_at` / 最近摘要等字段。
 
-### 2. `/thread fork` 有协议线索，但没有现成 Feidex 实现
+### 2. `/thread fork` 已接入 Claude 原生 fork session
 
 `claude-cli-protocol` 的文档和 `protocol.proto` 都出现了 `fork_session` / `--fork-session`。
 
-这说明:
+当前实现:
 
-- Claude CLI 很可能支持“从当前上下文派生一个新 session”
-- 但当前 Feidex 本地 wrapper `internal/claudecli` 没有把它暴露出来
-- 仓库里也没有 live probe 证明它和 Feidex 预期的 fork 语义完全一致
+- Claude CLI 提供 `--fork-session`
+- Feidex 本地 wrapper 已补 `WithForkSession()`
+- 产品层通过 `--resume <source> --fork-session` 启动新 Claude session，并要求返回新的 `session_id`
 
-建议:
+当前产品语义:
 
-- 先做 live probe，确认 `--fork-session` 的真实行为和返回的 session lineage。
-- 确认稳定后，再给 `internal/claudecli` 增加 `WithForkSession`。
-- 在验证之前，不建议直接把 Claude `/thread fork` 暴露给用户。
+- `/fork` 与 `/thread fork` 都已开放
+- fork 后会立即切换到新 session
+- 当前实现依赖 Claude CLI 自己维护 fork lineage，不自行复制本地 transcript
 
 ### 3. `/thread policy` 其实最接近现成能力
 
@@ -428,7 +422,7 @@
 | `modelUsage.contextWindow` | `ResultMessage` 提供 | 已接入，用于 Claude final footer 的同步 context 计算 |
 | `set_model` | 上游 Go SDK 已实现 | `internal/claudecli` 没有实现 |
 | `set_permission_mode` | 上游 Go SDK 已实现 | `internal/claudecli` 没有实现 |
-| `fork_session` | 协议配置存在 | `internal/claudecli` 没有实现 |
+| `fork_session` | 协议配置存在 | 已接入 `internal/claudecli` 并用于 Claude `/thread fork` |
 | sandbox settings | 协议配置存在 | `internal/claudecli` 没有实现 |
 | recording / loadRecording | 上游 SDK 已实现 | Feidex 本地 wrapper 未提供 |
 | turn history API | 上游 SDK 已实现 | Feidex 本地 wrapper 未提供 |
@@ -437,7 +431,7 @@
 
 - 第一优先级: 接出 `slash_commands`、`agents`、`skills`、`plugins`、`modelUsage`
 - 第二优先级: 补 `set_permission_mode` 和 `set_model`
-- 第三优先级: 再做 `fork_session`、recording、history/catalog
+- 第三优先级: recording、history/catalog
 
 ## 实现建议
 
@@ -494,8 +488,7 @@
 3. `/thread resume` + `/threads`
 4. `/skills`
 5. `/compact` / `/review`
-6. `/thread fork`
-7. `/history`
+6. `/history`
 
 原因:
 
@@ -503,8 +496,7 @@
 - 3 缺的是 catalog，不缺 resume 原语
 - 4 已有 init capability 可读
 - 5 CLI 已广告 slash commands，但要先 live probe
-- 6 有协议配置线索，但还缺验证
-- 7 主要是应用持久化工程量
+- 6 主要是应用持久化工程量
 
 ### P5: 其余能力需要单独设计，而不是简单解封
 
@@ -516,7 +508,6 @@
 | `/model` | 直接基于 `--model` / `set_model` 做 Claude 专属配置，不要继续写 `config.Codex`。 |
 | `/fast` | 目前只有 read-only `service_tier` 痕迹，没有稳定可写控制面；建议继续隐藏。 |
 | `/thread list/resume` | 依赖 Feidex 自己维护 session catalog，不依赖 CLI RPC。 |
-| `/thread fork` | 先验证 `fork_session` 的真实行为，再决定是否产品化。 |
 | `/thread sandbox` | 需要重做 Claude-specific sandbox UI 和映射，不能复用 Codex sandbox 语义。 |
 | `/thread policy` | 直接接 `set_permission_mode`，这是最容易先补齐的一项。 |
 
@@ -524,4 +515,4 @@
 
 如果只用一句话概括当前状态，最准确的说法应是:
 
-> Claude backend 当前对用户暴露出来的能力仍然偏少，但从 Claude CLI protocol 看，并不是很多功能“后端完全没有”，而是 Feidex 还没把 session resume、permission mode、model control、skills/agents/plugins capability、slash command 适配、history 持久化这些能力接出来。真正应该继续隐藏的，主要是缺少稳定控制面的 `fast` 和尚未定义好语义映射的 sandbox / fork。
+> Claude backend 当前对用户暴露出来的能力仍然偏少，但从 Claude CLI protocol 看，并不是很多功能“后端完全没有”，而是 Feidex 还没把 session resume、permission mode、model control、skills/agents/plugins capability、slash command 适配、history 持久化这些能力接出来。真正应该继续隐藏的，主要是缺少稳定控制面的 `fast` 和尚未定义好语义映射的 sandbox。

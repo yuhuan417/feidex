@@ -113,7 +113,9 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 	if r == nil {
 		return "", fmt.Errorf("claude runtime not initialized")
 	}
-	_ = ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
 		return "", fmt.Errorf("missing session key")
@@ -148,8 +150,11 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 				"exit_error", currentExitErr,
 			)
 		} else {
-			if resumeID == "" || currentID == "" || resumeID == currentID {
-				return firstNonEmpty(currentID, resumeID), nil
+			switch {
+			case resumeID == "":
+				return currentID, nil
+			case resumeID != "" && currentID == resumeID:
+				return currentID, nil
 			}
 		}
 	} else {
@@ -157,20 +162,61 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 	}
 
 	_ = r.ResetSession(sessionKey)
+	return r.startSession(ctx, sessionKey, ws, runtimeCfg, model, resumeID, false)
+}
 
+func (r *claudeRuntime) ForkSession(ctx context.Context, sessionKey string, ws *config.Workspace, sourceSessionID, model string) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("claude runtime not initialized")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return "", fmt.Errorf("missing session key")
+	}
+	if ws == nil {
+		return "", fmt.Errorf("workspace not found")
+	}
+	sourceSessionID = strings.TrimSpace(sourceSessionID)
+	if sourceSessionID == "" {
+		return "", fmt.Errorf("missing Claude source session id")
+	}
+	r.mu.Lock()
+	runtimeCfg := r.cfg
+	r.mu.Unlock()
+	model = strings.TrimSpace(firstNonEmpty(model, strings.TrimSpace(ws.Model), strings.TrimSpace(runtimeCfg.Model)))
+
+	_ = r.ResetSession(sessionKey)
+	forkedID, err := r.startSession(ctx, sessionKey, ws, runtimeCfg, model, sourceSessionID, true)
+	if err != nil {
+		return "", err
+	}
+	if forkedID != "" && forkedID == sourceSessionID {
+		_ = r.ResetSession(sessionKey)
+		return "", fmt.Errorf("Claude fork did not create a new session")
+	}
+	return forkedID, nil
+}
+
+func (r *claudeRuntime) startSession(ctx context.Context, sessionKey string, ws *config.Workspace, runtimeCfg config.ClaudeConfig, model, resumeID string, fork bool) (string, error) {
 	sessionCtx, cancel := context.WithCancel(context.Background())
+	initialSessionID := resumeID
+	if fork {
+		initialSessionID = ""
+	}
 	state := &claudeSessionState{
 		sessionKey:  sessionKey,
 		workspaceID: ws.ID,
 		ctx:         sessionCtx,
 		cancel:      cancel,
 		startedAt:   time.Now(),
-		sessionID:   resumeID,
+		sessionID:   initialSessionID,
 		readyCh:     make(chan struct{}),
 		allowTools:  map[string]bool{},
 		turns:       map[int]*claudeTurnState{},
 	}
-
 	permissionMode := claudePermissionModeForWorkspace(runtimeCfg, ws)
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
@@ -215,6 +261,9 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 	if resumeID != "" {
 		opts = append(opts, claudecli.WithResume(resumeID))
 	}
+	if fork {
+		opts = append(opts, claudecli.WithForkSession())
+	}
 	session := claudecli.NewSession(opts...)
 	state.session = session
 
@@ -229,7 +278,25 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 
 	go r.runSession(state)
 
-	return strings.TrimSpace(state.sessionID), nil
+	if err := session.Initialize(ctx); err != nil {
+		_ = r.ResetSession(sessionKey)
+		return "", err
+	}
+	state.mu.Lock()
+	sessionID := strings.TrimSpace(state.sessionID)
+	state.mu.Unlock()
+
+	if fork {
+		return sessionID, nil
+	}
+
+	if sessionID != "" {
+		return sessionID, nil
+	}
+	if resumeID != "" {
+		return resumeID, nil
+	}
+	return "", nil
 }
 
 func (r *claudeRuntime) StartTurn(ctx context.Context, sessionKey, threadID, turnID, prompt string) error {

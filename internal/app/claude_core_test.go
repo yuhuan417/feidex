@@ -19,6 +19,9 @@ type fakeClaudeCore struct {
 	ensureSessionID  string
 	ensureSessionSet bool
 	ensureSessionErr error
+	forkSessionID    string
+	forkSessionSet   bool
+	forkSessionErr   error
 	startTurnErr     error
 	interruptErr     error
 	approvalErr      error
@@ -33,6 +36,7 @@ type fakeClaudeCore struct {
 	updatedConfigs []config.ClaudeConfig
 
 	ensureResults    []fakeClaudeEnsureResult
+	forkResults      []fakeClaudeEnsureResult
 	startTurnResults []error
 
 	ensureCalls []struct {
@@ -40,6 +44,12 @@ type fakeClaudeCore struct {
 		workspaceID string
 		resumeID    string
 		model       string
+	}
+	forkCalls []struct {
+		sessionKey      string
+		workspaceID     string
+		sourceSessionID string
+		model           string
 	}
 	startTurnCalls []struct {
 		sessionKey string
@@ -98,6 +108,35 @@ func (f *fakeClaudeCore) EnsureSession(_ context.Context, sessionKey string, ws 
 		return "claude-session-1", nil
 	}
 	return f.ensureSessionID, nil
+}
+
+func (f *fakeClaudeCore) ForkSession(_ context.Context, sessionKey string, ws *config.Workspace, sourceSessionID, model string) (string, error) {
+	f.forkCalls = append(f.forkCalls, struct {
+		sessionKey      string
+		workspaceID     string
+		sourceSessionID string
+		model           string
+	}{
+		sessionKey:      sessionKey,
+		workspaceID:     ws.ID,
+		sourceSessionID: sourceSessionID,
+		model:           model,
+	})
+	if len(f.forkResults) > 0 {
+		result := f.forkResults[0]
+		f.forkResults = append([]fakeClaudeEnsureResult(nil), f.forkResults[1:]...)
+		return strings.TrimSpace(result.id), result.err
+	}
+	if f.forkSessionErr != nil {
+		return "", f.forkSessionErr
+	}
+	if f.forkSessionSet {
+		return strings.TrimSpace(f.forkSessionID), nil
+	}
+	if strings.TrimSpace(f.forkSessionID) == "" {
+		return "claude-fork-1", nil
+	}
+	return f.forkSessionID, nil
 }
 
 func (f *fakeClaudeCore) ResetSession(sessionKey string) error {

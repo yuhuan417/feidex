@@ -56,6 +56,9 @@ func (a *App) commandHistory(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
+	if a.isClaudeBackend() {
+		return a.historyTurnIndexForOrdinal(sessionKey, ordinal)
+	}
 	_, _, turns, err := a.fetchCurrentThreadHistory(sessionKey)
 	if err != nil {
 		return 0, err
@@ -69,6 +72,9 @@ func (a *App) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error
 }
 
 func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
+	if a.isClaudeBackend() {
+		return a.renderClaudeHistoryCard(sessionKey, page)
+	}
 	sess, thread, turns, err := a.fetchCurrentThreadHistory(sessionKey)
 	if err != nil {
 		return nil, err
@@ -171,6 +177,9 @@ func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, er
 }
 
 func (a *App) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
+	if a.isClaudeBackend() {
+		return a.renderClaudeHistoryDetailCard(sessionKey, index)
+	}
 	sess, thread, turns, err := a.fetchCurrentThreadHistory(sessionKey)
 	if err != nil {
 		return nil, err

@@ -103,15 +103,42 @@ func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error 
 
 func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 	if a.configuredBackend() == backendClaude {
+		sessionKey := a.makeSessionKey(msg)
 		if len(args) == 0 {
 			return a.commandThreads(msg, false)
 		}
 		switch strings.TrimSpace(args[0]) {
+		case "list":
+			includeAll := false
+			if len(args) > 2 {
+				return fmt.Errorf("usage: %s", threadCommandUsage)
+			}
+			if len(args) == 2 {
+				if strings.TrimSpace(args[1]) != "all" {
+					return fmt.Errorf("usage: %s", threadCommandUsage)
+				}
+				includeAll = true
+			}
+			return a.commandThreads(msg, includeAll)
 		case "new":
 			if len(args) != 1 {
 				return fmt.Errorf("usage: /thread new")
 			}
 			return a.commandThreadsNew(msg)
+		case "fork":
+			if len(args) != 1 {
+				return fmt.Errorf("usage: /thread fork")
+			}
+			return a.commandFork(msg, nil)
+		case "resume":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: /thread resume THREAD_ID")
+			}
+			resp, err := a.completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+			if err != nil {
+				return err
+			}
+			return a.replyCommandActionResponse(msg, resp)
 		default:
 			return backendUnsupportedError("/thread " + strings.TrimSpace(args[0]))
 		}
@@ -198,7 +225,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		}
 	}
 	if a.isClaudeBackend() {
-		return a.renderClaudeThreadsCard(sessionKey, sess, &workspace), nil
+		return a.renderClaudeThreadsCard(sessionKey, sess, &workspace, includeAll)
 	}
 	items, err := a.listWorkspaceThreads(sessionKey, &workspace, includeAll)
 	if err != nil {
@@ -235,6 +262,10 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	} else {
 		lines = append(lines, "", "通过下拉 list 选择要切换的线程。")
 	}
+	hasActiveThread := sess != nil && strings.TrimSpace(sess.ActiveThreadID) != ""
+	if !hasActiveThread {
+		lines = append(lines, "", "当前没有活动 thread，因此暂不显示 `/thread fork`、`/thread sandbox`、`/thread policy`。")
+	}
 	buttons := make([]feishu.Button, 0, 5)
 	selectOptions := make([]selectStaticOption, 0, len(items))
 	initialOption := ""
@@ -260,7 +291,7 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 			},
 		},
 	)
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
+	if hasActiveThread {
 		buttons = append(buttons,
 			feishu.Button{
 				Text: commandLabel("派生线程", "/thread fork"),
@@ -302,6 +333,105 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 	body := strings.Join(lines, "\n")
 	card := newMarkdownBodyCard("线程管理", "blue")
 	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.thread", body)})
+	if len(selectOptions) > 0 {
+		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+			"thread_resume_select",
+			"list",
+			map[string]any{"action": "thread.resume.select", "session_key": sessionKey, "include_all": includeAll},
+			selectOptions,
+			initialOption,
+		))
+	}
+	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
+		appendMarkdownBodyCardElement(card, row)
+	}
+	return card, nil
+}
+
+func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
+	items, err := a.listClaudeSessions(sessionKey, ws, includeAll)
+	if err != nil {
+		return nil, err
+	}
+	sortThreadsByUpdated(items)
+	workspaceID := "-"
+	if ws != nil {
+		workspaceID = firstNonEmpty(strings.TrimSpace(ws.ID), workspaceID)
+	}
+	currentLabel := "-"
+	currentThreadID := "-"
+	if sess != nil {
+		currentLabel = currentThreadLabel(sess)
+		if strings.TrimSpace(sess.ActiveThreadID) != "" {
+			currentThreadID = strings.TrimSpace(sess.ActiveThreadID)
+		}
+	}
+	scopeLabel := "当前工作区"
+	if includeAll {
+		scopeLabel = "全部 Claude sessions"
+	}
+	lines := []string{
+		"当前 backend: `claude`",
+		"当前 session: " + currentLabel,
+		"当前 session id: `" + currentThreadID + "`",
+		"工作区: `" + workspaceID + "`",
+		"list 范围: " + scopeLabel,
+		fmt.Sprintf("list 数量: `%d`", len(items)),
+	}
+	if len(items) == 0 {
+		lines = append(lines, "", "当前没有可切换的 Claude session。")
+	} else {
+		lines = append(lines, "", "通过下拉 list 选择要切换的 Claude session。")
+	}
+	hasActiveSession := sess != nil && strings.TrimSpace(sess.ActiveThreadID) != ""
+	if !hasActiveSession {
+		lines = append(lines, "", "当前没有活动 Claude session，因此暂不显示 `/thread fork`。")
+	}
+	buttons := []feishu.Button{
+		{
+			Text: commandLabel("新建线程", "/thread new"),
+			Type: "default",
+			Value: map[string]any{
+				"action":        "menu.new",
+				"session_key":   sessionKey,
+				"parent_action": "menu.thread",
+			},
+		},
+	}
+	if hasActiveSession {
+		buttons = append(buttons, feishu.Button{
+			Text: commandLabel("派生线程", "/thread fork"),
+			Type: "default",
+			Value: map[string]any{
+				"action":        "menu.fork",
+				"session_key":   sessionKey,
+				"parent_action": "menu.thread",
+			},
+		})
+	}
+	buttons = append(buttons, feishu.Button{
+		Text: "返回上一级",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.root",
+			"session_key": sessionKey,
+		},
+	})
+	selectOptions := make([]selectStaticOption, 0, len(items))
+	initialOption := ""
+	for idx, item := range items {
+		entry := fmt.Sprintf("%d. %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
+		if sess != nil && item.ID == sess.ActiveThreadID {
+			entry = fmt.Sprintf("%d. [当前] %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
+			initialOption = item.ID
+		}
+		selectOptions = append(selectOptions, selectStaticOption{
+			Text:  entry,
+			Value: item.ID,
+		})
+	}
+	card := newMarkdownBodyCard("线程管理", "blue")
+	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.thread", strings.Join(lines, "\n"))})
 	if len(selectOptions) > 0 {
 		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
 			"thread_resume_select",
@@ -408,6 +538,15 @@ func renderThreadButtonLabel(name, preview, id string) string {
 }
 
 func renderThreadListEntry(name, preview, id string) string {
+	base := renderThreadListEntryBase(name, preview, id)
+	shortID := shortThreadID(id)
+	if shortID == "" {
+		return base
+	}
+	return truncate(base, 38) + " [" + shortID + "]"
+}
+
+func renderThreadListEntryBase(name, preview, id string) string {
 	switch {
 	case strings.TrimSpace(name) != "" && strings.TrimSpace(preview) != "":
 		return truncate(name, 18) + " | " + truncate(preview, 36)
@@ -418,6 +557,14 @@ func renderThreadListEntry(name, preview, id string) string {
 	default:
 		return truncate(id, 48)
 	}
+}
+
+func shortThreadID(id string) string {
+	id = strings.TrimSpace(id)
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
 }
 
 func filterThreadsByWorkspaceCWD(items []codexrpc.ThreadListEntry, workspaceCWD string) []codexrpc.ThreadListEntry {
