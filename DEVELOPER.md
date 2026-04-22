@@ -11,6 +11,17 @@ Feidex is not a general chat bot. It is a bridge between Feishu message flows an
 - Codex-side protocol handling stays explicit and conservative.
 - Build, release, and upgrade flows stay reproducible.
 
+## Core Contracts
+
+Keep these rules visible in day-to-day work:
+
+- `frontend` is the top-level runtime isolation boundary. Backend binding, session lineage, pending requests, and runtime caches must remain frontend-scoped.
+- `internal/app` owns product semantics. Backend-specific protocol methods, envelope quirks, and transport details belong in backend adapters, not in app orchestration.
+- Any capability exposed in a Feishu menu must also have a direct slash-command style entrypoint.
+- Slow workflows must follow `fast callback ack -> async work -> card patch/follow-up`. Do not run clone, review, upgrade, download, or similar work inline in card callbacks.
+- Backend switching and frontend-scoped runtime-config changes are idle-only operations. Do not allow them while active work, queued/staged input, or pending approvals/forms exist.
+- New user-visible item or workflow types must update normalization, rendering, quiet-mode behavior, and tests together.
+
 ## Frontend Topology
 
 Treat `frontend` as the runtime isolation boundary.
@@ -263,6 +274,9 @@ Guidance:
 
 - Do not add product logic that depends on item deltas or snapshots unless the implementation is intentionally expanded to consume them.
 - When introducing a new item type, update normalization, rendering, quiet-mode handling, and tests together.
+- For server-request-backed approvals or forms, a local reply is not the terminal boundary. Treat `serverRequest/resolved` as the only authoritative resume and cleanup point.
+- For inline review, keep the `review/start` response turn id as the primary binding. A later `turn/started.turn.id` may differ and must not steal ownership.
+- `item/started` may arrive before `turn/started` for review and approval flows. Preserve early-binding logic unless the protocol contract itself changes.
 
 The usual files to touch for new item types are:
 
@@ -350,6 +364,19 @@ Implementation rule:
 - Only `progress` may create or update the dynamic `工作中` card.
 - If a working card already exists and the mode changes, turn-boundary and turn-finish code must still drain or reuse it instead of leaving it orphaned.
 
+## High-Signal Test Guards
+
+When a change touches one of these contracts, prefer updating the existing guard tests instead of relying only on broad `go test ./...` coverage:
+
+- Turn, thread, and submission lifecycle: `internal/app/critical_paths_test.go`, `internal/app/critical_paths_more_test.go`, `internal/app/state_machine_contracts_test.go`, `internal/app/protocol_business_logic_test.go`
+- Server requests, approvals, tool user input, and elicitation: `internal/app/item_started_server_request_test.go`, `internal/app/notifications_branches_more_test.go`, `internal/app/critical_paths_more_test.go`, `internal/app/app_more_test.go`
+- Review lifecycle and target mapping: `internal/app/review_critical_test.go`, `internal/app/review_test.go`, plus the live review tests under `internal/codexrpc`
+- Workspace new, clone, and path picker flows: `internal/app/path_picker_test.go`, `internal/app/actions_dispatch_more_test.go`, `internal/app/app_more_test.go`
+- Upgrade and backend maintenance: `internal/app/upgrade_isolation_test.go`, `internal/app/upgrade_more_test.go`, `internal/app/codex_upgrade_test.go`, `internal/app/claude_upgrade_test.go`
+- Backend selection and frontend isolation: `internal/app/backend_selection_test.go`, `internal/app/frontend_idle_test.go`, `internal/app/session_lineage_test.go`
+
+If a new core contract does not fit one of these buckets, add a named guard test for it instead of relying only on incidental coverage.
+
 ## Change Checklists
 
 ### When Adding Or Changing A CLI Command
@@ -369,6 +396,10 @@ Keep these in sync:
 - `internal/app/action_registry.go`
 - `internal/app/menu_actions.go`
 - tests for dispatch and card rendering
+
+Additional action-registry rule:
+
+- Card action names are a global namespace. Keep keys unique across all action-registry domain files.
 
 Additional rule for Feishu card actions:
 
