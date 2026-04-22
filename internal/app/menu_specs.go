@@ -60,6 +60,11 @@ var commandMenuGroupSpecs = []commandMenuGroupSpec{
 		Label:       "系统运维",
 		Description: "系统运维与帮助入口。",
 	},
+	{
+		Action:      "menu.group.backend",
+		Label:       "Backend",
+		Description: "Backend 切换与各 CLI 管理入口。",
+	},
 }
 
 var commandMenuItemSpecs = []commandMenuItemSpec{
@@ -79,13 +84,16 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 
 	{GroupAction: "menu.group.system", Action: "menu.debug", Label: "日志级别", Slash: "/debug", Kind: menuItemDirect},
 	{GroupAction: "menu.group.system", Action: "menu.debug.logs", Label: "查看日志", Slash: "/debug logs", Kind: menuItemDirect},
-	{GroupAction: "menu.group.system", Action: "menu.backend", Label: "Backend", Slash: "/backend", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.system", Action: "menu.codex_upgrade", Label: "Codex 管理", Slash: "/codex", Kind: menuItemSubmenu},
-	{GroupAction: "menu.group.system", Action: "menu.claude_upgrade", Label: "Claude 管理", Slash: "/claude", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.system", Action: "menu.group.backend", Label: "Backend", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.upgrade", Label: "升级服务", Slash: "/upgrade", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.status", Label: "状态面板", Slash: "/status", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.help", Label: "命令帮助", Slash: "/help", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
+
+	{GroupAction: "menu.group.backend", Action: "menu.backend.switch", Label: "Backend 切换", Slash: "/backend", Kind: menuItemDirect},
+	{GroupAction: "menu.group.backend", Action: "menu.codex_upgrade", Label: "Codex 管理", Slash: "/codex", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.backend", Action: "menu.claude_upgrade", Label: "Claude 管理", Slash: "/claude", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: "返回上一级", Kind: menuItemBack},
 }
 
 func menuGroupSpec(action string) (commandMenuGroupSpec, bool) {

@@ -30,6 +30,9 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 	"menu.group.system": func(a *App, sessionKey string) (map[string]any, bool) {
 		return a.renderSystemMenuCard(sessionKey), true
 	},
+	"menu.group.backend": func(a *App, sessionKey string) (map[string]any, bool) {
+		return a.renderBackendMenuCard(sessionKey), true
+	},
 	"menu.codex_upgrade": func(a *App, sessionKey string) (map[string]any, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

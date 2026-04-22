@@ -39,6 +39,13 @@ func (a *App) completeMenuGroupSystem(action *feishu.CardAction, sessionKey stri
 	}, nil
 }
 
+func (a *App) completeMenuBackendSwitch(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 Backend 切换"},
+		Card:  rawCard(a.renderBackendSelectionCard(sessionKey, "")),
+	}, nil
+}
+
 func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
 	actionName = nearestVisibleMenuAction(actionName, a.configuredBackend())
 	renderer := menuNodeRenderers[actionName]

@@ -90,6 +90,13 @@ func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(a.configuredBackend(), spec.Action, sessionKey))
 }
 
+func (a *App) renderBackendMenuCard(sessionKey string) map[string]any {
+	spec, _ := menuGroupSpec("menu.group.backend")
+	backend := firstNonEmpty(a.configuredBackend(), "unset")
+	body := spec.Description + "\n\n当前 backend: `" + backend + "`"
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(a.configuredBackend(), spec.Action, sessionKey))
+}
+
 func (a *App) renderHelpCard(sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},

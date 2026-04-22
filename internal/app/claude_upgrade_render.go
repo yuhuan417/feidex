@@ -166,7 +166,7 @@ func (a *App) renderClaudeUpgradeConfirmCard(sessionKey, requestID string, paylo
 			Text: "返回上一级",
 			Type: "default",
 			Value: map[string]any{
-				"action":      "menu.group.system",
+				"action":      "menu.group.backend",
 				"session_key": sessionKey,
 			},
 		},
@@ -296,7 +296,7 @@ func claudeUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button
 		Text: "返回上一级",
 		Type: "default",
 		Value: map[string]any{
-			"action":      "menu.group.system",
+			"action":      "menu.group.backend",
 			"session_key": sessionKey,
 		},
 	})

@@ -167,7 +167,7 @@ func (a *App) renderCodexUpgradeConfirmCard(sessionKey, requestID string, payloa
 			Text: "返回上一级",
 			Type: "default",
 			Value: map[string]any{
-				"action":      "menu.group.system",
+				"action":      "menu.group.backend",
 				"session_key": sessionKey,
 			},
 		},
@@ -297,7 +297,7 @@ func codexUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button 
 		Text: "返回上一级",
 		Type: "default",
 		Value: map[string]any{
-			"action":      "menu.group.system",
+			"action":      "menu.group.backend",
 			"session_key": sessionKey,
 		},
 	})

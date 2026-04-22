@@ -85,6 +85,72 @@ func TestCommandBackendShowsOnlyAvailableBackends(t *testing.T) {
 	}
 }
 
+func TestHandleCardActionMenuGroupBackendOpensBackendMenuCard(t *testing.T) {
+	a, _, _ := newTestApp(t)
+
+	resp, err := a.handleCardAction(&feishu.CardAction{
+		ActionValue: map[string]any{"action": "menu.group.backend", "session_key": "sess-1"},
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+	})
+	if err != nil {
+		t.Fatalf("handleCardAction(menu.group.backend) error = %v", err)
+	}
+	if resp == nil || resp.Card == nil {
+		t.Fatalf("handleCardAction(menu.group.backend) = %#v, want card response", resp)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "当前位置：主菜单 / 系统运维 / Backend") {
+		t.Fatalf("backend menu body = %q", body)
+	}
+}
+
+func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
+	a, _, _ := newTestApp(t)
+
+	selection := a.renderBackendSelectionCard("sess-1", "")
+	if body := cardMarkdownContent(t, selection); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / Backend / Backend 切换") {
+		t.Fatalf("backend selection body = %q", body)
+	}
+	foundBack := false
+	for _, button := range cardButtonsForTest(selection) {
+		value, _ := button["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := button["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if action, _ := value["action"].(string); action == "menu.group.backend" {
+			foundBack = true
+			break
+		}
+	}
+	if !foundBack {
+		t.Fatalf("backend selection buttons = %#v, want return to menu.group.backend", cardButtonsForTest(selection))
+	}
+
+	switching := a.renderBackendSwitchingCard("sess-1", backendClaude)
+	if body := cardMarkdownContent(t, switching); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / Backend / Backend 切换") {
+		t.Fatalf("backend switching body = %q", body)
+	}
+	buttons := cardButtonsForTest(switching)
+	if len(buttons) != 1 {
+		t.Fatalf("backend switching buttons = %#v, want 1", buttons)
+	}
+	value, _ := buttons[0]["value"].(map[string]any)
+	if len(value) == 0 {
+		behaviors, _ := buttons[0]["behaviors"].([]map[string]any)
+		if len(behaviors) > 0 {
+			value, _ = behaviors[0]["value"].(map[string]any)
+		}
+	}
+	if got, _ := value["action"].(string); got != "menu.backend.switch" {
+		t.Fatalf("backend switching action = %q, want menu.backend.switch", got)
+	}
+}
+
 func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
