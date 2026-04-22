@@ -49,7 +49,7 @@ func (a *App) markPendingRequestReplied(requestID string) *state.PendingRequest 
 	return appState.pending(requestID)
 }
 
-func (a *App) resolveServerPendingRequest(requestID string) *state.PendingRequest {
+func (a *App) markPendingRequestResolved(requestID string) *state.PendingRequest {
 	appState := a.appState()
 	pending := appState.pending(requestID)
 	if pending == nil {
@@ -62,6 +62,32 @@ func (a *App) resolveServerPendingRequest(requestID string) *state.PendingReques
 		req.Status = "resolved"
 	})
 	return appState.pending(requestID)
+}
+
+func (a *App) resolveServerPendingRequest(requestID string) *state.PendingRequest {
+	return a.markPendingRequestResolved(requestID)
+}
+
+func (a *App) backendResolvesPendingLocally(pending *state.PendingRequest) bool {
+	if pending == nil {
+		return false
+	}
+	if pendingBackend(a, pending) == backendClaude {
+		return true
+	}
+	return !isServerResolvedPendingKind(pending.Kind)
+}
+
+func (a *App) finalizePendingReply(pending *state.PendingRequest) *state.PendingRequest {
+	if pending == nil {
+		return nil
+	}
+	if a.backendResolvesPendingLocally(pending) {
+		resolved := a.markPendingRequestResolved(pending.ID)
+		a.resumeSubmissionAfterRequest(pending)
+		return resolved
+	}
+	return a.markPendingRequestReplied(pending.ID)
 }
 
 func (a *App) hasOpenPendingRequestForTurn(threadID, turnID, excludeID string) bool {

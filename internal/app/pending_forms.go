@@ -141,15 +141,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			Toast: &callback.Toast{Type: "warning", Content: "取消提交失败，请重试"},
 		}, nil
 	}
-	if pendingBackend(a, pending) == backendClaude {
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
-		a.resumeSubmissionAfterRequest(pending)
-	} else if isServerResolvedPendingKind(pending.Kind) {
-		_ = a.markPendingRequestReplied(requestID)
-	} else {
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
-		a.resumeSubmissionAfterRequest(pending)
-	}
+	_ = a.finalizePendingReply(pending)
 	if pending.Kind == "workspace_new" || pending.Kind == "workspace_clone" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},

@@ -67,8 +67,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 		if err := a.claude.ResolveUserInput(pending.ID, answers); err != nil {
 			return err
 		}
-		_ = a.appState().updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
-		a.resumeSubmissionAfterRequest(pending)
+		_ = a.finalizePendingReply(pending)
 		if pending.FeishuMsgID != "" {
 			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 		}
@@ -77,7 +76,7 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err := a.codex.Reply(pendingRequestIDRaw(pending), response); err != nil {
 		return err
 	}
-	_ = a.markPendingRequestReplied(pending.ID)
+	_ = a.finalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
 		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 	}

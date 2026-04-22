@@ -35,16 +35,7 @@ func (a *App) commandCompact(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /compact")
 	}
-	if msg == nil {
-		return nil
-	}
-	if a.configuredBackend() == backendClaude {
-		return a.enqueuePassthroughCommand(msg, "/compact")
-	}
-	if _, err := a.startThreadCompaction(a.makeSessionKey(msg)); err != nil {
-		return err
-	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", a.replyInThreadEnabled(msg.ChatType))
+	return a.handleBackendCompactCommand(msg)
 }
 
 func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {

@@ -22,15 +22,8 @@ func (a *App) handleCommand(msg *feishu.InboundMessage, raw string) error {
 		return a.replyBackendSelectionCard(msg, "")
 	}
 	backend := a.configuredBackend()
-	if backend == backendCodex {
-		if err := a.codexMaintenanceBlocksCommand(raw); err != nil {
-			return err
-		}
-	}
-	if backend == backendClaude {
-		if err := a.claudeMaintenanceBlocksCommand(raw); err != nil {
-			return err
-		}
+	if err := a.handleBackendMaintenanceBlock(raw); err != nil {
+		return err
 	}
 	if !commandHandlesLocallyForBackend(spec, backend, fields) {
 		return a.enqueuePassthroughCommand(msg, raw)
