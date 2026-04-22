@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -21,6 +22,9 @@ type conversationBackendFacade interface {
 	ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error)
 	startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error)
 	resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error)
+	forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error)
+	forkReplyMessage(forkedID string) string
+	recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)
 	renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error)
 	historyIndexForOrdinal(sessionKey string, ordinal int) (int, error)
 	renderHistoryCard(sessionKey string, page int) (map[string]any, error)
@@ -57,6 +61,18 @@ func (b codexConversationBackend) startWorkspaceThread(sessionKey string, sess *
 
 func (b codexConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
 	return b.app.resumeCodexSelectedThread(sessionKey, sess, ws, selection)
+}
+
+func (b codexConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+	return b.app.forkCodexActiveConversation(sessionKey, sess, ws)
+}
+
+func (b codexConversationBackend) forkReplyMessage(string) string {
+	return "已 fork 当前线程，并切换到新的分支线程。"
+}
+
+func (b codexConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+	b.app.recoverCodexStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
 }
 
 func (b codexConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
@@ -113,6 +129,21 @@ func (b claudeConversationBackend) startWorkspaceThread(sessionKey string, sess 
 
 func (b claudeConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
 	return b.app.resumeClaudeSelectedThread(sessionKey, sess, ws, selection)
+}
+
+func (b claudeConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+	return b.app.forkClaudeActiveConversation(sessionKey, sess, ws)
+}
+
+func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
+	if strings.TrimSpace(forkedID) == "" {
+		return "已准备 fork 当前会话。新的 Claude 分支会话会在下一条消息时创建并切换。"
+	}
+	return "已 fork 当前会话，并切换到新的分支会话。"
+}
+
+func (b claudeConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, _ *config.Workspace, _ string) {
+	b.app.recoverClaudeStartupConversation(sessionKey, workspaceID, sess)
 }
 
 func (b claudeConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {

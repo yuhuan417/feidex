@@ -1,0 +1,125 @@
+package app
+
+import (
+	"context"
+	"log/slog"
+	"strings"
+	"time"
+
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
+	"feidex/internal/state"
+)
+
+func (a *App) recoverClaudeStartupConversation(sessionKey, workspaceID string, sess *state.Session) {
+	if a == nil || sess == nil {
+		return
+	}
+	a.markSessionThreadLive(sessionKey, sess.ActiveThreadID)
+	slog.Debug("startup Claude session lineage preserved",
+		"session_key", sessionKey,
+		"thread_id", sess.ActiveThreadID,
+		"workspace_id", workspaceID,
+	)
+}
+
+func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+	if a == nil || a.codex == nil || sess == nil || ws == nil {
+		return
+	}
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
+	resumeParams := map[string]any{
+		"threadId":               threadID,
+		"persistExtendedHistory": true,
+	}
+	if strings.TrimSpace(effectiveModel) != "" {
+		resumeParams["model"] = effectiveModel
+	}
+	var resumeResp codexrpc.ThreadStartResult
+	slog.Debug("startup thread resume request",
+		"session_key", sessionKey,
+		"thread_id", threadID,
+		"workspace_id", workspaceID,
+		"model", effectiveModel,
+	)
+	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err := a.codex.Call(resumeCtx, "thread/resume", resumeParams, &resumeResp)
+	resumeCancel()
+	if err == nil {
+		setSessionThreadContext(sess,
+			workspaceID,
+			firstNonEmpty(strings.TrimSpace(resumeResp.Thread.ID), threadID),
+			firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Name), sess.ActiveThreadName),
+			firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Preview), sess.ActiveThreadPreview),
+		)
+		sess.Status = "idle"
+		if upsertErr := a.appState().saveSession(sess); upsertErr != nil {
+			slog.Error("startup thread resume persistence failed",
+				"session_key", sessionKey,
+				"thread_id", sess.ActiveThreadID,
+				"workspace_id", workspaceID,
+				"error", upsertErr,
+			)
+			return
+		}
+		a.markSessionThreadLive(sessionKey, sess.ActiveThreadID)
+		slog.Debug("startup thread resumed",
+			"session_key", sessionKey,
+			"thread_id", sess.ActiveThreadID,
+			"workspace_id", workspaceID,
+			"model", effectiveModel,
+		)
+		return
+	}
+
+	slog.Warn("startup thread/resume failed; starting fresh thread",
+		"session_key", sessionKey,
+		"thread_id", threadID,
+		"workspace_id", workspaceID,
+		"model", effectiveModel,
+		"error", err,
+	)
+	threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
+	var threadResp codexrpc.ThreadStartResult
+	slog.Debug("startup thread start request",
+		"session_key", sessionKey,
+		"workspace_id", workspaceID,
+		"cwd", ws.Cwd,
+		"model", effectiveModel,
+	)
+	threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	err = a.codex.Call(threadCtx, "thread/start", threadParams, &threadResp)
+	threadCancel()
+	if err != nil {
+		slog.Error("startup thread/start failed; clearing thread lineage",
+			"session_key", sessionKey,
+			"stale_thread_id", threadID,
+			"workspace_id", workspaceID,
+			"cwd", ws.Cwd,
+			"error", err,
+		)
+		clearSessionThreadContext(sess)
+		sess.Status = "idle"
+		_ = a.appState().saveSession(sess)
+		a.clearSessionLiveThread(sessionKey)
+		return
+	}
+	setSessionThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
+	sess.Status = "idle"
+	if upsertErr := a.appState().saveSession(sess); upsertErr != nil {
+		slog.Error("startup fresh thread persistence failed",
+			"session_key", sessionKey,
+			"thread_id", threadResp.Thread.ID,
+			"workspace_id", workspaceID,
+			"error", upsertErr,
+		)
+		return
+	}
+	a.markSessionThreadLive(sessionKey, threadResp.Thread.ID)
+	slog.Debug("startup thread started",
+		"session_key", sessionKey,
+		"thread_id", threadResp.Thread.ID,
+		"workspace_id", workspaceID,
+		"model", effectiveModel,
+	)
+}

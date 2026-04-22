@@ -20,6 +20,13 @@ func (a *App) backendWorkspaceCommandUsage() string {
 	return workspaceCommandUsage
 }
 
+func (a *App) handleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
+	if a != nil && a.isClaudeBackend() {
+		return a.commandClaudeModel(msg, args)
+	}
+	return a.commandCodexModel(msg, args)
+}
+
 func (a *App) backendSupportsWorkspacePermissionMode() bool {
 	return a != nil && a.isClaudeBackend()
 }
