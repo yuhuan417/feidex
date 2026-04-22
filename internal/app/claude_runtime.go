@@ -100,6 +100,15 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) claudeCore {
 	}
 }
 
+func (r *claudeRuntime) UpdateConfig(cfg config.ClaudeConfig) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.cfg = cfg
+	r.mu.Unlock()
+}
+
 func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws *config.Workspace, resumeID, model string) (string, error) {
 	if r == nil {
 		return "", fmt.Errorf("claude runtime not initialized")
@@ -112,8 +121,11 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 	if ws == nil {
 		return "", fmt.Errorf("workspace not found")
 	}
+	r.mu.Lock()
+	runtimeCfg := r.cfg
+	r.mu.Unlock()
 	resumeID = strings.TrimSpace(resumeID)
-	model = strings.TrimSpace(firstNonEmpty(model, strings.TrimSpace(ws.Model), strings.TrimSpace(r.cfg.Model)))
+	model = strings.TrimSpace(firstNonEmpty(model, strings.TrimSpace(ws.Model), strings.TrimSpace(runtimeCfg.Model)))
 
 	r.mu.Lock()
 	current := r.sessions[sessionKey]
@@ -159,9 +171,9 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 		turns:       map[int]*claudeTurnState{},
 	}
 
-	permissionMode := claudePermissionModeForWorkspace(r.cfg, ws)
+	permissionMode := claudePermissionModeForWorkspace(runtimeCfg, ws)
 	opts := []claudecli.SessionOption{
-		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(r.cfg.Command), "claude")),
+		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
 		claudecli.WithWorkDir(ws.Cwd),
 		claudecli.WithModel(model),
 		claudecli.WithPermissionMode(permissionMode),
@@ -188,14 +200,17 @@ func (r *claudeRuntime) EnsureSession(ctx context.Context, sessionKey string, ws
 			},
 		}),
 	}
-	if r.cfg.PermissionPromptToolStdio {
+	if effort := strings.TrimSpace(runtimeCfg.Effort); effort != "" {
+		opts = append(opts, claudecli.WithEffort(effort))
+	}
+	if runtimeCfg.PermissionPromptToolStdio {
 		opts = append(opts, claudecli.WithPermissionPromptToolStdio())
 	}
-	if r.cfg.DisablePlugins {
+	if runtimeCfg.DisablePlugins {
 		opts = append(opts, claudecli.WithDisablePlugins())
 	}
-	if strings.TrimSpace(r.cfg.SystemPrompt) != "" {
-		opts = append(opts, claudecli.WithSystemPrompt(strings.TrimSpace(r.cfg.SystemPrompt)))
+	if strings.TrimSpace(runtimeCfg.SystemPrompt) != "" {
+		opts = append(opts, claudecli.WithSystemPrompt(strings.TrimSpace(runtimeCfg.SystemPrompt)))
 	}
 	if resumeID != "" {
 		opts = append(opts, claudecli.WithResume(resumeID))

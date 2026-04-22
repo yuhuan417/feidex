@@ -249,6 +249,9 @@ func (s *Session) cliArgs() []string {
 	if strings.TrimSpace(s.cfg.Model) != "" {
 		args = append(args, "--model", strings.TrimSpace(s.cfg.Model))
 	}
+	if strings.TrimSpace(s.cfg.Effort) != "" {
+		args = append(args, "--effort", strings.TrimSpace(s.cfg.Effort))
+	}
 	if strings.TrimSpace(string(s.cfg.PermissionMode)) != "" {
 		args = append(args, "--permission-mode", string(s.cfg.PermissionMode))
 	}

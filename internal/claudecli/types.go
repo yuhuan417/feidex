@@ -34,6 +34,7 @@ var (
 
 type SessionConfig struct {
 	Model                     string
+	Effort                    string
 	WorkDir                   string
 	PermissionMode            PermissionMode
 	CLIPath                   string
@@ -58,6 +59,10 @@ func defaultConfig() SessionConfig {
 
 func WithModel(model string) SessionOption {
 	return func(c *SessionConfig) { c.Model = strings.TrimSpace(model) }
+}
+
+func WithEffort(effort string) SessionOption {
+	return func(c *SessionConfig) { c.Effort = strings.TrimSpace(effort) }
 }
 
 func WithWorkDir(dir string) SessionOption {

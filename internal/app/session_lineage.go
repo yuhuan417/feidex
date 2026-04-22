@@ -97,6 +97,20 @@ func sessionStoreBackendThread(sess *state.Session, backend string) {
 	sess.BackendThreads[backend] = snapshot
 }
 
+func sessionClearBackendThread(sess *state.Session, backend string) {
+	if sess == nil {
+		return
+	}
+	backend = normalizeRuntimeBackend(backend)
+	if backend == "" || len(sess.BackendThreads) == 0 {
+		return
+	}
+	delete(sess.BackendThreads, backend)
+	if len(sess.BackendThreads) == 0 {
+		sess.BackendThreads = nil
+	}
+}
+
 func sessionRestoreBackendThread(sess *state.Session, backend string) bool {
 	if sess == nil {
 		return false

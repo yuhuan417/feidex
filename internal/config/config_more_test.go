@@ -66,6 +66,40 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	}
 }
 
+func TestNormalizeClaudeEffort(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty", input: "", want: ""},
+		{name: "default", input: "default", want: ""},
+		{name: "auto", input: "auto", want: ""},
+		{name: "trimmed", input: " High ", want: "high"},
+		{name: "max", input: "max", want: "max"},
+		{name: "invalid", input: "ultra", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := NormalizeClaudeEffort(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("NormalizeClaudeEffort() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeClaudeEffort() error = %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("NormalizeClaudeEffort() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeRejectsInvalidWorkspaceConfigurations(t *testing.T) {
 	cases := []struct {
 		name string

@@ -257,6 +257,9 @@ func (a *App) updateGlobalModelConfig(mutate func(*config.CodexConfig), result c
 }
 
 func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
+	if a.isClaudeBackend() {
+		return a.commandClaudeModel(msg, args)
+	}
 	sessionKey := a.makeSessionKey(msg)
 	if len(args) > 0 {
 		action := a.commandActionFromMessage(msg, map[string]any{

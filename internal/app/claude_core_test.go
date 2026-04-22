@@ -28,6 +28,9 @@ type fakeClaudeCore struct {
 
 	resetCalls int
 	closed     bool
+	resetKeys  []string
+
+	updatedConfigs []config.ClaudeConfig
 
 	ensureResults    []fakeClaudeEnsureResult
 	startTurnResults []error
@@ -97,9 +100,14 @@ func (f *fakeClaudeCore) EnsureSession(_ context.Context, sessionKey string, ws 
 	return f.ensureSessionID, nil
 }
 
-func (f *fakeClaudeCore) ResetSession(string) error {
+func (f *fakeClaudeCore) ResetSession(sessionKey string) error {
 	f.resetCalls++
+	f.resetKeys = append(f.resetKeys, strings.TrimSpace(sessionKey))
 	return nil
+}
+
+func (f *fakeClaudeCore) UpdateConfig(cfg config.ClaudeConfig) {
+	f.updatedConfigs = append(f.updatedConfigs, cfg)
 }
 
 func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turnID, prompt string) error {

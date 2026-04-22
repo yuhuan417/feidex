@@ -57,6 +57,7 @@ service_name = "feidex"
 [claude]
 command = "claude"
 model = "sonnet"
+# effort = "medium"
 permission_mode = "default"
 permission_prompt_tool_stdio = true
 # disable_plugins = true

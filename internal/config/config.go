@@ -70,6 +70,7 @@ type CodexConfig struct {
 type ClaudeConfig struct {
 	Command                   string `toml:"command"`
 	Model                     string `toml:"model"`
+	Effort                    string `toml:"effort"`
 	PermissionMode            string `toml:"permission_mode"`
 	DisablePlugins            bool   `toml:"disable_plugins"`
 	SystemPrompt              string `toml:"system_prompt"`
@@ -173,6 +174,11 @@ func (c *Config) Normalize(baseDir string) error {
 	if c.Claude.Model == "" {
 		c.Claude.Model = "sonnet"
 	}
+	claudeEffort, err := NormalizeClaudeEffort(c.Claude.Effort)
+	if err != nil {
+		return err
+	}
+	c.Claude.Effort = claudeEffort
 	c.Claude.PermissionMode = normalizeClaudePermissionMode(c.Claude.PermissionMode)
 	c.Claude.SystemPrompt = strings.TrimSpace(c.Claude.SystemPrompt)
 	level, err := NormalizeLogLevel(c.Log.Level)
@@ -391,5 +397,25 @@ func normalizeClaudePermissionMode(value string) string {
 		return strings.TrimSpace(value)
 	default:
 		return strings.TrimSpace(value)
+	}
+}
+
+var supportedClaudeEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+func SupportedClaudeEfforts() []string {
+	out := make([]string, len(supportedClaudeEfforts))
+	copy(out, supportedClaudeEfforts)
+	return out
+}
+
+func NormalizeClaudeEffort(value string) (string, error) {
+	raw := strings.TrimSpace(value)
+	switch strings.ToLower(raw) {
+	case "", "default", "auto":
+		return "", nil
+	case "low", "medium", "high", "xhigh", "max":
+		return strings.ToLower(raw), nil
+	default:
+		return "", fmt.Errorf("unsupported claude.effort %q", raw)
 	}
 }

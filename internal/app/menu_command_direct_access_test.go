@@ -271,6 +271,53 @@ func TestCommandModelDirectSetAndEffort(t *testing.T) {
 	}
 }
 
+func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+
+	if err := a.commandModel(msg, nil); err != nil {
+		t.Fatalf("commandModel() error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after Claude /model = %d, want 1", len(ff.replyCards))
+	}
+	if selects := cardSelectStaticForTest(ff.replyCards[0]); len(selects) != 2 {
+		t.Fatalf("Claude /model selects = %+v, want 2", selects)
+	}
+
+	if err := a.commandModel(msg, []string{"set", "mimo-v2-pro"}); err != nil {
+		t.Fatalf("commandModel(set) error = %v", err)
+	}
+	if got := a.cfg.Claude.Model; got != "mimo-v2-pro" {
+		t.Fatalf("Claude model = %q, want mimo-v2-pro", got)
+	}
+	if len(claude.updatedConfigs) != 1 || claude.updatedConfigs[0].Model != "mimo-v2-pro" {
+		t.Fatalf("updated Claude configs = %+v", claude.updatedConfigs)
+	}
+
+	if err := a.commandEffort(msg, []string{"max"}); err != nil {
+		t.Fatalf("commandEffort(max) error = %v", err)
+	}
+	if got := a.cfg.Claude.Effort; got != "max" {
+		t.Fatalf("Claude effort = %q, want max", got)
+	}
+	if len(claude.updatedConfigs) != 2 || claude.updatedConfigs[1].Effort != "max" {
+		t.Fatalf("updated Claude configs after effort = %+v", claude.updatedConfigs)
+	}
+
+	if err := a.commandModel(msg, []string{"set", "default"}); err != nil {
+		t.Fatalf("commandModel(set default) error = %v", err)
+	}
+	if got := a.cfg.Claude.Model; got != "sonnet" {
+		t.Fatalf("Claude default model = %q, want sonnet", got)
+	}
+}
+
 func TestCommandHistoryDirectDetail(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}

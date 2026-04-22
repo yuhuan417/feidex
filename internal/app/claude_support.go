@@ -319,7 +319,7 @@ func (a *App) claudeUnsupportedCommand(raw string) error {
 		return nil
 	}
 	switch fields[0] {
-	case "/history", "/skills", "/model", "/review", "/fork", "/fast":
+	case "/history", "/skills", "/review", "/fork", "/fast":
 		return backendUnsupportedError(fields[0])
 	case "/thread":
 		if len(fields) <= 1 {

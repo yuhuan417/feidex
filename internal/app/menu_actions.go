@@ -60,6 +60,9 @@ func (a *App) completeMenuReview(action *feishu.CardAction, sessionKey string) (
 }
 
 func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	if a.isClaudeBackend() {
+		return a.completeClaudeModelSet(action, modelID)
+	}
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	menuAction, _ := action.ActionValue["menu_action"].(string)
 	if strings.TrimSpace(menuAction) == "" {
@@ -83,6 +86,9 @@ func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) 
 }
 
 func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+	if a.isClaudeBackend() {
+		return a.completeClaudeEffortSet(action, reasoningEffort)
+	}
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	menuAction, _ := action.ActionValue["menu_action"].(string)
 	if strings.TrimSpace(menuAction) == "" {

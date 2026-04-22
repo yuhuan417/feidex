@@ -40,12 +40,17 @@ func (a *App) statusCardBody(sess *state.Session) string {
 	}
 	ws = config.FindWorkspace(a.cfg, workspaceID)
 	model := configuredGlobalModel(a.cfg)
-	if model == "" {
-		model = "(follow app-server default)"
-	}
 	effort := configuredGlobalReasoningEffort(a.cfg)
-	if effort == "" {
-		effort = "(follow model default)"
+	if a.isClaudeBackend() {
+		model = firstNonEmpty(configuredClaudeModel(a.cfg), claudeDefaultModelAlias)
+		effort = firstNonEmpty(configuredClaudeEffort(a.cfg), "(follow Claude default)")
+	} else {
+		if model == "" {
+			model = "(follow app-server default)"
+		}
+		if effort == "" {
+			effort = "(follow model default)"
+		}
 	}
 	workspaceSandbox := "-"
 	workspacePolicy := "-"

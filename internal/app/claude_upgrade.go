@@ -734,6 +734,9 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 	if model := strings.TrimSpace(a.cfg.Claude.Model); model != "" {
 		opts = append(opts, claudecli.WithModel(model))
 	}
+	if effort := strings.TrimSpace(a.cfg.Claude.Effort); effort != "" {
+		opts = append(opts, claudecli.WithEffort(effort))
+	}
 	if a.cfg.Claude.DisablePlugins {
 		opts = append(opts, claudecli.WithDisablePlugins())
 	}

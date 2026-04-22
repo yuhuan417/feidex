@@ -71,6 +71,7 @@ func TestParsePlanInfoFromInput(t *testing.T) {
 func TestSessionCLIArgs(t *testing.T) {
 	session := NewSession(
 		WithModel("sonnet"),
+		WithEffort("max"),
 		WithPermissionMode(PermissionModePlan),
 		WithDisablePlugins(),
 		WithPermissionPromptToolStdio(),
@@ -85,6 +86,7 @@ func TestSessionCLIArgs(t *testing.T) {
 		"--output-format", "stream-json",
 		"--verbose",
 		"--model", "sonnet",
+		"--effort", "max",
 		"--permission-mode", "plan",
 		"--plugin-dir", "/dev/null",
 		"--permission-prompt-tool", "stdio",

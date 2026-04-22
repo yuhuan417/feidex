@@ -82,6 +82,13 @@ func matchModelCommand(fields []string) bool {
 	}
 }
 
+func matchEffortCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	return len(fields) == 2 && strings.TrimSpace(fields[1]) != ""
+}
+
 func matchThreadCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true
@@ -252,9 +259,24 @@ func localCommandSpecList() []localCommandSpec {
 			HelpEntries: []helpCommandSpec{
 				{Command: "/model", Summary: "打开模型选择与推理强度配置。"},
 				{Command: "/model set <model-id>", Summary: "直接设置全局 model。"},
-				{Command: "/model set default", Summary: "清空全局 model，跟随 app-server 默认。"},
+				{Command: "/model set default", Summary: "恢复全局默认 model。"},
 				{Command: "/model effort <effort>", Summary: "直接设置全局推理强度。"},
-				{Command: "/model effort default", Summary: "清空全局推理强度，跟随模型默认。"},
+				{Command: "/model effort default", Summary: "恢复默认推理强度。"},
+			},
+		},
+		{
+			Names: []string{"/effort"},
+			IsLocal: func(fields []string) bool {
+				return matchEffortCommand(fields)
+			},
+			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+				return a.commandEffort(msg, args)
+			},
+			HelpGroup: "model",
+			HelpEntries: []helpCommandSpec{
+				{Command: "/effort", Summary: "打开模型与推理强度配置。"},
+				{Command: "/effort <effort>", Summary: "直接设置全局推理强度。"},
+				{Command: "/effort default", Summary: "恢复默认推理强度。"},
 			},
 		},
 		{
