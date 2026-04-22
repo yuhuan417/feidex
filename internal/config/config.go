@@ -184,6 +184,9 @@ func (c *Config) Normalize(baseDir string) error {
 	}
 	c.Claude.Effort = claudeEffort
 	c.Claude.PermissionMode = normalizeClaudePermissionMode(c.Claude.PermissionMode)
+	if !isSupportedClaudePermissionMode(c.Claude.PermissionMode) {
+		return fmt.Errorf("unsupported claude.permission_mode %q", c.Claude.PermissionMode)
+	}
 	if c.Claude.PermissionMode == "bypassPermissions" && !c.Claude.DangerouslySkipPermissions {
 		return errors.New("claude.permission_mode=bypassPermissions requires claude.dangerously_skip_permissions = true")
 	}
@@ -255,6 +258,9 @@ func (c *Config) Normalize(baseDir string) error {
 			ws.SandboxMode = "workspace-write"
 		}
 		ws.ClaudePermissionMode = normalizeOptionalClaudePermissionMode(ws.ClaudePermissionMode)
+		if ws.ClaudePermissionMode != "" && !isSupportedClaudePermissionMode(ws.ClaudePermissionMode) {
+			return fmt.Errorf("workspace %q has unsupported claude_permission_mode %q", ws.ID, ws.ClaudePermissionMode)
+		}
 		if ws.ClaudePermissionMode == "bypassPermissions" && !c.Claude.DangerouslySkipPermissions {
 			return fmt.Errorf("workspace %q claude_permission_mode=bypassPermissions requires claude.dangerously_skip_permissions = true", ws.ID)
 		}
@@ -402,12 +408,21 @@ func normalizeBackendName(value string) string {
 
 func normalizeClaudePermissionMode(value string) string {
 	switch strings.TrimSpace(value) {
-	case "", "default", "auto":
+	case "", "default":
 		return "default"
 	case "acceptEdits", "plan", "bypassPermissions":
 		return strings.TrimSpace(value)
 	default:
 		return strings.TrimSpace(value)
+	}
+}
+
+func isSupportedClaudePermissionMode(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "default", "acceptEdits", "plan", "bypassPermissions":
+		return true
+	default:
+		return false
 	}
 }
 

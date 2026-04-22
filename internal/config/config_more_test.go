@@ -100,29 +100,32 @@ func TestNormalizeClaudeEffort(t *testing.T) {
 	}
 }
 
-func TestNormalizeClaudePermissionModeMapsAutoToDefault(t *testing.T) {
-	cfg := &Config{
-		Claude: ClaudeConfig{
-			PermissionMode:             "auto",
-			DangerouslySkipPermissions: true,
+func TestNormalizeRejectsClaudeAutoPermissionMode(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *Config
+	}{
+		{
+			name: "global auto",
+			cfg: &Config{
+				Claude: ClaudeConfig{PermissionMode: "auto"},
+				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+			},
 		},
-		Workspaces: []Workspace{
-			{
-				ID:                   "default",
-				Cwd:                  ".",
-				ClaudePermissionMode: "auto",
+		{
+			name: "workspace auto",
+			cfg: &Config{
+				Workspaces: []Workspace{{ID: "default", Cwd: ".", ClaudePermissionMode: "auto"}},
 			},
 		},
 	}
 
-	if err := cfg.Normalize(t.TempDir()); err != nil {
-		t.Fatalf("Normalize() error = %v", err)
-	}
-	if got := cfg.Claude.PermissionMode; got != "default" {
-		t.Fatalf("Claude.PermissionMode = %q, want default", got)
-	}
-	if got := cfg.Workspaces[0].ClaudePermissionMode; got != "default" {
-		t.Fatalf("Workspace.ClaudePermissionMode = %q, want default", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.cfg.Normalize(t.TempDir()); err == nil {
+				t.Fatal("expected Normalize() to reject auto permission mode")
+			}
+		})
 	}
 }
 

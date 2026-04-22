@@ -51,9 +51,6 @@ func claudePermissionModeLabel(value string) string {
 
 func (a *App) normalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error) {
 	_ = ctx
-	if strings.EqualFold(strings.TrimSpace(raw), "auto") {
-		return "", "", fmt.Errorf("Claude 权限模式已移除 `auto`，请使用 `default`、`acceptEdits` 或 `bypassPermissions`")
-	}
 	mode := normalizeClaudePermissionModeValue(raw)
 	switch mode {
 	case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeBypass):

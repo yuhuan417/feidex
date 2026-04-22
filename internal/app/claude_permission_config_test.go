@@ -126,7 +126,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 	}
 }
 
-func TestCompleteClaudeSessionPermissionModeSetRejectsRemovedAutoMode(t *testing.T) {
+func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 	a.backend = backendClaude
@@ -151,7 +151,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsRemovedAutoMode(t *testing
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
-	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "已移除 `auto`") {
-		t.Fatalf("completeClaudeSessionPermissionModeSet() response = %#v, want warning about removed auto mode", resp)
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "不支持的 Claude 权限模式 `auto`") {
+		t.Fatalf("completeClaudeSessionPermissionModeSet() response = %#v, want warning about unsupported auto mode", resp)
 	}
 }
