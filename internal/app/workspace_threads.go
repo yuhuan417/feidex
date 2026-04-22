@@ -21,14 +21,15 @@ type workspaceThreadBinding struct {
 }
 
 func (a *App) listWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
+	return a.conversationBackend().listWorkspaceThreads(sessionKey, ws, includeAll)
+}
+
+func (a *App) listCodexWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
 	if a == nil || a.codex == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
-	}
-	if a.isClaudeBackend() {
-		return nil, fmt.Errorf("listWorkspaceThreads is codex-only")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -84,6 +85,10 @@ func sortThreadsByUpdated(items []codexrpc.ThreadListEntry) {
 }
 
 func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
+	return a.conversationBackend().ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+}
+
+func (a *App) ensureClaudeWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
@@ -93,39 +98,48 @@ func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Sessio
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
-	if a.isClaudeBackend() {
-		if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
-			model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			threadID, err := a.claude.EnsureSession(ctx, sessionKey, ws, sess.ActiveThreadID, model)
-			if err == nil {
-				setSessionThreadContext(sess, ws.ID, threadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
-				sessionResetActiveOperations(sess)
-				sess.Status = "idle"
-				if saveErr := a.appState().saveSession(sess); saveErr != nil {
-					return nil, saveErr
-				}
-				a.markSessionThreadLive(sessionKey, threadID)
-				return &workspaceThreadBinding{
-					ThreadID: threadID,
-					Name:     sess.ActiveThreadName,
-					Preview:  sess.ActiveThreadPreview,
-					Resumed:  true,
-				}, nil
+	if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
+		model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		threadID, err := a.claude.EnsureSession(ctx, sessionKey, ws, sess.ActiveThreadID, model)
+		if err == nil {
+			setSessionThreadContext(sess, ws.ID, threadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
+			sessionResetActiveOperations(sess)
+			sess.Status = "idle"
+			if saveErr := a.appState().saveSession(sess); saveErr != nil {
+				return nil, saveErr
 			}
-			slog.Warn("Claude workspace session resume failed; starting fresh session",
-				"session_key", sessionKey,
-				"workspace_id", ws.ID,
-				"thread_id", sess.ActiveThreadID,
-				"cwd", ws.Cwd,
-				"error", err,
-			)
+			a.markSessionThreadLive(sessionKey, threadID)
+			return &workspaceThreadBinding{
+				ThreadID: threadID,
+				Name:     sess.ActiveThreadName,
+				Preview:  sess.ActiveThreadPreview,
+				Resumed:  true,
+			}, nil
 		}
-		return a.startWorkspaceThread(sessionKey, sess, ws)
+		slog.Warn("Claude workspace session resume failed; starting fresh session",
+			"session_key", sessionKey,
+			"workspace_id", ws.ID,
+			"thread_id", sess.ActiveThreadID,
+			"cwd", ws.Cwd,
+			"error", err,
+		)
 	}
+	return a.startClaudeWorkspaceThread(sessionKey, sess, ws)
+}
 
-	items, err := a.listWorkspaceThreads(sessionKey, ws, false)
+func (a *App) ensureCodexWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
+	if a == nil {
+		return nil, fmt.Errorf("app not initialized")
+	}
+	if sess == nil {
+		return nil, fmt.Errorf("session not initialized")
+	}
+	if ws == nil {
+		return nil, fmt.Errorf("workspace not found")
+	}
+	items, err := a.listCodexWorkspaceThreads(sessionKey, ws, false)
 	if err != nil {
 		slog.Warn("workspace thread list failed; falling back to new thread",
 			"session_key", sessionKey,
@@ -136,7 +150,7 @@ func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Sessio
 	}
 	if len(items) > 0 {
 		sortThreadsByUpdated(items)
-		if binding, resumeErr := a.resumeWorkspaceThread(sessionKey, sess, ws, items[0]); resumeErr == nil {
+		if binding, resumeErr := a.resumeCodexWorkspaceThread(sessionKey, sess, ws, items[0]); resumeErr == nil {
 			return binding, nil
 		} else {
 			slog.Warn("workspace thread resume failed; starting fresh thread",
@@ -148,10 +162,10 @@ func (a *App) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Sessio
 			)
 		}
 	}
-	return a.startWorkspaceThread(sessionKey, sess, ws)
+	return a.startCodexWorkspaceThread(sessionKey, sess, ws)
 }
 
-func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*workspaceThreadBinding, error) {
+func (a *App) resumeCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*workspaceThreadBinding, error) {
 	appState := a.appState()
 	threadID := strings.TrimSpace(entry.ID)
 	if threadID == "" {
@@ -198,33 +212,38 @@ func (a *App) resumeWorkspaceThread(sessionKey string, sess *state.Session, ws *
 }
 
 func (a *App) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	if a.isClaudeBackend() {
-		if a == nil || a.claude == nil {
-			return nil, fmt.Errorf("claude backend not initialized")
-		}
-		_ = a.claude.ResetSession(sessionKey)
-		model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		threadID, err := a.claude.EnsureSession(ctx, sessionKey, ws, "", model)
-		if err != nil {
-			return nil, err
-		}
-		clearSessionThreadContext(sess)
-		setSessionThreadContext(sess, ws.ID, threadID, "Claude", firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
-		sessionResetActiveOperations(sess)
-		sess.Status = "idle"
-		if err := a.appState().saveSession(sess); err != nil {
-			return nil, err
-		}
-		a.markSessionThreadLive(sessionKey, threadID)
-		return &workspaceThreadBinding{
-			ThreadID: threadID,
-			Name:     sess.ActiveThreadName,
-			Preview:  sess.ActiveThreadPreview,
-			Resumed:  false,
-		}, nil
+	return a.conversationBackend().startWorkspaceThread(sessionKey, sess, ws)
+}
+
+func (a *App) startClaudeWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
+	if a == nil || a.claude == nil {
+		return nil, fmt.Errorf("claude backend not initialized")
 	}
+	_ = a.claude.ResetSession(sessionKey)
+	model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	threadID, err := a.claude.EnsureSession(ctx, sessionKey, ws, "", model)
+	if err != nil {
+		return nil, err
+	}
+	clearSessionThreadContext(sess)
+	setSessionThreadContext(sess, ws.ID, threadID, "Claude", firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
+	sessionResetActiveOperations(sess)
+	sess.Status = "idle"
+	if err := a.appState().saveSession(sess); err != nil {
+		return nil, err
+	}
+	a.markSessionThreadLive(sessionKey, threadID)
+	return &workspaceThreadBinding{
+		ThreadID: threadID,
+		Name:     sess.ActiveThreadName,
+		Preview:  sess.ActiveThreadPreview,
+		Resumed:  false,
+	}, nil
+}
+
+func (a *App) startCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
 	if a == nil || a.codex == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}

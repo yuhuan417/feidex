@@ -306,10 +306,13 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		"cwd", ws.Cwd,
 		"thread_id", sess.ActiveThreadID,
 	)
+	return a.conversationBackend().startQueuedSubmission(w, sessionKey, sess, sub, ws, notifyFailure)
+}
+
+func (w *submissionWorkflow) startNextCodexSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+	a := w.app
+	appState := a.appState()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	if a.isClaudeBackend() {
-		return w.startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
-	}
 	if !sessionCanResumeThreadForSubmission(sess, sub) {
 		if strings.TrimSpace(sess.ActiveThreadID) != "" {
 			slog.Debug("dropping session thread lineage for new submission",
@@ -400,6 +403,7 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 	logSessionState("startNextSubmission session starting", sessionKey, appState.session(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	turnID := ""
+	var err error
 	if isReviewSubmission(sub) {
 		turnID, err = a.startSubmissionReview(turnCtx, threadID, sub)
 	} else {

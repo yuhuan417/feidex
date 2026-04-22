@@ -11,6 +11,7 @@ import (
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 )
 
 func formatUsageInt(value int64) string {
@@ -205,23 +206,35 @@ func (a *App) renderUsageCard(sessionKey string) map[string]any {
 	sess := a.appState().session(sessionKey)
 	body := primaryConversationMissingLabel(a.configuredBackend()) + "。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		if a.isClaudeBackend() {
-			body = "当前会话暂无 Claude usage 数据。"
-			if usage, ok := a.currentClaudeThreadUsage(sess.ActiveThreadID); ok {
-				body = renderClaudeThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage)
-			}
-		} else {
-			body = "当前线程暂无 token usage 数据。"
-			if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
-				contextLine := ""
-				if usage.ModelContextWindow != nil {
-					contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
-				}
-				body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
-			}
-		}
+		body = a.conversationBackend().renderUsageBody(sess)
 	}
 	return a.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
 	})
+}
+
+func (a *App) renderClaudeUsageBody(sess *state.Session) string {
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return primaryConversationMissingLabel(backendClaude) + "。"
+	}
+	body := "当前会话暂无 Claude usage 数据。"
+	if usage, ok := a.currentClaudeThreadUsage(sess.ActiveThreadID); ok {
+		body = renderClaudeThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage)
+	}
+	return body
+}
+
+func (a *App) renderCodexUsageBody(sess *state.Session) string {
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return primaryConversationMissingLabel(backendCodex) + "。"
+	}
+	body := "当前线程暂无 token usage 数据。"
+	if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
+		contextLine := ""
+		if usage.ModelContextWindow != nil {
+			contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
+		}
+		body = renderThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
+	}
+	return body
 }

@@ -235,15 +235,16 @@ func (a *App) commandSession(msg *feishu.InboundMessage, args []string) error {
 }
 
 func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
+	return a.conversationBackend().renderThreadsCard(sessionKey, includeAll)
+}
+
+func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
 	sess := a.appState().session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
 		if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {
 			workspace = *ws
 		}
-	}
-	if a.isClaudeBackend() {
-		return a.renderClaudeThreadsCard(sessionKey, sess, &workspace, includeAll)
 	}
 	items, err := a.listWorkspaceThreads(sessionKey, &workspace, includeAll)
 	if err != nil {
@@ -364,6 +365,17 @@ func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]
 		appendMarkdownBodyCardElement(card, row)
 	}
 	return card, nil
+}
+
+func (a *App) renderClaudeThreadsCardForCurrentBackend(sessionKey string, includeAll bool) (map[string]any, error) {
+	sess := a.appState().session(sessionKey)
+	workspace := a.cfg.Workspaces[0]
+	if sess != nil {
+		if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {
+			workspace = *ws
+		}
+	}
+	return a.renderClaudeThreadsCard(sessionKey, sess, &workspace, includeAll)
 }
 
 func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
@@ -513,17 +525,8 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if a.configuredBackend() == backendClaude {
-		if err := a.claude.Interrupt(ctx, sessionKey); err != nil {
-			return err
-		}
-	} else {
-		if err := a.codex.Call(ctx, "turn/interrupt", map[string]any{
-			"threadId": sess.ActiveThreadID,
-			"turnId":   sess.ActiveTurnID,
-		}, nil); err != nil {
-			return err
-		}
+	if err := a.conversationBackend().interruptActiveTurn(ctx, sessionKey, sess); err != nil {
+		return err
 	}
 	reply := "已请求中断当前任务。"
 	if discarded > 0 {
@@ -538,18 +541,7 @@ func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	if a.configuredBackend() == backendClaude {
-		return a.continueClaudeSessionWithText(sessionKey, text)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	return a.codex.Call(ctx, "turn/steer", map[string]any{
-		"threadId":       sess.ActiveThreadID,
-		"expectedTurnId": sess.ActiveTurnID,
-		"input": []map[string]any{
-			{"type": "text", "text": strings.TrimSpace(text), "text_elements": []any{}},
-		},
-	}, nil)
+	return a.conversationBackend().continueActiveTurn(sessionKey, text)
 }
 
 func currentThreadLabel(sess *state.Session) string {

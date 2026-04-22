@@ -1,11 +1,9 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -152,44 +150,7 @@ func (a *App) trySteerInboundReply(msg *feishu.InboundMessage, link *state.Messa
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
-	if a.isClaudeBackend() {
-		return a.tryClaudeReplyContinuation(msg, link, sessionKey, sess)
-	}
-	bucketSessionKey := a.pendingInputSessionKey(msg)
-	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
-	if err != nil {
-		return false, err
-	}
-	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
-	inputSub := &state.Submission{
-		InputText:            msg.Text,
-		Attachments:          append(stagedImageAttachments(stagedImages), inboundAttachments...),
-		WorkspaceID:          sess.WorkspaceID,
-		SessionKey:           sessionKey,
-		TriggerMessageID:     msg.MessageID,
-		SourceRootMessageIDs: uniqueStrings(append([]string{firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))}, stagedImageRootMessageIDs(stagedImages)...)),
-	}
-	inputs := buildTurnInputs(inputSub)
-	if len(inputs) == 0 {
-		return false, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := a.codex.Call(ctx, "turn/steer", map[string]any{
-		"threadId":       threadID,
-		"expectedTurnId": turnID,
-		"input":          inputs,
-	}, nil); err != nil {
-		return false, err
-	}
-	sess.WorkspaceID = firstNonEmpty(sess.WorkspaceID, a.defaultWorkspaceID())
-	if err := appState.saveSession(sess); err != nil {
-		return false, err
-	}
-	if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
-		return false, err
-	}
-	return true, nil
+	return a.conversationBackend().tryReplyContinuation(msg, link, sessionKey, sess)
 }
 
 func (a *App) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
