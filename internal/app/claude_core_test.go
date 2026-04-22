@@ -24,6 +24,8 @@ type fakeClaudeCore struct {
 	forkSessionErr   error
 	startTurnErr     error
 	interruptErr     error
+	setModelErr      error
+	setEffortErr     error
 	approvalErr      error
 	userInputErr     error
 	planErr          error
@@ -57,7 +59,17 @@ type fakeClaudeCore struct {
 		turnID     string
 		prompt     string
 	}
-	interruptCalls      []string
+	interruptCalls []string
+	setModelCalls  []struct {
+		sessionKey string
+		model      string
+	}
+	setEffortCalls []struct {
+		sessionKey string
+		effort     string
+	}
+	setModelApplied     bool
+	setEffortApplied    bool
 	permissionModeCalls []struct {
 		sessionKey string
 		mode       string
@@ -176,6 +188,28 @@ func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turn
 func (f *fakeClaudeCore) Interrupt(_ context.Context, sessionKey string) error {
 	f.interruptCalls = append(f.interruptCalls, sessionKey)
 	return f.interruptErr
+}
+
+func (f *fakeClaudeCore) SetModel(_ context.Context, sessionKey, model string) (bool, error) {
+	f.setModelCalls = append(f.setModelCalls, struct {
+		sessionKey string
+		model      string
+	}{
+		sessionKey: sessionKey,
+		model:      model,
+	})
+	return f.setModelApplied, f.setModelErr
+}
+
+func (f *fakeClaudeCore) SetEffort(_ context.Context, sessionKey, effort string) (bool, error) {
+	f.setEffortCalls = append(f.setEffortCalls, struct {
+		sessionKey string
+		effort     string
+	}{
+		sessionKey: sessionKey,
+		effort:     effort,
+	})
+	return f.setEffortApplied, f.setEffortErr
 }
 
 func (f *fakeClaudeCore) SetPermissionMode(_ context.Context, sessionKey, mode string) error {

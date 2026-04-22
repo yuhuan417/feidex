@@ -264,6 +264,41 @@ func (s *Session) SetPermissionMode(ctx context.Context, mode PermissionMode) er
 	return nil
 }
 
+func (s *Session) SetModel(ctx context.Context, model string) error {
+	model = strings.TrimSpace(model)
+	_, err := s.sendControlRequestAndWait(ctx, wireSetModelRequest{
+		Subtype: "set_model",
+		Model:   model,
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.cfg.Model = model
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *Session) SetEffort(ctx context.Context, effort string) error {
+	effort = strings.TrimSpace(effort)
+	if effort == "" {
+		return ErrEffortDefaultHotApplyUnsupported
+	}
+	_, err := s.sendControlRequestAndWait(ctx, wireApplyFlagSettingsRequest{
+		Subtype: "apply_flag_settings",
+		Settings: map[string]any{
+			"effortLevel": effort,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.cfg.Effort = effort
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *Session) sendControlRequestAndWait(ctx context.Context, request any) (wireControlResponsePayload, error) {
 	if err := ctx.Err(); err != nil {
 		return wireControlResponsePayload{}, err

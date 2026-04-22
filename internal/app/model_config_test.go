@@ -5,8 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
@@ -214,7 +216,7 @@ func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 	}
 }
 
-func TestUpdateClaudeModelConfigResetsIdleRuntimeSessionImmediately(t *testing.T) {
+func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -246,11 +248,113 @@ func TestUpdateClaudeModelConfigResetsIdleRuntimeSessionImmediately(t *testing.T
 	if sess == nil {
 		t.Fatal("session missing after config update")
 	}
-	if sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != "" {
-		t.Fatalf("session after immediate Claude reset = %+v", sess)
+	if sess.ActiveThreadID != "claude-thread-1" || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("session after Claude config update = %+v, want thread preserved", sess)
 	}
-	if claude.resetCalls != 1 || len(claude.resetKeys) != 1 || claude.resetKeys[0] != sessionKey {
-		t.Fatalf("Claude reset calls = %d keys=%v, want one reset for %q", claude.resetCalls, claude.resetKeys, sessionKey)
+	if claude.resetCalls != 0 {
+		t.Fatalf("Claude reset calls = %d, want no reset", claude.resetCalls)
+	}
+}
+
+func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	sessionKey := "feishu:p2p:chat:user"
+	claude := &fakeClaudeCore{setModelApplied: true}
+	a.claude = claude
+
+	resp, err := a.completeClaudeModelSet(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": sessionKey,
+			"menu_action": "menu.model",
+		},
+	}, "opus")
+	if err != nil {
+		t.Fatalf("completeClaudeModelSet() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil {
+		t.Fatal("completeClaudeModelSet() missing toast")
+	}
+	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "当前会话与后续对话会使用新配置") {
+		t.Fatalf("completeClaudeModelSet() toast = %#v", resp.Toast)
+	}
+	if got := a.cfg.Claude.Model; got != "opus" {
+		t.Fatalf("Claude model = %q, want opus", got)
+	}
+	if len(claude.setModelCalls) != 1 || claude.setModelCalls[0].sessionKey != sessionKey || claude.setModelCalls[0].model != "opus" {
+		t.Fatalf("Claude SetModel calls = %+v", claude.setModelCalls)
+	}
+	if claude.resetCalls != 0 {
+		t.Fatalf("Claude reset calls = %d, want none", claude.resetCalls)
+	}
+}
+
+func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	sessionKey := "feishu:p2p:chat:user"
+	claude := &fakeClaudeCore{setEffortApplied: true}
+	a.claude = claude
+
+	resp, err := a.completeClaudeEffortSet(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": sessionKey,
+			"menu_action": "menu.model",
+		},
+	}, "high")
+	if err != nil {
+		t.Fatalf("completeClaudeEffortSet() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil {
+		t.Fatal("completeClaudeEffortSet() missing toast")
+	}
+	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "当前会话与后续对话会使用新配置") {
+		t.Fatalf("completeClaudeEffortSet() toast = %#v", resp.Toast)
+	}
+	if got := a.cfg.Claude.Effort; got != "high" {
+		t.Fatalf("Claude effort = %q, want high", got)
+	}
+	if len(claude.setEffortCalls) != 1 || claude.setEffortCalls[0].sessionKey != sessionKey || claude.setEffortCalls[0].effort != "high" {
+		t.Fatalf("Claude SetEffort calls = %+v", claude.setEffortCalls)
+	}
+	if claude.resetCalls != 0 {
+		t.Fatalf("Claude reset calls = %d, want none", claude.resetCalls)
+	}
+}
+
+func TestCompleteClaudeEffortSetDefaultWarnsWhenLiveSessionCannotClear(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	sessionKey := "feishu:p2p:chat:user"
+	claude := &fakeClaudeCore{setEffortErr: claudecli.ErrEffortDefaultHotApplyUnsupported}
+	a.claude = claude
+
+	resp, err := a.completeClaudeEffortSet(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": sessionKey,
+			"menu_action": "menu.model",
+		},
+	}, "")
+	if err != nil {
+		t.Fatalf("completeClaudeEffortSet(default) error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil {
+		t.Fatal("completeClaudeEffortSet(default) missing toast")
+	}
+	if resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "暂不支持热切回默认") {
+		t.Fatalf("completeClaudeEffortSet(default) toast = %#v", resp.Toast)
+	}
+	if got := a.cfg.Claude.Effort; got != "" {
+		t.Fatalf("Claude effort = %q, want empty default", got)
+	}
+	if len(claude.setEffortCalls) != 1 || claude.setEffortCalls[0].sessionKey != sessionKey || claude.setEffortCalls[0].effort != "" {
+		t.Fatalf("Claude SetEffort calls = %+v", claude.setEffortCalls)
+	}
+	if claude.resetCalls != 0 {
+		t.Fatalf("Claude reset calls = %d, want none", claude.resetCalls)
 	}
 }
 

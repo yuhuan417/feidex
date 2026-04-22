@@ -27,9 +27,10 @@ const (
 )
 
 var (
-	ErrAlreadyStarted = errors.New("session already started")
-	ErrNotStarted     = errors.New("session not started")
-	ErrStopping       = errors.New("session is stopping")
+	ErrAlreadyStarted                   = errors.New("session already started")
+	ErrNotStarted                       = errors.New("session not started")
+	ErrStopping                         = errors.New("session is stopping")
+	ErrEffortDefaultHotApplyUnsupported = errors.New("claude live session does not support clearing effort to default")
 )
 
 type SessionConfig struct {

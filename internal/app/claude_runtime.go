@@ -345,6 +345,58 @@ func (r *claudeRuntime) Interrupt(ctx context.Context, sessionKey string) error 
 	return state.session.Interrupt(ctx)
 }
 
+func (r *claudeRuntime) SetModel(ctx context.Context, sessionKey, model string) (bool, error) {
+	if r == nil {
+		return false, fmt.Errorf("claude runtime not initialized")
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return false, fmt.Errorf("missing session key")
+	}
+	state, err := r.sessionState(sessionKey)
+	if err != nil {
+		slog.Debug("skip Claude model hot apply; runtime session not initialized",
+			"session_key", sessionKey,
+			"model", strings.TrimSpace(model),
+		)
+		return false, nil
+	}
+	if state.session == nil {
+		slog.Debug("skip Claude model hot apply; session handle missing",
+			"session_key", sessionKey,
+			"model", strings.TrimSpace(model),
+		)
+		return false, nil
+	}
+	return true, state.session.SetModel(ctx, strings.TrimSpace(model))
+}
+
+func (r *claudeRuntime) SetEffort(ctx context.Context, sessionKey, effort string) (bool, error) {
+	if r == nil {
+		return false, fmt.Errorf("claude runtime not initialized")
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return false, fmt.Errorf("missing session key")
+	}
+	state, err := r.sessionState(sessionKey)
+	if err != nil {
+		slog.Debug("skip Claude effort hot apply; runtime session not initialized",
+			"session_key", sessionKey,
+			"effort", strings.TrimSpace(effort),
+		)
+		return false, nil
+	}
+	if state.session == nil {
+		slog.Debug("skip Claude effort hot apply; session handle missing",
+			"session_key", sessionKey,
+			"effort", strings.TrimSpace(effort),
+		)
+		return false, nil
+	}
+	return true, state.session.SetEffort(ctx, strings.TrimSpace(effort))
+}
+
 func (r *claudeRuntime) SetPermissionMode(ctx context.Context, sessionKey, mode string) error {
 	if r == nil {
 		return fmt.Errorf("claude runtime not initialized")

@@ -211,6 +211,111 @@ func TestSessionInitializeSendsControlInitializeAndWaitsForResponse(t *testing.T
 	}
 }
 
+func TestSessionSetModelSendsControlRequestAndUpdatesConfig(t *testing.T) {
+	session := NewSession()
+	session.started = true
+	var out bytes.Buffer
+	session.writer = newNDJSONWriter(&out)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.SetModel(context.Background(), "opus")
+	}()
+
+	requestID := waitForPendingControlRequest(t, session)
+	session.handleControlResponse(wireControlResponse{
+		Type: "control_response",
+		Response: wireControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+		},
+	})
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("SetModel() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SetModel() did not return after control response")
+	}
+
+	if got := out.String(); !strings.Contains(got, `"subtype":"set_model"`) || !strings.Contains(got, `"model":"opus"`) {
+		t.Fatalf("SetModel() wrote %q, want set_model control request", got)
+	}
+	if got := session.cfg.Model; got != "opus" {
+		t.Fatalf("session cfg model = %q, want opus", got)
+	}
+}
+
+func TestSessionSetEffortSendsApplyFlagSettingsAndUpdatesConfig(t *testing.T) {
+	session := NewSession()
+	session.started = true
+	var out bytes.Buffer
+	session.writer = newNDJSONWriter(&out)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.SetEffort(context.Background(), "high")
+	}()
+
+	requestID := waitForPendingControlRequest(t, session)
+	session.handleControlResponse(wireControlResponse{
+		Type: "control_response",
+		Response: wireControlResponsePayload{
+			Subtype:   "success",
+			RequestID: requestID,
+		},
+	})
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("SetEffort() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SetEffort() did not return after control response")
+	}
+
+	if got := out.String(); !strings.Contains(got, `"subtype":"apply_flag_settings"`) || !strings.Contains(got, `"effortLevel":"high"`) {
+		t.Fatalf("SetEffort() wrote %q, want apply_flag_settings control request", got)
+	}
+	if got := session.cfg.Effort; got != "high" {
+		t.Fatalf("session cfg effort = %q, want high", got)
+	}
+}
+
+func TestSessionSetEffortRejectsDefaultHotApply(t *testing.T) {
+	session := NewSession()
+	session.started = true
+	var out bytes.Buffer
+	session.writer = newNDJSONWriter(&out)
+
+	err := session.SetEffort(context.Background(), "")
+	if err != ErrEffortDefaultHotApplyUnsupported {
+		t.Fatalf("SetEffort(default) error = %v, want %v", err, ErrEffortDefaultHotApplyUnsupported)
+	}
+	if got := out.String(); got != "" {
+		t.Fatalf("SetEffort(default) wrote %q, want empty output", got)
+	}
+}
+
+func waitForPendingControlRequest(t *testing.T, session *Session) string {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		session.mu.Lock()
+		for id := range session.pendingCtl {
+			session.mu.Unlock()
+			return id
+		}
+		session.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("control request was not registered")
+	return ""
+}
+
 func TestSessionEmitsTextFromAssistantMessage(t *testing.T) {
 	session := NewSession()
 	session.current = &turnState{

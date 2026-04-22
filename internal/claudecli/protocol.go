@@ -198,6 +198,16 @@ type wireSetPermissionModeRequest struct {
 	Mode    string `json:"mode"`
 }
 
+type wireSetModelRequest struct {
+	Subtype string `json:"subtype"`
+	Model   string `json:"model,omitempty"`
+}
+
+type wireApplyFlagSettingsRequest struct {
+	Subtype  string         `json:"subtype"`
+	Settings map[string]any `json:"settings"`
+}
+
 type wireToolUseRequest struct {
 	Subtype               string           `json:"subtype"`
 	ToolName              string           `json:"tool_name"`

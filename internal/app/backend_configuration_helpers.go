@@ -64,7 +64,7 @@ func (a *App) renderClaudeModelMenuCard(sessionKey string) map[string]any {
 		"当前 model: `" + modelValue + "`",
 		"当前 effort: `" + effortValue + "`",
 		"Claude model / effort 只允许在 frontend 空闲时切换。",
-		"切换成功后会立即重置当前 frontend 的 Claude 会话。",
+		"切换成功后会尝试立即应用到当前会话；后续新会话会使用新配置。",
 	}, "\n")
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},

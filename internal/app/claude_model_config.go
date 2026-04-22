@@ -2,13 +2,15 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -96,7 +98,7 @@ func (a *App) renderClaudeModelConfigCard(sessionKey, menuAction string) map[str
 				"这里提供 Claude 常用别名与当前自定义 model。\n" +
 				"需要任意 raw model 时，请直接使用 `/model set <model-id>`。\n" +
 				"`/model set default` 会恢复为 `sonnet`。\n" +
-				"切换 Claude model / effort 只允许在当前 frontend 空闲时进行；成功后会立即重置当前 Claude 会话。",
+				"切换 Claude model / effort 只允许在当前 frontend 空闲时进行；成功后会尝试立即应用到当前会话，并用于后续对话。",
 		},
 		{"tag": "markdown", "content": "选择 Claude 默认模型"},
 	}
@@ -176,41 +178,6 @@ func (a *App) ensureClaudeRuntimeConfigChangeSafe() error {
 	return nil
 }
 
-func (a *App) resetClaudeFrontendSessionsForConfigChange() error {
-	if a == nil || a.claude == nil {
-		return nil
-	}
-	appState := a.appState()
-	var firstErr error
-	for _, sess := range appState.sessions() {
-		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
-			continue
-		}
-		sessionKey := strings.TrimSpace(sess.Key)
-		if sessionKey == "" {
-			continue
-		}
-		if _, err := appState.updateSession(sessionKey, func(current *state.Session) {
-			if current == nil {
-				return
-			}
-			clearSessionThreadContext(current)
-			sessionClearBackendThread(current, backendClaude)
-			current.Status = firstNonEmpty(strings.TrimSpace(current.Status), "idle")
-		}); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		a.clearSessionLiveThread(sessionKey)
-		if err := a.claude.ResetSession(sessionKey); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
-}
-
 func (a *App) updateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
 	if a.cfg == nil {
 		return fmt.Errorf("nil config")
@@ -230,11 +197,34 @@ func (a *App) updateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
 	}
 	if a.claude != nil {
 		a.claude.UpdateConfig(a.cfg.Claude)
-		if err := a.resetClaudeFrontendSessionsForConfigChange(); err != nil {
-			return err
-		}
 	}
 	return nil
+}
+
+func (a *App) hotApplyClaudeModelToCurrentSession(sessionKey, model string) (bool, error) {
+	if a == nil || a.claude == nil {
+		return false, nil
+	}
+	sessionKey = a.normalizeSessionKey(sessionKey)
+	if sessionKey == "" || !a.sessionBelongsToFrontend(sessionKey) {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return a.claude.SetModel(ctx, sessionKey, strings.TrimSpace(model))
+}
+
+func (a *App) hotApplyClaudeEffortToCurrentSession(sessionKey, effort string) (bool, error) {
+	if a == nil || a.claude == nil {
+		return false, nil
+	}
+	sessionKey = a.normalizeSessionKey(sessionKey)
+	if sessionKey == "" || !a.sessionBelongsToFrontend(sessionKey) {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return a.claude.SetEffort(ctx, sessionKey, strings.TrimSpace(effort))
 }
 
 func (a *App) completeClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -243,13 +233,22 @@ func (a *App) completeClaudeModelSet(action *feishu.CardAction, modelID string) 
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}
+	model := normalizeClaudeModelValue(modelID)
 	if err := a.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
-		c.Model = normalizeClaudeModelValue(modelID)
+		c.Model = model
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	toastType := "success"
+	toastContent := "已更新 Claude 模型；后续对话会使用新配置"
+	if applied, err := a.hotApplyClaudeModelToCurrentSession(sessionKey, model); err != nil {
+		toastType = "warning"
+		toastContent = "已更新 Claude 模型；当前会话热更新失败，仅后续对话会使用新配置"
+	} else if applied {
+		toastContent = "已更新 Claude 模型；当前会话与后续对话会使用新配置"
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 模型，并重置当前 frontend 的 Claude 会话"},
+		Toast: &callback.Toast{Type: toastType, Content: toastContent},
 		Card:  rawCard(a.renderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
 }
@@ -269,8 +268,21 @@ func (a *App) completeClaudeEffortSet(action *feishu.CardAction, effort string) 
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	toastType := "success"
+	toastContent := "已更新 Claude 推理强度；后续对话会使用新配置"
+	if applied, applyErr := a.hotApplyClaudeEffortToCurrentSession(sessionKey, normalized); applyErr != nil {
+		toastType = "warning"
+		switch {
+		case errors.Is(applyErr, claudecli.ErrEffortDefaultHotApplyUnsupported):
+			toastContent = "已更新 Claude 推理强度；当前会话暂不支持热切回默认，仅后续对话会使用新配置"
+		default:
+			toastContent = "已更新 Claude 推理强度；当前会话热更新失败，仅后续对话会使用新配置"
+		}
+	} else if applied {
+		toastContent = "已更新 Claude 推理强度；当前会话与后续对话会使用新配置"
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 推理强度，并重置当前 frontend 的 Claude 会话"},
+		Toast: &callback.Toast{Type: toastType, Content: toastContent},
 		Card:  rawCard(a.renderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
 }
