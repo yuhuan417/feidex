@@ -37,6 +37,7 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
+			Backend:      backendCodex,
 			Kind:         kind,
 			SessionKey:   sessionKey,
 			ThreadID:     threadID,
@@ -84,6 +85,7 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
+			Backend:      backendCodex,
 			Kind:         "permissions",
 			SessionKey:   sessionKey,
 			ThreadID:     threadID,
@@ -131,6 +133,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
+			Backend:      backendCodex,
 			Kind:         "tool_request_user_input",
 			SessionKey:   sessionKey,
 			ThreadID:     payload.ThreadID,

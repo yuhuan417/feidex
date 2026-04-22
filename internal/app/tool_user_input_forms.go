@@ -32,6 +32,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
+			Backend:      backendCodex,
 			Kind:         "tool_request_user_input_form",
 			SessionKey:   sessionKey,
 			ThreadID:     payload.ThreadID,
@@ -55,25 +56,9 @@ func (a *App) completeToolUserInputText(msg *feishu.InboundMessage, pending *sta
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
 	}
-	response, summary, err := parseToolUserInputResponse(strings.TrimSpace(msg.Text), payload)
+	adapter := a.serverRequestBackendAdapter(pending)
+	summary, err := adapter.replyTextUserInput(pending, payload, msg.Text)
 	if err != nil {
-		return err
-	}
-	if pendingBackend(a, pending) == backendClaude {
-		answers, _, err := parseClaudeToolUserInputResponse(strings.TrimSpace(msg.Text), payload)
-		if err != nil {
-			return err
-		}
-		if err := a.claude.ResolveUserInput(pending.ID, answers); err != nil {
-			return err
-		}
-		_ = a.finalizePendingReply(pending)
-		if pending.FeishuMsgID != "" {
-			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
-		}
-		return nil
-	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), response); err != nil {
 		return err
 	}
 	_ = a.finalizePendingReply(pending)

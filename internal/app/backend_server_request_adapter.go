@@ -12,6 +12,9 @@ type serverRequestBackendAdapter interface {
 	replyApproval(pending *state.PendingRequest, actionName string, replyPayload any) error
 	replyQuickUserInput(pending *state.PendingRequest, payload toolUserInputPayload, questionID, answer string) (string, error)
 	replyFormUserInput(pending *state.PendingRequest, payload toolUserInputPayload, selections map[string]string) (string, error)
+	replyTextUserInput(pending *state.PendingRequest, payload toolUserInputPayload, text string) (string, error)
+	replyElicitationForm(pending *state.PendingRequest, payload elicitationFormPayload, text string) (string, error)
+	replyElicitationURL(pending *state.PendingRequest, actionName string) (string, error)
 	cancelPending(pending *state.PendingRequest) error
 }
 
@@ -58,6 +61,45 @@ func (c codexServerRequestAdapter) replyFormUserInput(pending *state.PendingRequ
 		return "", newUIWarningError(err.Error())
 	}
 	return summary, c.app.codex.Reply(pendingRequestIDRaw(pending), replyPayload)
+}
+
+func (c codexServerRequestAdapter) replyTextUserInput(pending *state.PendingRequest, payload toolUserInputPayload, text string) (string, error) {
+	if c.app == nil || c.app.codex == nil {
+		return "", fmt.Errorf("codex client not initialized")
+	}
+	replyPayload, summary, err := parseToolUserInputResponse(strings.TrimSpace(text), payload)
+	if err != nil {
+		return "", err
+	}
+	return summary, c.app.codex.Reply(pendingRequestIDRaw(pending), replyPayload)
+}
+
+func (c codexServerRequestAdapter) replyElicitationForm(pending *state.PendingRequest, payload elicitationFormPayload, text string) (string, error) {
+	if c.app == nil || c.app.codex == nil {
+		return "", fmt.Errorf("codex client not initialized")
+	}
+	content, summary, err := parseElicitationFormResponse(strings.TrimSpace(text), payload)
+	if err != nil {
+		return "", err
+	}
+	return summary, c.app.codex.Reply(pendingRequestIDRaw(pending), map[string]any{
+		"action":  "accept",
+		"content": content,
+	})
+}
+
+func (c codexServerRequestAdapter) replyElicitationURL(pending *state.PendingRequest, actionName string) (string, error) {
+	if c.app == nil || c.app.codex == nil {
+		return "", fmt.Errorf("codex client not initialized")
+	}
+	decision := "cancel"
+	switch strings.TrimSpace(actionName) {
+	case "elicitation_url.accept":
+		decision = "accept"
+	case "elicitation_url.decline":
+		decision = "decline"
+	}
+	return decision, c.app.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
 }
 
 func (c codexServerRequestAdapter) cancelPending(pending *state.PendingRequest) error {
@@ -116,6 +158,25 @@ func (c claudeServerRequestAdapter) replyFormUserInput(pending *state.PendingReq
 		return "", newUIWarningError(err.Error())
 	}
 	return summary, c.app.claude.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
+}
+
+func (c claudeServerRequestAdapter) replyTextUserInput(pending *state.PendingRequest, payload toolUserInputPayload, text string) (string, error) {
+	if c.app == nil || c.app.claude == nil {
+		return "", fmt.Errorf("claude backend not initialized")
+	}
+	answers, summary, err := parseClaudeToolUserInputResponse(strings.TrimSpace(text), payload)
+	if err != nil {
+		return "", err
+	}
+	return summary, c.app.claude.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
+}
+
+func (claudeServerRequestAdapter) replyElicitationForm(*state.PendingRequest, elicitationFormPayload, string) (string, error) {
+	return "", fmt.Errorf("claude backend does not support elicitation form replies")
+}
+
+func (claudeServerRequestAdapter) replyElicitationURL(*state.PendingRequest, string) (string, error) {
+	return "", fmt.Errorf("claude backend does not support elicitation url replies")
 }
 
 func (c claudeServerRequestAdapter) cancelPending(pending *state.PendingRequest) error {

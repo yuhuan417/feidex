@@ -101,13 +101,13 @@ func (a *App) configuredSessionInflightMode() sessionInflightMode {
 }
 
 func pendingBackend(a *App, pending *state.PendingRequest) string {
+	if pending != nil && strings.TrimSpace(pending.Backend) != "" {
+		return normalizeRuntimeBackend(pending.Backend)
+	}
 	if a != nil {
 		if backend := a.configuredBackend(); backend != "" {
 			return backend
 		}
-	}
-	if pending != nil && strings.TrimSpace(pending.Backend) != "" {
-		return normalizeRuntimeBackend(pending.Backend)
 	}
 	return ""
 }

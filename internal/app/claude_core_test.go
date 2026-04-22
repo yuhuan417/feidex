@@ -938,6 +938,53 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	}
 }
 
+func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	a.feishu = ff
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "question-text-1",
+		Backend:     backendClaude,
+		Kind:        "tool_request_user_input_form",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "card-1",
+		PayloadJSON: mustJSON(toolUserInputPayload{
+			ThreadID: "claude-thread-1",
+			TurnID:   "claude-turn-1",
+			ItemID:   "item-1",
+			Questions: []toolUserInputQuestion{
+				{ID: "q1", Question: "Choose a mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			},
+		}),
+		Status: "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	if err := a.completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
+		t.Fatalf("completeToolUserInputText() error = %v", err)
+	}
+	if len(claude.userInputCalls) != 1 {
+		t.Fatalf("user input calls = %d, want 1", len(claude.userInputCalls))
+	}
+	if claude.userInputCalls[0].requestID != "question-text-1" {
+		t.Fatalf("request id = %q, want question-text-1", claude.userInputCalls[0].requestID)
+	}
+	if got := claude.userInputCalls[0].answers["Choose a mode"]; got != "Fast" {
+		t.Fatalf("resolved Claude text answer = %q, want Fast", got)
+	}
+	if pending := a.store.PendingByID("question-text-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after text answer = %+v, want resolved", pending)
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched cards = %d, want 1", len(ff.patchedCards))
+	}
+}
+
 func TestClaudeQuestionsAsToolUserInputPreservesMultiSelect(t *testing.T) {
 	questions := []claudecli.Question{
 		{

@@ -78,6 +78,42 @@ func TestCompleteUserInputFormAnswerKeepsPendingWhenCodexReplyFails(t *testing.T
 	}
 }
 
+func TestCompleteToolUserInputTextKeepsPendingWhenCodexReplyFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	_ = a.appState().setSubmissionStatus(sub.ID, "waiting_user_input")
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "input-text-1",
+		RequestIDRaw: `"input-text-1"`,
+		Backend:      backendCodex,
+		Kind:         "tool_request_user_input_form",
+		SessionKey:   "sess-1",
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		PayloadJSON: mustJSON(toolUserInputPayload{
+			Questions: []toolUserInputQuestion{
+				{ID: "mode", Question: "Choose mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			},
+		}),
+		Status: "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(input-text-1) error = %v", err)
+	}
+	fc.replyErr = errors.New("write failed")
+
+	err := a.completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("input-text-1"))
+	if err == nil || err.Error() != "write failed" {
+		t.Fatalf("completeToolUserInputText() error = %v, want write failed", err)
+	}
+	if pending := a.store.PendingByID("input-text-1"); pending == nil || pending.Status != "pending" {
+		t.Fatalf("pending after failed user input text reply = %+v, want pending", pending)
+	}
+	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_user_input" {
+		t.Fatalf("submission after failed user input text reply = %+v, want waiting_user_input", updated)
+	}
+}
+
 func TestCompleteElicitationURLActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -137,5 +173,39 @@ func TestCompletePendingFormCancelKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	}
 	if pending := a.store.PendingByID("form-1"); pending == nil || pending.Status != "pending" {
 		t.Fatalf("pending after failed form cancel reply = %+v, want pending", pending)
+	}
+}
+
+func TestCompleteElicitationFormTextKeepsPendingWhenCodexReplyFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	_ = a.appState().setSubmissionStatus(sub.ID, "waiting_user_input")
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "elicit-form-1",
+		RequestIDRaw: `"elicit-form-1"`,
+		Backend:      backendCodex,
+		Kind:         "mcp_elicitation_form",
+		SessionKey:   "sess-1",
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		PayloadJSON: mustJSON(elicitationFormPayload{
+			Schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+		}),
+		Status: "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(elicit-form-1) error = %v", err)
+	}
+	fc.replyErr = errors.New("write failed")
+
+	err := a.completeElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicit-form-1"))
+	if err == nil || err.Error() != "write failed" {
+		t.Fatalf("completeElicitationFormText() error = %v, want write failed", err)
+	}
+	if pending := a.store.PendingByID("elicit-form-1"); pending == nil || pending.Status != "pending" {
+		t.Fatalf("pending after failed elicitation form reply = %+v, want pending", pending)
+	}
+	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_user_input" {
+		t.Fatalf("submission after failed elicitation form reply = %+v, want waiting_user_input", updated)
 	}
 }

@@ -33,6 +33,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
+			Backend:      backendCodex,
 			Kind:         "mcp_elicitation_form",
 			SessionKey:   sessionKey,
 			ThreadID:     payload.ThreadID,
@@ -73,6 +74,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 		_ = appState.savePending(&state.PendingRequest{
 			ID:           requestKey,
 			RequestIDRaw: requestIDStored(requestID),
+			Backend:      backendCodex,
 			Kind:         "mcp_elicitation_url",
 			SessionKey:   sessionKey,
 			ThreadID:     payload.ThreadID,
@@ -100,15 +102,11 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
-	decision := "cancel"
-	switch actionName {
-	case "elicitation_url.accept":
-		decision = "accept"
-	case "elicitation_url.decline":
-		decision = "decline"
-	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision}); err != nil {
-		slog.Error("elicitation url reply to codex failed",
+	adapter := a.serverRequestBackendAdapter(pending)
+	decision, err := adapter.replyElicitationURL(pending, actionName)
+	if err != nil {
+		slog.Error("elicitation url reply failed",
+			"backend", adapter.kind(),
 			"request_id", requestID,
 			"action", actionName,
 			"user_id", action.UserID,
@@ -130,14 +128,9 @@ func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *s
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
 	}
-	content, summary, err := parseElicitationFormResponse(strings.TrimSpace(msg.Text), payload)
+	adapter := a.serverRequestBackendAdapter(pending)
+	summary, err := adapter.replyElicitationForm(pending, payload, msg.Text)
 	if err != nil {
-		return err
-	}
-	if err := a.codex.Reply(pendingRequestIDRaw(pending), map[string]any{
-		"action":  "accept",
-		"content": content,
-	}); err != nil {
 		return err
 	}
 	_ = a.finalizePendingReply(pending)
