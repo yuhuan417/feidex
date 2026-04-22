@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 const (
 	claudeSessionCommandUsage   = "/session | /session list [all] | /session new | /session fork | /session resume SESSION_ID | /session permissions [MODE|inherit]"
 	claudeWorkspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace permissions [MODE|inherit]"
-	claudePermissionCacheTTL    = 5 * time.Minute
 )
 
 type claudePermissionModeOption struct {
@@ -25,46 +23,21 @@ type claudePermissionModeOption struct {
 	Label string
 }
 
-type claudeCapabilitySnapshot struct {
-	CheckedAt         time.Time
-	AutoModeAvailable bool
-}
-
-func (a *App) isClaudeAutoModeAvailable(ctx context.Context) bool {
+func (a *App) isClaudeBypassPermissionsEnabled() bool {
 	if a == nil || a.cfg == nil {
 		return false
 	}
-	a.claudeCapabilityMu.Lock()
-	snapshot := a.claudeCapability
-	a.claudeCapabilityMu.Unlock()
-	if !snapshot.CheckedAt.IsZero() && time.Since(snapshot.CheckedAt) < claudePermissionCacheTTL {
-		return snapshot.AutoModeAvailable
-	}
-	command := firstNonEmpty(strings.TrimSpace(a.cfg.Claude.Command), "claude")
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	checkCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
-	defer cancel()
-	available := exec.CommandContext(checkCtx, command, "auto-mode", "config").Run() == nil
-	a.claudeCapabilityMu.Lock()
-	a.claudeCapability = claudeCapabilitySnapshot{
-		CheckedAt:         time.Now(),
-		AutoModeAvailable: available,
-	}
-	a.claudeCapabilityMu.Unlock()
-	return available
+	return a.cfg.Claude.DangerouslySkipPermissions
 }
 
-func claudePermissionModeOptions(includeAuto bool) []claudePermissionModeOption {
+func claudePermissionModeOptions(includeBypass bool) []claudePermissionModeOption {
 	options := []claudePermissionModeOption{
 		{Value: string(claudePermissionModeDefault), Label: "default"},
 		{Value: string(claudePermissionModeAcceptEdits), Label: "acceptEdits"},
 	}
-	if includeAuto {
-		options = append(options, claudePermissionModeOption{Value: string(claudePermissionModeAuto), Label: "auto"})
+	if includeBypass {
+		options = append(options, claudePermissionModeOption{Value: string(claudePermissionModeBypass), Label: "bypassPermissions"})
 	}
-	options = append(options, claudePermissionModeOption{Value: string(claudePermissionModeBypass), Label: "bypassPermissions"})
 	return options
 }
 
@@ -77,14 +50,18 @@ func claudePermissionModeLabel(value string) string {
 }
 
 func (a *App) normalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error) {
+	_ = ctx
+	if strings.EqualFold(strings.TrimSpace(raw), "auto") {
+		return "", "", fmt.Errorf("Claude 权限模式已移除 `auto`，请使用 `default`、`acceptEdits` 或 `bypassPermissions`")
+	}
 	mode := normalizeClaudePermissionModeValue(raw)
 	switch mode {
-	case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeAuto), string(claudePermissionModeBypass):
+	case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeBypass):
 	default:
 		return "", "", fmt.Errorf("不支持的 Claude 权限模式 `%s`", strings.TrimSpace(raw))
 	}
-	if mode == string(claudePermissionModeAuto) && !a.isClaudeAutoModeAvailable(ctx) {
-		return string(claudePermissionModeDefault), "当前 Claude CLI 不支持 `auto`，已回退到 `default`。", nil
+	if mode == string(claudePermissionModeBypass) && !a.isClaudeBypassPermissionsEnabled() {
+		return "", "", fmt.Errorf("当前未启用 `claude.dangerously_skip_permissions`，不能切到 `bypassPermissions`")
 	}
 	return mode, "", nil
 }
@@ -152,7 +129,7 @@ func (a *App) renderClaudeSessionPermissionMenuCard(sessionKey string) (map[stri
 			"mode":        "",
 		},
 	})
-	for _, opt := range claudePermissionModeOptions(a.isClaudeAutoModeAvailable(context.Background())) {
+	for _, opt := range claudePermissionModeOptions(a.isClaudeBypassPermissionsEnabled()) {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == override {
@@ -272,7 +249,7 @@ func (a *App) renderClaudeWorkspacePermissionMenuCard(sessionKey string) (map[st
 			"mode":         "",
 		},
 	})
-	for _, opt := range claudePermissionModeOptions(a.isClaudeAutoModeAvailable(context.Background())) {
+	for _, opt := range claudePermissionModeOptions(a.isClaudeBypassPermissionsEnabled()) {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == override {

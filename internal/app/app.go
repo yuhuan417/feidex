@@ -55,8 +55,6 @@ type App struct {
 	claudeUpgradeMu    sync.Mutex
 	claudeUpgrade      claudeUpgradeSnapshot
 	claudeRestart      claudeRestartSnapshot
-	claudeCapabilityMu sync.Mutex
-	claudeCapability   claudeCapabilitySnapshot
 }
 
 type turnBinding struct {

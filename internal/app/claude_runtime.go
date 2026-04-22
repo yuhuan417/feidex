@@ -245,6 +245,9 @@ func (r *claudeRuntime) startSession(ctx context.Context, sessionKey string, ws 
 			},
 		}),
 	}
+	if runtimeCfg.DangerouslySkipPermissions {
+		opts = append(opts, claudecli.WithDangerouslySkipPermissions())
+	}
 	if effort := strings.TrimSpace(runtimeCfg.Effort); effort != "" {
 		opts = append(opts, claudecli.WithEffort(effort))
 	}
@@ -1068,32 +1071,19 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 }
 
 func (r *claudeRuntime) permissionModeForSession(ctx context.Context, sessionKey string, ws *config.Workspace, cfg config.ClaudeConfig) claudecli.PermissionMode {
+	_ = ctx
+	_ = sessionKey
 	var sess *state.Session
 	if r != nil && r.app != nil && r.app.store != nil {
 		sess = r.app.appState().session(sessionKey)
 	}
-	mode := effectiveClaudePermissionMode(sess, ws, cfg)
-	if normalizeClaudePermissionModeValue(mode) == string(claudePermissionModeAuto) && !r.app.isClaudeAutoModeAvailable(ctx) {
-		slog.Warn("Claude auto permission mode unavailable; falling back to default",
-			"session_key", sessionKey,
-			"workspace_id", func() string {
-				if ws == nil {
-					return ""
-				}
-				return ws.ID
-			}(),
-		)
-		mode = string(claudePermissionModeDefault)
-	}
-	return claudePermissionModeValue(mode)
+	return claudePermissionModeValue(effectiveClaudePermissionMode(sess, ws, cfg))
 }
 
 func claudePermissionModeValue(mode string) claudecli.PermissionMode {
 	switch normalizeClaudePermissionModeValue(mode) {
 	case string(claudePermissionModeAcceptEdits):
 		return claudecli.PermissionModeAcceptEdits
-	case string(claudePermissionModeAuto):
-		return claudecli.PermissionModeAuto
 	case string(claudePermissionModePlan):
 		return claudecli.PermissionModePlan
 	case string(claudePermissionModeBypass):

@@ -15,7 +15,6 @@ type PermissionMode string
 const (
 	PermissionModeDefault     PermissionMode = "default"
 	PermissionModeAcceptEdits PermissionMode = "acceptEdits"
-	PermissionModeAuto        PermissionMode = "auto"
 	PermissionModePlan        PermissionMode = "plan"
 	PermissionModeBypass      PermissionMode = "bypassPermissions"
 )
@@ -34,20 +33,21 @@ var (
 )
 
 type SessionConfig struct {
-	Model                     string
-	Effort                    string
-	WorkDir                   string
-	PermissionMode            PermissionMode
-	CLIPath                   string
-	DisablePlugins            bool
-	SystemPrompt              string
-	PermissionPromptToolStdio bool
-	Resume                    string
-	ForkSession               bool
-	EventBufferSize           int
-	StderrHandler             func([]byte)
-	PermissionHandler         PermissionHandler
-	InteractiveToolHandler    InteractiveToolHandler
+	Model                      string
+	Effort                     string
+	WorkDir                    string
+	PermissionMode             PermissionMode
+	DangerouslySkipPermissions bool
+	CLIPath                    string
+	DisablePlugins             bool
+	SystemPrompt               string
+	PermissionPromptToolStdio  bool
+	Resume                     string
+	ForkSession                bool
+	EventBufferSize            int
+	StderrHandler              func([]byte)
+	PermissionHandler          PermissionHandler
+	InteractiveToolHandler     InteractiveToolHandler
 }
 
 type SessionOption func(*SessionConfig)
@@ -73,6 +73,10 @@ func WithWorkDir(dir string) SessionOption {
 
 func WithPermissionMode(mode PermissionMode) SessionOption {
 	return func(c *SessionConfig) { c.PermissionMode = mode }
+}
+
+func WithDangerouslySkipPermissions() SessionOption {
+	return func(c *SessionConfig) { c.DangerouslySkipPermissions = true }
 }
 
 func WithCLIPath(path string) SessionOption {

@@ -139,7 +139,7 @@ func normalizeClaudeSessionPermissionUpdate(update map[string]any) (map[string]a
 	case "setMode":
 		mode := normalizeClaudePermissionModeValue(stringValue(update["mode"]))
 		switch mode {
-		case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeAuto), string(claudePermissionModeBypass):
+		case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeBypass):
 		default:
 			return nil, false
 		}

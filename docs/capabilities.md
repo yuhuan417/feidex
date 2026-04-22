@@ -159,8 +159,6 @@ Claude 当前不暴露 Codex 风格的 sandbox / approval policy 菜单与命令
 
 - `default`
 - `acceptEdits`
-- `auto`
-  - 仅当本机 Claude CLI 支持时可见；不支持时会回退。
 - `bypassPermissions`
 - `inherit`
   - 仅用于清除 session / workspace 覆盖。

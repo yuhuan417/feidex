@@ -49,3 +49,109 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 		t.Fatal("expected runtime session to remain uninitialized in this test")
 	}
 }
+
+func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.backend = backendClaude
+	a.cfg.Claude.DangerouslySkipPermissions = true
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "claude-session-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	sessionCard, err := a.renderClaudeSessionPermissionMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderClaudeSessionPermissionMenuCard() error = %v", err)
+	}
+	if !cardHasButtonText(sessionCard, "bypassPermissions") {
+		t.Fatalf("session permission card should expose bypassPermissions: %#v", cardButtonsForTest(sessionCard))
+	}
+
+	workspaceCard, err := a.renderClaudeWorkspacePermissionMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderClaudeWorkspacePermissionMenuCard() error = %v", err)
+	}
+	if !cardHasButtonText(workspaceCard, "bypassPermissions") {
+		t.Fatalf("workspace permission card should expose bypassPermissions: %#v", cardButtonsForTest(workspaceCard))
+	}
+	if cardHasButtonText(sessionCard, "auto") || cardHasButtonText(workspaceCard, "auto") {
+		t.Fatalf("permission cards should not expose auto mode: session=%#v workspace=%#v", cardButtonsForTest(sessionCard), cardButtonsForTest(workspaceCard))
+	}
+}
+
+func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPermissionsDisabled(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.backend = backendClaude
+	a.cfg.Claude.DangerouslySkipPermissions = false
+	a.codex = nil
+
+	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	a.claude = runtime
+	defer runtime.Close()
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "claude-session-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	card, err := a.renderClaudeSessionPermissionMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderClaudeSessionPermissionMenuCard() error = %v", err)
+	}
+	if cardHasButtonText(card, "bypassPermissions") {
+		t.Fatalf("session permission card should hide bypassPermissions when disabled: %#v", cardButtonsForTest(card))
+	}
+
+	resp, err := a.completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
+	if err != nil {
+		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "dangerously_skip_permissions") {
+		t.Fatalf("completeClaudeSessionPermissionModeSet() response = %#v, want warning about dangerously_skip_permissions", resp)
+	}
+}
+
+func TestCompleteClaudeSessionPermissionModeSetRejectsRemovedAutoMode(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.backend = backendClaude
+	a.codex = nil
+
+	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	a.claude = runtime
+	defer runtime.Close()
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "claude-session-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	resp, err := a.completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
+	if err != nil {
+		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "已移除 `auto`") {
+		t.Fatalf("completeClaudeSessionPermissionModeSet() response = %#v, want warning about removed auto mode", resp)
+	}
+}

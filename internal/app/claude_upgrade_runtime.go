@@ -112,6 +112,9 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 		claudecli.WithPermissionMode(claudePermissionModeValue(a.cfg.Claude.PermissionMode)),
 		claudecli.WithEventBufferSize(16),
 	}
+	if a.cfg.Claude.DangerouslySkipPermissions {
+		opts = append(opts, claudecli.WithDangerouslySkipPermissions())
+	}
 	if model := strings.TrimSpace(a.cfg.Claude.Model); model != "" {
 		opts = append(opts, claudecli.WithModel(model))
 	}

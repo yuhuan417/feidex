@@ -340,6 +340,9 @@ func (s *Session) cliArgs() []string {
 	if strings.TrimSpace(string(s.cfg.PermissionMode)) != "" {
 		args = append(args, "--permission-mode", string(s.cfg.PermissionMode))
 	}
+	if s.cfg.DangerouslySkipPermissions {
+		args = append(args, "--dangerously-skip-permissions")
+	}
 	if s.cfg.DisablePlugins {
 		args = append(args, "--plugin-dir", "/dev/null")
 	}

@@ -33,7 +33,6 @@ type claudePermissionMode string
 const (
 	claudePermissionModeDefault     claudePermissionMode = "default"
 	claudePermissionModeAcceptEdits claudePermissionMode = "acceptEdits"
-	claudePermissionModeAuto        claudePermissionMode = "auto"
 	claudePermissionModePlan        claudePermissionMode = "plan"
 	claudePermissionModeBypass      claudePermissionMode = "bypassPermissions"
 )

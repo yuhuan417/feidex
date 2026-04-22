@@ -68,13 +68,14 @@ type CodexConfig struct {
 }
 
 type ClaudeConfig struct {
-	Command                   string `toml:"command"`
-	Model                     string `toml:"model"`
-	Effort                    string `toml:"effort"`
-	PermissionMode            string `toml:"permission_mode"`
-	DisablePlugins            bool   `toml:"disable_plugins"`
-	SystemPrompt              string `toml:"system_prompt"`
-	PermissionPromptToolStdio bool   `toml:"permission_prompt_tool_stdio"`
+	Command                    string `toml:"command"`
+	Model                      string `toml:"model"`
+	Effort                     string `toml:"effort"`
+	PermissionMode             string `toml:"permission_mode"`
+	DangerouslySkipPermissions bool   `toml:"dangerously_skip_permissions"`
+	DisablePlugins             bool   `toml:"disable_plugins"`
+	SystemPrompt               string `toml:"system_prompt"`
+	PermissionPromptToolStdio  bool   `toml:"permission_prompt_tool_stdio"`
 }
 
 type DaemonConfig struct {
@@ -111,10 +112,11 @@ func Default() *Config {
 			ServiceName:     "feidex",
 		},
 		Claude: ClaudeConfig{
-			Command:                   "claude",
-			Model:                     "sonnet",
-			PermissionMode:            "default",
-			PermissionPromptToolStdio: true,
+			Command:                    "claude",
+			Model:                      "sonnet",
+			PermissionMode:             "default",
+			DangerouslySkipPermissions: true,
+			PermissionPromptToolStdio:  true,
 		},
 		Daemon: DaemonConfig{
 			ServiceName: "feidex",
@@ -182,6 +184,9 @@ func (c *Config) Normalize(baseDir string) error {
 	}
 	c.Claude.Effort = claudeEffort
 	c.Claude.PermissionMode = normalizeClaudePermissionMode(c.Claude.PermissionMode)
+	if c.Claude.PermissionMode == "bypassPermissions" && !c.Claude.DangerouslySkipPermissions {
+		return errors.New("claude.permission_mode=bypassPermissions requires claude.dangerously_skip_permissions = true")
+	}
 	c.Claude.SystemPrompt = strings.TrimSpace(c.Claude.SystemPrompt)
 	level, err := NormalizeLogLevel(c.Log.Level)
 	if err != nil {
@@ -250,6 +255,9 @@ func (c *Config) Normalize(baseDir string) error {
 			ws.SandboxMode = "workspace-write"
 		}
 		ws.ClaudePermissionMode = normalizeOptionalClaudePermissionMode(ws.ClaudePermissionMode)
+		if ws.ClaudePermissionMode == "bypassPermissions" && !c.Claude.DangerouslySkipPermissions {
+			return fmt.Errorf("workspace %q claude_permission_mode=bypassPermissions requires claude.dangerously_skip_permissions = true", ws.ID)
+		}
 		if _, ok := seen[ws.ID]; ok {
 			return fmt.Errorf("duplicate workspace id %q", ws.ID)
 		}
@@ -394,9 +402,9 @@ func normalizeBackendName(value string) string {
 
 func normalizeClaudePermissionMode(value string) string {
 	switch strings.TrimSpace(value) {
-	case "", "default":
+	case "", "default", "auto":
 		return "default"
-	case "acceptEdits", "auto", "plan", "bypassPermissions":
+	case "acceptEdits", "plan", "bypassPermissions":
 		return strings.TrimSpace(value)
 	default:
 		return strings.TrimSpace(value)

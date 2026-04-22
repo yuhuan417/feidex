@@ -192,12 +192,10 @@ func effectiveThreadServiceTier(sess *state.Session) string {
 
 func normalizeClaudePermissionModeValue(value string) string {
 	switch strings.TrimSpace(value) {
-	case "", "default":
+	case "", "default", "auto":
 		return string(claudePermissionModeDefault)
 	case string(claudePermissionModeAcceptEdits):
 		return string(claudePermissionModeAcceptEdits)
-	case string(claudePermissionModeAuto):
-		return string(claudePermissionModeAuto)
 	case string(claudePermissionModeBypass):
 		return string(claudePermissionModeBypass)
 	case string(claudePermissionModePlan):

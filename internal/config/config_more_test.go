@@ -100,6 +100,32 @@ func TestNormalizeClaudeEffort(t *testing.T) {
 	}
 }
 
+func TestNormalizeClaudePermissionModeMapsAutoToDefault(t *testing.T) {
+	cfg := &Config{
+		Claude: ClaudeConfig{
+			PermissionMode:             "auto",
+			DangerouslySkipPermissions: true,
+		},
+		Workspaces: []Workspace{
+			{
+				ID:                   "default",
+				Cwd:                  ".",
+				ClaudePermissionMode: "auto",
+			},
+		},
+	}
+
+	if err := cfg.Normalize(t.TempDir()); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+	if got := cfg.Claude.PermissionMode; got != "default" {
+		t.Fatalf("Claude.PermissionMode = %q, want default", got)
+	}
+	if got := cfg.Workspaces[0].ClaudePermissionMode; got != "default" {
+		t.Fatalf("Workspace.ClaudePermissionMode = %q, want default", got)
+	}
+}
+
 func TestNormalizeRejectsInvalidWorkspaceConfigurations(t *testing.T) {
 	cases := []struct {
 		name string
@@ -142,6 +168,19 @@ func TestNormalizeRejectsInvalidWorkspaceConfigurations(t *testing.T) {
 			cfg: &Config{
 				Codex:      CodexConfig{WSURL: "wss://example.test/ws"},
 				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+			},
+		},
+		{
+			name: "claude bypass without dangerous flag",
+			cfg: &Config{
+				Claude:     ClaudeConfig{PermissionMode: "bypassPermissions"},
+				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+			},
+		},
+		{
+			name: "workspace claude bypass without dangerous flag",
+			cfg: &Config{
+				Workspaces: []Workspace{{ID: "default", Cwd: ".", ClaudePermissionMode: "bypassPermissions"}},
 			},
 		},
 	}
