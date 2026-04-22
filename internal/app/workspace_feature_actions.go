@@ -42,23 +42,9 @@ func (a *App) completeWorkspaceUse(action *feishu.CardAction, sessionKey, worksp
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			if a.isClaudeBackend() {
-				toast = "已切换工作区，自动绑定会话失败"
-			} else {
-				toast = "已切换工作区，自动绑定 thread 失败"
-			}
-		} else if binding.Resumed {
-			if a.isClaudeBackend() {
-				toast = "已切换工作区，并恢复最近会话"
-			} else {
-				toast = "已切换工作区，并恢复最近线程"
-			}
+			toast = "已切换工作区" + strings.TrimPrefix(a.backendWorkspaceSwitchBindingFailureNotice(), "。")
 		} else {
-			if a.isClaudeBackend() {
-				toast = "已切换工作区，并创建新会话"
-			} else {
-				toast = "已切换工作区，并创建新线程"
-			}
+			toast = "已切换工作区" + strings.TrimPrefix(a.backendWorkspaceSwitchBindingNotice(binding), "。")
 		}
 	}
 	return &callback.CardActionTriggerResponse{

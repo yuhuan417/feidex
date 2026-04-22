@@ -100,22 +100,8 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 	}
-	if a.isClaudeBackend() && args[0] == "permissions" {
-		if len(args) == 1 {
-			return a.showClaudeWorkspacePermissionMenu(msg)
-		}
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /workspace permissions [MODE|inherit]")
-		}
-		_, _, ws := a.currentWorkspaceForMessage(msg)
-		if ws == nil {
-			return fmt.Errorf("workspace not found")
-		}
-		resp, err := a.completeClaudeWorkspacePermissionModeSet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
-		if err != nil {
-			return err
-		}
-		return a.replyCommandActionResponse(msg, resp)
+	if args[0] == "permissions" {
+		return a.handleBackendWorkspacePermissionCommand(msg, args, sessionKey)
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
@@ -167,11 +153,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		}
 		reply := "已切换工作区到 " + ws.ID
 		if sessionHasInFlightSubmission(sess) {
-			if a.isClaudeBackend() {
-				reply += "。当前运行中的任务仍归属原会话；后续新任务会使用新工作区。"
-			} else {
-				reply += "。当前运行中的任务仍归属原线程；后续新任务会使用新工作区。"
-			}
+			reply += a.backendWorkspaceSwitchInFlightNotice()
 			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 		}
 		binding, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
@@ -182,32 +164,13 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			if a.isClaudeBackend() {
-				reply += "。自动绑定会话失败，可稍后重试。"
-			} else {
-				reply += "。自动绑定 thread 失败，可稍后重试。"
-			}
+			reply += a.backendWorkspaceSwitchBindingFailureNotice()
 			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 		}
-		if binding.Resumed {
-			if a.isClaudeBackend() {
-				reply += "。已自动恢复该工作区最近使用的会话。"
-			} else {
-				reply += "。已自动恢复该工作区最近使用的线程。"
-			}
-		} else {
-			if a.isClaudeBackend() {
-				reply += "。已自动创建新会话。"
-			} else {
-				reply += "。已自动创建新线程。"
-			}
-		}
+		reply += a.backendWorkspaceSwitchBindingNotice(binding)
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 	}
-	if a.isClaudeBackend() {
-		return fmt.Errorf("usage: %s", claudeWorkspaceCommandUsage)
-	}
-	return fmt.Errorf("usage: %s", workspaceCommandUsage)
+	return fmt.Errorf("usage: %s", a.backendWorkspaceCommandUsage())
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
@@ -227,25 +190,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 	}
 	currentWS := config.FindWorkspace(a.cfg, currentID)
 	bodyLines := []string{"当前工作区: `" + currentID + "`"}
-	if currentWS != nil {
-		if a.isClaudeBackend() {
-			effectiveMode := effectiveClaudePermissionMode(nil, currentWS, a.cfg.Claude)
-			override := strings.TrimSpace(currentWS.ClaudePermissionMode)
-			overrideLabel := "跟随全局"
-			if override != "" {
-				overrideLabel = claudePermissionModeLabel(override)
-			}
-			bodyLines = append(bodyLines,
-				"默认 Claude 权限: "+claudePermissionModeLabel(effectiveMode),
-				"工作区覆盖: "+overrideLabel,
-			)
-		} else {
-			bodyLines = append(bodyLines,
-				"默认 sandbox: `"+currentWS.SandboxMode+"`",
-				"默认 policy: `"+currentWS.ApprovalPolicy+"`",
-			)
-		}
-	}
+	bodyLines = a.appendBackendWorkspaceSummaryLines(bodyLines, currentWS)
 	buttons := make([]feishu.Button, 0, 6)
 	selectOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
 	for _, ws := range a.cfg.Workspaces {
@@ -276,35 +221,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 	)
-	if a.isClaudeBackend() {
-		buttons = append(buttons, feishu.Button{
-			Text: submenuCommandLabel("默认权限", "/workspace permissions"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.permission_mode.menu",
-				"session_key": sessionKey,
-			},
-		})
-	} else {
-		buttons = append(buttons,
-			feishu.Button{
-				Text: submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
-				Type: "default",
-				Value: map[string]any{
-					"action":      "workspace.sandbox.menu",
-					"session_key": sessionKey,
-				},
-			},
-			feishu.Button{
-				Text: submenuCommandLabel("配置默认策略", "/workspace policy"),
-				Type: "default",
-				Value: map[string]any{
-					"action":      "workspace.policy.menu",
-					"session_key": sessionKey,
-				},
-			},
-		)
-	}
+	buttons = append(buttons, a.backendWorkspaceConfigButtons(sessionKey)...)
 	buttons = append(buttons,
 		feishu.Button{
 			Text: submenuCommandLabel("删除工作区", "/workspace delete"),

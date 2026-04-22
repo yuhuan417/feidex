@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -60,62 +59,6 @@ func (a *App) completeMenuReview(action *feishu.CardAction, sessionKey string) (
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
 		Card:  rawCard(a.renderReviewMenuCard(sessionKey)),
-	}, nil
-}
-
-func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	if a.isClaudeBackend() {
-		return a.completeClaudeModelSet(action, modelID)
-	}
-	sessionKey, _ := action.ActionValue["session_key"].(string)
-	menuAction, _ := action.ActionValue["menu_action"].(string)
-	if strings.TrimSpace(menuAction) == "" {
-		menuAction = "menu.model"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	result, err := a.fetchModelList(ctx)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	if err := a.updateGlobalModelConfig(func(c *config.CodexConfig) {
-		c.Model = strings.TrimSpace(modelID)
-	}, result); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新全局模型"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, menuAction)),
-	}, nil
-}
-
-func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	if a.isClaudeBackend() {
-		return a.completeClaudeEffortSet(action, reasoningEffort)
-	}
-	sessionKey, _ := action.ActionValue["session_key"].(string)
-	menuAction, _ := action.ActionValue["menu_action"].(string)
-	if strings.TrimSpace(menuAction) == "" {
-		menuAction = "menu.model"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	result, err := a.fetchModelList(ctx)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	selectedModel, _ := effectiveConfiguredModelAndEffort(a.cfg, result)
-	if strings.TrimSpace(reasoningEffort) != "" && !modelSupportsEffort(selectedModel, reasoningEffort) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前模型不支持这个推理强度"}}, nil
-	}
-	if err := a.updateGlobalModelConfig(func(c *config.CodexConfig) {
-		c.ReasoningEffort = strings.TrimSpace(reasoningEffort)
-	}, result); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新全局推理强度"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 

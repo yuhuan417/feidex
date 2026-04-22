@@ -90,43 +90,6 @@ func (a *App) renderContextMenuCard(sessionKey string) map[string]any {
 	return a.renderCommandMenuCard(sessionKey)
 }
 
-func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
-	if a.isClaudeBackend() {
-		modelValue := firstNonEmpty(configuredClaudeModel(a.cfg), claudeDefaultModelAlias)
-		effortValue := firstNonEmpty(configuredClaudeEffort(a.cfg), "(default)")
-		body := strings.Join([]string{
-			"当前 model: `" + modelValue + "`",
-			"当前 effort: `" + effortValue + "`",
-			"Claude model / effort 只允许在 frontend 空闲时切换。",
-			"切换成功后会立即重置当前 frontend 的 Claude 会话。",
-		}, "\n")
-		buttons := []feishu.Button{
-			{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-		}
-		return a.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
-	}
-	modelValue := firstNonEmpty(configuredGlobalModel(a.cfg), "(default)")
-	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(a.cfg), "(default)")
-	fastValue := "-"
-	if a.store != nil {
-		if sess := a.appState().session(sessionKey); sess != nil {
-			fastValue = renderServiceTierValue(sess.ActiveThreadServiceTier)
-		}
-	}
-	body := strings.Join([]string{
-		"当前 model: `" + modelValue + "`",
-		"当前 reasoning: `" + effortValue + "`",
-		"当前 fast: " + fastValue,
-	}, "\n")
-	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-	}
-	return a.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
-}
-
 func (a *App) renderSystemMenuCard(sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
 	backend := firstNonEmpty(a.configuredBackend(), "unset")
