@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -140,9 +141,10 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	}
 	origManager := newCodexInstallManager
 	origClient := newCodexClient
+	var promoted *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
 	newCodexClient = func(config config.CodexConfig) codexClient {
-		return &fakeCodexClient{
+		promoted = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
 					t.Fatalf("unexpected smoke method: %s", method)
@@ -152,6 +154,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 				return nil
 			},
 		}
+		return promoted
 	}
 	defer func() {
 		newCodexInstallManager = origManager
@@ -176,6 +179,12 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	}
 	if !fc.closed {
 		t.Fatal("expected live codex runtime to be closed after successful promotion")
+	}
+	if promoted == nil || !promoted.started || promoted.closed {
+		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
 	}
 	snapshot := a.codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
@@ -203,23 +212,30 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	}
 	origManager := newCodexInstallManager
 	origClient := newCodexClient
-	smokeRuns := 0
+	var smoke *fakeCodexClient
+	var rollbackSmoke *fakeCodexClient
+	runCount := 0
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
 	newCodexClient = func(config config.CodexConfig) codexClient {
-		smokeRuns++
-		return &fakeCodexClient{
+		runCount++
+		client := &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
 					t.Fatalf("unexpected smoke method: %s", method)
 				}
-				if smokeRuns == 1 {
+				if runCount == 1 {
 					return errString("boom")
 				}
-				result := out.(*codexrpc.ModelListResult)
-				result.Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
 				return nil
 			},
 		}
+		if runCount == 1 {
+			smoke = client
+		} else {
+			rollbackSmoke = client
+		}
+		return client
 	}
 	defer func() {
 		newCodexInstallManager = origManager
@@ -244,6 +260,15 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	}
 	if fc.closed {
 		t.Fatal("live codex runtime should not be closed when upgrade rolls back")
+	}
+	if smoke == nil || !smoke.closed {
+		t.Fatalf("smoke runtime = %+v, want closed after failed validation", smoke)
+	}
+	if rollbackSmoke == nil || !rollbackSmoke.closed {
+		t.Fatalf("rollback smoke runtime = %+v, want closed after rollback validation", rollbackSmoke)
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != fc {
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.codex, fc)
 	}
 	snapshot := a.codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
@@ -271,9 +296,10 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}
 	origManager := newCodexInstallManager
 	origClient := newCodexClient
+	var promoted *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
 	newCodexClient = func(config config.CodexConfig) codexClient {
-		return &fakeCodexClient{
+		promoted = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
 					t.Fatalf("unexpected smoke method: %s", method)
@@ -282,6 +308,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 				return nil
 			},
 		}
+		return promoted
 	}
 	defer func() {
 		newCodexInstallManager = origManager
@@ -305,6 +332,12 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if !fc.closed {
 		t.Fatal("expected live runtime to be closed during restart")
 	}
+	if promoted == nil || !promoted.started || promoted.closed {
+		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
+	}
 	snapshot := a.codexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
@@ -318,7 +351,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}
 }
 
-func TestRunCodexRestartOperationFailureAfterClose(t *testing.T) {
+func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	manager := &fakeCodexInstallManager{
 		probe: codexinstall.Probe{
@@ -331,9 +364,10 @@ func TestRunCodexRestartOperationFailureAfterClose(t *testing.T) {
 	}
 	origManager := newCodexInstallManager
 	origClient := newCodexClient
+	var smoke *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
 	newCodexClient = func(config config.CodexConfig) codexClient {
-		return &fakeCodexClient{
+		smoke = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
 					t.Fatalf("unexpected smoke method: %s", method)
@@ -341,6 +375,7 @@ func TestRunCodexRestartOperationFailureAfterClose(t *testing.T) {
 				return errString("restart-boom")
 			},
 		}
+		return smoke
 	}
 	defer func() {
 		newCodexInstallManager = origManager
@@ -355,8 +390,14 @@ func TestRunCodexRestartOperationFailureAfterClose(t *testing.T) {
 		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
 	}
 	a.runCodexRestartOperation("msg-1", "sess-1")
-	if !fc.closed {
-		t.Fatal("restart should still close live runtime before smoke test")
+	if fc.closed {
+		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
+	}
+	if smoke == nil || !smoke.closed {
+		t.Fatalf("smoke runtime = %+v, want closed after failed restart validation", smoke)
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != fc {
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.codex, fc)
 	}
 	state := a.codexRestartState()
 	if state.Running || state.Result != "failed" {
@@ -368,5 +409,142 @@ func TestRunCodexRestartOperationFailureAfterClose(t *testing.T) {
 	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
 	if !strings.Contains(body, "结果: `failed`") {
 		t.Fatalf("restart failure card body = %q", body)
+	}
+}
+
+func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	fc.closeErr = os.ErrProcessDone
+	manager := &fakeCodexInstallManager{
+		probe: codexinstall.Probe{
+			Command:        "codex",
+			CommandPath:    "/usr/local/bin/codex",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newCodexInstallManager
+	origClient := newCodexClient
+	var promoted *fakeCodexClient
+	newCodexInstallManager = func(string) codexInstallManager { return manager }
+	newCodexClient = func(config config.CodexConfig) codexClient {
+		promoted = &fakeCodexClient{
+			callHook: func(_ context.Context, method string, _ any, out any) error {
+				if method != "model/list" {
+					t.Fatalf("unexpected smoke method: %s", method)
+				}
+				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				return nil
+			},
+		}
+		return promoted
+	}
+	defer func() {
+		newCodexInstallManager = origManager
+		newCodexClient = origClient
+	}()
+
+	snapshot, err := a.beginCodexRestartOperation()
+	if err != nil {
+		t.Fatalf("beginCodexRestartOperation() error = %v", err)
+	}
+	if !snapshot.Running {
+		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
+	}
+	a.runCodexRestartOperation("msg-1", "sess-1")
+
+	if !fc.closed {
+		t.Fatal("restart should still attempt to close exited runtime")
+	}
+	if promoted == nil || !promoted.started || promoted.closed {
+		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
+	}
+	state := a.codexRestartState()
+	if state.Running || state.Result != "success" {
+		t.Fatalf("restart state = %+v", state)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected restart success patches")
+	}
+}
+
+func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+
+	origClient := newCodexClient
+	var smoke *fakeCodexClient
+	newCodexClient = func(config config.CodexConfig) codexClient {
+		smoke = &fakeCodexClient{
+			callHook: func(_ context.Context, method string, _ any, out any) error {
+				if method != "model/list" {
+					t.Fatalf("unexpected smoke method: %s", method)
+				}
+				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				return nil
+			},
+		}
+		return smoke
+	}
+	defer func() { newCodexClient = origClient }()
+
+	switched, err := a.refreshCodexRuntimeAfterMaintenance(context.Background())
+	if err != nil {
+		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
+	}
+	if switched {
+		t.Fatal("refreshCodexRuntimeAfterMaintenance() switched runtime on Claude backend")
+	}
+	if smoke == nil || !smoke.closed {
+		t.Fatalf("smoke runtime = %+v, want closed after smoke-only validation", smoke)
+	}
+	if fc.closed {
+		t.Fatal("existing codex runtime should not be touched on Claude backend")
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != fc {
+		t.Fatalf("a.codex = %#v, want original codex runtime %#v", a.codex, fc)
+	}
+}
+
+func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	fc.closeErr = os.ErrProcessDone
+
+	origClient := newCodexClient
+	var promoted *fakeCodexClient
+	newCodexClient = func(config config.CodexConfig) codexClient {
+		promoted = &fakeCodexClient{
+			callHook: func(_ context.Context, method string, _ any, out any) error {
+				if method != "model/list" {
+					t.Fatalf("unexpected smoke method: %s", method)
+				}
+				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				return nil
+			},
+		}
+		return promoted
+	}
+	defer func() { newCodexClient = origClient }()
+
+	switched, err := a.refreshCodexRuntimeAfterMaintenance(context.Background())
+	if err != nil {
+		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
+	}
+	if !switched {
+		t.Fatal("refreshCodexRuntimeAfterMaintenance() did not switch runtime")
+	}
+	if !fc.closed {
+		t.Fatal("old runtime should still receive close attempt")
+	}
+	if promoted == nil || !promoted.started || promoted.closed {
+		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
+	}
+	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
 	}
 }

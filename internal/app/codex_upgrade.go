@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -699,38 +701,68 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 
 	update("smoke_testing", "正在验证新版本")
 	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	err = a.codexSmokeTest(ctx)
+	switched, err := a.refreshCodexRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
 		rollback(previousVersion, err)
 		return
 	}
-	if a.codex != nil {
-		if err := a.codex.Close(); err != nil {
-			rollback(previousVersion, fmt.Errorf("切换 runtime 失败: %w", err))
-			return
-		}
+	if switched {
+		finalize("success", "升级成功，已切换到 `"+payload.TargetVersion+"`")
+		return
 	}
-	finalize("success", "升级成功，已切换到 `"+payload.TargetVersion+"`")
+	finalize("success", "升级成功，已验证 `"+payload.TargetVersion+"` 可用；当前 frontend 未启用 Codex backend")
 }
 
 func (a *App) codexSmokeTest(ctx context.Context) error {
+	client, err := a.startVerifiedCodexClient(ctx)
+	if err != nil {
+		return err
+	}
+	return client.Close()
+}
+
+func (a *App) startVerifiedCodexClient(ctx context.Context) (codexClient, error) {
 	client := newCodexClient(a.cfg.Codex)
 	if client == nil {
-		return fmt.Errorf("codex client not initialized")
+		return nil, fmt.Errorf("codex client not initialized")
 	}
+	client.SetHandlers(a.handleNotification, a.handleServerRequest)
 	if err := client.Start(ctx, a.cfg.Codex.ExperimentalAPI); err != nil {
-		return err
+		return nil, err
 	}
-	defer client.Close()
 	var result codexrpc.ModelListResult
 	if err := client.Call(ctx, "model/list", map[string]any{"limit": 1, "includeHidden": false}, &result); err != nil {
-		return err
+		_ = client.Close()
+		return nil, err
 	}
 	if len(result.Data) == 0 {
-		return fmt.Errorf("model/list returned no visible models")
+		_ = client.Close()
+		return nil, fmt.Errorf("model/list returned no visible models")
 	}
-	return nil
+	return client, nil
+}
+
+func (a *App) refreshCodexRuntimeAfterMaintenance(ctx context.Context) (bool, error) {
+	if a == nil {
+		return false, fmt.Errorf("app not initialized")
+	}
+	if a.configuredBackend() != backendCodex {
+		return false, a.codexSmokeTest(ctx)
+	}
+	next, err := a.startVerifiedCodexClient(ctx)
+	if err != nil {
+		return false, err
+	}
+	old := a.codex
+	if old != nil {
+		if err := old.Close(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			_ = next.Close()
+			return false, fmt.Errorf("切换 runtime 失败: %w", err)
+		}
+	}
+	a.codex = next
+	return true, nil
 }
 
 func (a *App) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
@@ -836,20 +868,18 @@ func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
 		return
 	}
 
-	update("restarting", "正在关闭当前 Codex runtime")
-	if a.codex != nil {
-		if err := a.codex.Close(); err != nil {
-			finalize("failed", "关闭当前 Codex runtime 失败: "+err.Error())
-			return
-		}
-	}
+	update("restarting", "正在准备新的 Codex runtime")
 	update("smoke_testing", "正在验证重启后的 runtime")
 	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	err = a.codexSmokeTest(ctx)
+	switched, err := a.refreshCodexRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
-		finalize("failed", "Codex runtime 已关闭，但重启后的 smoke test 失败: "+err.Error())
+		finalize("failed", "Codex runtime 重启失败: "+err.Error())
 		return
 	}
-	finalize("success", "Codex runtime 已原地重启，后续任务会使用新进程")
+	if switched {
+		finalize("success", "Codex runtime 已原地重启，后续任务会使用新进程")
+		return
+	}
+	finalize("success", "Codex CLI 校验通过；当前 frontend 未启用 Codex backend")
 }

@@ -129,6 +129,8 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
@@ -183,6 +185,8 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
@@ -244,6 +248,8 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 
 func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
@@ -294,8 +300,10 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	}
 }
 
-func TestRunClaudeRestartOperationFailureAfterClose(t *testing.T) {
+func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
@@ -324,8 +332,8 @@ func TestRunClaudeRestartOperationFailureAfterClose(t *testing.T) {
 		t.Fatalf("beginClaudeRestartOperation() = %+v", snapshot)
 	}
 	a.runClaudeRestartOperation("msg-1", "sess-1")
-	if !claude.closed {
-		t.Fatal("restart should still close live runtime before smoke test")
+	if claude.closed {
+		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
 	}
 	state := a.claudeRestartState()
 	if state.Running || state.Result != "failed" {
@@ -337,5 +345,26 @@ func TestRunClaudeRestartOperationFailureAfterClose(t *testing.T) {
 	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
 	if !strings.Contains(body, "结果: `failed`") {
 		t.Fatalf("restart failure card body = %q", body)
+	}
+}
+
+func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	origSmoke := runClaudeSmokeTest
+	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
+	defer func() { runClaudeSmokeTest = origSmoke }()
+
+	switched, err := a.refreshClaudeRuntimeAfterMaintenance(context.Background())
+	if err != nil {
+		t.Fatalf("refreshClaudeRuntimeAfterMaintenance() error = %v", err)
+	}
+	if switched {
+		t.Fatal("refreshClaudeRuntimeAfterMaintenance() switched runtime on non-Claude backend")
+	}
+	if claude.closed {
+		t.Fatal("existing Claude runtime should not be closed on non-Claude backend")
 	}
 }

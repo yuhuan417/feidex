@@ -699,19 +699,17 @@ func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload cl
 
 	update("smoke_testing", "正在验证新版本")
 	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	err = runClaudeSmokeTest(a, ctx)
+	switched, err := a.refreshClaudeRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
 		rollback(previousVersion, err)
 		return
 	}
-	if a.claude != nil {
-		if err := a.claude.Close(); err != nil {
-			rollback(previousVersion, fmt.Errorf("切换 runtime 失败: %w", err))
-			return
-		}
+	if switched {
+		finalize("success", "升级成功，已切换到 `"+payload.TargetVersion+"`")
+		return
 	}
-	finalize("success", "升级成功，已切换到 `"+payload.TargetVersion+"`")
+	finalize("success", "升级成功，已验证 `"+payload.TargetVersion+"` 可用；当前 frontend 未启用 Claude backend")
 }
 
 func (a *App) claudeSmokeTest(ctx context.Context) error {
@@ -773,6 +771,26 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (a *App) refreshClaudeRuntimeAfterMaintenance(ctx context.Context) (bool, error) {
+	if a == nil {
+		return false, fmt.Errorf("claude app not initialized")
+	}
+	if err := runClaudeSmokeTest(a, ctx); err != nil {
+		return false, err
+	}
+	if a.configuredBackend() != backendClaude {
+		return false, nil
+	}
+	if a.claude == nil {
+		a.claude = newClaudeCore(a, a.cfg.Claude)
+		return true, nil
+	}
+	if err := a.claude.Close(); err != nil {
+		return false, fmt.Errorf("切换 runtime 失败: %w", err)
+	}
+	return true, nil
 }
 
 func (a *App) startClaudeRestartFromMessage(msg *feishu.InboundMessage) error {
@@ -879,20 +897,18 @@ func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
 		return
 	}
 
-	update("restarting", "正在关闭当前 Claude runtime")
-	if a.claude != nil {
-		if err := a.claude.Close(); err != nil {
-			finalize("failed", "关闭当前 Claude runtime 失败: "+err.Error())
-			return
-		}
-	}
+	update("restarting", "正在准备新的 Claude runtime")
 	update("smoke_testing", "正在验证重启后的 runtime")
 	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	err = runClaudeSmokeTest(a, ctx)
+	switched, err := a.refreshClaudeRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
-		finalize("failed", "Claude runtime 已关闭，但重启后的 smoke test 失败: "+err.Error())
+		finalize("failed", "Claude runtime 重启失败: "+err.Error())
 		return
 	}
-	finalize("success", "Claude runtime 已原地重启，后续任务会使用新进程")
+	if switched {
+		finalize("success", "Claude runtime 已原地重启，后续任务会使用新进程")
+		return
+	}
+	finalize("success", "Claude CLI 校验通过；当前 frontend 未启用 Claude backend")
 }
