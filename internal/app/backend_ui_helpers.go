@@ -14,129 +14,47 @@ import (
 )
 
 func (a *App) backendWorkspaceCommandUsage() string {
-	if a != nil && a.isClaudeBackend() {
-		return claudeWorkspaceCommandUsage
-	}
-	return workspaceCommandUsage
+	return a.backendConfiguration().workspaceCommandUsage()
 }
 
 func (a *App) handleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
-	if a != nil && a.isClaudeBackend() {
-		return a.commandClaudeModel(msg, args)
-	}
-	return a.commandCodexModel(msg, args)
+	return a.backendConfiguration().handleModelCommand(msg, args)
 }
 
 func (a *App) backendSupportsWorkspacePermissionMode() bool {
-	return a != nil && a.isClaudeBackend()
+	return a.backendConfiguration().supportsWorkspacePermissionMode()
 }
 
 func (a *App) handleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	if !a.backendSupportsWorkspacePermissionMode() {
-		return fmt.Errorf("usage: %s", a.backendWorkspaceCommandUsage())
+	config := a.backendConfiguration()
+	if !config.supportsWorkspacePermissionMode() {
+		return fmt.Errorf("usage: %s", config.workspaceCommandUsage())
 	}
-	if len(args) == 1 {
-		return a.showClaudeWorkspacePermissionMenu(msg)
-	}
-	if len(args) != 2 {
-		return fmt.Errorf("usage: /workspace permissions [MODE|inherit]")
-	}
-	_, _, ws := a.currentWorkspaceForMessage(msg)
-	if ws == nil {
-		return fmt.Errorf("workspace not found")
-	}
-	resp, err := a.completeClaudeWorkspacePermissionModeSet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
-	if err != nil {
-		return err
-	}
-	return a.replyCommandActionResponse(msg, resp)
+	return config.handleWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
 func (a *App) appendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	if currentWS == nil {
-		return lines
-	}
-	if a != nil && a.isClaudeBackend() {
-		effectiveMode := effectiveClaudePermissionMode(nil, currentWS, a.cfg.Claude)
-		override := strings.TrimSpace(currentWS.ClaudePermissionMode)
-		overrideLabel := "跟随全局"
-		if override != "" {
-			overrideLabel = claudePermissionModeLabel(override)
-		}
-		return append(lines,
-			"默认 Claude 权限: "+claudePermissionModeLabel(effectiveMode),
-			"工作区覆盖: "+overrideLabel,
-		)
-	}
-	return append(lines,
-		"默认 sandbox: `"+currentWS.SandboxMode+"`",
-		"默认 policy: `"+currentWS.ApprovalPolicy+"`",
-	)
+	return a.backendConfiguration().appendWorkspaceSummaryLines(lines, currentWS)
 }
 
 func (a *App) backendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	if a != nil && a.isClaudeBackend() {
-		return []feishu.Button{{
-			Text: submenuCommandLabel("默认权限", "/workspace permissions"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.permission_mode.menu",
-				"session_key": sessionKey,
-			},
-		}}
-	}
-	return []feishu.Button{
-		{
-			Text: submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.sandbox.menu",
-				"session_key": sessionKey,
-			},
-		},
-		{
-			Text: submenuCommandLabel("配置默认策略", "/workspace policy"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.policy.menu",
-				"session_key": sessionKey,
-			},
-		},
-	}
+	return a.backendConfiguration().workspaceConfigButtons(sessionKey)
 }
 
 func (a *App) backendWorkspaceSwitchInFlightNotice() string {
-	if a != nil && a.isClaudeBackend() {
-		return "。当前运行中的任务仍归属原会话；后续新任务会使用新工作区。"
-	}
-	return "。当前运行中的任务仍归属原线程；后续新任务会使用新工作区。"
+	return a.backendConfiguration().workspaceSwitchInFlightNotice()
 }
 
 func (a *App) backendWorkspaceSwitchBindingFailureNotice() string {
-	if a != nil && a.isClaudeBackend() {
-		return "。自动绑定会话失败，可稍后重试。"
-	}
-	return "。自动绑定 thread 失败，可稍后重试。"
+	return a.backendConfiguration().workspaceSwitchBindingFailureNotice()
 }
 
 func (a *App) backendWorkspaceSwitchBindingNotice(binding *workspaceThreadBinding) string {
-	if binding != nil && binding.Resumed {
-		if a != nil && a.isClaudeBackend() {
-			return "。已自动恢复该工作区最近使用的会话。"
-		}
-		return "。已自动恢复该工作区最近使用的线程。"
-	}
-	if a != nil && a.isClaudeBackend() {
-		return "。已自动创建新会话。"
-	}
-	return "。已自动创建新线程。"
+	return a.backendConfiguration().workspaceSwitchBindingNotice(binding)
 }
 
 func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
-	if a != nil && a.isClaudeBackend() {
-		return a.renderClaudeModelMenuCard(sessionKey)
-	}
-	return a.renderCodexModelMenuCard(sessionKey)
+	return a.backendConfiguration().renderModelMenuCard(sessionKey)
 }
 
 func (a *App) renderClaudeModelMenuCard(sessionKey string) map[string]any {
@@ -178,10 +96,7 @@ func (a *App) renderCodexModelMenuCard(sessionKey string) map[string]any {
 }
 
 func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	if a != nil && a.isClaudeBackend() {
-		return a.completeClaudeModelSet(action, modelID)
-	}
-	return a.completeCodexGlobalModelSet(action, modelID)
+	return a.backendConfiguration().completeGlobalModelSet(action, modelID)
 }
 
 func (a *App) completeCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -208,10 +123,7 @@ func (a *App) completeCodexGlobalModelSet(action *feishu.CardAction, modelID str
 }
 
 func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	if a != nil && a.isClaudeBackend() {
-		return a.completeClaudeEffortSet(action, reasoningEffort)
-	}
-	return a.completeCodexGlobalReasoningEffortSet(action, reasoningEffort)
+	return a.backendConfiguration().completeGlobalReasoningEffortSet(action, reasoningEffort)
 }
 
 func (a *App) completeCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
@@ -242,10 +154,7 @@ func (a *App) completeCodexGlobalReasoningEffortSet(action *feishu.CardAction, r
 }
 
 func (a *App) statusCardBody(sess *state.Session) string {
-	if a != nil && a.isClaudeBackend() {
-		return a.renderClaudeStatusBody(sess)
-	}
-	return a.renderCodexStatusBody(sess)
+	return a.backendConfiguration().statusCardBody(sess)
 }
 
 func (a *App) renderClaudeStatusBody(sess *state.Session) string {
