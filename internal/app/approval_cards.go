@@ -1,13 +1,10 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
-	"time"
 
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string) {
@@ -15,7 +12,6 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 }
 
 func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string, requestPayload map[string]any) {
-	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for approval")
@@ -24,33 +20,28 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 	requestKey := requestIDKey(requestID)
 	buttons := approvalButtons(kind, requestKey, requestPayload)
 	card := a.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
+	payload := map[string]any{}
+	if strings.TrimSpace(body) != "" {
+		payload["body"] = body
+	}
+	if len(requestPayload) > 0 {
+		payload["request"] = requestPayload
+	}
+	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: requestIDStored(requestID),
+		backend:         backendCodex,
+		kind:            kind,
+		sessionKey:      sessionKey,
+		threadID:        threadID,
+		turnID:          turnID,
+		itemID:          itemID,
+		ownerUserID:     sub.UserID,
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_approval",
+		linkKind:        "approval_card",
+	})
 	if err == nil {
-		a.recordMessageLink(msgID, "approval_card", sub, requestKey)
-		payload := map[string]any{}
-		if strings.TrimSpace(body) != "" {
-			payload["body"] = body
-		}
-		if len(requestPayload) > 0 {
-			payload["request"] = requestPayload
-		}
-		_ = appState.savePending(&state.PendingRequest{
-			ID:           requestKey,
-			RequestIDRaw: requestIDStored(requestID),
-			Backend:      backendCodex,
-			Kind:         kind,
-			SessionKey:   sessionKey,
-			ThreadID:     threadID,
-			TurnID:       turnID,
-			ItemID:       itemID,
-			OwnerUserID:  sub.UserID,
-			FeishuMsgID:  msgID,
-			PayloadJSON:  mustJSON(payload),
-			Status:       "pending",
-			CreatedAt:    time.Now().Unix(),
-			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
-		})
-		_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
@@ -61,7 +52,6 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 }
 
 func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any, requestPayload map[string]any) {
-	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for permissions approval")
@@ -72,40 +62,34 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 		{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
 		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
 	})
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
+	payload := map[string]any{"permissions": permissions}
+	if strings.TrimSpace(body) != "" {
+		payload["body"] = body
+	}
+	if len(requestPayload) > 0 {
+		payload["request"] = requestPayload
+	}
+	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: requestIDStored(requestID),
+		backend:         backendCodex,
+		kind:            "permissions",
+		sessionKey:      sessionKey,
+		threadID:        threadID,
+		turnID:          turnID,
+		itemID:          itemID,
+		ownerUserID:     sub.UserID,
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_approval",
+		linkKind:        "permissions_card",
+	})
 	if err == nil {
-		a.recordMessageLink(msgID, "permissions_card", sub, requestKey)
-		payload := map[string]any{"permissions": permissions}
-		if strings.TrimSpace(body) != "" {
-			payload["body"] = body
-		}
-		if len(requestPayload) > 0 {
-			payload["request"] = requestPayload
-		}
-		_ = appState.savePending(&state.PendingRequest{
-			ID:           requestKey,
-			RequestIDRaw: requestIDStored(requestID),
-			Backend:      backendCodex,
-			Kind:         "permissions",
-			SessionKey:   sessionKey,
-			ThreadID:     threadID,
-			TurnID:       turnID,
-			ItemID:       itemID,
-			OwnerUserID:  sub.UserID,
-			FeishuMsgID:  msgID,
-			PayloadJSON:  mustJSON(payload),
-			Status:       "pending",
-			CreatedAt:    time.Now().Unix(),
-			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
-		})
-		_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
 }
 
 func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
-	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil || len(payload.Questions) == 0 {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
@@ -126,27 +110,22 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 		})
 	}
 	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
+	requestKey := requestIDKey(requestID)
+	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: requestIDStored(requestID),
+		backend:         backendCodex,
+		kind:            "tool_request_user_input",
+		sessionKey:      sessionKey,
+		threadID:        payload.ThreadID,
+		turnID:          payload.TurnID,
+		itemID:          payload.ItemID,
+		ownerUserID:     sub.UserID,
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_user_input",
+		linkKind:        "user_input_card",
+	})
 	if err == nil {
-		requestKey := requestIDKey(requestID)
-		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
-		_ = appState.savePending(&state.PendingRequest{
-			ID:           requestKey,
-			RequestIDRaw: requestIDStored(requestID),
-			Backend:      backendCodex,
-			Kind:         "tool_request_user_input",
-			SessionKey:   sessionKey,
-			ThreadID:     payload.ThreadID,
-			TurnID:       payload.TurnID,
-			ItemID:       payload.ItemID,
-			OwnerUserID:  sub.UserID,
-			FeishuMsgID:  msgID,
-			PayloadJSON:  mustJSON(payload),
-			Status:       "pending",
-			CreatedAt:    time.Now().Unix(),
-			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
-		})
-		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())

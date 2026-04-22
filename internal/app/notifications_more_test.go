@@ -158,7 +158,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("sendApprovalCardWithPayload() cards = %d, want 1", len(ff.sendCards))
 	}
 	pending := a.store.PendingByID("req-1")
-	if pending == nil || pending.Kind != "command" || pending.Status != "pending" {
+	if pending == nil || pending.Kind != "command" || pending.Status != "pending" || pending.Backend != backendCodex {
 		t.Fatalf("approval pending = %+v, want stored command request", pending)
 	}
 	if got := a.store.GetSubmission(sub.ID); got.Status != "waiting_approval" {
@@ -166,7 +166,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	}
 
 	a.sendPermissionsCardWithPayload(json.RawMessage(`"perm-1"`), "thread-1", "turn-1", "item-2", "need perms", map[string]any{"mode": "read"}, map[string]any{"permissions": map[string]any{"mode": "read"}})
-	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Kind != "permissions" {
+	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Kind != "permissions" || pending.Backend != backendCodex {
 		t.Fatalf("permissions pending = %+v, want stored permissions request", pending)
 	}
 
@@ -178,7 +178,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 			{ID: "mode", Question: "Pick one", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 		},
 	})
-	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" {
+	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" || pending.Backend != backendCodex {
 		t.Fatalf("user-input pending = %+v, want stored request", pending)
 	}
 

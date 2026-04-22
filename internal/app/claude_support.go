@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -23,7 +22,6 @@ func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey stri
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude approval delivery unavailable")
 	}
-	appState := a.appState()
 	requestKey := strings.TrimSpace(requestID)
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
@@ -49,29 +47,20 @@ func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey stri
 	}
 
 	card := a.renderApprovalCard(sessionKey, sub, title, "orange", strings.TrimSpace(body), buttons)
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
-	if err != nil {
-		return err
-	}
-	a.recordMessageLink(msgID, "approval_card", sub, requestKey)
-	_ = appState.savePending(&state.PendingRequest{
-		ID:           requestKey,
-		RequestIDRaw: claudeRequestIDStored(requestKey),
-		Backend:      backendClaude,
-		Kind:         strings.TrimSpace(kind),
-		SessionKey:   strings.TrimSpace(sessionKey),
-		ThreadID:     strings.TrimSpace(threadID),
-		TurnID:       strings.TrimSpace(turnID),
-		ItemID:       strings.TrimSpace(itemID),
-		OwnerUserID:  strings.TrimSpace(sub.UserID),
-		FeishuMsgID:  msgID,
-		PayloadJSON:  mustJSON(payload),
-		Status:       "pending",
-		CreatedAt:    time.Now().Unix(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
+	return a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: claudeRequestIDStored(requestKey),
+		backend:         backendClaude,
+		kind:            strings.TrimSpace(kind),
+		sessionKey:      strings.TrimSpace(sessionKey),
+		threadID:        strings.TrimSpace(threadID),
+		turnID:          strings.TrimSpace(turnID),
+		itemID:          strings.TrimSpace(itemID),
+		ownerUserID:     strings.TrimSpace(sub.UserID),
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_approval",
+		linkKind:        "approval_card",
 	})
-	_ = appState.setSubmissionStatus(sub.ID, "waiting_approval")
-	return nil
 }
 
 func claudeApprovalButtons(kind, requestKey, sessionActionLabel string) []feishu.Button {
@@ -191,7 +180,6 @@ func (a *App) sendClaudeUserInputCard(requestID, sessionKey string, sub *state.S
 	if a == nil || a.feishu == nil || sub == nil || len(payload.Questions) == 0 {
 		return fmt.Errorf("claude question delivery unavailable")
 	}
-	appState := a.appState()
 	requestKey := strings.TrimSpace(requestID)
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
@@ -211,71 +199,51 @@ func (a *App) sendClaudeUserInputCard(requestID, sessionKey string, sub *state.S
 		})
 	}
 	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
-	if err != nil {
-		return err
-	}
-	a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
-	_ = appState.savePending(&state.PendingRequest{
-		ID:           requestKey,
-		RequestIDRaw: claudeRequestIDStored(requestKey),
-		Backend:      backendClaude,
-		Kind:         "tool_request_user_input",
-		SessionKey:   strings.TrimSpace(sessionKey),
-		ThreadID:     payload.ThreadID,
-		TurnID:       payload.TurnID,
-		ItemID:       payload.ItemID,
-		OwnerUserID:  strings.TrimSpace(sub.UserID),
-		FeishuMsgID:  msgID,
-		PayloadJSON:  mustJSON(payload),
-		Status:       "pending",
-		CreatedAt:    time.Now().Unix(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
+	return a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: claudeRequestIDStored(requestKey),
+		backend:         backendClaude,
+		kind:            "tool_request_user_input",
+		sessionKey:      strings.TrimSpace(sessionKey),
+		threadID:        payload.ThreadID,
+		turnID:          payload.TurnID,
+		itemID:          payload.ItemID,
+		ownerUserID:     strings.TrimSpace(sub.UserID),
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_user_input",
+		linkKind:        "user_input_card",
 	})
-	_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-	return nil
 }
 
 func (a *App) sendClaudeUserInputFormCard(requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude question delivery unavailable")
 	}
-	appState := a.appState()
 	requestKey := strings.TrimSpace(requestID)
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
 	}
 	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
-	if err != nil {
-		return err
-	}
-	a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
-	_ = appState.savePending(&state.PendingRequest{
-		ID:           requestKey,
-		RequestIDRaw: claudeRequestIDStored(requestKey),
-		Backend:      backendClaude,
-		Kind:         "tool_request_user_input_form",
-		SessionKey:   strings.TrimSpace(sessionKey),
-		ThreadID:     payload.ThreadID,
-		TurnID:       payload.TurnID,
-		ItemID:       payload.ItemID,
-		OwnerUserID:  strings.TrimSpace(sub.UserID),
-		FeishuMsgID:  msgID,
-		PayloadJSON:  mustJSON(payload),
-		Status:       "pending",
-		CreatedAt:    time.Now().Unix(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
+	return a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: claudeRequestIDStored(requestKey),
+		backend:         backendClaude,
+		kind:            "tool_request_user_input_form",
+		sessionKey:      strings.TrimSpace(sessionKey),
+		threadID:        payload.ThreadID,
+		turnID:          payload.TurnID,
+		itemID:          payload.ItemID,
+		ownerUserID:     strings.TrimSpace(sub.UserID),
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_user_input",
+		linkKind:        "user_input_card",
 	})
-	_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-	return nil
 }
 
 func (a *App) sendClaudePlanModeCard(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude plan confirmation unavailable")
 	}
-	appState := a.appState()
 	requestKey := strings.TrimSpace(requestID)
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
@@ -283,29 +251,20 @@ func (a *App) sendClaudePlanModeCard(requestID, sessionKey string, sub *state.Su
 	card := a.feishu.SimpleStatusCard("Claude 计划确认", "orange", prependAttentionMentionMarkdown(strings.TrimSpace(body), sub.UserID), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
-	if err != nil {
-		return err
-	}
-	a.recordMessageLink(msgID, "claude_plan_card", sub, requestKey)
-	_ = appState.savePending(&state.PendingRequest{
-		ID:           requestKey,
-		RequestIDRaw: claudeRequestIDStored(requestKey),
-		Backend:      backendClaude,
-		Kind:         claudePlanModePendingKind,
-		SessionKey:   strings.TrimSpace(sessionKey),
-		ThreadID:     strings.TrimSpace(threadID),
-		TurnID:       strings.TrimSpace(turnID),
-		ItemID:       requestKey,
-		OwnerUserID:  strings.TrimSpace(sub.UserID),
-		FeishuMsgID:  msgID,
-		PayloadJSON:  mustJSON(map[string]any{"body": strings.TrimSpace(body)}),
-		Status:       "pending",
-		CreatedAt:    time.Now().Unix(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
+	return a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: claudeRequestIDStored(requestKey),
+		backend:         backendClaude,
+		kind:            claudePlanModePendingKind,
+		sessionKey:      strings.TrimSpace(sessionKey),
+		threadID:        strings.TrimSpace(threadID),
+		turnID:          strings.TrimSpace(turnID),
+		itemID:          requestKey,
+		ownerUserID:     strings.TrimSpace(sub.UserID),
+		payloadJSON:     mustJSON(map[string]any{"body": strings.TrimSpace(body)}),
+		waitingStatus:   "waiting_user_input",
+		linkKind:        "claude_plan_card",
 	})
-	_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
-	return nil
 }
 
 func claudeApprovalResolutionForAction(actionName string) (claudeApprovalResolution, string) {

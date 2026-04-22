@@ -832,6 +832,45 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	}
 }
 
+func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+
+	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
+
+	if err := a.sendClaudeApprovalCardWithPayload(
+		"command",
+		"approve-card-1",
+		"sess-1",
+		sub,
+		"claude-thread-1",
+		"claude-turn-1",
+		"item-1",
+		"需要审批",
+		map[string]any{"command": "pwd"},
+		"允许本会话",
+	); err != nil {
+		t.Fatalf("sendClaudeApprovalCardWithPayload() error = %v", err)
+	}
+	if pending := a.store.PendingByID("approve-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != "command" || pending.Status != "pending" {
+		t.Fatalf("approval pending = %+v, want Claude pending command", pending)
+	}
+
+	if err := a.sendClaudePlanModeCard("plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
+		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
+	}
+	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
+		t.Fatalf("plan pending = %+v, want Claude plan pending", pending)
+	}
+	if len(ff.sendCards) != 2 {
+		t.Fatalf("sendCards = %d, want 2", len(ff.sendCards))
+	}
+	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_user_input" {
+		t.Fatalf("submission after Claude pending cards = %+v, want waiting_user_input", updated)
+	}
+}
+
 func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude

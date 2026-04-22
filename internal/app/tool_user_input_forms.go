@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -18,7 +17,6 @@ type toolUserInputFormDrafts struct {
 }
 
 func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserInputPayload) {
-	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
@@ -26,26 +24,21 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 	}
 	requestKey := requestIDKey(requestID)
 	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
+	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+		requestKey:      requestKey,
+		requestIDStored: requestIDStored(requestID),
+		backend:         backendCodex,
+		kind:            "tool_request_user_input_form",
+		sessionKey:      sessionKey,
+		threadID:        payload.ThreadID,
+		turnID:          payload.TurnID,
+		itemID:          payload.ItemID,
+		ownerUserID:     sub.UserID,
+		payloadJSON:     mustJSON(payload),
+		waitingStatus:   "waiting_user_input",
+		linkKind:        "user_input_card",
+	})
 	if err == nil {
-		a.recordMessageLink(msgID, "user_input_card", sub, requestKey)
-		_ = appState.savePending(&state.PendingRequest{
-			ID:           requestKey,
-			RequestIDRaw: requestIDStored(requestID),
-			Backend:      backendCodex,
-			Kind:         "tool_request_user_input_form",
-			SessionKey:   sessionKey,
-			ThreadID:     payload.ThreadID,
-			TurnID:       payload.TurnID,
-			ItemID:       payload.ItemID,
-			OwnerUserID:  sub.UserID,
-			FeishuMsgID:  msgID,
-			PayloadJSON:  mustJSON(payload),
-			Status:       "pending",
-			CreatedAt:    time.Now().Unix(),
-			ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
-		})
-		_ = appState.setSubmissionStatus(sub.ID, "waiting_user_input")
 		return
 	}
 	_ = a.codex.ReplyError(requestID, -32603, err.Error())
