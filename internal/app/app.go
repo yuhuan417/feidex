@@ -30,6 +30,7 @@ type App struct {
 	started             time.Time
 	deduper             *inboundDeduper
 	backendSwitchMu     sync.Mutex
+	asyncRunner         func(func())
 
 	turnStreamsMu      sync.Mutex
 	turnStreams        map[string]*turnStream
@@ -165,6 +166,17 @@ func (a *App) Stop(ctx context.Context) error {
 		return a.codex.Close()
 	}
 	return nil
+}
+
+func (a *App) runAsync(fn func()) {
+	if fn == nil {
+		return
+	}
+	if a != nil && a.asyncRunner != nil {
+		a.asyncRunner(fn)
+		return
+	}
+	go fn()
 }
 
 func (a *App) buildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {

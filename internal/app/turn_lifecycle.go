@@ -324,7 +324,9 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 				"session_key", sessionKey,
 				"thread_id", updatedSess.ActiveThreadID,
 			)
-			go w.startNextSubmissionAsync(sessionKey, "finishTurn")
+			a.runAsync(func() {
+				w.startNextSubmissionAsync(sessionKey, "finishTurn")
+			})
 		}
 	}
 	a.cleanupSubmissionRuntimeState(sub)

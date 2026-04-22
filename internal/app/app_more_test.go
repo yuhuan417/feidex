@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -475,19 +476,28 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	}
 	ff := &fakeFeishuClient{}
 	fc := &fakeCodexClient{}
+	var asyncWG sync.WaitGroup
 	a := &App{
-		cfg:          loadedCfg,
-		cfgPath:      cfgPath,
-		store:        store,
-		codex:        fc,
-		feishu:       ff,
-		started:      time.Now(),
+		cfg:     loadedCfg,
+		cfgPath: cfgPath,
+		store:   store,
+		codex:   fc,
+		feishu:  ff,
+		started: time.Now(),
+		asyncRunner: func(fn func()) {
+			asyncWG.Add(1)
+			go func() {
+				defer asyncWG.Done()
+				fn()
+			}()
+		},
 		turnStreams:  map[string]*turnStream{},
 		liveThreads:  map[string]string{},
 		turnBindings: map[string]turnBinding{},
 		pendingTurns: map[string][]turnBinding{},
 		claudeUsage:  map[string]claudeThreadUsageSnapshot{},
 	}
+	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc
 }
 

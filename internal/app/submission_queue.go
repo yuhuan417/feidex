@@ -211,7 +211,9 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 	}
 	a.cleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
-		go w.startNextSubmissionAsync(sessionKey, "turnStartFailed")
+		a.runAsync(func() {
+			w.startNextSubmissionAsync(sessionKey, "turnStartFailed")
+		})
 	}
 }
 
