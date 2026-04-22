@@ -103,11 +103,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 	if store == nil {
 		return nil, fmt.Errorf("nil store")
 	}
-	var codexClient codexClient
 	backend := normalizeRuntimeBackend(frontend.Backend)
-	if backend == backendCodex {
-		codexClient = newCodexClient(cfg.Codex)
-	}
 	feishuClient := wrapFeishuClient(newFeishuClient(frontend.Feishu))
 	app := &App{
 		cfg:                 cfg,
@@ -116,7 +112,6 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		frontendID:          strings.TrimSpace(frontend.ID),
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
-		codex:               codexClient,
 		feishu:              feishuClient,
 		started:             time.Now(),
 		deduper:             newInboundDeduper(),
@@ -131,11 +126,12 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		finalCardPatches:    map[string]*finalCardPatchState{},
 		pendingSkills:       map[string]state.SubmissionSkill{},
 	}
-	if codexClient != nil {
-		app.configureCodexClientRuntime(codexClient)
-	}
-	if backend == backendClaude {
-		app.claude = newClaudeCore(app, cfg.Claude)
+	if backend != "" {
+		handle, err := app.buildBackendRuntimeHandle(backend)
+		if err != nil {
+			return nil, err
+		}
+		handle.install(app)
 	}
 	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
 	app.feishu.ConfigureLocalFileLinks("", "")
@@ -159,13 +155,10 @@ func (a *App) Start(ctx context.Context) error {
 
 func (a *App) Stop(ctx context.Context) error {
 	a.feishu.Stop()
-	if a.claude != nil {
-		_ = a.claude.Close()
+	if a == nil {
+		return nil
 	}
-	if a.codex != nil {
-		return a.codex.Close()
-	}
-	return nil
+	return a.currentBackendRuntimeHandle().close()
 }
 
 func (a *App) runAsync(fn func()) {

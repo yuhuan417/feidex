@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -26,48 +25,15 @@ func (a *App) configureCodexClientRuntime(client codexClient) {
 }
 
 func (a *App) handleCodexTransportError(err error) {
-	if a == nil {
-		return
+	if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
+		runtime.handleTransportFailure(a, "", "", err)
 	}
-	message := backendTransportFailureMessage(backendCodex, err)
-	slog.Error("codex backend transport failed",
-		"frontend_id", a.frontendID,
-		"error", err,
-	)
-	go a.failBackendActiveWork(backendCodex, "", "", message)
 }
 
 func (a *App) failClaudeSessionActiveWork(sessionKey, threadID string, err error) {
-	if a == nil {
-		return
+	if runtime := backendRuntimeForKind(backendClaude); runtime != nil {
+		runtime.handleTransportFailure(a, sessionKey, threadID, err)
 	}
-	sessionKey = strings.TrimSpace(sessionKey)
-	threadID = strings.TrimSpace(threadID)
-	if sessionKey == "" && threadID == "" {
-		return
-	}
-	message := backendTransportFailureMessage(backendClaude, err)
-	slog.Warn("claude session failed",
-		"session_key", sessionKey,
-		"thread_id", threadID,
-		"error", err,
-	)
-	a.failBackendActiveWork(backendClaude, sessionKey, threadID, message)
-}
-
-func backendTransportFailureMessage(backend string, err error) string {
-	label := "后端异常结束"
-	switch normalizeRuntimeBackend(backend) {
-	case backendClaude:
-		label = "Claude 会话异常结束"
-	case backendCodex:
-		label = "Codex 后端异常退出"
-	}
-	detail := strings.TrimSpace(errorText(err))
-	if detail == "" {
-		return label + "。"
-	}
-	return label + "：" + detail
 }
 
 func errorText(err error) string {

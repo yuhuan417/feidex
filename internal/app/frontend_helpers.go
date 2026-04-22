@@ -9,10 +9,10 @@ import (
 )
 
 func (a *App) startBackend(ctx context.Context) error {
-	if a == nil || a.codex == nil {
+	if a == nil {
 		return nil
 	}
-	return a.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI)
+	return a.startPreparedBackendRuntime(ctx, a.currentBackendRuntimeHandle())
 }
 
 func (a *App) startFrontend(ctx context.Context) error {

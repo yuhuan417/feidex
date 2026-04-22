@@ -7,26 +7,15 @@ import (
 )
 
 func (a *App) handleBackendMaintenanceBlock(raw string) error {
-	switch a.configuredBackend() {
-	case backendCodex:
-		return a.codexMaintenanceBlocksCommand(raw)
-	case backendClaude:
-		return a.claudeMaintenanceBlocksCommand(raw)
-	default:
-		return nil
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.maintenanceBlocksCommand(a, raw)
 	}
+	return nil
 }
 
 func (a *App) backendMaintenanceBlocksInboundMessage() error {
-	switch a.configuredBackend() {
-	case backendCodex:
-		if a.codexMaintenanceActive() {
-			return errString("Codex 正在维护中，当前只允许 `/codex`、`/status`、`/help`")
-		}
-	case backendClaude:
-		if a.claudeMaintenanceActive() {
-			return errString("Claude 正在维护中，当前只允许 `/claude`、`/status`、`/help`")
-		}
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.maintenanceBlocksCommand(a, "")
 	}
 	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -25,35 +24,31 @@ type availableBackend struct {
 }
 
 func backendDisplayName(backend string) string {
-	switch normalizeRuntimeBackend(backend) {
-	case backendCodex:
-		return "Codex"
-	case backendClaude:
-		return "Claude"
-	default:
-		return "未设置"
+	if runtime := backendRuntimeForKind(backend); runtime != nil {
+		return runtime.displayName()
 	}
+	return "未设置"
 }
 
 func (a *App) availableBackends() []availableBackend {
 	if a == nil || a.cfg == nil {
 		return nil
 	}
-	candidates := []availableBackend{
-		{Kind: backendCodex, Command: strings.TrimSpace(a.cfg.Codex.Command)},
-		{Kind: backendClaude, Command: strings.TrimSpace(a.cfg.Claude.Command)},
-	}
-	out := make([]availableBackend, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate.Command == "" {
+	out := make([]availableBackend, 0, 2)
+	for _, runtime := range backendRuntimeFacades() {
+		command := runtime.configuredCommand(a)
+		if command == "" {
 			continue
 		}
-		path, err := backendLookPath(candidate.Command)
+		path, err := backendLookPath(command)
 		if err != nil {
 			continue
 		}
-		candidate.Path = path
-		out = append(out, candidate)
+		out = append(out, availableBackend{
+			Kind:    runtime.kind(),
+			Command: command,
+			Path:    path,
+		})
 	}
 	return out
 }
@@ -242,14 +237,10 @@ func (a *App) completeBackendSelect(action *feishu.CardAction, sessionKey, targe
 }
 
 func (a *App) backendRuntimeReady(target string) bool {
-	switch normalizeRuntimeBackend(target) {
-	case backendCodex:
-		return a != nil && a.codex != nil
-	case backendClaude:
-		return a != nil && a.claude != nil
-	default:
-		return false
+	if runtime := backendRuntimeForKind(target); runtime != nil {
+		return runtime.runtimeReady(a)
 	}
+	return false
 }
 
 func (a *App) backendSwitchBlockedReason() string {
@@ -281,69 +272,31 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 	}
 
 	nextSessions := a.frontendSessionsAfterBackendSwitch(current, target)
-	newCodex, newClaude, err := a.prepareBackendRuntime(ctx, target)
+	newHandle, err := a.prepareBackendRuntime(ctx, target)
 	if err != nil {
 		return err
 	}
 
-	oldCodex := a.codex
-	oldClaude := a.claude
+	oldHandle := a.currentBackendRuntimeHandle()
 	oldBackend := a.backend
 	if err := a.setConfiguredBackend(target); err != nil {
-		if newClaude != nil {
-			_ = newClaude.Close()
-		}
-		if newCodex != nil {
-			_ = newCodex.Close()
-		}
+		_ = newHandle.close()
 		return err
 	}
 
-	a.backend = target
-	a.codex = newCodex
-	a.claude = newClaude
+	newHandle.install(a)
 	for _, sess := range nextSessions {
 		if err := a.store.UpsertSession(sess); err != nil {
+			oldHandle.install(a)
 			a.backend = oldBackend
-			a.codex = oldCodex
-			a.claude = oldClaude
 			_ = a.setConfiguredBackend(current)
-			if newClaude != nil {
-				_ = newClaude.Close()
-			}
-			if newCodex != nil {
-				_ = newCodex.Close()
-			}
+			_ = newHandle.close()
 			return err
 		}
 	}
 	a.recoverFrontendRuntimeState()
-	if oldClaude != nil {
-		_ = oldClaude.Close()
-	}
-	if oldCodex != nil {
-		_ = oldCodex.Close()
-	}
+	_ = oldHandle.close()
 	return nil
-}
-
-func (a *App) prepareBackendRuntime(ctx context.Context, target string) (codexClient, claudeCore, error) {
-	switch normalizeRuntimeBackend(target) {
-	case backendCodex:
-		client := newCodexClient(a.cfg.Codex)
-		a.configureCodexClientRuntime(client)
-		startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		if err := client.Start(startCtx, a.cfg.Codex.ExperimentalAPI); err != nil {
-			_ = client.Close()
-			return nil, nil, err
-		}
-		return client, nil, nil
-	case backendClaude:
-		return nil, newClaudeCore(a, a.cfg.Claude), nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported backend %q", target)
-	}
 }
 
 func (a *App) frontendSessionsAfterBackendSwitch(current, target string) []*state.Session {
