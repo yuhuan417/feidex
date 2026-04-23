@@ -1,0 +1,96 @@
+package app
+
+import (
+	"strings"
+
+	"feidex/internal/feishu"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
+)
+
+func reviewAsyncButtons(sessionKey, retryAction string) []feishu.Button {
+	buttons := []feishu.Button{}
+	if strings.TrimSpace(retryAction) != "" {
+		buttons = append(buttons, feishu.Button{
+			Text: "重试",
+			Type: "primary",
+			Value: map[string]any{
+				"action":      retryAction,
+				"session_key": sessionKey,
+			},
+		})
+	}
+	buttons = append(buttons, feishu.Button{
+		Text: "返回代码审查",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.review",
+			"session_key": sessionKey,
+		},
+	})
+	return buttons
+}
+
+func (a *App) renderReviewPreparingCard(sessionKey, body string) map[string]any {
+	return a.feishu.SimpleStatusCard("代码审查", "blue", menuCardBody("menu.review", strings.TrimSpace(body)), nil)
+}
+
+func (a *App) renderReviewFailureCard(sessionKey, errText, retryAction string) map[string]any {
+	body := "这次 review 操作失败了。"
+	if text := strings.TrimSpace(errText); text != "" {
+		body += "\n\n错误: " + text
+	}
+	return a.feishu.SimpleStatusCard("代码审查", "orange", menuCardBody("menu.review", body), reviewAsyncButtons(sessionKey, retryAction))
+}
+
+func (a *App) renderReviewResultCard(sessionKey, text string) map[string]any {
+	return a.feishu.SimpleStatusCard("代码审查", "green", menuCardBody("menu.review", firstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
+}
+
+func (a *App) completeMenuReviewUncommitted(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeAsyncCommandAction(
+		action,
+		sessionKey,
+		"/review",
+		"menu.review",
+		"正在准备 review",
+		a.renderReviewPreparingCard(sessionKey, "正在准备 review，请稍候。\n\n这张卡片会自动刷新。"),
+		a.renderReviewResultCard,
+		func(sessionKey, errText string) map[string]any {
+			return a.renderReviewFailureCard(sessionKey, errText, "menu.review.uncommitted")
+		},
+		"review uncommitted patch failed",
+	)
+}
+
+func (a *App) completeMenuReviewBase(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeAsyncCommandAction(
+		action,
+		sessionKey,
+		"/review base",
+		"menu.review",
+		"正在加载 review 表单",
+		a.renderReviewPreparingCard(sessionKey, "正在加载 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		nil,
+		func(sessionKey, errText string) map[string]any {
+			return a.renderReviewFailureCard(sessionKey, errText, "menu.review.base")
+		},
+		"review base patch failed",
+	)
+}
+
+func (a *App) completeMenuReviewCommit(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.completeAsyncCommandAction(
+		action,
+		sessionKey,
+		"/review commit",
+		"menu.review",
+		"正在加载 review 表单",
+		a.renderReviewPreparingCard(sessionKey, "正在加载 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		nil,
+		func(sessionKey, errText string) map[string]any {
+			return a.renderReviewFailureCard(sessionKey, errText, "menu.review.commit")
+		},
+		"review commit patch failed",
+	)
+}

@@ -30,26 +30,17 @@ func (a *App) completeMaintenanceAsyncAction(
 	patchWarnMsg string,
 ) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	messageID := strings.TrimSpace(action.MessageID)
-	if messageID == "" {
-		return a.completeMenuCommand(action, sessionKey, rawCommand, "menu.group.system")
-	}
-	go func() {
-		_, card, err := a.runCommandFromCardAction(action, sessionKey, rawCommand)
-		if err != nil {
-			card = failureCard(sessionKey, err.Error())
-		} else if card == nil {
-			card = failureCard(sessionKey, "命令没有返回卡片")
-		}
-		a.patchMaintenanceCard(messageID, card, patchWarnMsg,
-			"session_key", sessionKey,
-			"message_id", messageID,
-		)
-	}()
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: toastText},
-		Card:  rawCard(preparingCard(sessionKey)),
-	}, nil
+	return a.completeAsyncCommandAction(
+		action,
+		sessionKey,
+		rawCommand,
+		"menu.group.system",
+		toastText,
+		preparingCard(sessionKey),
+		nil,
+		failureCard,
+		patchWarnMsg,
+	)
 }
 
 func (a *App) maintenanceFallbackResponse(

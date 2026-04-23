@@ -325,6 +325,7 @@ Rules:
 - Do not perform blocking network I/O directly inside a card callback.
 - Do not run long local processes directly inside a card callback, including `git clone`, `git fetch`, archive extraction, large directory scans, or similar work.
 - Do not start long Codex or other multi-step workflows directly inside a card callback when the first user-visible response can be returned earlier.
+- When auditing a card action, trace only until the first async boundary. If the synchronous path runs `git`, external network I/O, real Feishu API calls, or potentially long backend runtime work inline, treat it as heavy and move it out of the callback path. See `docs/feishu-card-callback-latency-audit.md` for the current classification examples.
 - Card callbacks may validate input, update pending state, enqueue work, and return a toast or replacement card.
 - Heavy work must move to an async path: enqueue background work first, acknowledge the callback immediately, then patch the card or send a follow-up message when the background step finishes.
 - If a new card action can sometimes be fast but can also block on network, disk, subprocesses, or external services, treat it as heavy and keep it out of the callback path.

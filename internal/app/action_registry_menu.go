@@ -44,13 +44,13 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return a.completeMenuReview(action, actionSessionKey(action))
 	},
 	"menu.review.uncommitted": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeMenuCommand(action, actionSessionKey(action), "/review", "menu.review")
+		return a.completeMenuReviewUncommitted(action, actionSessionKey(action))
 	},
 	"menu.review.base": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeMenuCommand(action, actionSessionKey(action), "/review base", "menu.review")
+		return a.completeMenuReviewBase(action, actionSessionKey(action))
 	},
 	"menu.review.commit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeMenuCommand(action, actionSessionKey(action), "/review commit", "menu.review")
+		return a.completeMenuReviewCommit(action, actionSessionKey(action))
 	},
 	"menu.review.custom": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuCommand(action, actionSessionKey(action), "/review custom", "menu.review")
