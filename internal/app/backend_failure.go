@@ -19,15 +19,27 @@ func (a *App) configureCodexClientRuntime(client codexClient) {
 	client.SetHandlers(a.handleNotification, a.handleServerRequest)
 	if aware, ok := client.(codexErrorAware); ok {
 		aware.SetErrorHandler(func(err error) {
-			a.handleCodexTransportError(err)
+			a.handleCodexTransportError(client, err)
 		})
 	}
 }
 
-func (a *App) handleCodexTransportError(err error) {
-	if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
-		runtime.handleTransportFailure(a, "", "", err)
+func (a *App) handleCodexTransportError(client codexClient, err error) {
+	if a == nil || !a.beginCodexTransportRecovery(client) {
+		return
 	}
+	message := backendTransportFailureMessage(backendCodex, err)
+	slog.Error("codex backend transport failed",
+		"frontend_id", a.frontendID,
+		"error", err,
+	)
+	a.resetLiveThreadState()
+	a.runAsync(func() {
+		a.failBackendActiveWork(backendCodex, "", "", message)
+	})
+	a.runAsync(func() {
+		a.recoverCodexRuntimeAfterTransportFailure(client)
+	})
 }
 
 func (a *App) failClaudeSessionActiveWork(sessionKey, threadID string, err error) {

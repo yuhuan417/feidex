@@ -242,6 +242,13 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		)
 		return nil
 	}
+	if !a.isClaudeBackend() && a.codexRuntimeRecovering() {
+		slog.Debug("startNextSubmission deferred",
+			"session_key", sessionKey,
+			"reason", "codex_runtime_recovering",
+		)
+		return nil
+	}
 	subID, err := appState.dequeueSubmission(sessionKey)
 	if err != nil || subID == "" {
 		slog.Debug("startNextSubmission no queued item",

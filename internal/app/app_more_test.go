@@ -23,13 +23,14 @@ import (
 )
 
 type fakeCodexClient struct {
-	startErr error
-	closeErr error
-	callErr  error
-	replyErr error
-	started  bool
-	closed   bool
-	replies  []struct {
+	startErr  error
+	closeErr  error
+	callErr   error
+	replyErr  error
+	started   bool
+	closed    bool
+	startHook func(context.Context, bool) error
+	replies   []struct {
 		id     json.RawMessage
 		result any
 	}
@@ -167,8 +168,11 @@ func (f *fakeCodexClient) SetErrorHandler(onError func(error)) {
 	f.onError = onError
 }
 
-func (f *fakeCodexClient) Start(context.Context, bool) error {
+func (f *fakeCodexClient) Start(ctx context.Context, experimentalAPI bool) error {
 	f.started = true
+	if f.startHook != nil {
+		return f.startHook(ctx, experimentalAPI)
+	}
 	return f.startErr
 }
 

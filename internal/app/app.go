@@ -31,30 +31,33 @@ type App struct {
 	deduper             *inboundDeduper
 	backendSwitchMu     sync.Mutex
 	asyncRunner         func(func())
+	codexRuntimeMu      sync.Mutex
+	codexRecovering     bool
+	codexRecoverySource codexClient
 
-	turnStreamsMu      sync.Mutex
-	turnStreams        map[string]*turnStream
-	turnItemsMu        sync.Mutex
-	turnItems          map[string]*turnItemState
-	workspaceCloneMu   sync.Mutex
-	workspaceCloneOps  map[string]*workspaceCloneOperation
-	liveThreadMu       sync.Mutex
-	liveThreads        map[string]string
-	turnBindMu         sync.Mutex
-	turnBindings       map[string]turnBinding
-	pendingTurns       map[string][]turnBinding
-	threadUsage        map[string]codexrpc.ThreadTokenUsage
-	claudeUsage        map[string]claudeThreadUsageSnapshot
-	finalCardPatchMu   sync.Mutex
-	finalCardPatches   map[string]*finalCardPatchState
-	skillsMu           sync.Mutex
-	pendingSkills      map[string]state.SubmissionSkill
-	codexUpgradeMu     sync.Mutex
-	codexUpgrade       codexUpgradeSnapshot
-	codexRestart       codexRestartSnapshot
-	claudeUpgradeMu    sync.Mutex
-	claudeUpgrade      claudeUpgradeSnapshot
-	claudeRestart      claudeRestartSnapshot
+	turnStreamsMu     sync.Mutex
+	turnStreams       map[string]*turnStream
+	turnItemsMu       sync.Mutex
+	turnItems         map[string]*turnItemState
+	workspaceCloneMu  sync.Mutex
+	workspaceCloneOps map[string]*workspaceCloneOperation
+	liveThreadMu      sync.Mutex
+	liveThreads       map[string]string
+	turnBindMu        sync.Mutex
+	turnBindings      map[string]turnBinding
+	pendingTurns      map[string][]turnBinding
+	threadUsage       map[string]codexrpc.ThreadTokenUsage
+	claudeUsage       map[string]claudeThreadUsageSnapshot
+	finalCardPatchMu  sync.Mutex
+	finalCardPatches  map[string]*finalCardPatchState
+	skillsMu          sync.Mutex
+	pendingSkills     map[string]state.SubmissionSkill
+	codexUpgradeMu    sync.Mutex
+	codexUpgrade      codexUpgradeSnapshot
+	codexRestart      codexRestartSnapshot
+	claudeUpgradeMu   sync.Mutex
+	claudeUpgrade     claudeUpgradeSnapshot
+	claudeRestart     claudeRestartSnapshot
 }
 
 type turnBinding struct {
