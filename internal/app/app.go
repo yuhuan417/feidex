@@ -35,6 +35,8 @@ type App struct {
 	codexRuntimeMu      sync.Mutex
 	codexRecovering     bool
 	codexRecoverySource codexClient
+	codexAutoThreadMu   sync.Mutex
+	codexAutoThreading  bool
 	frontendRecoveryMu  sync.Mutex
 	backendSwitching    bool
 	backendSwitchTarget string

@@ -29,6 +29,7 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 	if a == nil || !a.beginCodexTransportRecovery(client) {
 		return
 	}
+	skipFrontendRecovery := a.codexAutoThreadRecoveryActive()
 	message := "Codex 后端异常退出。"
 	if detail := strings.TrimSpace(errorText(err)); detail != "" {
 		message = "Codex 后端异常退出：" + detail
@@ -42,7 +43,7 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 		a.failBackendActiveWork(backendCodex, "", "", message)
 	})
 	a.runAsync(func() {
-		a.recoverCodexRuntimeAfterTransportFailure(client)
+		a.recoverCodexRuntimeAfterTransportFailure(client, skipFrontendRecovery)
 	})
 }
 

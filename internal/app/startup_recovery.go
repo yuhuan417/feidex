@@ -71,6 +71,11 @@ func (a *App) recoverFrontendRuntimeState() {
 	if !a.hasConfiguredBackend() {
 		return
 	}
+	endCodexAutoThreadRecovery := func() {}
+	if a.configuredBackend() == backendCodex {
+		endCodexAutoThreadRecovery = a.beginCodexAutoThreadRecoveryScope()
+	}
+	defer endCodexAutoThreadRecovery()
 	a.recoverSessionThreadsOnStartup()
 }
 

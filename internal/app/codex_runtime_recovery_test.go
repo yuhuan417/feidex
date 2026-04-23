@@ -181,3 +181,91 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 		t.Fatalf("submission after deferred start = %+v, want queued", sub)
 	}
 }
+
+func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecoveryFailure(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.configureCodexClientRuntime(fc)
+
+	sessionKey := "sess-auto-thread-recovery"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var initialCallsMu sync.Mutex
+	initialCalls := []string{}
+	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
+		initialCallsMu.Lock()
+		initialCalls = append(initialCalls, method)
+		initialCallsMu.Unlock()
+		if method != "thread/resume" {
+			return nil
+		}
+		if fc.onError == nil {
+			t.Fatal("expected configured codex error handler")
+		}
+		fc.onError(errors.New("codex app-server read failed: read |0: file already closed"))
+		return errors.New("codex app-server read failed: read |0: file already closed")
+	}
+
+	var promotedCallsMu sync.Mutex
+	promotedCalls := []string{}
+	promoted := &fakeCodexClient{
+		callHook: func(_ context.Context, method string, _ any, out any) error {
+			promotedCallsMu.Lock()
+			promotedCalls = append(promotedCalls, method)
+			promotedCallsMu.Unlock()
+			switch method {
+			case "model/list":
+				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+			case "thread/resume":
+				result := out.(*codexrpc.ThreadStartResult)
+				result.Thread.ID = "thread-1"
+			case "thread/start":
+				result := out.(*codexrpc.ThreadStartResult)
+				result.Thread.ID = "thread-new"
+			}
+			return nil
+		},
+	}
+
+	origNewCodex := newCodexClient
+	newCodexClient = func(config.CodexConfig) codexClient { return promoted }
+	defer func() { newCodexClient = origNewCodex }()
+
+	a.recoverFrontendRuntimeState()
+
+	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
+		current, ok := a.currentCodexClient().(*fakeCodexClient)
+		return ok && current == promoted && !a.codexRuntimeRecovering()
+	})
+
+	if !fc.closed {
+		t.Fatal("failed codex client should be closed after recovery")
+	}
+
+	initialCallsMu.Lock()
+	if len(initialCalls) != 1 || initialCalls[0] != "thread/resume" {
+		t.Fatalf("initial startup recovery calls = %+v, want only thread/resume", initialCalls)
+	}
+	initialCallsMu.Unlock()
+
+	promotedCallsMu.Lock()
+	if len(promotedCalls) != 1 || promotedCalls[0] != "model/list" {
+		t.Fatalf("promoted client calls = %+v, want only model/list", promotedCalls)
+	}
+	promotedCallsMu.Unlock()
+
+	if a.sessionHasLiveThread(sessionKey, "thread-1") {
+		t.Fatal("unexpected live-thread mark after skipped frontend thread recovery")
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.Status != "idle" {
+		t.Fatalf("session after skipped frontend thread recovery = %+v", sess)
+	}
+}

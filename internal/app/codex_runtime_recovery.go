@@ -91,7 +91,30 @@ func (a *App) completeCodexTransportRecovery(next codexClient) bool {
 	return next != nil
 }
 
-func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient) {
+func (a *App) beginCodexAutoThreadRecoveryScope() func() {
+	if a == nil {
+		return func() {}
+	}
+	a.codexAutoThreadMu.Lock()
+	a.codexAutoThreading = true
+	a.codexAutoThreadMu.Unlock()
+	return func() {
+		a.codexAutoThreadMu.Lock()
+		a.codexAutoThreading = false
+		a.codexAutoThreadMu.Unlock()
+	}
+}
+
+func (a *App) codexAutoThreadRecoveryActive() bool {
+	if a == nil {
+		return false
+	}
+	a.codexAutoThreadMu.Lock()
+	defer a.codexAutoThreadMu.Unlock()
+	return a.codexAutoThreading
+}
+
+func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient, skipFrontendRecovery bool) {
 	if a == nil {
 		return
 	}
@@ -124,8 +147,11 @@ func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient) {
 	}
 	slog.Info("codex runtime recovered",
 		"frontend_id", a.frontendID,
+		"frontend_thread_recovery_skipped", skipFrontendRecovery,
 	)
-	a.recoverFrontendRuntimeState()
+	if !skipFrontendRecovery {
+		a.recoverFrontendRuntimeState()
+	}
 	a.resumeQueuedFrontendSessionsAfterCodexRecovery()
 }
 
