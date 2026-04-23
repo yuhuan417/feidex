@@ -252,8 +252,12 @@ func renderThreadSettingValue(override, fallback string) string {
 
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := a.makeSessionKey(msg)
-	sess := a.appState().session(sessionKey)
 	discarded := a.discardSessionPendingInputs(sessionKey)
+	sess := a.appState().session(sessionKey)
+	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
+	if sess == nil {
+		sess = a.appState().session(sessionKey)
+	}
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		if discarded > 0 {
 			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), a.replyInThreadEnabled(msg.ChatType))

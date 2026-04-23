@@ -1,0 +1,69 @@
+package app
+
+import (
+	"context"
+	"log/slog"
+	"strings"
+	"time"
+
+	"feidex/internal/codexrpc"
+	"feidex/internal/state"
+)
+
+func isTerminalTurnStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "completed", "failed", "interrupted":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
+	if a == nil || a.isClaudeBackend() || a.codex == nil || sess == nil {
+		return sess
+	}
+	if !sessionHasInFlightSubmission(sess) {
+		return sess
+	}
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
+	turnID := strings.TrimSpace(sess.ActiveTurnID)
+	if threadID == "" || turnID == "" || !a.turnStreamSawFinal(turnID) {
+		return sess
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var result codexrpc.ThreadReadResult
+	if err := a.codex.Call(ctx, "thread/read", map[string]any{
+		"threadId":     threadID,
+		"includeTurns": true,
+	}, &result); err != nil {
+		slog.Warn("codex terminal turn reconciliation skipped",
+			"session_key", sessionKey,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"error", err,
+		)
+		return sess
+	}
+
+	for _, turn := range result.Thread.Turns {
+		if strings.TrimSpace(turn.ID) != turnID {
+			continue
+		}
+		if !isTerminalTurnStatus(turn.Status) {
+			return sess
+		}
+		slog.Warn("reconciling missed codex turn completion",
+			"session_key", sessionKey,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"status", turn.Status,
+		)
+		a.finishTurn(threadID, turnID, turn.Status)
+		return a.appState().session(sessionKey)
+	}
+	return sess
+}

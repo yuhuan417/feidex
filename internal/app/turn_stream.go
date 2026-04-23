@@ -207,6 +207,16 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	return result
 }
 
+func (a *App) turnStreamSawFinal(turnID string) bool {
+	if a == nil || strings.TrimSpace(turnID) == "" {
+		return false
+	}
+	a.turnStreamsMu.Lock()
+	defer a.turnStreamsMu.Unlock()
+	stream := a.turnStreams[strings.TrimSpace(turnID)]
+	return stream != nil && stream.SentFinal
+}
+
 func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *turnStream {
 	if a.turnStreams == nil {
 		a.turnStreams = map[string]*turnStream{}

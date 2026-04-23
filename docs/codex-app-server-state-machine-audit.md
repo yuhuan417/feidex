@@ -70,7 +70,7 @@
 | `SM-01` | 每条连接只做一次 `initialize -> initialized` 握手 | `internal/codexrpc/client_test.go`、`internal/codexrpc/integration_live_test.go` |
 | `SM-02` | experimental API / opt-out 协商不漂移 | `internal/codexrpc/client_test.go`、`internal/codexrpc/integration_live_test.go` |
 | `SM-03` | `thread/start` 后 thread 元数据与本地 session 绑定不乱 | `internal/codexrpc/integration_live_test.go`、`internal/app/critical_paths_test.go`、`internal/app/critical_paths_more_test.go` |
-| `SM-04` | `turn/start`、`turn/started`、`turn/completed` 与队列恢复不乱序 | `internal/app/critical_paths_test.go`、`internal/app/critical_paths_more_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
+| `SM-04` | `turn/start`、`turn/started`、`turn/completed` 与队列恢复不乱序 | `internal/app/critical_paths_test.go`、`internal/app/critical_paths_more_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/app/codex_turn_recovery_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
 | `SM-05` | `turn/steer` 必须绑定 `expectedTurnId`，reply follow-up 不能误开新 turn | `internal/app/app_more_test.go`、`internal/app/steer_more_test.go`、`internal/codexrpc/integration_live_state_machine_test.go` |
 | `SM-06` | `turn/interrupt` 只请求中断，真正收口仍等 `turn/completed(interrupted)` | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go` |
 | `SM-07` | `error` 只记录失败上下文，不得早于 `turn/completed(failed)` 清 session | `internal/app/state_machine_contracts_test.go`、`internal/app/app_more_test.go` |
@@ -157,11 +157,13 @@
   - `internal/app/turn_item_state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
   - `internal/app/codex_event_router.go:57-87` 消费 `turn/started` 和 `turn/completed`。
   - `internal/app/turn_item_payload.go:21-67` 按 completed item 渲染最终内容。
+  - 当本地已经看到了 final output，但后续缺失 `turn/completed`、导致 session 卡在 in-flight 时，`internal/app/codex_turn_recovery.go` 会在下一次 `enqueue` 或显式 `/stop` 时，通过 `thread/read(includeTurns=true)` 对账该 `turnId` 的服务端终态；只有确认 turn 已进入 `completed|failed|interrupted` 后，才复用现有 `finishTurn` 收口本地状态。
   - `internal/codexrpc/client.go:113-125` 通过 `optOutNotificationMethods` 明确退订当前不接入的 item delta 通知。
 - 差异点:
   - `item/agentMessage/delta`、`item/plan/delta`、`item/commandExecution/outputDelta`、`item/fileChange/outputDelta` 等流式通知被明确视为非目标能力，并通过 opt-out 退订。
   - `item/started` 已经接入，因此 tool approval / file change 这类需要前置 item 上下文的流程，已经不再只依赖 completed item。
   - 当前产品以 started/completed 为唯一消费边界，最终 completed item 仍被完整处理，没有用户可见信息损失。
+  - 主协议边界仍然是 `turn/completed`；`thread/read` 对账只用于 missed notification 后的本地恢复，不把 final item 本身当作终态。
 - 修改建议:
   - 保持现状即可；如果后续仍有其他明确不用消费的流式通知，也可继续加入 opt-out。
 

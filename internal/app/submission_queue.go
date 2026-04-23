@@ -32,6 +32,21 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
+	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
+	if sess == nil {
+		sess = appState.session(sessionKey)
+	}
+	if sess == nil {
+		sess = &state.Session{
+			Key:           sessionKey,
+			WorkspaceID:   a.defaultWorkspaceID(),
+			OwnerUserID:   msg.UserID,
+			ChatID:        msg.ChatID,
+			ChatType:      msg.ChatType,
+			RootMessageID: msg.RootMessageID,
+			Status:        "idle",
+		}
+	}
 	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return err
