@@ -37,10 +37,6 @@ func (a *App) claudeUpgradeState() claudeUpgradeSnapshot {
 	return a.claudeUpgrade
 }
 
-func (a *App) claudeUpgradeActive() bool {
-	return a.claudeUpgradeState().Running
-}
-
 func (a *App) claudeRestartState() claudeRestartSnapshot {
 	if a == nil {
 		return claudeRestartSnapshot{}
@@ -48,10 +44,6 @@ func (a *App) claudeRestartState() claudeRestartSnapshot {
 	a.claudeUpgradeMu.Lock()
 	defer a.claudeUpgradeMu.Unlock()
 	return a.claudeRestart
-}
-
-func (a *App) claudeRestartActive() bool {
-	return a.claudeRestartState().Running
 }
 
 func (a *App) claudeMaintenanceActive() bool {

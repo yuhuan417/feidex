@@ -37,22 +37,6 @@ const (
 	claudePermissionModeBypass      claudePermissionMode = "bypassPermissions"
 )
 
-func configHasBackend(cfg *config.Config, backend string) bool {
-	if cfg == nil {
-		return false
-	}
-	backend = normalizeRuntimeBackend(backend)
-	if backend == "" {
-		return false
-	}
-	for _, frontend := range cfg.ResolvedFrontends() {
-		if normalizeRuntimeBackend(frontend.Backend) == backend {
-			return true
-		}
-	}
-	return false
-}
-
 func normalizeRuntimeBackend(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "":

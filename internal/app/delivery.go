@@ -96,10 +96,6 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	return []string{id}
 }
 
-func (a *App) sendReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool) []sentReplyChunk {
-	return a.sendReplyCardChunksWithReuse(ctx, sub, title, color, chunks, inThread, enablePreview, "")
-}
-
 func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []sentReplyChunk {
 	reuseMessageIDs := []string(nil)
 	if strings.TrimSpace(reuseMessageID) != "" {

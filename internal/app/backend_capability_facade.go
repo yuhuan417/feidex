@@ -16,7 +16,6 @@ const (
 
 type conversationPresentation struct {
 	Slash          string
-	PluralSlash    string
 	Noun           string
 	MenuLabel      string
 	IDLabel        string
@@ -42,7 +41,6 @@ func backendCapabilityForKind(kind string) backendCapabilitySpec {
 			kind: backendClaude,
 			conversation: conversationPresentation{
 				Slash:          "/session",
-				PluralSlash:    "/session list",
 				Noun:           "会话",
 				MenuLabel:      "会话管理",
 				IDLabel:        "session id",
@@ -61,7 +59,6 @@ func backendCapabilityForKind(kind string) backendCapabilitySpec {
 			kind: backendCodex,
 			conversation: conversationPresentation{
 				Slash:          "/thread",
-				PluralSlash:    "/threads",
 				Noun:           "线程",
 				MenuLabel:      "线程管理",
 				IDLabel:        "thread id",
@@ -154,19 +151,6 @@ func backendCommandPolicy(backend string, policy localCommandBackendSpec) map[st
 		return nil
 	}
 	return map[string]localCommandBackendSpec{backend: policy}
-}
-
-func mergeBackendCommandPolicies(policySets ...map[string]localCommandBackendSpec) map[string]localCommandBackendSpec {
-	merged := map[string]localCommandBackendSpec{}
-	for _, policies := range policySets {
-		for backend, policy := range policies {
-			merged[backend] = policy
-		}
-	}
-	if len(merged) == 0 {
-		return nil
-	}
-	return merged
 }
 
 func backendPoliciesForUnsupportedFeature(feature backendFeature) map[string]localCommandBackendSpec {

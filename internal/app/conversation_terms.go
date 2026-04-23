@@ -4,10 +4,6 @@ func primaryConversationSlash(backend string) string {
 	return backendCapabilityForKind(backend).conversation.Slash
 }
 
-func primaryConversationPluralSlash(backend string) string {
-	return backendCapabilityForKind(backend).conversation.PluralSlash
-}
-
 func primaryConversationNoun(backend string) string {
 	return backendCapabilityForKind(backend).conversation.Noun
 }

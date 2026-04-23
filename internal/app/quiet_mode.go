@@ -63,15 +63,6 @@ func quietModeStatusText(mode config.QuietMode) string {
 	return mode.String()
 }
 
-func quietModeDescription(mode config.QuietMode) string {
-	for _, option := range quietModeOptions {
-		if option.Mode == mode {
-			return option.Description
-		}
-	}
-	return ""
-}
-
 func shouldDeliverTurnKindInQuiet(mode config.QuietMode, kind string) bool {
 	switch mode {
 	case config.QuietModeProgress:

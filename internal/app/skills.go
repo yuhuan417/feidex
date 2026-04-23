@@ -158,21 +158,6 @@ func skillDisplayName(skill codexrpc.SkillMetadata) string {
 	return strings.TrimSpace(skill.Name)
 }
 
-func skillSummaryText(skill codexrpc.SkillMetadata) string {
-	for _, candidate := range []string{
-		strings.TrimSpace(skill.Description),
-		strings.TrimSpace(skill.ShortDescription),
-	} {
-		if candidate != "" {
-			return candidate
-		}
-	}
-	if skill.Interface != nil && strings.TrimSpace(skill.Interface.ShortDescription) != "" {
-		return strings.TrimSpace(skill.Interface.ShortDescription)
-	}
-	return "-"
-}
-
 func skillOptionText(skill codexrpc.SkillMetadata) string {
 	label := skillDisplayName(skill)
 	if skill.Name != "" && skill.Name != label {

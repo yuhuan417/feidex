@@ -28,10 +28,6 @@ func (a *App) shouldStageInboundImages(msg *feishu.InboundMessage) bool {
 	return true
 }
 
-func (a *App) stageInboundImages(msg *feishu.InboundMessage) error {
-	return a.stageInboundImagesForSession(msg, a.pendingInputSessionKey(msg))
-}
-
 func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string) error {
 	if msg == nil {
 		return nil

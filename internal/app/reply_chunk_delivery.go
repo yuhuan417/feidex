@@ -94,24 +94,3 @@ func (a *App) sendReplyChunk(ctx context.Context, sub *state.Submission, spec re
 		ShowHeader:  spec.ShowHeader,
 	}, true
 }
-
-func sentReplyChunkMatchesSpec(chunk sentReplyChunk, spec replyChunkRenderSpec) bool {
-	if strings.TrimSpace(chunk.Title) != strings.TrimSpace(spec.Title) {
-		return false
-	}
-	if strings.TrimSpace(chunk.Body) != strings.TrimSpace(spec.Body) {
-		return false
-	}
-	if chunk.ShowHeader != spec.ShowHeader {
-		return false
-	}
-	if len(chunk.FooterLines) != len(spec.FooterLines) {
-		return false
-	}
-	for i := range chunk.FooterLines {
-		if strings.TrimSpace(chunk.FooterLines[i]) != strings.TrimSpace(spec.FooterLines[i]) {
-			return false
-		}
-	}
-	return true
-}

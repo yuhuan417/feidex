@@ -6,11 +6,6 @@ import (
 	"time"
 )
 
-func (a *App) updateClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
-	_, ok := a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, "")
-	return ok
-}
-
 func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]sentReplyChunk, bool) {
 	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, reuseMessageID)
 }
@@ -18,9 +13,6 @@ func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, 
 func (a *App) finalizeClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
 	_, ok := a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true, "")
 	return ok
-}
-
-func (a *App) closeClaudeOutputSegment(threadID, turnID string) {
 }
 
 func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]sentReplyChunk, bool) {

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 func (a *App) startBackend(ctx context.Context) error {
@@ -69,22 +68,6 @@ func (a *App) sessionBelongsToFrontend(sessionKey string) bool {
 		return true
 	}
 	return frontendID == "" && a.allowLegacyFrontendFallback()
-}
-
-func (a *App) pendingBelongsToFrontend(req *state.PendingRequest) bool {
-	if req == nil {
-		return false
-	}
-	if strings.TrimSpace(req.FrontendID) == strings.TrimSpace(a.frontendID) {
-		return true
-	}
-	if strings.TrimSpace(req.FrontendID) != "" {
-		return false
-	}
-	if strings.TrimSpace(req.SessionKey) != "" {
-		return a.sessionBelongsToFrontend(req.SessionKey)
-	}
-	return a.allowLegacyFrontendFallback()
 }
 
 func (a *App) normalizeSessionKey(sessionKey string) string {

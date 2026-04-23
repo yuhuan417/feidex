@@ -126,22 +126,6 @@ func matchThreadCommand(fields []string) bool {
 	}
 }
 
-func matchClaudeThreadCommand(fields []string) bool {
-	if len(fields) == 1 {
-		return true
-	}
-	switch strings.TrimSpace(fields[1]) {
-	case "list":
-		return len(fields) == 2 || (len(fields) == 3 && strings.TrimSpace(fields[2]) == "all")
-	case "new", "fork":
-		return len(fields) == 2
-	case "resume":
-		return len(fields) == 3
-	default:
-		return false
-	}
-}
-
 func matchSessionCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true

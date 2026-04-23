@@ -37,10 +37,6 @@ func (a *App) codexUpgradeState() codexUpgradeSnapshot {
 	return a.codexUpgrade
 }
 
-func (a *App) codexUpgradeActive() bool {
-	return a.codexUpgradeState().Running
-}
-
 func (a *App) codexRestartState() codexRestartSnapshot {
 	if a == nil {
 		return codexRestartSnapshot{}
@@ -48,10 +44,6 @@ func (a *App) codexRestartState() codexRestartSnapshot {
 	a.codexUpgradeMu.Lock()
 	defer a.codexUpgradeMu.Unlock()
 	return a.codexRestart
-}
-
-func (a *App) codexRestartActive() bool {
-	return a.codexRestartState().Running
 }
 
 func (a *App) codexMaintenanceActive() bool {

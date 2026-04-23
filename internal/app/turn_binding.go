@@ -75,19 +75,6 @@ func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submis
 	return matched.SessionKey, sub
 }
 
-func (a *App) clearPendingTurnBinding(threadID string) {
-	if a == nil {
-		return
-	}
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return
-	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	delete(a.pendingTurns, threadID)
-}
-
 func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string) {
 	if a == nil {
 		return

@@ -21,10 +21,6 @@ func (a *App) handleBackendModelCommand(msg *feishu.InboundMessage, args []strin
 	return a.backendConfiguration().handleModelCommand(msg, args)
 }
 
-func (a *App) backendSupportsWorkspacePermissionMode() bool {
-	return a.backendConfiguration().supportsWorkspacePermissionMode()
-}
-
 func (a *App) handleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
 	config := a.backendConfiguration()
 	if !config.supportsWorkspacePermissionMode() {

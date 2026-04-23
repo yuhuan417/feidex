@@ -211,25 +211,6 @@ func sessionFindActiveOperationByTurn(sess *state.Session, turnID string) *state
 	return nil
 }
 
-func sessionFindActiveOperationBySubmission(sess *state.Session, submissionID string) *state.SessionActiveOperation {
-	if sess == nil {
-		return nil
-	}
-	sessionEnsureActiveOperations(sess)
-	submissionID = strings.TrimSpace(submissionID)
-	if submissionID == "" {
-		return nil
-	}
-	for i := len(sess.ActiveOperations) - 1; i >= 0; i-- {
-		op := sess.ActiveOperations[i]
-		if strings.TrimSpace(op.SubmissionID) == submissionID {
-			cp := op
-			return &cp
-		}
-	}
-	return nil
-}
-
 func sessionFindActiveOperationByThread(sess *state.Session, threadID string) *state.SessionActiveOperation {
 	if sess == nil {
 		return nil
@@ -273,23 +254,6 @@ func sessionFindPendingSubmissionOperationByThread(sess *state.Session, threadID
 		return &cp
 	}
 	return nil
-}
-
-func sessionHasOperationForThread(sess *state.Session, threadID string) bool {
-	if sess == nil {
-		return false
-	}
-	sessionEnsureActiveOperations(sess)
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return false
-	}
-	for _, op := range sess.ActiveOperations {
-		if strings.TrimSpace(op.ThreadID) == threadID {
-			return true
-		}
-	}
-	return false
 }
 
 func sessionActiveOperationMatches(op state.SessionActiveOperation, submissionID, turnID string) bool {
