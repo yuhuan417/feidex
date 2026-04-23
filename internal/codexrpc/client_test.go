@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -325,6 +327,79 @@ done
 	}
 }
 
+func TestStartKeepsProcessAliveAfterStartupContextCancel(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "app-server.pid")
+	scriptPath := filepath.Join(dir, "codex-rpc.sh")
+	script := fmt.Sprintf(`#!/bin/sh
+echo $$ > %q
+trap 'exit 0' TERM INT
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '%%s\n' '{"id":1,"result":{"userAgent":"ua","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+    *'"method":"initialized"'*)
+      while :; do
+        sleep 1
+      done
+      ;;
+  esac
+done
+`, pidPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	client := New(config.CodexConfig{Command: scriptPath})
+	if err := client.Start(ctx, true); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	pid := waitForPIDFile(t, pidPath)
+	cancel()
+	time.Sleep(200 * time.Millisecond)
+
+	if !processAlive(pid) {
+		t.Fatalf("app-server pid %d exited after startup context cancellation", pid)
+	}
+}
+
+func TestStartCleansUpProcessWhenInitializationContextTimesOut(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "app-server.pid")
+	scriptPath := filepath.Join(dir, "codex-rpc.sh")
+	script := fmt.Sprintf(`#!/bin/sh
+echo $$ > %q
+trap 'exit 0' TERM INT
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      sleep 1
+      printf '%%s\n' '{"id":1,"result":{"userAgent":"ua","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+  esac
+done
+`, pidPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	client := New(config.CodexConfig{Command: scriptPath})
+	err := client.Start(ctx, true)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Start() error = %v, want %v", err, context.DeadlineExceeded)
+	}
+
+	pid := waitForPIDFile(t, pidPath)
+	waitForProcessExit(t, pid)
+}
+
 func TestStartRejectsRemovedWebSocketTransport(t *testing.T) {
 	client := New(config.CodexConfig{Transport: "ws"})
 	err := client.Start(context.Background(), true)
@@ -350,4 +425,44 @@ func TestCloseClosesStdinWhenNoProcess(t *testing.T) {
 	if !writer.closed {
 		t.Fatal("Close() did not close stdin writer")
 	}
+}
+
+func waitForPIDFile(t *testing.T, path string) int {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			pid, convErr := strconv.Atoi(strings.TrimSpace(string(data)))
+			if convErr == nil && pid > 0 {
+				return pid
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for pid file %s", path)
+	return 0
+}
+
+func waitForProcessExit(t *testing.T, pid int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !processAlive(pid) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("process %d still alive", pid)
+}
+
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
 }

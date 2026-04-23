@@ -3,8 +3,13 @@ package claudecli
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -300,6 +305,35 @@ func TestSessionSetEffortRejectsDefaultHotApply(t *testing.T) {
 	}
 }
 
+func TestSessionStartStopsProcessWhenContextCanceled(t *testing.T) {
+	dir := t.TempDir()
+	pidPath := filepath.Join(dir, "claude.pid")
+	scriptPath := filepath.Join(dir, "fake-claude.sh")
+	script := fmt.Sprintf(`#!/bin/sh
+echo $$ > %q
+trap 'exit 0' TERM INT
+while :; do
+  sleep 1
+done
+`, pidPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	session := NewSession(
+		WithCLIPath(scriptPath),
+		WithEventBufferSize(1),
+	)
+	if err := session.Start(ctx); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	pid := waitForSessionPIDFile(t, pidPath)
+	cancel()
+	waitForSessionProcessExit(t, pid)
+}
+
 func waitForPendingControlRequest(t *testing.T, session *Session) string {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
@@ -510,4 +544,44 @@ func assertNoExtraSessionEvents(t *testing.T, events <-chan Event) {
 		t.Fatalf("unexpected extra event: %#v", raw)
 	default:
 	}
+}
+
+func waitForSessionPIDFile(t *testing.T, path string) int {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			pid, convErr := strconv.Atoi(strings.TrimSpace(string(data)))
+			if convErr == nil && pid > 0 {
+				return pid
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for pid file %s", path)
+	return 0
+}
+
+func waitForSessionProcessExit(t *testing.T, pid int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !sessionProcessAlive(pid) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("process %d still alive", pid)
+}
+
+func sessionProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
 }

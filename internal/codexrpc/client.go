@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -18,6 +19,7 @@ import (
 )
 
 type Client struct {
+	id     uint64
 	cfg    config.CodexConfig
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
@@ -37,6 +39,8 @@ type Client struct {
 	onRequest      func(RequestEnvelope)
 	onError        func(error)
 }
+
+var nextClientID atomic.Uint64
 
 type responseEnvelope struct {
 	ID     int64           `json:"id"`
@@ -65,6 +69,7 @@ func New(cfg config.CodexConfig) *Client {
 		cfg.Command = "codex"
 	}
 	return &Client{
+		id:       nextClientID.Add(1),
 		cfg:      cfg,
 		pending:  map[int64]chan responseEnvelope{},
 		waitDone: make(chan struct{}),
@@ -84,9 +89,22 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 	if err := validateTransportConfig(c.cfg); err != nil {
 		return err
 	}
-	if err := c.startStdio(ctx); err != nil {
+	if err := c.startStdio(); err != nil {
 		return err
 	}
+	started := false
+	defer func() {
+		if started {
+			return
+		}
+		if err := c.Close(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			slog.Warn("codex app-server startup cleanup failed",
+				"client_id", c.id,
+				"pid", c.pid(),
+				"error", err,
+			)
+		}
+	}()
 
 	var initResp struct {
 		UserAgent      string `json:"userAgent"`
@@ -115,13 +133,25 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 	}, &initResp); err != nil {
 		return err
 	}
-	return c.Notify("initialized", map[string]any{})
+	if err := c.Notify("initialized", map[string]any{}); err != nil {
+		return err
+	}
+	started = true
+	slog.Info("codex app-server ready",
+		"client_id", c.id,
+		"pid", c.pid(),
+	)
+	return nil
 }
 
 func (c *Client) Close() error {
 	c.stateMu.Lock()
 	c.closing = true
 	c.stateMu.Unlock()
+	slog.Info("codex app-server closing",
+		"client_id", c.id,
+		"pid", c.pid(),
+	)
 	if c.stdin != nil {
 		_ = c.stdin.Close()
 	}
@@ -204,13 +234,24 @@ func (c *Client) readLoop() {
 	for scanner.Scan() {
 		c.handleIncoming(scanner.Bytes())
 	}
-	if !c.isClosing() {
-		c.emitTransportError(c.transportReadError(scanner.Err()))
+	if c.isClosing() {
+		slog.Info("codex app-server read loop stopped",
+			"client_id", c.id,
+			"pid", c.pid(),
+		)
+		return
 	}
+	err := c.transportReadError(scanner.Err())
+	slog.Warn("codex app-server read loop exited",
+		"client_id", c.id,
+		"pid", c.pid(),
+		"error", err,
+	)
+	c.emitTransportError(err)
 }
 
-func (c *Client) startStdio(ctx context.Context) error {
-	c.cmd = exec.CommandContext(ctx, c.cfg.Command, "app-server")
+func (c *Client) startStdio() error {
+	c.cmd = exec.Command(c.cfg.Command, "app-server")
 	if dir := strings.TrimSpace(c.cfg.AppServerDir); dir != "" {
 		c.cmd.Dir = dir
 	}
@@ -228,6 +269,12 @@ func (c *Client) startStdio(ctx context.Context) error {
 	if err := c.cmd.Start(); err != nil {
 		return err
 	}
+	slog.Info("codex app-server started",
+		"client_id", c.id,
+		"pid", c.pid(),
+		"command", c.cfg.Command,
+		"cwd", strings.TrimSpace(c.cmd.Dir),
+	)
 	go c.waitLoop()
 	go c.readLoop()
 	return nil
@@ -242,6 +289,15 @@ func (c *Client) waitLoop() {
 	if waitDone != nil {
 		close(waitDone)
 	}
+	level := slog.LevelInfo
+	if err != nil && !c.isClosing() {
+		level = slog.LevelWarn
+	}
+	slog.Log(context.Background(), level, "codex app-server exited",
+		"client_id", c.id,
+		"pid", c.pid(),
+		"error", err,
+	)
 }
 
 func (c *Client) handleIncoming(line []byte) {
@@ -355,4 +411,11 @@ func (c *Client) failPending(err error) {
 		default:
 		}
 	}
+}
+
+func (c *Client) pid() int {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return 0
+	}
+	return c.cmd.Process.Pid
 }

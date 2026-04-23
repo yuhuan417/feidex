@@ -272,6 +272,11 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 	}
 	a.beginBackendSwitchState(target)
 	defer a.finishBackendSwitchState()
+	slog.Info("backend switch begin",
+		"frontend_id", a.frontendID,
+		"current_backend", current,
+		"target_backend", target,
+	)
 
 	nextSessions := a.frontendSessionsAfterBackendSwitch(current, target)
 	newHandle, err := a.prepareBackendRuntime(ctx, target)
@@ -296,8 +301,17 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 			return err
 		}
 	}
+	slog.Info("backend switch runtime installed",
+		"frontend_id", a.frontendID,
+		"target_backend", target,
+	)
 	a.recoverFrontendRuntimeState()
 	_ = oldHandle.close()
+	slog.Info("backend switch completed",
+		"frontend_id", a.frontendID,
+		"current_backend", current,
+		"target_backend", target,
+	)
 	return nil
 }
 

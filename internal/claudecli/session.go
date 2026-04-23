@@ -76,6 +76,12 @@ func (s *Session) Start(ctx context.Context) error {
 	if s.started {
 		return ErrAlreadyStarted
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	args := s.cliArgs()
 	command := strings.TrimSpace(s.cfg.CLIPath)
@@ -83,7 +89,7 @@ func (s *Session) Start(ctx context.Context) error {
 		command = "claude"
 	}
 
-	cmd := exec.CommandContext(ctx, command, args...)
+	cmd := exec.Command(command, args...)
 	if s.cfg.WorkDir != "" {
 		cmd.Dir = s.cfg.WorkDir
 	}
@@ -117,6 +123,7 @@ func (s *Session) Start(ctx context.Context) error {
 	if s.cfg.StderrHandler != nil {
 		go s.stderrLoop()
 	}
+	go s.stopOnContextDone(ctx)
 	return nil
 }
 
@@ -429,6 +436,18 @@ func (s *Session) waitLoop(cmd *exec.Cmd) {
 	s.mu.Unlock()
 	if waitDone != nil {
 		close(waitDone)
+	}
+}
+
+func (s *Session) stopOnContextDone(ctx context.Context) {
+	if ctx == nil {
+		return
+	}
+	select {
+	case <-s.done:
+		return
+	case <-ctx.Done():
+		_ = s.Stop()
 	}
 }
 

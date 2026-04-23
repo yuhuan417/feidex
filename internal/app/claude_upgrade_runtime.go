@@ -99,6 +99,9 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 	if a == nil || a.cfg == nil {
 		return fmt.Errorf("claude app not initialized")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	workdir := "."
 	for _, ws := range a.cfg.Workspaces {
 		if cwd := strings.TrimSpace(ws.Cwd); cwd != "" {
@@ -131,7 +134,9 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 		opts = append(opts, claudecli.WithPermissionPromptToolStdio())
 	}
 	session := claudecli.NewSession(opts...)
-	if err := session.Start(ctx); err != nil {
+	sessionCtx, sessionCancel := context.WithCancel(context.Background())
+	defer sessionCancel()
+	if err := session.Start(sessionCtx); err != nil {
 		return err
 	}
 	defer session.Stop()
