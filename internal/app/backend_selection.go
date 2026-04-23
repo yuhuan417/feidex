@@ -124,7 +124,7 @@ func (a *App) renderBackendSelectionCard(sessionKey, notice string) map[string]a
 	case strings.Contains(notice, "已切换"):
 		color = "green"
 	}
-	return a.feishu.SimpleStatusCard("Backend", color, menuCardBody("menu.backend.switch", strings.Join(lines, "\n")), buttons)
+	return a.feishu.SimpleStatusCard("后端选择", color, menuCardBody("menu.backend.switch", strings.Join(lines, "\n")), buttons)
 }
 
 func (a *App) renderBackendSwitchingCard(sessionKey, target string) map[string]any {
@@ -133,7 +133,7 @@ func (a *App) renderBackendSwitchingCard(sessionKey, target string) map[string]a
 		"",
 		"会先切换 runtime，再恢复这个 backend 之前的 thread lineage。",
 	}, "\n")
-	return a.feishu.SimpleStatusCard("切换 Backend", "orange", menuCardBody("menu.backend.switch", body), []feishu.Button{
+	return a.feishu.SimpleStatusCard("切换后端", "orange", menuCardBody("menu.backend.switch", body), []feishu.Button{
 		{Text: "处理中", Type: "default", Value: map[string]any{"action": "menu.backend.switch", "session_key": sessionKey}},
 	})
 }
@@ -167,7 +167,7 @@ func (a *App) commandBackend(msg *feishu.InboundMessage, args []string) error {
 
 func (a *App) completeMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 Backend 管理"},
+		Toast: &callback.Toast{Type: "info", Content: "已打开后端选择"},
 		Card:  rawCard(a.renderBackendMenuCard(sessionKey)),
 	}, nil
 }

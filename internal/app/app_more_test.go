@@ -1583,6 +1583,16 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		if !strings.HasSuffix(label, "›") {
 			t.Fatalf("root submenu label missing indicator: %q", label)
 		}
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if actionName, _ := value["action"].(string); actionName == "menu.group.backend" {
+			t.Fatalf("root menu should not expose backend group directly: %#v", rootActions)
+		}
 	}
 
 	toolsCard := a.renderToolsMenuCard(sessionKey)

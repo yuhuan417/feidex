@@ -10,6 +10,7 @@ type commandMenuGroupSpec struct {
 	Action      string
 	Label       string
 	Description string
+	ShowInRoot  bool
 }
 
 type menuItemKind string
@@ -39,31 +40,37 @@ var commandMenuGroupSpecs = []commandMenuGroupSpec{
 		Action:      "menu.tools",
 		Label:       "常用工具",
 		Description: "常用会话与线程工具入口。",
+		ShowInRoot:  true,
 	},
 	{
 		Action:      "menu.group.model",
 		Label:       "模型配置",
 		Description: "模型选择与响应速度配置。",
+		ShowInRoot:  true,
 	},
 	{
 		Action:      "menu.thread",
 		Label:       "线程管理",
 		Description: "查看当前线程状态，并通过下拉切换线程。",
+		ShowInRoot:  true,
 	},
 	{
 		Action:      "menu.workspace",
 		Label:       "工作区管理",
 		Description: "查看当前工作区状态，并通过下拉切换工作区。",
+		ShowInRoot:  true,
 	},
 	{
 		Action:      "menu.group.system",
 		Label:       "系统运维",
 		Description: "系统运维与帮助入口。",
+		ShowInRoot:  true,
 	},
 	{
 		Action:      "menu.group.backend",
-		Label:       "Backend",
-		Description: "Backend 切换与各 CLI 管理入口。",
+		Label:       "后端选择",
+		Description: "后端切换与各 CLI 管理入口。",
+		ShowInRoot:  false,
 	},
 }
 
@@ -84,13 +91,13 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 
 	{GroupAction: "menu.group.system", Action: "menu.debug", Label: "日志级别", Slash: "/debug", Kind: menuItemDirect},
 	{GroupAction: "menu.group.system", Action: "menu.debug.logs", Label: "查看日志", Slash: "/debug logs", Kind: menuItemDirect},
-	{GroupAction: "menu.group.system", Action: "menu.group.backend", Label: "Backend", Kind: menuItemSubmenu},
+	{GroupAction: "menu.group.system", Action: "menu.group.backend", Label: "后端选择", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.upgrade", Label: "升级服务", Slash: "/upgrade", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.status", Label: "状态面板", Slash: "/status", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.help", Label: "命令帮助", Slash: "/help", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 
-	{GroupAction: "menu.group.backend", Action: "menu.backend.switch", Label: "Backend 切换", Slash: "/backend", Kind: menuItemDirect},
+	{GroupAction: "menu.group.backend", Action: "menu.backend.switch", Label: "切换后端", Slash: "/backend", Kind: menuItemDirect},
 	{GroupAction: "menu.group.backend", Action: "menu.codex_upgrade", Label: "Codex 管理", Slash: "/codex", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.backend", Action: "menu.claude_upgrade", Label: "Claude 管理", Slash: "/claude", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: "返回上一级", Kind: menuItemBack},
@@ -199,6 +206,9 @@ func groupHasVisibleMenuItems(action, backend string) bool {
 func renderRootMenuButtons(backend, sessionKey string) []feishu.Button {
 	buttons := make([]feishu.Button, 0, len(commandMenuGroupSpecs))
 	for _, spec := range commandMenuGroupSpecs {
+		if !spec.ShowInRoot {
+			continue
+		}
 		if !groupHasVisibleMenuItems(spec.Action, backend) {
 			continue
 		}
