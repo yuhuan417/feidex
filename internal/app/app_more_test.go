@@ -230,6 +230,7 @@ type fakeFeishuClient struct {
 	sentTexts                 []string
 	replyCards                []map[string]any
 	sendCards                 []map[string]any
+	sendCardChatIDs           []string
 	patchedCards              []map[string]any
 	replyCardInThread         []bool
 	replyTextWithIDs          []string
@@ -331,7 +332,8 @@ func (f *fakeFeishuClient) ReplyCard(_ context.Context, _ string, card map[strin
 	return f.replyCardID, f.replyCardErr
 }
 
-func (f *fakeFeishuClient) SendCard(_ context.Context, _ string, card map[string]any) (string, error) {
+func (f *fakeFeishuClient) SendCard(_ context.Context, chatID string, card map[string]any) (string, error) {
+	f.sendCardChatIDs = append(f.sendCardChatIDs, chatID)
 	f.sendCards = append(f.sendCards, card)
 	if f.sendCardID == "" {
 		f.sendCardID = "send-card-id"

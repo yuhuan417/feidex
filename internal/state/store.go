@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 4
+const currentSnapshotVersion = 6
 
 type Store struct {
 	path    string
@@ -23,8 +23,9 @@ type Store struct {
 }
 
 type Snapshot struct {
-	Version  int                       `json:"version"`
-	Sessions map[string]*storedSession `json:"sessions"`
+	Version                   int                                   `json:"version"`
+	Sessions                  map[string]*storedSession             `json:"sessions"`
+	FrontendCardNotifications map[string][]FrontendCardNotification `json:"frontend_card_notifications,omitempty"`
 }
 
 type runtimeState struct {
@@ -55,6 +56,15 @@ type storedSession struct {
 	OwnerUserID                string                          `json:"owner_user_id"`
 	ModelOverride              string                          `json:"model_override"`
 	UpdatedAt                  int64                           `json:"updated_at"`
+}
+
+type FrontendCardNotification struct {
+	Kind        string `json:"kind,omitempty"`
+	CollapseKey string `json:"collapse_key,omitempty"`
+	Title       string `json:"title"`
+	Color       string `json:"color,omitempty"`
+	Body        string `json:"body"`
+	CreatedAt   int64  `json:"created_at,omitempty"`
 }
 
 type SessionBackendThread struct {
@@ -184,8 +194,9 @@ func Open(path string) (*Store, error) {
 	s := &Store{
 		path: path,
 		data: Snapshot{
-			Version:  currentSnapshotVersion,
-			Sessions: map[string]*storedSession{},
+			Version:                   currentSnapshotVersion,
+			Sessions:                  map[string]*storedSession{},
+			FrontendCardNotifications: map[string][]FrontendCardNotification{},
 		},
 		runtime: runtimeState{
 			Sessions:        map[string]*Session{},
@@ -210,6 +221,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.data.Sessions == nil {
 		s.data.Sessions = map[string]*storedSession{}
+	}
+	if s.data.FrontendCardNotifications == nil {
+		s.data.FrontendCardNotifications = map[string][]FrontendCardNotification{}
 	}
 	rewrite := s.data.Version != currentSnapshotVersion
 	s.data.Version = currentSnapshotVersion
@@ -438,6 +452,101 @@ func (s *Store) AllSessions() []*Session {
 		out = append(out, cloneSession(sess))
 	}
 	return out
+}
+
+func (s *Store) FrontendCardNotifications(frontendID string) []FrontendCardNotification {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneFrontendCardNotifications(s.data.FrontendCardNotifications[strings.TrimSpace(frontendID)])
+}
+
+func (s *Store) AppendFrontendCardNotification(frontendID string, note FrontendCardNotification) error {
+	frontendID = strings.TrimSpace(frontendID)
+	note, ok := normalizeFrontendCardNotification(note)
+	if !ok {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.FrontendCardNotifications == nil {
+		s.data.FrontendCardNotifications = map[string][]FrontendCardNotification{}
+	}
+	existing := s.data.FrontendCardNotifications[frontendID]
+	key := frontendCardNotificationKey(note)
+	for i, candidate := range existing {
+		if frontendCardNotificationKey(candidate) == key {
+			candidate, _ = normalizeFrontendCardNotification(candidate)
+			if candidate.Kind == note.Kind &&
+				candidate.CollapseKey == note.CollapseKey &&
+				candidate.Title == note.Title &&
+				candidate.Color == note.Color &&
+				candidate.Body == note.Body {
+				return nil
+			}
+			if note.CreatedAt == 0 {
+				note.CreatedAt = time.Now().Unix()
+			}
+			existing[i] = note
+			s.data.FrontendCardNotifications[frontendID] = existing
+			return s.saveLocked()
+		}
+	}
+	if note.CreatedAt == 0 {
+		note.CreatedAt = time.Now().Unix()
+	}
+	s.data.FrontendCardNotifications[frontendID] = append(existing, note)
+	return s.saveLocked()
+}
+
+func (s *Store) DrainFrontendCardNotifications(frontendID string) ([]FrontendCardNotification, error) {
+	frontendID = strings.TrimSpace(frontendID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	notes := cloneFrontendCardNotifications(s.data.FrontendCardNotifications[frontendID])
+	if len(notes) == 0 {
+		return nil, nil
+	}
+	delete(s.data.FrontendCardNotifications, frontendID)
+	return notes, s.saveLocked()
+}
+
+func cloneFrontendCardNotifications(src []FrontendCardNotification) []FrontendCardNotification {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]FrontendCardNotification, 0, len(src))
+	for _, note := range src {
+		if normalized, ok := normalizeFrontendCardNotification(note); ok {
+			dst = append(dst, normalized)
+		}
+	}
+	if len(dst) == 0 {
+		return nil
+	}
+	return dst
+}
+
+func normalizeFrontendCardNotification(note FrontendCardNotification) (FrontendCardNotification, bool) {
+	note.Kind = strings.TrimSpace(note.Kind)
+	note.CollapseKey = strings.TrimSpace(note.CollapseKey)
+	note.Title = strings.TrimSpace(note.Title)
+	note.Color = strings.TrimSpace(note.Color)
+	note.Body = strings.TrimSpace(note.Body)
+	if note.Title == "" || note.Body == "" {
+		return FrontendCardNotification{}, false
+	}
+	return note, true
+}
+
+func frontendCardNotificationKey(note FrontendCardNotification) string {
+	note, ok := normalizeFrontendCardNotification(note)
+	if !ok {
+		return ""
+	}
+	if note.CollapseKey != "" {
+		return strings.Join([]string{"collapse", note.CollapseKey}, "|")
+	}
+	return strings.Join([]string{note.Kind, note.Title, note.Color, note.Body}, "|")
 }
 
 func cloneSession(sess *Session) *Session {

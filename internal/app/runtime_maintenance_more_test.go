@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,5 +61,123 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	a.cleanupAttachmentDir(root)
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatalf("cleanupAttachmentDir() should remove expired dir, stat err=%v", err)
+	}
+}
+
+func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "default"
+	a.feishu = wrapFeishuClient(ff)
+	for _, sess := range []*state.Session{
+		{Key: "feishu:frontend:default:p2p:chat-b:ou-user-1", ChatID: "chat-b"},
+		{Key: "feishu:frontend:default:group:chat-a:root:om-root-1", ChatID: "chat-a"},
+		{Key: "feishu:frontend:default:p2p:chat-a:ou-user-2", ChatID: "chat-a"},
+		{Key: "feishu:frontend:other:p2p:chat-c:ou-user-3", ChatID: "chat-c"},
+	} {
+		if err := a.store.UpsertSession(sess); err != nil {
+			t.Fatalf("UpsertSession(%q) error = %v", sess.Key, err)
+		}
+	}
+	ff.cleanupErr = &permissionIssueTestError{
+		err: errors.New("permission denied"),
+		issue: &feishu.PermissionIssue{
+			API:     "drive.file.list",
+			Code:    99991663,
+			Message: "no permission",
+		},
+	}
+
+	a.runDriveArtifactGC("test")
+	if got, want := len(ff.sendCards), 2; got != want {
+		t.Fatalf("permission diagnostic send cards = %d, want %d", got, want)
+	}
+	if got, want := ff.sendCardChatIDs, []string{"chat-a", "chat-b"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("permission diagnostic chat ids = %#v, want %#v", got, want)
+	}
+	for i, card := range ff.sendCards {
+		body := cardMarkdownContent(t, card)
+		if !strings.Contains(body, "drive.file.list") {
+			t.Fatalf("permission diagnostic body[%d] = %q", i, body)
+		}
+	}
+
+	a.runDriveArtifactGC("test")
+	if got, want := len(ff.sendCards), 2; got != want {
+		t.Fatalf("deduplicated permission diagnostic send cards = %d, want %d", got, want)
+	}
+}
+
+func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessage(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "default"
+	a.feishu = wrapFeishuClient(ff)
+	ff.cleanupErr = &permissionIssueTestError{
+		err: errors.New("permission denied"),
+		issue: &feishu.PermissionIssue{
+			API:     "drive.file.list",
+			Code:    99991663,
+			Message: "no permission",
+		},
+	}
+
+	a.runDriveArtifactGC("test")
+	if got := len(ff.sendCards); got != 0 {
+		t.Fatalf("permission diagnostic send cards before inbound = %d, want 0", got)
+	}
+	if got := a.appState().frontendCardNotifications(); len(got) != 1 || !strings.Contains(got[0].Body, "drive.file.list") {
+		t.Fatalf("frontendCardNotifications() = %+v", got)
+	}
+
+	router := newFeishuEventRouter(a)
+	if err := router.processMessage(&feishu.InboundMessage{
+		MessageID: "m-1",
+		ChatID:    "chat-next",
+		ChatType:  "p2p",
+		UserID:    "ou-user-next",
+	}); err != nil {
+		t.Fatalf("processMessage() error = %v", err)
+	}
+	if got, want := len(ff.sendCards), 1; got != want {
+		t.Fatalf("permission diagnostic send cards after inbound = %d, want %d", got, want)
+	}
+	if got, want := ff.sendCardChatIDs, []string{"chat-next"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("permission diagnostic chat ids after inbound = %#v, want %#v", got, want)
+	}
+	if got := a.appState().frontendCardNotifications(); len(got) != 0 {
+		t.Fatalf("frontendCardNotifications() after inbound = %+v, want empty", got)
+	}
+}
+
+func TestRunDriveArtifactGCQueuesOnlyOneDeferredPermissionIssue(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "default"
+	a.feishu = wrapFeishuClient(ff)
+
+	ff.cleanupErr = &permissionIssueTestError{
+		err: errors.New("permission denied 1"),
+		issue: &feishu.PermissionIssue{
+			API:     "drive.file.list",
+			Code:    99991663,
+			Message: "first no permission",
+		},
+	}
+	a.runDriveArtifactGC("test")
+
+	ff.cleanupErr = &permissionIssueTestError{
+		err: errors.New("permission denied 2"),
+		issue: &feishu.PermissionIssue{
+			API:     "drive.file.delete",
+			Code:    99991663,
+			Message: "second no permission",
+		},
+	}
+	a.runDriveArtifactGC("test")
+
+	got := a.appState().frontendCardNotifications()
+	if len(got) != 1 {
+		t.Fatalf("frontendCardNotifications() len = %d, want 1", len(got))
+	}
+	if !strings.Contains(got[0].Body, "drive.file.delete") || strings.Contains(got[0].Body, "drive.file.list") {
+		t.Fatalf("frontendCardNotifications() body = %q, want latest collapsed error", got[0].Body)
 	}
 }

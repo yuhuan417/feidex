@@ -8,11 +8,16 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
 const attachmentRetention = 7 * 24 * time.Hour
 const artifactRetention = 3 * 24 * time.Hour
+
+type permissionIssueDiagnosticSender interface {
+	notifyPermissionIssue(feishuNotifyTarget, error)
+}
 
 func (a *App) expirePendingRequestsOnStartup() {
 	if a == nil || a.store == nil {
@@ -130,6 +135,7 @@ func (a *App) runDriveArtifactGC(source string) {
 	defer cancel()
 	result, err := a.feishu.CleanupArtifactsBefore(ctx, time.Now().Add(-artifactRetention))
 	if err != nil {
+		a.notifyDriveArtifactGCPermissionIssue(source, err)
 		slog.Warn("artifact gc failed", "source", source, "error", err)
 		return
 	}
@@ -141,4 +147,53 @@ func (a *App) runDriveArtifactGC(source string) {
 		"deleted_file_count", result.DeletedFileCount,
 		"deleted_estimated_bytes", result.DeletedEstimatedBytes,
 	)
+}
+
+func (a *App) notifyDriveArtifactGCPermissionIssue(source string, err error) {
+	if a == nil || a.feishu == nil || err == nil {
+		return
+	}
+	issue, ok := feishu.PermissionIssueFromError(err)
+	if !ok || issue == nil {
+		return
+	}
+	body := renderFeishuPermissionIssueBody(issue)
+	if body == "" {
+		return
+	}
+	notifier, ok := a.feishu.(permissionIssueDiagnosticSender)
+	chatIDs := a.startupReadyChatIDs(a.appState().sessions())
+	if len(chatIDs) == 0 {
+		a.queueFrontendCardNotification(state.FrontendCardNotification{
+			Kind:        frontendCardNotificationKindFeishuPermissionIssue,
+			CollapseKey: frontendCardNotificationKindFeishuPermissionIssue,
+			Title:       "飞书权限错误",
+			Color:       "red",
+			Body:        body,
+		})
+		slog.Debug("artifact gc permission diagnostic queued",
+			"source", source,
+			"reason", "no_known_chats",
+			"api", strings.TrimSpace(issue.API),
+		)
+		return
+	}
+	if !ok {
+		a.queueFrontendCardNotification(state.FrontendCardNotification{
+			Kind:        frontendCardNotificationKindFeishuPermissionIssue,
+			CollapseKey: frontendCardNotificationKindFeishuPermissionIssue,
+			Title:       "飞书权限错误",
+			Color:       "red",
+			Body:        body,
+		})
+		slog.Debug("artifact gc permission diagnostic queued",
+			"source", source,
+			"reason", "feishu_notifier_unavailable",
+			"api", strings.TrimSpace(issue.API),
+		)
+		return
+	}
+	for _, chatID := range chatIDs {
+		notifier.notifyPermissionIssue(feishuNotifyTarget{ChatID: chatID}, err)
+	}
 }

@@ -233,6 +233,35 @@ func (s *appStateFacade) messageLink(messageID string) *state.MessageLink {
 	return nil
 }
 
+func (s *appStateFacade) queueFrontendCardNotification(note state.FrontendCardNotification) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	return s.store.AppendFrontendCardNotification(strings.TrimSpace(s.frontendID), note)
+}
+
+func (s *appStateFacade) frontendCardNotifications() []state.FrontendCardNotification {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	notes := s.store.FrontendCardNotifications(strings.TrimSpace(s.frontendID))
+	if len(notes) == 0 && s.legacyFallback && strings.TrimSpace(s.frontendID) != "" {
+		return s.store.FrontendCardNotifications("")
+	}
+	return notes
+}
+
+func (s *appStateFacade) drainFrontendCardNotifications() ([]state.FrontendCardNotification, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	notes, err := s.store.DrainFrontendCardNotifications(strings.TrimSpace(s.frontendID))
+	if err != nil || len(notes) > 0 || !s.legacyFallback || strings.TrimSpace(s.frontendID) == "" {
+		return notes, err
+	}
+	return s.store.DrainFrontendCardNotifications("")
+}
+
 func (s *appStateFacade) saveMessageLink(link *state.MessageLink) error {
 	if s == nil || s.store == nil || link == nil {
 		return nil

@@ -265,6 +265,76 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 	}
 }
 
+func TestFrontendCardNotificationsPersistDeduplicateAndDrain(t *testing.T) {
+	store := openTestStore(t)
+
+	note := FrontendCardNotification{
+		Kind:  "feishu_permission_issue",
+		Title: "飞书权限错误",
+		Color: "red",
+		Body:  "缺少 drive.drive",
+	}
+	if err := store.AppendFrontendCardNotification("frontend-a", note); err != nil {
+		t.Fatalf("AppendFrontendCardNotification() error = %v", err)
+	}
+	if err := store.AppendFrontendCardNotification("frontend-a", FrontendCardNotification{
+		Kind:  "feishu_permission_issue",
+		Title: "飞书权限错误",
+		Color: "red",
+		Body:  "缺少 drive.drive",
+	}); err != nil {
+		t.Fatalf("AppendFrontendCardNotification(duplicate) error = %v", err)
+	}
+	if got := store.FrontendCardNotifications("frontend-a"); len(got) != 1 || got[0].Body != "缺少 drive.drive" || got[0].CreatedAt == 0 {
+		t.Fatalf("FrontendCardNotifications() = %+v", got)
+	}
+
+	reopened, err := Open(store.path)
+	if err != nil {
+		t.Fatalf("Open(reopened) error = %v", err)
+	}
+	if got := reopened.FrontendCardNotifications("frontend-a"); len(got) != 1 || got[0].Body != "缺少 drive.drive" {
+		t.Fatalf("reopened FrontendCardNotifications() = %+v", got)
+	}
+	drained, err := reopened.DrainFrontendCardNotifications("frontend-a")
+	if err != nil {
+		t.Fatalf("DrainFrontendCardNotifications() error = %v", err)
+	}
+	if len(drained) != 1 || drained[0].Body != "缺少 drive.drive" {
+		t.Fatalf("DrainFrontendCardNotifications() = %+v", drained)
+	}
+	if got := reopened.FrontendCardNotifications("frontend-a"); len(got) != 0 {
+		t.Fatalf("FrontendCardNotifications() after drain = %+v", got)
+	}
+}
+
+func TestFrontendCardNotificationsCollapseByKey(t *testing.T) {
+	store := openTestStore(t)
+
+	if err := store.AppendFrontendCardNotification("frontend-a", FrontendCardNotification{
+		Kind:        "feishu_permission_issue",
+		CollapseKey: "feishu_permission_issue",
+		Title:       "飞书权限错误",
+		Color:       "red",
+		Body:        "第一次错误",
+	}); err != nil {
+		t.Fatalf("AppendFrontendCardNotification(first) error = %v", err)
+	}
+	if err := store.AppendFrontendCardNotification("frontend-a", FrontendCardNotification{
+		Kind:        "feishu_permission_issue",
+		CollapseKey: "feishu_permission_issue",
+		Title:       "飞书权限错误",
+		Color:       "red",
+		Body:        "第二次错误",
+	}); err != nil {
+		t.Fatalf("AppendFrontendCardNotification(second) error = %v", err)
+	}
+	got := store.FrontendCardNotifications("frontend-a")
+	if len(got) != 1 || got[0].Body != "第二次错误" {
+		t.Fatalf("FrontendCardNotifications() with collapse key = %+v", got)
+	}
+}
+
 func TestSessionContextIsRecoveredFromSessionKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	store, err := Open(path)

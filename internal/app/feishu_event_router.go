@@ -69,6 +69,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		"attachment_count", len(msg.Attachments),
 		"merge_forward_count", len(msg.MergeForwardMessageIDs),
 	)
+	a.flushPendingFrontendCardNotifications(msg)
 	if len(msg.MergeForwardMessageIDs) > 0 {
 		a.startMergeForwardPrefetch(msg)
 		return nil
