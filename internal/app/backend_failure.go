@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,7 +29,10 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 	if a == nil || !a.beginCodexTransportRecovery(client) {
 		return
 	}
-	message := backendTransportFailureMessage(backendCodex, err)
+	message := "Codex 后端异常退出。"
+	if detail := strings.TrimSpace(errorText(err)); detail != "" {
+		message = "Codex 后端异常退出：" + detail
+	}
 	slog.Error("codex backend transport failed",
 		"frontend_id", a.frontendID,
 		"error", err,
