@@ -56,7 +56,30 @@ func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any,
 }
 
 func (a *App) completeMenuCompact(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
+	messageID := ""
+	userID := ""
+	if action != nil {
+		messageID = strings.TrimSpace(action.MessageID)
+		userID = strings.TrimSpace(action.UserID)
+	}
+	if messageID == "" {
+		return a.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
+	}
+	a.runAsync(func() {
+		card := a.renderCompactAcceptedCard(sessionKey)
+		if err := a.runMenuCompactAction(action, sessionKey); err != nil {
+			card = a.renderCompactFailedCard(sessionKey, err.Error())
+		}
+		a.patchMaintenanceCard(messageID, card, "compact menu patch failed",
+			"session_key", sessionKey,
+			"message_id", messageID,
+			"user_id", userID,
+		)
+	})
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "正在请求压缩当前线程上下文"},
+		Card:  rawCard(a.renderCompactPreparingCard(sessionKey)),
+	}, nil
 }
 
 func (a *App) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

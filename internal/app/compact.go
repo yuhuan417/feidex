@@ -38,6 +38,61 @@ func (a *App) commandCompact(msg *feishu.InboundMessage, args []string) error {
 	return a.handleBackendCompactCommand(msg)
 }
 
+func compactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {
+	buttons := []feishu.Button{}
+	if includeRetry {
+		buttons = append(buttons, feishu.Button{
+			Text: "重试",
+			Type: "primary",
+			Value: map[string]any{
+				"action":        "menu.compact",
+				"session_key":   sessionKey,
+				"parent_action": "menu.tools",
+			},
+		})
+	}
+	buttons = append(buttons, feishu.Button{
+		Text: "返回常用工具",
+		Type: "default",
+		Value: map[string]any{
+			"action":      "menu.tools",
+			"session_key": sessionKey,
+		},
+	})
+	return buttons
+}
+
+func (a *App) renderCompactPreparingCard(sessionKey string) map[string]any {
+	body := "正在请求当前线程上下文压缩，请稍候。\n\n这张卡片会自动刷新。"
+	return a.feishu.SimpleStatusCard("压缩上下文", "blue", menuCardBody("menu.tools", body), compactMenuButtons(sessionKey, false))
+}
+
+func (a *App) renderCompactAcceptedCard(sessionKey string) map[string]any {
+	body := "已提交 `/compact`。\n\n后续结果会通过正常消息流返回。"
+	return a.feishu.SimpleStatusCard("压缩上下文", "green", menuCardBody("menu.tools", body), compactMenuButtons(sessionKey, false))
+}
+
+func (a *App) renderCompactFailedCard(sessionKey, errText string) map[string]any {
+	body := "请求 `/compact` 失败。"
+	if text := strings.TrimSpace(errText); text != "" {
+		body += "\n\n错误: " + text
+	}
+	return a.feishu.SimpleStatusCard("压缩上下文", "orange", menuCardBody("menu.tools", body), compactMenuButtons(sessionKey, true))
+}
+
+func (a *App) runMenuCompactAction(action *feishu.CardAction, sessionKey string) error {
+	if a == nil {
+		return nil
+	}
+	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
+	sessionKey = firstNonEmpty(a.makeSessionKey(msg), strings.TrimSpace(sessionKey))
+	if a.isClaudeBackend() {
+		return a.enqueueSubmission(msg)
+	}
+	_, err := a.startThreadCompaction(sessionKey)
+	return err
+}
+
 func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("store not initialized")

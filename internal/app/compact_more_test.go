@@ -5,9 +5,42 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
+
+type blockingClaudeCompactCore struct {
+	*fakeClaudeCore
+	started chan struct{}
+	release chan struct{}
+}
+
+func (f *blockingClaudeCompactCore) StartTurn(_ context.Context, sessionKey, threadID, turnID, prompt string) error {
+	if f.fakeClaudeCore == nil {
+		f.fakeClaudeCore = &fakeClaudeCore{}
+	}
+	f.startTurnCalls = append(f.startTurnCalls, struct {
+		sessionKey string
+		threadID   string
+		turnID     string
+		prompt     string
+	}{
+		sessionKey: sessionKey,
+		threadID:   threadID,
+		turnID:     turnID,
+		prompt:     prompt,
+	})
+	select {
+	case f.started <- struct{}{}:
+	default:
+	}
+	if f.release != nil {
+		<-f.release
+	}
+	return f.startTurnErr
+}
 
 func TestStandaloneCompactionLifecycle(t *testing.T) {
 	a, ff, fc := newTestApp(t)
@@ -172,4 +205,217 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 
 	a.restoreStandaloneCompactSession("sess-complete", "thread-other", "idle")
 	a.restoreStandaloneCompactSession("missing", "thread-missing", "idle")
+}
+
+func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:            sessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadID: "thread-1",
+		ChatID:         "chat",
+		ChatType:       "p2p",
+		OwnerUserID:    "user",
+		Status:         "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	fc.callHook = func(_ context.Context, method string, params any, _ any) error {
+		if method != "thread/compact/start" {
+			t.Fatalf("unexpected Call method %q", method)
+		}
+		payload, _ := params.(map[string]any)
+		if got := strings.TrimSpace(stringValue(payload["threadId"])); got != "thread-1" {
+			t.Fatalf("thread/compact/start threadId = %q", got)
+		}
+		started <- struct{}{}
+		<-release
+		return nil
+	}
+
+	resp, err := a.completeMenuCompact(&feishu.CardAction{
+		MessageID: "card-1",
+		ChatID:    "chat",
+		UserID:    "user",
+		ActionValue: map[string]any{
+			"session_key":   sessionKey,
+			"parent_action": "menu.tools",
+		},
+	}, sessionKey)
+	if err != nil {
+		t.Fatalf("completeMenuCompact() error = %v", err)
+	}
+	if resp.Toast == nil || resp.Toast.Type != "info" || !strings.Contains(resp.Toast.Content, "正在请求压缩") {
+		t.Fatalf("completeMenuCompact() toast = %#v", resp.Toast)
+	}
+	if resp.Card == nil {
+		t.Fatal("completeMenuCompact() should return preparing card")
+	}
+	if body := cardMarkdownContent(t, resp.Card.Data.(map[string]any)); !strings.Contains(body, "正在请求当前线程上下文压缩") {
+		t.Fatalf("preparing card body = %q", body)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("thread/compact/start was not started asynchronously")
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patchedCards before compact finishes = %+v, want none", ff.patchedCards)
+	}
+
+	close(release)
+	deadline := time.Now().Add(2 * time.Second)
+	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected accepted compact card patch")
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(body, "已提交 `/compact`") {
+		t.Fatalf("accepted patched card body = %q", body)
+	}
+	if !cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "返回常用工具") {
+		t.Fatalf("accepted patched card missing return button: %#v", ff.patchedCards[len(ff.patchedCards)-1])
+	}
+	if sess := a.store.GetSession(sessionKey); sess == nil || sess.Status != sessionStatusCompacting {
+		t.Fatalf("session after compact ack = %+v", sess)
+	}
+}
+
+func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	claude := &blockingClaudeCompactCore{
+		fakeClaudeCore: &fakeClaudeCore{},
+		started:        make(chan struct{}, 1),
+		release:        make(chan struct{}),
+	}
+	defer func() {
+		select {
+		case <-claude.release:
+		default:
+			close(claude.release)
+		}
+	}()
+	a.claude = claude
+
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat",
+		ChatType:    "p2p",
+		OwnerUserID: "user",
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	resp, err := a.completeMenuCompact(&feishu.CardAction{
+		MessageID: "card-claude",
+		ChatID:    "chat",
+		UserID:    "user",
+		ActionValue: map[string]any{
+			"session_key":   sessionKey,
+			"parent_action": "menu.tools",
+		},
+	}, sessionKey)
+	if err != nil {
+		t.Fatalf("completeMenuCompact() error = %v", err)
+	}
+	if resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeMenuCompact() toast = %#v", resp.Toast)
+	}
+
+	select {
+	case <-claude.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Claude /compact was not started asynchronously")
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patchedCards before Claude start returns = %+v, want none", ff.patchedCards)
+	}
+
+	close(claude.release)
+	deadline := time.Now().Add(2 * time.Second)
+	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected accepted compact card patch")
+	}
+	if len(claude.startTurnCalls) != 1 || strings.TrimSpace(claude.startTurnCalls[0].prompt) != "/compact" {
+		t.Fatalf("Claude startTurn calls = %#v", claude.startTurnCalls)
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(body, "已提交 `/compact`") {
+		t.Fatalf("accepted patched card body = %q", body)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || strings.TrimSpace(sess.ActiveSubmissionID) == "" || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		t.Fatalf("session after Claude compact = %+v", sess)
+	}
+}
+
+func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendCodex
+	a.cfg.Feishu.Backend = backendCodex
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat",
+		ChatType:    "p2p",
+		OwnerUserID: "user",
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	resp, err := a.completeMenuCompact(&feishu.CardAction{
+		MessageID: "card-fail",
+		ChatID:    "chat",
+		UserID:    "user",
+		ActionValue: map[string]any{
+			"session_key":   sessionKey,
+			"parent_action": "menu.tools",
+		},
+	}, sessionKey)
+	if err != nil {
+		t.Fatalf("completeMenuCompact() error = %v", err)
+	}
+	if resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeMenuCompact() toast = %#v", resp.Toast)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected failure compact card patch")
+	}
+	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	if !strings.Contains(body, "请求 `/compact` 失败") || !strings.Contains(body, "当前没有活动线程") {
+		t.Fatalf("failure patched card body = %q", body)
+	}
+	if !cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "重试") {
+		t.Fatalf("failure patched card missing retry button: %#v", ff.patchedCards[len(ff.patchedCards)-1])
+	}
 }
