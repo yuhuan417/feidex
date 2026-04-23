@@ -172,6 +172,7 @@ func (w *submissionWorkflow) notifySubmissionStartFailure(ctx context.Context, s
 func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
 	a := w.app
 	appState := a.appState()
+	dropThreadLineage := shouldDropCodexThreadLineageAfterStartFailure(a, err)
 	if sub != nil {
 		current := appState.submission(sub.ID)
 		switch {
@@ -192,12 +193,18 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 		_ = appState.finalizeSubmission(sub.ID, "failed")
 	}
 	shouldStartNext := false
+	clearedThreadLineage := false
 	if sess, saveErr := appState.updateSession(sessionKey, func(sess *state.Session) {
 		if sess == nil {
 			return
 		}
 		if sub != nil {
 			sessionRemoveActiveOperation(sess, sub.ID, "")
+		}
+		if dropThreadLineage && strings.TrimSpace(threadID) != "" && strings.TrimSpace(sess.ActiveThreadID) == strings.TrimSpace(threadID) {
+			clearSessionThreadContext(sess)
+			sessionClearBackendThread(sess, backendCodex)
+			clearedThreadLineage = true
 		}
 		if !sessionHasActiveOperations(sess) {
 			if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
@@ -221,6 +228,9 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 	} else if sess != nil {
 		shouldStartNext = sessionShouldStartNextSubmissionAsync(sess)
 	}
+	if clearedThreadLineage {
+		a.clearSessionLiveThread(sessionKey)
+	}
 	if notifyFailure && sub != nil {
 		w.notifySubmissionStartFailure(context.Background(), sub, err, shouldStartNext)
 	}
@@ -229,6 +239,28 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 		a.runAsync(func() {
 			w.startNextSubmissionAsync(sessionKey, "turnStartFailed")
 		})
+	}
+}
+
+func shouldDropCodexThreadLineageAfterStartFailure(a *App, err error) bool {
+	if a == nil || a.configuredBackend() != backendCodex || err == nil {
+		return false
+	}
+	if a.codexRuntimeRecovering() {
+		return true
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(text, "codex client not initialized"):
+		return true
+	case strings.Contains(text, "codex app-server read failed"):
+		return true
+	case strings.Contains(text, "codex app-server stdin write failed"):
+		return true
+	case strings.Contains(text, "codex app-server process exited"):
+		return true
+	default:
+		return false
 	}
 }
 

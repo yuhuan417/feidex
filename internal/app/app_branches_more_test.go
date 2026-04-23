@@ -391,6 +391,68 @@ func TestStartNextSubmissionNormalizesIdleAfterMissingQueuedSubmission(t *testin
 	}
 }
 
+func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-start-failure-runtime"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		Status:      "queued",
+		Queue:       []string{"sub-1"},
+		BackendThreads: map[string]state.SessionBackendThread{
+			backendCodex: {
+				ThreadID:    "thread-stale",
+				WorkspaceID: a.cfg.Workspaces[0].ID,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-1",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		InputText:        "hello",
+		TriggerMessageID: "m-1",
+		Status:           "queued",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			return errors.New("codex client not initialized")
+		default:
+			return nil
+		}
+	}
+
+	if err := a.startNextSubmission(sessionKey); err == nil || !strings.Contains(err.Error(), "codex client not initialized") {
+		t.Fatalf("startNextSubmission() error = %v, want codex runtime failure", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil {
+		t.Fatal("expected session after start failure")
+	}
+	if sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != "" {
+		t.Fatalf("session after runtime start failure kept thread lineage: %+v", sess)
+	}
+	if _, ok := sess.BackendThreads[backendCodex]; ok {
+		t.Fatalf("session after runtime start failure kept codex backend snapshot: %+v", sess.BackendThreads)
+	}
+	if a.sessionHasLiveThread(sessionKey, "thread-1") {
+		t.Fatal("expected failed runtime start to clear live thread binding")
+	}
+}
+
 func TestStartNextSubmissionSkipsMissingQueuedSubmissionAndStartsNext(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-ghost-then-real"
