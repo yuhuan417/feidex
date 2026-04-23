@@ -18,6 +18,9 @@ func (a *App) frontendIdleBlockedReason() string {
 			return runtime.idleMaintenanceBlockedReason()
 		}
 	}
+	if a.frontendMessageTrafficCount() > 0 {
+		return "当前仍有消息处理中"
+	}
 	for _, sess := range a.appState().sessions() {
 		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
 			continue

@@ -14,6 +14,31 @@ import (
 func (w *submissionWorkflow) startNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := w.app
 	appState := a.appState()
+	if a == nil || a.claude == nil {
+		err := fmt.Errorf("claude backend not initialized")
+		threadID := ""
+		if sess != nil {
+			threadID = strings.TrimSpace(sess.ActiveThreadID)
+		}
+		w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
+		slog.Warn("Claude submission start skipped because runtime is unavailable",
+			"session_key", sessionKey,
+			"submission_id", func() string {
+				if sub == nil {
+					return ""
+				}
+				return sub.ID
+			}(),
+			"thread_id", threadID,
+			"workspace_id", func() string {
+				if sub == nil {
+					return ""
+				}
+				return sub.WorkspaceID
+			}(),
+		)
+		return err
+	}
 
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	if !sessionCanResumeThreadForSubmission(sess, sub) {
@@ -124,6 +149,9 @@ func (w *submissionWorkflow) startNextClaudeSubmissionWithFailureNotice(sessionK
 func (w *submissionWorkflow) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
 	a := w.app
 	appState := a.appState()
+	if a == nil || a.claude == nil {
+		return nil, "", fmt.Errorf("claude backend not initialized")
+	}
 
 	turnID, err := appState.nextLocalID("claude-turn")
 	if err != nil || strings.TrimSpace(turnID) == "" {

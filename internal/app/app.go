@@ -18,32 +18,34 @@ import (
 )
 
 type App struct {
-	cfg                 *config.Config
-	cfgPath             string
-	store               *state.Store
-	frontendID          string
-	frontendConfigIndex int
-	configMu            sync.RWMutex
-	backend             string
-	codex               codexClient
-	claude              claudeCore
-	feishu              feishuClient
-	started             time.Time
-	deduper             *inboundDeduper
-	backendSwitchMu     sync.Mutex
-	backendStateMu      sync.Mutex
-	asyncRunner         func(func())
-	codexRuntimeMu      sync.Mutex
-	codexRecovering     bool
-	codexRecoverySource codexClient
-	codexAutoThreadMu   sync.Mutex
-	codexAutoThreading  bool
-	codexAutoRetryMu    sync.Mutex
-	codexAutoRetries    map[string]*codexAutoRetryState
-	codexAutoRetryAfter func(time.Duration, func()) delayedTask
-	frontendRecoveryMu  sync.Mutex
-	backendSwitching    bool
-	backendSwitchTarget string
+	cfg                    *config.Config
+	cfgPath                string
+	store                  *state.Store
+	frontendID             string
+	frontendConfigIndex    int
+	configMu               sync.RWMutex
+	backend                string
+	codex                  codexClient
+	claude                 claudeCore
+	feishu                 feishuClient
+	started                time.Time
+	deduper                *inboundDeduper
+	backendSwitchMu        sync.Mutex
+	backendStateMu         sync.Mutex
+	asyncRunner            func(func())
+	codexRuntimeMu         sync.Mutex
+	codexRecovering        bool
+	codexRecoverySource    codexClient
+	codexAutoThreadMu      sync.Mutex
+	codexAutoThreading     bool
+	codexAutoRetryMu       sync.Mutex
+	codexAutoRetries       map[string]*codexAutoRetryState
+	codexAutoRetryAfter    func(time.Duration, func()) delayedTask
+	frontendRecoveryMu     sync.Mutex
+	frontendTrafficMu      sync.Mutex
+	frontendMessageTraffic int
+	backendSwitching       bool
+	backendSwitchTarget    string
 
 	turnStreamsMu     sync.Mutex
 	turnStreams       map[string]*turnStream

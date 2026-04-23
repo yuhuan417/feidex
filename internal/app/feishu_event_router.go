@@ -36,6 +36,8 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 			a.deduper.Release(msg.MessageID)
 		}
 	}()
+	a.beginFrontendMessageTraffic()
+	defer a.finishFrontendMessageTraffic()
 	markHandled := func() {
 		if a.deduper != nil {
 			a.deduper.MarkDone(msg.MessageID)

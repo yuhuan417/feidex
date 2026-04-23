@@ -71,6 +71,15 @@ func TestFrontendIdleState(t *testing.T) {
 			want: "当前正在执行 Codex 维护，请稍后再切换 backend",
 		},
 		{
+			name: "in flight message traffic blocks idle",
+			seed: func(t *testing.T, a *App, _ *state.Store) {
+				t.Helper()
+				a.beginFrontendMessageTraffic()
+				t.Cleanup(a.finishFrontendMessageTraffic)
+			},
+			want: "当前仍有消息处理中",
+		},
+		{
 			name: "claude maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
