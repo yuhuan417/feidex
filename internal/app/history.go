@@ -268,7 +268,11 @@ func (a *App) fetchCurrentThreadHistory(sessionKey string) (*state.Session, *cod
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var result codexrpc.ThreadReadResult
-	if err := a.codex.Call(ctx, "thread/read", map[string]any{
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := client.Call(ctx, "thread/read", map[string]any{
 		"threadId":     strings.TrimSpace(sess.ActiveThreadID),
 		"includeTurns": true,
 	}, &result); err != nil {

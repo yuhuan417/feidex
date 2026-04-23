@@ -39,11 +39,9 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 		t.Fatal("cleanupSubmissionRuntimeState() should remove runtime artifacts")
 	}
 
-	a.startDriveArtifactGCLoop(context.Background())
-	ff.cleanupErr = context.Canceled
+	ff.setCleanupState(feishu.PreviewDriveCleanupResult{}, context.Canceled)
 	a.runDriveArtifactGC("test")
-	ff.cleanupErr = nil
-	ff.cleanupResult = feishu.PreviewDriveCleanupResult{DeletedFileCount: 1}
+	ff.setCleanupState(feishu.PreviewDriveCleanupResult{DeletedFileCount: 1}, nil)
 	a.runDriveArtifactGC("test")
 
 	root := filepath.Join(a.cfg.Workspaces[0].Cwd, attachmentsDirName, "old")

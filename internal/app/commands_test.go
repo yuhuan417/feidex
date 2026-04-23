@@ -96,6 +96,23 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 	}
 }
 
+func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.beginBackendSwitchState(backendCodex)
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+		Text:      "/quiet",
+	}
+	err := a.handleCommand(msg, "/quiet")
+	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
+		t.Fatalf("handleCommand() error = %v, want backend switch block", err)
+	}
+}
+
 func TestIsLocalCommand(t *testing.T) {
 	cases := map[string]bool{
 		"/menu":                     true,

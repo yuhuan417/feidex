@@ -10,6 +10,9 @@ func (a *App) frontendIdleBlockedReason() string {
 	if a == nil {
 		return "app not initialized"
 	}
+	if reason := a.backendSwitchBlockedReasonForTraffic(); reason != "" {
+		return reason
+	}
 	for _, runtime := range backendRuntimeFacades() {
 		if runtime.maintenanceActive(a) {
 			return runtime.idleMaintenanceBlockedReason()

@@ -16,6 +16,11 @@ func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActio
 		return &callback.CardActionTriggerResponse{}, nil
 	}
 	name := resolvedCardActionName(action)
+	if reason := a.backendSwitchBlocksCardAction(name); reason != "" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: reason},
+		}, nil
+	}
 	handler := cardActionHandlers[name]
 	if handler == nil {
 		slog.Warn("unknown feishu card action",

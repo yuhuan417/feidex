@@ -88,10 +88,11 @@ func effectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.Model
 
 func (a *App) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
 	var result codexrpc.ModelListResult
-	if a.codex == nil {
-		return result, fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return result, err
 	}
-	if err := a.codex.Call(ctx, "model/list", map[string]any{"limit": 100, "includeHidden": false}, &result); err != nil {
+	if err := client.Call(ctx, "model/list", map[string]any{"limit": 100, "includeHidden": false}, &result); err != nil {
 		return result, err
 	}
 	return result, nil

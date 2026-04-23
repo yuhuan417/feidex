@@ -97,8 +97,9 @@ func (a *App) workspaceByID(workspaceID string) (*config.Workspace, error) {
 
 func (a *App) fetchSkillsForCWD(ctx context.Context, cwd string, forceReload bool) (codexrpc.SkillsListEntry, error) {
 	var result codexrpc.SkillsListResult
-	if a == nil || a.codex == nil {
-		return codexrpc.SkillsListEntry{}, fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return codexrpc.SkillsListEntry{}, err
 	}
 	params := map[string]any{
 		"forceReload": forceReload,
@@ -106,7 +107,7 @@ func (a *App) fetchSkillsForCWD(ctx context.Context, cwd string, forceReload boo
 	if strings.TrimSpace(cwd) != "" {
 		params["cwds"] = []string{strings.TrimSpace(cwd)}
 	}
-	if err := a.codex.Call(ctx, "skills/list", params, &result); err != nil {
+	if err := client.Call(ctx, "skills/list", params, &result); err != nil {
 		return codexrpc.SkillsListEntry{}, err
 	}
 	for _, entry := range result.Data {

@@ -267,6 +267,119 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 	}
 }
 
+func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("Open(store) error = %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.Feishu.Backend = backendClaude
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatalf("Save(config) error = %v", err)
+	}
+
+	origLookPath := backendLookPath
+	origNewCodex := newCodexClient
+	origNewClaude := newClaudeCore
+	defer func() {
+		backendLookPath = origLookPath
+		newCodexClient = origNewCodex
+		newClaudeCore = origNewClaude
+	}()
+
+	backendLookPath = func(file string) (string, error) {
+		switch file {
+		case "codex":
+			return "/usr/bin/codex", nil
+		case "claude":
+			return "/usr/bin/claude", nil
+		default:
+			return "", errors.New("not found")
+		}
+	}
+
+	var app *App
+	var codexCalls []string
+	newCodexClient = func(config.CodexConfig) codexClient {
+		client := &fakeCodexClient{}
+		client.callHook = func(_ context.Context, method string, _ any, _ any) error {
+			codexCalls = append(codexCalls, method)
+			switch method {
+			case "thread/resume":
+				if !app.beginCodexTransportRecovery(client) {
+					t.Fatal("expected beginCodexTransportRecovery() to start recovery")
+				}
+				return errors.New("codex app-server read failed: read |0: file already closed")
+			case "thread/start":
+				t.Fatal("thread/start should not run while codex runtime is recovering")
+				return nil
+			default:
+				return nil
+			}
+		}
+		return client
+	}
+	newClaudeCore = func(_ *App, _ config.ClaudeConfig) claudeCore {
+		return &fakeClaudeCore{}
+	}
+
+	app = &App{
+		cfg:         cfg,
+		cfgPath:     cfgPath,
+		store:       store,
+		backend:     backendClaude,
+		claude:      &fakeClaudeCore{},
+		feishu:      &fakeFeishuClient{},
+		liveThreads: map[string]string{},
+	}
+
+	sessionKey := "feishu:p2p:chat-1:user-1"
+	if err := store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             "default",
+		ActiveThreadID:          "claude-session-1",
+		ActiveThreadWorkspaceID: "default",
+		ActiveThreadName:        "Claude Session",
+		ActiveThreadPreview:     "claude preview",
+		Status:                  "idle",
+		BackendThreads: map[string]state.SessionBackendThread{
+			backendCodex: {
+				ThreadID:    "codex-thread-1",
+				WorkspaceID: "default",
+				Name:        "Codex Thread",
+				Preview:     "codex preview",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	if err := app.switchBackend(context.Background(), backendCodex); err != nil {
+		t.Fatalf("switchBackend(claude->codex) error = %v", err)
+	}
+
+	if !app.codexRuntimeRecovering() {
+		t.Fatal("expected codex runtime to be marked recovering")
+	}
+	if got := app.currentCodexClient(); got != nil {
+		t.Fatalf("currentCodexClient() = %#v, want nil while recovering", got)
+	}
+	if len(codexCalls) != 1 || codexCalls[0] != "thread/resume" {
+		t.Fatalf("codex calls = %+v, want only thread/resume", codexCalls)
+	}
+
+	sess := store.GetSession(sessionKey)
+	if sess == nil {
+		t.Fatal("expected session after backend switch")
+	}
+	if sess.ActiveThreadID != "codex-thread-1" || sess.ActiveThreadWorkspaceID != "default" || sess.Status != "idle" {
+		t.Fatalf("session after deferred codex startup recovery = %+v", sess)
+	}
+}
+
 func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {

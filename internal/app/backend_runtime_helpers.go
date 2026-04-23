@@ -7,6 +7,9 @@ import (
 )
 
 func (a *App) handleBackendMaintenanceBlock(raw string) error {
+	if reason := a.backendSwitchBlockedReasonForTraffic(); reason != "" {
+		return newUIWarningError(reason)
+	}
 	if runtime := a.backendRuntime(); runtime != nil {
 		return runtime.maintenanceBlocksCommand(a, raw)
 	}
@@ -14,6 +17,9 @@ func (a *App) handleBackendMaintenanceBlock(raw string) error {
 }
 
 func (a *App) backendMaintenanceBlocksInboundMessage() error {
+	if reason := a.backendSwitchBlockedReasonForTraffic(); reason != "" {
+		return newUIWarningError(reason)
+	}
 	if runtime := a.backendRuntime(); runtime != nil {
 		return runtime.maintenanceBlocksCommand(a, "")
 	}

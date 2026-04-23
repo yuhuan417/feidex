@@ -84,8 +84,9 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 }
 
 func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	if a == nil || a.codex == nil {
-		return nil, fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return nil, err
 	}
 	threadID := strings.TrimSpace(selection.ThreadID)
 	if threadID == "" {
@@ -111,7 +112,7 @@ func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, 
 		"model", effectiveModel,
 	)
 	var result codexrpc.ThreadStartResult
-	if err := a.codex.Call(context.Background(), "thread/resume", params, &result); err != nil {
+	if err := client.Call(context.Background(), "thread/resume", params, &result); err != nil {
 		return nil, err
 	}
 	boundThreadID := firstNonEmpty(strings.TrimSpace(result.Thread.ID), threadID)
@@ -141,21 +142,23 @@ func (a *App) interruptClaudeActiveTurn(ctx context.Context, sessionKey string) 
 }
 
 func (a *App) interruptCodexActiveTurn(ctx context.Context, sess *state.Session) error {
-	if a == nil || a.codex == nil {
-		return fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return err
 	}
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有运行中的任务")
 	}
-	return a.codex.Call(ctx, "turn/interrupt", map[string]any{
+	return client.Call(ctx, "turn/interrupt", map[string]any{
 		"threadId": sess.ActiveThreadID,
 		"turnId":   sess.ActiveTurnID,
 	}, nil)
 }
 
 func (a *App) continueCodexActiveTurn(sessionKey, text string) error {
-	if a == nil || a.codex == nil {
-		return fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return err
 	}
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -167,7 +170,7 @@ func (a *App) continueCodexActiveTurn(sessionKey, text string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	return a.codex.Call(ctx, "turn/steer", map[string]any{
+	return client.Call(ctx, "turn/steer", map[string]any{
 		"threadId":       sess.ActiveThreadID,
 		"expectedTurnId": sess.ActiveTurnID,
 		"input": []map[string]any{
@@ -217,9 +220,13 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 	if len(inputs) == 0 {
 		return false, nil
 	}
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return false, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "turn/steer", map[string]any{
+	if err := client.Call(ctx, "turn/steer", map[string]any{
 		"threadId":       threadID,
 		"expectedTurnId": turnID,
 		"input":          inputs,

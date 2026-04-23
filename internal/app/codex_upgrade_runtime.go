@@ -137,14 +137,14 @@ func (a *App) refreshCodexRuntimeAfterMaintenance(ctx context.Context) (bool, er
 	if err != nil {
 		return false, err
 	}
-	old := a.codex
+	old := a.currentCodexClient()
 	if old != nil {
 		if err := old.Close(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			_ = next.Close()
 			return false, fmt.Errorf("切换 runtime 失败: %w", err)
 		}
 	}
-	a.codex = next
+	a.replaceCodexClient(next)
 	return true, nil
 }
 

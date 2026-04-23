@@ -209,6 +209,7 @@ func (f *fakeCodexClient) ReplyError(id json.RawMessage, code int, msg string) e
 }
 
 type fakeFeishuClient struct {
+	mu                        sync.Mutex
 	startErr                  error
 	replyTextErr              error
 	sendTextErr               error
@@ -262,48 +263,71 @@ type fakeFeishuClient struct {
 }
 
 func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.onMessage = onMessage
 }
 
 func (f *fakeFeishuClient) Start(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.started = true
 	return f.startErr
 }
 
 func (f *fakeFeishuClient) Stop() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.stopped = true
 }
 
 func (f *fakeFeishuClient) ConfigureLocalFileLinks(statePath, processCWD string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.localFileLinkStatePath = statePath
 	f.localFileLinkProcessCWD = processCWD
 }
 
 func (f *fakeFeishuClient) RewriteLocalFileLinks(ctx context.Context, req feishu.LocalFileLinkRewriteRequest) (string, error) {
+	f.mu.Lock()
 	f.rewriteLocalFileLinkReqs = append(f.rewriteLocalFileLinkReqs, req)
-	if f.rewriteLocalFileLinksHook != nil {
-		return f.rewriteLocalFileLinksHook(ctx, req)
+	hook := f.rewriteLocalFileLinksHook
+	out := f.rewriteLocalFileLinksOut
+	err := f.rewriteLocalFileLinksErr
+	f.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, req)
 	}
-	return f.rewriteLocalFileLinksOut, f.rewriteLocalFileLinksErr
+	return out, err
 }
 
 func (f *fakeFeishuClient) CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.cleanupResult, f.cleanupErr
 }
 
 func (f *fakeFeishuClient) AddReaction(context.Context, string, string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.addReactionErr
 }
 func (f *fakeFeishuClient) RemoveReaction(context.Context, string, string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.removeReactionErr
 }
 
 func (f *fakeFeishuClient) ReplyText(_ context.Context, _ string, text string, _ bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.replyTexts = append(f.replyTexts, text)
 	return f.replyTextErr
 }
 
 func (f *fakeFeishuClient) ReplyTextWithID(_ context.Context, _ string, text string, _ bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.replyTextWithIDs = append(f.replyTextWithIDs, text)
 	if len(f.replyTextIDs) > 0 {
 		id := f.replyTextIDs[0]
@@ -314,12 +338,16 @@ func (f *fakeFeishuClient) ReplyTextWithID(_ context.Context, _ string, text str
 }
 
 func (f *fakeFeishuClient) SendText(_ context.Context, _ string, text string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.sentTexts = append(f.sentTexts, text)
 	return f.sendTextErr
 }
 
 func (f *fakeFeishuClient) ReplyCard(_ context.Context, _ string, card map[string]any, inThread bool) (string, error) {
-	f.replyCards = append(f.replyCards, card)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replyCards = append(f.replyCards, cloneTestCard(card))
 	f.replyCardInThread = append(f.replyCardInThread, inThread)
 	if len(f.replyCardIDs) > 0 {
 		id := f.replyCardIDs[0]
@@ -333,8 +361,10 @@ func (f *fakeFeishuClient) ReplyCard(_ context.Context, _ string, card map[strin
 }
 
 func (f *fakeFeishuClient) SendCard(_ context.Context, chatID string, card map[string]any) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.sendCardChatIDs = append(f.sendCardChatIDs, chatID)
-	f.sendCards = append(f.sendCards, card)
+	f.sendCards = append(f.sendCards, cloneTestCard(card))
 	if f.sendCardID == "" {
 		f.sendCardID = "send-card-id"
 	}
@@ -342,28 +372,39 @@ func (f *fakeFeishuClient) SendCard(_ context.Context, chatID string, card map[s
 }
 
 func (f *fakeFeishuClient) PatchCard(_ context.Context, _ string, card map[string]any) error {
-	f.patchedCards = append(f.patchedCards, card)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.patchedCards = append(f.patchedCards, cloneTestCard(card))
 	return f.patchCardErr
 }
 
 func (f *fakeFeishuClient) DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.downloadPath, f.downloadName, f.downloadErr
 }
 
 func (f *fakeFeishuClient) ResolveMergeForward(ctx context.Context, messageID string, messageIDs []string) (string, []feishu.Attachment, error) {
 	ids := append([]string(nil), messageIDs...)
+	f.mu.Lock()
 	f.mergeForwardCalls = append(f.mergeForwardCalls, struct {
 		messageID string
 		ids       []string
 	}{messageID: messageID, ids: ids})
-	if f.resolveMergeForwardHook != nil {
-		return f.resolveMergeForwardHook(ctx, messageID, ids)
-	}
+	hook := f.resolveMergeForwardHook
 	attachments := append([]feishu.Attachment(nil), f.mergeForwardAttachments...)
-	return f.mergeForwardText, attachments, f.mergeForwardErr
+	text := f.mergeForwardText
+	err := f.mergeForwardErr
+	f.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, messageID, ids)
+	}
+	return text, attachments, err
 }
 
 func (f *fakeFeishuClient) ShareLocalFile(_ context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.sharedFileRequests = append(f.sharedFileRequests, req)
 	return f.sharedFileResult, f.shareFileErr
 }
@@ -373,13 +414,118 @@ func (f *fakeFeishuClient) SimpleStatusCard(title, color, body string, buttons [
 }
 
 func (f *fakeFeishuClient) UrgentApp(_ context.Context, messageID, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.urgentAppCalls = append(f.urgentAppCalls, struct{ messageID, userID string }{messageID: messageID, userID: userID})
 	return f.urgentAppErr
 }
 
 func (f *fakeFeishuClient) LookupMessageSenderOpenID(_ context.Context, messageID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.lookupMessageSenderCalls = append(f.lookupMessageSenderCalls, messageID)
 	return f.lookupMessageSenderOpen, f.lookupMessageSenderErr
+}
+
+func (f *fakeFeishuClient) replyCardsSnapshot() []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return cloneTestCardSlice(f.replyCards)
+}
+
+func (f *fakeFeishuClient) sendCardsSnapshot() []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return cloneTestCardSlice(f.sendCards)
+}
+
+func (f *fakeFeishuClient) patchedCardsSnapshot() []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return cloneTestCardSlice(f.patchedCards)
+}
+
+func (f *fakeFeishuClient) replyTextsSnapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.replyTexts...)
+}
+
+func (f *fakeFeishuClient) replyTextWithIDsSnapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.replyTextWithIDs...)
+}
+
+func (f *fakeFeishuClient) sharedFileRequestsSnapshot() []feishu.SharedFileRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]feishu.SharedFileRequest(nil), f.sharedFileRequests...)
+}
+
+func (f *fakeFeishuClient) setCleanupState(result feishu.PreviewDriveCleanupResult, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cleanupResult = result
+	f.cleanupErr = err
+}
+
+func cloneTestCardSlice(cards []map[string]any) []map[string]any {
+	if len(cards) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, len(cards))
+	for i, card := range cards {
+		out[i] = cloneTestCard(card)
+	}
+	return out
+}
+
+func cloneTestCard(card map[string]any) map[string]any {
+	if card == nil {
+		return nil
+	}
+	cloned, _ := cloneTestValue(card).(map[string]any)
+	return cloned
+}
+
+func cloneTestValue(value any) any {
+	switch current := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(current))
+		for key, item := range current {
+			out[key] = cloneTestValue(item)
+		}
+		return out
+	case []map[string]any:
+		out := make([]map[string]any, len(current))
+		for i, item := range current {
+			out[i] = cloneTestCard(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(current))
+		for i, item := range current {
+			out[i] = cloneTestValue(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), current...)
+	case []feishu.Button:
+		return append([]feishu.Button(nil), current...)
+	case []feishu.Attachment:
+		return append([]feishu.Attachment(nil), current...)
+	case []feishu.SharedFileRequest:
+		return append([]feishu.SharedFileRequest(nil), current...)
+	case map[string]string:
+		out := make(map[string]string, len(current))
+		for key, item := range current {
+			out[key] = item
+		}
+		return out
+	default:
+		return current
+	}
 }
 
 func cardMarkdownContent(t *testing.T, card map[string]any) string {
@@ -1329,6 +1475,13 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	if resp, err := a.dispatchCardAction(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
 	}
+	a.beginBackendSwitchState(backendCodex)
+	if resp, err := a.dispatchCardAction(&feishu.CardAction{
+		ActionValue: map[string]any{"action": "menu.root"},
+	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
+		t.Fatalf("dispatchCardAction(blocked) = %#v, %v", resp, err)
+	}
+	a.finishBackendSwitchState()
 
 	for name, fn := range map[string]func() (*callback.CardActionTriggerResponse, error){
 		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
@@ -1466,6 +1619,23 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 				t.Fatalf("%s should update current card", name)
 			}
 		}
+	}
+}
+
+func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.beginBackendSwitchState(backendCodex)
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+		Text:      "hello",
+	}
+	err := newFeishuEventRouter(a).processMessage(msg)
+	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
+		t.Fatalf("processMessage() error = %v, want backend switch block", err)
 	}
 }
 
@@ -2543,21 +2713,21 @@ func TestCompleteMenuUpgradeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	if body := cardMarkdownContent(t, card); !strings.Contains(body, "正在检查可升级版本") {
 		t.Fatalf("upgrade preparing body = %q", body)
 	}
-	if len(ff.patchedCards) != 0 {
-		t.Fatalf("patched cards before release completes = %+v, want none", ff.patchedCards)
+	if patched := ff.patchedCardsSnapshot(); len(patched) != 0 {
+		t.Fatalf("patched cards before release completes = %+v, want none", patched)
 	}
 
 	<-blocking.started
 	close(blocking.release)
 
-	deadline := time.Now().Add(1 * time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(ff.patchedCards) == 0 {
+	waitForTestCondition(t, "async upgrade card patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
 		t.Fatal("expected upgrade card to be patched asynchronously")
 	}
-	if body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]); !strings.Contains(body, "最新版本: `v0.2.0`") {
+	if body := cardMarkdownContent(t, patched[len(patched)-1]); !strings.Contains(body, "最新版本: `v0.2.0`") {
 		t.Fatalf("patched upgrade body = %q", body)
 	}
 }

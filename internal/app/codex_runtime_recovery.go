@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -32,6 +34,42 @@ func (a *App) codexRuntimeRecovering() bool {
 	a.codexRuntimeMu.Lock()
 	defer a.codexRuntimeMu.Unlock()
 	return a.codexRecovering
+}
+
+func (a *App) currentCodexClient() codexClient {
+	if a == nil {
+		return nil
+	}
+	a.codexRuntimeMu.Lock()
+	defer a.codexRuntimeMu.Unlock()
+	return a.codex
+}
+
+func (a *App) requireCodexClient() (codexClient, error) {
+	client := a.currentCodexClient()
+	if client == nil {
+		return nil, fmt.Errorf("codex client not initialized")
+	}
+	return client, nil
+}
+
+func (a *App) replaceCodexClient(next codexClient) codexClient {
+	if a == nil {
+		return nil
+	}
+	a.codexRuntimeMu.Lock()
+	defer a.codexRuntimeMu.Unlock()
+	prev := a.codex
+	a.codex = next
+	return prev
+}
+
+func (a *App) replyCodexError(requestID json.RawMessage, code int, message string) {
+	client := a.currentCodexClient()
+	if client == nil {
+		return
+	}
+	_ = client.ReplyError(requestID, code, message)
 }
 
 func (a *App) completeCodexTransportRecovery(next codexClient) bool {

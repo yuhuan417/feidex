@@ -262,14 +262,14 @@ func TestTurnItemFinalAnswerSchedulesLocalFileLinkPatch(t *testing.T) {
 		t.Fatalf("sendTurnItemCardWithReuse(final) = %q, want final-card-id", got)
 	}
 
-	deadline := time.Now().Add(1 * time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(ff.patchedCards) == 0 {
+	waitForTestCondition(t, "local file link patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
 		t.Fatal("expected final turn item to patch local file links asynchronously")
 	}
-	if body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]); !strings.Contains(body, "patched preview body") {
+	if body := cardMarkdownContent(t, patched[len(patched)-1]); !strings.Contains(body, "patched preview body") {
 		t.Fatalf("patched final turn item body = %q, want rewritten preview content", body)
 	}
 }

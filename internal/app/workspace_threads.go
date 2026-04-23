@@ -25,8 +25,9 @@ func (a *App) listWorkspaceThreads(sessionKey string, ws *config.Workspace, incl
 }
 
 func (a *App) listCodexWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	if a == nil || a.codex == nil {
-		return nil, fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return nil, err
 	}
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
@@ -56,7 +57,6 @@ func (a *App) listCodexWorkspaceThreads(sessionKey string, ws *config.Workspace,
 	}
 
 	var result codexrpc.ThreadListResult
-	var err error
 	for idx, params := range queries {
 		slog.Debug("thread list query",
 			"attempt", idx+1,
@@ -64,7 +64,7 @@ func (a *App) listCodexWorkspaceThreads(sessionKey string, ws *config.Workspace,
 			"params", fmt.Sprintf("%v", params),
 		)
 		result = codexrpc.ThreadListResult{}
-		err = a.codex.Call(ctx, "thread/list", params, &result)
+		err = client.Call(ctx, "thread/list", params, &result)
 		if err != nil {
 			slog.Error("thread list query failed", "attempt", idx+1, "error", err)
 			continue
@@ -167,6 +167,10 @@ func (a *App) ensureCodexWorkspaceThreadBinding(sessionKey string, sess *state.S
 
 func (a *App) resumeCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*workspaceThreadBinding, error) {
 	appState := a.appState()
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return nil, err
+	}
 	threadID := strings.TrimSpace(entry.ID)
 	if threadID == "" {
 		return nil, fmt.Errorf("missing thread id")
@@ -182,7 +186,7 @@ func (a *App) resumeCodexWorkspaceThread(sessionKey string, sess *state.Session,
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "thread/resume", params, &result); err != nil {
+	if err := client.Call(ctx, "thread/resume", params, &result); err != nil {
 		return nil, err
 	}
 	boundThreadID := firstNonEmpty(strings.TrimSpace(result.Thread.ID), threadID)
@@ -244,8 +248,9 @@ func (a *App) startClaudeWorkspaceThread(sessionKey string, sess *state.Session,
 }
 
 func (a *App) startCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	if a == nil || a.codex == nil {
-		return nil, fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return nil, err
 	}
 	appState := a.appState()
 	effectiveModel := configuredGlobalModel(a.cfg)
@@ -253,7 +258,7 @@ func (a *App) startCodexWorkspaceThread(sessionKey string, sess *state.Session, 
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "thread/start", threadParams, &result); err != nil {
+	if err := client.Call(ctx, "thread/start", threadParams, &result); err != nil {
 		return nil, err
 	}
 	threadID := strings.TrimSpace(result.Thread.ID)

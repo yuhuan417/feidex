@@ -113,7 +113,12 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	if err := a.codex.Call(ctx, "thread/compact/start", map[string]any{
+	client, err := a.requireCodexClient()
+	if err != nil {
+		a.restoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
+		return nil, err
+	}
+	if err := client.Call(ctx, "thread/compact/start", map[string]any{
 		"threadId": threadID,
 	}, nil); err != nil {
 		a.restoreStandaloneCompactSession(sessionKey, threadID, previousStatus)

@@ -24,7 +24,11 @@ func (a *App) recoverClaudeStartupConversation(sessionKey, workspaceID string, s
 }
 
 func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
-	if a == nil || a.codex == nil || sess == nil || ws == nil {
+	if a == nil || sess == nil || ws == nil {
+		return
+	}
+	client := a.currentCodexClient()
+	if client == nil {
 		return
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
@@ -43,7 +47,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		"model", effectiveModel,
 	)
 	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err := a.codex.Call(resumeCtx, "thread/resume", resumeParams, &resumeResp)
+	err := client.Call(resumeCtx, "thread/resume", resumeParams, &resumeResp)
 	resumeCancel()
 	if err == nil {
 		setSessionThreadContext(sess,
@@ -72,6 +76,17 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		return
 	}
 
+	if a.codexRuntimeRecovering() || a.currentCodexClient() == nil {
+		slog.Warn("startup thread recovery deferred while codex runtime recovering",
+			"session_key", sessionKey,
+			"thread_id", threadID,
+			"workspace_id", workspaceID,
+			"model", effectiveModel,
+			"error", err,
+		)
+		return
+	}
+
 	slog.Warn("startup thread/resume failed; starting fresh thread",
 		"session_key", sessionKey,
 		"thread_id", threadID,
@@ -79,6 +94,16 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		"model", effectiveModel,
 		"error", err,
 	)
+	client = a.currentCodexClient()
+	if client == nil {
+		slog.Warn("startup fresh thread recovery skipped because codex runtime disappeared",
+			"session_key", sessionKey,
+			"thread_id", threadID,
+			"workspace_id", workspaceID,
+			"model", effectiveModel,
+		)
+		return
+	}
 	threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
 	var threadResp codexrpc.ThreadStartResult
 	slog.Debug("startup thread start request",
@@ -88,9 +113,19 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		"model", effectiveModel,
 	)
 	threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err = a.codex.Call(threadCtx, "thread/start", threadParams, &threadResp)
+	err = client.Call(threadCtx, "thread/start", threadParams, &threadResp)
 	threadCancel()
 	if err != nil {
+		if a.codexRuntimeRecovering() || a.currentCodexClient() == nil {
+			slog.Warn("startup fresh thread recovery deferred while codex runtime recovering",
+				"session_key", sessionKey,
+				"stale_thread_id", threadID,
+				"workspace_id", workspaceID,
+				"cwd", ws.Cwd,
+				"error", err,
+			)
+			return
+		}
 		slog.Error("startup thread/start failed; clearing thread lineage",
 			"session_key", sessionKey,
 			"stale_thread_id", threadID,

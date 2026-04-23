@@ -20,7 +20,8 @@ func isTerminalTurnStatus(status string) bool {
 }
 
 func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
-	if a == nil || a.isClaudeBackend() || a.codex == nil || sess == nil {
+	client := a.currentCodexClient()
+	if a == nil || a.isClaudeBackend() || client == nil || sess == nil {
 		return sess
 	}
 	if !sessionHasInFlightSubmission(sess) {
@@ -36,7 +37,7 @@ func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess
 	defer cancel()
 
 	var result codexrpc.ThreadReadResult
-	if err := a.codex.Call(ctx, "thread/read", map[string]any{
+	if err := client.Call(ctx, "thread/read", map[string]any{
 		"threadId":     threadID,
 		"includeTurns": true,
 	}, &result); err != nil {

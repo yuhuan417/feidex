@@ -55,6 +55,14 @@ func TestFrontendIdleState(t *testing.T) {
 			want:     "",
 		},
 		{
+			name: "backend switching blocks idle",
+			seed: func(t *testing.T, a *App, _ *state.Store) {
+				t.Helper()
+				a.beginBackendSwitchState(backendCodex)
+			},
+			want: "当前正在切换到 Codex backend，请稍后再试",
+		},
+		{
 			name: "maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()

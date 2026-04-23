@@ -14,7 +14,7 @@ func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID,
 func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string, requestPayload map[string]any) {
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		_ = a.codex.ReplyError(requestID, -32602, "no active session for approval")
+		a.replyCodexError(requestID, -32602, "no active session for approval")
 		return
 	}
 	requestKey := requestIDKey(requestID)
@@ -44,7 +44,7 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 	if err == nil {
 		return
 	}
-	_ = a.codex.ReplyError(requestID, -32603, err.Error())
+	a.replyCodexError(requestID, -32603, err.Error())
 }
 
 func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any) {
@@ -54,7 +54,7 @@ func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, i
 func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any, requestPayload map[string]any) {
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		_ = a.codex.ReplyError(requestID, -32602, "no active session for permissions approval")
+		a.replyCodexError(requestID, -32602, "no active session for permissions approval")
 		return
 	}
 	requestKey := requestIDKey(requestID)
@@ -86,13 +86,13 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 	if err == nil {
 		return
 	}
-	_ = a.codex.ReplyError(requestID, -32603, err.Error())
+	a.replyCodexError(requestID, -32603, err.Error())
 }
 
 func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil || len(payload.Questions) == 0 {
-		_ = a.codex.ReplyError(requestID, -32602, "no active session for request_user_input")
+		a.replyCodexError(requestID, -32602, "no active session for request_user_input")
 		return
 	}
 	q := payload.Questions[0]
@@ -128,7 +128,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 	if err == nil {
 		return
 	}
-	_ = a.codex.ReplyError(requestID, -32603, err.Error())
+	a.replyCodexError(requestID, -32603, err.Error())
 }
 
 func mustJSON(v any) string {

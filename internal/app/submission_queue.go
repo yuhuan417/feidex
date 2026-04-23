@@ -364,6 +364,12 @@ func (w *submissionWorkflow) startNextCodexSubmissionWithFailureNotice(sessionKe
 	effectiveSandboxMode := effectiveThreadSandboxMode(sess, ws)
 	effectiveServiceTier := effectiveThreadServiceTier(sess)
 	if threadID == "" {
+		client, err := a.requireCodexClient()
+		if err != nil {
+			w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
+			logSessionState("startNextSubmission thread-client-missing", sessionKey, appState.session(sessionKey))
+			return err
+		}
 		threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
 		var threadResp codexrpc.ThreadStartResult
 		slog.Debug("thread start request",
@@ -374,7 +380,7 @@ func (w *submissionWorkflow) startNextCodexSubmissionWithFailureNotice(sessionKe
 			"model", effectiveModel,
 		)
 		threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err := a.codex.Call(threadCtx, "thread/start", threadParams, &threadResp)
+		err = client.Call(threadCtx, "thread/start", threadParams, &threadResp)
 		threadCancel()
 		if err != nil {
 			w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)

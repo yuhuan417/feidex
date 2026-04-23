@@ -34,8 +34,9 @@ func (a *App) forkClaudeActiveConversation(sessionKey string, sess *state.Sessio
 }
 
 func (a *App) forkCodexActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	if a == nil || a.codex == nil {
-		return "", fmt.Errorf("codex client not initialized")
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return "", err
 	}
 	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), a.defaultWorkspaceID())
 	params := map[string]any{
@@ -54,7 +55,7 @@ func (a *App) forkCodexActiveConversation(sessionKey string, sess *state.Session
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := a.codex.Call(ctx, "thread/fork", params, &result); err != nil {
+	if err := client.Call(ctx, "thread/fork", params, &result); err != nil {
 		return "", err
 	}
 	forkedID := strings.TrimSpace(result.Thread.ID)

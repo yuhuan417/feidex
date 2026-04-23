@@ -31,16 +31,29 @@ type codexServerRequestAdapter struct {
 
 func (codexServerRequestAdapter) kind() string { return backendCodex }
 
-func (c codexServerRequestAdapter) replyApproval(pending *state.PendingRequest, _ string, replyPayload any) error {
-	if c.app == nil || c.app.codex == nil {
-		return fmt.Errorf("codex client not initialized")
+func (c codexServerRequestAdapter) client() (codexClient, error) {
+	if c.app == nil {
+		return nil, fmt.Errorf("codex client not initialized")
 	}
-	return c.app.codex.Reply(pendingRequestIDRaw(pending), replyPayload)
+	client := c.app.currentCodexClient()
+	if client == nil {
+		return nil, fmt.Errorf("codex client not initialized")
+	}
+	return client, nil
+}
+
+func (c codexServerRequestAdapter) replyApproval(pending *state.PendingRequest, _ string, replyPayload any) error {
+	client, err := c.client()
+	if err != nil {
+		return err
+	}
+	return client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
 func (c codexServerRequestAdapter) replyQuickUserInput(pending *state.PendingRequest, _ toolUserInputPayload, questionID, answer string) (string, error) {
-	if c.app == nil || c.app.codex == nil {
-		return "", fmt.Errorf("codex client not initialized")
+	client, err := c.client()
+	if err != nil {
+		return "", err
 	}
 	replyPayload := map[string]any{
 		"answers": map[string]any{
@@ -49,48 +62,52 @@ func (c codexServerRequestAdapter) replyQuickUserInput(pending *state.PendingReq
 			},
 		},
 	}
-	return strings.TrimSpace(answer), c.app.codex.Reply(pendingRequestIDRaw(pending), replyPayload)
+	return strings.TrimSpace(answer), client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
 func (c codexServerRequestAdapter) replyFormUserInput(pending *state.PendingRequest, payload toolUserInputPayload, selections map[string]string) (string, error) {
-	if c.app == nil || c.app.codex == nil {
-		return "", fmt.Errorf("codex client not initialized")
+	client, err := c.client()
+	if err != nil {
+		return "", err
 	}
 	replyPayload, summary, err := buildToolUserInputResponseFromSelections(payload, selections)
 	if err != nil {
 		return "", newUIWarningError(err.Error())
 	}
-	return summary, c.app.codex.Reply(pendingRequestIDRaw(pending), replyPayload)
+	return summary, client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
 func (c codexServerRequestAdapter) replyTextUserInput(pending *state.PendingRequest, payload toolUserInputPayload, text string) (string, error) {
-	if c.app == nil || c.app.codex == nil {
-		return "", fmt.Errorf("codex client not initialized")
+	client, err := c.client()
+	if err != nil {
+		return "", err
 	}
 	replyPayload, summary, err := parseToolUserInputResponse(strings.TrimSpace(text), payload)
 	if err != nil {
 		return "", err
 	}
-	return summary, c.app.codex.Reply(pendingRequestIDRaw(pending), replyPayload)
+	return summary, client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
 func (c codexServerRequestAdapter) replyElicitationForm(pending *state.PendingRequest, payload elicitationFormPayload, text string) (string, error) {
-	if c.app == nil || c.app.codex == nil {
-		return "", fmt.Errorf("codex client not initialized")
+	client, err := c.client()
+	if err != nil {
+		return "", err
 	}
 	content, summary, err := parseElicitationFormResponse(strings.TrimSpace(text), payload)
 	if err != nil {
 		return "", err
 	}
-	return summary, c.app.codex.Reply(pendingRequestIDRaw(pending), map[string]any{
+	return summary, client.Reply(pendingRequestIDRaw(pending), map[string]any{
 		"action":  "accept",
 		"content": content,
 	})
 }
 
 func (c codexServerRequestAdapter) replyElicitationURL(pending *state.PendingRequest, actionName string) (string, error) {
-	if c.app == nil || c.app.codex == nil {
-		return "", fmt.Errorf("codex client not initialized")
+	client, err := c.client()
+	if err != nil {
+		return "", err
 	}
 	decision := "cancel"
 	switch strings.TrimSpace(actionName) {
@@ -99,21 +116,23 @@ func (c codexServerRequestAdapter) replyElicitationURL(pending *state.PendingReq
 	case "elicitation_url.decline":
 		decision = "decline"
 	}
-	return decision, c.app.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
+	return decision, client.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
 }
 
 func (c codexServerRequestAdapter) cancelPending(pending *state.PendingRequest) error {
 	switch pending.Kind {
 	case "tool_request_user_input_form":
-		if c.app == nil || c.app.codex == nil {
-			return fmt.Errorf("codex client not initialized")
+		client, err := c.client()
+		if err != nil {
+			return err
 		}
-		return c.app.codex.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
+		return client.ReplyError(pendingRequestIDRaw(pending), -32800, "cancelled by user")
 	case "mcp_elicitation_form":
-		if c.app == nil || c.app.codex == nil {
-			return fmt.Errorf("codex client not initialized")
+		client, err := c.client()
+		if err != nil {
+			return err
 		}
-		return c.app.codex.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
+		return client.Reply(pendingRequestIDRaw(pending), map[string]any{"action": "cancel"})
 	default:
 		return nil
 	}

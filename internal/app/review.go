@@ -288,8 +288,12 @@ func (a *App) startSubmissionReview(ctx context.Context, threadID string, sub *s
 		"delivery": "inline",
 		"target":   reviewTargetParams(target),
 	}
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return "", err
+	}
 	var reviewResp codexrpc.ReviewStartResult
-	if err := a.codex.Call(ctx, "review/start", params, &reviewResp); err != nil {
+	if err := client.Call(ctx, "review/start", params, &reviewResp); err != nil {
 		return "", err
 	}
 	turnID := strings.TrimSpace(reviewResp.Turn.ID)

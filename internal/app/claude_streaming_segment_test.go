@@ -451,14 +451,14 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 		errCh <- err
 	}()
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for len(ff.sendCards) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	waitForTestCondition(t, "plan confirmation card", func() bool {
+		return len(ff.sendCardsSnapshot()) > 0
+	})
+	sendCards := ff.sendCardsSnapshot()
+	if len(sendCards) != 1 {
+		t.Fatalf("plan confirmation card count = %d, want 1", len(sendCards))
 	}
-	if len(ff.sendCards) != 1 {
-		t.Fatalf("plan confirmation card count = %d, want 1", len(ff.sendCards))
-	}
-	if got := cardHeaderTitle(t, ff.sendCards[0]); got != "Claude 计划确认" {
+	if got := cardHeaderTitle(t, sendCards[0]); got != "Claude 计划确认" {
 		t.Fatalf("plan confirmation title = %q, want Claude 计划确认", got)
 	}
 

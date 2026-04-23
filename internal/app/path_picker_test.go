@@ -552,8 +552,8 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	if pending := a.store.PendingByID("workspace-clone-1"); pending == nil || pending.Status != "processing" {
 		t.Fatalf("pending after async submit = %+v, want processing", pending)
 	}
-	if len(ff.patchedCards) != 0 {
-		t.Fatalf("patchedCards before clone completes = %+v, want none", ff.patchedCards)
+	if patched := ff.patchedCardsSnapshot(); len(patched) != 0 {
+		t.Fatalf("patchedCards before clone completes = %+v, want none", patched)
 	}
 	select {
 	case <-started:
@@ -564,21 +564,18 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	released = true
 
 	wantTargetDir := filepath.Join(parentDir, "repo-copy")
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(ff.patchedCards) > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForTestCondition(t, "workspace clone success patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
 	if gotRepoURL != "git@github.com:example/repo.git" {
 		t.Fatalf("workspaceGitClone repoURL = %q", gotRepoURL)
 	}
 	if gotTargetDir != wantTargetDir {
 		t.Fatalf("workspaceGitClone targetDir = %q, want %q", gotTargetDir, wantTargetDir)
 	}
-	if len(ff.patchedCards) == 0 {
-		t.Fatalf("patchedCards after clone completes = %+v, want success card", ff.patchedCards)
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatalf("patchedCards after clone completes = %+v, want success card", patched)
 	}
 	if pending := a.store.PendingByID("workspace-clone-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after clone submit = %+v, want resolved", pending)
@@ -586,7 +583,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	if ws := config.FindWorkspace(a.cfg, "repo-copy"); ws == nil || filepath.Clean(ws.Cwd) != filepath.Clean(wantTargetDir) {
 		t.Fatalf("created workspace = %+v, want cwd %q", ws, wantTargetDir)
 	}
-	body = cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body = cardMarkdownContent(t, patched[len(patched)-1])
 	if !strings.Contains(body, "已从仓库创建并切换到工作区 `repo-copy`") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("clone status card body = %q", body)
 	}
@@ -756,24 +753,21 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(ff.patchedCards) > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(ff.patchedCards) == 0 {
-		t.Fatalf("patchedCards after clone failure = %+v, want retry form", ff.patchedCards)
+	waitForTestCondition(t, "workspace clone failure patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatalf("patchedCards after clone failure = %+v, want retry form", patched)
 	}
 	if pending := a.store.PendingByID("workspace-clone-fail"); pending == nil || pending.Status != "pending" {
 		t.Fatalf("pending after clone failure = %+v, want pending", pending)
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patched[len(patched)-1])
 	if !strings.Contains(body, "最近一次创建失败") || !strings.Contains(body, context.DeadlineExceeded.Error()) {
 		t.Fatalf("clone failure card body = %q", body)
 	}
-	inputs := workspaceCloneFormInputs(t, ff.patchedCards[len(ff.patchedCards)-1])
+	inputs := workspaceCloneFormInputs(t, patched[len(patched)-1])
 	if got, _ := inputs["repo_url"]["default_value"].(string); got != "git@github.com:example/repo.git" {
 		t.Fatalf("repo_url default_value after failure = %q", got)
 	}
@@ -827,20 +821,17 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 		t.Fatalf("completeWorkspaceCloneSubmit() = %#v, %v", resp, err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(ff.patchedCards) > 0 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(ff.patchedCards) == 0 {
-		t.Fatalf("patchedCards after manual hint = %+v, want status card", ff.patchedCards)
+	waitForTestCondition(t, "workspace clone manual hint patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatalf("patchedCards after manual hint = %+v, want status card", patched)
 	}
 	if pending := a.store.PendingByID("workspace-clone-manual"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after create workspace failure = %+v, want resolved", pending)
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patched[len(patched)-1])
 	wantTargetDir := filepath.Join(parentDir, "repo-copy")
 	if !strings.Contains(body, "仓库已拉取，可手动接管") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("manual hint body = %q", body)
@@ -848,8 +839,8 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 	if !strings.Contains(body, "/workspace new") || !strings.Contains(body, "unsupported log.level") {
 		t.Fatalf("manual hint body = %q, want workspace new guidance and underlying error", body)
 	}
-	if cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "接管为工作区") {
-		t.Fatalf("manual hint card should not include takeover button: %#v", ff.patchedCards[len(ff.patchedCards)-1])
+	if cardHasButtonText(patched[len(patched)-1], "接管为工作区") {
+		t.Fatalf("manual hint card should not include takeover button: %#v", patched[len(patched)-1])
 	}
 	if ws := config.FindWorkspace(a.cfg, "repo-copy"); ws != nil {
 		t.Fatalf("workspace should not be registered on manual hint path: %+v", ws)
@@ -916,17 +907,15 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("workspace clone did not start")
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(ff.patchedCards) > 0 && strings.Contains(cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1]), "Receiving objects: 42%") {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	waitForTestCondition(t, "workspace clone progress patch", func() bool {
+		patched := ff.patchedCardsSnapshot()
+		return len(patched) > 0 && strings.Contains(cardMarkdownContent(t, patched[len(patched)-1]), "Receiving objects: 42%")
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatalf("patchedCards after progress = %+v, want progress card", patched)
 	}
-	if len(ff.patchedCards) == 0 {
-		t.Fatalf("patchedCards after progress = %+v, want progress card", ff.patchedCards)
-	}
-	progressBody := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	progressBody := cardMarkdownContent(t, patched[len(patched)-1])
 	if !strings.Contains(progressBody, "Receiving objects: 42%") {
 		t.Fatalf("progress body = %q, want streamed git progress", progressBody)
 	}
@@ -945,17 +934,15 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		t.Fatalf("cancel response body = %q", cancelBody)
 	}
 
-	deadline = time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if pending := a.store.PendingByID("workspace-clone-cancel"); pending != nil && pending.Status == "resolved" && len(ff.patchedCards) > 1 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForTestCondition(t, "workspace clone cancel patch", func() bool {
+		pending := a.store.PendingByID("workspace-clone-cancel")
+		return pending != nil && pending.Status == "resolved" && len(ff.patchedCardsSnapshot()) > 1
+	})
 	if pending := a.store.PendingByID("workspace-clone-cancel"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after cancel = %+v, want resolved", pending)
 	}
-	finalBody := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	patched = ff.patchedCardsSnapshot()
+	finalBody := cardMarkdownContent(t, patched[len(patched)-1])
 	if !strings.Contains(finalBody, "已取消仓库克隆") {
 		t.Fatalf("final cancel body = %q", finalBody)
 	}
@@ -1006,26 +993,24 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 	if !strings.Contains(body, "正在生成文件下载链接") || !strings.Contains(body, "report.txt") {
 		t.Fatalf("download preparing card body = %q", body)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(ff.patchedCards) > 0 && len(ff.sharedFileRequests) == 1 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	waitForTestCondition(t, "download file share completion", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0 && len(ff.sharedFileRequestsSnapshot()) == 1
+	})
+	sharedRequests := ff.sharedFileRequestsSnapshot()
+	if len(sharedRequests) != 1 {
+		t.Fatalf("sharedFileRequests = %+v, want 1", sharedRequests)
 	}
-	if len(ff.sharedFileRequests) != 1 {
-		t.Fatalf("sharedFileRequests = %+v, want 1", ff.sharedFileRequests)
-	}
-	if got := filepath.Clean(ff.sharedFileRequests[0].LocalPath); got != filepath.Clean(target) {
+	if got := filepath.Clean(sharedRequests[0].LocalPath); got != filepath.Clean(target) {
 		t.Fatalf("share local path = %q, want %q", got, target)
 	}
-	if got := ff.sharedFileRequests[0].ChatID; got != "chat-1" {
+	if got := sharedRequests[0].ChatID; got != "chat-1" {
 		t.Fatalf("share chat id = %q, want chat-1", got)
 	}
-	if len(ff.patchedCards) == 0 {
-		t.Fatalf("patchedCards = %+v, want final download card", ff.patchedCards)
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatalf("patchedCards = %+v, want final download card", patched)
 	}
-	finalBody := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	finalBody := cardMarkdownContent(t, patched[len(patched)-1])
 	if !strings.Contains(finalBody, "https://drive.example/file-1") || !strings.Contains(finalBody, "report.txt") {
 		t.Fatalf("download result card body = %q", finalBody)
 	}

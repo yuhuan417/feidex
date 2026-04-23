@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
@@ -22,15 +21,15 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 	}
 	a.markFinalCardPreviewDone("card-1")
 
-	deadline := time.Now().Add(time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(ff.patchedCards) == 0 {
+	waitForTestCondition(t, "final card patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
 		t.Fatal("expected patched final card")
 	}
 
-	last := ff.patchedCards[len(ff.patchedCards)-1]
+	last := patched[len(patched)-1]
 	if body := cardMarkdownContent(t, last); !strings.Contains(body, "rewritten body") {
 		t.Fatalf("patched body = %q, want rewritten body", body)
 	}

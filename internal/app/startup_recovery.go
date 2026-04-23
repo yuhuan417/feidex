@@ -62,6 +62,11 @@ func (a *App) recoverSharedRuntimeState() {
 }
 
 func (a *App) recoverFrontendRuntimeState() {
+	if a == nil {
+		return
+	}
+	a.frontendRecoveryMu.Lock()
+	defer a.frontendRecoveryMu.Unlock()
 	a.resetLiveThreadState()
 	if !a.hasConfiguredBackend() {
 		return

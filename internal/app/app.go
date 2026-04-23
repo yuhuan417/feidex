@@ -30,10 +30,14 @@ type App struct {
 	started             time.Time
 	deduper             *inboundDeduper
 	backendSwitchMu     sync.Mutex
+	backendStateMu      sync.Mutex
 	asyncRunner         func(func())
 	codexRuntimeMu      sync.Mutex
 	codexRecovering     bool
 	codexRecoverySource codexClient
+	frontendRecoveryMu  sync.Mutex
+	backendSwitching    bool
+	backendSwitchTarget string
 
 	turnStreamsMu     sync.Mutex
 	turnStreams       map[string]*turnStream
@@ -287,8 +291,12 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 		"reasoning_effort", reasoningEffort,
 		"model", model,
 	)
+	client, err := a.requireCodexClient()
+	if err != nil {
+		return "", err
+	}
 	var turnResp codexrpc.TurnStartResult
-	if err := a.codex.Call(ctx, "turn/start", turnParams, &turnResp); err != nil {
+	if err := client.Call(ctx, "turn/start", turnParams, &turnResp); err != nil {
 		slog.Error("turn/start failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,

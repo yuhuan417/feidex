@@ -270,6 +270,8 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 	if current == target && a.backendRuntimeReady(target) {
 		return nil
 	}
+	a.beginBackendSwitchState(target)
+	defer a.finishBackendSwitchState()
 
 	nextSessions := a.frontendSessionsAfterBackendSwitch(current, target)
 	newHandle, err := a.prepareBackendRuntime(ctx, target)
