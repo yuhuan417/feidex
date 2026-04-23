@@ -257,6 +257,7 @@ func (a *App) renderCodexStatusBody(sess *state.Session) string {
 		"thread_id: `" + conversationID + "`",
 		"全局模型: `" + model + "`",
 		"全局推理强度: `" + effort + "`",
+		"codex auto retry: `" + map[bool]string{true: "on", false: "off"}[a.codexAutoRetryEnabled()] + "`",
 		"quiet: `" + quietModeStatusText(a.quietMode()) + "`",
 		"workspace sandbox: `" + workspaceSandbox + "`",
 		"workspace policy: `" + workspacePolicy + "`",

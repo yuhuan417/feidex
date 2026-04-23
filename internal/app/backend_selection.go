@@ -159,10 +159,15 @@ func (a *App) replyBackendSelectionCard(msg *feishu.InboundMessage, reason strin
 }
 
 func (a *App) commandBackend(msg *feishu.InboundMessage, args []string) error {
-	if len(args) > 0 {
-		return fmt.Errorf("usage: /backend")
+	if len(args) == 0 {
+		return a.replyBackendSelectionCard(msg, "")
 	}
-	return a.replyBackendSelectionCard(msg, "")
+	switch strings.TrimSpace(args[0]) {
+	case "retry":
+		return a.commandCodexAutoRetry(msg, args[1:])
+	default:
+		return fmt.Errorf("usage: /backend | /backend retry | /backend retry status | /backend retry on | /backend retry off")
+	}
 }
 
 func (a *App) completeMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

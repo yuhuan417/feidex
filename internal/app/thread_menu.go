@@ -258,7 +258,15 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	if sess == nil {
 		sess = a.appState().session(sessionKey)
 	}
+	canceledRetry := a.cancelCodexAutoRetry(sessionKey, sess != nil && sess.ActiveTurnID != "" && sess.ActiveThreadID != "", "已停止当前 session 的自动重试。")
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
+		if canceledRetry {
+			reply := "已停止当前 session 的自动重试。"
+			if discarded > 0 {
+				reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
+			}
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+		}
 		if discarded > 0 {
 			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), a.replyInThreadEnabled(msg.ChatType))
 		}
@@ -272,6 +280,9 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	reply := "已请求中断当前任务。"
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
+	}
+	if canceledRetry {
+		reply += " 当前 session 的自动重试也已停止。"
 	}
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
 }

@@ -238,6 +238,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 			sess.Status = "idle"
 		}
 	})
+	a.observeCodexAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub)
 	a.cleanupSubmissionRuntimeState(sub)
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		a.runAsync(func() {

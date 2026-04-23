@@ -227,6 +227,7 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 		)
 	} else if sess != nil {
 		shouldStartNext = sessionShouldStartNextSubmissionAsync(sess)
+		a.observeCodexAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
 	}
 	if clearedThreadLineage {
 		a.clearSessionLiveThread(sessionKey)

@@ -32,6 +32,7 @@ type LogConfig struct {
 
 type FeishuConfig struct {
 	Backend             string    `toml:"backend"`
+	CodexAutoRetry      bool      `toml:"codex_auto_retry"`
 	AppID               string    `toml:"app_id"`
 	AppSecret           string    `toml:"app_secret"`
 	AllowFrom           []string  `toml:"allow_from"`

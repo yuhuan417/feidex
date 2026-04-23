@@ -36,6 +36,19 @@ func exactOrSingleArgCommand(fields []string, allowed ...string) bool {
 	return commandArgInSet(fields[1], allowed...)
 }
 
+func matchBackendCommand(fields []string) bool {
+	if len(fields) == 1 {
+		return true
+	}
+	if len(fields) == 2 && strings.TrimSpace(fields[1]) == "retry" {
+		return true
+	}
+	if len(fields) != 3 || strings.TrimSpace(fields[1]) != "retry" {
+		return false
+	}
+	return commandArgInSet(fields[2], "status", "on", "off")
+}
+
 func commandArgInSet(value string, allowed ...string) bool {
 	value = strings.TrimSpace(value)
 	for _, item := range allowed {

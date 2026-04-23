@@ -85,6 +85,9 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 	"menu.backend.switch": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuBackendSwitch(action, actionSessionKey(action))
 	},
+	"menu.codex_retry": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeMenuCommand(action, actionSessionKey(action), "/backend retry", "menu.group.backend")
+	},
 	"menu.help": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeMenuHelp(action, actionSessionKey(action))
 	},
@@ -153,5 +156,8 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 	},
 	"backend.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return a.completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))
+	},
+	"codex_retry.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return a.completeCodexAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
 	},
 }
