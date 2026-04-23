@@ -22,7 +22,7 @@ func (a *App) startFrontend(ctx context.Context) error {
 	return a.feishu.Start(ctx)
 }
 
-func (a *App) feishuConfig() *config.FeishuConfig {
+func (a *App) feishuConfigUnlocked() *config.FeishuConfig {
 	if a == nil || a.cfg == nil {
 		return nil
 	}
@@ -30,6 +30,15 @@ func (a *App) feishuConfig() *config.FeishuConfig {
 		return &a.cfg.Frontends[a.frontendConfigIndex].FeishuConfig
 	}
 	return &a.cfg.Feishu
+}
+
+func (a *App) feishuConfig() *config.FeishuConfig {
+	if a == nil {
+		return nil
+	}
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	return a.feishuConfigUnlocked()
 }
 
 func (a *App) replyInThreadEnabled(chatType string) bool {
@@ -49,6 +58,8 @@ func (a *App) allowLegacyFrontendFallback() bool {
 	if a == nil || a.cfg == nil {
 		return false
 	}
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
 	return len(a.cfg.ResolvedFrontends()) == 1
 }
 

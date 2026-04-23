@@ -88,10 +88,11 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	newCodexClient = func(config.CodexConfig) codexClient { return promoted }
 	defer func() { newCodexClient = origNewCodex }()
 
-	if fc.onError == nil {
+	_, _, onError := fc.handlersSnapshot()
+	if onError == nil {
 		t.Fatal("expected configured codex error handler")
 	}
-	fc.onError(errors.New("stdio EOF"))
+	onError(errors.New("stdio EOF"))
 
 	waitForTestCondition(t, "codex runtime recovery to start", func() bool {
 		return a.codexRuntimeRecovering()
@@ -111,7 +112,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	close(blockStart)
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
-		current, ok := a.codex.(*fakeCodexClient)
+		current, ok := a.currentCodexClient().(*fakeCodexClient)
 		return ok && current == promoted && !a.codexRuntimeRecovering()
 	})
 	waitForTestCondition(t, "queued submission to start on recovered runtime", func() bool {
@@ -119,10 +120,12 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 		return sub != nil && sub.Status == "running" && sub.ThreadID == "thread-recovered" && sub.TurnID == "turn-recovered"
 	})
 
-	if !fc.closed {
+	_, failedClosed := fc.statusSnapshot()
+	if !failedClosed {
 		t.Fatal("failed codex client should be closed after recovery")
 	}
-	if !promoted.started || promoted.closed {
+	promotedStarted, promotedClosed := promoted.statusSnapshot()
+	if !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
 	if !a.sessionHasLiveThread(sessionKey, "thread-recovered") {
@@ -138,7 +141,9 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	a, _, _ := newTestApp(t)
+	a.codexRuntimeMu.Lock()
 	a.codexRecovering = true
+	a.codexRuntimeMu.Unlock()
 
 	sessionKey := "sess-recovering"
 	if err := a.store.UpsertSession(&state.Session{

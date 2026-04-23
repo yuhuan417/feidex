@@ -25,8 +25,10 @@ type feishuNotifyTarget struct {
 type notifyingFeishuClient struct {
 	base feishuClient
 
-	mu     sync.Mutex
-	recent map[string]time.Time
+	mu        sync.Mutex
+	recent    map[string]time.Time
+	captureMu sync.Mutex
+	captures  []*commandCaptureClient
 }
 
 func wrapFeishuClient(base feishuClient) feishuClient {
@@ -37,6 +39,43 @@ func wrapFeishuClient(base feishuClient) feishuClient {
 		base:   base,
 		recent: map[string]time.Time{},
 	}
+}
+
+func (n *notifyingFeishuClient) captureCommandOutput(replyMessageID string, fn func() error) (string, map[string]any, error) {
+	capture := &commandCaptureClient{replyMessageID: strings.TrimSpace(replyMessageID)}
+	n.captureMu.Lock()
+	n.captures = append(n.captures, capture)
+	n.captureMu.Unlock()
+	defer func() {
+		n.captureMu.Lock()
+		defer n.captureMu.Unlock()
+		for i := len(n.captures) - 1; i >= 0; i-- {
+			if n.captures[i] != capture {
+				continue
+			}
+			n.captures = append(n.captures[:i], n.captures[i+1:]...)
+			break
+		}
+	}()
+	var err error
+	if fn != nil {
+		err = fn()
+	}
+	n.captureMu.Lock()
+	defer n.captureMu.Unlock()
+	return strings.TrimSpace(capture.text), cloneCapturedCard(capture.card), err
+}
+
+func (n *notifyingFeishuClient) commandCaptureForMessageLocked(messageID string) *commandCaptureClient {
+	messageID = strings.TrimSpace(messageID)
+	for i := len(n.captures) - 1; i >= 0; i-- {
+		capture := n.captures[i]
+		if capture == nil || strings.TrimSpace(capture.replyMessageID) != messageID {
+			continue
+		}
+		return capture
+	}
+	return nil
 }
 
 func (n *notifyingFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*feishu.BotMenuClick), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
@@ -84,6 +123,14 @@ func (n *notifyingFeishuClient) RemoveReaction(ctx context.Context, messageID, e
 }
 
 func (n *notifyingFeishuClient) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
+	n.captureMu.Lock()
+	if capture := n.commandCaptureForMessageLocked(messageID); capture != nil {
+		capture.text = strings.TrimSpace(text)
+		capture.card = nil
+		n.captureMu.Unlock()
+		return nil
+	}
+	n.captureMu.Unlock()
 	err := n.base.ReplyText(ctx, messageID, text, inThread)
 	if err != nil {
 		n.notifyPermissionIssue(feishuNotifyTarget{MessageID: messageID, InThread: inThread}, err)
@@ -92,6 +139,14 @@ func (n *notifyingFeishuClient) ReplyText(ctx context.Context, messageID, text s
 }
 
 func (n *notifyingFeishuClient) ReplyTextWithID(ctx context.Context, messageID, text string, inThread bool) (string, error) {
+	n.captureMu.Lock()
+	if capture := n.commandCaptureForMessageLocked(messageID); capture != nil {
+		capture.text = strings.TrimSpace(text)
+		capture.card = nil
+		n.captureMu.Unlock()
+		return firstNonEmpty(strings.TrimSpace(capture.replyMessageID), strings.TrimSpace(messageID)), nil
+	}
+	n.captureMu.Unlock()
 	id, err := n.base.ReplyTextWithID(ctx, messageID, text, inThread)
 	if err != nil {
 		n.notifyPermissionIssue(feishuNotifyTarget{MessageID: messageID, InThread: inThread}, err)
@@ -108,6 +163,14 @@ func (n *notifyingFeishuClient) SendText(ctx context.Context, chatID, text strin
 }
 
 func (n *notifyingFeishuClient) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	n.captureMu.Lock()
+	if capture := n.commandCaptureForMessageLocked(messageID); capture != nil {
+		capture.card = cloneCapturedCard(card)
+		capture.text = ""
+		n.captureMu.Unlock()
+		return firstNonEmpty(strings.TrimSpace(capture.replyMessageID), strings.TrimSpace(messageID)), nil
+	}
+	n.captureMu.Unlock()
 	id, err := n.base.ReplyCard(ctx, messageID, card, inThread)
 	if err != nil {
 		n.notifyPermissionIssue(feishuNotifyTarget{MessageID: messageID, InThread: inThread}, err)
@@ -124,6 +187,14 @@ func (n *notifyingFeishuClient) SendCard(ctx context.Context, chatID string, car
 }
 
 func (n *notifyingFeishuClient) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
+	n.captureMu.Lock()
+	if capture := n.commandCaptureForMessageLocked(messageID); capture != nil {
+		capture.card = cloneCapturedCard(card)
+		capture.text = ""
+		n.captureMu.Unlock()
+		return nil
+	}
+	n.captureMu.Unlock()
 	err := n.base.PatchCard(ctx, messageID, card)
 	if err != nil {
 		n.notifyPermissionIssue(feishuNotifyTarget{MessageID: messageID}, err)
@@ -260,6 +331,53 @@ func (n *notifyingFeishuClient) permissionIssueKey(target feishuNotifyTarget, is
 		strings.TrimSpace(issue.Message),
 		strings.TrimSpace(issue.LogID),
 	}, "|")
+}
+
+func cloneCapturedCard(card map[string]any) map[string]any {
+	if card == nil {
+		return nil
+	}
+	cloned, _ := cloneCapturedValue(card).(map[string]any)
+	return cloned
+}
+
+func cloneCapturedValue(value any) any {
+	switch current := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(current))
+		for key, item := range current {
+			out[key] = cloneCapturedValue(item)
+		}
+		return out
+	case []map[string]any:
+		out := make([]map[string]any, len(current))
+		for i, item := range current {
+			out[i] = cloneCapturedCard(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(current))
+		for i, item := range current {
+			out[i] = cloneCapturedValue(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), current...)
+	case []feishu.Button:
+		return append([]feishu.Button(nil), current...)
+	case []feishu.Attachment:
+		return append([]feishu.Attachment(nil), current...)
+	case []feishu.SharedFileRequest:
+		return append([]feishu.SharedFileRequest(nil), current...)
+	case map[string]string:
+		out := make(map[string]string, len(current))
+		for key, item := range current {
+			out[key] = item
+		}
+		return out
+	default:
+		return current
+	}
 }
 
 func (n *notifyingFeishuClient) shouldSendPermissionIssue(key string) bool {

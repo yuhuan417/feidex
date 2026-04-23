@@ -244,6 +244,8 @@ func (a *App) updateGlobalModelConfig(mutate func(*config.CodexConfig), result c
 	if a.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
 	mutate(&a.cfg.Codex)
 	a.cfg.Codex.Model = strings.TrimSpace(a.cfg.Codex.Model)
 	a.cfg.Codex.ReasoningEffort = strings.TrimSpace(a.cfg.Codex.ReasoningEffort)

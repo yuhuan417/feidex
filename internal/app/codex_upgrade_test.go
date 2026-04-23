@@ -57,10 +57,11 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 	if err := a.commandCodex(msg, nil); err != nil {
 		t.Fatalf("commandCodex() error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
-	body := cardMarkdownContent(t, ff.replyCards[0])
+	body := cardMarkdownContent(t, replyCards[0])
 	for _, want := range []string{"当前版本: `1.0.0`", "最新稳定版: `未检查`", "状态: `等待检查`"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("status card body = %q, want %q", body, want)
@@ -88,10 +89,11 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 	if err := a.commandCodex(msg, []string{"upgrade"}); err != nil {
 		t.Fatalf("commandCodex(upgrade) error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
-	body := cardMarkdownContent(t, ff.replyCards[0])
+	body := cardMarkdownContent(t, replyCards[0])
 	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `1.1.0`", "失败处理: 自动回滚到 `1.0.0`"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
@@ -114,8 +116,9 @@ func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	if err := a.handleCommand(msg, "/status"); err != nil {
 		t.Fatalf("handleCommand(/status) error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
 	if err := a.handleCommand(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
 		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
@@ -177,23 +180,30 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	if got := manager.installs; len(got) != 1 || got[0] != "1.1.0" {
 		t.Fatalf("install versions = %#v", got)
 	}
-	if !fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if !liveClosed {
 		t.Fatal("expected live codex runtime to be closed after successful promotion")
 	}
-	if promoted == nil || !promoted.started || promoted.closed {
+	promotedStarted, promotedClosed := false, false
+	if promoted != nil {
+		promotedStarted, promotedClosed = promoted.statusSnapshot()
+	}
+	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
 	snapshot := a.codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected progress cards to be patched")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `success`") {
 		t.Fatalf("final patched card body = %q", body)
 	}
@@ -258,26 +268,37 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if got := manager.installs; len(got) != 2 || got[0] != "1.1.0" || got[1] != "1.0.0" {
 		t.Fatalf("install versions = %#v", got)
 	}
-	if fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if liveClosed {
 		t.Fatal("live codex runtime should not be closed when upgrade rolls back")
 	}
-	if smoke == nil || !smoke.closed {
+	_, smokeClosed := false, false
+	if smoke != nil {
+		_, smokeClosed = smoke.statusSnapshot()
+	}
+	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after failed validation", smoke)
 	}
-	if rollbackSmoke == nil || !rollbackSmoke.closed {
+	_, rollbackClosed := false, false
+	if rollbackSmoke != nil {
+		_, rollbackClosed = rollbackSmoke.statusSnapshot()
+	}
+	if rollbackSmoke == nil || !rollbackClosed {
 		t.Fatalf("rollback smoke runtime = %+v, want closed after rollback validation", rollbackSmoke)
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != fc {
-		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.codex, fc)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != fc {
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.currentCodexClient(), fc)
 	}
 	snapshot := a.codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected rollback progress cards to be patched")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `rolled_back`") {
 		t.Fatalf("rollback patched card body = %q", body)
 	}
@@ -319,8 +340,9 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if err := a.commandCodex(msg, []string{"restart"}); err != nil {
 		t.Fatalf("commandCodex(restart) error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -329,23 +351,30 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if !fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if !liveClosed {
 		t.Fatal("expected live runtime to be closed during restart")
 	}
-	if promoted == nil || !promoted.started || promoted.closed {
+	promotedStarted, promotedClosed := false, false
+	if promoted != nil {
+		promotedStarted, promotedClosed = promoted.statusSnapshot()
+	}
+	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
 	snapshot := a.codexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected restart progress card patches")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `success`") {
 		t.Fatalf("restart final card body = %q", body)
 	}
@@ -390,23 +419,30 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
 	}
 	a.runCodexRestartOperation("msg-1", "sess-1")
-	if fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if liveClosed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
 	}
-	if smoke == nil || !smoke.closed {
+	_, smokeClosed := false, false
+	if smoke != nil {
+		_, smokeClosed = smoke.statusSnapshot()
+	}
+	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after failed restart validation", smoke)
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != fc {
-		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.codex, fc)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != fc {
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.currentCodexClient(), fc)
 	}
 	state := a.codexRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected restart failure patches")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `failed`") {
 		t.Fatalf("restart failure card body = %q", body)
 	}
@@ -454,20 +490,27 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	}
 	a.runCodexRestartOperation("msg-1", "sess-1")
 
-	if !fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if !liveClosed {
 		t.Fatal("restart should still attempt to close exited runtime")
 	}
-	if promoted == nil || !promoted.started || promoted.closed {
+	promotedStarted, promotedClosed := false, false
+	if promoted != nil {
+		promotedStarted, promotedClosed = promoted.statusSnapshot()
+	}
+	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
 	state := a.codexRestartState()
 	if state.Running || state.Result != "success" {
 		t.Fatalf("restart state = %+v", state)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected restart success patches")
 	}
 }
@@ -500,14 +543,20 @@ func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing
 	if switched {
 		t.Fatal("refreshCodexRuntimeAfterMaintenance() switched runtime on Claude backend")
 	}
-	if smoke == nil || !smoke.closed {
+	_, smokeClosed := false, false
+	if smoke != nil {
+		_, smokeClosed = smoke.statusSnapshot()
+	}
+	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after smoke-only validation", smoke)
 	}
-	if fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if liveClosed {
 		t.Fatal("existing codex runtime should not be touched on Claude backend")
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != fc {
-		t.Fatalf("a.codex = %#v, want original codex runtime %#v", a.codex, fc)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != fc {
+		t.Fatalf("a.codex = %#v, want original codex runtime %#v", a.currentCodexClient(), fc)
 	}
 }
 
@@ -538,13 +587,19 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	if !switched {
 		t.Fatal("refreshCodexRuntimeAfterMaintenance() did not switch runtime")
 	}
-	if !fc.closed {
+	_, liveClosed := fc.statusSnapshot()
+	if !liveClosed {
 		t.Fatal("old runtime should still receive close attempt")
 	}
-	if promoted == nil || !promoted.started || promoted.closed {
+	promotedStarted, promotedClosed := false, false
+	if promoted != nil {
+		promotedStarted, promotedClosed = promoted.statusSnapshot()
+	}
+	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	if got, ok := a.codex.(*fakeCodexClient); !ok || got != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.codex, promoted)
+	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	if !ok || current != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
 }

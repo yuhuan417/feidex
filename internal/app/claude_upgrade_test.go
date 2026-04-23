@@ -54,10 +54,11 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 	if err := a.commandClaude(msg, nil); err != nil {
 		t.Fatalf("commandClaude() error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
-	body := cardMarkdownContent(t, ff.replyCards[0])
+	body := cardMarkdownContent(t, replyCards[0])
 	for _, want := range []string{"当前版本: `1.0.0`", "最新稳定版: `未检查`", "状态: `等待检查`", "smoke test: `start + init`"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("status card body = %q, want %q", body, want)
@@ -85,10 +86,11 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 	if err := a.commandClaude(msg, []string{"upgrade"}); err != nil {
 		t.Fatalf("commandClaude(upgrade) error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
-	body := cardMarkdownContent(t, ff.replyCards[0])
+	body := cardMarkdownContent(t, replyCards[0])
 	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `1.1.0`", "失败处理: 自动回滚到 `1.0.0`"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
@@ -113,8 +115,9 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	if err := a.handleCommand(msg, "/status"); err != nil {
 		t.Fatalf("handleCommand(/status) error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
 	if err := a.handleCommand(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
 		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
@@ -174,10 +177,11 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected progress cards to be patched")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `success`") {
 		t.Fatalf("final patched card body = %q", body)
 	}
@@ -237,10 +241,11 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected rollback progress cards to be patched")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `rolled_back`") {
 		t.Fatalf("rollback patched card body = %q", body)
 	}
@@ -274,8 +279,9 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	if err := a.commandClaude(msg, []string{"restart"}); err != nil {
 		t.Fatalf("commandClaude(restart) error = %v", err)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -291,10 +297,11 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected restart progress card patches")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `success`") {
 		t.Fatalf("restart final card body = %q", body)
 	}
@@ -339,10 +346,11 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected restart failure patches")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "结果: `failed`") {
 		t.Fatalf("restart failure card body = %q", body)
 	}

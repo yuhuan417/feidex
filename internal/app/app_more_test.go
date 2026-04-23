@@ -23,26 +23,31 @@ import (
 )
 
 type fakeCodexClient struct {
-	startErr  error
-	closeErr  error
-	callErr   error
-	replyErr  error
-	started   bool
-	closed    bool
-	startHook func(context.Context, bool) error
-	replies   []struct {
-		id     json.RawMessage
-		result any
-	}
-	replyErrors []struct {
-		id   json.RawMessage
-		code int
-		msg  string
-	}
+	mu             sync.Mutex
+	startErr       error
+	closeErr       error
+	callErr        error
+	replyErr       error
+	started        bool
+	closed         bool
+	startHook      func(context.Context, bool) error
+	replies        []fakeCodexReply
+	replyErrors    []fakeCodexReplyError
 	callHook       func(context.Context, string, any, any) error
 	onNotification func(string, json.RawMessage)
 	onRequest      func(codexrpc.RequestEnvelope)
 	onError        func(error)
+}
+
+type fakeCodexReply struct {
+	id     json.RawMessage
+	result any
+}
+
+type fakeCodexReplyError struct {
+	id   json.RawMessage
+	code int
+	msg  string
 }
 
 type fakeReleaseClient struct {
@@ -160,52 +165,99 @@ func (f *fakeDaemonManagerForApp) Status() (*daemon.Status, error) {
 func (f *fakeDaemonManagerForApp) Platform() string { return "test" }
 
 func (f *fakeCodexClient) SetHandlers(onNotification func(string, json.RawMessage), onRequest func(codexrpc.RequestEnvelope)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.onNotification = onNotification
 	f.onRequest = onRequest
 }
 
 func (f *fakeCodexClient) SetErrorHandler(onError func(error)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.onError = onError
 }
 
 func (f *fakeCodexClient) Start(ctx context.Context, experimentalAPI bool) error {
+	f.mu.Lock()
 	f.started = true
-	if f.startHook != nil {
-		return f.startHook(ctx, experimentalAPI)
+	hook := f.startHook
+	err := f.startErr
+	f.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, experimentalAPI)
 	}
-	return f.startErr
+	return err
 }
 
 func (f *fakeCodexClient) Close() error {
+	f.mu.Lock()
 	f.closed = true
-	return f.closeErr
+	err := f.closeErr
+	f.mu.Unlock()
+	return err
 }
 
 func (f *fakeCodexClient) Call(ctx context.Context, method string, params any, out any) error {
-	if f.callHook != nil {
-		return f.callHook(ctx, method, params, out)
+	f.mu.Lock()
+	hook := f.callHook
+	err := f.callErr
+	f.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, method, params, out)
 	}
-	return f.callErr
+	return err
 }
 
 func (f *fakeCodexClient) Reply(id json.RawMessage, result any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.replyErr != nil {
 		return f.replyErr
 	}
-	f.replies = append(f.replies, struct {
-		id     json.RawMessage
-		result any
-	}{append(json.RawMessage(nil), id...), result})
+	f.replies = append(f.replies, fakeCodexReply{
+		id:     append(json.RawMessage(nil), id...),
+		result: result,
+	})
 	return nil
 }
 
 func (f *fakeCodexClient) ReplyError(id json.RawMessage, code int, msg string) error {
-	f.replyErrors = append(f.replyErrors, struct {
-		id   json.RawMessage
-		code int
-		msg  string
-	}{append(json.RawMessage(nil), id...), code, msg})
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replyErrors = append(f.replyErrors, fakeCodexReplyError{
+		id:   append(json.RawMessage(nil), id...),
+		code: code,
+		msg:  msg,
+	})
 	return nil
+}
+
+func (f *fakeCodexClient) handlersSnapshot() (func(string, json.RawMessage), func(codexrpc.RequestEnvelope), func(error)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.onNotification, f.onRequest, f.onError
+}
+
+func (f *fakeCodexClient) statusSnapshot() (started bool, closed bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.started, f.closed
+}
+
+func (f *fakeCodexClient) repliesSnapshot() []fakeCodexReply {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]fakeCodexReply, len(f.replies))
+	copy(out, f.replies)
+	return out
+}
+
+func (f *fakeCodexClient) replyErrorsSnapshot() []fakeCodexReplyError {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]fakeCodexReplyError, len(f.replyErrors))
+	copy(out, f.replyErrors)
+	return out
 }
 
 type fakeFeishuClient struct {
@@ -634,7 +686,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		cfgPath: cfgPath,
 		store:   store,
 		codex:   fc,
-		feishu:  ff,
+		feishu:  wrapFeishuClient(ff),
 		started: time.Now(),
 		asyncRunner: func(fn func()) {
 			asyncWG.Add(1)

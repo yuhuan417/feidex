@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,7 +16,64 @@ import (
 	"feidex/internal/state"
 )
 
+type fakeClaudeEnsureCall struct {
+	sessionKey  string
+	workspaceID string
+	resumeID    string
+	model       string
+}
+
+type fakeClaudeForkCall struct {
+	sessionKey      string
+	workspaceID     string
+	sourceSessionID string
+	model           string
+}
+
+type fakeClaudeStartTurnCall struct {
+	sessionKey string
+	threadID   string
+	turnID     string
+	prompt     string
+}
+
+type fakeClaudeSetModelCall struct {
+	sessionKey string
+	model      string
+}
+
+type fakeClaudeSetEffortCall struct {
+	sessionKey string
+	effort     string
+}
+
+type fakeClaudePermissionModeCall struct {
+	sessionKey string
+	mode       string
+}
+
+type fakeClaudeApprovalCall struct {
+	requestID  string
+	resolution claudeApprovalResolution
+}
+
+type fakeClaudeUserInputCall struct {
+	requestID string
+	answers   map[string]string
+}
+
+type fakeClaudePlanCall struct {
+	requestID string
+	feedback  string
+}
+
+type fakeClaudeCancelCall struct {
+	requestID string
+	message   string
+}
+
 type fakeClaudeCore struct {
+	mu               sync.Mutex
 	ensureSessionID  string
 	ensureSessionSet bool
 	ensureSessionErr error
@@ -41,55 +99,19 @@ type fakeClaudeCore struct {
 	forkResults      []fakeClaudeEnsureResult
 	startTurnResults []error
 
-	ensureCalls []struct {
-		sessionKey  string
-		workspaceID string
-		resumeID    string
-		model       string
-	}
-	forkCalls []struct {
-		sessionKey      string
-		workspaceID     string
-		sourceSessionID string
-		model           string
-	}
-	startTurnCalls []struct {
-		sessionKey string
-		threadID   string
-		turnID     string
-		prompt     string
-	}
-	interruptCalls []string
-	setModelCalls  []struct {
-		sessionKey string
-		model      string
-	}
-	setEffortCalls []struct {
-		sessionKey string
-		effort     string
-	}
+	ensureCalls         []fakeClaudeEnsureCall
+	forkCalls           []fakeClaudeForkCall
+	startTurnCalls      []fakeClaudeStartTurnCall
+	interruptCalls      []string
+	setModelCalls       []fakeClaudeSetModelCall
+	setEffortCalls      []fakeClaudeSetEffortCall
 	setModelApplied     bool
 	setEffortApplied    bool
-	permissionModeCalls []struct {
-		sessionKey string
-		mode       string
-	}
-	approvalCalls []struct {
-		requestID  string
-		resolution claudeApprovalResolution
-	}
-	userInputCalls []struct {
-		requestID string
-		answers   map[string]string
-	}
-	planCalls []struct {
-		requestID string
-		feedback  string
-	}
-	cancelCalls []struct {
-		requestID string
-		message   string
-	}
+	permissionModeCalls []fakeClaudePermissionModeCall
+	approvalCalls       []fakeClaudeApprovalCall
+	userInputCalls      []fakeClaudeUserInputCall
+	planCalls           []fakeClaudePlanCall
+	cancelCalls         []fakeClaudeCancelCall
 }
 
 type fakeClaudeEnsureResult struct {
@@ -98,12 +120,9 @@ type fakeClaudeEnsureResult struct {
 }
 
 func (f *fakeClaudeCore) EnsureSession(_ context.Context, sessionKey string, ws *config.Workspace, resumeID, model string) (string, error) {
-	f.ensureCalls = append(f.ensureCalls, struct {
-		sessionKey  string
-		workspaceID string
-		resumeID    string
-		model       string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ensureCalls = append(f.ensureCalls, fakeClaudeEnsureCall{
 		sessionKey:  sessionKey,
 		workspaceID: ws.ID,
 		resumeID:    resumeID,
@@ -127,12 +146,9 @@ func (f *fakeClaudeCore) EnsureSession(_ context.Context, sessionKey string, ws 
 }
 
 func (f *fakeClaudeCore) ForkSession(_ context.Context, sessionKey string, ws *config.Workspace, sourceSessionID, model string) (string, error) {
-	f.forkCalls = append(f.forkCalls, struct {
-		sessionKey      string
-		workspaceID     string
-		sourceSessionID string
-		model           string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.forkCalls = append(f.forkCalls, fakeClaudeForkCall{
 		sessionKey:      sessionKey,
 		workspaceID:     ws.ID,
 		sourceSessionID: sourceSessionID,
@@ -156,22 +172,23 @@ func (f *fakeClaudeCore) ForkSession(_ context.Context, sessionKey string, ws *c
 }
 
 func (f *fakeClaudeCore) ResetSession(sessionKey string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.resetCalls++
 	f.resetKeys = append(f.resetKeys, strings.TrimSpace(sessionKey))
 	return nil
 }
 
 func (f *fakeClaudeCore) UpdateConfig(cfg config.ClaudeConfig) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.updatedConfigs = append(f.updatedConfigs, cfg)
 }
 
 func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turnID, prompt string) error {
-	f.startTurnCalls = append(f.startTurnCalls, struct {
-		sessionKey string
-		threadID   string
-		turnID     string
-		prompt     string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.startTurnCalls = append(f.startTurnCalls, fakeClaudeStartTurnCall{
 		sessionKey: sessionKey,
 		threadID:   threadID,
 		turnID:     turnID,
@@ -186,15 +203,16 @@ func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turn
 }
 
 func (f *fakeClaudeCore) Interrupt(_ context.Context, sessionKey string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.interruptCalls = append(f.interruptCalls, sessionKey)
 	return f.interruptErr
 }
 
 func (f *fakeClaudeCore) SetModel(_ context.Context, sessionKey, model string) (bool, error) {
-	f.setModelCalls = append(f.setModelCalls, struct {
-		sessionKey string
-		model      string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.setModelCalls = append(f.setModelCalls, fakeClaudeSetModelCall{
 		sessionKey: sessionKey,
 		model:      model,
 	})
@@ -202,10 +220,9 @@ func (f *fakeClaudeCore) SetModel(_ context.Context, sessionKey, model string) (
 }
 
 func (f *fakeClaudeCore) SetEffort(_ context.Context, sessionKey, effort string) (bool, error) {
-	f.setEffortCalls = append(f.setEffortCalls, struct {
-		sessionKey string
-		effort     string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.setEffortCalls = append(f.setEffortCalls, fakeClaudeSetEffortCall{
 		sessionKey: sessionKey,
 		effort:     effort,
 	})
@@ -213,10 +230,9 @@ func (f *fakeClaudeCore) SetEffort(_ context.Context, sessionKey, effort string)
 }
 
 func (f *fakeClaudeCore) SetPermissionMode(_ context.Context, sessionKey, mode string) error {
-	f.permissionModeCalls = append(f.permissionModeCalls, struct {
-		sessionKey string
-		mode       string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.permissionModeCalls = append(f.permissionModeCalls, fakeClaudePermissionModeCall{
 		sessionKey: sessionKey,
 		mode:       mode,
 	})
@@ -224,10 +240,9 @@ func (f *fakeClaudeCore) SetPermissionMode(_ context.Context, sessionKey, mode s
 }
 
 func (f *fakeClaudeCore) ResolveApproval(requestID string, resolution claudeApprovalResolution) error {
-	f.approvalCalls = append(f.approvalCalls, struct {
-		requestID  string
-		resolution claudeApprovalResolution
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.approvalCalls = append(f.approvalCalls, fakeClaudeApprovalCall{
 		requestID:  requestID,
 		resolution: resolution,
 	})
@@ -239,10 +254,9 @@ func (f *fakeClaudeCore) ResolveUserInput(requestID string, answers map[string]s
 	for k, v := range answers {
 		cp[k] = v
 	}
-	f.userInputCalls = append(f.userInputCalls, struct {
-		requestID string
-		answers   map[string]string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.userInputCalls = append(f.userInputCalls, fakeClaudeUserInputCall{
 		requestID: requestID,
 		answers:   cp,
 	})
@@ -250,10 +264,9 @@ func (f *fakeClaudeCore) ResolveUserInput(requestID string, answers map[string]s
 }
 
 func (f *fakeClaudeCore) ResolvePlanFeedback(requestID, feedback string) error {
-	f.planCalls = append(f.planCalls, struct {
-		requestID string
-		feedback  string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.planCalls = append(f.planCalls, fakeClaudePlanCall{
 		requestID: requestID,
 		feedback:  feedback,
 	})
@@ -261,10 +274,9 @@ func (f *fakeClaudeCore) ResolvePlanFeedback(requestID, feedback string) error {
 }
 
 func (f *fakeClaudeCore) CancelPending(requestID, message string) error {
-	f.cancelCalls = append(f.cancelCalls, struct {
-		requestID string
-		message   string
-	}{
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancelCalls = append(f.cancelCalls, fakeClaudeCancelCall{
 		requestID: requestID,
 		message:   message,
 	})
@@ -272,8 +284,70 @@ func (f *fakeClaudeCore) CancelPending(requestID, message string) error {
 }
 
 func (f *fakeClaudeCore) Close() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.closed = true
 	return nil
+}
+
+func (f *fakeClaudeCore) ensureCallsSnapshot() []fakeClaudeEnsureCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeClaudeEnsureCall(nil), f.ensureCalls...)
+}
+
+func (f *fakeClaudeCore) startTurnCallsSnapshot() []fakeClaudeStartTurnCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeClaudeStartTurnCall(nil), f.startTurnCalls...)
+}
+
+func (f *fakeClaudeCore) interruptCallsSnapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.interruptCalls...)
+}
+
+func (f *fakeClaudeCore) updatedConfigsSnapshot() []config.ClaudeConfig {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]config.ClaudeConfig(nil), f.updatedConfigs...)
+}
+
+func (f *fakeClaudeCore) approvalCallsSnapshot() []fakeClaudeApprovalCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeClaudeApprovalCall(nil), f.approvalCalls...)
+}
+
+func (f *fakeClaudeCore) userInputCallsSnapshot() []fakeClaudeUserInputCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]fakeClaudeUserInputCall, len(f.userInputCalls))
+	copy(out, f.userInputCalls)
+	for i := range out {
+		if out[i].answers == nil {
+			continue
+		}
+		cp := make(map[string]string, len(out[i].answers))
+		for key, value := range out[i].answers {
+			cp[key] = value
+		}
+		out[i].answers = cp
+	}
+	return out
+}
+
+func (f *fakeClaudeCore) planCallsSnapshot() []fakeClaudePlanCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeClaudePlanCall(nil), f.planCalls...)
+}
+
+func (f *fakeClaudeCore) cancelCallsSnapshot() []fakeClaudeCancelCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeClaudeCancelCall(nil), f.cancelCalls...)
 }
 
 func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
@@ -410,8 +484,8 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 	if queuedSub == nil || queuedSub.InputText != "follow-up task" || queuedSub.Status != "queued" {
 		t.Fatalf("queued Claude submission = %+v", queuedSub)
 	}
-	if len(ff.replyCards) == 0 || !strings.Contains(cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]), "已加入队列") {
-		t.Fatalf("queued notice cards = %+v", ff.replyCards)
+	if replyCards := ff.replyCardsSnapshot(); len(replyCards) == 0 || !strings.Contains(cardMarkdownContent(t, replyCards[len(replyCards)-1]), "已加入队列") {
+		t.Fatalf("queued notice cards = %+v", replyCards)
 	}
 
 	a.finishTurn("claude-thread-1", "claude-turn-current", "completed")
@@ -420,7 +494,8 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 	for time.Now().Before(deadline) {
 		sess = a.store.GetSession(sessionKey)
 		queuedSub = a.store.GetSubmission(queuedSubID)
-		if len(claude.startTurnCalls) == 1 &&
+		startTurnCalls := claude.startTurnCallsSnapshot()
+		if len(startTurnCalls) == 1 &&
 			sess != nil &&
 			queuedSub != nil &&
 			sess.ActiveSubmissionID == queuedSubID &&
@@ -433,18 +508,20 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if len(claude.ensureCalls) != 1 || claude.ensureCalls[0].resumeID != "claude-thread-1" {
-		t.Fatalf("ensure calls after queued Claude follow-up = %#v", claude.ensureCalls)
+	ensureCalls := claude.ensureCallsSnapshot()
+	if len(ensureCalls) != 1 || ensureCalls[0].resumeID != "claude-thread-1" {
+		t.Fatalf("ensure calls after queued Claude follow-up = %#v", ensureCalls)
 	}
-	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "follow-up task") {
-		t.Fatalf("startTurn calls after queued Claude follow-up = %#v", claude.startTurnCalls)
+	startTurnCalls := claude.startTurnCallsSnapshot()
+	if len(startTurnCalls) != 1 || !strings.Contains(startTurnCalls[0].prompt, "follow-up task") {
+		t.Fatalf("startTurn calls after queued Claude follow-up = %#v", startTurnCalls)
 	}
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveSubmissionID != queuedSubID || sess.Status != "turn_in_progress" {
 		t.Fatalf("session after queued Claude follow-up start = %+v", sess)
 	}
-	if len(ff.replyCards) < 2 || !strings.Contains(cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]), "已轮到这条消息") {
-		t.Fatalf("started notice cards = %+v", ff.replyCards)
+	if replyCards := ff.replyCardsSnapshot(); len(replyCards) < 2 || !strings.Contains(cardMarkdownContent(t, replyCards[len(replyCards)-1]), "已轮到这条消息") {
+		t.Fatalf("started notice cards = %+v", replyCards)
 	}
 }
 

@@ -288,7 +288,10 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 }
 
 func (a *App) validateUpgradeRuntime() (string, string, error) {
-	manager, err := newDaemonManager(a.cfg.Daemon.ServiceName)
+	a.configMu.RLock()
+	serviceName := strings.TrimSpace(a.cfg.Daemon.ServiceName)
+	a.configMu.RUnlock()
+	manager, err := newDaemonManager(serviceName)
 	if err != nil {
 		return "", "", fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
 	}

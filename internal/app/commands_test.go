@@ -727,7 +727,8 @@ func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 }
 
 func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
-	a := &App{cfg: testCodexConfig(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
+	ff := &fakeFeishuClient{}
+	a := &App{cfg: testCodexConfig(), feishu: wrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := a.completeMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
@@ -768,7 +769,8 @@ func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 }
 
 func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
-	a := &App{cfg: testCodexConfig(), feishu: &fakeFeishuClient{}, cfgPath: "/etc/feidex/config.toml"}
+	ff := &fakeFeishuClient{}
+	a := &App{cfg: testCodexConfig(), feishu: wrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := a.completeMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")

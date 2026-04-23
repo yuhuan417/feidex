@@ -32,12 +32,12 @@ func (h *backendRuntimeHandle) install(a *App) {
 		return
 	}
 	if h == nil {
-		a.backend = ""
+		a.setRuntimeBackend("")
 		a.replaceCodexClient(nil)
 		a.claude = nil
 		return
 	}
-	a.backend = normalizeRuntimeBackend(h.backend)
+	a.setRuntimeBackend(h.backend)
 	a.replaceCodexClient(h.codex)
 	a.claude = h.claude
 }

@@ -184,7 +184,9 @@ func (a *App) updateQuietMode(mode config.QuietMode) error {
 	if a == nil || a.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
-	cfg := a.feishuConfig()
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+	cfg := a.feishuConfigUnlocked()
 	if cfg == nil {
 		return fmt.Errorf("nil feishu config")
 	}

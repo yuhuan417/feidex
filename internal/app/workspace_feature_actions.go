@@ -397,6 +397,8 @@ func (a *App) completeClaudeWorkspacePermissionMenu(action *feishu.CardAction, s
 }
 
 func (a *App) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
 	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)

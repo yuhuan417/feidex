@@ -78,13 +78,33 @@ func (a *App) configuredBackend() string {
 	if a == nil {
 		return ""
 	}
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
 	if backend := normalizeRuntimeBackend(a.backend); strings.TrimSpace(a.backend) != "" {
 		return backend
 	}
-	if cfg := a.feishuConfig(); cfg != nil {
+	if cfg := a.feishuConfigUnlocked(); cfg != nil {
 		return normalizeRuntimeBackend(cfg.Backend)
 	}
 	return ""
+}
+
+func (a *App) currentRuntimeBackend() string {
+	if a == nil {
+		return ""
+	}
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	return normalizeRuntimeBackend(a.backend)
+}
+
+func (a *App) setRuntimeBackend(backend string) {
+	if a == nil {
+		return
+	}
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+	a.backend = normalizeRuntimeBackend(backend)
 }
 
 func (a *App) hasConfiguredBackend() bool {

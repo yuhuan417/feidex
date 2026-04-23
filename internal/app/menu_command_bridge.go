@@ -17,6 +17,10 @@ type commandCaptureClient struct {
 	card           map[string]any
 }
 
+type commandCaptureFeishuClient interface {
+	captureCommandOutput(replyMessageID string, fn func() error) (string, map[string]any, error)
+}
+
 func (c *commandCaptureClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*feishu.BotMenuClick), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
 	c.base.SetHandlers(onMessage, onCardAction, onBotMenu, onRecall, onReaction)
 }
@@ -182,17 +186,13 @@ func (a *App) runCommandFromCardAction(action *feishu.CardAction, sessionKey, ra
 	if action == nil {
 		return "", nil, nil
 	}
-	capture := &commandCaptureClient{
-		base:           a.feishu,
-		replyMessageID: strings.TrimSpace(action.MessageID),
-	}
-	shadow := *a
-	shadow.feishu = capture
 	msg := a.commandMessageFromAction(action, sessionKey, rawCommand)
-	if err := shadow.handleCommand(msg, rawCommand); err != nil {
-		return "", nil, err
+	if capture, ok := a.feishu.(commandCaptureFeishuClient); ok {
+		return capture.captureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
+			return a.handleCommand(msg, rawCommand)
+		})
 	}
-	return strings.TrimSpace(capture.text), capture.card, nil
+	return "", nil, a.handleCommand(msg, rawCommand)
 }
 
 func (a *App) completeMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {

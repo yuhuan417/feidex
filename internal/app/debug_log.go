@@ -26,7 +26,9 @@ func runtimeLogLevelText() string {
 func (a *App) setRuntimeDebug(enabled bool) string {
 	level := logcontrol.SetDebug(enabled)
 	if a != nil && a.cfg != nil {
+		a.configMu.Lock()
 		a.cfg.Log.Level = level
+		a.configMu.Unlock()
 	}
 	return level
 }

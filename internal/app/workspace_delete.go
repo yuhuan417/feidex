@@ -168,6 +168,8 @@ func (a *App) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionK
 }
 
 func (a *App) validateWorkspaceDeletion(sessionKey, workspaceID string) error {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return fmt.Errorf("请指定 workspace_id")
@@ -200,6 +202,7 @@ func (a *App) deleteWorkspace(sessionKey, workspaceID string) error {
 	if err := a.validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
 		return err
 	}
+	a.configMu.Lock()
 	workspaceID = strings.TrimSpace(workspaceID)
 	fallbackID := ""
 	nextWorkspaces := make([]config.Workspace, 0, len(a.cfg.Workspaces)-1)
@@ -219,12 +222,15 @@ func (a *App) deleteWorkspace(sessionKey, workspaceID string) error {
 	a.cfg.Workspaces = nextWorkspaces
 	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
 		a.cfg.Workspaces = prevWorkspaces
+		a.configMu.Unlock()
 		return err
 	}
 	if err := config.Save(a.cfgPath, a.cfg); err != nil {
 		a.cfg.Workspaces = prevWorkspaces
+		a.configMu.Unlock()
 		return err
 	}
+	a.configMu.Unlock()
 	appState := a.appState()
 	for _, sess := range appState.sessions() {
 		if sess == nil {

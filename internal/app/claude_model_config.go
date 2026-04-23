@@ -188,6 +188,8 @@ func (a *App) updateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
 	if err := a.ensureClaudeRuntimeConfigChangeSafe(); err != nil {
 		return err
 	}
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
 	mutate(&a.cfg.Claude)
 	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
 		return err

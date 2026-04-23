@@ -338,7 +338,9 @@ func (a *App) workspaceByIDAndCWD(workspaceID, targetDir string) *config.Workspa
 
 func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
 	appState := a.appState()
+	a.configMu.Lock()
 	if config.FindWorkspace(a.cfg, id) != nil {
+		a.configMu.Unlock()
 		return fmt.Errorf("workspace %q 已存在", id)
 	}
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{
@@ -351,12 +353,16 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 	})
 	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
 		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
+		a.configMu.Unlock()
 		return err
 	}
 	if err := config.Save(a.cfgPath, a.cfg); err != nil {
 		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
+		a.configMu.Unlock()
 		return err
 	}
+	ws := config.FindWorkspace(a.cfg, id)
+	a.configMu.Unlock()
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
@@ -368,7 +374,6 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 	if sessionHasInFlightSubmission(sess) {
 		return nil
 	}
-	ws := config.FindWorkspace(a.cfg, id)
 	if ws == nil {
 		return nil
 	}

@@ -23,6 +23,7 @@ type App struct {
 	store               *state.Store
 	frontendID          string
 	frontendConfigIndex int
+	configMu            sync.RWMutex
 	backend             string
 	codex               codexClient
 	claude              claudeCore
@@ -341,7 +342,12 @@ func firstNonEmpty(values ...string) string {
 }
 
 func (a *App) defaultWorkspaceID() string {
-	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
+	if a == nil || a.cfg == nil {
+		return "default"
+	}
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	if len(a.cfg.Workspaces) == 0 {
 		return "default"
 	}
 	return a.cfg.Workspaces[0].ID

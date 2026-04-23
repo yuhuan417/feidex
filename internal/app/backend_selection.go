@@ -280,7 +280,7 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 	}
 
 	oldHandle := a.currentBackendRuntimeHandle()
-	oldBackend := a.backend
+	oldBackend := a.currentRuntimeBackend()
 	if err := a.setConfiguredBackend(target); err != nil {
 		_ = newHandle.close()
 		return err
@@ -290,7 +290,7 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 	for _, sess := range nextSessions {
 		if err := a.store.UpsertSession(sess); err != nil {
 			oldHandle.install(a)
-			a.backend = oldBackend
+			a.setRuntimeBackend(oldBackend)
 			_ = a.setConfiguredBackend(current)
 			_ = newHandle.close()
 			return err
@@ -329,7 +329,9 @@ func (a *App) setConfiguredBackend(target string) error {
 		return fmt.Errorf("nil config")
 	}
 	target = normalizeRuntimeBackend(target)
-	cfg := a.feishuConfig()
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+	cfg := a.feishuConfigUnlocked()
 	if cfg == nil {
 		return fmt.Errorf("frontend config not found")
 	}

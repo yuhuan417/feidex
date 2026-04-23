@@ -21,17 +21,15 @@ func (f *blockingClaudeCompactCore) StartTurn(_ context.Context, sessionKey, thr
 	if f.fakeClaudeCore == nil {
 		f.fakeClaudeCore = &fakeClaudeCore{}
 	}
-	f.startTurnCalls = append(f.startTurnCalls, struct {
-		sessionKey string
-		threadID   string
-		turnID     string
-		prompt     string
-	}{
+	f.mu.Lock()
+	f.startTurnCalls = append(f.startTurnCalls, fakeClaudeStartTurnCall{
 		sessionKey: sessionKey,
 		threadID:   threadID,
 		turnID:     turnID,
 		prompt:     prompt,
 	})
+	err := f.startTurnErr
+	f.mu.Unlock()
 	select {
 	case f.started <- struct{}{}:
 	default:
@@ -39,7 +37,7 @@ func (f *blockingClaudeCompactCore) StartTurn(_ context.Context, sessionKey, thr
 	if f.release != nil {
 		<-f.release
 	}
-	return f.startTurnErr
+	return err
 }
 
 func TestStandaloneCompactionLifecycle(t *testing.T) {
@@ -271,24 +269,25 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 	case <-time.After(2 * time.Second):
 		t.Fatal("thread/compact/start was not started asynchronously")
 	}
-	if len(ff.patchedCards) != 0 {
-		t.Fatalf("patchedCards before compact finishes = %+v, want none", ff.patchedCards)
+	if patchedCards := ff.patchedCardsSnapshot(); len(patchedCards) != 0 {
+		t.Fatalf("patchedCards before compact finishes = %+v, want none", patchedCards)
 	}
 
 	close(release)
 	deadline := time.Now().Add(2 * time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected accepted compact card patch")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "已提交 `/compact`") {
 		t.Fatalf("accepted patched card body = %q", body)
 	}
-	if !cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "返回常用工具") {
-		t.Fatalf("accepted patched card missing return button: %#v", ff.patchedCards[len(ff.patchedCards)-1])
+	if !cardHasButtonText(patchedCards[len(patchedCards)-1], "返回常用工具") {
+		t.Fatalf("accepted patched card missing return button: %#v", patchedCards[len(patchedCards)-1])
 	}
 	if sess := a.store.GetSession(sessionKey); sess == nil || sess.Status != sessionStatusCompacting {
 		t.Fatalf("session after compact ack = %+v", sess)
@@ -347,22 +346,24 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 	case <-time.After(2 * time.Second):
 		t.Fatal("Claude /compact was not started asynchronously")
 	}
-	if len(ff.patchedCards) != 0 {
-		t.Fatalf("patchedCards before Claude start returns = %+v, want none", ff.patchedCards)
+	if patchedCards := ff.patchedCardsSnapshot(); len(patchedCards) != 0 {
+		t.Fatalf("patchedCards before Claude start returns = %+v, want none", patchedCards)
 	}
 
 	close(claude.release)
 	deadline := time.Now().Add(2 * time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected accepted compact card patch")
 	}
-	if len(claude.startTurnCalls) != 1 || strings.TrimSpace(claude.startTurnCalls[0].prompt) != "/compact" {
-		t.Fatalf("Claude startTurn calls = %#v", claude.startTurnCalls)
+	startTurnCalls := claude.startTurnCallsSnapshot()
+	if len(startTurnCalls) != 1 || strings.TrimSpace(startTurnCalls[0].prompt) != "/compact" {
+		t.Fatalf("Claude startTurn calls = %#v", startTurnCalls)
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "已提交 `/compact`") {
 		t.Fatalf("accepted patched card body = %q", body)
 	}
@@ -405,17 +406,18 @@ func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected failure compact card patch")
 	}
-	body := cardMarkdownContent(t, ff.patchedCards[len(ff.patchedCards)-1])
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
 	if !strings.Contains(body, "请求 `/compact` 失败") || !strings.Contains(body, "当前没有活动线程") {
 		t.Fatalf("failure patched card body = %q", body)
 	}
-	if !cardHasButtonText(ff.patchedCards[len(ff.patchedCards)-1], "重试") {
-		t.Fatalf("failure patched card missing retry button: %#v", ff.patchedCards[len(ff.patchedCards)-1])
+	if !cardHasButtonText(patchedCards[len(patchedCards)-1], "重试") {
+		t.Fatalf("failure patched card missing retry button: %#v", patchedCards[len(patchedCards)-1])
 	}
 }

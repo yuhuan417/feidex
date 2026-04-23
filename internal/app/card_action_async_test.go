@@ -17,13 +17,14 @@ import (
 func waitForPatchedCard(t *testing.T, ff *fakeFeishuClient) map[string]any {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
-	for len(ff.patchedCards) == 0 && time.Now().Before(deadline) {
+	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if len(ff.patchedCards) == 0 {
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
 		t.Fatal("expected asynchronous card patch")
 	}
-	return ff.patchedCards[len(ff.patchedCards)-1]
+	return patchedCards[len(patchedCards)-1]
 }
 
 func TestCompleteUpgradeDevReturnsPreparingCardAndPatchesAsync(t *testing.T) {
@@ -71,8 +72,8 @@ func TestCompleteUpgradeDevReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	if body := cardMarkdownContent(t, card); !strings.Contains(body, "正在检查可升级版本") {
 		t.Fatalf("upgrade dev preparing body = %q", body)
 	}
-	if len(ff.patchedCards) != 0 {
-		t.Fatalf("patched cards before dev release completes = %+v, want none", ff.patchedCards)
+	if patchedCards := ff.patchedCardsSnapshot(); len(patchedCards) != 0 {
+		t.Fatalf("patched cards before dev release completes = %+v, want none", patchedCards)
 	}
 
 	<-blocking.started
