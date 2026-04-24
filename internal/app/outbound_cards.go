@@ -93,28 +93,55 @@ func buildMarkdownBodyCardActionElements(buttons []feishu.Button) []map[string]a
 	return rows
 }
 
-func (a *App) prepareCardMarkdown(sub *state.Submission, text string) string {
+type cardRenderer struct {
+	app *App
+}
+
+func (a *App) cardRenderer() cardRenderer {
+	return cardRenderer{app: a}
+}
+
+func (r cardRenderer) prepareCardMarkdown(sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
 	}
-	if sub == nil {
+	if sub == nil || r.app == nil {
 		return normalizeCardMarkdown(text)
 	}
-	return a.prepareSubmissionCardMarkdown(sub, text)
+	return r.app.prepareSubmissionCardMarkdown(sub, text)
 }
 
 func (a *App) renderReplyMarkdownCard(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-	return a.renderReplyMarkdownCardWithOptions(context.Background(), sub, title, color, body, buttons, false)
+	return a.cardRenderer().renderReplyMarkdownCardWithOptions(context.Background(), sub, title, color, body, buttons, false)
+}
+
+func (a *App) prepareCardMarkdown(sub *state.Submission, text string) string {
+	return a.cardRenderer().prepareCardMarkdown(sub, text)
 }
 
 func (a *App) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
-	return a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, strings.TrimSpace(title) != "", body, buttons, enablePreview)
+	return a.cardRenderer().renderReplyMarkdownCardWithOptions(ctx, sub, title, color, body, buttons, enablePreview)
+}
+
+func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
+	return r.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, strings.TrimSpace(title) != "", body, buttons, enablePreview)
 }
 
 func (a *App) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
+	return a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, body, buttons, enablePreview)
+}
+
+func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	card := newMarkdownBodyCardWithHeader(title, color, showHeader)
-	if content := a.prepareReplyCardMarkdown(ctx, sub, body, enablePreview); content != "" {
+	if r.app == nil {
+		if content := normalizeCardMarkdown(body); content != "" {
+			appendMarkdownBodyCardElement(card, map[string]any{
+				"tag":     "markdown",
+				"content": content,
+			})
+		}
+	} else if content := r.app.prepareReplyCardMarkdown(ctx, sub, body, enablePreview); content != "" {
 		appendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,
@@ -133,6 +160,10 @@ func (a *App) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub 
 }
 
 func (a *App) renderCompactMarkdownCard(sub *state.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {
+	return a.cardRenderer().renderCompactMarkdownCard(sub, title, color, meta, body, buttons)
+}
+
+func (r cardRenderer) renderCompactMarkdownCard(sub *state.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {
 	card := newMarkdownBodyCard(title, color)
 	meta = strings.Join(strings.Fields(strings.TrimSpace(meta)), " ")
 	if meta != "" {
@@ -146,7 +177,7 @@ func (a *App) renderCompactMarkdownCard(sub *state.Submission, title, color, met
 			},
 		})
 	}
-	if content := a.prepareCardMarkdown(sub, body); content != "" {
+	if content := r.prepareCardMarkdown(sub, body); content != "" {
 		appendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,
