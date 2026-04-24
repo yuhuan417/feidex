@@ -98,6 +98,25 @@ var workspaceGitClone = func(ctx context.Context, repoURL, targetDir string, rep
 	return nil
 }
 
+type workspaceCloneTracker struct {
+	mu  sync.Mutex
+	ops map[string]*workspaceCloneOperation
+}
+
+func newWorkspaceCloneTracker() *workspaceCloneTracker {
+	return &workspaceCloneTracker{ops: map[string]*workspaceCloneOperation{}}
+}
+
+func (a *App) workspaceCloneTracker() *workspaceCloneTracker {
+	if a == nil {
+		return nil
+	}
+	if a.workspaceCloneOps == nil {
+		a.workspaceCloneOps = newWorkspaceCloneTracker()
+	}
+	return a.workspaceCloneOps
+}
+
 type workspaceCloneOperation struct {
 	mu             sync.Mutex
 	cancel         context.CancelFunc
@@ -221,39 +240,36 @@ func (a *App) setWorkspaceCloneOperation(requestID string, op *workspaceCloneOpe
 	if requestID == "" || op == nil {
 		return
 	}
-	a.workspaceCloneMu.Lock()
-	defer a.workspaceCloneMu.Unlock()
-	if a.workspaceCloneOps == nil {
-		a.workspaceCloneOps = map[string]*workspaceCloneOperation{}
+	tracker := a.workspaceCloneTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.ops == nil {
+		tracker.ops = map[string]*workspaceCloneOperation{}
 	}
-	if previous := a.workspaceCloneOps[requestID]; previous != nil && previous.cancel != nil && previous != op {
+	if previous := tracker.ops[requestID]; previous != nil && previous.cancel != nil && previous != op {
 		previous.cancel()
 	}
-	a.workspaceCloneOps[requestID] = op
+	tracker.ops[requestID] = op
 }
 
 func (a *App) workspaceCloneOperation(requestID string) *workspaceCloneOperation {
 	if a == nil {
 		return nil
 	}
-	a.workspaceCloneMu.Lock()
-	defer a.workspaceCloneMu.Unlock()
-	if a.workspaceCloneOps == nil {
-		return nil
-	}
-	return a.workspaceCloneOps[strings.TrimSpace(requestID)]
+	tracker := a.workspaceCloneTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.ops[strings.TrimSpace(requestID)]
 }
 
 func (a *App) clearWorkspaceCloneOperation(requestID string) {
 	if a == nil {
 		return
 	}
-	a.workspaceCloneMu.Lock()
-	defer a.workspaceCloneMu.Unlock()
-	if a.workspaceCloneOps == nil {
-		return
-	}
-	delete(a.workspaceCloneOps, strings.TrimSpace(requestID))
+	tracker := a.workspaceCloneTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	delete(tracker.ops, strings.TrimSpace(requestID))
 }
 
 func (a *App) patchWorkspaceCloneProgressCard(messageID, requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) {

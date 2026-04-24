@@ -49,8 +49,7 @@ type App struct {
 
 	turnStreams       *turnStreamTracker
 	turnItems         *turnItemTracker
-	workspaceCloneMu  sync.Mutex
-	workspaceCloneOps map[string]*workspaceCloneOperation
+	workspaceCloneOps *workspaceCloneTracker
 	liveThreads       *liveThreadTracker
 	turnBindings      *turnBindingTracker
 	finalCardPatches  *finalCardPatchTracker
@@ -121,7 +120,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		deduper:             newInboundDeduper(),
 		turnStreams:         newTurnStreamTracker(),
 		turnItems:           newTurnItemTracker(),
-		workspaceCloneOps:   map[string]*workspaceCloneOperation{},
+		workspaceCloneOps:   newWorkspaceCloneTracker(),
 		liveThreads:         newLiveThreadTracker(),
 		turnBindings:        newTurnBindingTracker(),
 		finalCardPatches:    newFinalCardPatchTracker(),
