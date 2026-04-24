@@ -123,7 +123,7 @@ func (s menuActionService) completeQuietSet(action *feishu.CardAction, mode conf
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietModeStatusText(mode)},
-		Card:  rawCard(s.app.renderQuietModeMenuCard(sessionKey)),
+		Card:  rawCard(renderQuietModeMenuCard(s.app, sessionKey)),
 	}, nil
 }
 

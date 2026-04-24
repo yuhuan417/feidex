@@ -79,11 +79,11 @@ func isClaudeTodoToolPayload(payload turnItemCardPayload) bool {
 	return quietmode.IsClaudeTodoToolPayload(payload.ProtocolItemType, payload.ToolName)
 }
 
-func (a *App) renderQuietModeCard() map[string]any {
-	return a.renderQuietModeMenuCard("")
+func renderQuietModeCard(a *App) map[string]any {
+	return renderQuietModeMenuCard(a, "")
 }
 
-func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
+func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
 	mode := quietMode(feishuConfig(a))
 	lines := []string{
 		"当前模式: `" + quietModeStatusText(mode) + "`",
@@ -153,7 +153,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 		if msg == nil {
 			return nil
 		}
-		card := a.renderQuietModeMenuCard(makeSessionKey(a, msg))
+		card := renderQuietModeMenuCard(a, makeSessionKey(a, msg))
 		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 		return err
 	}
@@ -164,7 +164,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			card := a.renderQuietModeMenuCard(makeSessionKey(a, msg))
+			card := renderQuietModeMenuCard(a, makeSessionKey(a, msg))
 			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 			return err
 		default:

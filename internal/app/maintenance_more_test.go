@@ -16,7 +16,7 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg, cfgPath: filepath.Join(t.TempDir(), "config.toml"), feishu: feishu.New(cfg.Feishu)}
 
-	card := a.renderQuietModeCard()
+	card := renderQuietModeCard(a)
 	title, preview, buttonCount := feishu.New(cfg.Feishu).SimpleStatusCard("tmp", "blue", "tmp", nil)["header"], cardElementsForTest(card), 0
 	_ = title
 	_ = preview
