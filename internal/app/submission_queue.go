@@ -14,7 +14,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
+func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
 	a := w.app
 	appState := a.appState()
 	sess := appState.session(sessionKey)
@@ -145,11 +145,11 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	return nil
 }
 
-func (w *submissionWorkflow) startNextSubmission(sessionKey string) error {
+func (w *lifecycleCoordinator) startNextSubmission(sessionKey string) error {
 	return w.startNextSubmissionWithFailureNotice(sessionKey, false)
 }
 
-func (w *submissionWorkflow) notifySubmissionStartFailure(ctx context.Context, sub *state.Submission, err error, willContinue bool) {
+func (w *lifecycleCoordinator) notifySubmissionStartFailure(ctx context.Context, sub *state.Submission, err error, willContinue bool) {
 	a := w.app
 	if a == nil || a.feishu == nil || sub == nil || err == nil {
 		return
@@ -171,7 +171,7 @@ func (w *submissionWorkflow) notifySubmissionStartFailure(ctx context.Context, s
 	}
 }
 
-func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
+func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
 	a := w.app
 	appState := a.appState()
 	dropThreadLineage := shouldDropCodexThreadLineageAfterStartFailure(a, err)
@@ -255,7 +255,7 @@ func shouldDropCodexThreadLineageAfterStartFailure(a *App, err error) bool {
 	return false
 }
 
-func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey string, notifyFailure bool) error {
+func (w *lifecycleCoordinator) startNextSubmissionWithFailureNotice(sessionKey string, notifyFailure bool) error {
 	a := w.app
 	appState := a.appState()
 	sess := appState.session(sessionKey)
@@ -354,7 +354,7 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 	return a.conversationBackend().startQueuedSubmission(w, sessionKey, sess, sub, ws, notifyFailure)
 }
 
-func (w *submissionWorkflow) startNextCodexSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := w.app
 	appState := a.appState()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
@@ -521,7 +521,7 @@ func (w *submissionWorkflow) startNextCodexSubmissionWithFailureNotice(sessionKe
 	return nil
 }
 
-func (w *submissionWorkflow) startNextSubmissionAsync(sessionKey, source string) {
+func (w *lifecycleCoordinator) startNextSubmissionAsync(sessionKey, source string) {
 	a := w.app
 	appState := a.appState()
 	if strings.TrimSpace(sessionKey) == "" {

@@ -109,7 +109,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	if a == nil {
 		return
 	}
-	newSubmissionWorkflow(a).bindPendingSubmissionTurn(threadID, turnID, true)
+	newLifecycleCoordinator(a).bindPendingSubmissionTurn(threadID, turnID, true)
 	item = a.completeTurnItemState(threadID, turnID, itemID, item)
 	itemID = strings.TrimSpace(firstNonEmpty(strings.TrimSpace(itemID), stringValue(item["id"])))
 	if a.completeStandaloneCompactItem(threadID, turnID, item) {

@@ -267,7 +267,7 @@ func (a *App) startClaudeContinuationSubmission(sessionKey string, sub *state.Su
 	if ws == nil {
 		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
 	}
-	return newSubmissionWorkflow(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	return newLifecycleCoordinator(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 func (a *App) recordSubmissionSourceLinks(sub *state.Submission) {

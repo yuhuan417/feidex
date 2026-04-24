@@ -9,7 +9,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (w *submissionWorkflow) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
+func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
 	a := w.app
 	appState := a.appState()
 	threadID = strings.TrimSpace(threadID)
@@ -54,7 +54,7 @@ func (w *submissionWorkflow) bindPendingSubmissionTurn(threadID, turnID string, 
 	return true
 }
 
-func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) {
+func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string) {
 	a := w.app
 	appState := a.appState()
 	threadID = strings.TrimSpace(threadID)
@@ -150,7 +150,7 @@ func (w *submissionWorkflow) onTurnStartedNotification(threadID, turnID string) 
 	logSessionState("turn started notification session snapshot", sessionKey, appState.session(sessionKey))
 }
 
-func (w *submissionWorkflow) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
+func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
 	a := w.app
 	appState := a.appState()
 	threadID = strings.TrimSpace(threadID)
@@ -227,7 +227,7 @@ func (w *submissionWorkflow) bindPendingSubmissionForTurnCompletion(threadID, tu
 	return sessionKey, sub
 }
 
-func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
+func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 	a := w.app
 	appState := a.appState()
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)

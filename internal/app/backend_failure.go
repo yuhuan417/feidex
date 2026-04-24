@@ -246,7 +246,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	a.cleanupSubmissionRuntimeState(sub)
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		a.runAsync(func() {
-			newSubmissionWorkflow(a).startNextSubmissionAsync(sessionKey, "backendFailed")
+			newLifecycleCoordinator(a).startNextSubmissionAsync(sessionKey, "backendFailed")
 		})
 	}
 }

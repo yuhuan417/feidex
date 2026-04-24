@@ -442,7 +442,7 @@ func (a *App) startAutoRetrySubmission(sessionKey string, sess *state.Session, s
 		return nil, err
 	}
 	sub.ID = id
-	if err := a.conversationBackend().startQueuedSubmission(newSubmissionWorkflow(a), sessionKey, sess, sub, ws, false); err != nil {
+	if err := a.conversationBackend().startQueuedSubmission(newLifecycleCoordinator(a), sessionKey, sess, sub, ws, false); err != nil {
 		if current := a.appState().submission(sub.ID); current != nil {
 			sub = current
 		}

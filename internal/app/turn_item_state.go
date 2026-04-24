@@ -47,7 +47,7 @@ func (a *App) noteTurnItemStarted(threadID, turnID string, item map[string]any) 
 	if a == nil || item == nil {
 		return
 	}
-	newSubmissionWorkflow(a).bindPendingSubmissionTurn(threadID, turnID, true)
+	newLifecycleCoordinator(a).bindPendingSubmissionTurn(threadID, turnID, true)
 	itemID := strings.TrimSpace(stringValue(item["id"]))
 	key := turnItemStateKey(turnID, itemID)
 	if key == "" {

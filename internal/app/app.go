@@ -229,11 +229,11 @@ func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
-	return newSubmissionWorkflow(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot)
+	return newLifecycleCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot)
 }
 
 func (a *App) startNextSubmission(sessionKey string) error {
-	return newSubmissionWorkflow(a).startNextSubmission(sessionKey)
+	return newLifecycleCoordinator(a).startNextSubmission(sessionKey)
 }
 
 func buildTurnSandboxPolicy(mode string) map[string]any {

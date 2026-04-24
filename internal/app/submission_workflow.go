@@ -1,10 +1,10 @@
 package app
 
-// submissionWorkflow owns the submission queue and turn lifecycle flow.
-type submissionWorkflow struct {
+// lifecycleCoordinator owns submission queueing, turn startup, and turn completion.
+type lifecycleCoordinator struct {
 	app *App
 }
 
-func newSubmissionWorkflow(app *App) *submissionWorkflow {
-	return &submissionWorkflow{app: app}
+func newLifecycleCoordinator(app *App) *lifecycleCoordinator {
+	return &lifecycleCoordinator{app: app}
 }

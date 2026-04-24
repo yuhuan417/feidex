@@ -42,7 +42,7 @@ func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testi
 		t.Fatal("expected queued submission")
 	}
 
-	err = newSubmissionWorkflow(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, &a.cfg.Workspaces[0], false)
+	err = newLifecycleCoordinator(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, &a.cfg.Workspaces[0], false)
 	if err == nil || !strings.Contains(err.Error(), "claude backend not initialized") {
 		t.Fatalf("startNextClaudeSubmissionWithFailureNotice() error = %v, want claude backend not initialized", err)
 	}

@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	inboundDedupRetention   = 10 * time.Minute
-	inboundInflightTTL      = 2 * time.Minute
-	inboundDedupGCInterval  = time.Minute
-	inboundDedupMaxEntries  = 4096
+	inboundDedupRetention  = 10 * time.Minute
+	inboundInflightTTL     = 2 * time.Minute
+	inboundDedupGCInterval = time.Minute
+	inboundDedupMaxEntries = 4096
 )
 
 type inboundDeduper struct {

@@ -170,6 +170,6 @@ func (a *App) resumeQueuedFrontendSessionsAfterCodexRecovery() {
 		if sessionKey == "" {
 			continue
 		}
-		go newSubmissionWorkflow(a).startNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
+		go newLifecycleCoordinator(a).startNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
 	}
 }
