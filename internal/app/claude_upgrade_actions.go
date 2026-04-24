@@ -101,7 +101,7 @@ func (a *App) completeClaudeUpgradeAction(action *feishu.CardAction, actionName 
 		TargetVersion:   payload.TargetVersion,
 		LatestVersion:   payload.TargetVersion,
 	}
-	if !a.beginClaudeUpgrade(snapshot) {
+	if !newMaintenanceStateService(a).beginClaudeUpgrade(snapshot) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		view, err := a.loadClaudeUpgradeView(ctx, false)
@@ -113,7 +113,7 @@ func (a *App) completeClaudeUpgradeAction(action *feishu.CardAction, actionName 
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "Claude 正在维护中"},
-			Card:  rawCard(a.renderClaudeUpgradeOperationCard(sessionKey, a.claudeUpgradeState())),
+			Card:  rawCard(a.renderClaudeUpgradeOperationCard(sessionKey, newMaintenanceStateService(a).claudeUpgradeState())),
 		}, nil
 	}
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -121,6 +121,6 @@ func (a *App) completeClaudeUpgradeAction(action *feishu.CardAction, actionName 
 	go a.runClaudeUpgradeOperation(messageID, sessionKey, payload)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "Claude 升级已开始"},
-		Card:  rawCard(a.renderClaudeUpgradeOperationCard(sessionKey, a.claudeUpgradeState())),
+		Card:  rawCard(a.renderClaudeUpgradeOperationCard(sessionKey, newMaintenanceStateService(a).claudeUpgradeState())),
 	}, nil
 }

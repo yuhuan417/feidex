@@ -75,14 +75,14 @@ func (codexRuntimeFacade) startRuntime(ctx context.Context, a *App, handle *back
 }
 
 func (codexRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && a.codexMaintenanceActive()
+	return a != nil && newMaintenanceStateService(a).codexMaintenanceActive()
 }
 
 func (codexRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 	if a == nil {
 		return nil
 	}
-	return a.codexMaintenanceBlocksCommand(raw)
+	return newMaintenanceStateService(a).codexMaintenanceBlocksCommand(raw)
 }
 
 func (codexRuntimeFacade) idleMaintenanceBlockedReason() string {

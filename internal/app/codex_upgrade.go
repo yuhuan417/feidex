@@ -91,9 +91,9 @@ func (a *App) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (cod
 	}
 	view := codexUpgradeView{
 		Probe:      probe,
-		BusyReason: a.codexUpgradeRuntimeBusyReason(),
-		Snapshot:   a.codexUpgradeState(),
-		Restart:    a.codexRestartState(),
+		BusyReason: newMaintenanceStateService(a).codexUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(a).codexUpgradeState(),
+		Restart:    newMaintenanceStateService(a).codexRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

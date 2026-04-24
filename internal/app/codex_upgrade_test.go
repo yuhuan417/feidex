@@ -142,7 +142,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.beginCodexUpgrade(codexUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	newMaintenanceStateService(a).beginCodexUpgrade(codexUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := a.handleCommand(msg, "/status"); err != nil {
@@ -196,7 +196,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !a.beginCodexUpgrade(codexUpgradeSnapshot{
+	if !newMaintenanceStateService(a).beginCodexUpgrade(codexUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -227,7 +227,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
-	snapshot := a.codexUpgradeState()
+	snapshot := newMaintenanceStateService(a).codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -284,7 +284,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !a.beginCodexUpgrade(codexUpgradeSnapshot{
+	if !newMaintenanceStateService(a).beginCodexUpgrade(codexUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -322,7 +322,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.currentCodexClient(), fc)
 	}
-	snapshot := a.codexUpgradeState()
+	snapshot := newMaintenanceStateService(a).codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -378,7 +378,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if !a.codexRestartState().Running {
+		if !newMaintenanceStateService(a).codexRestartState().Running {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -398,7 +398,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
-	snapshot := a.codexRestartState()
+	snapshot := newMaintenanceStateService(a).codexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
@@ -466,7 +466,7 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.currentCodexClient(), fc)
 	}
-	state := a.codexRestartState()
+	state := newMaintenanceStateService(a).codexRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}
@@ -537,7 +537,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
 	}
-	state := a.codexRestartState()
+	state := newMaintenanceStateService(a).codexRestartState()
 	if state.Running || state.Result != "success" {
 		t.Fatalf("restart state = %+v", state)
 	}

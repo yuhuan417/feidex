@@ -64,14 +64,14 @@ func (claudeRuntimeFacade) startRuntime(context.Context, *App, *backendRuntimeHa
 }
 
 func (claudeRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && a.claudeMaintenanceActive()
+	return a != nil && newMaintenanceStateService(a).claudeMaintenanceActive()
 }
 
 func (claudeRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 	if a == nil {
 		return nil
 	}
-	return a.claudeMaintenanceBlocksCommand(raw)
+	return newMaintenanceStateService(a).claudeMaintenanceBlocksCommand(raw)
 }
 
 func (claudeRuntimeFacade) idleMaintenanceBlockedReason() string {

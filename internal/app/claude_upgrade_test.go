@@ -143,7 +143,7 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.claude = &fakeClaudeCore{}
-	a.beginClaudeUpgrade(claudeUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	newMaintenanceStateService(a).beginClaudeUpgrade(claudeUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := a.handleCommand(msg, "/status"); err != nil {
@@ -188,7 +188,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 		runClaudeSmokeTest = origSmoke
 	}()
 
-	if !a.beginClaudeUpgrade(claudeUpgradeSnapshot{
+	if !newMaintenanceStateService(a).beginClaudeUpgrade(claudeUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -207,7 +207,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	if !claude.closed {
 		t.Fatal("expected live Claude runtime to be closed after successful promotion")
 	}
-	snapshot := a.claudeUpgradeState()
+	snapshot := newMaintenanceStateService(a).claudeUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -252,7 +252,7 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		runClaudeSmokeTest = origSmoke
 	}()
 
-	if !a.beginClaudeUpgrade(claudeUpgradeSnapshot{
+	if !newMaintenanceStateService(a).beginClaudeUpgrade(claudeUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -271,7 +271,7 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if claude.closed {
 		t.Fatal("live Claude runtime should not be closed when upgrade rolls back before promotion")
 	}
-	snapshot := a.claudeUpgradeState()
+	snapshot := newMaintenanceStateService(a).claudeUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -319,7 +319,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if !a.claudeRestartState().Running {
+		if !newMaintenanceStateService(a).claudeRestartState().Running {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -327,7 +327,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	if !claude.closed {
 		t.Fatal("expected live runtime to be closed during restart")
 	}
-	snapshot := a.claudeRestartState()
+	snapshot := newMaintenanceStateService(a).claudeRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
@@ -376,7 +376,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if claude.closed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
 	}
-	state := a.claudeRestartState()
+	state := newMaintenanceStateService(a).claudeRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}

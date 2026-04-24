@@ -20,8 +20,8 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 		sessionKey,
 		"codex upgrade progress patch failed",
 		a.renderCodexUpgradeOperationCard,
-		a.updateCodexUpgrade,
-		a.finishCodexUpgrade,
+		newMaintenanceStateService(a).updateCodexUpgrade,
+		newMaintenanceStateService(a).finishCodexUpgrade,
 		func(snapshot *codexUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -39,9 +39,9 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 		InstallVersion:    manager.InstallVersion,
 		SmokeTest:         a.codexSmokeTest,
 		RefreshRuntime:    a.refreshCodexRuntimeAfterMaintenance,
-		RuntimeBusyReason: a.codexUpgradeRuntimeBusyReason,
+		RuntimeBusyReason: newMaintenanceStateService(a).codexUpgradeRuntimeBusyReason,
 		RecordVersions: func(previousVersion, targetVersion string) {
-			a.updateCodexUpgrade(func(snapshot *codexUpgradeSnapshot) {
+			newMaintenanceStateService(a).updateCodexUpgrade(func(snapshot *codexUpgradeSnapshot) {
 				snapshot.CurrentVersion = previousVersion
 				snapshot.PreviousVersion = previousVersion
 				snapshot.TargetVersion = targetVersion
@@ -111,24 +111,24 @@ func (a *App) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
 		a.beginCodexRestartOperation,
 		a.runCodexRestartOperation,
 		a.renderCodexRestartOperationCard,
-		func(message string) { a.finishCodexRestart("failed", message) },
+		func(message string) { newMaintenanceStateService(a).finishCodexRestart("failed", message) },
 	)
 }
 
 func (a *App) beginCodexRestartOperation() (codexRestartSnapshot, error) {
-	if err := a.ensureCodexUpgradeReady(); err != nil {
+	if err := newMaintenanceStateService(a).ensureCodexUpgradeReady(); err != nil {
 		return codexRestartSnapshot{}, err
 	}
 	snapshot := codexRestartSnapshot{
 		Running:        true,
 		Phase:          "preflight",
 		Message:        "正在校验重启前置条件",
-		CurrentVersion: firstNonEmpty(a.codexUpgradeState().CurrentVersion, a.codexRestartState().CurrentVersion),
+		CurrentVersion: firstNonEmpty(newMaintenanceStateService(a).codexUpgradeState().CurrentVersion, newMaintenanceStateService(a).codexRestartState().CurrentVersion),
 	}
-	if !a.beginCodexRestart(snapshot) {
+	if !newMaintenanceStateService(a).beginCodexRestart(snapshot) {
 		return codexRestartSnapshot{}, errString("Codex 正在维护中，请稍后再试")
 	}
-	return a.codexRestartState(), nil
+	return newMaintenanceStateService(a).codexRestartState(), nil
 }
 
 func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
@@ -138,8 +138,8 @@ func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
 		sessionKey,
 		"codex restart progress patch failed",
 		a.renderCodexRestartOperationCard,
-		a.updateCodexRestart,
-		a.finishCodexRestart,
+		newMaintenanceStateService(a).updateCodexRestart,
+		newMaintenanceStateService(a).finishCodexRestart,
 		func(snapshot *codexRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -154,10 +154,10 @@ func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
 		finalize("failed", "重启前检查失败: "+err.Error())
 		return
 	}
-	a.updateCodexRestart(func(snapshot *codexRestartSnapshot) {
+	newMaintenanceStateService(a).updateCodexRestart(func(snapshot *codexRestartSnapshot) {
 		snapshot.CurrentVersion = firstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
 	})
-	if reason := a.codexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+	if reason := newMaintenanceStateService(a).codexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		finalize("failed", "重启前检查失败: "+reason)
 		return
 	}

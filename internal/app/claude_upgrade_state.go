@@ -16,14 +16,14 @@ func newClaudeMaintenanceTracker() *claudeMaintenanceTracker {
 	return &claudeMaintenanceTracker{}
 }
 
-func (a *App) claudeMaintenanceTracker() *claudeMaintenanceTracker {
-	if a == nil {
+func (s maintenanceStateService) claudeMaintenanceTracker() *claudeMaintenanceTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.claudeMaintenance == nil {
-		a.claudeMaintenance = newClaudeMaintenanceTracker()
+	if s.app.claudeMaintenance == nil {
+		s.app.claudeMaintenance = newClaudeMaintenanceTracker()
 	}
-	return a.claudeMaintenance
+	return s.app.claudeMaintenance
 }
 
 type claudeUpgradeSnapshot struct {
@@ -49,38 +49,38 @@ type claudeRestartSnapshot struct {
 	UpdatedAt      time.Time
 }
 
-func (a *App) claudeUpgradeState() claudeUpgradeSnapshot {
-	if a == nil {
+func (s maintenanceStateService) claudeUpgradeState() claudeUpgradeSnapshot {
+	if s.app == nil {
 		return claudeUpgradeSnapshot{}
 	}
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	return tracker.upgrade
 }
 
-func (a *App) claudeRestartState() claudeRestartSnapshot {
-	if a == nil {
+func (s maintenanceStateService) claudeRestartState() claudeRestartSnapshot {
+	if s.app == nil {
 		return claudeRestartSnapshot{}
 	}
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	return tracker.restart
 }
 
-func (a *App) claudeMaintenanceActive() bool {
-	if a == nil {
+func (s maintenanceStateService) claudeMaintenanceActive() bool {
+	if s.app == nil {
 		return false
 	}
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	return tracker.upgrade.Running || tracker.restart.Running
 }
 
-func (a *App) beginClaudeUpgrade(snapshot claudeUpgradeSnapshot) bool {
-	if a == nil {
+func (s maintenanceStateService) beginClaudeUpgrade(snapshot claudeUpgradeSnapshot) bool {
+	if s.app == nil {
 		return false
 	}
 	now := time.Now()
@@ -93,7 +93,7 @@ func (a *App) beginClaudeUpgrade(snapshot claudeUpgradeSnapshot) bool {
 	}
 	snapshot.UpdatedAt = now
 
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.upgrade.Running || tracker.restart.Running {
@@ -103,8 +103,8 @@ func (a *App) beginClaudeUpgrade(snapshot claudeUpgradeSnapshot) bool {
 	return true
 }
 
-func (a *App) beginClaudeRestart(snapshot claudeRestartSnapshot) bool {
-	if a == nil {
+func (s maintenanceStateService) beginClaudeRestart(snapshot claudeRestartSnapshot) bool {
+	if s.app == nil {
 		return false
 	}
 	now := time.Now()
@@ -117,7 +117,7 @@ func (a *App) beginClaudeRestart(snapshot claudeRestartSnapshot) bool {
 	}
 	snapshot.UpdatedAt = now
 
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.upgrade.Running || tracker.restart.Running {
@@ -127,11 +127,11 @@ func (a *App) beginClaudeRestart(snapshot claudeRestartSnapshot) bool {
 	return true
 }
 
-func (a *App) updateClaudeUpgrade(mutate func(*claudeUpgradeSnapshot)) claudeUpgradeSnapshot {
-	if a == nil {
+func (s maintenanceStateService) updateClaudeUpgrade(mutate func(*claudeUpgradeSnapshot)) claudeUpgradeSnapshot {
+	if s.app == nil {
 		return claudeUpgradeSnapshot{}
 	}
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	mutate(&tracker.upgrade)
@@ -139,11 +139,11 @@ func (a *App) updateClaudeUpgrade(mutate func(*claudeUpgradeSnapshot)) claudeUpg
 	return tracker.upgrade
 }
 
-func (a *App) updateClaudeRestart(mutate func(*claudeRestartSnapshot)) claudeRestartSnapshot {
-	if a == nil {
+func (s maintenanceStateService) updateClaudeRestart(mutate func(*claudeRestartSnapshot)) claudeRestartSnapshot {
+	if s.app == nil {
 		return claudeRestartSnapshot{}
 	}
-	tracker := a.claudeMaintenanceTracker()
+	tracker := s.claudeMaintenanceTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	mutate(&tracker.restart)
@@ -151,8 +151,8 @@ func (a *App) updateClaudeRestart(mutate func(*claudeRestartSnapshot)) claudeRes
 	return tracker.restart
 }
 
-func (a *App) finishClaudeUpgrade(result, message string) claudeUpgradeSnapshot {
-	return a.updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
+func (s maintenanceStateService) finishClaudeUpgrade(result, message string) claudeUpgradeSnapshot {
+	return s.updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
 		snapshot.Running = false
 		if strings.TrimSpace(result) != "" {
 			snapshot.Result = strings.TrimSpace(result)
@@ -181,8 +181,8 @@ func (a *App) finishClaudeUpgrade(result, message string) claudeUpgradeSnapshot 
 	})
 }
 
-func (a *App) finishClaudeRestart(result, message string) claudeRestartSnapshot {
-	return a.updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
+func (s maintenanceStateService) finishClaudeRestart(result, message string) claudeRestartSnapshot {
+	return s.updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
 		snapshot.Running = false
 		if strings.TrimSpace(result) != "" {
 			snapshot.Result = strings.TrimSpace(result)
@@ -199,31 +199,31 @@ func (a *App) finishClaudeRestart(result, message string) claudeRestartSnapshot 
 	})
 }
 
-func (a *App) claudeUpgradeRuntimeBusyReason() string {
-	if a == nil || a.store == nil {
+func (s maintenanceStateService) claudeUpgradeRuntimeBusyReason() string {
+	if s.app == nil || s.app.store == nil {
 		return ""
 	}
 	activeSessions := 0
-	for _, sess := range a.appState().sessions() {
-		if sess != nil && a.sessionBelongsToFrontend(sess.Key) && sessionHasActiveWork(sess) {
+	for _, sess := range s.app.appState().sessions() {
+		if sess != nil && s.app.sessionBelongsToFrontend(sess.Key) && sessionHasActiveWork(sess) {
 			activeSessions++
 		}
 	}
 	if activeSessions > 0 {
 		return "当前仍有运行中的任务"
 	}
-	if pendingCount := a.claudeUpgradeBlockingPendingCount(); pendingCount > 0 {
+	if pendingCount := s.claudeUpgradeBlockingPendingCount(); pendingCount > 0 {
 		return "当前仍有待处理审批或表单"
 	}
 	return ""
 }
 
-func (a *App) claudeUpgradeBlockingPendingCount() int {
-	if a == nil || a.store == nil {
+func (s maintenanceStateService) claudeUpgradeBlockingPendingCount() int {
+	if s.app == nil || s.app.store == nil {
 		return 0
 	}
 	count := 0
-	for _, req := range a.appState().pendingRequests() {
+	for _, req := range s.app.appState().pendingRequests() {
 		if req == nil || !isServerResolvedPendingKind(req.Kind) || !isPendingRequestOpen(req) {
 			continue
 		}
@@ -232,20 +232,20 @@ func (a *App) claudeUpgradeBlockingPendingCount() int {
 	return count
 }
 
-func (a *App) ensureClaudeUpgradeReady() error {
-	if a == nil {
+func (s maintenanceStateService) ensureClaudeUpgradeReady() error {
+	if s.app == nil {
 		return nil
 	}
-	if a.claudeMaintenanceActive() {
+	if s.claudeMaintenanceActive() {
 		return errString("Claude 正在维护中，请稍后再试")
 	}
-	if reason := a.claudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+	if reason := s.claudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		return errString(reason)
 	}
 	return nil
 }
 
-func (a *App) claudeMaintenanceAllowsCommand(raw string) bool {
+func (s maintenanceStateService) claudeMaintenanceAllowsCommand(raw string) bool {
 	raw = strings.TrimSpace(raw)
 	switch {
 	case raw == "/help":
@@ -261,11 +261,11 @@ func (a *App) claudeMaintenanceAllowsCommand(raw string) bool {
 	}
 }
 
-func (a *App) claudeMaintenanceBlocksCommand(raw string) error {
-	if a == nil || !a.claudeMaintenanceActive() {
+func (s maintenanceStateService) claudeMaintenanceBlocksCommand(raw string) error {
+	if s.app == nil || !s.claudeMaintenanceActive() {
 		return nil
 	}
-	if a.claudeMaintenanceAllowsCommand(raw) {
+	if s.claudeMaintenanceAllowsCommand(raw) {
 		return nil
 	}
 	return errString("Claude 正在维护中，当前只允许 `/claude`、`/status`、`/help`")

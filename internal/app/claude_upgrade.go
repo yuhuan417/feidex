@@ -91,9 +91,9 @@ func (a *App) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (cl
 	}
 	view := claudeUpgradeView{
 		Probe:      probe,
-		BusyReason: a.claudeUpgradeRuntimeBusyReason(),
-		Snapshot:   a.claudeUpgradeState(),
-		Restart:    a.claudeRestartState(),
+		BusyReason: newMaintenanceStateService(a).claudeUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(a).claudeUpgradeState(),
+		Restart:    newMaintenanceStateService(a).claudeRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

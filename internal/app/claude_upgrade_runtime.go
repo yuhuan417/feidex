@@ -20,8 +20,8 @@ func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload cl
 		sessionKey,
 		"claude upgrade progress patch failed",
 		a.renderClaudeUpgradeOperationCard,
-		a.updateClaudeUpgrade,
-		a.finishClaudeUpgrade,
+		newMaintenanceStateService(a).updateClaudeUpgrade,
+		newMaintenanceStateService(a).finishClaudeUpgrade,
 		func(snapshot *claudeUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -39,9 +39,9 @@ func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload cl
 		InstallVersion:    manager.InstallVersion,
 		SmokeTest:         func(ctx context.Context) error { return runClaudeSmokeTest(a, ctx) },
 		RefreshRuntime:    a.refreshClaudeRuntimeAfterMaintenance,
-		RuntimeBusyReason: a.claudeUpgradeRuntimeBusyReason,
+		RuntimeBusyReason: newMaintenanceStateService(a).claudeUpgradeRuntimeBusyReason,
 		RecordVersions: func(previousVersion, targetVersion string) {
-			a.updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
+			newMaintenanceStateService(a).updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
 				snapshot.CurrentVersion = previousVersion
 				snapshot.PreviousVersion = previousVersion
 				snapshot.TargetVersion = targetVersion
@@ -181,24 +181,24 @@ func (a *App) startClaudeRestartFromMessage(msg *feishu.InboundMessage) error {
 		a.beginClaudeRestartOperation,
 		a.runClaudeRestartOperation,
 		a.renderClaudeRestartOperationCard,
-		func(message string) { a.finishClaudeRestart("failed", message) },
+		func(message string) { newMaintenanceStateService(a).finishClaudeRestart("failed", message) },
 	)
 }
 
 func (a *App) beginClaudeRestartOperation() (claudeRestartSnapshot, error) {
-	if err := a.ensureClaudeUpgradeReady(); err != nil {
+	if err := newMaintenanceStateService(a).ensureClaudeUpgradeReady(); err != nil {
 		return claudeRestartSnapshot{}, err
 	}
 	snapshot := claudeRestartSnapshot{
 		Running:        true,
 		Phase:          "preflight",
 		Message:        "正在校验重启前置条件",
-		CurrentVersion: firstNonEmpty(a.claudeUpgradeState().CurrentVersion, a.claudeRestartState().CurrentVersion),
+		CurrentVersion: firstNonEmpty(newMaintenanceStateService(a).claudeUpgradeState().CurrentVersion, newMaintenanceStateService(a).claudeRestartState().CurrentVersion),
 	}
-	if !a.beginClaudeRestart(snapshot) {
+	if !newMaintenanceStateService(a).beginClaudeRestart(snapshot) {
 		return claudeRestartSnapshot{}, errString("Claude 正在维护中，请稍后再试")
 	}
-	return a.claudeRestartState(), nil
+	return newMaintenanceStateService(a).claudeRestartState(), nil
 }
 
 func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
@@ -208,8 +208,8 @@ func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
 		sessionKey,
 		"claude restart progress patch failed",
 		a.renderClaudeRestartOperationCard,
-		a.updateClaudeRestart,
-		a.finishClaudeRestart,
+		newMaintenanceStateService(a).updateClaudeRestart,
+		newMaintenanceStateService(a).finishClaudeRestart,
 		func(snapshot *claudeRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -225,10 +225,10 @@ func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
 		finalize("failed", "重启前检查失败: "+err.Error())
 		return
 	}
-	a.updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
+	newMaintenanceStateService(a).updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
 		snapshot.CurrentVersion = firstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
 	})
-	if reason := a.claudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+	if reason := newMaintenanceStateService(a).claudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		finalize("failed", "重启前检查失败: "+reason)
 		return
 	}
