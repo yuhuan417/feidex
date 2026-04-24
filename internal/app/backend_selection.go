@@ -173,7 +173,7 @@ func (a *App) commandBackend(msg *feishu.InboundMessage, args []string) error {
 func (a *App) completeMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开后端选择"},
-		Card:  rawCard(a.renderBackendMenuCard(sessionKey)),
+		Card:  rawCard(newCommandService(a).renderBackendMenuCard(sessionKey)),
 	}, nil
 }
 

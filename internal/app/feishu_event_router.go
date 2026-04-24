@@ -92,7 +92,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	}
 	if !msg.ExpandedMergeForward && strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
 		if isLocalCommandForBackend(a.configuredBackend(), strings.TrimSpace(msg.Text)) {
-			if err := a.handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
+			if err := newCommandService(a).handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
 				return err
 			}
 			return nil
@@ -173,7 +173,7 @@ func (r *feishuEventRouter) handleBotMenu(click *feishu.BotMenuClick) {
 		ChatType: "p2p",
 		Text:     click.Command,
 	}
-	if err := a.handleCommand(msg, click.Command); err != nil {
+	if err := newCommandService(a).handleCommand(msg, click.Command); err != nil {
 		_ = a.feishu.SendText(context.Background(), click.UserID, "命令执行失败: "+err.Error())
 	}
 }

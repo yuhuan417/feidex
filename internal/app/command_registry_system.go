@@ -22,7 +22,7 @@ func localCommandSystemIntroSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandHelp(msg, args)
+				return newCommandService(a).commandHelp(msg, args)
 			},
 			HelpEntries: []helpCommandSpec{
 				{Command: "/help", Summary: "查看所有本地命令与说明。"},

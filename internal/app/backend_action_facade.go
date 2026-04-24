@@ -74,7 +74,7 @@ func (claudeBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMess
 	if a == nil || msg == nil {
 		return nil
 	}
-	return a.enqueuePassthroughCommand(msg, "/compact")
+	return newCommandService(a).enqueuePassthroughCommand(msg, "/compact")
 }
 
 func (claudeBackendActions) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {

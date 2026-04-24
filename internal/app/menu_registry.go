@@ -12,7 +12,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return a.renderCommandMenuCard(sessionKey), true
 	},
 	"menu.tools": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderToolsMenuCard(sessionKey), true
+		return newCommandService(a).renderToolsMenuCard(sessionKey), true
 	},
 	"menu.review": func(a *App, sessionKey string) (map[string]any, bool) {
 		return newReviewFormService(a).renderReviewMenuCard(sessionKey), true
@@ -28,10 +28,10 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return newBackendConfigurationService(a).renderModelMenuCard(sessionKey), true
 	},
 	"menu.group.system": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderSystemMenuCard(sessionKey), true
+		return newCommandService(a).renderSystemMenuCard(sessionKey), true
 	},
 	"menu.group.backend": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderBackendMenuCard(sessionKey), true
+		return newCommandService(a).renderBackendMenuCard(sessionKey), true
 	},
 	"menu.codex_upgrade": func(a *App, sessionKey string) (map[string]any, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -146,14 +146,14 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	newMaintenanceStateService(a).beginClaudeUpgrade(claudeUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.handleCommand(msg, "/status"); err != nil {
+	if err := newCommandService(a).handleCommand(msg, "/status"); err != nil {
 		t.Fatalf("handleCommand(/status) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
 	if len(replyCards) != 1 {
 		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
-	if err := a.handleCommand(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
+	if err := newCommandService(a).handleCommand(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
 		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
 	}
 

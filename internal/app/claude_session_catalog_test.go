@@ -64,7 +64,7 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, "session-list-1", "List Session", "continue work", time.Unix(100, 0))
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := a.handleCommand(msg, "/session"); err != nil {
+	if err := newCommandService(a).handleCommand(msg, "/session"); err != nil {
 		t.Fatalf("handleCommand(/session) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -161,7 +161,7 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := a.handleCommand(msg, "/session resume session-resume-1"); err != nil {
+	if err := newCommandService(a).handleCommand(msg, "/session resume session-resume-1"); err != nil {
 		t.Fatalf("handleCommand(/session resume) error = %v", err)
 	}
 	if len(claude.ensureCalls) != 1 {

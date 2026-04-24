@@ -76,7 +76,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("create submission: %v", err)
 	}
 
-	err = a.handleCommand(&feishu.InboundMessage{
+	err = newCommandService(a).handleCommand(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -107,7 +107,7 @@ func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 		UserID:    "user-1",
 		Text:      "/quiet",
 	}
-	err := a.handleCommand(msg, "/quiet")
+	err := newCommandService(a).handleCommand(msg, "/quiet")
 	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
 		t.Fatalf("handleCommand() error = %v, want backend switch block", err)
 	}
@@ -283,7 +283,7 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 				UserID:    "user",
 				Text:      raw,
 			}
-			if err := a.handleCommand(msg, raw); err != nil {
+			if err := newCommandService(a).handleCommand(msg, raw); err != nil {
 				t.Fatalf("handleCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.startTurnCalls) != 1 {
@@ -459,7 +459,7 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 		UserID:    "user",
 		Text:      "/compact",
 	}
-	if err := a.handleCommand(msg, "/compact"); err != nil {
+	if err := newCommandService(a).handleCommand(msg, "/compact"); err != nil {
 		t.Fatalf("handleCommand(/compact) error = %v", err)
 	}
 	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "/compact") {
@@ -599,7 +599,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			}
 
 			msg := &feishu.InboundMessage{MessageID: "m-claude-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-			if err := a.handleCommand(msg, raw); err != nil {
+			if err := newCommandService(a).handleCommand(msg, raw); err != nil {
 				t.Fatalf("handleCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.forkCalls) != 1 {
@@ -648,7 +648,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	a.markSessionThreadLive(sessionKey, "claude-parent")
 
 	msg := &feishu.InboundMessage{MessageID: "m-claude-fork-pending", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := a.handleCommand(msg, "/fork"); err != nil {
+	if err := newCommandService(a).handleCommand(msg, "/fork"); err != nil {
 		t.Fatalf("handleCommand(/fork) error = %v", err)
 	}
 	if len(claude.forkCalls) != 1 {

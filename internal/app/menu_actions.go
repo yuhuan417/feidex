@@ -29,7 +29,7 @@ func (s menuActionService) completeMenuRoot(action *feishu.CardAction, sessionKe
 func (s menuActionService) completeMenuTools(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开常用工具"},
-		Card:  rawCard(s.app.renderToolsMenuCard(sessionKey)),
+		Card:  rawCard(newCommandService(s.app).renderToolsMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -43,7 +43,7 @@ func (s menuActionService) completeMenuGroupModel(action *feishu.CardAction, ses
 func (s menuActionService) completeMenuGroupSystem(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 system"},
-		Card:  rawCard(s.app.renderSystemMenuCard(sessionKey)),
+		Card:  rawCard(newCommandService(s.app).renderSystemMenuCard(sessionKey)),
 	}, nil
 }
 

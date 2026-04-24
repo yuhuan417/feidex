@@ -1817,7 +1817,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		}
 	}
 
-	toolsCard := a.renderToolsMenuCard(sessionKey)
+	toolsCard := newCommandService(a).renderToolsMenuCard(sessionKey)
 	if body := cardMarkdownContent(t, toolsCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") {
 		t.Fatalf("tools menu missing breadcrumb: %q", body)
 	}
@@ -1868,7 +1868,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		t.Fatalf("expected real command labels in model menu, got %#v", modelLabelByAction)
 	}
 
-	helpCard := a.renderHelpCard(sessionKey)
+	helpCard := newCommandService(a).renderHelpCard(sessionKey)
 	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 命令帮助") {
 		t.Fatalf("help card missing breadcrumb: %q", body)
 	}
@@ -1881,7 +1881,7 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 	a.claude = &fakeClaudeCore{}
 	sessionKey := "feishu:p2p:chat:user"
 
-	toolsCard := a.renderToolsMenuCard(sessionKey)
+	toolsCard := newCommandService(a).renderToolsMenuCard(sessionKey)
 	toolsLabels := cardButtonLabelsByAction(toolsCard)
 	for _, actionName := range []string{"menu.review", "menu.skills"} {
 		if _, ok := toolsLabels[actionName]; ok {
@@ -2631,7 +2631,7 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-path", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.handleCommand(msg, "/upgrade path dist/feidex linux amd64"); err != nil {
+	if err := newCommandService(a).handleCommand(msg, "/upgrade path dist/feidex linux amd64"); err != nil {
 		t.Fatalf("handleCommand(/upgrade path ...) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -3649,11 +3649,11 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/workspace policy",
 		"/workspace new",
 	} {
-		if err := a.handleCommand(msg, raw); err != nil && raw != "/threads" {
+		if err := newCommandService(a).handleCommand(msg, raw); err != nil && raw != "/threads" {
 			t.Fatalf("handleCommand(%q) error = %v", raw, err)
 		}
 	}
-	if err := a.handleCommand(msg, "/unknown"); err == nil {
+	if err := newCommandService(a).handleCommand(msg, "/unknown"); err == nil {
 		t.Fatal("expected unknown command to fail")
 	}
 	if len(ff.replyCards) == 0 {
@@ -3696,7 +3696,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-help", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 
-	if err := a.commandHelp(msg, nil); err != nil {
+	if err := newCommandService(a).commandHelp(msg, nil); err != nil {
 		t.Fatalf("commandHelp() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
