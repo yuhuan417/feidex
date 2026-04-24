@@ -1848,7 +1848,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
 	}
 
-	modelCard := a.renderModelMenuCard(sessionKey)
+	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)
 	modelActions := cardButtonsForTest(modelCard)
 	modelLabelByAction := map[string]string{}
 	for _, action := range modelActions {
@@ -1894,7 +1894,7 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 		}
 	}
 
-	modelCard := a.renderModelMenuCard(sessionKey)
+	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)
 	modelLabels := cardButtonLabelsByAction(modelCard)
 	if _, ok := modelLabels["menu.fast"]; ok {
 		t.Fatalf("unexpected Claude model action menu.fast in %+v", modelLabels)
@@ -3504,11 +3504,11 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 		}
 	}
 
-	resp, err := a.completeGlobalModelSet(&feishu.CardAction{}, "gpt-5")
+	resp, err := newBackendConfigurationService(a).completeGlobalModelSet(&feishu.CardAction{}, "gpt-5")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeGlobalModelSet() = %#v, %v", resp, err)
 	}
-	resp, err = a.completeGlobalReasoningEffortSet(&feishu.CardAction{}, "high")
+	resp, err = newBackendConfigurationService(a).completeGlobalReasoningEffortSet(&feishu.CardAction{}, "high")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeGlobalReasoningEffortSet() = %#v, %v", resp, err)
 	}

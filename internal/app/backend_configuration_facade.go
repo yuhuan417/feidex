@@ -101,19 +101,19 @@ func (codexBackendConfigurationFacade) workspaceSwitchBindingNotice(binding *wor
 }
 
 func (c codexBackendConfigurationFacade) renderModelMenuCard(sessionKey string) map[string]any {
-	return c.app.renderCodexModelMenuCard(sessionKey)
+	return newBackendConfigurationService(c.app).renderCodexModelMenuCard(sessionKey)
 }
 
 func (c codexBackendConfigurationFacade) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	return c.app.completeCodexGlobalModelSet(action, modelID)
+	return newBackendConfigurationService(c.app).completeCodexGlobalModelSet(action, modelID)
 }
 
 func (c codexBackendConfigurationFacade) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	return c.app.completeCodexGlobalReasoningEffortSet(action, reasoningEffort)
+	return newBackendConfigurationService(c.app).completeCodexGlobalReasoningEffortSet(action, reasoningEffort)
 }
 
 func (c codexBackendConfigurationFacade) statusCardBody(sess *state.Session) string {
-	return c.app.renderCodexStatusBody(sess)
+	return newBackendConfigurationService(c.app).renderCodexStatusBody(sess)
 }
 
 type claudeBackendConfigurationFacade struct {
@@ -193,7 +193,7 @@ func (claudeBackendConfigurationFacade) workspaceSwitchBindingNotice(binding *wo
 }
 
 func (c claudeBackendConfigurationFacade) renderModelMenuCard(sessionKey string) map[string]any {
-	return c.app.renderClaudeModelMenuCard(sessionKey)
+	return newBackendConfigurationService(c.app).renderClaudeModelMenuCard(sessionKey)
 }
 
 func (c claudeBackendConfigurationFacade) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -205,5 +205,5 @@ func (c claudeBackendConfigurationFacade) completeGlobalReasoningEffortSet(actio
 }
 
 func (c claudeBackendConfigurationFacade) statusCardBody(sess *state.Session) string {
-	return c.app.renderClaudeStatusBody(sess)
+	return newBackendConfigurationService(c.app).renderClaudeStatusBody(sess)
 }

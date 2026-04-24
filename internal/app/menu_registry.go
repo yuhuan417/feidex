@@ -25,7 +25,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return card, true
 	},
 	"menu.group.model": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderModelMenuCard(sessionKey), true
+		return newBackendConfigurationService(a).renderModelMenuCard(sessionKey), true
 	},
 	"menu.group.system": func(a *App, sessionKey string) (map[string]any, bool) {
 		return a.renderSystemMenuCard(sessionKey), true

@@ -13,49 +13,49 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) backendWorkspaceCommandUsage() string {
-	return a.backendConfiguration().workspaceCommandUsage()
+func (s backendConfigurationService) backendWorkspaceCommandUsage() string {
+	return s.app.backendConfiguration().workspaceCommandUsage()
 }
 
-func (a *App) handleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
-	return a.backendConfiguration().handleModelCommand(msg, args)
+func (s backendConfigurationService) handleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
+	return s.app.backendConfiguration().handleModelCommand(msg, args)
 }
 
-func (a *App) handleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	config := a.backendConfiguration()
+func (s backendConfigurationService) handleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
+	config := s.app.backendConfiguration()
 	if !config.supportsWorkspacePermissionMode() {
 		return fmt.Errorf("usage: %s", config.workspaceCommandUsage())
 	}
 	return config.handleWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
-func (a *App) appendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return a.backendConfiguration().appendWorkspaceSummaryLines(lines, currentWS)
+func (s backendConfigurationService) appendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
+	return s.app.backendConfiguration().appendWorkspaceSummaryLines(lines, currentWS)
 }
 
-func (a *App) backendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return a.backendConfiguration().workspaceConfigButtons(sessionKey)
+func (s backendConfigurationService) backendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
+	return s.app.backendConfiguration().workspaceConfigButtons(sessionKey)
 }
 
-func (a *App) backendWorkspaceSwitchInFlightNotice() string {
-	return a.backendConfiguration().workspaceSwitchInFlightNotice()
+func (s backendConfigurationService) backendWorkspaceSwitchInFlightNotice() string {
+	return s.app.backendConfiguration().workspaceSwitchInFlightNotice()
 }
 
-func (a *App) backendWorkspaceSwitchBindingFailureNotice() string {
-	return a.backendConfiguration().workspaceSwitchBindingFailureNotice()
+func (s backendConfigurationService) backendWorkspaceSwitchBindingFailureNotice() string {
+	return s.app.backendConfiguration().workspaceSwitchBindingFailureNotice()
 }
 
-func (a *App) backendWorkspaceSwitchBindingNotice(binding *workspaceThreadBinding) string {
-	return a.backendConfiguration().workspaceSwitchBindingNotice(binding)
+func (s backendConfigurationService) backendWorkspaceSwitchBindingNotice(binding *workspaceThreadBinding) string {
+	return s.app.backendConfiguration().workspaceSwitchBindingNotice(binding)
 }
 
-func (a *App) renderModelMenuCard(sessionKey string) map[string]any {
-	return a.backendConfiguration().renderModelMenuCard(sessionKey)
+func (s backendConfigurationService) renderModelMenuCard(sessionKey string) map[string]any {
+	return s.app.backendConfiguration().renderModelMenuCard(sessionKey)
 }
 
-func (a *App) renderClaudeModelMenuCard(sessionKey string) map[string]any {
-	modelValue := firstNonEmpty(configuredClaudeModel(a.cfg), claudeDefaultModelAlias)
-	effortValue := firstNonEmpty(configuredClaudeEffort(a.cfg), "(default)")
+func (s backendConfigurationService) renderClaudeModelMenuCard(sessionKey string) map[string]any {
+	modelValue := firstNonEmpty(configuredClaudeModel(s.app.cfg), claudeDefaultModelAlias)
+	effortValue := firstNonEmpty(configuredClaudeEffort(s.app.cfg), "(default)")
 	body := strings.Join([]string{
 		"当前 model: `" + modelValue + "`",
 		"当前 effort: `" + effortValue + "`",
@@ -66,15 +66,15 @@ func (a *App) renderClaudeModelMenuCard(sessionKey string) map[string]any {
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
+	return s.app.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
 }
 
-func (a *App) renderCodexModelMenuCard(sessionKey string) map[string]any {
-	modelValue := firstNonEmpty(configuredGlobalModel(a.cfg), "(default)")
-	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(a.cfg), "(default)")
+func (s backendConfigurationService) renderCodexModelMenuCard(sessionKey string) map[string]any {
+	modelValue := firstNonEmpty(configuredGlobalModel(s.app.cfg), "(default)")
+	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(s.app.cfg), "(default)")
 	fastValue := "-"
-	if a.store != nil {
-		if sess := a.appState().session(sessionKey); sess != nil {
+	if s.app.store != nil {
+		if sess := s.app.appState().session(sessionKey); sess != nil {
 			fastValue = renderServiceTierValue(sess.ActiveThreadServiceTier)
 		}
 	}
@@ -88,14 +88,14 @@ func (a *App) renderCodexModelMenuCard(sessionKey string) map[string]any {
 		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
+	return s.app.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", body), buttons)
 }
 
-func (a *App) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	return a.backendConfiguration().completeGlobalModelSet(action, modelID)
+func (s backendConfigurationService) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.backendConfiguration().completeGlobalModelSet(action, modelID)
 }
 
-func (a *App) completeCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+func (s backendConfigurationService) completeCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	menuAction, _ := action.ActionValue["menu_action"].(string)
 	if strings.TrimSpace(menuAction) == "" {
@@ -103,26 +103,26 @@ func (a *App) completeCodexGlobalModelSet(action *feishu.CardAction, modelID str
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := a.fetchModelList(ctx)
+	result, err := s.app.fetchModelList(ctx)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if err := a.updateGlobalModelConfig(func(c *config.CodexConfig) {
+	if err := s.app.updateGlobalModelConfig(func(c *config.CodexConfig) {
 		c.Model = strings.TrimSpace(modelID)
 	}, result); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局模型"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, menuAction)),
+		Card:  rawCard(s.app.renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 
-func (a *App) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	return a.backendConfiguration().completeGlobalReasoningEffortSet(action, reasoningEffort)
+func (s backendConfigurationService) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.backendConfiguration().completeGlobalReasoningEffortSet(action, reasoningEffort)
 }
 
-func (a *App) completeCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+func (s backendConfigurationService) completeCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	menuAction, _ := action.ActionValue["menu_action"].(string)
 	if strings.TrimSpace(menuAction) == "" {
@@ -130,31 +130,31 @@ func (a *App) completeCodexGlobalReasoningEffortSet(action *feishu.CardAction, r
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := a.fetchModelList(ctx)
+	result, err := s.app.fetchModelList(ctx)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	selectedModel, _ := effectiveConfiguredModelAndEffort(a.cfg, result)
+	selectedModel, _ := effectiveConfiguredModelAndEffort(s.app.cfg, result)
 	if strings.TrimSpace(reasoningEffort) != "" && !modelSupportsEffort(selectedModel, reasoningEffort) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前模型不支持这个推理强度"}}, nil
 	}
-	if err := a.updateGlobalModelConfig(func(c *config.CodexConfig) {
+	if err := s.app.updateGlobalModelConfig(func(c *config.CodexConfig) {
 		c.ReasoningEffort = strings.TrimSpace(reasoningEffort)
 	}, result); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局推理强度"},
-		Card:  rawCard(a.renderModelConfigCard(result, sessionKey, menuAction)),
+		Card:  rawCard(s.app.renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 
-func (a *App) statusCardBody(sess *state.Session) string {
-	return a.backendConfiguration().statusCardBody(sess)
+func (s backendConfigurationService) statusCardBody(sess *state.Session) string {
+	return s.app.backendConfiguration().statusCardBody(sess)
 }
 
-func (a *App) renderClaudeStatusBody(sess *state.Session) string {
-	workspaceID := a.defaultWorkspaceID()
+func (s backendConfigurationService) renderClaudeStatusBody(sess *state.Session) string {
+	workspaceID := s.app.defaultWorkspaceID()
 	conversationLabel := "-"
 	conversationID := "-"
 	status := "idle"
@@ -169,22 +169,22 @@ func (a *App) renderClaudeStatusBody(sess *state.Session) string {
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
-	ws = config.FindWorkspace(a.cfg, workspaceID)
-	model := firstNonEmpty(configuredClaudeModel(a.cfg), claudeDefaultModelAlias)
-	effort := firstNonEmpty(configuredClaudeEffort(a.cfg), "(follow Claude default)")
+	ws = config.FindWorkspace(s.app.cfg, workspaceID)
+	model := firstNonEmpty(configuredClaudeModel(s.app.cfg), claudeDefaultModelAlias)
+	effort := firstNonEmpty(configuredClaudeEffort(s.app.cfg), "(follow Claude default)")
 	workspacePermission := "-"
 	sessionPermission := "跟随工作区"
 	effectivePermission := "-"
 	if ws != nil {
-		workspacePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(nil, ws, a.cfg.Claude))
-		effectivePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(sess, ws, a.cfg.Claude))
+		workspacePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(nil, ws, s.app.cfg.Claude))
+		effectivePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(sess, ws, s.app.cfg.Claude))
 	}
 	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
 		sessionPermission = claudePermissionModeLabel(sess.ActiveClaudePermissionMode)
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
-		"backend: `" + firstNonEmpty(a.configuredBackend(), "unset") + "`",
+		"backend: `" + firstNonEmpty(s.app.configuredBackend(), "unset") + "`",
 		"版本: `" + currentVersion() + "`",
 		"log level: " + renderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -192,8 +192,8 @@ func (a *App) renderClaudeStatusBody(sess *state.Session) string {
 		"session_id: `" + conversationID + "`",
 		"Claude model: `" + model + "`",
 		"Claude effort: `" + effort + "`",
-		"auto retry: `" + map[bool]string{true: "on", false: "off"}[newAutoRetryService(a).autoRetryEnabled()] + "`",
-		"quiet: `" + quietModeStatusText(a.quietMode()) + "`",
+		"auto retry: `" + map[bool]string{true: "on", false: "off"}[newAutoRetryService(s.app).autoRetryEnabled()] + "`",
+		"quiet: `" + quietModeStatusText(s.app.quietMode()) + "`",
 		"workspace permission mode: " + workspacePermission,
 		"session permission mode: " + sessionPermission,
 		"effective permission mode: " + effectivePermission,
@@ -201,8 +201,8 @@ func (a *App) renderClaudeStatusBody(sess *state.Session) string {
 	}, "\n")
 }
 
-func (a *App) renderCodexStatusBody(sess *state.Session) string {
-	workspaceID := a.defaultWorkspaceID()
+func (s backendConfigurationService) renderCodexStatusBody(sess *state.Session) string {
+	workspaceID := s.app.defaultWorkspaceID()
 	conversationLabel := "-"
 	conversationID := "-"
 	status := "idle"
@@ -217,9 +217,9 @@ func (a *App) renderCodexStatusBody(sess *state.Session) string {
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
-	ws = config.FindWorkspace(a.cfg, workspaceID)
-	model := configuredGlobalModel(a.cfg)
-	effort := configuredGlobalReasoningEffort(a.cfg)
+	ws = config.FindWorkspace(s.app.cfg, workspaceID)
+	model := configuredGlobalModel(s.app.cfg)
+	effort := configuredGlobalReasoningEffort(s.app.cfg)
 	if model == "" {
 		model = "(follow app-server default)"
 	}
@@ -246,7 +246,7 @@ func (a *App) renderCodexStatusBody(sess *state.Session) string {
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
-		"backend: `" + firstNonEmpty(a.configuredBackend(), "unset") + "`",
+		"backend: `" + firstNonEmpty(s.app.configuredBackend(), "unset") + "`",
 		"版本: `" + currentVersion() + "`",
 		"log level: " + renderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -254,8 +254,8 @@ func (a *App) renderCodexStatusBody(sess *state.Session) string {
 		"thread_id: `" + conversationID + "`",
 		"全局模型: `" + model + "`",
 		"全局推理强度: `" + effort + "`",
-		"auto retry: `" + map[bool]string{true: "on", false: "off"}[newAutoRetryService(a).autoRetryEnabled()] + "`",
-		"quiet: `" + quietModeStatusText(a.quietMode()) + "`",
+		"auto retry: `" + map[bool]string{true: "on", false: "off"}[newAutoRetryService(s.app).autoRetryEnabled()] + "`",
+		"quiet: `" + quietModeStatusText(s.app.quietMode()) + "`",
 		"workspace sandbox: `" + workspaceSandbox + "`",
 		"workspace policy: `" + workspacePolicy + "`",
 		"thread sandbox: " + threadSandbox,

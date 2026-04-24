@@ -101,7 +101,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 	}
 	if args[0] == "permissions" {
-		return s.app.handleBackendWorkspacePermissionCommand(msg, args, sessionKey)
+		return newBackendConfigurationService(s.app).handleBackendWorkspacePermissionCommand(msg, args, sessionKey)
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
@@ -153,7 +153,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		}
 		reply := "已切换工作区到 " + ws.ID
 		if sessionHasInFlightSubmission(sess) {
-			reply += s.app.backendWorkspaceSwitchInFlightNotice()
+			reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchInFlightNotice()
 			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 		}
 		binding, err := s.app.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
@@ -164,13 +164,13 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			reply += s.app.backendWorkspaceSwitchBindingFailureNotice()
+			reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchBindingFailureNotice()
 			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 		}
-		reply += s.app.backendWorkspaceSwitchBindingNotice(binding)
+		reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchBindingNotice(binding)
 		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 	}
-	return fmt.Errorf("usage: %s", s.app.backendWorkspaceCommandUsage())
+	return fmt.Errorf("usage: %s", newBackendConfigurationService(s.app).backendWorkspaceCommandUsage())
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
@@ -190,7 +190,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 	}
 	currentWS := config.FindWorkspace(a.cfg, currentID)
 	bodyLines := []string{"当前工作区: `" + currentID + "`"}
-	bodyLines = a.appendBackendWorkspaceSummaryLines(bodyLines, currentWS)
+	bodyLines = newBackendConfigurationService(a).appendBackendWorkspaceSummaryLines(bodyLines, currentWS)
 	buttons := make([]feishu.Button, 0, 6)
 	selectOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
 	for _, ws := range a.cfg.Workspaces {
@@ -221,7 +221,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 	)
-	buttons = append(buttons, a.backendWorkspaceConfigButtons(sessionKey)...)
+	buttons = append(buttons, newBackendConfigurationService(a).backendWorkspaceConfigButtons(sessionKey)...)
 	buttons = append(buttons,
 		feishu.Button{
 			Text: submenuCommandLabel("删除工作区", "/workspace delete"),

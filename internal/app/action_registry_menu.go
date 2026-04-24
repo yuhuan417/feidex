@@ -116,24 +116,24 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeServiceTierSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "service_tier"))
 	},
 	"model.config.set_model": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeGlobalModelSet(action, actionStringValue(action, "model_id"))
+		return newBackendConfigurationService(s.app).completeGlobalModelSet(action, actionStringValue(action, "model_id"))
 	},
 	"model.config.select_model": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		modelID := strings.TrimSpace(action.Option)
 		if modelID == modelConfigDefaultOptionValue {
 			modelID = ""
 		}
-		return s.app.completeGlobalModelSet(action, modelID)
+		return newBackendConfigurationService(s.app).completeGlobalModelSet(action, modelID)
 	},
 	"model.config.set_effort": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
+		return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 	},
 	"model.config.select_effort": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		reasoningEffort := strings.TrimSpace(action.Option)
 		if reasoningEffort == modelConfigDefaultOptionValue {
 			reasoningEffort = ""
 		}
-		return s.app.completeGlobalReasoningEffortSet(action, reasoningEffort)
+		return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, reasoningEffort)
 	},
 	"history.page": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeHistoryPage(action, actionSessionKey(action), actionIntValue(action, "page"))

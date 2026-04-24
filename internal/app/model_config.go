@@ -260,7 +260,7 @@ func (a *App) updateGlobalModelConfig(mutate func(*config.CodexConfig), result c
 }
 
 func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
-	return a.handleBackendModelCommand(msg, args)
+	return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
 }
 
 func (a *App) commandCodexModel(msg *feishu.InboundMessage, args []string) error {
@@ -290,7 +290,7 @@ func (a *App) commandCodexModel(msg *feishu.InboundMessage, args []string) error
 					return a.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, a.replyInThreadEnabled(msg.ChatType))
 				}
 			}
-			resp, err := a.completeGlobalModelSet(action, modelID)
+			resp, err := newBackendConfigurationService(a).completeGlobalModelSet(action, modelID)
 			if err != nil {
 				return err
 			}
@@ -303,7 +303,7 @@ func (a *App) commandCodexModel(msg *feishu.InboundMessage, args []string) error
 			if effort == "default" || effort == modelConfigDefaultOptionValue {
 				effort = ""
 			}
-			resp, err := a.completeGlobalReasoningEffortSet(action, effort)
+			resp, err := newBackendConfigurationService(a).completeGlobalReasoningEffortSet(action, effort)
 			if err != nil {
 				return err
 			}

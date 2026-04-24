@@ -36,7 +36,7 @@ func (s menuActionService) completeMenuTools(action *feishu.CardAction, sessionK
 func (s menuActionService) completeMenuGroupModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 model"},
-		Card:  rawCard(s.app.renderModelMenuCard(sessionKey)),
+		Card:  rawCard(newBackendConfigurationService(s.app).renderModelMenuCard(sessionKey)),
 	}, nil
 }
 

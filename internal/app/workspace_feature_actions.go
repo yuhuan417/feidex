@@ -42,9 +42,9 @@ func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, 
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			toast = "已切换工作区" + strings.TrimPrefix(s.app.backendWorkspaceSwitchBindingFailureNotice(), "。")
+			toast = "已切换工作区" + strings.TrimPrefix(newBackendConfigurationService(s.app).backendWorkspaceSwitchBindingFailureNotice(), "。")
 		} else {
-			toast = "已切换工作区" + strings.TrimPrefix(s.app.backendWorkspaceSwitchBindingNotice(binding), "。")
+			toast = "已切换工作区" + strings.TrimPrefix(newBackendConfigurationService(s.app).backendWorkspaceSwitchBindingNotice(binding), "。")
 		}
 	}
 	return &callback.CardActionTriggerResponse{

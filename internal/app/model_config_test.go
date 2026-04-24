@@ -89,7 +89,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		Queue:                      []string{"sub-1"},
 	}
 	a := &App{cfg: cfg}
-	body := a.statusCardBody(sess)
+	body := newBackendConfigurationService(a).statusCardBody(sess)
 	for _, want := range []string{
 		"版本: `0.1.0`",
 		"log level: `info`",
@@ -173,7 +173,7 @@ func TestStatusCardBodyUsesClaudeModelAndEffortOnClaudeBackend(t *testing.T) {
 	cfg.Claude.Effort = "max"
 	a := &App{cfg: cfg, backend: backendClaude}
 
-	body := a.statusCardBody(&state.Session{WorkspaceID: "default"})
+	body := newBackendConfigurationService(a).statusCardBody(&state.Session{WorkspaceID: "default"})
 	if !strings.Contains(body, "Claude model: `mimo-v2-pro`") {
 		t.Fatalf("status body missing Claude model: %q", body)
 	}
@@ -189,7 +189,7 @@ func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 	a.cfg.Claude.Model = "mimo-v2-pro"
 	a.cfg.Claude.Effort = "high"
 
-	card := a.renderModelMenuCard("sess-1")
+	card := newBackendConfigurationService(a).renderModelMenuCard("sess-1")
 	body := cardMarkdownContent(t, card)
 	if !strings.Contains(body, "当前 effort: `high`") {
 		t.Fatalf("Claude model menu body = %q", body)
