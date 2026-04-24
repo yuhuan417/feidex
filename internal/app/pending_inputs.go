@@ -197,7 +197,7 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 		return false
 	}
 	newPendingQueueService(s.app).markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
-	s.app.cleanupSubmissionRuntimeState(sub)
+	newRuntimeMaintenanceService(s.app).cleanupSubmissionRuntimeState(sub)
 	return true
 }
 
@@ -224,7 +224,7 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 			continue
 		}
 		discarded++
-		s.app.cleanupSubmissionRuntimeState(sub)
+		newRuntimeMaintenanceService(s.app).cleanupSubmissionRuntimeState(sub)
 	}
 	sess.Queue = nil
 	sess.StagedImages = nil

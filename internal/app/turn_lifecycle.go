@@ -333,5 +333,5 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 			w.startNextSubmissionAsync(sessionKey, "finishTurn")
 		})
 	}
-	a.cleanupSubmissionRuntimeState(sub)
+	newRuntimeMaintenanceService(a).cleanupSubmissionRuntimeState(sub)
 }

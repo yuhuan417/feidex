@@ -19,15 +19,15 @@ type permissionIssueDiagnosticSender interface {
 	notifyPermissionIssue(feishuNotifyTarget, error)
 }
 
-func (a *App) expirePendingRequestsOnStartup() {
-	if a == nil || a.store == nil {
+func (s runtimeMaintenanceService) expirePendingRequestsOnStartup() {
+	if s.app == nil || s.app.store == nil {
 		return
 	}
-	for _, req := range a.store.AllPendingRequests() {
+	for _, req := range s.app.store.AllPendingRequests() {
 		if req == nil || (req.Status != "pending" && req.Status != "replied") {
 			continue
 		}
-		_ = a.store.UpdateScopedPending(req.FrontendID, req.ID, func(p *state.PendingRequest) {
+		_ = s.app.store.UpdateScopedPending(req.FrontendID, req.ID, func(p *state.PendingRequest) {
 			p.Status = "expired"
 			if p.ExpiresAt < time.Now().Unix() {
 				return
@@ -37,8 +37,8 @@ func (a *App) expirePendingRequestsOnStartup() {
 	}
 }
 
-func (a *App) cleanupExpiredAttachments() {
-	for _, ws := range a.cfg.Workspaces {
+func (s runtimeMaintenanceService) cleanupExpiredAttachments() {
+	for _, ws := range s.app.cfg.Workspaces {
 		root := filepath.Join(ws.Cwd, attachmentsDirName)
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -48,12 +48,12 @@ func (a *App) cleanupExpiredAttachments() {
 			if !entry.IsDir() {
 				continue
 			}
-			a.cleanupAttachmentDir(filepath.Join(root, entry.Name()))
+			newRuntimeMaintenanceService(s.app).cleanupAttachmentDir(filepath.Join(root, entry.Name()))
 		}
 	}
 }
 
-func (a *App) cleanupAttachmentDir(root string) {
+func (s runtimeMaintenanceService) cleanupAttachmentDir(root string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return
@@ -71,11 +71,11 @@ func (a *App) cleanupAttachmentDir(root string) {
 	}
 }
 
-func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
-	if a == nil || a.store == nil || sub == nil {
+func (s runtimeMaintenanceService) cleanupSubmissionRuntimeState(sub *state.Submission) {
+	if s.app == nil || s.app.store == nil || sub == nil {
 		return
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	submissionID := strings.TrimSpace(sub.ID)
 	turnID := strings.TrimSpace(sub.TurnID)
 	threadID := strings.TrimSpace(sub.ThreadID)
@@ -100,19 +100,19 @@ func (a *App) cleanupSubmissionRuntimeState(sub *state.Submission) {
 		appState.deleteSubmission(submissionID)
 	}
 	if turnID != "" {
-		newRuntimeStateService(a).clearTurnBinding(turnID)
-		newRuntimeStateService(a).clearTurnItemStates(turnID)
+		newRuntimeStateService(s.app).clearTurnBinding(turnID)
+		newRuntimeStateService(s.app).clearTurnItemStates(turnID)
 	}
 	if submissionID != "" && threadID != "" {
-		newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, submissionID)
+		newRuntimeStateService(s.app).clearPendingTurnBindingForSubmission(threadID, submissionID)
 	}
 }
 
-func (a *App) startDriveArtifactGCLoop(ctx context.Context) {
-	if a == nil || a.feishu == nil {
+func (s runtimeMaintenanceService) startDriveArtifactGCLoop(ctx context.Context) {
+	if s.app == nil || s.app.feishu == nil {
 		return
 	}
-	go a.runDriveArtifactGC("startup")
+	go newRuntimeMaintenanceService(s.app).runDriveArtifactGC("startup")
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -121,21 +121,21 @@ func (a *App) startDriveArtifactGCLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				a.runDriveArtifactGC("ticker")
+				newRuntimeMaintenanceService(s.app).runDriveArtifactGC("ticker")
 			}
 		}
 	}()
 }
 
-func (a *App) runDriveArtifactGC(source string) {
-	if a == nil || a.feishu == nil {
+func (s runtimeMaintenanceService) runDriveArtifactGC(source string) {
+	if s.app == nil || s.app.feishu == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	result, err := a.feishu.CleanupArtifactsBefore(ctx, time.Now().Add(-artifactRetention))
+	result, err := s.app.feishu.CleanupArtifactsBefore(ctx, time.Now().Add(-artifactRetention))
 	if err != nil {
-		a.notifyDriveArtifactGCPermissionIssue(source, err)
+		newRuntimeMaintenanceService(s.app).notifyDriveArtifactGCPermissionIssue(source, err)
 		slog.Warn("artifact gc failed", "source", source, "error", err)
 		return
 	}
@@ -149,8 +149,8 @@ func (a *App) runDriveArtifactGC(source string) {
 	)
 }
 
-func (a *App) notifyDriveArtifactGCPermissionIssue(source string, err error) {
-	if a == nil || a.feishu == nil || err == nil {
+func (s runtimeMaintenanceService) notifyDriveArtifactGCPermissionIssue(source string, err error) {
+	if s.app == nil || s.app.feishu == nil || err == nil {
 		return
 	}
 	issue, ok := feishu.PermissionIssueFromError(err)
@@ -161,10 +161,10 @@ func (a *App) notifyDriveArtifactGCPermissionIssue(source string, err error) {
 	if body == "" {
 		return
 	}
-	notifier, ok := a.feishu.(permissionIssueDiagnosticSender)
-	chatIDs := a.startupReadyChatIDs(a.appState().sessions())
+	notifier, ok := s.app.feishu.(permissionIssueDiagnosticSender)
+	chatIDs := s.app.startupReadyChatIDs(s.app.appState().sessions())
 	if len(chatIDs) == 0 {
-		a.queueFrontendCardNotification(state.FrontendCardNotification{
+		s.app.queueFrontendCardNotification(state.FrontendCardNotification{
 			Kind:        frontendCardNotificationKindFeishuPermissionIssue,
 			CollapseKey: frontendCardNotificationKindFeishuPermissionIssue,
 			Title:       "飞书权限错误",
@@ -179,7 +179,7 @@ func (a *App) notifyDriveArtifactGCPermissionIssue(source string, err error) {
 		return
 	}
 	if !ok {
-		a.queueFrontendCardNotification(state.FrontendCardNotification{
+		s.app.queueFrontendCardNotification(state.FrontendCardNotification{
 			Kind:        frontendCardNotificationKindFeishuPermissionIssue,
 			CollapseKey: frontendCardNotificationKindFeishuPermissionIssue,
 			Title:       "飞书权限错误",

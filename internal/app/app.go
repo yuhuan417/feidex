@@ -145,7 +145,7 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.startFrontend(ctx); err != nil {
 		return err
 	}
-	a.startDriveArtifactGCLoop(ctx)
+	newRuntimeMaintenanceService(a).startDriveArtifactGCLoop(ctx)
 	go a.sendStartupReadyNotifications()
 	return nil
 }

@@ -243,7 +243,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 			reuseMessageID,
 		)
 	}
-	a.cleanupSubmissionRuntimeState(sub)
+	newRuntimeMaintenanceService(a).cleanupSubmissionRuntimeState(sub)
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		a.runAsync(func() {
 			newLifecycleCoordinator(a).startNextSubmissionAsync(sessionKey, "backendFailed")

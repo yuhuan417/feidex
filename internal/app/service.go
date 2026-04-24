@@ -67,7 +67,7 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 	}
 	for _, app := range s.apps {
-		app.startDriveArtifactGCLoop(ctx)
+		newRuntimeMaintenanceService(app).startDriveArtifactGCLoop(ctx)
 		go app.sendStartupReadyNotifications()
 	}
 	return nil

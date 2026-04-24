@@ -237,7 +237,7 @@ func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID
 	if notifyFailure && sub != nil {
 		w.notifySubmissionStartFailure(context.Background(), sub, err, shouldStartNext)
 	}
-	a.cleanupSubmissionRuntimeState(sub)
+	newRuntimeMaintenanceService(a).cleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
 		a.runAsync(func() {
 			w.startNextSubmissionAsync(sessionKey, "turnStartFailed")

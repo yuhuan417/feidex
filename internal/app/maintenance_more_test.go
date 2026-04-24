@@ -60,12 +60,12 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = workspace
 	a := &App{cfg: cfg, store: store}
-	a.expirePendingRequestsOnStartup()
+	newRuntimeMaintenanceService(a).expirePendingRequestsOnStartup()
 	if got := a.store.PendingByID("pending"); got == nil || got.Status != "expired" {
 		t.Fatalf("expirePendingRequestsOnStartup() = %+v, want expired request", got)
 	}
 
-	a.cleanupExpiredAttachments()
+	newRuntimeMaintenanceService(a).cleanupExpiredAttachments()
 	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
 		t.Fatalf("expected old attachment dir to be removed, stat err = %v", err)
 	}
@@ -79,7 +79,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	if err := os.Chtimes(oldDir, oldTime, oldTime); err != nil {
 		t.Fatalf("Chtimes(oldDir second) error = %v", err)
 	}
-	a.cleanupAttachmentDir(attachmentsRoot)
+	newRuntimeMaintenanceService(a).cleanupAttachmentDir(attachmentsRoot)
 	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
 		t.Fatalf("cleanupAttachmentDir() should remove old dir, stat err = %v", err)
 	}
