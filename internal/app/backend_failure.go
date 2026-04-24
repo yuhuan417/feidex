@@ -127,7 +127,7 @@ func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, mes
 			continue
 		}
 		seenCompacts[key] = struct{}{}
-		a.failStandaloneCompactTurn(target.threadID, target.turnID, message)
+		failStandaloneCompactTurn(a,target.threadID, target.turnID, message)
 	}
 }
 

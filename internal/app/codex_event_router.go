@@ -34,7 +34,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		}
 		if json.Unmarshal(params, &p) == nil {
 			newRuntimeStateService(a).noteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
-			a.noteStandaloneCompactItemStarted(p.ThreadID, p.TurnID, p.Item)
+			noteStandaloneCompactItemStarted(a,p.ThreadID, p.TurnID, p.Item)
 		}
 	case "item/completed":
 		var p struct {
@@ -114,7 +114,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 				"turn_id", p.TurnID,
 				"message", p.Error.Message,
 			)
-			if a.failStandaloneCompactTurn(p.ThreadID, p.TurnID, p.Error.Message) {
+			if failStandaloneCompactTurn(a,p.ThreadID, p.TurnID, p.Error.Message) {
 				return
 			}
 			newTurnStreamService(a).recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)

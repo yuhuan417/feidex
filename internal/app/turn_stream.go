@@ -112,7 +112,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 	newLifecycleCoordinator(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
 	item = newRuntimeStateService(s.app).completeTurnItemState(threadID, turnID, itemID, item)
 	itemID = strings.TrimSpace(firstNonEmpty(strings.TrimSpace(itemID), stringValue(item["id"])))
-	if s.app.completeStandaloneCompactItem(threadID, turnID, item) {
+	if completeStandaloneCompactItem(s.app, threadID, turnID, item) {
 		return
 	}
 	sessionKey, sub := findSubmissionByTurn(s.app, threadID, turnID)

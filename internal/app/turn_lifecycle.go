@@ -66,7 +66,7 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 	if w.bindPendingSubmissionTurn(threadID, turnID, false) {
 		return
 	}
-	if a.bindStandaloneCompactTurn(threadID, turnID) {
+	if bindStandaloneCompactTurn(a,threadID, turnID) {
 		return
 	}
 
@@ -235,7 +235,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		sessionKey, sub = w.bindPendingSubmissionForTurnCompletion(threadID, turnID)
 	}
 	if sub == nil {
-		if a.finishStandaloneCompactTurn(threadID, turnID, status) {
+		if finishStandaloneCompactTurn(a,threadID, turnID, status) {
 			return
 		}
 		slog.Warn("finishTurn missing submission",
