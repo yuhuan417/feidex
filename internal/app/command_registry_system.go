@@ -39,9 +39,9 @@ func localCommandSystemIntroSpecs() []localCommandSpec {
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{
 				{Command: "/backend", Summary: "查看本 frontend 当前可用的 backend，并在空闲态切换。"},
-				{Command: "/backend retry", Summary: "查看当前 frontend 的 Codex 自动重试开关。"},
-				{Command: "/backend retry on", Summary: "开启当前 frontend 的 Codex 自动重试。"},
-				{Command: "/backend retry off", Summary: "关闭当前 frontend 的 Codex 自动重试。"},
+				{Command: "/backend retry", Summary: "查看当前 frontend 的自动重试开关。"},
+				{Command: "/backend retry on", Summary: "开启当前 frontend 的自动重试。"},
+				{Command: "/backend retry off", Summary: "关闭当前 frontend 的自动重试。"},
 			},
 		},
 	}

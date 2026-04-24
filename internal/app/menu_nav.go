@@ -14,7 +14,7 @@ var menuNodes = map[string]menuNode{
 	"menu.group.system":              {Label: "系统运维", Parent: "menu.root"},
 	"menu.group.backend":             {Label: "后端选择", Parent: "menu.group.system"},
 	"menu.backend.switch":            {Label: "切换后端", Parent: "menu.group.backend"},
-	"menu.codex_retry":               {Label: "Codex 自动重试", Parent: "menu.group.backend"},
+	"menu.auto_retry":                {Label: "自动重试", Parent: "menu.group.backend"},
 	"menu.thread":                    {Label: "线程管理", Parent: "menu.root"},
 	"menu.workspace":                 {Label: "工作区管理", Parent: "menu.root"},
 	"menu.review":                    {Label: "代码审查", Parent: "menu.tools"},

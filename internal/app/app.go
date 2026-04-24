@@ -38,9 +38,9 @@ type App struct {
 	codexRecoverySource    codexClient
 	codexAutoThreadMu      sync.Mutex
 	codexAutoThreading     bool
-	codexAutoRetryMu       sync.Mutex
-	codexAutoRetries       map[string]*codexAutoRetryState
-	codexAutoRetryAfter    func(time.Duration, func()) delayedTask
+	autoRetryMu            sync.Mutex
+	autoRetries            map[string]*autoRetryState
+	autoRetryAfter         func(time.Duration, func()) delayedTask
 	frontendRecoveryMu     sync.Mutex
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
@@ -137,7 +137,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		threadUsage:         map[string]codexrpc.ThreadTokenUsage{},
 		claudeUsage:         map[string]claudeThreadUsageSnapshot{},
 		finalCardPatches:    map[string]*finalCardPatchState{},
-		codexAutoRetries:    map[string]*codexAutoRetryState{},
+		autoRetries:         map[string]*autoRetryState{},
 		pendingSkills:       map[string]state.SubmissionSkill{},
 	}
 	if backend != "" {

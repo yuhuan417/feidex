@@ -164,7 +164,7 @@ func (a *App) commandBackend(msg *feishu.InboundMessage, args []string) error {
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "retry":
-		return a.commandCodexAutoRetry(msg, args[1:])
+		return a.commandAutoRetry(msg, args[1:])
 	default:
 		return fmt.Errorf("usage: /backend | /backend retry | /backend retry status | /backend retry on | /backend retry off")
 	}

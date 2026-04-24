@@ -319,7 +319,7 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 	})
 	if updatedSess != nil {
 		logSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
-		a.observeCodexAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub)
+		a.observeAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub)
 		if sessionShouldStartNextSubmissionAsync(updatedSess) {
 			slog.Debug("finishTurn scheduling next submission asynchronously",
 				"session_key", sessionKey,

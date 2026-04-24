@@ -159,6 +159,20 @@ func TestFrontendIdleState(t *testing.T) {
 			},
 			want: "当前仍有待处理审批或表单",
 		},
+		{
+			name: "pending auto retry blocks idle",
+			seed: func(t *testing.T, a *App, _ *state.Store) {
+				t.Helper()
+				a.autoRetries = map[string]*autoRetryState{
+					currentSessionKey: {
+						SessionKey: currentSessionKey,
+						ThreadID:   "thread-1",
+						Timer:      &fakeDelayedTask{},
+					},
+				}
+			},
+			want: "当前仍有等待自动重试的任务",
+		},
 	}
 
 	for _, tt := range tests {

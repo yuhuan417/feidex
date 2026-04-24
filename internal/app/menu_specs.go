@@ -98,7 +98,7 @@ var commandMenuItemSpecs = []commandMenuItemSpec{
 	{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: menuItemBack},
 
 	{GroupAction: "menu.group.backend", Action: "menu.backend.switch", Label: "切换后端", Slash: "/backend", Kind: menuItemDirect},
-	{GroupAction: "menu.group.backend", Action: "menu.codex_retry", Label: "Codex 自动重试", Slash: "/backend retry", Kind: menuItemDirect},
+	{GroupAction: "menu.group.backend", Action: "menu.auto_retry", Label: "自动重试", Slash: "/backend retry", Kind: menuItemDirect},
 	{GroupAction: "menu.group.backend", Action: "menu.codex_upgrade", Label: "Codex 管理", Slash: "/codex", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.backend", Action: "menu.claude_upgrade", Label: "Claude 管理", Slash: "/claude", Kind: menuItemSubmenu},
 	{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: "返回上一级", Kind: menuItemBack},

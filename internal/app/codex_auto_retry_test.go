@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ type scheduledRetry struct {
 	task  *fakeDelayedTask
 }
 
-func seedCodexAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *state.Session {
+func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *state.Session {
 	t.Helper()
 	sess := &state.Session{
 		Key:                     sessionKey,
@@ -53,23 +54,23 @@ func seedCodexAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string
 	return a.appState().session(sessionKey)
 }
 
-func TestCodexAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
+func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	a.codexAutoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
+	a.autoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := a.updateCodexAutoRetryEnabled(true); err != nil {
-		t.Fatalf("updateCodexAutoRetryEnabled(true) error = %v", err)
+	if err := a.updateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	threadID := "thread-retry-1"
-	sess := seedCodexAutoRetrySession(t, a, sessionKey, threadID)
+	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	a.markSessionThreadLive(sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
@@ -81,7 +82,7 @@ func TestCodexAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		Status:               "failed",
 	}
 
-	a.observeCodexAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
+	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
 
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
@@ -89,8 +90,8 @@ func TestCodexAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	if scheduled[0].delay != time.Second {
 		t.Fatalf("scheduled delay = %s, want %s", scheduled[0].delay, time.Second)
 	}
-	if snapshot, ok := a.currentCodexAutoRetryState(sessionKey); !ok {
-		t.Fatal("currentCodexAutoRetryState() missing state")
+	if snapshot, ok := a.currentAutoRetryState(sessionKey); !ok {
+		t.Fatal("currentAutoRetryState() missing state")
 	} else if snapshot.RetryCount != 0 {
 		t.Fatalf("retry count = %d, want 0 before timer fires", snapshot.RetryCount)
 	}
@@ -120,9 +121,9 @@ func TestCodexAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 
 	scheduled[0].task.fire()
 
-	snapshot, ok := a.currentCodexAutoRetryState(sessionKey)
+	snapshot, ok := a.currentAutoRetryState(sessionKey)
 	if !ok {
-		t.Fatal("currentCodexAutoRetryState() missing state after firing timer")
+		t.Fatal("currentAutoRetryState() missing state after firing timer")
 	}
 	if snapshot.RetryCount != 1 {
 		t.Fatalf("retry count = %d, want 1 after firing timer", snapshot.RetryCount)
@@ -139,23 +140,23 @@ func TestCodexAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	}
 }
 
-func TestCommandInterruptCancelsPendingCodexAutoRetry(t *testing.T) {
+func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	a.codexAutoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
+	a.autoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := a.updateCodexAutoRetryEnabled(true); err != nil {
-		t.Fatalf("updateCodexAutoRetryEnabled(true) error = %v", err)
+	if err := a.updateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	threadID := "thread-stop-1"
-	sess := seedCodexAutoRetrySession(t, a, sessionKey, threadID)
+	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	a.markSessionThreadLive(sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
@@ -166,7 +167,7 @@ func TestCommandInterruptCancelsPendingCodexAutoRetry(t *testing.T) {
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	a.observeCodexAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
+	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
 
 	msg := &feishu.InboundMessage{
 		SessionKey: sessionKey,
@@ -181,8 +182,8 @@ func TestCommandInterruptCancelsPendingCodexAutoRetry(t *testing.T) {
 	if len(scheduled) != 1 || !scheduled[0].task.stopped {
 		t.Fatalf("scheduled retry task stopped = %v, want true", len(scheduled) == 1 && scheduled[0].task.stopped)
 	}
-	if _, ok := a.currentCodexAutoRetryState(sessionKey); ok {
-		t.Fatal("currentCodexAutoRetryState() still present after /stop")
+	if _, ok := a.currentAutoRetryState(sessionKey); ok {
+		t.Fatal("currentAutoRetryState() still present after /stop")
 	}
 	replies := ff.replyTextsSnapshot()
 	if len(replies) == 0 || !containsAll(replies[len(replies)-1], "已停止当前 session 的自动重试") {
@@ -190,7 +191,97 @@ func TestCommandInterruptCancelsPendingCodexAutoRetry(t *testing.T) {
 	}
 }
 
-func TestCodexAutoRetryDelayCapsAtFifteenSeconds(t *testing.T) {
+func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.asyncRunner = func(fn func()) { fn() }
+	a.cfg.Feishu.Backend = backendClaude
+	a.claude = &fakeClaudeCore{
+		ensureSessionSet: true,
+		ensureSessionID:  "claude-session-1",
+		startTurnErr:     errors.New("claude start failed"),
+	}
+
+	scheduled := make([]scheduledRetry, 0, 4)
+	a.autoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
+		task := &fakeDelayedTask{fn: fn}
+		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
+		return task
+	}
+	if err := a.updateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
+	}
+
+	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
+	threadID := "claude-session-1"
+	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
+	a.markSessionThreadLive(sessionKey, threadID)
+	sub := &state.Submission{
+		SessionKey:           sessionKey,
+		WorkspaceID:          a.defaultWorkspaceID(),
+		ThreadID:             threadID,
+		ChatID:               sess.ChatID,
+		TriggerMessageID:     "trigger-1",
+		SourceRootMessageIDs: []string{sess.RootMessageID},
+		Status:               "failed",
+	}
+
+	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
+	if len(scheduled) != 1 {
+		t.Fatalf("scheduled retries = %d, want 1 before timer fires", len(scheduled))
+	}
+
+	scheduled[0].task.fire()
+
+	if len(scheduled) != 2 {
+		t.Fatalf("scheduled retries = %d, want 2 after start failure reschedule", len(scheduled))
+	}
+	if scheduled[1].delay != time.Second {
+		t.Fatalf("rescheduled delay = %s, want %s", scheduled[1].delay, time.Second)
+	}
+	snapshot, ok := a.currentAutoRetryState(sessionKey)
+	if !ok {
+		t.Fatal("currentAutoRetryState() missing state after Claude start failure")
+	}
+	if snapshot.RetryCount != 0 {
+		t.Fatalf("retry count = %d, want 0 after failed start", snapshot.RetryCount)
+	}
+	if !a.hasPendingAutoRetry(sessionKey) {
+		t.Fatal("hasPendingAutoRetry(sessionKey) = false, want true")
+	}
+
+	claude, ok := a.claude.(*fakeClaudeCore)
+	if !ok {
+		t.Fatalf("claude core type = %T", a.claude)
+	}
+	claude.mu.Lock()
+	startTurnCalls := append([]fakeClaudeStartTurnCall(nil), claude.startTurnCalls...)
+	claude.mu.Unlock()
+	if len(startTurnCalls) != 2 {
+		t.Fatalf("Claude StartTurn calls = %d, want 2", len(startTurnCalls))
+	}
+	for _, call := range startTurnCalls {
+		if call.prompt != "继续" {
+			t.Fatalf("Claude StartTurn prompt = %q, want 继续", call.prompt)
+		}
+	}
+
+	if cards := ff.replyCardsSnapshot(); len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want 1 waiting card", len(cards))
+	}
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) != 1 {
+		t.Fatalf("patched cards = %d, want 1 waiting-state patch", len(patched))
+	}
+	body := cardMarkdownContent(t, patched[0])
+	if body == "" || !containsAll(body, "自动发送“继续”", "下一次自动重试") {
+		t.Fatalf("waiting patch body = %q", body)
+	}
+	if strings.Contains(body, "已自动发送“继续”") {
+		t.Fatalf("waiting patch body = %q, want no successful-send message", body)
+	}
+}
+
+func TestAutoRetryDelayCapsAtFifteenSeconds(t *testing.T) {
 	cases := []struct {
 		step int
 		want time.Duration
@@ -203,8 +294,8 @@ func TestCodexAutoRetryDelayCapsAtFifteenSeconds(t *testing.T) {
 		{step: 8, want: 15 * time.Second},
 	}
 	for _, tc := range cases {
-		if got := codexAutoRetryDelayForStep(tc.step); got != tc.want {
-			t.Fatalf("codexAutoRetryDelayForStep(%d) = %s, want %s", tc.step, got, tc.want)
+		if got := autoRetryDelayForStep(tc.step); got != tc.want {
+			t.Fatalf("autoRetryDelayForStep(%d) = %s, want %s", tc.step, got, tc.want)
 		}
 	}
 }
