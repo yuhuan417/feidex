@@ -49,7 +49,7 @@ func (s pendingInputService) completeToolUserInputText(msg *feishu.InboundMessag
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
 	}
-	adapter := s.app.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(s.app, pending)
 	summary, err := adapter.replyTextUserInput(pending, payload, msg.Text)
 	if err != nil {
 		return err

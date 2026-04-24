@@ -18,7 +18,7 @@ type serverRequestBackendAdapter interface {
 	cancelPending(pending *state.PendingRequest) error
 }
 
-func (a *App) serverRequestBackendAdapter(pending *state.PendingRequest) serverRequestBackendAdapter {
+func serverRequestAdapterForPending(a *App, pending *state.PendingRequest) serverRequestBackendAdapter {
 	if runtime := backendRuntimeForKind(pendingBackend(a, pending)); runtime != nil {
 		return runtime.serverRequestAdapter(a)
 	}

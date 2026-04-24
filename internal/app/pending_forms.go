@@ -120,7 +120,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
-	adapter := a.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(a, pending)
 	replyErr := adapter.cancelPending(pending)
 	if replyErr != nil {
 		slog.Error("pending form cancel reply failed",

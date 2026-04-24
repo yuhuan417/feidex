@@ -37,7 +37,7 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 
 func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload, questionID, answer string) (*callback.CardActionTriggerResponse, error) {
 	requestID := strings.TrimSpace(pending.ID)
-	adapter := a.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(a, pending)
 	selectionSummary, err := adapter.replyQuickUserInput(pending, payload, questionID, answer)
 	if err != nil {
 		if isUIWarningError(err) {
@@ -66,7 +66,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 	requestID := strings.TrimSpace(pending.ID)
 	drafts := toolUserInputDraftsFromCardAction(payload, action)
 	selections := toolUserInputSelectionsFromDrafts(payload, drafts)
-	adapter := a.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(a, pending)
 	summary, err := adapter.replyFormUserInput(pending, payload, selections)
 	if err != nil {
 		if isUIWarningError(err) {

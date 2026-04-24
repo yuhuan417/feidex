@@ -116,7 +116,7 @@ func TestActionHelperBranches(t *testing.T) {
 	}
 
 	cfgPath := a.cfgPath
-	if _, err := a.updateWorkspaceDefaults("default", func(w *config.Workspace) { w.Name = "Renamed" }); err != nil {
+	if _, err := updateWorkspaceDefaults(a, "default", func(w *config.Workspace) { w.Name = "Renamed" }); err != nil {
 		t.Fatalf("updateWorkspaceDefaults() error = %v", err)
 	}
 	loaded, err := config.Load(cfgPath)

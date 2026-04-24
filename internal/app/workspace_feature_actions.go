@@ -396,7 +396,7 @@ func (s workspaceActionService) completeClaudeWorkspacePermissionMenu(action *fe
 	return completeMenuCommand(s.app, action, sessionKey, "/workspace permissions", "menu.workspace")
 }
 
-func (a *App) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
+func updateWorkspaceDefaults(a *App, workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
 	a.configMu.Lock()
 	defer a.configMu.Unlock()
 	ws := config.FindWorkspace(a.cfg, workspaceID)
@@ -424,7 +424,7 @@ func (s workspaceActionService) completeWorkspaceSandboxSet(action *feishu.CardA
 	if !valid {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 sandbox"}}, nil
 	}
-	_, err := s.app.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
+	_, err := updateWorkspaceDefaults(s.app, workspaceID, func(w *config.Workspace) {
 		w.SandboxMode = sandboxMode
 	})
 	if err != nil {
@@ -451,7 +451,7 @@ func (s workspaceActionService) completeWorkspacePolicySet(action *feishu.CardAc
 	if !valid {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 policy"}}, nil
 	}
-	_, err := s.app.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
+	_, err := updateWorkspaceDefaults(s.app, workspaceID, func(w *config.Workspace) {
 		w.ApprovalPolicy = approvalPolicy
 	})
 	if err != nil {

@@ -89,7 +89,7 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
 	}
-	adapter := a.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(a, pending)
 	decision, err := adapter.replyElicitationURL(pending, actionName)
 	if err != nil {
 		slog.Error("elicitation url reply failed",
@@ -115,7 +115,7 @@ func (s pendingInputService) completeElicitationFormText(msg *feishu.InboundMess
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
 	}
-	adapter := s.app.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(s.app, pending)
 	summary, err := adapter.replyElicitationForm(pending, payload, msg.Text)
 	if err != nil {
 		return err

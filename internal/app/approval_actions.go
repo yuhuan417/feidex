@@ -59,7 +59,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 	if strings.TrimSpace(warning) != "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: warning}}, nil
 	}
-	adapter := a.serverRequestBackendAdapter(pending)
+	adapter := serverRequestAdapterForPending(a, pending)
 	if err := adapter.replyApproval(pending, actionName, replyPayload); err != nil {
 		if isUIWarningError(err) {
 			return &callback.CardActionTriggerResponse{

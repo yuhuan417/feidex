@@ -299,7 +299,7 @@ func (s workspaceActionService) completeClaudeWorkspacePermissionModeSet(action 
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
 	}
-	_, err := s.app.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
+	_, err := updateWorkspaceDefaults(s.app, workspaceID, func(w *config.Workspace) {
 		w.ClaudePermissionMode = mode
 	})
 	if err != nil {
