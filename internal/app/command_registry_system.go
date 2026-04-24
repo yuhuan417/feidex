@@ -34,7 +34,7 @@ func localCommandSystemIntroSpecs() []localCommandSpec {
 				return matchBackendCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandBackend(msg, args)
+				return newBackendSelectionService(a).commandBackend(msg, args)
 			},
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{

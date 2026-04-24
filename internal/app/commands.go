@@ -19,7 +19,7 @@ func (s commandService) handleCommand(msg *feishu.InboundMessage, raw string) er
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
 	if !s.app.hasConfiguredBackend() && fields[0] != "/backend" {
-		return s.app.replyBackendSelectionCard(msg, "")
+		return newBackendSelectionService(s.app).replyBackendSelectionCard(msg, "")
 	}
 	backend := s.app.configuredBackend()
 	if err := s.app.handleBackendMaintenanceBlock(raw); err != nil {

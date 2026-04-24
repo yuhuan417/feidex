@@ -30,13 +30,13 @@ func backendDisplayName(backend string) string {
 	return "未设置"
 }
 
-func (a *App) availableBackends() []availableBackend {
-	if a == nil || a.cfg == nil {
+func (s backendSelectionService) availableBackends() []availableBackend {
+	if s.app == nil || s.app.cfg == nil {
 		return nil
 	}
 	out := make([]availableBackend, 0, 2)
 	for _, runtime := range backendRuntimeFacades() {
-		command := runtime.configuredCommand(a)
+		command := runtime.configuredCommand(s.app)
 		if command == "" {
 			continue
 		}
@@ -53,12 +53,12 @@ func (a *App) availableBackends() []availableBackend {
 	return out
 }
 
-func (a *App) backendAvailable(target string) bool {
+func (s backendSelectionService) backendAvailable(target string) bool {
 	target = normalizeRuntimeBackend(target)
 	if target == "" {
 		return false
 	}
-	for _, candidate := range a.availableBackends() {
+	for _, candidate := range newBackendSelectionService(s.app).availableBackends() {
 		if candidate.Kind == target {
 			return true
 		}
@@ -66,12 +66,12 @@ func (a *App) backendAvailable(target string) bool {
 	return false
 }
 
-func (a *App) renderBackendSelectionCard(sessionKey, notice string) map[string]any {
-	current := a.configuredBackend()
-	choices := a.availableBackends()
+func (s backendSelectionService) renderBackendSelectionCard(sessionKey, notice string) map[string]any {
+	current := s.app.configuredBackend()
+	choices := newBackendSelectionService(s.app).availableBackends()
 	lines := []string{
 		"当前 backend: `" + firstNonEmpty(current, "unset") + "`",
-		"当前 frontend: `" + firstNonEmpty(strings.TrimSpace(a.frontendID), config.DefaultFrontendID) + "`",
+		"当前 frontend: `" + firstNonEmpty(strings.TrimSpace(s.app.frontendID), config.DefaultFrontendID) + "`",
 	}
 	if len(choices) == 0 {
 		lines = append(lines,
@@ -124,111 +124,111 @@ func (a *App) renderBackendSelectionCard(sessionKey, notice string) map[string]a
 	case strings.Contains(notice, "已切换"):
 		color = "green"
 	}
-	return a.feishu.SimpleStatusCard("后端选择", color, menuCardBody("menu.backend.switch", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard("后端选择", color, menuCardBody("menu.backend.switch", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) renderBackendSwitchingCard(sessionKey, target string) map[string]any {
+func (s backendSelectionService) renderBackendSwitchingCard(sessionKey, target string) map[string]any {
 	body := strings.Join([]string{
 		"正在切换到 backend: `" + normalizeRuntimeBackend(target) + "`",
 		"",
 		"会先切换 runtime，再恢复这个 backend 之前的 thread lineage。",
 	}, "\n")
-	return a.feishu.SimpleStatusCard("切换后端", "orange", menuCardBody("menu.backend.switch", body), []feishu.Button{
+	return s.app.feishu.SimpleStatusCard("切换后端", "orange", menuCardBody("menu.backend.switch", body), []feishu.Button{
 		{Text: "处理中", Type: "default", Value: map[string]any{"action": "menu.backend.switch", "session_key": sessionKey}},
 	})
 }
 
-func (a *App) replyBackendSelectionCard(msg *feishu.InboundMessage, reason string) error {
-	if a == nil || a.feishu == nil {
+func (s backendSelectionService) replyBackendSelectionCard(msg *feishu.InboundMessage, reason string) error {
+	if s.app == nil || s.app.feishu == nil {
 		return fmt.Errorf("backend not configured")
 	}
 	sessionKey := ""
 	if msg != nil {
-		sessionKey = a.makeSessionKey(msg)
+		sessionKey = s.app.makeSessionKey(msg)
 	}
-	card := a.renderBackendSelectionCard(sessionKey, firstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
+	card := newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, firstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
 	if msg != nil && strings.TrimSpace(msg.MessageID) != "" {
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	if msg != nil && strings.TrimSpace(msg.ChatID) != "" {
-		_, err := a.feishu.SendCard(context.Background(), msg.ChatID, card)
+		_, err := s.app.feishu.SendCard(context.Background(), msg.ChatID, card)
 		return err
 	}
 	return fmt.Errorf("backend not configured")
 }
 
-func (a *App) commandBackend(msg *feishu.InboundMessage, args []string) error {
+func (s backendSelectionService) commandBackend(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
-		return a.replyBackendSelectionCard(msg, "")
+		return newBackendSelectionService(s.app).replyBackendSelectionCard(msg, "")
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "retry":
-		return newAutoRetryService(a).commandAutoRetry(msg, args[1:])
+		return newAutoRetryService(s.app).commandAutoRetry(msg, args[1:])
 	default:
 		return fmt.Errorf("usage: /backend | /backend retry | /backend retry status | /backend retry on | /backend retry off")
 	}
 }
 
-func (a *App) completeMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s backendSelectionService) completeMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开后端选择"},
-		Card:  rawCard(newCommandService(a).renderBackendMenuCard(sessionKey)),
+		Card:  rawCard(newCommandService(s.app).renderBackendMenuCard(sessionKey)),
 	}, nil
 }
 
-func (a *App) completeBackendSelect(action *feishu.CardAction, sessionKey, target string) (*callback.CardActionTriggerResponse, error) {
+func (s backendSelectionService) completeBackendSelect(action *feishu.CardAction, sessionKey, target string) (*callback.CardActionTriggerResponse, error) {
 	target = normalizeRuntimeBackend(target)
 	if target == "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 backend"}}, nil
 	}
-	if !a.backendAvailable(target) {
+	if !newBackendSelectionService(s.app).backendAvailable(target) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: backendDisplayName(target) + " 当前不可用"},
-			Card:  rawCard(a.renderBackendSelectionCard(sessionKey, backendDisplayName(target)+" 当前不可用，请先确认本机安装。")),
+			Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, backendDisplayName(target)+" 当前不可用，请先确认本机安装。")),
 		}, nil
 	}
-	if current := a.configuredBackend(); current == target && a.backendRuntimeReady(target) {
+	if current := s.app.configuredBackend(); current == target && newBackendSelectionService(s.app).backendRuntimeReady(target) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "当前已经在使用 " + backendDisplayName(target)},
-			Card:  rawCard(a.renderBackendSelectionCard(sessionKey, "当前已经在使用 `"+target+"`。")),
+			Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, "当前已经在使用 `"+target+"`。")),
 		}, nil
 	}
-	if reason := a.backendSwitchBlockedReason(); reason != "" {
+	if reason := newBackendSelectionService(s.app).backendSwitchBlockedReason(); reason != "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: reason},
-			Card:  rawCard(a.renderBackendSelectionCard(sessionKey, reason)),
+			Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, reason)),
 		}, nil
 	}
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		if err := a.switchBackend(context.Background(), target); err != nil {
+		if err := newBackendSelectionService(s.app).switchBackend(context.Background(), target); err != nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "error", Content: err.Error()},
-				Card:  rawCard(a.renderBackendSelectionCard(sessionKey, "切换失败: "+err.Error())),
+				Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, "切换失败: "+err.Error())),
 			}, nil
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已切换到 " + backendDisplayName(target)},
-			Card:  rawCard(a.renderBackendSelectionCard(sessionKey, "已切换到 `"+target+"`。")),
+			Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, "已切换到 `"+target+"`。")),
 		}, nil
 	}
 
 	messageID := strings.TrimSpace(action.MessageID)
 	go func() {
-		err := a.switchBackend(context.Background(), target)
+		err := newBackendSelectionService(s.app).switchBackend(context.Background(), target)
 		notice := "已切换到 `" + target + "`。"
 		if err != nil {
 			notice = "切换失败: " + err.Error()
 			slog.Warn("backend switch failed",
-				"frontend_id", a.frontendID,
+				"frontend_id", s.app.frontendID,
 				"target_backend", target,
 				"message_id", messageID,
 				"error", err,
 			)
 		}
-		if patchErr := a.feishu.PatchCard(context.Background(), messageID, a.renderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
+		if patchErr := s.app.feishu.PatchCard(context.Background(), messageID, newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
 			slog.Warn("backend switch patch failed",
-				"frontend_id", a.frontendID,
+				"frontend_id", s.app.frontendID,
 				"target_backend", target,
 				"message_id", messageID,
 				"error", patchErr,
@@ -237,94 +237,94 @@ func (a *App) completeBackendSelect(action *feishu.CardAction, sessionKey, targe
 	}()
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在切换到 " + backendDisplayName(target)},
-		Card:  rawCard(a.renderBackendSwitchingCard(sessionKey, target)),
+		Card:  rawCard(newBackendSelectionService(s.app).renderBackendSwitchingCard(sessionKey, target)),
 	}, nil
 }
 
-func (a *App) backendRuntimeReady(target string) bool {
+func (s backendSelectionService) backendRuntimeReady(target string) bool {
 	if runtime := backendRuntimeForKind(target); runtime != nil {
-		return runtime.runtimeReady(a)
+		return runtime.runtimeReady(s.app)
 	}
 	return false
 }
 
-func (a *App) backendSwitchBlockedReason() string {
-	return a.frontendIdleBlockedReason()
+func (s backendSelectionService) backendSwitchBlockedReason() string {
+	return s.app.frontendIdleBlockedReason()
 }
 
-func (a *App) switchBackend(ctx context.Context, target string) error {
-	if a == nil {
+func (s backendSelectionService) switchBackend(ctx context.Context, target string) error {
+	if s.app == nil {
 		return fmt.Errorf("app not initialized")
 	}
 	target = normalizeRuntimeBackend(target)
 	if target == "" {
 		return fmt.Errorf("missing backend")
 	}
-	if !a.backendAvailable(target) {
+	if !newBackendSelectionService(s.app).backendAvailable(target) {
 		return fmt.Errorf("%s backend 当前不可用", backendDisplayName(target))
 	}
 
-	a.backendSwitchMu.Lock()
-	defer a.backendSwitchMu.Unlock()
+	s.app.backendSwitchMu.Lock()
+	defer s.app.backendSwitchMu.Unlock()
 
-	if reason := a.backendSwitchBlockedReason(); reason != "" {
+	if reason := newBackendSelectionService(s.app).backendSwitchBlockedReason(); reason != "" {
 		return fmt.Errorf("%s", reason)
 	}
 
-	current := a.configuredBackend()
-	if current == target && a.backendRuntimeReady(target) {
+	current := s.app.configuredBackend()
+	if current == target && newBackendSelectionService(s.app).backendRuntimeReady(target) {
 		return nil
 	}
-	newRuntimeStateService(a).beginBackendSwitchState(target)
-	defer newRuntimeStateService(a).finishBackendSwitchState()
+	newRuntimeStateService(s.app).beginBackendSwitchState(target)
+	defer newRuntimeStateService(s.app).finishBackendSwitchState()
 	slog.Info("backend switch begin",
-		"frontend_id", a.frontendID,
+		"frontend_id", s.app.frontendID,
 		"current_backend", current,
 		"target_backend", target,
 	)
 
-	nextSessions := a.frontendSessionsAfterBackendSwitch(current, target)
-	newHandle, err := a.prepareBackendRuntime(ctx, target)
+	nextSessions := newBackendSelectionService(s.app).frontendSessionsAfterBackendSwitch(current, target)
+	newHandle, err := s.app.prepareBackendRuntime(ctx, target)
 	if err != nil {
 		return err
 	}
 
-	oldHandle := a.currentBackendRuntimeHandle()
-	oldBackend := a.currentRuntimeBackend()
-	if err := a.setConfiguredBackend(target); err != nil {
+	oldHandle := s.app.currentBackendRuntimeHandle()
+	oldBackend := s.app.currentRuntimeBackend()
+	if err := newBackendSelectionService(s.app).setConfiguredBackend(target); err != nil {
 		_ = newHandle.close()
 		return err
 	}
 
-	newHandle.install(a)
+	newHandle.install(s.app)
 	for _, sess := range nextSessions {
-		if err := a.store.UpsertSession(sess); err != nil {
-			oldHandle.install(a)
-			a.setRuntimeBackend(oldBackend)
-			_ = a.setConfiguredBackend(current)
+		if err := s.app.store.UpsertSession(sess); err != nil {
+			oldHandle.install(s.app)
+			s.app.setRuntimeBackend(oldBackend)
+			_ = newBackendSelectionService(s.app).setConfiguredBackend(current)
 			_ = newHandle.close()
 			return err
 		}
 	}
 	slog.Info("backend switch runtime installed",
-		"frontend_id", a.frontendID,
+		"frontend_id", s.app.frontendID,
 		"target_backend", target,
 	)
-	a.recoverFrontendRuntimeState()
+	s.app.recoverFrontendRuntimeState()
 	_ = oldHandle.close()
 	slog.Info("backend switch completed",
-		"frontend_id", a.frontendID,
+		"frontend_id", s.app.frontendID,
 		"current_backend", current,
 		"target_backend", target,
 	)
 	return nil
 }
 
-func (a *App) frontendSessionsAfterBackendSwitch(current, target string) []*state.Session {
-	appState := a.appState()
+func (s backendSelectionService) frontendSessionsAfterBackendSwitch(current, target string) []*state.Session {
+	appState := s.app.appState()
 	out := make([]*state.Session, 0, 8)
 	for _, sess := range appState.sessions() {
-		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
+		if sess == nil || !s.app.sessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		cp := stateCloneSession(sess)
@@ -343,23 +343,23 @@ func (a *App) frontendSessionsAfterBackendSwitch(current, target string) []*stat
 	return out
 }
 
-func (a *App) setConfiguredBackend(target string) error {
-	if a == nil || a.cfg == nil {
+func (s backendSelectionService) setConfiguredBackend(target string) error {
+	if s.app == nil || s.app.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
 	target = normalizeRuntimeBackend(target)
-	a.configMu.Lock()
-	defer a.configMu.Unlock()
-	cfg := a.feishuConfigUnlocked()
+	s.app.configMu.Lock()
+	defer s.app.configMu.Unlock()
+	cfg := s.app.feishuConfigUnlocked()
 	if cfg == nil {
 		return fmt.Errorf("frontend config not found")
 	}
 	cfg.Backend = target
-	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
+	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {
 		return err
 	}
-	if strings.TrimSpace(a.cfgPath) == "" {
+	if strings.TrimSpace(s.app.cfgPath) == "" {
 		return nil
 	}
-	return config.Save(a.cfgPath, a.cfg)
+	return config.Save(s.app.cfgPath, s.app.cfg)
 }

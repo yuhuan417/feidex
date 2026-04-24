@@ -80,7 +80,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
 			return nil
 		}
-		return a.replyBackendSelectionCard(msg, "")
+		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
 	if !msg.ExpandedMergeForward {
 		if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {

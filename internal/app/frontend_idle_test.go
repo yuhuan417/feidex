@@ -185,7 +185,7 @@ func TestFrontendIdleState(t *testing.T) {
 			if got != tt.want {
 				t.Fatalf("frontendIdleBlockedReason() = %q, want %q", got, tt.want)
 			}
-			if got := a.backendSwitchBlockedReason(); got != tt.want {
+			if got := newBackendSelectionService(a).backendSwitchBlockedReason(); got != tt.want {
 				t.Fatalf("backendSwitchBlockedReason() = %q, want %q", got, tt.want)
 			}
 			if got := a.frontendIsIdle(); got != tt.wantIdle {

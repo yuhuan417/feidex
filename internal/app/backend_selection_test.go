@@ -68,7 +68,7 @@ func TestCommandBackendShowsOnlyAvailableBackends(t *testing.T) {
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "/backend"}
-	if err := a.commandBackend(msg, nil); err != nil {
+	if err := newBackendSelectionService(a).commandBackend(msg, nil); err != nil {
 		t.Fatalf("commandBackend() error = %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestHandleCardActionMenuGroupBackendOpensBackendMenuCard(t *testing.T) {
 func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	selection := a.renderBackendSelectionCard("sess-1", "")
+	selection := newBackendSelectionService(a).renderBackendSelectionCard("sess-1", "")
 	if body := cardMarkdownContent(t, selection); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端选择 / 切换后端") {
 		t.Fatalf("backend selection body = %q", body)
 	}
@@ -131,7 +131,7 @@ func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
 		t.Fatalf("backend selection buttons = %#v, want return to menu.group.backend", cardButtonsForTest(selection))
 	}
 
-	switching := a.renderBackendSwitchingCard("sess-1", backendClaude)
+	switching := newBackendSelectionService(a).renderBackendSwitchingCard("sess-1", backendClaude)
 	if body := cardMarkdownContent(t, switching); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端选择 / 切换后端") {
 		t.Fatalf("backend switching body = %q", body)
 	}
@@ -221,7 +221,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		t.Fatalf("UpsertSession(codex) error = %v", err)
 	}
 
-	if err := a.switchBackend(context.Background(), backendClaude); err != nil {
+	if err := newBackendSelectionService(a).switchBackend(context.Background(), backendClaude); err != nil {
 		t.Fatalf("switchBackend(codex->claude) error = %v", err)
 	}
 	if len(createdClaude) != 1 {
@@ -246,7 +246,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		t.Fatalf("saveSession(claude lineage) error = %v", err)
 	}
 
-	if err := a.switchBackend(context.Background(), backendCodex); err != nil {
+	if err := newBackendSelectionService(a).switchBackend(context.Background(), backendCodex); err != nil {
 		t.Fatalf("switchBackend(claude->codex) error = %v", err)
 	}
 	if len(createdCodex) != 1 {
@@ -357,7 +357,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := app.switchBackend(context.Background(), backendCodex); err != nil {
+	if err := newBackendSelectionService(app).switchBackend(context.Background(), backendCodex); err != nil {
 		t.Fatalf("switchBackend(claude->codex) error = %v", err)
 	}
 

@@ -50,7 +50,7 @@ func (s menuActionService) completeMenuGroupSystem(action *feishu.CardAction, se
 func (s menuActionService) completeMenuBackendSwitch(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开切换后端"},
-		Card:  rawCard(s.app.renderBackendSelectionCard(sessionKey, "")),
+		Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, "")),
 	}, nil
 }
 

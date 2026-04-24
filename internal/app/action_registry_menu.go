@@ -23,7 +23,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuGroupSystem(action, actionSessionKey(action))
 	},
 	"menu.group.backend": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuBackend(action, actionSessionKey(action))
+		return newBackendSelectionService(s.app).completeMenuBackend(action, actionSessionKey(action))
 	},
 	"menu.thread": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newThreadActionService(s.app).completeMenuThread(action, actionSessionKey(action))
@@ -155,7 +155,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newSkillsService(s.app).completeSkillsReload(action, actionSessionKey(action))
 	},
 	"backend.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))
+		return newBackendSelectionService(s.app).completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))
 	},
 	"auto_retry.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newAutoRetryService(s.app).completeAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
