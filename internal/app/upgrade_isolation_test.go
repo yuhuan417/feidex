@@ -44,7 +44,7 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-only", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandUpgrade(msg, nil); err != nil {
+	if err := newAppUpgradeService(a).commandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() with nil codex and no session state error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -147,7 +147,7 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 		return "feidex-upgrade-isolated", nil
 	}
 
-	resp, err := a.completeUpgradeAction(&feishu.CardAction{
+	resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-isolated"},
 	}, "upgrade.confirm")
@@ -179,7 +179,7 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 		t.Fatalf("UpsertPending(local) error = %v", err)
 	}
 
-	resp, err = a.completeUpgradeAction(&feishu.CardAction{
+	resp, err = newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-isolated-local"},
 	}, "upgrade.confirm")

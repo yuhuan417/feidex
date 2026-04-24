@@ -8,13 +8,13 @@ import (
 
 var maintenanceCardActionHandlers = map[string]cardActionHandler{
 	"upgrade.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeUpgradeAction(action, "upgrade.confirm")
+		return newAppUpgradeService(s.app).completeUpgradeAction(action, "upgrade.confirm")
 	},
 	"upgrade.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeUpgradeAction(action, "upgrade.cancel")
+		return newAppUpgradeService(s.app).completeUpgradeAction(action, "upgrade.cancel")
 	},
 	"upgrade.local.pick": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeUpgradeLocalPick(action)
+		return newAppUpgradeService(s.app).completeUpgradeLocalPick(action)
 	},
 	"upgrade.dev": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeUpgradeDev(action)

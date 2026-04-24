@@ -190,9 +190,9 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 					"message_id", messageID,
 					"error", err,
 				)
-				card = s.app.renderUpgradeFailedCard(sessionKey, err.Error())
+				card = newAppUpgradeService(s.app).renderUpgradeFailedCard(sessionKey, err.Error())
 			} else if card == nil {
-				card = s.app.renderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
+				card = newAppUpgradeService(s.app).renderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
 			}
 			if err := s.app.feishu.PatchCard(context.Background(), messageID, card); err != nil {
 				slog.Warn("upgrade panel patch failed",
@@ -205,7 +205,7 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 		}()
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在检查可升级版本"},
-			Card:  rawCard(s.app.renderUpgradePreparingCard(sessionKey)),
+			Card:  rawCard(newAppUpgradeService(s.app).renderUpgradePreparingCard(sessionKey)),
 		}, nil
 	}
 	return s.app.completeMenuCommand(action, sessionKey, "/upgrade", "menu.group.system")
@@ -219,9 +219,9 @@ func (s menuActionService) completeUpgradeDev(action *feishu.CardAction) (*callb
 		"/upgrade dev",
 		"menu.group.system",
 		"正在检查开发版升级信息",
-		s.app.renderUpgradePreparingCard(sessionKey),
+		newAppUpgradeService(s.app).renderUpgradePreparingCard(sessionKey),
 		nil,
-		s.app.renderUpgradeFailedCard,
+		newAppUpgradeService(s.app).renderUpgradeFailedCard,
 		"upgrade dev patch failed",
 	)
 }

@@ -40,34 +40,34 @@ type upgradePendingPayload struct {
 	ReleaseURL     string `json:"release_url"`
 }
 
-func (a *App) renderUpgradePreparingCard(sessionKey string) map[string]any {
+func (s appUpgradeService) renderUpgradePreparingCard(sessionKey string) map[string]any {
 	body := "正在检查可升级版本，请稍候。\n\n这张卡片会自动刷新。"
-	return a.feishu.SimpleStatusCard("升级服务", "blue", menuCardBody("menu.upgrade", body), nil)
+	return s.app.feishu.SimpleStatusCard("升级服务", "blue", menuCardBody("menu.upgrade", body), nil)
 }
 
-func (a *App) renderUpgradeFailedCard(sessionKey, errText string) map[string]any {
+func (s appUpgradeService) renderUpgradeFailedCard(sessionKey, errText string) map[string]any {
 	body := "检查升级信息失败。"
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return a.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", body), upgradePanelButtons(sessionKey, nil, true))
+	return s.app.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", body), upgradePanelButtons(sessionKey, nil, true))
 }
 
-func (a *App) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any, error) {
-	return a.renderUpgradeCardForTarget(sessionKey, ownerUserID, "", false)
+func (s appUpgradeService) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any, error) {
+	return newAppUpgradeService(s.app).renderUpgradeCardForTarget(sessionKey, ownerUserID, "", false)
 }
 
-func (a *App) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVersion string) (map[string]any, error) {
-	return a.renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion, false)
+func (s appUpgradeService) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVersion string) (map[string]any, error) {
+	return newAppUpgradeService(s.app).renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion, false)
 }
 
-func (a *App) renderUpgradeDevCard(sessionKey, ownerUserID string) (map[string]any, error) {
-	return a.renderUpgradeCardForTarget(sessionKey, ownerUserID, "", true)
+func (s appUpgradeService) renderUpgradeDevCard(sessionKey, ownerUserID string) (map[string]any, error) {
+	return newAppUpgradeService(s.app).renderUpgradeCardForTarget(sessionKey, ownerUserID, "", true)
 }
 
-func (a *App) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion string, useDevRelease bool) (map[string]any, error) {
-	appState := a.appState()
-	exePath, assetName, err := a.validateUpgradeRuntime()
+func (s appUpgradeService) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion string, useDevRelease bool) (map[string]any, error) {
+	appState := s.app.appState()
+	exePath, assetName, err := newAppUpgradeService(s.app).validateUpgradeRuntime()
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (a *App) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersi
 		target, err = newReleaseClient().LatestLinuxBinary(ctx, currentGOARCH())
 		if err != nil {
 			bodyLines = append(bodyLines, "", "远端版本检查失败。你仍然可以选择本地 Binary 升级。", "错误: "+err.Error())
-			return a.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradePanelButtons(sessionKey, nil, true)), nil
+			return s.app.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradePanelButtons(sessionKey, nil, true)), nil
 		}
 		bodyLines = append(bodyLines, "最新版本: `"+target.Version+"`")
 	}
@@ -122,7 +122,7 @@ func (a *App) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersi
 	if !forceVersion && !useDevRelease {
 		if cmp, cmpErr := release.CompareVersions(current, target.Version); cmpErr == nil && cmp >= 0 {
 			bodyLines = append(bodyLines, "", "当前版本已不落后于远端最新版本。你仍然可以选择本地 Binary 升级。")
-			return a.feishu.SimpleStatusCard("已是最新版本", "green", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradePanelButtons(sessionKey, nil, true)), nil
+			return s.app.feishu.SimpleStatusCard("已是最新版本", "green", menuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradePanelButtons(sessionKey, nil, true)), nil
 		}
 	}
 
@@ -154,29 +154,29 @@ func (a *App) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersi
 		return nil, err
 	}
 	bodyLines = append(bodyLines, "", remoteUpgradeSummary(forceVersion, useDevRelease))
-	return a.renderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, bodyLines), nil
+	return newAppUpgradeService(s.app).renderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, bodyLines), nil
 }
 
-func (a *App) commandUpgrade(msg *feishu.InboundMessage, args []string) error {
+func (s appUpgradeService) commandUpgrade(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
-		return a.replyUpgradeCard(msg, "")
+		return newAppUpgradeService(s.app).replyUpgradeCard(msg, "")
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "dev":
 		if len(args) != 1 {
 			return fmt.Errorf(upgradeCommandUsage)
 		}
-		return a.replyUpgradeDevCard(msg)
+		return newAppUpgradeService(s.app).replyUpgradeDevCard(msg)
 	case "local":
 		if len(args) != 1 {
 			return fmt.Errorf(upgradeCommandUsage)
 		}
-		return a.commandUpgradeLocalPick(msg)
+		return newAppUpgradeService(s.app).commandUpgradeLocalPick(msg)
 	case "path":
 		if len(args) < 2 {
 			return fmt.Errorf(upgradeCommandUsage)
 		}
-		return a.commandUpgradeLocalPath(msg, strings.Join(args[1:], " "))
+		return newAppUpgradeService(s.app).commandUpgradeLocalPath(msg, strings.Join(args[1:], " "))
 	}
 	if len(args) > 1 {
 		return fmt.Errorf(upgradeCommandUsage)
@@ -185,30 +185,30 @@ func (a *App) commandUpgrade(msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return fmt.Errorf("版本格式不正确: %q，示例: /upgrade v0.3.0", args[0])
 	}
-	return a.replyUpgradeCard(msg, targetVersion)
+	return newAppUpgradeService(s.app).replyUpgradeCard(msg, targetVersion)
 }
 
-func (a *App) replyUpgradeCard(msg *feishu.InboundMessage, targetVersion string) error {
+func (s appUpgradeService) replyUpgradeCard(msg *feishu.InboundMessage, targetVersion string) error {
 	if msg == nil {
 		return nil
 	}
-	card, err := a.renderUpgradeCardForVersion(a.makeSessionKey(msg), msg.UserID, targetVersion)
+	card, err := newAppUpgradeService(s.app).renderUpgradeCardForVersion(s.app.makeSessionKey(msg), msg.UserID, targetVersion)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) replyUpgradeDevCard(msg *feishu.InboundMessage) error {
+func (s appUpgradeService) replyUpgradeDevCard(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	card, err := a.renderUpgradeDevCard(a.makeSessionKey(msg), msg.UserID)
+	card, err := newAppUpgradeService(s.app).renderUpgradeDevCard(s.app.makeSessionKey(msg), msg.UserID)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -223,8 +223,8 @@ func normalizeUpgradeVersion(raw string) (string, error) {
 	return "v" + strings.TrimPrefix(raw, "v"), nil
 }
 
-func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s appUpgradeService) completeUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "upgrade_release" {
@@ -241,7 +241,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-			Card:  rawCard(newCommandService(a).renderSystemMenuCard(sessionKey)),
+			Card:  rawCard(newCommandService(s.app).renderSystemMenuCard(sessionKey)),
 		}, nil
 	}
 
@@ -250,7 +250,7 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级参数损坏"}}, nil
 	}
 	unitName, err := startDaemonUpgrade(daemon.UpgradeSpec{
-		ServiceName:    a.cfg.Daemon.ServiceName,
+		ServiceName:    s.app.cfg.Daemon.ServiceName,
 		Version:        firstNonEmpty(strings.TrimSpace(payload.TargetVersion), firstNonEmpty(strings.TrimSpace(payload.SourceName), "local-artifact")),
 		BinaryPath:     payload.BinaryPath,
 		DownloadURL:    payload.DownloadURL,
@@ -281,16 +281,16 @@ func (a *App) completeUpgradeAction(action *feishu.CardAction, actionName string
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已开始升级"},
-		Card: rawCard(a.feishu.SimpleStatusCard("升级中", "orange", menuCardBody("menu.upgrade", body), []feishu.Button{
+		Card: rawCard(s.app.feishu.SimpleStatusCard("升级中", "orange", menuCardBody("menu.upgrade", body), []feishu.Button{
 			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})),
 	}, nil
 }
 
-func (a *App) validateUpgradeRuntime() (string, string, error) {
-	a.configMu.RLock()
-	serviceName := strings.TrimSpace(a.cfg.Daemon.ServiceName)
-	a.configMu.RUnlock()
+func (s appUpgradeService) validateUpgradeRuntime() (string, string, error) {
+	s.app.configMu.RLock()
+	serviceName := strings.TrimSpace(s.app.cfg.Daemon.ServiceName)
+	s.app.configMu.RUnlock()
 	manager, err := newDaemonManager(serviceName)
 	if err != nil {
 		return "", "", fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
@@ -375,7 +375,7 @@ func upgradePanelButtons(sessionKey string, confirm map[string]any, includeBack 
 	return buttons
 }
 
-func (a *App) renderUpgradeConfirmCard(title, sessionKey, requestID string, payload upgradePendingPayload, lines []string) map[string]any {
+func (s appUpgradeService) renderUpgradeConfirmCard(title, sessionKey, requestID string, payload upgradePendingPayload, lines []string) map[string]any {
 	buttonLabel := "升级到 " + payload.TargetVersion
 	if strings.TrimSpace(payload.SourcePath) != "" {
 		buttonLabel = "升级本地制品"
@@ -394,7 +394,7 @@ func (a *App) renderUpgradeConfirmCard(title, sessionKey, requestID string, payl
 			"确认后会使用本地制品重启 daemon；如果启动失败会自动回退到旧版本。",
 		)
 	}
-	return a.feishu.SimpleStatusCard(title, "orange", menuCardBody("menu.upgrade", strings.Join(lines, "\n")), upgradePanelButtons(sessionKey, map[string]any{
+	return s.app.feishu.SimpleStatusCard(title, "orange", menuCardBody("menu.upgrade", strings.Join(lines, "\n")), upgradePanelButtons(sessionKey, map[string]any{
 		"request_id": requestID,
 		"label":      buttonLabel,
 	}, true))

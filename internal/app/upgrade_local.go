@@ -18,47 +18,47 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) commandUpgradeLocalPick(msg *feishu.InboundMessage) error {
+func (s appUpgradeService) commandUpgradeLocalPick(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := newWorkspaceConfigService(a).currentWorkspaceForMessage(msg)
-	requestID, payload, err := a.createUpgradeLocalPickerRequest(sessionKey, ws, msg.UserID, "")
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
+	requestID, payload, err := newAppUpgradeService(s.app).createUpgradeLocalPickerRequest(sessionKey, ws, msg.UserID, "")
 	if err != nil {
 		return err
 	}
-	card, err := newWorkspaceRenderService(a).renderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
-	return a.appState().updatePending(requestID, func(req *state.PendingRequest) {
+	return s.app.appState().updatePending(requestID, func(req *state.PendingRequest) {
 		req.FeishuMsgID = msgID
 	})
 }
 
-func (a *App) commandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string) error {
+func (s appUpgradeService) commandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := newWorkspaceConfigService(a).currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	selectedPath, err := resolveUpgradeLocalSourcePath(ws, rawPath)
 	if err != nil {
 		return err
 	}
-	requestID, payload, err := a.createLocalUpgradeRequest(sessionKey, msg.UserID, "", selectedPath)
+	requestID, payload, err := newAppUpgradeService(s.app).createLocalUpgradeRequest(sessionKey, msg.UserID, "", selectedPath)
 	if err != nil {
 		return err
 	}
-	card := a.renderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, upgradeLocalConfirmLines(payload.BinaryPath))
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := newAppUpgradeService(s.app).renderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, upgradeLocalConfirmLines(payload.BinaryPath))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
-	return a.appState().updatePending(requestID, func(req *state.PendingRequest) {
+	return s.app.appState().updatePending(requestID, func(req *state.PendingRequest) {
 		req.FeishuMsgID = msgID
 	})
 }
@@ -82,12 +82,12 @@ func resolveUpgradeLocalSourcePath(ws *config.Workspace, rawPath string) (string
 	return resolved, nil
 }
 
-func (a *App) createUpgradeLocalPickerRequest(sessionKey string, ws *config.Workspace, ownerUserID, feishuMsgID string) (string, pathPickerPayload, error) {
-	if _, _, err := a.validateUpgradeRuntime(); err != nil {
+func (s appUpgradeService) createUpgradeLocalPickerRequest(sessionKey string, ws *config.Workspace, ownerUserID, feishuMsgID string) (string, pathPickerPayload, error) {
+	if _, _, err := newAppUpgradeService(s.app).validateUpgradeRuntime(); err != nil {
 		return "", pathPickerPayload{}, err
 	}
-	appState := a.appState()
-	payload, err := a.newDownloadPathPickerPayload(ws)
+	appState := s.app.appState()
+	payload, err := s.app.newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return "", pathPickerPayload{}, err
 	}
@@ -111,17 +111,17 @@ func (a *App) createUpgradeLocalPickerRequest(sessionKey string, ws *config.Work
 	return requestID, payload, nil
 }
 
-func (a *App) createLocalUpgradeRequest(sessionKey, ownerUserID, feishuMsgID, selectedPath string) (string, upgradePendingPayload, error) {
-	exePath, _, err := a.validateUpgradeRuntime()
+func (s appUpgradeService) createLocalUpgradeRequest(sessionKey, ownerUserID, feishuMsgID, selectedPath string) (string, upgradePendingPayload, error) {
+	exePath, _, err := newAppUpgradeService(s.app).validateUpgradeRuntime()
 	if err != nil {
 		return "", upgradePendingPayload{}, err
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	requestID, err := appState.nextLocalID("upgrade")
 	if err != nil {
 		return "", upgradePendingPayload{}, err
 	}
-	stagedPath, sha256Hex, sizeBytes, err := a.stageLocalUpgradeArtifact(requestID, selectedPath)
+	stagedPath, sha256Hex, sizeBytes, err := newAppUpgradeService(s.app).stageLocalUpgradeArtifact(requestID, selectedPath)
 	if err != nil {
 		return "", upgradePendingPayload{}, err
 	}
@@ -151,19 +151,19 @@ func (a *App) createLocalUpgradeRequest(sessionKey, ownerUserID, feishuMsgID, se
 	return requestID, payload, nil
 }
 
-func (a *App) completeUpgradeLocalPick(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s appUpgradeService) completeUpgradeLocalPick(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	appState := a.appState()
-	wsID := a.defaultWorkspaceID()
+	appState := s.app.appState()
+	wsID := s.app.defaultWorkspaceID()
 	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		wsID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(a.cfg, wsID)
-	requestID, payload, err := a.createUpgradeLocalPickerRequest(sessionKey, ws, action.UserID, action.MessageID)
+	ws := config.FindWorkspace(s.app.cfg, wsID)
+	requestID, payload, err := newAppUpgradeService(s.app).createUpgradeLocalPickerRequest(sessionKey, ws, action.UserID, action.MessageID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	card, err := newWorkspaceRenderService(a).renderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -173,20 +173,20 @@ func (a *App) completeUpgradeLocalPick(action *feishu.CardAction) (*callback.Car
 	}, nil
 }
 
-func (a *App) completeUpgradeLocalBinaryConfirm(action *feishu.CardAction, pending *state.PendingRequest, payload pathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
+func (s appUpgradeService) completeUpgradeLocalBinaryConfirm(action *feishu.CardAction, pending *state.PendingRequest, payload pathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := firstNonEmpty(strings.TrimSpace(pending.SessionKey), actionSessionKey(action))
-	requestID, upgradePayload, err := a.createLocalUpgradeRequest(sessionKey, pending.OwnerUserID, firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID)), selectedPath)
+	requestID, upgradePayload, err := newAppUpgradeService(s.app).createLocalUpgradeRequest(sessionKey, pending.OwnerUserID, firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID)), selectedPath)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	_ = a.appState().updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = s.app.appState().updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已选择本地 Binary"},
-		Card:  rawCard(a.renderUpgradeConfirmCard("升级确认", sessionKey, requestID, upgradePayload, upgradeLocalConfirmLines(upgradePayload.BinaryPath))),
+		Card:  rawCard(newAppUpgradeService(s.app).renderUpgradeConfirmCard("升级确认", sessionKey, requestID, upgradePayload, upgradeLocalConfirmLines(upgradePayload.BinaryPath))),
 	}, nil
 }
 
-func (a *App) stageLocalUpgradeArtifact(requestID, sourcePath string) (string, string, int64, error) {
+func (s appUpgradeService) stageLocalUpgradeArtifact(requestID, sourcePath string) (string, string, int64, error) {
 	sourcePath = strings.TrimSpace(sourcePath)
 	if sourcePath == "" {
 		return "", "", 0, fmt.Errorf("missing local binary path")
@@ -198,7 +198,7 @@ func (a *App) stageLocalUpgradeArtifact(requestID, sourcePath string) (string, s
 	if !info.Mode().IsRegular() {
 		return "", "", 0, fmt.Errorf("本地制品不是普通文件")
 	}
-	dir := filepath.Join(a.cfg.DataDir, "upgrades", requestID)
+	dir := filepath.Join(s.app.cfg.DataDir, "upgrades", requestID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", 0, err
 	}

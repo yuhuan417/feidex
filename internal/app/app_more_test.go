@@ -2406,7 +2406,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandUpgrade(msg, nil); err != nil {
+	if err := newAppUpgradeService(a).commandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -2461,7 +2461,7 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandUpgrade(msg, []string{"v0.3.0"}); err != nil {
+	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"v0.3.0"}); err != nil {
 		t.Fatalf("commandUpgrade(specified version) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -2527,7 +2527,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	upgradeDisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandUpgrade(msg, []string{"dev"}); err != nil {
+	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"dev"}); err != nil {
 		t.Fatalf("commandUpgrade(dev) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -2573,7 +2573,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandUpgrade(msg, []string{"local"}); err != nil {
+	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"local"}); err != nil {
 		t.Fatalf("commandUpgrade(local) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -2702,7 +2702,7 @@ func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 		return "feidex-upgrade-1", nil
 	}
 
-	resp, err := a.completeUpgradeAction(&feishu.CardAction{
+	resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-1"},
 	}, "upgrade.confirm")

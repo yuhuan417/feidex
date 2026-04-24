@@ -153,7 +153,7 @@ func (s workspaceActionService) completePathPickerAction(action *feishu.CardActi
 		if pending.Kind == upgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-			return s.app.completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
+			return newAppUpgradeService(s.app).completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
 		}
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "resolved"

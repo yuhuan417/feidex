@@ -124,7 +124,7 @@ func localCommandSystemRuntimeSpecs() []localCommandSpec {
 				return matchUpgradeCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandUpgrade(msg, args)
+				return newAppUpgradeService(a).commandUpgrade(msg, args)
 			},
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{
