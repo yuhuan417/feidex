@@ -69,7 +69,7 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 	if ws == nil {
 		return discarded, nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
-	binding, err := a.startWorkspaceThread(sessionKey, sess, ws)
+	binding, err := newWorkspaceThreadService(a).startWorkspaceThread(sessionKey, sess, ws)
 	if err != nil {
 		return discarded, nil, err
 	}

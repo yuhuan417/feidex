@@ -156,7 +156,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 			reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchInFlightNotice()
 			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 		}
-		binding, err := s.app.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+		binding, err := newWorkspaceThreadService(s.app).ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
 			slog.Warn("workspace switch thread binding failed",
 				"session_key", sessionKey,

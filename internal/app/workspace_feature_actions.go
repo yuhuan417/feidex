@@ -34,7 +34,7 @@ func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, 
 	_ = appState.saveSession(sess)
 	toast := "已切换工作区"
 	if !sessionHasInFlightSubmission(sess) {
-		binding, err := s.app.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+		binding, err := newWorkspaceThreadService(s.app).ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
 			slog.Warn("workspace action thread binding failed",
 				"session_key", sessionKey,

@@ -62,7 +62,7 @@ func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[st
 			workspace = *ws
 		}
 	}
-	items, err := a.listWorkspaceThreads(sessionKey, &workspace, includeAll)
+	items, err := newWorkspaceThreadService(a).listWorkspaceThreads(sessionKey, &workspace, includeAll)
 	if err != nil {
 		return nil, err
 	}

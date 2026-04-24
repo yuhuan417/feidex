@@ -377,7 +377,7 @@ func (s workspaceManagementService) createWorkspaceAndSwitch(sessionKey, userID,
 	if ws == nil {
 		return nil
 	}
-	if _, err := s.app.ensureWorkspaceThreadBinding(sessionKey, sess, ws); err != nil {
+	if _, err := newWorkspaceThreadService(s.app).ensureWorkspaceThreadBinding(sessionKey, sess, ws); err != nil {
 		slog.Warn("workspace create thread binding failed",
 			"session_key", sessionKey,
 			"workspace_id", id,

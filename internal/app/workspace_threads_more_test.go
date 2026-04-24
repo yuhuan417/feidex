@@ -67,7 +67,7 @@ func TestStartWorkspaceThreadReturnsErrorWhenCodexClientMissing(t *testing.T) {
 		t.Fatal("default workspace missing")
 	}
 
-	_, err := a.startWorkspaceThread("sess-1", sess, ws)
+	_, err := newWorkspaceThreadService(a).startWorkspaceThread("sess-1", sess, ws)
 	if err == nil || !strings.Contains(err.Error(), "codex client not initialized") {
 		t.Fatalf("startWorkspaceThread() error = %v, want codex client not initialized", err)
 	}

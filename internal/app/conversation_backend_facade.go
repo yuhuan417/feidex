@@ -48,15 +48,15 @@ type codexConversationBackend struct {
 }
 
 func (b codexConversationBackend) listWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return b.app.listCodexWorkspaceThreads(sessionKey, ws, includeAll)
+	return newWorkspaceThreadService(b.app).listCodexWorkspaceThreads(sessionKey, ws, includeAll)
 }
 
 func (b codexConversationBackend) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return b.app.ensureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.app).ensureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return b.app.startCodexWorkspaceThread(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.app).startCodexWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
@@ -120,11 +120,11 @@ func (b claudeConversationBackend) listWorkspaceThreads(sessionKey string, ws *c
 }
 
 func (b claudeConversationBackend) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return b.app.ensureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.app).ensureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return b.app.startClaudeWorkspaceThread(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.app).startClaudeWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
