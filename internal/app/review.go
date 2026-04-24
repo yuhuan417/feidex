@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	appreview "feidex/internal/app/review"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -16,10 +17,10 @@ const (
 	submissionKindReview = "review"
 	pendingKindReview    = "review_form"
 
-	reviewTargetUncommitted = "uncommittedChanges"
-	reviewTargetBaseBranch  = "baseBranch"
-	reviewTargetCommit      = "commit"
-	reviewTargetCustom      = "custom"
+	reviewTargetUncommitted = appreview.TargetUncommitted
+	reviewTargetBaseBranch  = appreview.TargetBaseBranch
+	reviewTargetCommit      = appreview.TargetCommit
+	reviewTargetCustom      = appreview.TargetCustom
 
 	reviewFormModeBase   = "base"
 	reviewFormModeCommit = "commit"
@@ -29,13 +30,7 @@ const (
 	gitFieldSep  = "\x1f"
 )
 
-type reviewTargetSpec struct {
-	Type         string
-	Branch       string
-	CommitSHA    string
-	CommitTitle  string
-	Instructions string
-}
+type reviewTargetSpec = appreview.TargetSpec
 
 type reviewPendingPayload struct {
 	Mode         string `json:"mode"`
