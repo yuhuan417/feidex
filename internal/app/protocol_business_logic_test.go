@@ -31,7 +31,7 @@ func TestItemStartedBindsPendingSubmissionBeforeTurnStarted(t *testing.T) {
 	if !a.sessionHasLiveThread("sess-1", "thread-1") {
 		t.Fatal("early item/started should mark thread live for the session")
 	}
-	if a.turnStreams["turn-early"] == nil {
+	if a.turnStreamTracker().streams["turn-early"] == nil {
 		t.Fatal("early item/started should initialize turn stream state")
 	}
 }

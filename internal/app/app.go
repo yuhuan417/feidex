@@ -47,8 +47,7 @@ type App struct {
 	backendSwitching       bool
 	backendSwitchTarget    string
 
-	turnStreamsMu     sync.Mutex
-	turnStreams       map[string]*turnStream
+	turnStreams       *turnStreamTracker
 	turnItemsMu       sync.Mutex
 	turnItems         map[string]*turnItemState
 	workspaceCloneMu  sync.Mutex
@@ -127,7 +126,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		feishu:              feishuClient,
 		started:             time.Now(),
 		deduper:             newInboundDeduper(),
-		turnStreams:         map[string]*turnStream{},
+		turnStreams:         newTurnStreamTracker(),
 		turnItems:           map[string]*turnItemState{},
 		workspaceCloneOps:   map[string]*workspaceCloneOperation{},
 		liveThreads:         map[string]string{},

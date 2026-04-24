@@ -46,7 +46,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		codex:       fc,
 		started:     time.Now(),
 		deduper:     newInboundDeduper(),
-		turnStreams: map[string]*turnStream{},
+		turnStreams: newTurnStreamTracker(),
 		liveThreads: map[string]string{},
 	}
 
@@ -125,7 +125,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		feishu:      ff,
 		codex:       fc,
 		started:     time.Now(),
-		turnStreams: map[string]*turnStream{},
+		turnStreams: newTurnStreamTracker(),
 		liveThreads: map[string]string{},
 	}
 	bad.handleFeishuMessage(&feishu.InboundMessage{

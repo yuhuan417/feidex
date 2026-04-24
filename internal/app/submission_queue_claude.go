@@ -238,9 +238,7 @@ func (w *submissionWorkflow) rollbackClaudeSubmissionStartState(sessionKey strin
 		})
 		a.clearTurnBinding(turnID)
 		a.clearTurnItemStates(turnID)
-		a.turnStreamsMu.Lock()
-		delete(a.turnStreams, strings.TrimSpace(turnID))
-		a.turnStreamsMu.Unlock()
+		a.deleteTurnStream(turnID)
 	}
 
 	if updatedSess == nil || !sessionHasActiveOperations(updatedSess) {

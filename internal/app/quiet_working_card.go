@@ -143,16 +143,7 @@ func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submissi
 }
 
 func (a *App) commitQuietWorkingCardRender(turnID, messageID, body string) {
-	a.turnStreamsMu.Lock()
-	defer a.turnStreamsMu.Unlock()
-	stream := a.turnStreams[turnID]
-	if stream == nil || stream.QuietWorking == nil {
-		return
-	}
-	if strings.TrimSpace(messageID) != "" {
-		stream.QuietWorking.MessageID = messageID
-	}
-	stream.QuietWorking.RenderedBody = body
+	a.commitTurnStreamQuietRender(turnID, messageID, body)
 }
 
 func buildQuietWorkingCardLines(itemID string, item map[string]any, workspaceCwd string) (string, []string) {

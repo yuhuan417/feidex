@@ -3,9 +3,29 @@ package app
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"feidex/internal/state"
 )
+
+type turnStreamTracker struct {
+	mu      sync.Mutex
+	streams map[string]*turnStream
+}
+
+func newTurnStreamTracker() *turnStreamTracker {
+	return &turnStreamTracker{streams: map[string]*turnStream{}}
+}
+
+func (a *App) turnStreamTracker() *turnStreamTracker {
+	if a == nil {
+		return nil
+	}
+	if a.turnStreams == nil {
+		a.turnStreams = newTurnStreamTracker()
+	}
+	return a.turnStreams
+}
 
 type turnStream struct {
 	TurnID       string
@@ -33,9 +53,10 @@ func (a *App) noteTurnStarted(sessionKey string, sub *state.Submission) {
 		return
 	}
 	a.maybeSendSubmissionStartedNotice(context.Background(), sub)
-	a.turnStreamsMu.Lock()
-	defer a.turnStreamsMu.Unlock()
-	a.ensureTurnStreamLocked(sessionKey, sub)
+	tracker := a.turnStreamTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	a.ensureTurnStreamLocked(tracker, sessionKey, sub)
 }
 
 func (a *App) maybeSendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
@@ -65,9 +86,10 @@ func (a *App) updatePendingPlan(turnID, plan string) {
 	if sub == nil {
 		return
 	}
-	a.turnStreamsMu.Lock()
-	defer a.turnStreamsMu.Unlock()
-	stream := a.ensureTurnStreamLocked(sessionKey, sub)
+	tracker := a.turnStreamTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	stream.PendingPlan = strings.TrimSpace(plan)
 }
 
@@ -76,9 +98,10 @@ func (a *App) recordTurnError(threadID, turnID, message string) {
 	if sub == nil {
 		return
 	}
-	a.turnStreamsMu.Lock()
-	defer a.turnStreamsMu.Unlock()
-	stream := a.ensureTurnStreamLocked(sessionKey, sub)
+	tracker := a.turnStreamTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	stream.LastError = strings.TrimSpace(message)
 }
 
@@ -109,8 +132,9 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		skipPayload      bool
 	)
 
-	a.turnStreamsMu.Lock()
-	stream := a.ensureTurnStreamLocked(sessionKey, sub)
+	tracker := a.turnStreamTracker()
+	tracker.mu.Lock()
+	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	if strings.TrimSpace(threadID) != "" {
 		stream.ThreadID = threadID
 	}
@@ -150,7 +174,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	} else if a.quietWorkingCardEnabled() {
 		workingUpdate = a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	}
-	a.turnStreamsMu.Unlock()
+	tracker.mu.Unlock()
 
 	a.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
@@ -168,9 +192,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		a.turnStreamsMu.Lock()
-		delete(a.turnStreams, turnID)
-		a.turnStreamsMu.Unlock()
+		a.deleteTurnStream(turnID)
 		a.clearTurnItemStates(turnID)
 		return turnStreamFlushResult{}
 	}
@@ -182,8 +204,9 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 		result           turnStreamFlushResult
 	)
 
-	a.turnStreamsMu.Lock()
-	stream := a.ensureTurnStreamLocked(sessionKey, sub)
+	tracker := a.turnStreamTracker()
+	tracker.mu.Lock()
+	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	result.SawFinal = stream.SentFinal
 	result.LastError = stream.LastError
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
@@ -197,8 +220,8 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
-	delete(a.turnStreams, turnID)
-	a.turnStreamsMu.Unlock()
+	delete(tracker.streams, turnID)
+	tracker.mu.Unlock()
 
 	a.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
@@ -211,17 +234,21 @@ func (a *App) turnStreamSawFinal(turnID string) bool {
 	if a == nil || strings.TrimSpace(turnID) == "" {
 		return false
 	}
-	a.turnStreamsMu.Lock()
-	defer a.turnStreamsMu.Unlock()
-	stream := a.turnStreams[strings.TrimSpace(turnID)]
+	tracker := a.turnStreamTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	stream := tracker.streams[strings.TrimSpace(turnID)]
 	return stream != nil && stream.SentFinal
 }
 
-func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *turnStream {
-	if a.turnStreams == nil {
-		a.turnStreams = map[string]*turnStream{}
+func (a *App) ensureTurnStreamLocked(tracker *turnStreamTracker, sessionKey string, sub *state.Submission) *turnStream {
+	if tracker == nil {
+		return nil
 	}
-	stream := a.turnStreams[sub.TurnID]
+	if tracker.streams == nil {
+		tracker.streams = map[string]*turnStream{}
+	}
+	stream := tracker.streams[sub.TurnID]
 	if stream != nil {
 		stream.SessionKey = sessionKey
 		stream.SubmissionID = sub.ID
@@ -238,10 +265,87 @@ func (a *App) ensureTurnStreamLocked(sessionKey string, sub *state.Submission) *
 		SessionKey:   sessionKey,
 		WorkspaceID:  sub.WorkspaceID,
 	}
-	a.turnStreams[sub.TurnID] = stream
+	tracker.streams[sub.TurnID] = stream
 	return stream
 }
 
 func isQuietBoundaryTurnPayload(payload turnItemCardPayload) bool {
 	return isQuietBoundaryTurnItem(payload.ItemType) || isClaudeTodoToolPayload(payload)
+}
+
+func (a *App) deleteTurnStream(turnID string) {
+	tracker := a.turnStreamTracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	tracker.mu.Lock()
+	delete(tracker.streams, turnID)
+	tracker.mu.Unlock()
+}
+
+func (a *App) markTurnStreamFinal(turnID string) {
+	tracker := a.turnStreamTracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	tracker.mu.Lock()
+	if stream := tracker.streams[turnID]; stream != nil {
+		stream.SentFinal = true
+	}
+	tracker.mu.Unlock()
+}
+
+func (a *App) prepareTurnStreamQuietBoundary(turnID string) quietWorkingBoundary {
+	tracker := a.turnStreamTracker()
+	if tracker == nil {
+		return quietWorkingBoundary{}
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return quietWorkingBoundary{}
+	}
+	tracker.mu.Lock()
+	boundary := a.prepareQuietWorkingCardBoundaryLocked(tracker.streams[turnID])
+	tracker.mu.Unlock()
+	return boundary
+}
+
+func (a *App) prepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
+	tracker := a.turnStreamTracker()
+	if tracker == nil || sub == nil {
+		return quietWorkingCardOp{}
+	}
+	tracker.mu.Lock()
+	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	if strings.TrimSpace(threadID) != "" {
+		stream.ThreadID = strings.TrimSpace(threadID)
+	}
+	op := a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
+	tracker.mu.Unlock()
+	return op
+}
+
+func (a *App) commitTurnStreamQuietRender(turnID, messageID, body string) {
+	tracker := a.turnStreamTracker()
+	if tracker == nil {
+		return
+	}
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	stream := tracker.streams[strings.TrimSpace(turnID)]
+	if stream == nil || stream.QuietWorking == nil {
+		return
+	}
+	if strings.TrimSpace(messageID) != "" {
+		stream.QuietWorking.MessageID = messageID
+	}
+	stream.QuietWorking.RenderedBody = body
 }

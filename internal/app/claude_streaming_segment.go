@@ -40,11 +40,7 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 		if len(results) == 0 {
 			return nil, false
 		}
-		a.turnStreamsMu.Lock()
-		if stream := a.turnStreams[turnID]; stream != nil {
-			stream.SentFinal = true
-		}
-		a.turnStreamsMu.Unlock()
+		a.markTurnStreamFinal(turnID)
 		return results, true
 	}
 

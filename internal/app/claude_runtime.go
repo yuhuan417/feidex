@@ -644,9 +644,7 @@ func (r *claudeRuntime) prepareClaudeQuietWorkingBoundary(threadID, turnID strin
 	if sub == nil {
 		return nil, quietWorkingBoundary{}
 	}
-	r.app.turnStreamsMu.Lock()
-	boundary := r.app.prepareQuietWorkingCardBoundaryLocked(r.app.turnStreams[turnID])
-	r.app.turnStreamsMu.Unlock()
+	boundary := r.app.prepareTurnStreamQuietBoundary(turnID)
 	return sub, boundary
 }
 
@@ -676,15 +674,9 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	}
 	workspaceCwd := r.app.workspaceCwd(sub.WorkspaceID)
 	var op quietWorkingCardOp
-	r.app.turnStreamsMu.Lock()
-	stream := r.app.ensureTurnStreamLocked(sessionKey, sub)
-	if threadID != "" {
-		stream.ThreadID = threadID
-	}
-	op = r.app.prepareQuietWorkingCardUpdateLocked(stream, "claude-thinking-"+turnID, map[string]any{
+	op = r.app.prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
 	}, workspaceCwd)
-	r.app.turnStreamsMu.Unlock()
 	r.app.executeQuietWorkingCardOp(context.Background(), sub, op)
 }
 
@@ -825,11 +817,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				footerLines := r.app.turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
-					r.app.turnStreamsMu.Lock()
-					if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
-						stream.SentFinal = true
-					}
-					r.app.turnStreamsMu.Unlock()
+					r.app.markTurnStreamFinal(turn.TurnID)
 				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
 					r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
@@ -854,11 +842,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				footerLines := r.app.turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
-					r.app.turnStreamsMu.Lock()
-					if stream := r.app.turnStreams[turn.TurnID]; stream != nil {
-						stream.SentFinal = true
-					}
-					r.app.turnStreamsMu.Unlock()
+					r.app.markTurnStreamFinal(turn.TurnID)
 				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
 					r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
