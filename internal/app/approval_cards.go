@@ -7,19 +7,19 @@ import (
 	"feidex/internal/feishu"
 )
 
-func (a *App) sendApprovalCard(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string) {
-	a.sendApprovalCardWithPayload(kind, requestID, threadID, turnID, itemID, body, nil)
+func (s outboundCardService) sendApprovalCard(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string) {
+	newOutboundCardService(s.app).sendApprovalCardWithPayload(kind, requestID, threadID, turnID, itemID, body, nil)
 }
 
-func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string, requestPayload map[string]any) {
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+func (s outboundCardService) sendApprovalCardWithPayload(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string, requestPayload map[string]any) {
+	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		a.replyCodexError(requestID, -32602, "no active session for approval")
+		s.app.replyCodexError(requestID, -32602, "no active session for approval")
 		return
 	}
 	requestKey := requestIDKey(requestID)
 	buttons := approvalButtons(kind, requestKey, requestPayload)
-	card := a.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
+	card := s.app.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
 	payload := map[string]any{}
 	if strings.TrimSpace(body) != "" {
 		payload["body"] = body
@@ -27,7 +27,7 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 	if len(requestPayload) > 0 {
 		payload["request"] = requestPayload
 	}
-	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+	err := s.app.deliverPendingCard(sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -44,21 +44,21 @@ func (a *App) sendApprovalCardWithPayload(kind string, requestID json.RawMessage
 	if err == nil {
 		return
 	}
-	a.replyCodexError(requestID, -32603, err.Error())
+	s.app.replyCodexError(requestID, -32603, err.Error())
 }
 
-func (a *App) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any) {
-	a.sendPermissionsCardWithPayload(requestID, threadID, turnID, itemID, body, permissions, nil)
+func (s outboundCardService) sendPermissionsCard(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any) {
+	newOutboundCardService(s.app).sendPermissionsCardWithPayload(requestID, threadID, turnID, itemID, body, permissions, nil)
 }
 
-func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any, requestPayload map[string]any) {
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+func (s outboundCardService) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any, requestPayload map[string]any) {
+	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		a.replyCodexError(requestID, -32602, "no active session for permissions approval")
+		s.app.replyCodexError(requestID, -32602, "no active session for permissions approval")
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	card := a.renderApprovalCard(sessionKey, sub, "权限请求", "orange", strings.TrimSpace(body), []feishu.Button{
+	card := s.app.renderApprovalCard(sessionKey, sub, "权限请求", "orange", strings.TrimSpace(body), []feishu.Button{
 		{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
 		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
 	})
@@ -69,7 +69,7 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 	if len(requestPayload) > 0 {
 		payload["request"] = requestPayload
 	}
-	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+	err := s.app.deliverPendingCard(sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -86,13 +86,13 @@ func (a *App) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID
 	if err == nil {
 		return
 	}
-	a.replyCodexError(requestID, -32603, err.Error())
+	s.app.replyCodexError(requestID, -32603, err.Error())
 }
 
-func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
-	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
+func (s outboundCardService) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
+	sessionKey, sub := s.app.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil || len(payload.Questions) == 0 {
-		a.replyCodexError(requestID, -32602, "no active session for request_user_input")
+		s.app.replyCodexError(requestID, -32602, "no active session for request_user_input")
 		return
 	}
 	q := payload.Questions[0]
@@ -109,9 +109,9 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 			},
 		})
 	}
-	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
+	card := s.app.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
 	requestKey := requestIDKey(requestID)
-	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+	err := s.app.deliverPendingCard(sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -128,7 +128,7 @@ func (a *App) sendUserInputCard(requestID json.RawMessage, payload toolUserInput
 	if err == nil {
 		return
 	}
-	a.replyCodexError(requestID, -32603, err.Error())
+	s.app.replyCodexError(requestID, -32603, err.Error())
 }
 
 func mustJSON(v any) string {

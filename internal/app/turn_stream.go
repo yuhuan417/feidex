@@ -178,14 +178,14 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 
 	s.app.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		s.app.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
+		newOutboundCardService(s.app).sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
 	s.app.executeQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
 	if s.app.quietWorkingCardEnabled() {
 		s.app.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
 	if hasPayload && !skipPayload && (!s.app.quietModeEnabled() || shouldDeliverTurnItemPayloadInQuiet(s.app.quietMode(), payload)) {
-		s.app.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
+		newOutboundCardService(s.app).sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
 }
 
@@ -225,7 +225,7 @@ func (s turnStreamService) flushTurnStream(ctx context.Context, threadID, turnID
 
 	s.app.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		s.app.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
+		newOutboundCardService(s.app).sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
 	return result
 }

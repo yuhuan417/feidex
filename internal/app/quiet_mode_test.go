@@ -155,18 +155,18 @@ func TestSendTurnItemCardQuietModes(t *testing.T) {
 		Color:       "green",
 		SummaryText: "intermediate reply",
 	}
-	if got := a.sendTurnItemCard(context.Background(), sub, agentPayload); got != "reply-card-id" {
+	if got := newOutboundCardService(a).sendTurnItemCard(context.Background(), sub, agentPayload); got != "reply-card-id" {
 		t.Fatalf("sendTurnItemCard(normal agent) = %q, want reply-card-id", got)
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeFinal
-	if got := a.sendTurnItemCard(context.Background(), sub, agentPayload); got != "" {
+	if got := newOutboundCardService(a).sendTurnItemCard(context.Background(), sub, agentPayload); got != "" {
 		t.Fatalf("sendTurnItemCard(final non-final agent) = %q, want empty", got)
 	}
 
 	finalPayload := agentPayload
 	finalPayload.IsFinalAnswer = true
-	if got := a.sendTurnItemCard(context.Background(), sub, finalPayload); got != "reply-card-id" {
+	if got := newOutboundCardService(a).sendTurnItemCard(context.Background(), sub, finalPayload); got != "reply-card-id" {
 		t.Fatalf("sendTurnItemCard(final final-answer) = %q, want reply-card-id", got)
 	}
 	if len(ff.replyCards) != 2 {

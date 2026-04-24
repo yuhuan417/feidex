@@ -178,7 +178,7 @@ func TestNotificationHelperWrappers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.sendPermissionsCard(json.RawMessage(`"perm-wrap"`), "thread-1", "turn-1", "item-1", "body", map[string]any{"mode": "read"})
+	newOutboundCardService(a).sendPermissionsCard(json.RawMessage(`"perm-wrap"`), "thread-1", "turn-1", "item-1", "body", map[string]any{"mode": "read"})
 	if pending := a.store.PendingByID("perm-wrap"); pending == nil || pending.Kind != "permissions" {
 		t.Fatalf("sendPermissionsCard() pending = %+v", pending)
 	}

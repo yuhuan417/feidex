@@ -313,7 +313,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		suppressTerminalCard = newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
 	}
 	if terminalText != "" && !suppressTerminalCard {
-		a.replaceTurnEventCardWithReuse(
+		newOutboundCardService(a).replaceTurnEventCardWithReuse(
 			context.Background(),
 			sub,
 			"任务状态",

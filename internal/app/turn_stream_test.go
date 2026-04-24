@@ -235,7 +235,7 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		DetailText:  "命令执行:\n命令:\n" + markdownCodeBlock("$ pwd") + "\n输出:\n" + markdownCodeBlock("/tmp/work"),
 	}
 
-	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
+	card := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, payload, false)
 	elements := cardBodyElements(t, card)
 	if len(elements) != 2 {
 		t.Fatalf("expected 2 compact elements (meta, markdown), got %d", len(elements))
@@ -275,7 +275,7 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 		SummaryText: "回复:\nfinal text",
 	}
 
-	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
+	card := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, payload, false)
 	if _, ok := card["header"]; ok {
 		t.Fatalf("expected normal reply card to omit header, got: %#v", card["header"])
 	}
@@ -310,7 +310,7 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 		IsFinalAnswer: true,
 	}
 
-	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
+	card := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, payload, false)
 	header, ok := card["header"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected final answer header, got: %#v", card["header"])
@@ -346,7 +346,7 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 		DetailText:  markdownCodeBlockWithLang("diff", "@@ -1 +1 @@\n-old\n+new"),
 	}
 
-	card := a.renderTurnItemCard(context.Background(), sub, payload, false)
+	card := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, payload, false)
 	elements := cardBodyElements(t, card)
 	if len(elements) != 1 {
 		t.Fatalf("expected compact file-change card, got %d elements", len(elements))

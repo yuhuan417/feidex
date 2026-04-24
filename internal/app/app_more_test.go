@@ -1475,7 +1475,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
 
-	a.sendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
+	newOutboundCardService(a).sendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
 
 	if len(ff.sendCards) != 1 {
 		t.Fatalf("approval card count = %d, want 1", len(ff.sendCards))

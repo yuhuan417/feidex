@@ -197,7 +197,7 @@ func TestSendTurnItemCardSplitsReplyTables(t *testing.T) {
 		}, "\n"),
 	}
 
-	got := a.sendTurnItemCard(context.Background(), sub, payload)
+	got := newOutboundCardService(a).sendTurnItemCard(context.Background(), sub, payload)
 	if got != "card-1" {
 		t.Fatalf("sendTurnItemCard() = %q, want first split card id", got)
 	}

@@ -232,7 +232,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 		suppressTerminalCard = newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub, reuseMessageID)
 	}
 	if terminalText != "" && !suppressTerminalCard {
-		a.replaceTurnEventCardWithReuse(
+		newOutboundCardService(a).replaceTurnEventCardWithReuse(
 			context.Background(),
 			sub,
 			"任务状态",

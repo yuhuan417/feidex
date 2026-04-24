@@ -365,10 +365,10 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	if !a.replyInThreadForSubmission(sub) {
 		t.Fatal("replyInThreadForSubmission() should be true for group session")
 	}
-	if got := a.sendPlanCard(context.Background(), sub, "  do thing  "); got != "reply-card-id" {
+	if got := newOutboundCardService(a).sendPlanCard(context.Background(), sub, "  do thing  "); got != "reply-card-id" {
 		t.Fatalf("sendPlanCard() = %q", got)
 	}
-	if got := a.sendTurnEventCard(context.Background(), sub, "状态更新", "blue", "  body  ", "turn_terminal", "item-1"); got != "reply-card-id" {
+	if got := newOutboundCardService(a).sendTurnEventCard(context.Background(), sub, "状态更新", "blue", "  body  ", "turn_terminal", "item-1"); got != "reply-card-id" {
 		t.Fatalf("sendTurnEventCard() = %q", got)
 	}
 	if len(ff.replyCards) < 2 {

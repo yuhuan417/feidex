@@ -164,7 +164,7 @@ func (r *codexEventRouter) onCommandApproval(req codexrpc.RequestEnvelope) {
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
 	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
-	a.sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, renderCommandApprovalBody(raw), raw)
+	newOutboundCardService(a).sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, renderCommandApprovalBody(raw), raw)
 }
 
 func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
@@ -184,7 +184,7 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 			workspaceCwd = ws.Cwd
 		}
 	}
-	a.sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, renderFileApprovalBodyWithWorkspace(raw, workspaceCwd), raw)
+	newOutboundCardService(a).sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, renderFileApprovalBodyWithWorkspace(raw, workspaceCwd), raw)
 }
 
 func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
@@ -199,7 +199,7 @@ func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
 	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	permissions, _ := raw["permissions"].(map[string]any)
-	a.sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, renderPermissionsApprovalBody(raw), permissions, raw)
+	newOutboundCardService(a).sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, renderPermissionsApprovalBody(raw), permissions, raw)
 }
 
 func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
@@ -210,7 +210,7 @@ func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
 		return
 	}
 	if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 && !p.Questions[0].MultiSelect && !p.Questions[0].IsOther {
-		a.sendUserInputCard(req.ID, p)
+		newOutboundCardService(a).sendUserInputCard(req.ID, p)
 		return
 	}
 	a.sendUserInputFormCard(req.ID, p)

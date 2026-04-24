@@ -13,7 +13,7 @@ func TestCompleteUserInputAnswerKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
-	a.sendUserInputCard(json.RawMessage(`"input-1"`), toolUserInputPayload{
+	newOutboundCardService(a).sendUserInputCard(json.RawMessage(`"input-1"`), toolUserInputPayload{
 		ThreadID: "thread-1",
 		TurnID:   "turn-1",
 		ItemID:   "item-1",
