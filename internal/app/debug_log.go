@@ -23,12 +23,12 @@ func runtimeLogLevelText() string {
 	return logcontrol.CurrentName()
 }
 
-func (a *App) setRuntimeDebug(enabled bool) string {
+func (s debugService) setRuntimeDebug(enabled bool) string {
 	level := logcontrol.SetDebug(enabled)
-	if a != nil && a.cfg != nil {
-		a.configMu.Lock()
-		a.cfg.Log.Level = level
-		a.configMu.Unlock()
+	if s.app != nil && s.app.cfg != nil {
+		s.app.configMu.Lock()
+		s.app.cfg.Log.Level = level
+		s.app.configMu.Unlock()
 	}
 	return level
 }
@@ -46,56 +46,56 @@ func desiredDebugEnabled(args []string) (bool, error) {
 	return false, fmt.Errorf("usage: /debug | /debug on | /debug off")
 }
 
-func (a *App) commandDebug(msg *feishu.InboundMessage, args []string) error {
+func (s debugService) commandDebug(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
 	if len(args) > 0 && strings.TrimSpace(args[0]) == "logs" {
-		return a.commandDebugLogs(msg, args[1:])
+		return newDebugService(s.app).commandDebugLogs(msg, args[1:])
 	}
-	if !a.debugAccessAllowed(msg.UserID) {
-		card := a.renderDebugAccessDeniedCard(a.makeSessionKey(msg), msg.UserID)
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	if !newDebugService(s.app).debugAccessAllowed(msg.UserID) {
+		card := newDebugService(s.app).renderDebugAccessDeniedCard(s.app.makeSessionKey(msg), msg.UserID)
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	enabled, err := desiredDebugEnabled(args)
 	if err != nil {
 		return err
 	}
-	level := a.setRuntimeDebug(enabled)
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", a.replyInThreadEnabled(msg.ChatType))
+	level := newDebugService(s.app).setRuntimeDebug(enabled)
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.replyInThreadEnabled(msg.ChatType))
 }
 
-func (a *App) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/debug", "menu.group.system")
+func (s debugService) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, "/debug", "menu.group.system")
 }
 
-func (a *App) commandDebugLogs(msg *feishu.InboundMessage, args []string) error {
+func (s debugService) commandDebugLogs(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /debug logs")
 	}
 	if msg == nil {
 		return nil
 	}
-	if !a.debugAccessAllowed(msg.UserID) {
-		card := a.renderDebugAccessDeniedCard(a.makeSessionKey(msg), msg.UserID)
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	if !newDebugService(s.app).debugAccessAllowed(msg.UserID) {
+		card := newDebugService(s.app).renderDebugAccessDeniedCard(s.app.makeSessionKey(msg), msg.UserID)
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
-	card := a.renderDebugLogsCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := newDebugService(s.app).renderDebugLogsCard(s.app.makeSessionKey(msg))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) completeMenuDebugLogs(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/debug logs", "menu.group.system")
+func (s debugService) completeMenuDebugLogs(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, "/debug logs", "menu.group.system")
 }
 
-func (a *App) debugAccessAllowed(userID string) bool {
-	if a == nil || a.cfg == nil {
+func (s debugService) debugAccessAllowed(userID string) bool {
+	if s.app == nil || s.app.cfg == nil {
 		return false
 	}
-	return debugUserAllowed(userID, a.debugAllowFrom())
+	return debugUserAllowed(userID, s.app.debugAllowFrom())
 }
 
 func debugUserAllowed(userID string, allowFrom []string) bool {
@@ -115,13 +115,13 @@ func debugUserAllowed(userID string, allowFrom []string) bool {
 	return false
 }
 
-func (a *App) renderDebugAccessDeniedCard(sessionKey, userID string) map[string]any {
+func (s debugService) renderDebugAccessDeniedCard(sessionKey, userID string) map[string]any {
 	bodyLines := []string{
 		"当前用户无权使用 debug 功能。",
 		"",
 		"当前用户 OpenID: `" + firstNonEmpty(strings.TrimSpace(userID), "-") + "`",
 	}
-	if cfgPath := strings.TrimSpace(a.cfgPath); cfgPath != "" {
+	if cfgPath := strings.TrimSpace(s.app.cfgPath); cfgPath != "" {
 		bodyLines = append(bodyLines, "配置文件: `"+cfgPath+"`")
 	}
 	bodyLines = append(bodyLines,
@@ -134,7 +134,7 @@ func (a *App) renderDebugAccessDeniedCard(sessionKey, userID string) map[string]
 			"debug_allow_from = [\"" + firstNonEmpty(strings.TrimSpace(userID), "ou_xxx") + "\"]",
 		}, "\n")),
 	)
-	return a.feishu.SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
+	return s.app.feishu.SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	})
 }
@@ -146,7 +146,7 @@ func actionUserID(action *feishu.CardAction) string {
 	return strings.TrimSpace(action.UserID)
 }
 
-func (a *App) renderDebugLogsCard(sessionKey string) map[string]any {
+func (s debugService) renderDebugLogsCard(sessionKey string) map[string]any {
 	lines := logcontrol.RecentLines(debugLogRecentLimit)
 	card := newMarkdownBodyCard("调试日志", "blue")
 	var logBlock map[string]any

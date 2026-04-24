@@ -74,10 +74,10 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuStatus(action, actionSessionKey(action))
 	},
 	"menu.debug": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuDebug(action, actionSessionKey(action))
+		return newDebugService(s.app).completeMenuDebug(action, actionSessionKey(action))
 	},
 	"menu.debug.logs": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuDebugLogs(action, actionSessionKey(action))
+		return newDebugService(s.app).completeMenuDebugLogs(action, actionSessionKey(action))
 	},
 	"menu.backend": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuBackendSwitch(action, actionSessionKey(action))

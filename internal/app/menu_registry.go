@@ -62,6 +62,6 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return newWorkspaceConfigService(a).renderWorkspaceMenuCard(sessionKey), true
 	},
 	"menu.debug.logs": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderDebugLogsCard(sessionKey), true
+		return newDebugService(a).renderDebugLogsCard(sessionKey), true
 	},
 }

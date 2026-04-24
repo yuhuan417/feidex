@@ -55,7 +55,7 @@ func localCommandSystemDebugSpecs() []localCommandSpec {
 				return exactOrSingleArgCommand(fields, "on", "off", "logs")
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandDebug(msg, args)
+				return newDebugService(a).commandDebug(msg, args)
 			},
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{

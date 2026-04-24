@@ -1607,10 +1607,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuDebug(action, action.ActionValue["session_key"].(string))
+			return newDebugService(a).completeMenuDebug(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+			return newDebugService(a).completeMenuDebugLogs(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
