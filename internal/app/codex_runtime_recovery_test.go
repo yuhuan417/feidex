@@ -243,7 +243,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	newCodexClient = func(config.CodexConfig) codexClient { return promoted }
 	defer func() { newCodexClient = origNewCodex }()
 
-	a.recoverFrontendRuntimeState()
+	recoverFrontendRuntimeState(a)
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
 		current, ok := currentCodexClient(a).(*fakeCodexClient)

@@ -57,20 +57,20 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		return nil
 	}
 	if len(args) == 0 {
-		return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
+		return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "uncommitted", "uncommittedChanges":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /review | /review uncommitted | /review base [branch] | /review commit [rev] | /review custom [instructions]")
 		}
-		return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
+		return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	case "base":
 		switch len(args) {
 		case 1:
 			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeBase)
 		case 2:
-			return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{
+			return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{
 				Type:   appreview.TargetBaseBranch,
 				Branch: strings.TrimSpace(args[1]),
 			})
@@ -82,7 +82,7 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		case 1:
 			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCommit)
 		case 2:
-			return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{
+			return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{
 				Type:      appreview.TargetCommit,
 				CommitSHA: strings.TrimSpace(args[1]),
 			})
@@ -93,7 +93,7 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		if len(args) == 1 {
 			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCustom)
 		}
-		return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{
+		return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{
 			Type:         appreview.TargetCustom,
 			Instructions: strings.TrimSpace(strings.Join(args[1:], " ")),
 		})
@@ -102,15 +102,15 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 	}
 }
 
-func (a *App) startInlineReviewFromMessage(msg *feishu.InboundMessage, target appreview.TargetSpec) error {
-	confirmation, err := a.startInlineReview(msg, target)
+func startInlineReviewFromMessage(a *App, msg *feishu.InboundMessage, target appreview.TargetSpec) error {
+	confirmation, err := startInlineReview(a, msg, target)
 	if err != nil {
 		return err
 	}
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, confirmation, replyInThreadEnabled(a, msg.ChatType))
 }
 
-func (a *App) startInlineReview(msg *feishu.InboundMessage, target appreview.TargetSpec) (string, error) {
+func startInlineReview(a *App, msg *feishu.InboundMessage, target appreview.TargetSpec) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("nil message")
 	}

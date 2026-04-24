@@ -113,5 +113,5 @@ func TestReplyAndStartupHelpersReturnEarly(t *testing.T) {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 	var a *App
-	a.sendStartupReadyNotifications()
+	sendStartupReadyNotifications(a)
 }

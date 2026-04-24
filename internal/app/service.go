@@ -55,10 +55,10 @@ func (s *Service) Start(ctx context.Context) error {
 		app.startInboundDeduperLoop(ctx)
 	}
 	if len(s.apps) > 0 {
-		s.apps[0].recoverSharedRuntimeState()
+		recoverSharedRuntimeState(s.apps[0])
 	}
 	for _, app := range s.apps {
-		app.recoverFrontendRuntimeState()
+		recoverFrontendRuntimeState(app)
 	}
 	for _, app := range s.apps {
 		if err := app.startFrontend(ctx); err != nil {
@@ -68,7 +68,7 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 	for _, app := range s.apps {
 		newRuntimeMaintenanceService(app).startDriveArtifactGCLoop(ctx)
-		go app.sendStartupReadyNotifications()
+		go sendStartupReadyNotifications(app)
 	}
 	return nil
 }

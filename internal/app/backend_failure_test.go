@@ -24,7 +24,7 @@ func TestFailSubmissionWithoutTerminalCompletionMentionsUserWhenQueueEmpty(t *te
 		t.Fatalf("savePending() error = %v", err)
 	}
 
-	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
+	failSubmissionWithoutTerminalCompletion(a,"sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
 
 	if got := a.store.GetSubmission(sub.ID); got != nil {
 		t.Fatalf("submission after forced failure = %+v, want deleted", got)
@@ -58,7 +58,7 @@ func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
 
-	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Claude 会话异常结束：broken pipe")
+	failSubmissionWithoutTerminalCompletion(a,"sess-1", sub, "thread-1", "turn-1", "Claude 会话异常结束：broken pipe")
 
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected terminal failure card")
@@ -81,7 +81,7 @@ func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAu
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	markSessionThreadLive(a, "sess-1", "thread-1")
 
-	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
+	failSubmissionWithoutTerminalCompletion(a,"sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply cards = %d, want 1 auto-retry card only", len(ff.replyCards))

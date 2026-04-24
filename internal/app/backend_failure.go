@@ -45,14 +45,14 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 	)
 	resetLiveThreadState(a)
 	runAsync(a, func() {
-		a.failBackendActiveWork(backendCodex, "", "", message)
+		failBackendActiveWork(a,backendCodex, "", "", message)
 	})
 	runAsync(a, func() {
 		a.recoverCodexRuntimeAfterTransportFailure(client, skipFrontendRecovery)
 	})
 }
 
-func (a *App) failClaudeSessionActiveWork(sessionKey, threadID string, err error) {
+func failClaudeSessionActiveWork(a *App, sessionKey, threadID string, err error) {
 	if runtime := backendRuntimeForKind(backendClaude); runtime != nil {
 		runtime.handleTransportFailure(a, sessionKey, threadID, err)
 	}
@@ -65,7 +65,7 @@ func errorText(err error) string {
 	return strings.TrimSpace(err.Error())
 }
 
-func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, message string) {
+func failBackendActiveWork(a *App, backend, scopeSessionKey, scopeThreadID, message string) {
 	if a == nil || a.store == nil {
 		return
 	}
@@ -98,7 +98,7 @@ func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, mes
 					continue
 				}
 				seenSubmissions[submissionID] = struct{}{}
-				a.failSubmissionWithoutTerminalCompletion(sess.Key, sub, strings.TrimSpace(op.ThreadID), strings.TrimSpace(op.TurnID), message)
+				failSubmissionWithoutTerminalCompletion(a, sess.Key, sub, strings.TrimSpace(op.ThreadID), strings.TrimSpace(op.TurnID), message)
 				continue
 			}
 			if runtime := backendRuntimeForKind(backend); runtime == nil || !runtime.failsStandaloneCompaction() {
@@ -154,7 +154,7 @@ func backendFailureScopeMatches(sess *state.Session, scopeSessionKey, scopeThrea
 	return true
 }
 
-func (a *App) resolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID string) {
+func resolvePendingRequestsForTerminalFailure(a *App, sessionKey, threadID, turnID string) {
 	if a == nil || a.store == nil {
 		return
 	}
@@ -184,7 +184,7 @@ func (a *App) resolvePendingRequestsForTerminalFailure(sessionKey, threadID, tur
 	}
 }
 
-func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *state.Submission, threadID, turnID, message string) {
+func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *state.Submission, threadID, turnID, message string) {
 	if a == nil || a.store == nil || sub == nil {
 		return
 	}
@@ -203,7 +203,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	if turnID != "" {
 		flush = newTurnStreamService(a).flushTurnStream(context.Background(), threadID, turnID)
 	}
-	a.resolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
+	resolvePendingRequestsForTerminalFailure(a, sessionKey, threadID, turnID)
 	_ = appState.finalizeSubmission(sub.ID, "failed")
 	sub = appState.submission(sub.ID)
 	if sub == nil {

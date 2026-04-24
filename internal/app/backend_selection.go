@@ -310,7 +310,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 		"frontend_id", s.app.frontendID,
 		"target_backend", target,
 	)
-	s.app.recoverFrontendRuntimeState()
+	recoverFrontendRuntimeState(s.app)
 	_ = oldHandle.close()
 	slog.Info("backend switch completed",
 		"frontend_id", s.app.frontendID,

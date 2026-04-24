@@ -140,13 +140,13 @@ func (a *App) Start(ctx context.Context) error {
 		return err
 	}
 	a.startInboundDeduperLoop(ctx)
-	a.recoverSharedRuntimeState()
-	a.recoverFrontendRuntimeState()
+	recoverSharedRuntimeState(a)
+	recoverFrontendRuntimeState(a)
 	if err := a.startFrontend(ctx); err != nil {
 		return err
 	}
 	newRuntimeMaintenanceService(a).startDriveArtifactGCLoop(ctx)
-	go a.sendStartupReadyNotifications()
+	go sendStartupReadyNotifications(a)
 	return nil
 }
 

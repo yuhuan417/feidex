@@ -894,7 +894,7 @@ func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event clau
 	)
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		if isFatalClaudeSessionError(state, event) {
-			r.app.failClaudeSessionActiveWork(sessionKey, threadID, event.Error)
+			failClaudeSessionActiveWork(r.app,sessionKey, threadID, event.Error)
 		}
 		return
 	}
@@ -902,7 +902,7 @@ func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event clau
 		newTurnStreamService(r.app).recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 	if isFatalClaudeSessionError(state, event) {
-		r.app.failClaudeSessionActiveWork(sessionKey, threadID, event.Error)
+		failClaudeSessionActiveWork(r.app,sessionKey, threadID, event.Error)
 	}
 }
 

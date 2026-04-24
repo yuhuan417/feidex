@@ -8,15 +8,15 @@ import (
 )
 
 func updateClaudeOutputSegmentWithReuse(a *App, ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
-	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, reuseMessageID)
+	return deliverClaudeOutputSegment(a, ctx, threadID, turnID, body, false, reuseMessageID)
 }
 
 func finalizeClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, body string) bool {
-	_, ok := a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true, "")
+	_, ok := deliverClaudeOutputSegment(a, ctx, threadID, turnID, body, true, "")
 	return ok
 }
 
-func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
+func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
 	if a == nil {
 		return nil, false
 	}

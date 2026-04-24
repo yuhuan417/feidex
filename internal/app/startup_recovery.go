@@ -11,12 +11,12 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) recoverRuntimeState() {
-	a.recoverSharedRuntimeState()
-	a.recoverFrontendRuntimeState()
+func recoverRuntimeState(a *App) {
+	recoverSharedRuntimeState(a)
+	recoverFrontendRuntimeState(a)
 }
 
-func (a *App) recoverSharedRuntimeState() {
+func recoverSharedRuntimeState(a *App) {
 	resetLiveThreadState(a)
 	appState := appState(a)
 	sessions := appState.sessions()
@@ -61,7 +61,7 @@ func (a *App) recoverSharedRuntimeState() {
 	newRuntimeMaintenanceService(a).cleanupExpiredAttachments()
 }
 
-func (a *App) recoverFrontendRuntimeState() {
+func recoverFrontendRuntimeState(a *App) {
 	if a == nil {
 		return
 	}
@@ -76,7 +76,7 @@ func (a *App) recoverFrontendRuntimeState() {
 		endBackendRecovery = runtime.beginStartupRecoveryScope(a)
 	}
 	defer endBackendRecovery()
-	a.recoverSessionThreadsOnStartup()
+	recoverSessionThreadsOnStartup(a)
 }
 
 func resetLiveThreadState(a *App) {
@@ -86,7 +86,7 @@ func resetLiveThreadState(a *App) {
 	a.liveThreads = newLiveThreadTracker()
 }
 
-func (a *App) recoverSessionThreadsOnStartup() {
+func recoverSessionThreadsOnStartup(a *App) {
 	if a == nil || a.store == nil {
 		return
 	}
@@ -152,7 +152,7 @@ func startupReadyChatIDs(sessions []*state.Session) []string {
 	return chatIDs
 }
 
-func (a *App) startupReadyChatIDs(sessions []*state.Session) []string {
+func appStartupReadyChatIDs(a *App, sessions []*state.Session) []string {
 	if a == nil {
 		return startupReadyChatIDs(sessions)
 	}
@@ -166,11 +166,11 @@ func (a *App) startupReadyChatIDs(sessions []*state.Session) []string {
 	return startupReadyChatIDs(filtered)
 }
 
-func (a *App) sendStartupReadyNotifications() {
+func sendStartupReadyNotifications(a *App) {
 	if a == nil || a.feishu == nil || a.store == nil {
 		return
 	}
-	chatIDs := a.startupReadyChatIDs(appState(a).sessions())
+	chatIDs := appStartupReadyChatIDs(a, appState(a).sessions())
 	if len(chatIDs) == 0 {
 		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return

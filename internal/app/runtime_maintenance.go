@@ -162,7 +162,7 @@ func (s runtimeMaintenanceService) notifyDriveArtifactGCPermissionIssue(source s
 		return
 	}
 	notifier, ok := s.app.feishu.(permissionIssueDiagnosticSender)
-	chatIDs := s.app.startupReadyChatIDs(appState(s.app).sessions())
+	chatIDs := appStartupReadyChatIDs(s.app,appState(s.app).sessions())
 	if len(chatIDs) == 0 {
 		queueFrontendCardNotification(s.app, state.FrontendCardNotification{
 			Kind:        frontendCardNotificationKindFeishuPermissionIssue,

@@ -830,7 +830,7 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 		t.Fatalf("UpsertSession(sess-2) error = %v", err)
 	}
 
-	a.recoverRuntimeState()
+	recoverRuntimeState(a)
 
 	sess1 := a.store.GetSession("sess-1")
 	if sess1.WorkspaceID != defaultWorkspaceID(a) || sess1.ActiveThreadID != "" {
@@ -878,7 +878,7 @@ func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
 		return nil
 	}
 
-	a.recoverRuntimeState()
+	recoverRuntimeState(a)
 
 	if len(calls) != 1 || calls[0] != "thread/resume" {
 		t.Fatalf("startup recovery calls = %+v, want thread/resume", calls)
@@ -928,7 +928,7 @@ func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
 		}
 	}
 
-	a.recoverRuntimeState()
+	recoverRuntimeState(a)
 
 	if len(calls) != 2 || calls[0] != "thread/resume" || calls[1] != "thread/start" {
 		t.Fatalf("startup recovery calls = %+v, want resume then start", calls)
@@ -1018,7 +1018,7 @@ func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
 	if err := a.store.UpsertSession(&state.Session{Key: "s3", ChatID: "chat-1"}); err != nil {
 		t.Fatalf("UpsertSession(s3) error = %v", err)
 	}
-	a.sendStartupReadyNotifications()
+	sendStartupReadyNotifications(a)
 	if len(ff.sentTexts) < 2 {
 		t.Fatalf("expected startup notifications to known chats, got %+v", ff.sentTexts)
 	}

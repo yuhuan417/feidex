@@ -150,7 +150,7 @@ func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient, skipF
 		"frontend_thread_recovery_skipped", skipFrontendRecovery,
 	)
 	if !skipFrontendRecovery {
-		a.recoverFrontendRuntimeState()
+		recoverFrontendRuntimeState(a)
 	}
 	a.resumeQueuedFrontendSessionsAfterCodexRecovery()
 }
