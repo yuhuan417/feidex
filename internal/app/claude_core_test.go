@@ -1515,7 +1515,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 		UserID:        "user-1",
 		RootMessageID: "root-msg",
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

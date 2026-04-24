@@ -58,11 +58,11 @@ func (s skillsService) commandSkills(msg *feishu.InboundMessage, args []string) 
 	default:
 		return fmt.Errorf("usage: /skills | /skills reload")
 	}
-	card, err := newSkillsService(s.app).renderSkillsCard(s.app.makeSessionKey(msg), forceReload)
+	card, err := newSkillsService(s.app).renderSkillsCard(makeSessionKey(s.app, msg), forceReload)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -70,7 +70,7 @@ func (s skillsService) currentWorkspaceForSessionKey(sessionKey string) (*config
 	if s.app == nil || s.app.cfg == nil || len(s.app.cfg.Workspaces) == 0 {
 		return nil, fmt.Errorf("当前没有可用工作区")
 	}
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = strings.TrimSpace(sess.WorkspaceID)
 	}
@@ -87,7 +87,7 @@ func (s skillsService) workspaceByID(workspaceID string) (*config.Workspace, err
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
-		workspaceID = s.app.defaultWorkspaceID()
+		workspaceID = defaultWorkspaceID(s.app)
 	}
 	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
@@ -98,7 +98,7 @@ func (s skillsService) workspaceByID(workspaceID string) (*config.Workspace, err
 
 func (s skillsService) fetchSkillsForCWD(ctx context.Context, cwd string, forceReload bool) (codexrpc.SkillsListEntry, error) {
 	var result codexrpc.SkillsListResult
-	client, err := s.app.requireCodexClient()
+	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return codexrpc.SkillsListEntry{}, err
 	}

@@ -27,7 +27,7 @@ func (a *App) beginCodexTransportRecovery(client codexClient) bool {
 	return true
 }
 
-func (a *App) codexRuntimeRecovering() bool {
+func codexRuntimeRecovering(a *App) bool {
 	if a == nil {
 		return false
 	}
@@ -36,7 +36,7 @@ func (a *App) codexRuntimeRecovering() bool {
 	return a.codexRecovering
 }
 
-func (a *App) currentCodexClient() codexClient {
+func currentCodexClient(a *App) codexClient {
 	if a == nil {
 		return nil
 	}
@@ -45,15 +45,15 @@ func (a *App) currentCodexClient() codexClient {
 	return a.codex
 }
 
-func (a *App) requireCodexClient() (codexClient, error) {
-	client := a.currentCodexClient()
+func requireCodexClient(a *App) (codexClient, error) {
+	client := currentCodexClient(a)
 	if client == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
 	return client, nil
 }
 
-func (a *App) replaceCodexClient(next codexClient) codexClient {
+func replaceCodexClient(a *App, next codexClient) codexClient {
 	if a == nil {
 		return nil
 	}
@@ -64,8 +64,8 @@ func (a *App) replaceCodexClient(next codexClient) codexClient {
 	return prev
 }
 
-func (a *App) replyCodexError(requestID json.RawMessage, code int, message string) {
-	client := a.currentCodexClient()
+func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
+	client := currentCodexClient(a)
 	if client == nil {
 		return
 	}
@@ -91,7 +91,7 @@ func (a *App) completeCodexTransportRecovery(next codexClient) bool {
 	return next != nil
 }
 
-func (a *App) beginCodexAutoThreadRecoveryScope() func() {
+func beginCodexAutoThreadRecoveryScope(a *App) func() {
 	if a == nil {
 		return func() {}
 	}
@@ -105,7 +105,7 @@ func (a *App) beginCodexAutoThreadRecoveryScope() func() {
 	}
 }
 
-func (a *App) codexAutoThreadRecoveryActive() bool {
+func codexAutoThreadRecoveryActive(a *App) bool {
 	if a == nil {
 		return false
 	}
@@ -160,7 +160,7 @@ func (a *App) resumeQueuedFrontendSessionsAfterCodexRecovery() {
 		return
 	}
 	for _, sess := range a.appState().sessions() {
-		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
+		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
 		if !sessionShouldStartNextSubmissionAsync(sess) {

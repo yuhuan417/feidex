@@ -21,7 +21,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), kind) {
+	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), kind) {
 		return nil
 	}
 	appState := a.appState()

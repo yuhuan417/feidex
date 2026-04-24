@@ -11,11 +11,11 @@ import (
 )
 
 func (s threadActionService) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(s.app.configuredBackend()), "menu.root")
+	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(configuredBackend(s.app)), "menu.root")
 }
 
 func (s threadActionService) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(s.app.configuredBackend())+" new", "menu.thread")
+	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" new", "menu.thread")
 }
 
 func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
@@ -122,7 +122,7 @@ func (s threadActionService) completeThreadResume(action *feishu.CardAction, ses
 		sess.ChatID = action.ChatID
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = s.app.defaultWorkspaceID()
+		sess.WorkspaceID = defaultWorkspaceID(s.app)
 	}
 	ws := config.FindWorkspace(s.app.cfg, sess.WorkspaceID)
 	if ws == nil {
@@ -148,10 +148,10 @@ func (s threadActionService) completeThreadResume(action *feishu.CardAction, ses
 	includeAll, _ := action.ActionValue["include_all"].(bool)
 	card, err := s.app.renderThreadsCard(sessionKey, includeAll)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(s.app.configuredBackend())}}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(configuredBackend(s.app))}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(s.app.configuredBackend())},
+		Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(configuredBackend(s.app))},
 		Card:  rawCard(card),
 	}, nil
 }

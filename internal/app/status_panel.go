@@ -17,11 +17,11 @@ func (a *App) renderStatusCard(sessionKey string) map[string]any {
 		{Text: commandLabel("刷新", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBodyForBackend(a.configuredBackend(), "menu.status", newBackendConfigurationService(a).statusCardBody(sess)), buttons)
+	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBodyForBackend(configuredBackend(a), "menu.status", newBackendConfigurationService(a).statusCardBody(sess)), buttons)
 }
 
 func (a *App) commandStatus(msg *feishu.InboundMessage) error {
-	card := a.renderStatusCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := a.renderStatusCard(makeSessionKey(a, msg))
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }

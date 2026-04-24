@@ -90,7 +90,7 @@ func (a *App) applyClaudePermissionModeToRuntime(sessionKey, mode string) error 
 
 func (a *App) renderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error) {
 	sess := a.appState().session(sessionKey)
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -155,15 +155,15 @@ func (a *App) renderClaudeSessionPermissionMenuCard(sessionKey string) (map[stri
 			"session_key": sessionKey,
 		},
 	})
-	return a.feishu.SimpleStatusCard("配置会话权限", "blue", menuCardBodyForBackend(a.configuredBackend(), "thread.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
+	return a.feishu.SimpleStatusCard("配置会话权限", "blue", menuCardBodyForBackend(configuredBackend(a), "thread.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
 func (a *App) showClaudeSessionPermissionMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderClaudeSessionPermissionMenuCard(a.makeSessionKey(msg))
+	card, err := a.renderClaudeSessionPermissionMenuCard(makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 
@@ -211,7 +211,7 @@ func (a *App) renderClaudeWorkspacePermissionMenuCard(sessionKey string) (map[st
 	if a.store != nil {
 		sess = a.appState().session(sessionKey)
 	}
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -275,15 +275,15 @@ func (a *App) renderClaudeWorkspacePermissionMenuCard(sessionKey string) (map[st
 			"session_key": sessionKey,
 		},
 	})
-	return a.feishu.SimpleStatusCard("配置默认权限", "blue", menuCardBodyForBackend(a.configuredBackend(), "workspace.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
+	return a.feishu.SimpleStatusCard("配置默认权限", "blue", menuCardBodyForBackend(configuredBackend(a), "workspace.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
 func (a *App) showClaudeWorkspacePermissionMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderClaudeWorkspacePermissionMenuCard(a.makeSessionKey(msg))
+	card, err := a.renderClaudeWorkspacePermissionMenuCard(makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 

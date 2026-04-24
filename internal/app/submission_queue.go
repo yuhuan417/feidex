@@ -21,7 +21,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   a.defaultWorkspaceID(),
+			WorkspaceID:   defaultWorkspaceID(a),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -30,7 +30,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = a.defaultWorkspaceID()
+		sess.WorkspaceID = defaultWorkspaceID(a)
 	}
 	if runtime := a.backendRuntime(); runtime != nil {
 		sess = runtime.reconcileCompletedTurnFromFinalOutput(a, sessionKey, sess)
@@ -41,7 +41,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   a.defaultWorkspaceID(),
+			WorkspaceID:   defaultWorkspaceID(a),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -59,7 +59,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	skillResolution := newSkillsService(a).resolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
 		newSkillsService(a).setSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
-		if err := a.feishu.ReplyText(context.Background(), msg.MessageID, skillPendingConfirmationText(skillResolution.PendingReplacement.Name), a.replyInThreadEnabled(msg.ChatType)); err != nil {
+		if err := a.feishu.ReplyText(context.Background(), msg.MessageID, skillPendingConfirmationText(skillResolution.PendingReplacement.Name), replyInThreadEnabled(a, msg.ChatType)); err != nil {
 			return err
 		}
 		return nil
@@ -70,7 +70,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	if !bindOnlyCurrentRoot {
 		sourceRootMessageIDs = uniqueStrings(append(sourceRootMessageIDs, stagedImageRootMessageIDs(stagedImages)...))
 	}
-	mode := a.configuredSessionInflightMode()
+	mode := configuredSessionInflightMode(a)
 	hasInFlight := sessionHasInFlightSubmission(sess)
 	queueLenBefore := len(sess.Queue)
 	shouldAttemptStart := !hasInFlight || sessionInflightAllowsAdditional(mode)
@@ -264,10 +264,10 @@ func (w *lifecycleCoordinator) startNextSubmissionWithFailureNotice(sessionKey s
 		slog.Debug("startNextSubmission skipped", "session_key", sessionKey, "has_session", false)
 		return nil
 	}
-	nextMode := a.configuredSessionInflightMode()
+	nextMode := configuredSessionInflightMode(a)
 	if len(sess.Queue) > 0 {
 		if nextSub := appState.submission(sess.Queue[0]); nextSub != nil {
-			nextMode = a.configuredSessionInflightMode()
+			nextMode = configuredSessionInflightMode(a)
 		}
 	}
 	if sessionHasInFlightSubmission(sess) && !sessionInflightAllowsAdditional(nextMode) {
@@ -336,7 +336,7 @@ func (w *lifecycleCoordinator) startNextSubmissionWithFailureNotice(sessionKey s
 		slog.Error("workspace resolution failed",
 			"submission_id", sub.ID,
 			"workspace_id", sub.WorkspaceID,
-			"default_workspace_id", a.defaultWorkspaceID(),
+			"default_workspace_id", defaultWorkspaceID(a),
 		)
 		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
 	}
@@ -387,7 +387,7 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 	effectiveSandboxMode := effectiveThreadSandboxMode(sess, ws)
 	effectiveServiceTier := effectiveThreadServiceTier(sess)
 	if threadID == "" {
-		client, err := a.requireCodexClient()
+		client, err := requireCodexClient(a)
 		if err != nil {
 			w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
 			logSessionState("startNextSubmission thread-client-missing", sessionKey, appState.session(sessionKey))

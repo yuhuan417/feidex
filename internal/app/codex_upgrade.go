@@ -55,7 +55,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 			return fmt.Errorf(codexUpgradeCommandUsage)
 		}
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	view, err := newBackendUpgradeService(s.app).loadCodexUpgradeView(ctx, includeLatest)
@@ -64,14 +64,14 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 	}
 	if !prepareUpgrade {
 		card := newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, includeLatest)
-		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	card, pendingID, err := newUpgradeRenderService(s.app).prepareCodexUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}

@@ -14,7 +14,7 @@ func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
 		return false
 	}
 	sess := a.appState().session(sub.SessionKey)
-	return sess != nil && sess.ChatType == "group" && a.replyInThreadEnabled(sess.ChatType)
+	return sess != nil && sess.ChatType == "group" && replyInThreadEnabled(a, sess.ChatType)
 }
 
 func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {
@@ -65,7 +65,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	if payload.Title == "" || payload.Color == "" {
 		payload.Title, payload.Color = turnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
-	if s.app.quietModeEnabled() && !shouldDeliverTurnItemPayloadInQuiet(s.app.quietMode(), payload) {
+	if quietModeEnabled(feishuConfig(s.app)) && !shouldDeliverTurnItemPayloadInQuiet(quietMode(feishuConfig(s.app)), payload) {
 		return ""
 	}
 	kind := turnItemEventKind(payload.ItemType)
@@ -158,7 +158,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if s.app.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(s.app.quietMode(), kind) {
+	if quietModeEnabled(feishuConfig(s.app)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(s.app)), kind) {
 		return ""
 	}
 	body = strings.TrimSpace(body)

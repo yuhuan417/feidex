@@ -94,14 +94,14 @@ func (s backendUpgradeService) refreshCodexRuntimeAfterMaintenance(ctx context.C
 	if err != nil {
 		return false, err
 	}
-	old := s.app.currentCodexClient()
+	old := currentCodexClient(s.app)
 	if old != nil {
 		if err := old.Close(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			_ = next.Close()
 			return false, fmt.Errorf("切换 runtime 失败: %w", err)
 		}
 	}
-	s.app.replaceCodexClient(next)
+	replaceCodexClient(s.app, next)
 	return true, nil
 }
 

@@ -224,7 +224,7 @@ func (a *App) handleCardAction(action *feishu.CardAction) (*callback.CardActionT
 }
 
 func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
-	return enqueueSubmissionWithSessionKey(a, msg, a.makeSessionKey(msg), false)
+	return enqueueSubmissionWithSessionKey(a, msg, makeSessionKey(a, msg), false)
 }
 
 func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
@@ -282,7 +282,7 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 		"reasoning_effort", reasoningEffort,
 		"model", model,
 	)
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return "", err
 	}
@@ -299,9 +299,9 @@ func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID stri
 	return turnResp.Turn.ID, nil
 }
 
-func (a *App) makeSessionKey(msg *feishu.InboundMessage) string {
+func makeSessionKey(a *App, msg *feishu.InboundMessage) string {
 	if msg != nil && strings.TrimSpace(msg.SessionKey) != "" {
-		return a.normalizeSessionKey(msg.SessionKey)
+		return normalizeSessionKey(a, msg.SessionKey)
 	}
 	frontendID := strings.TrimSpace(a.frontendID)
 	if msg.ChatType == "group" {
@@ -329,7 +329,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func (a *App) defaultWorkspaceID() string {
+func defaultWorkspaceID(a *App) string {
 	if a == nil || a.cfg == nil {
 		return "default"
 	}
@@ -346,17 +346,17 @@ func (a *App) replyError(msg *feishu.InboundMessage, err error) error {
 		return nil
 	}
 	if msg.MessageID != "" {
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "执行失败: "+err.Error(), a.replyInThreadEnabled(msg.ChatType))
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "执行失败: "+err.Error(), replyInThreadEnabled(a, msg.ChatType))
 	}
 	return a.feishu.SendText(context.Background(), msg.ChatID, "执行失败: "+err.Error())
 }
 
 func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
-	card := a.renderCommandMenuCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := a.renderCommandMenuCard(makeSessionKey(a, msg))
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 
 func (a *App) renderCommandMenuCard(sessionKey string) map[string]any {
-	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(a.configuredBackend(), sessionKey))
+	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(configuredBackend(a), sessionKey))
 }

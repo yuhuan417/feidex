@@ -14,16 +14,16 @@ import (
 )
 
 func (s workspaceConfigService) showWorkspaceDeleteMenu(msg *feishu.InboundMessage) error {
-	card, err := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(s.app.makeSessionKey(msg))
+	card, err := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(makeSessionKey(s.app, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
 func (s workspaceConfigService) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
-	currentID := s.app.defaultWorkspaceID()
+	currentID := defaultWorkspaceID(s.app)
 	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = strings.TrimSpace(sess.WorkspaceID)
 	}
@@ -180,7 +180,7 @@ func (s workspaceConfigService) validateWorkspaceDeletion(sessionKey, workspaceI
 	if len(s.app.cfg.Workspaces) <= 1 {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
-	currentID := s.app.defaultWorkspaceID()
+	currentID := defaultWorkspaceID(s.app)
 	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = strings.TrimSpace(sess.WorkspaceID)
 	}

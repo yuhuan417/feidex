@@ -98,12 +98,12 @@ func startMaintenanceRestartFromMessage[S any](
 	if msg == nil {
 		return nil
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	snapshot, err := begin()
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, renderOperationCard(sessionKey, snapshot), a.replyInThreadEnabled(msg.ChatType))
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, renderOperationCard(sessionKey, snapshot), replyInThreadEnabled(a, msg.ChatType))
 	if err != nil {
 		finishFailed("启动重启卡片失败: " + err.Error())
 		return err

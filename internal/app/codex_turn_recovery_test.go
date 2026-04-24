@@ -21,7 +21,7 @@ func TestEnqueueSubmissionReconcilesCompletedCodexTurnFromThreadRead(t *testing.
 		UserID:        "user-1",
 		Text:          "first task",
 	}
-	sessionKey := a.makeSessionKey(msg1)
+	sessionKey := makeSessionKey(a, msg1)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID
@@ -89,7 +89,7 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 		RootMessageID: "root-stop",
 		UserID:        "user-1",
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].SentFinal = true

@@ -20,7 +20,7 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), "final_message") {
+	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
 		return ""
 	}
 	body := prependAttentionMentionMarkdown("", a.turnStopAttentionUserID(sub, sub.TurnID))
@@ -56,7 +56,7 @@ func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *stat
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), "final_message") {
+	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
 		return nil
 	}
 	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)

@@ -18,7 +18,7 @@ import (
 func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicitationFormPayload) {
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
-		a.replyCodexError(requestID, -32602, "no active session for elicitation")
+		replyCodexError(a, requestID, -32602, "no active session for elicitation")
 		return
 	}
 	requestKey := requestIDKey(requestID)
@@ -41,13 +41,13 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 	if err == nil {
 		return
 	}
-	a.replyCodexError(requestID, -32603, err.Error())
+	replyCodexError(a, requestID, -32603, err.Error())
 }
 
 func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitationURLPayload) {
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
-		a.replyCodexError(requestID, -32602, "no active session for elicitation")
+		replyCodexError(a, requestID, -32602, "no active session for elicitation")
 		return
 	}
 	requestKey := requestIDKey(requestID)
@@ -76,7 +76,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 	if err == nil {
 		return
 	}
-	a.replyCodexError(requestID, -32603, err.Error())
+	replyCodexError(a, requestID, -32603, err.Error())
 }
 
 func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {

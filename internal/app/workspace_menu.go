@@ -56,7 +56,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 	if len(args) == 0 {
 		return newWorkspaceConfigService(s.app).showWorkspaceMenu(msg)
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	if args[0] == "list" {
 		return newWorkspaceConfigService(s.app).showWorkspaceMenu(msg)
 	}
@@ -98,7 +98,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 			return err
 		}
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
-		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 	}
 	if args[0] == "permissions" {
 		return newBackendConfigurationService(s.app).handleBackendWorkspacePermissionCommand(msg, args, sessionKey)
@@ -154,7 +154,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		reply := "已切换工作区到 " + ws.ID
 		if sessionHasInFlightSubmission(sess) {
 			reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchInFlightNotice()
-			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 		}
 		binding, err := newWorkspaceThreadService(s.app).ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
@@ -165,17 +165,17 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 				"error", err,
 			)
 			reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchBindingFailureNotice()
-			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 		}
 		reply += newBackendConfigurationService(s.app).backendWorkspaceSwitchBindingNotice(binding)
-		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 	}
 	return fmt.Errorf("usage: %s", newBackendConfigurationService(s.app).backendWorkspaceCommandUsage())
 }
 
 func (s workspaceConfigService) showWorkspaceMenu(msg *feishu.InboundMessage) error {
-	card := newWorkspaceConfigService(s.app).renderWorkspaceMenuCard(s.app.makeSessionKey(msg))
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	card := newWorkspaceConfigService(s.app).renderWorkspaceMenuCard(makeSessionKey(s.app, msg))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -184,7 +184,7 @@ func (s workspaceConfigService) renderWorkspaceMenuCard(sessionKey string) map[s
 	if s.app.store != nil {
 		sess = s.app.appState().session(sessionKey)
 	}
-	currentID := s.app.defaultWorkspaceID()
+	currentID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = sess.WorkspaceID
 	}
@@ -272,9 +272,9 @@ func workspaceApprovalPolicyOptions() []workspaceSettingOption {
 }
 
 func (s workspaceConfigService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
-	sessionKey = s.app.makeSessionKey(msg)
+	sessionKey = makeSessionKey(s.app, msg)
 	sess = s.app.appState().session(sessionKey)
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -284,17 +284,17 @@ func (s workspaceConfigService) currentWorkspaceForMessage(msg *feishu.InboundMe
 func (s workspaceConfigService) currentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
 	sessionKey, sess, ws = newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(s.app.configuredBackend()))
+		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(configuredBackend(s.app)))
 	}
 	return sessionKey, sess, ws, strings.TrimSpace(sess.ActiveThreadID), nil
 }
 
 func (s workspaceConfigService) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
-	card, err := newWorkspaceConfigService(s.app).renderWorkspaceSandboxMenuCard(s.app.makeSessionKey(msg))
+	card, err := newWorkspaceConfigService(s.app).renderWorkspaceSandboxMenuCard(makeSessionKey(s.app, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -303,7 +303,7 @@ func (s workspaceConfigService) renderWorkspaceSandboxMenuCard(sessionKey string
 	if s.app.store != nil {
 		sess = s.app.appState().session(sessionKey)
 	}
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -343,11 +343,11 @@ func (s workspaceConfigService) renderWorkspaceSandboxMenuCard(sessionKey string
 }
 
 func (s workspaceConfigService) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
-	card, err := newWorkspaceConfigService(s.app).renderWorkspacePolicyMenuCard(s.app.makeSessionKey(msg))
+	card, err := newWorkspaceConfigService(s.app).renderWorkspacePolicyMenuCard(makeSessionKey(s.app, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -356,7 +356,7 @@ func (s workspaceConfigService) renderWorkspacePolicyMenuCard(sessionKey string)
 	if s.app.store != nil {
 		sess = s.app.appState().session(sessionKey)
 	}
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}

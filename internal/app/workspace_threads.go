@@ -25,7 +25,7 @@ func (s workspaceThreadService) listWorkspaceThreads(sessionKey string, ws *conf
 }
 
 func (s workspaceThreadService) listCodexWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	client, err := s.app.requireCodexClient()
+	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (s workspaceThreadService) ensureCodexWorkspaceThreadBinding(sessionKey str
 
 func (s workspaceThreadService) resumeCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*workspaceThreadBinding, error) {
 	appState := s.app.appState()
-	client, err := s.app.requireCodexClient()
+	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +248,7 @@ func (s workspaceThreadService) startClaudeWorkspaceThread(sessionKey string, se
 }
 
 func (s workspaceThreadService) startCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	client, err := s.app.requireCodexClient()
+	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return nil, err
 	}

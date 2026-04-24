@@ -223,9 +223,9 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
 	snapshot := newMaintenanceStateService(a).codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
@@ -318,9 +318,9 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if rollbackSmoke == nil || !rollbackClosed {
 		t.Fatalf("rollback smoke runtime = %+v, want closed after rollback validation", rollbackSmoke)
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != fc {
-		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.currentCodexClient(), fc)
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
 	snapshot := newMaintenanceStateService(a).codexUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
@@ -394,9 +394,9 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
 	snapshot := newMaintenanceStateService(a).codexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
@@ -462,9 +462,9 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after failed restart validation", smoke)
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != fc {
-		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.currentCodexClient(), fc)
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
 	state := newMaintenanceStateService(a).codexRestartState()
 	if state.Running || state.Result != "failed" {
@@ -533,9 +533,9 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
 	state := newMaintenanceStateService(a).codexRestartState()
 	if state.Running || state.Result != "success" {
@@ -586,9 +586,9 @@ func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing
 	if liveClosed {
 		t.Fatal("existing codex runtime should not be touched on Claude backend")
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != fc {
-		t.Fatalf("a.codex = %#v, want original codex runtime %#v", a.currentCodexClient(), fc)
+		t.Fatalf("a.codex = %#v, want original codex runtime %#v", currentCodexClient(a), fc)
 	}
 }
 
@@ -630,8 +630,8 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := a.currentCodexClient().(*fakeCodexClient)
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.currentCodexClient(), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
 }

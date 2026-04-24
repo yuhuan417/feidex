@@ -30,7 +30,7 @@ func (a *App) backendActions() backendActionFacade {
 	if a == nil {
 		return nil
 	}
-	return backendActionForKind(a.configuredBackend())
+	return backendActionForKind(configuredBackend(a))
 }
 
 type codexBackendActions struct{}
@@ -40,7 +40,7 @@ func (codexBackendActions) runMenuCompactAction(a *App, action *feishu.CardActio
 		return nil
 	}
 	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
-	sessionKey = firstNonEmpty(a.makeSessionKey(msg), strings.TrimSpace(sessionKey))
+	sessionKey = firstNonEmpty(makeSessionKey(a, msg), strings.TrimSpace(sessionKey))
 	_, err := a.startThreadCompaction(sessionKey)
 	return err
 }
@@ -49,10 +49,10 @@ func (codexBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMessa
 	if a == nil || msg == nil {
 		return nil
 	}
-	if _, err := a.startThreadCompaction(a.makeSessionKey(msg)); err != nil {
+	if _, err := a.startThreadCompaction(makeSessionKey(a, msg)); err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", a.replyInThreadEnabled(msg.ChatType))
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", replyInThreadEnabled(a, msg.ChatType))
 }
 
 func (codexBackendActions) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {

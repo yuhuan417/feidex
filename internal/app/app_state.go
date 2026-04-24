@@ -19,8 +19,8 @@ func (a *App) appState() *appStateFacade {
 	return &appStateFacade{
 		store:          a.store,
 		frontendID:     strings.TrimSpace(a.frontendID),
-		backend:        normalizeRuntimeBackend(a.configuredBackend()),
-		legacyFallback: a.allowLegacyFrontendFallback(),
+		backend:        normalizeRuntimeBackend(configuredBackend(a)),
+		legacyFallback: allowLegacyFrontendFallback(a),
 	}
 }
 

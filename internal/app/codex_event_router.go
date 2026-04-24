@@ -150,7 +150,7 @@ func (r *codexEventRouter) handleServerRequest(req codexrpc.RequestEnvelope) {
 	case "mcpServer/elicitation/request":
 		onMcpElicitationRequest(a, req)
 	default:
-		a.replyCodexError(req.ID, -32601, "unsupported server request")
+		replyCodexError(a, req.ID, -32601, "unsupported server request")
 	}
 }
 
@@ -158,7 +158,7 @@ func (r *codexEventRouter) onCommandApproval(req codexrpc.RequestEnvelope) {
 	a := r.app
 	var raw map[string]any
 	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		a.replyCodexError(req.ID, -32602, "invalid params")
+		replyCodexError(a, req.ID, -32602, "invalid params")
 		return
 	}
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
@@ -172,7 +172,7 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 	a := r.app
 	var raw map[string]any
 	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		a.replyCodexError(req.ID, -32602, "invalid params")
+		replyCodexError(a, req.ID, -32602, "invalid params")
 		return
 	}
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
@@ -192,7 +192,7 @@ func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
 	a := r.app
 	var raw map[string]any
 	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		a.replyCodexError(req.ID, -32602, "invalid params")
+		replyCodexError(a, req.ID, -32602, "invalid params")
 		return
 	}
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
@@ -207,7 +207,7 @@ func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
 	a := r.app
 	var p toolUserInputPayload
 	if err := json.Unmarshal(req.Params, &p); err != nil {
-		a.replyCodexError(req.ID, -32602, "invalid params")
+		replyCodexError(a, req.ID, -32602, "invalid params")
 		return
 	}
 	if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 && !p.Questions[0].MultiSelect && !p.Questions[0].IsOther {
@@ -228,25 +228,25 @@ func (r *codexEventRouter) onMcpElicitationRequest(req codexrpc.RequestEnvelope)
 		URL        string `json:"url"`
 	}
 	if err := json.Unmarshal(req.Params, &header); err != nil {
-		a.replyCodexError(req.ID, -32602, "invalid params")
+		replyCodexError(a, req.ID, -32602, "invalid params")
 		return
 	}
 	switch header.Mode {
 	case "url":
 		var payload elicitationURLPayload
 		if err := json.Unmarshal(req.Params, &payload); err != nil {
-			a.replyCodexError(req.ID, -32602, "invalid params")
+			replyCodexError(a, req.ID, -32602, "invalid params")
 			return
 		}
 		a.sendElicitationURLCard(req.ID, payload)
 	case "form":
 		var payload elicitationFormPayload
 		if err := json.Unmarshal(req.Params, &payload); err != nil {
-			a.replyCodexError(req.ID, -32602, "invalid params")
+			replyCodexError(a, req.ID, -32602, "invalid params")
 			return
 		}
 		a.sendElicitationFormCard(req.ID, payload)
 	default:
-		a.replyCodexError(req.ID, -32601, "unsupported elicitation mode")
+		replyCodexError(a, req.ID, -32601, "unsupported elicitation mode")
 	}
 }

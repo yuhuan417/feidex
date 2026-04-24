@@ -95,7 +95,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	onError(errors.New("stdio EOF"))
 
 	waitForTestCondition(t, "codex runtime recovery to start", func() bool {
-		return a.codexRuntimeRecovering()
+		return codexRuntimeRecovering(a)
 	})
 	waitForTestCondition(t, "active submission failure cleanup", func() bool {
 		return a.store.GetSubmission(activeSub.ID) == nil
@@ -112,8 +112,8 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	close(blockStart)
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
-		current, ok := a.currentCodexClient().(*fakeCodexClient)
-		return ok && current == promoted && !a.codexRuntimeRecovering()
+		current, ok := currentCodexClient(a).(*fakeCodexClient)
+		return ok && current == promoted && !codexRuntimeRecovering(a)
 	})
 	waitForTestCondition(t, "queued submission to start on recovered runtime", func() bool {
 		sub := a.store.GetSubmission(queuedID)
@@ -246,8 +246,8 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	a.recoverFrontendRuntimeState()
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
-		current, ok := a.currentCodexClient().(*fakeCodexClient)
-		return ok && current == promoted && !a.codexRuntimeRecovering()
+		current, ok := currentCodexClient(a).(*fakeCodexClient)
+		return ok && current == promoted && !codexRuntimeRecovering(a)
 	})
 
 	if !fc.closed {

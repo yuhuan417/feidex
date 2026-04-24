@@ -23,7 +23,7 @@ func (a *App) recoverSharedRuntimeState() {
 	cleared := 0
 	for _, sess := range sessions {
 		if strings.TrimSpace(sess.WorkspaceID) == "" {
-			sess.WorkspaceID = a.defaultWorkspaceID()
+			sess.WorkspaceID = defaultWorkspaceID(a)
 			slog.Warn("repairing empty workspace on startup",
 				"session_key", sess.Key,
 				"workspace_id", sess.WorkspaceID,
@@ -68,7 +68,7 @@ func (a *App) recoverFrontendRuntimeState() {
 	a.frontendRecoveryMu.Lock()
 	defer a.frontendRecoveryMu.Unlock()
 	a.resetLiveThreadState()
-	if !a.hasConfiguredBackend() {
+	if !hasConfiguredBackend(a) {
 		return
 	}
 	endBackendRecovery := func() {}
@@ -96,7 +96,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 		if sess == nil {
 			continue
 		}
-		if !a.sessionBelongsToFrontend(sess.Key) {
+		if !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
@@ -113,7 +113,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 		}
 
 		sessionKey := strings.TrimSpace(sess.Key)
-		workspaceID := firstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, a.defaultWorkspaceID())
+		workspaceID := firstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, defaultWorkspaceID(a))
 		ws := config.FindWorkspace(a.cfg, workspaceID)
 		if ws == nil {
 			slog.Warn("startup thread recovery dropped unknown workspace lineage",
@@ -158,7 +158,7 @@ func (a *App) startupReadyChatIDs(sessions []*state.Session) []string {
 	}
 	filtered := make([]*state.Session, 0, len(sessions))
 	for _, sess := range sessions {
-		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
+		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
 		filtered = append(filtered, sess)

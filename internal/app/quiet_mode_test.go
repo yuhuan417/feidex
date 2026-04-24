@@ -122,8 +122,8 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 	if err := a.commandQuiet(msg, []string{"normal"}); err != nil {
 		t.Fatalf("commandQuiet(normal) error = %v", err)
 	}
-	if a.quietMode() != config.QuietModeNormal {
-		t.Fatalf("expected /quiet normal to set normal mode, got %q", a.quietMode())
+	if quietMode(feishuConfig(a)) != config.QuietModeNormal {
+		t.Fatalf("expected /quiet normal to set normal mode, got %q", quietMode(feishuConfig(a)))
 	}
 	if len(ff.replyTexts) != 1 {
 		t.Fatalf("reply text count after /quiet normal = %d, want 1", len(ff.replyTexts))

@@ -147,7 +147,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if err := startNextSubmission(a, "missing"); err != nil {
 		t.Fatalf("startNextSubmission(missing) error = %v", err)
 	}
-	if got := (&App{cfg: &config.Config{}}).defaultWorkspaceID(); got != "default" {
+	if got := defaultWorkspaceID(&App{cfg: &config.Config{}}); got != "default" {
 		t.Fatalf("defaultWorkspaceID() = %q, want default", got)
 	}
 	if got := nonZero(0, 0); got != 0 {
@@ -583,7 +583,7 @@ func TestHandleFeishuMessageMergeForwardPrefetchesInBackgroundAndSubmitsImageOnl
 
 	close(releaseResolve)
 
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		sess := a.store.GetSession(sessionKey)

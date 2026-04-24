@@ -171,7 +171,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 			itemBoundary = prepareQuietWorkingCardBoundaryLocked(stream)
 			itemReuseMessage = itemBoundary.ReuseMessageID
 		}
-	} else if s.app.quietWorkingCardEnabled() {
+	} else if quietWorkingCardEnabled(feishuConfig(s.app)) {
 		workingUpdate = prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	}
 	tracker.mu.Unlock()
@@ -181,10 +181,10 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 		newOutboundCardService(s.app).sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
 	s.app.executeQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
-	if s.app.quietWorkingCardEnabled() {
+	if quietWorkingCardEnabled(feishuConfig(s.app)) {
 		s.app.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
-	if hasPayload && !skipPayload && (!s.app.quietModeEnabled() || shouldDeliverTurnItemPayloadInQuiet(s.app.quietMode(), payload)) {
+	if hasPayload && !skipPayload && (!quietModeEnabled(feishuConfig(s.app)) || shouldDeliverTurnItemPayloadInQuiet(quietMode(feishuConfig(s.app)), payload)) {
 		newOutboundCardService(s.app).sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
 }

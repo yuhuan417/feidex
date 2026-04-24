@@ -56,7 +56,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	logText := truncate(msg.Text, 160)
 	if a.shouldRedactInboundText(sessionKey, msg.UserID) {
 		logText = "[redacted pending input]"
@@ -76,7 +76,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		a.startMergeForwardPrefetch(msg)
 		return nil
 	}
-	if !a.hasConfiguredBackend() {
+	if !hasConfiguredBackend(a) {
 		if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
 			return nil
 		}
@@ -91,7 +91,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		}
 	}
 	if !msg.ExpandedMergeForward && strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
-		if isLocalCommandForBackend(a.configuredBackend(), strings.TrimSpace(msg.Text)) {
+		if isLocalCommandForBackend(configuredBackend(a), strings.TrimSpace(msg.Text)) {
 			if err := newCommandService(a).handleCommand(msg, strings.TrimSpace(msg.Text)); err != nil {
 				return err
 			}
@@ -102,12 +102,12 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return err
 	}
 	replyLink := newReplyContinuationService(a).replyRootTurnLink(msg)
-	targetSessionKey := a.makeSessionKey(msg)
+	targetSessionKey := makeSessionKey(a, msg)
 	if replyLink != nil {
 		targetSessionKey = newReplyContinuationService(a).sessionKeyForInboundMessage(msg, replyLink)
 	}
 	if newPendingQueueService(a).shouldStageInboundImages(msg) {
-		if err := newPendingQueueService(a).stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
+		if err := newPendingQueueService(a).stageInboundImagesForSession(msg, makeSessionKey(a, msg)); err != nil {
 			return err
 		}
 		return nil

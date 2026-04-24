@@ -35,7 +35,7 @@ func (c codexServerRequestAdapter) client() (codexClient, error) {
 	if c.app == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
-	client := c.app.currentCodexClient()
+	client := currentCodexClient(c.app)
 	if client == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}

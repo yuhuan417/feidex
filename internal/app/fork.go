@@ -18,7 +18,7 @@ func (s conversationWorkflowService) commandFork(msg *feishu.InboundMessage, arg
 	if msg == nil {
 		return nil
 	}
-	discarded, forkedID, err := s.app.startThreadFork(s.app.makeSessionKey(msg))
+	discarded, forkedID, err := s.app.startThreadFork(makeSessionKey(s.app, msg))
 	if err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func (s conversationWorkflowService) commandFork(msg *feishu.InboundMessage, arg
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 }
 
 func (a *App) startThreadFork(sessionKey string) (int, string, error) {
@@ -36,12 +36,12 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 	appState := a.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(a.configuredBackend()))
+		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(configuredBackend(a)))
 	}
 	if sessionHasActiveWork(sess) {
 		return 0, "", fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
 	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
 		return 0, "", fmt.Errorf("workspace %q not found", workspaceID)
@@ -59,5 +59,5 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 }
 
 func (s conversationWorkflowService) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(s.app.configuredBackend())+" fork", "menu.thread")
+	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" fork", "menu.thread")
 }

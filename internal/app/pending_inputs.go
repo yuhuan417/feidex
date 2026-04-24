@@ -37,7 +37,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   s.app.defaultWorkspaceID(),
+			WorkspaceID:   defaultWorkspaceID(s.app),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -46,7 +46,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = s.app.defaultWorkspaceID()
+		sess.WorkspaceID = defaultWorkspaceID(s.app)
 	}
 	attachments, err := s.app.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {

@@ -116,7 +116,7 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	_, commits := initReviewGitRepoWithCommits(t, a.cfg.Workspaces[0].Cwd)
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-select", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 

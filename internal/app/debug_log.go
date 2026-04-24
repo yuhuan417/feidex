@@ -54,8 +54,8 @@ func (s debugService) commandDebug(msg *feishu.InboundMessage, args []string) er
 		return newDebugService(s.app).commandDebugLogs(msg, args[1:])
 	}
 	if !newDebugService(s.app).debugAccessAllowed(msg.UserID) {
-		card := newDebugService(s.app).renderDebugAccessDeniedCard(s.app.makeSessionKey(msg), msg.UserID)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		card := newDebugService(s.app).renderDebugAccessDeniedCard(makeSessionKey(s.app, msg), msg.UserID)
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	enabled, err := desiredDebugEnabled(args)
@@ -63,7 +63,7 @@ func (s debugService) commandDebug(msg *feishu.InboundMessage, args []string) er
 		return err
 	}
 	level := newDebugService(s.app).setRuntimeDebug(enabled)
-	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", replyInThreadEnabled(s.app, msg.ChatType))
 }
 
 func (s debugService) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -78,12 +78,12 @@ func (s debugService) commandDebugLogs(msg *feishu.InboundMessage, args []string
 		return nil
 	}
 	if !newDebugService(s.app).debugAccessAllowed(msg.UserID) {
-		card := newDebugService(s.app).renderDebugAccessDeniedCard(s.app.makeSessionKey(msg), msg.UserID)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		card := newDebugService(s.app).renderDebugAccessDeniedCard(makeSessionKey(s.app, msg), msg.UserID)
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
-	card := newDebugService(s.app).renderDebugLogsCard(s.app.makeSessionKey(msg))
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	card := newDebugService(s.app).renderDebugLogsCard(makeSessionKey(s.app, msg))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -95,7 +95,7 @@ func (s debugService) debugAccessAllowed(userID string) bool {
 	if s.app == nil || s.app.cfg == nil {
 		return false
 	}
-	return debugUserAllowed(userID, s.app.debugAllowFrom())
+	return debugUserAllowed(userID, debugAllowFrom(s.app))
 }
 
 func debugUserAllowed(userID string, allowFrom []string) bool {

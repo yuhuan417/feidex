@@ -137,7 +137,7 @@ func (a *App) replyCommandActionResponse(msg *feishu.InboundMessage, resp *callb
 	if msg == nil || resp == nil {
 		return nil
 	}
-	replyInThread := a.replyInThreadEnabled(msg.ChatType)
+	replyInThread := replyInThreadEnabled(a, msg.ChatType)
 	if resp.Card != nil {
 		if card, ok := resp.Card.Data.(map[string]any); ok && len(card) > 0 {
 			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThread)

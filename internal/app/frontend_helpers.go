@@ -21,7 +21,7 @@ func (a *App) startFrontend(ctx context.Context) error {
 	return a.feishu.Start(ctx)
 }
 
-func (a *App) feishuConfigUnlocked() *config.FeishuConfig {
+func feishuConfigUnlocked(a *App) *config.FeishuConfig {
 	if a == nil || a.cfg == nil {
 		return nil
 	}
@@ -31,29 +31,29 @@ func (a *App) feishuConfigUnlocked() *config.FeishuConfig {
 	return &a.cfg.Feishu
 }
 
-func (a *App) feishuConfig() *config.FeishuConfig {
+func feishuConfig(a *App) *config.FeishuConfig {
 	if a == nil {
 		return nil
 	}
 	a.configMu.RLock()
 	defer a.configMu.RUnlock()
-	return a.feishuConfigUnlocked()
+	return feishuConfigUnlocked(a)
 }
 
-func (a *App) replyInThreadEnabled(chatType string) bool {
-	cfg := a.feishuConfig()
+func replyInThreadEnabled(a *App, chatType string) bool {
+	cfg := feishuConfig(a)
 	return cfg != nil && strings.TrimSpace(chatType) == "group" && cfg.ReplyInThread
 }
 
-func (a *App) debugAllowFrom() []string {
-	cfg := a.feishuConfig()
+func debugAllowFrom(a *App) []string {
+	cfg := feishuConfig(a)
 	if cfg == nil {
 		return nil
 	}
 	return cfg.DebugAllowFrom
 }
 
-func (a *App) allowLegacyFrontendFallback() bool {
+func allowLegacyFrontendFallback(a *App) bool {
 	if a == nil || a.cfg == nil {
 		return false
 	}
@@ -62,15 +62,15 @@ func (a *App) allowLegacyFrontendFallback() bool {
 	return len(a.cfg.ResolvedFrontends()) == 1
 }
 
-func (a *App) sessionBelongsToFrontend(sessionKey string) bool {
+func sessionBelongsToFrontend(a *App, sessionKey string) bool {
 	frontendID, _, _, _, _ := parseSessionKey(sessionKey)
 	if strings.TrimSpace(frontendID) == strings.TrimSpace(a.frontendID) {
 		return true
 	}
-	return frontendID == "" && a.allowLegacyFrontendFallback()
+	return frontendID == "" && allowLegacyFrontendFallback(a)
 }
 
-func (a *App) normalizeSessionKey(sessionKey string) string {
+func normalizeSessionKey(a *App, sessionKey string) string {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
 		return ""

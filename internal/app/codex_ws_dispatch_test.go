@@ -15,7 +15,7 @@ func TestConfiguredSessionInflightModeCodexWSRemainsSingle(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Codex.Transport = "ws"
 
-	if got := a.configuredSessionInflightMode(); got != sessionInflightSingle {
+	if got := configuredSessionInflightMode(a); got != sessionInflightSingle {
 		t.Fatalf("configuredSessionInflightMode() = %q, want %q", got, sessionInflightSingle)
 	}
 }
@@ -31,7 +31,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := a.makeSessionKey(msg1)
+	sessionKey := makeSessionKey(a, msg1)
 
 	var mu sync.Mutex
 	var methods []string

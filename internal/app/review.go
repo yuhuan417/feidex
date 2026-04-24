@@ -107,7 +107,7 @@ func (a *App) startInlineReviewFromMessage(msg *feishu.InboundMessage, target ap
 	if err != nil {
 		return err
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, confirmation, a.replyInThreadEnabled(msg.ChatType))
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, confirmation, replyInThreadEnabled(a, msg.ChatType))
 }
 
 func (a *App) startInlineReview(msg *feishu.InboundMessage, target appreview.TargetSpec) (string, error) {
@@ -228,7 +228,7 @@ func (a *App) startSubmissionReview(ctx context.Context, threadID string, sub *s
 		"delivery": "inline",
 		"target":   reviewTargetParams(target),
 	}
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return "", err
 	}

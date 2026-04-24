@@ -31,7 +31,7 @@ func (s appUpgradeService) commandUpgradeLocalPick(msg *feishu.InboundMessage) e
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (s appUpgradeService) commandUpgradeLocalPath(msg *feishu.InboundMessage, r
 		return err
 	}
 	card := newAppUpgradeService(s.app).renderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, upgradeLocalConfirmLines(payload.BinaryPath))
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (s appUpgradeService) createLocalUpgradeRequest(sessionKey, ownerUserID, fe
 func (s appUpgradeService) completeUpgradeLocalPick(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
 	appState := s.app.appState()
-	wsID := s.app.defaultWorkspaceID()
+	wsID := defaultWorkspaceID(s.app)
 	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		wsID = sess.WorkspaceID
 	}

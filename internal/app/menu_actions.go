@@ -55,7 +55,7 @@ func (s menuActionService) completeMenuBackendSwitch(action *feishu.CardAction, 
 }
 
 func (s menuActionService) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
-	actionName = nearestVisibleMenuAction(actionName, s.app.configuredBackend())
+	actionName = nearestVisibleMenuAction(actionName, configuredBackend(s.app))
 	renderer := menuNodeRenderers[actionName]
 	if renderer == nil {
 		return nil, false
@@ -95,7 +95,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 }
 
 func (s menuActionService) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if !menuActionVisibleForBackend("menu.review", s.app.configuredBackend()) {
+	if !menuActionVisibleForBackend("menu.review", configuredBackend(s.app)) {
 		return s.app.completeMenuCommand(action, sessionKey, "/review", "menu.tools")
 	}
 	return &callback.CardActionTriggerResponse{

@@ -49,7 +49,7 @@ func sessionInflightAllowsAdditional(mode sessionInflightMode) bool {
 	return appruntime.SessionInflightAllowsAdditional(mode)
 }
 
-func (a *App) configuredBackend() string {
+func configuredBackend(a *App) string {
 	if a == nil {
 		return ""
 	}
@@ -58,13 +58,13 @@ func (a *App) configuredBackend() string {
 	if backend := normalizeRuntimeBackend(a.backend); strings.TrimSpace(a.backend) != "" {
 		return backend
 	}
-	if cfg := a.feishuConfigUnlocked(); cfg != nil {
+	if cfg := feishuConfigUnlocked(a); cfg != nil {
 		return normalizeRuntimeBackend(cfg.Backend)
 	}
 	return ""
 }
 
-func (a *App) currentRuntimeBackend() string {
+func currentRuntimeBackend(a *App) string {
 	if a == nil {
 		return ""
 	}
@@ -73,7 +73,7 @@ func (a *App) currentRuntimeBackend() string {
 	return normalizeRuntimeBackend(a.backend)
 }
 
-func (a *App) setRuntimeBackend(backend string) {
+func setRuntimeBackend(a *App, backend string) {
 	if a == nil {
 		return
 	}
@@ -82,12 +82,12 @@ func (a *App) setRuntimeBackend(backend string) {
 	a.backend = normalizeRuntimeBackend(backend)
 }
 
-func (a *App) hasConfiguredBackend() bool {
-	return strings.TrimSpace(a.configuredBackend()) != ""
+func hasConfiguredBackend(a *App) bool {
+	return strings.TrimSpace(configuredBackend(a)) != ""
 }
 
-func (a *App) configuredSessionInflightMode() sessionInflightMode {
-	return sessionInflightModeForBackend(a.configuredBackend())
+func configuredSessionInflightMode(a *App) sessionInflightMode {
+	return sessionInflightModeForBackend(configuredBackend(a))
 }
 
 func pendingBackend(a *App, pending *state.PendingRequest) string {
@@ -95,7 +95,7 @@ func pendingBackend(a *App, pending *state.PendingRequest) string {
 		return normalizeRuntimeBackend(pending.Backend)
 	}
 	if a != nil {
-		if backend := a.configuredBackend(); backend != "" {
+		if backend := configuredBackend(a); backend != "" {
 			return backend
 		}
 	}

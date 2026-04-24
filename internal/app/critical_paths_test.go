@@ -23,7 +23,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := a.makeSessionKey(msg1)
+	sessionKey := makeSessionKey(a, msg1)
 
 	var mu sync.Mutex
 	var methods []string

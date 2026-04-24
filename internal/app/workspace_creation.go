@@ -70,7 +70,7 @@ func (s workspaceManagementService) beginWorkspaceNewWithPayload(msg *feishu.Inb
 		return err
 	}
 	card := newWorkspaceRenderService(s.app).renderWorkspaceNewCard(sessionKey, requestID, payload)
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -342,7 +342,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 	if strings.TrimSpace(cwd) == "" {
 		return fmt.Errorf("请先选择目录")
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	if existingWS := newWorkspaceManagementService(s.app).workspaceByIDAndCWD(id, cwd); existingWS != nil {
 		payload.DraftID = id
 		payload.DraftName = name
@@ -354,7 +354,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 		if pending.FeishuMsgID != "" {
 			_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, newWorkspaceRenderService(s.app).renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
 		}
-		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, s.app.replyInThreadEnabled(msg.ChatType))
+		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, replyInThreadEnabled(s.app, msg.ChatType))
 	}
 	if err := newWorkspaceManagementService(s.app).createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
@@ -363,5 +363,5 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 	if pending.FeishuMsgID != "" {
 		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
-	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, s.app.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, replyInThreadEnabled(s.app, msg.ChatType))
 }

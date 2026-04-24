@@ -22,7 +22,7 @@ func (claudeRuntimeFacade) configuredCommand(a *App) string {
 }
 
 func (claudeRuntimeFacade) isActive(a *App) bool {
-	return a != nil && a.configuredBackend() == backendClaude
+	return a != nil && configuredBackend(a) == backendClaude
 }
 
 func (claudeRuntimeFacade) runtimeReady(a *App) bool {

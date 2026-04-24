@@ -15,7 +15,7 @@ import (
 func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.InboundMessage, threadID, turnID string) (string, *state.Submission) {
 	t.Helper()
 
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
@@ -57,7 +57,7 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := a.makeSessionKey(msg1)
+	sessionKey := makeSessionKey(a, msg1)
 
 	var mu sync.Mutex
 	var methods []string
@@ -185,7 +185,7 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := a.makeSessionKey(msg1)
+	sessionKey := makeSessionKey(a, msg1)
 
 	var mu sync.Mutex
 	var methods []string

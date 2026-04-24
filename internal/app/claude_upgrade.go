@@ -55,7 +55,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 			return fmt.Errorf(claudeUpgradeCommandUsage)
 		}
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	view, err := newBackendUpgradeService(s.app).loadClaudeUpgradeView(ctx, includeLatest)
@@ -64,14 +64,14 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	}
 	if !prepareUpgrade {
 		card := newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, includeLatest)
-		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	card, pendingID, err := newUpgradeRenderService(s.app).prepareClaudeUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}

@@ -192,11 +192,11 @@ func (s appUpgradeService) replyUpgradeCard(msg *feishu.InboundMessage, targetVe
 	if msg == nil {
 		return nil
 	}
-	card, err := newAppUpgradeService(s.app).renderUpgradeCardForVersion(s.app.makeSessionKey(msg), msg.UserID, targetVersion)
+	card, err := newAppUpgradeService(s.app).renderUpgradeCardForVersion(makeSessionKey(s.app, msg), msg.UserID, targetVersion)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -204,11 +204,11 @@ func (s appUpgradeService) replyUpgradeDevCard(msg *feishu.InboundMessage) error
 	if msg == nil {
 		return nil
 	}
-	card, err := newAppUpgradeService(s.app).renderUpgradeDevCard(s.app.makeSessionKey(msg), msg.UserID)
+	card, err := newAppUpgradeService(s.app).renderUpgradeDevCard(makeSessionKey(s.app, msg), msg.UserID)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 

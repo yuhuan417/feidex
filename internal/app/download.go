@@ -39,7 +39,7 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 	workspaceCWD := strings.TrimSpace(payload.RootPath)
 	if sess != nil {
 		chatID = firstNonEmpty(chatID, sess.ChatID)
-		workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID())
+		workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
 		if ws := config.FindWorkspace(a.cfg, workspaceID); ws != nil {
 			workspaceCWD = firstNonEmpty(workspaceCWD, strings.TrimSpace(ws.Cwd))
 		}

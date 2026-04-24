@@ -15,7 +15,7 @@ func (a *App) forkClaudeActiveConversation(sessionKey string, sess *state.Sessio
 	if a == nil || a.claude == nil {
 		return "", fmt.Errorf("claude backend not initialized")
 	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), a.defaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
 	model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
 	currentThreadID := strings.TrimSpace(sess.ActiveThreadID)
 	currentName := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude")
@@ -34,11 +34,11 @@ func (a *App) forkClaudeActiveConversation(sessionKey string, sess *state.Sessio
 }
 
 func (a *App) forkCodexActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return "", err
 	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), a.defaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
 	params := map[string]any{
 		"threadId":       strings.TrimSpace(sess.ActiveThreadID),
 		"cwd":            ws.Cwd,

@@ -199,14 +199,14 @@ func (s usageService) commandUsage(msg *feishu.InboundMessage, args []string) er
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /usage")
 	}
-	card := newUsageService(s.app).renderUsageCard(s.app.makeSessionKey(msg))
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	card := newUsageService(s.app).renderUsageCard(makeSessionKey(s.app, msg))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
 func (s usageService) renderUsageCard(sessionKey string) map[string]any {
 	sess := s.app.appState().session(sessionKey)
-	body := primaryConversationMissingLabel(s.app.configuredBackend()) + "。"
+	body := primaryConversationMissingLabel(configuredBackend(s.app)) + "。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		body = s.app.conversationBackend().renderUsageBody(sess)
 	}

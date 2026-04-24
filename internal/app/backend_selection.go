@@ -67,7 +67,7 @@ func (s backendSelectionService) backendAvailable(target string) bool {
 }
 
 func (s backendSelectionService) renderBackendSelectionCard(sessionKey, notice string) map[string]any {
-	current := s.app.configuredBackend()
+	current := configuredBackend(s.app)
 	choices := newBackendSelectionService(s.app).availableBackends()
 	lines := []string{
 		"当前 backend: `" + firstNonEmpty(current, "unset") + "`",
@@ -144,11 +144,11 @@ func (s backendSelectionService) replyBackendSelectionCard(msg *feishu.InboundMe
 	}
 	sessionKey := ""
 	if msg != nil {
-		sessionKey = s.app.makeSessionKey(msg)
+		sessionKey = makeSessionKey(s.app, msg)
 	}
 	card := newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, firstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
 	if msg != nil && strings.TrimSpace(msg.MessageID) != "" {
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	if msg != nil && strings.TrimSpace(msg.ChatID) != "" {
@@ -188,7 +188,7 @@ func (s backendSelectionService) completeBackendSelect(action *feishu.CardAction
 			Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, backendDisplayName(target)+" 当前不可用，请先确认本机安装。")),
 		}, nil
 	}
-	if current := s.app.configuredBackend(); current == target && newBackendSelectionService(s.app).backendRuntimeReady(target) {
+	if current := configuredBackend(s.app); current == target && newBackendSelectionService(s.app).backendRuntimeReady(target) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "当前已经在使用 " + backendDisplayName(target)},
 			Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, "当前已经在使用 `"+target+"`。")),
@@ -271,7 +271,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 		return fmt.Errorf("%s", reason)
 	}
 
-	current := s.app.configuredBackend()
+	current := configuredBackend(s.app)
 	if current == target && newBackendSelectionService(s.app).backendRuntimeReady(target) {
 		return nil
 	}
@@ -290,7 +290,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 	}
 
 	oldHandle := s.app.currentBackendRuntimeHandle()
-	oldBackend := s.app.currentRuntimeBackend()
+	oldBackend := currentRuntimeBackend(s.app)
 	if err := newBackendSelectionService(s.app).setConfiguredBackend(target); err != nil {
 		_ = newHandle.close()
 		return err
@@ -300,7 +300,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 	for _, sess := range nextSessions {
 		if err := s.app.store.UpsertSession(sess); err != nil {
 			oldHandle.install(s.app)
-			s.app.setRuntimeBackend(oldBackend)
+			setRuntimeBackend(s.app, oldBackend)
 			_ = newBackendSelectionService(s.app).setConfiguredBackend(current)
 			_ = newHandle.close()
 			return err
@@ -324,7 +324,7 @@ func (s backendSelectionService) frontendSessionsAfterBackendSwitch(current, tar
 	appState := s.app.appState()
 	out := make([]*state.Session, 0, 8)
 	for _, sess := range appState.sessions() {
-		if sess == nil || !s.app.sessionBelongsToFrontend(sess.Key) {
+		if sess == nil || !sessionBelongsToFrontend(s.app, sess.Key) {
 			continue
 		}
 		cp := stateCloneSession(sess)
@@ -350,7 +350,7 @@ func (s backendSelectionService) setConfiguredBackend(target string) error {
 	target = normalizeRuntimeBackend(target)
 	s.app.configMu.Lock()
 	defer s.app.configMu.Unlock()
-	cfg := s.app.feishuConfigUnlocked()
+	cfg := feishuConfigUnlocked(s.app)
 	if cfg == nil {
 		return fmt.Errorf("frontend config not found")
 	}

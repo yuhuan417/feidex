@@ -22,18 +22,18 @@ func (codexRuntimeFacade) configuredCommand(a *App) string {
 }
 
 func (codexRuntimeFacade) isActive(a *App) bool {
-	return a != nil && a.configuredBackend() == backendCodex
+	return a != nil && configuredBackend(a) == backendCodex
 }
 
 func (codexRuntimeFacade) runtimeReady(a *App) bool {
-	return a != nil && a.currentCodexClient() != nil
+	return a != nil && currentCodexClient(a) != nil
 }
 
 func (codexRuntimeFacade) beginStartupRecoveryScope(a *App) func() {
 	if a == nil {
 		return func() {}
 	}
-	return a.beginCodexAutoThreadRecoveryScope()
+	return beginCodexAutoThreadRecoveryScope(a)
 }
 
 func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
@@ -94,14 +94,14 @@ func (codexRuntimeFacade) resolvesPendingLocally(kind string) bool {
 }
 
 func (codexRuntimeFacade) deferQueuedSubmissionsDuringRecovery(a *App) bool {
-	return a != nil && a.codexRuntimeRecovering()
+	return a != nil && codexRuntimeRecovering(a)
 }
 
 func (codexRuntimeFacade) dropThreadLineageAfterStartFailure(a *App, err error) bool {
 	if a == nil || err == nil {
 		return false
 	}
-	if a.codexRuntimeRecovering() {
+	if codexRuntimeRecovering(a) {
 		return true
 	}
 	text := strings.ToLower(strings.TrimSpace(err.Error()))

@@ -26,7 +26,7 @@ func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess
 	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
 		return sess
 	}
-	client := a.currentCodexClient()
+	client := currentCodexClient(a)
 	if client == nil {
 		return sess
 	}

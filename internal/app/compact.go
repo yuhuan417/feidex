@@ -110,7 +110,7 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		a.restoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
 		return nil, err
@@ -366,7 +366,7 @@ func (a *App) sendSessionTextNotice(sess *state.Session, text string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if strings.TrimSpace(sess.ChatType) == "group" && a.replyInThreadEnabled(sess.ChatType) && strings.TrimSpace(sess.RootMessageID) != "" {
+	if strings.TrimSpace(sess.ChatType) == "group" && replyInThreadEnabled(a, sess.ChatType) && strings.TrimSpace(sess.RootMessageID) != "" {
 		_ = a.feishu.ReplyText(ctx, sess.RootMessageID, text, true)
 		return
 	}

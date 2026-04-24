@@ -506,5 +506,5 @@ func (s workspaceManagementService) cloneWorkspaceAndSwitchInSelectedParent(msg 
 		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
-	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 }

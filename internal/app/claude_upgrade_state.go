@@ -205,7 +205,7 @@ func (s maintenanceStateService) claudeUpgradeRuntimeBusyReason() string {
 	}
 	activeSessions := 0
 	for _, sess := range s.app.appState().sessions() {
-		if sess != nil && s.app.sessionBelongsToFrontend(sess.Key) && sessionHasActiveWork(sess) {
+		if sess != nil && sessionBelongsToFrontend(s.app, sess.Key) && sessionHasActiveWork(sess) {
 			activeSessions++
 		}
 	}

@@ -36,22 +36,22 @@ func (s historyService) commandHistory(msg *feishu.InboundMessage, args []string
 		if err != nil || ordinal <= 0 {
 			return fmt.Errorf("usage: %s", historyCommandUsage)
 		}
-		index, err := newHistoryService(s.app).historyIndexForOrdinal(s.app.makeSessionKey(msg), ordinal)
+		index, err := newHistoryService(s.app).historyIndexForOrdinal(makeSessionKey(s.app, msg), ordinal)
 		if err != nil {
 			return err
 		}
-		card, err := newHistoryService(s.app).renderHistoryDetailCard(s.app.makeSessionKey(msg), index)
+		card, err := newHistoryService(s.app).renderHistoryDetailCard(makeSessionKey(s.app, msg), index)
 		if err != nil {
 			return err
 		}
-		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
-	card, err := newHistoryService(s.app).renderHistoryCard(s.app.makeSessionKey(msg), 0)
+	card, err := newHistoryService(s.app).renderHistoryCard(makeSessionKey(s.app, msg), 0)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -268,7 +268,7 @@ func (s historyService) fetchCurrentThreadHistory(sessionKey string) (*state.Ses
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var result codexrpc.ThreadReadResult
-	client, err := s.app.requireCodexClient()
+	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return nil, nil, nil, err
 	}

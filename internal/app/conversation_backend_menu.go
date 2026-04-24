@@ -84,8 +84,8 @@ func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[st
 		scopeLabel = "全部来源（仅命令入口）"
 	}
 	lines := []string{
-		primaryConversationCurrentLabel(a.configuredBackend()) + ": " + currentLabel,
-		"当前 " + primaryConversationIDLabel(a.configuredBackend()) + ": `" + currentThreadID + "`",
+		primaryConversationCurrentLabel(configuredBackend(a)) + ": " + currentLabel,
+		"当前 " + primaryConversationIDLabel(configuredBackend(a)) + ": `" + currentThreadID + "`",
 		"工作区: `" + workspace.ID + "`",
 		"当前 thread sandbox: " + currentThreadSandbox,
 		"当前 thread policy: " + currentThreadPolicy,
@@ -150,8 +150,8 @@ func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[st
 		},
 	})
 	return buildConversationThreadsCard(sessionKey, conversationThreadsCardView{
-		Title:          primaryConversationMenuLabel(a.configuredBackend()),
-		Backend:        a.configuredBackend(),
+		Title:          primaryConversationMenuLabel(configuredBackend(a)),
+		Backend:        configuredBackend(a),
 		BodyLines:      lines,
 		Buttons:        buttons,
 		Items:          items,
@@ -266,7 +266,7 @@ func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws
 	})
 	return buildConversationThreadsCard(sessionKey, conversationThreadsCardView{
 		Title:          "会话管理",
-		Backend:        a.configuredBackend(),
+		Backend:        configuredBackend(a),
 		BodyLines:      lines,
 		Buttons:        buttons,
 		Items:          items,

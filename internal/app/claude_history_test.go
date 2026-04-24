@@ -34,7 +34,7 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 	})
 
 	msg := &feishu.InboundMessage{MessageID: "m-history", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

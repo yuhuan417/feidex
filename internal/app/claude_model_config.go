@@ -207,8 +207,8 @@ func (s modelConfigService) hotApplyClaudeModelToCurrentSession(sessionKey, mode
 	if s.app == nil || s.app.claude == nil {
 		return false, nil
 	}
-	sessionKey = s.app.normalizeSessionKey(sessionKey)
-	if sessionKey == "" || !s.app.sessionBelongsToFrontend(sessionKey) {
+	sessionKey = normalizeSessionKey(s.app, sessionKey)
+	if sessionKey == "" || !sessionBelongsToFrontend(s.app, sessionKey) {
 		return false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -220,8 +220,8 @@ func (s modelConfigService) hotApplyClaudeEffortToCurrentSession(sessionKey, eff
 	if s.app == nil || s.app.claude == nil {
 		return false, nil
 	}
-	sessionKey = s.app.normalizeSessionKey(sessionKey)
-	if sessionKey == "" || !s.app.sessionBelongsToFrontend(sessionKey) {
+	sessionKey = normalizeSessionKey(s.app, sessionKey)
+	if sessionKey == "" || !sessionBelongsToFrontend(s.app, sessionKey) {
 		return false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -293,7 +293,7 @@ func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args 
 	if msg == nil {
 		return nil
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) > 0 {
 		action := commandActionFromMessage(msg, map[string]any{
 			"menu_action": "menu.model",
@@ -327,7 +327,7 @@ func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args 
 		}
 	}
 	card := newModelConfigService(s.app).renderClaudeModelConfigCard(sessionKey, "menu.model")
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 

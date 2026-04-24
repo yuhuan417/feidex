@@ -11,7 +11,7 @@ func (a *App) recordMessageLink(messageID, kind string, sub *state.Submission, r
 		return
 	}
 	link := &state.MessageLink{
-		Backend:   a.configuredBackend(),
+		Backend:   configuredBackend(a),
 		MessageID: messageID,
 	}
 	if sub != nil {

@@ -154,7 +154,7 @@ func (s backendConfigurationService) statusCardBody(sess *state.Session) string 
 }
 
 func (s backendConfigurationService) renderClaudeStatusBody(sess *state.Session) string {
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	conversationLabel := "-"
 	conversationID := "-"
 	status := "idle"
@@ -184,7 +184,7 @@ func (s backendConfigurationService) renderClaudeStatusBody(sess *state.Session)
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
-		"backend: `" + firstNonEmpty(s.app.configuredBackend(), "unset") + "`",
+		"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"版本: `" + currentVersion() + "`",
 		"log level: " + renderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -193,7 +193,7 @@ func (s backendConfigurationService) renderClaudeStatusBody(sess *state.Session)
 		"Claude model: `" + model + "`",
 		"Claude effort: `" + effort + "`",
 		"auto retry: `" + map[bool]string{true: "on", false: "off"}[newAutoRetryService(s.app).autoRetryEnabled()] + "`",
-		"quiet: `" + quietModeStatusText(s.app.quietMode()) + "`",
+		"quiet: `" + quietModeStatusText(quietMode(feishuConfig(s.app))) + "`",
 		"workspace permission mode: " + workspacePermission,
 		"session permission mode: " + sessionPermission,
 		"effective permission mode: " + effectivePermission,
@@ -202,7 +202,7 @@ func (s backendConfigurationService) renderClaudeStatusBody(sess *state.Session)
 }
 
 func (s backendConfigurationService) renderCodexStatusBody(sess *state.Session) string {
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	conversationLabel := "-"
 	conversationID := "-"
 	status := "idle"
@@ -246,7 +246,7 @@ func (s backendConfigurationService) renderCodexStatusBody(sess *state.Session) 
 	}
 	return strings.Join([]string{
 		"状态: `" + status + "`",
-		"backend: `" + firstNonEmpty(s.app.configuredBackend(), "unset") + "`",
+		"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"版本: `" + currentVersion() + "`",
 		"log level: " + renderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -255,7 +255,7 @@ func (s backendConfigurationService) renderCodexStatusBody(sess *state.Session) 
 		"全局模型: `" + model + "`",
 		"全局推理强度: `" + effort + "`",
 		"auto retry: `" + map[bool]string{true: "on", false: "off"}[newAutoRetryService(s.app).autoRetryEnabled()] + "`",
-		"quiet: `" + quietModeStatusText(s.app.quietMode()) + "`",
+		"quiet: `" + quietModeStatusText(quietMode(feishuConfig(s.app))) + "`",
 		"workspace sandbox: `" + workspaceSandbox + "`",
 		"workspace policy: `" + workspacePolicy + "`",
 		"thread sandbox: " + threadSandbox,

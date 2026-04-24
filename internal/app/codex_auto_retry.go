@@ -60,7 +60,7 @@ type autoRetryState struct {
 }
 
 func (s autoRetryService) autoRetryEnabled() bool {
-	cfg := s.app.feishuConfig()
+	cfg := feishuConfig(s.app)
 	return cfg != nil && cfg.AutoRetry
 }
 
@@ -70,7 +70,7 @@ func (s autoRetryService) updateAutoRetryEnabled(enabled bool) error {
 	}
 	s.app.configMu.Lock()
 	defer s.app.configMu.Unlock()
-	cfg := s.app.feishuConfigUnlocked()
+	cfg := feishuConfigUnlocked(s.app)
 	if cfg == nil {
 		return fmt.Errorf("frontend config not found")
 	}
@@ -109,7 +109,7 @@ func formatAutoRetryDelay(delay time.Duration) string {
 }
 
 func (s autoRetryService) autoRetryTitle() string {
-	backend := strings.TrimSpace(s.app.configuredBackend())
+	backend := strings.TrimSpace(configuredBackend(s.app))
 	switch normalizeRuntimeBackend(backend) {
 	case backendClaude:
 		return "Claude 自动重试"
@@ -417,7 +417,7 @@ func (s autoRetryService) startAutoRetrySubmission(sessionKey string, sess *stat
 	if !s.app.sessionHasLiveThread(sessionKey, snapshot.ThreadID) {
 		return nil, fmt.Errorf("active thread is not live")
 	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(snapshot.WorkspaceID), s.app.defaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(snapshot.WorkspaceID), defaultWorkspaceID(s.app))
 	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
@@ -579,7 +579,7 @@ func (s autoRetryService) deliverAutoRetryCard(snapshot autoRetryState, card map
 	var err error
 	replyInThread := false
 	if sess := s.app.appState().session(snapshot.SessionKey); sess != nil {
-		replyInThread = s.app.replyInThreadEnabled(sess.ChatType)
+		replyInThread = replyInThreadEnabled(s.app, sess.ChatType)
 	}
 	switch {
 	case strings.TrimSpace(snapshot.TriggerMessageID) != "":
@@ -641,7 +641,7 @@ func (s autoRetryService) renderAutoRetryConfigCard(sessionKey string) map[strin
 	enabled := s.autoRetryEnabled()
 	lines := []string{
 		"当前 frontend: `" + firstNonEmpty(strings.TrimSpace(s.app.frontendID), config.DefaultFrontendID) + "`",
-		"当前 backend: `" + firstNonEmpty(s.app.configuredBackend(), "unset") + "`",
+		"当前 backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"开关状态: `" + map[bool]string{true: "on", false: "off"}[enabled] + "`",
 		"",
 		"当 turn 终态为 `failed` 且当前 session 仍保留活动线程时，会按“继续”自动重试。",
@@ -716,8 +716,8 @@ func (s autoRetryService) commandAutoRetry(msg *feishu.InboundMessage, args []st
 		return fmt.Errorf("usage: /backend retry | /backend retry status | /backend retry on | /backend retry off")
 	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "status" {
-		card := s.renderAutoRetryConfigCard(s.app.makeSessionKey(msg))
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+		card := s.renderAutoRetryConfigCard(makeSessionKey(s.app, msg))
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	enabled := false

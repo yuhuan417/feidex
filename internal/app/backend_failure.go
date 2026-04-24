@@ -34,7 +34,7 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 	if a == nil || !a.beginCodexTransportRecovery(client) {
 		return
 	}
-	skipFrontendRecovery := a.codexAutoThreadRecoveryActive()
+	skipFrontendRecovery := codexAutoThreadRecoveryActive(a)
 	message := "Codex 后端异常退出。"
 	if detail := strings.TrimSpace(errorText(err)); detail != "" {
 		message = "Codex 后端异常退出：" + detail
@@ -78,7 +78,7 @@ func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, mes
 	}
 	compactTargets := make([]compactTarget, 0)
 	for _, sess := range sessions {
-		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
+		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
 		if !backendFailureScopeMatches(sess, scopeSessionKey, scopeThreadID) {

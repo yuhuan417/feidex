@@ -667,7 +667,7 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	turnID = strings.TrimSpace(turn.TurnID)
 	state.mu.Unlock()
 
-	if r == nil || r.app == nil || !r.app.quietWorkingCardEnabled() || turnID == "" {
+	if r == nil || r.app == nil || !quietWorkingCardEnabled(feishuConfig(r.app)) || turnID == "" {
 		return
 	}
 	sessionKey, sub := r.app.findSubmissionByTurn(threadID, turnID)

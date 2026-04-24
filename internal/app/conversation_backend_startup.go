@@ -27,7 +27,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 	if a == nil || sess == nil || ws == nil {
 		return
 	}
-	client := a.currentCodexClient()
+	client := currentCodexClient(a)
 	if client == nil {
 		return
 	}
@@ -76,7 +76,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		return
 	}
 
-	if a.codexRuntimeRecovering() || a.currentCodexClient() == nil {
+	if codexRuntimeRecovering(a) || currentCodexClient(a) == nil {
 		slog.Warn("startup thread recovery deferred while codex runtime recovering",
 			"session_key", sessionKey,
 			"thread_id", threadID,
@@ -94,7 +94,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		"model", effectiveModel,
 		"error", err,
 	)
-	client = a.currentCodexClient()
+	client = currentCodexClient(a)
 	if client == nil {
 		slog.Warn("startup fresh thread recovery skipped because codex runtime disappeared",
 			"session_key", sessionKey,
@@ -116,7 +116,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 	err = client.Call(threadCtx, "thread/start", threadParams, &threadResp)
 	threadCancel()
 	if err != nil {
-		if a.codexRuntimeRecovering() || a.currentCodexClient() == nil {
+		if codexRuntimeRecovering(a) || currentCodexClient(a) == nil {
 			slog.Warn("startup fresh thread recovery deferred while codex runtime recovering",
 				"session_key", sessionKey,
 				"stale_thread_id", threadID,

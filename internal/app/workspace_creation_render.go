@@ -102,7 +102,7 @@ func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID s
 	if s.app.store != nil {
 		sess = s.app.appState().session(sessionKey)
 	}
-	workspaceID := s.app.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}

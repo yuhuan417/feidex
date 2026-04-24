@@ -22,7 +22,7 @@ func (a *App) frontendIdleBlockedReason() string {
 		return "当前仍有消息处理中"
 	}
 	for _, sess := range a.appState().sessions() {
-		if sess == nil || !a.sessionBelongsToFrontend(sess.Key) {
+		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
 		if sessionHasActiveWork(sess) {

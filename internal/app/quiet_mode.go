@@ -40,8 +40,7 @@ var quietModeOptions = []quietModeOption{
 	},
 }
 
-func (a *App) quietMode() config.QuietMode {
-	cfg := a.feishuConfig()
+func quietMode(cfg *config.FeishuConfig) config.QuietMode {
 	if cfg == nil {
 		return config.QuietModeProgress
 	}
@@ -52,12 +51,12 @@ func (a *App) quietMode() config.QuietMode {
 	return mode
 }
 
-func (a *App) quietModeEnabled() bool {
-	return a.quietMode() != config.QuietModeVerbose
+func quietModeEnabled(cfg *config.FeishuConfig) bool {
+	return quietMode(cfg) != config.QuietModeVerbose
 }
 
-func (a *App) quietWorkingCardEnabled() bool {
-	return a.quietMode() == config.QuietModeProgress
+func quietWorkingCardEnabled(cfg *config.FeishuConfig) bool {
+	return quietMode(cfg) == config.QuietModeProgress
 }
 
 func quietModeStatusText(mode config.QuietMode) string {
@@ -85,7 +84,7 @@ func (a *App) renderQuietModeCard() map[string]any {
 }
 
 func (a *App) renderQuietModeMenuCard(sessionKey string) map[string]any {
-	mode := a.quietMode()
+	mode := quietMode(feishuConfig(a))
 	lines := []string{
 		"当前模式: `" + quietModeStatusText(mode) + "`",
 		"",
@@ -131,7 +130,7 @@ func (a *App) updateQuietMode(mode config.QuietMode) error {
 	}
 	a.configMu.Lock()
 	defer a.configMu.Unlock()
-	cfg := a.feishuConfigUnlocked()
+	cfg := feishuConfigUnlocked(a)
 	if cfg == nil {
 		return fmt.Errorf("nil feishu config")
 	}
@@ -154,8 +153,8 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 		if msg == nil {
 			return nil
 		}
-		card := a.renderQuietModeMenuCard(a.makeSessionKey(msg))
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+		card := a.renderQuietModeMenuCard(makeSessionKey(a, msg))
+		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 		return err
 	}
 	arg := strings.TrimSpace(args[0])
@@ -165,8 +164,8 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			card := a.renderQuietModeMenuCard(a.makeSessionKey(msg))
-			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+			card := a.renderQuietModeMenuCard(makeSessionKey(a, msg))
+			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 			return err
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))
@@ -179,7 +178,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			if err := a.updateQuietMode(mode); err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", a.replyInThreadEnabled(msg.ChatType))
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", replyInThreadEnabled(a, msg.ChatType))
 		}
 	}
 	return nil

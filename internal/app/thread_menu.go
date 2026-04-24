@@ -77,28 +77,28 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 }
 
 func (s threadCommandService) commandThreadsNew(msg *feishu.InboundMessage) error {
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	discarded, binding, err := s.app.startFreshThread(sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
 	if err != nil {
 		return err
 	}
-	noun := primaryConversationNoun(s.app.configuredBackend())
+	noun := primaryConversationNoun(configuredBackend(s.app))
 	reply := "已创建新" + noun + "并切换过去。"
 	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
-		reply += " " + primaryConversationSummaryLabel(s.app.configuredBackend()) + ": `" + binding.ThreadID + "`。"
+		reply += " " + primaryConversationSummaryLabel(configuredBackend(s.app)) + ": `" + binding.ThreadID + "`。"
 	}
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 }
 
 func (s threadCommandService) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
-	card, err := s.app.renderThreadsCard(s.app.makeSessionKey(msg), includeAll)
+	card, err := s.app.renderThreadsCard(makeSessionKey(s.app, msg), includeAll)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -106,7 +106,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 	if len(args) == 0 {
 		return s.commandThreads(msg, false)
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	switch strings.TrimSpace(args[0]) {
 	case "list":
 		includeAll := false
@@ -180,7 +180,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 	if len(args) == 0 {
 		return s.commandThreads(msg, false)
 	}
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	switch strings.TrimSpace(args[0]) {
 	case "list":
 		includeAll := false
@@ -251,7 +251,7 @@ func renderThreadSettingValue(override, fallback string) string {
 }
 
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
 	sess := a.appState().session(sessionKey)
 	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
@@ -265,10 +265,10 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 			if discarded > 0 {
 				reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(a, msg.ChatType))
 		}
 		if discarded > 0 {
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), a.replyInThreadEnabled(msg.ChatType))
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), replyInThreadEnabled(a, msg.ChatType))
 		}
 		return fmt.Errorf("当前没有运行中的任务")
 	}
@@ -284,11 +284,11 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	if canceledRetry {
 		reply += " 当前 session 的自动重试也已停止。"
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(a, msg.ChatType))
 }
 
 func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	sess := a.appState().session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
@@ -377,17 +377,17 @@ func sameWorkspaceCWD(a, b string) bool {
 }
 
 func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderThreadSandboxMenuCard(a.makeSessionKey(msg))
+	card, err := a.renderThreadSandboxMenuCard(makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 
 func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	sess := a.appState().session(sessionKey)
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -429,17 +429,17 @@ func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, er
 }
 
 func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderThreadPolicyMenuCard(a.makeSessionKey(msg))
+	card, err := a.renderThreadPolicyMenuCard(makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 
 func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
 	sess := a.appState().session(sessionKey)
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}

@@ -32,7 +32,7 @@ func (s replyContinuationService) messageLinkMatchesCurrentBackend(link *state.M
 	if s.app == nil || link == nil {
 		return false
 	}
-	currentBackend := s.app.configuredBackend()
+	currentBackend := configuredBackend(s.app)
 	linkBackend := normalizeRuntimeBackend(link.Backend)
 	switch {
 	case currentBackend == "":
@@ -54,7 +54,7 @@ func (s replyContinuationService) sessionKeyForInboundMessage(msg *feishu.Inboun
 	if link != nil && strings.TrimSpace(link.SessionKey) != "" {
 		return strings.TrimSpace(link.SessionKey)
 	}
-	return s.app.makeSessionKey(msg)
+	return makeSessionKey(s.app, msg)
 }
 
 func (s replyContinuationService) pendingInputSessionKey(msg *feishu.InboundMessage) string {
@@ -139,7 +139,7 @@ func (s replyContinuationService) trySteerInboundReply(msg *feishu.InboundMessag
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   s.app.defaultWorkspaceID(),
+			WorkspaceID:   defaultWorkspaceID(s.app),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -148,7 +148,7 @@ func (s replyContinuationService) trySteerInboundReply(msg *feishu.InboundMessag
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = s.app.defaultWorkspaceID()
+		sess.WorkspaceID = defaultWorkspaceID(s.app)
 	}
 	return s.app.conversationBackend().tryReplyContinuation(msg, link, sessionKey, sess)
 }
@@ -189,7 +189,7 @@ func (s replyContinuationService) continueClaudeSessionWithText(sessionKey, text
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), s.app.defaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(s.app))
 	sub := &state.Submission{
 		SessionKey:  strings.TrimSpace(sessionKey),
 		WorkspaceID: workspaceID,
@@ -213,7 +213,7 @@ func (s replyContinuationService) buildClaudeContinuationSubmissionFromMessage(m
 	if s.app == nil || msg == nil || sess == nil {
 		return nil, nil
 	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), s.app.defaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(s.app))
 	bucketSessionKey := newReplyContinuationService(s.app).pendingInputSessionKey(msg)
 	inboundAttachments, err := s.app.resolveInboundAttachments(msg, workspaceID, sessionKey)
 	if err != nil {

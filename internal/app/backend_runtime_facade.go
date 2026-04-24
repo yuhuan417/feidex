@@ -32,13 +32,13 @@ func (h *backendRuntimeHandle) install(a *App) {
 		return
 	}
 	if h == nil {
-		a.setRuntimeBackend("")
-		a.replaceCodexClient(nil)
+		setRuntimeBackend(a, "")
+		replaceCodexClient(a, nil)
 		a.claude = nil
 		return
 	}
-	a.setRuntimeBackend(h.backend)
-	a.replaceCodexClient(h.codex)
+	setRuntimeBackend(a, h.backend)
+	replaceCodexClient(a, h.codex)
 	a.claude = h.claude
 }
 
@@ -87,7 +87,7 @@ func (a *App) backendRuntime() backendRuntimeFacade {
 	if a == nil {
 		return nil
 	}
-	return backendRuntimeForKind(a.configuredBackend())
+	return backendRuntimeForKind(configuredBackend(a))
 }
 
 func (a *App) currentBackendRuntimeHandle() *backendRuntimeHandle {
@@ -95,8 +95,8 @@ func (a *App) currentBackendRuntimeHandle() *backendRuntimeHandle {
 		return nil
 	}
 	return &backendRuntimeHandle{
-		backend: a.configuredBackend(),
-		codex:   a.currentCodexClient(),
+		backend: configuredBackend(a),
+		codex:   currentCodexClient(a),
 		claude:  a.claude,
 	}
 }

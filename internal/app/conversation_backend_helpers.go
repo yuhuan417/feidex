@@ -64,7 +64,7 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 	clearSessionThreadContext(sess)
 	setSessionThreadContext(
 		sess,
-		firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID()),
+		firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)),
 		resumedID,
 		firstNonEmpty(selectedName, "Claude"),
 		firstNonEmpty(selectedPreview, ws.Name),
@@ -84,7 +84,7 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 }
 
 func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, 
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
-	setSessionThreadContext(sess, firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.defaultWorkspaceID()), boundThreadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
+	setSessionThreadContext(sess, firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)), boundThreadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	a.markSessionThreadLive(sessionKey, boundThreadID)
 	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
@@ -142,7 +142,7 @@ func (a *App) interruptClaudeActiveTurn(ctx context.Context, sessionKey string) 
 }
 
 func (a *App) interruptCodexActiveTurn(ctx context.Context, sess *state.Session) error {
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (a *App) interruptCodexActiveTurn(ctx context.Context, sess *state.Session)
 }
 
 func (a *App) continueCodexActiveTurn(sessionKey, text string) error {
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   a.defaultWorkspaceID(),
+			WorkspaceID:   defaultWorkspaceID(a),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -200,7 +200,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = a.defaultWorkspaceID()
+		sess.WorkspaceID = defaultWorkspaceID(a)
 	}
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(msg)
 	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
@@ -220,7 +220,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 	if len(inputs) == 0 {
 		return false, nil
 	}
-	client, err := a.requireCodexClient()
+	client, err := requireCodexClient(a)
 	if err != nil {
 		return false, err
 	}
@@ -233,7 +233,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 	}, nil); err != nil {
 		return false, err
 	}
-	sess.WorkspaceID = firstNonEmpty(sess.WorkspaceID, a.defaultWorkspaceID())
+	sess.WorkspaceID = firstNonEmpty(sess.WorkspaceID, defaultWorkspaceID(a))
 	if err := a.appState().saveSession(sess); err != nil {
 		return false, err
 	}

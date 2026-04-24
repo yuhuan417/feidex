@@ -19,7 +19,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		RootMessageID: "root-stop",
 		UserID:        "user-1",
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 	sess := a.store.GetSession(sessionKey)
 	sess.Status = "turn_in_progress"

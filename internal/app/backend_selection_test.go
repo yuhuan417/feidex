@@ -47,7 +47,7 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 	if !strings.Contains(body, "当前 frontend 还没有设置 backend") || !strings.Contains(body, "`codex`") {
 		t.Fatalf("backend selection body = %q", body)
 	}
-	if sess := store.GetSession(a.makeSessionKey(msg)); sess != nil {
+	if sess := store.GetSession(makeSessionKey(a, msg)); sess != nil {
 		t.Fatalf("unexpected session persisted while backend unset: %+v", sess)
 	}
 }
@@ -361,10 +361,10 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		t.Fatalf("switchBackend(claude->codex) error = %v", err)
 	}
 
-	if !app.codexRuntimeRecovering() {
+	if !codexRuntimeRecovering(app) {
 		t.Fatal("expected codex runtime to be marked recovering")
 	}
-	if got := app.currentCodexClient(); got != nil {
+	if got := currentCodexClient(app); got != nil {
 		t.Fatalf("currentCodexClient() = %#v, want nil while recovering", got)
 	}
 	if len(codexCalls) != 1 || codexCalls[0] != "thread/resume" {

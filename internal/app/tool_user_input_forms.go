@@ -19,7 +19,7 @@ type toolUserInputFormDrafts struct {
 func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserInputPayload) {
 	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
 	if sub == nil {
-		a.replyCodexError(requestID, -32602, "no active session for request_user_input")
+		replyCodexError(a, requestID, -32602, "no active session for request_user_input")
 		return
 	}
 	requestKey := requestIDKey(requestID)
@@ -41,7 +41,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 	if err == nil {
 		return
 	}
-	a.replyCodexError(requestID, -32603, err.Error())
+	replyCodexError(a, requestID, -32603, err.Error())
 }
 
 func (s pendingInputService) completeToolUserInputText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {

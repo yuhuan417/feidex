@@ -88,7 +88,7 @@ func effectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.Model
 
 func (s modelConfigService) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
 	var result codexrpc.ModelListResult
-	client, err := s.app.requireCodexClient()
+	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return result, err
 	}
@@ -264,7 +264,7 @@ func (s modelConfigService) commandModel(msg *feishu.InboundMessage, args []stri
 }
 
 func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args []string) error {
-	sessionKey := s.app.makeSessionKey(msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) > 0 {
 		action := commandActionFromMessage(msg, map[string]any{
 			"menu_action": "menu.model",
@@ -287,7 +287,7 @@ func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args [
 					return err
 				}
 				if lookupModelEntry(result, modelID) == nil {
-					return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, s.app.replyInThreadEnabled(msg.ChatType))
+					return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, replyInThreadEnabled(s.app, msg.ChatType))
 				}
 			}
 			resp, err := newBackendConfigurationService(s.app).completeGlobalModelSet(action, modelID)
@@ -319,6 +319,6 @@ func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args [
 		return err
 	}
 	card := newModelConfigService(s.app).renderModelConfigCard(result, sessionKey, "menu.model")
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }

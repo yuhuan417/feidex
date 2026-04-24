@@ -148,7 +148,7 @@ func TestCommandUsageAndMenuAction(t *testing.T) {
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected commandUsage to send card")
 	}
-	resp, err := newMenuActionService(a).completeMenuUsage(&feishu.CardAction{}, a.makeSessionKey(msg))
+	resp, err := newMenuActionService(a).completeMenuUsage(&feishu.CardAction{}, makeSessionKey(a, msg))
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completeMenuUsage() = %#v, %v", resp, err)
 	}

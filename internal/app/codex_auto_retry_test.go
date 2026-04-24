@@ -39,9 +39,9 @@ func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *st
 	t.Helper()
 	sess := &state.Session{
 		Key:                     sessionKey,
-		WorkspaceID:             a.defaultWorkspaceID(),
+		WorkspaceID:             defaultWorkspaceID(a),
 		ActiveThreadID:          threadID,
-		ActiveThreadWorkspaceID: a.defaultWorkspaceID(),
+		ActiveThreadWorkspaceID: defaultWorkspaceID(a),
 		OwnerUserID:             "user-1",
 		ChatID:                  "chat-1",
 		ChatType:                "group",
@@ -74,7 +74,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	a.markSessionThreadLive(sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          a.defaultWorkspaceID(),
+		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",
@@ -160,7 +160,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	a.markSessionThreadLive(sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          a.defaultWorkspaceID(),
+		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",
@@ -217,7 +217,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	a.markSessionThreadLive(sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          a.defaultWorkspaceID(),
+		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",

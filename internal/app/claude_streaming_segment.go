@@ -32,7 +32,7 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 	if final {
 		kind = "final_message"
 	}
-	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), kind) {
+	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), kind) {
 		return nil, true
 	}
 

@@ -93,7 +93,7 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 	writeFile(t, repo+"/main.go", "package main\n\nfunc main() { println(\"dirty\") }\n")
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-uncommitted", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 
@@ -140,7 +140,7 @@ func TestCompleteMenuReviewBaseReturnsPreparingCardAndPatchesAsync(t *testing.T)
 	_ = initReviewGitRepo(t, a.cfg.Workspaces[0].Cwd)
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 
@@ -173,7 +173,7 @@ func TestCompleteReviewBaseSelectReturnsPreparingCardAndPatchesAsync(t *testing.
 	_ = initReviewGitRepo(t, a.cfg.Workspaces[0].Cwd)
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-select-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 
@@ -212,7 +212,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 	_ = initReviewGitRepo(t, a.cfg.Workspaces[0].Cwd)
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-submit-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 
@@ -278,7 +278,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 
-	sessionKey := a.makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-1", UserID: "user-1"})
+	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-1", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
