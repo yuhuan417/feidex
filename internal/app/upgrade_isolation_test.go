@@ -26,7 +26,6 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 
 	a, ff, _ := newTestApp(t)
 	a.codex = nil
-	a.liveThreads = nil
 	a.turnBindings = nil
 
 	newReleaseClient = func() releaseClient {
@@ -79,7 +78,6 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 
 	a, ff, _ := newTestApp(t)
 	a.codex = nil
-	a.liveThreads = nil
 	a.turnBindings = nil
 
 	newDaemonManager = func(string) (daemon.Manager, error) {
@@ -126,7 +124,6 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 
 	a, _, _ := newTestApp(t)
 	a.codex = nil
-	a.liveThreads = nil
 	a.turnBindings = nil
 
 	if err := a.store.UpsertPending(&state.PendingRequest{

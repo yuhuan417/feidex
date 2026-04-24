@@ -205,7 +205,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		backend:     backendCodex,
 		codex:       &fakeCodexClient{},
 		feishu:      &fakeFeishuClient{},
-		liveThreads: map[string]string{},
+		liveThreads: newLiveThreadTracker(),
 	}
 
 	sessionKey := "feishu:p2p:chat-1:user-1"
@@ -333,7 +333,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		backend:     backendClaude,
 		claude:      &fakeClaudeCore{},
 		feishu:      &fakeFeishuClient{},
-		liveThreads: map[string]string{},
+		liveThreads: newLiveThreadTracker(),
 	}
 
 	sessionKey := "feishu:p2p:chat-1:user-1"

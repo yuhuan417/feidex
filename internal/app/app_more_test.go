@@ -696,7 +696,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 			}()
 		},
 		turnStreams:  newTurnStreamTracker(),
-		liveThreads:  map[string]string{},
+		liveThreads:  newLiveThreadTracker(),
 		turnBindings: newTurnBindingTracker(),
 	}
 	t.Cleanup(asyncWG.Wait)

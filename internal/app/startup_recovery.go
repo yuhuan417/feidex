@@ -83,9 +83,7 @@ func (a *App) resetLiveThreadState() {
 	if a == nil {
 		return
 	}
-	a.liveThreadMu.Lock()
-	defer a.liveThreadMu.Unlock()
-	a.liveThreads = map[string]string{}
+	a.liveThreads = newLiveThreadTracker()
 }
 
 func (a *App) recoverSessionThreadsOnStartup() {

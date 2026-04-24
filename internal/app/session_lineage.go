@@ -2,39 +2,62 @@ package app
 
 import (
 	"strings"
+	"sync"
 
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
+type liveThreadTracker struct {
+	mu      sync.Mutex
+	threads map[string]string
+}
+
+func newLiveThreadTracker() *liveThreadTracker {
+	return &liveThreadTracker{threads: map[string]string{}}
+}
+
+func (a *App) liveThreadTracker() *liveThreadTracker {
+	if a == nil {
+		return nil
+	}
+	if a.liveThreads == nil {
+		a.liveThreads = newLiveThreadTracker()
+	}
+	return a.liveThreads
+}
+
 func (a *App) markSessionThreadLive(sessionKey, threadID string) {
 	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return
 	}
-	a.liveThreadMu.Lock()
-	defer a.liveThreadMu.Unlock()
-	if a.liveThreads == nil {
-		a.liveThreads = map[string]string{}
+	tracker := a.liveThreadTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.threads == nil {
+		tracker.threads = map[string]string{}
 	}
-	a.liveThreads[strings.TrimSpace(sessionKey)] = strings.TrimSpace(threadID)
+	tracker.threads[strings.TrimSpace(sessionKey)] = strings.TrimSpace(threadID)
 }
 
 func (a *App) sessionHasLiveThread(sessionKey, threadID string) bool {
 	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return false
 	}
-	a.liveThreadMu.Lock()
-	defer a.liveThreadMu.Unlock()
-	return a.liveThreads[strings.TrimSpace(sessionKey)] == strings.TrimSpace(threadID)
+	tracker := a.liveThreadTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.threads[strings.TrimSpace(sessionKey)] == strings.TrimSpace(threadID)
 }
 
 func (a *App) clearSessionLiveThread(sessionKey string) {
 	if a == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	a.liveThreadMu.Lock()
-	defer a.liveThreadMu.Unlock()
-	delete(a.liveThreads, strings.TrimSpace(sessionKey))
+	tracker := a.liveThreadTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	delete(tracker.threads, strings.TrimSpace(sessionKey))
 }
 
 func sessionHasInFlightSubmission(sess *state.Session) bool {

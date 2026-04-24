@@ -47,7 +47,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		started:     time.Now(),
 		deduper:     newInboundDeduper(),
 		turnStreams: newTurnStreamTracker(),
-		liveThreads: map[string]string{},
+		liveThreads: newLiveThreadTracker(),
 	}
 
 	a.handleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
@@ -126,7 +126,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		codex:       fc,
 		started:     time.Now(),
 		turnStreams: newTurnStreamTracker(),
-		liveThreads: map[string]string{},
+		liveThreads: newLiveThreadTracker(),
 	}
 	bad.handleFeishuMessage(&feishu.InboundMessage{
 		MessageID:   "bad-attach",

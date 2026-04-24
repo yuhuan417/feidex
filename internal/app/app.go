@@ -51,8 +51,7 @@ type App struct {
 	turnItems         *turnItemTracker
 	workspaceCloneMu  sync.Mutex
 	workspaceCloneOps map[string]*workspaceCloneOperation
-	liveThreadMu      sync.Mutex
-	liveThreads       map[string]string
+	liveThreads       *liveThreadTracker
 	turnBindings      *turnBindingTracker
 	finalCardPatches  *finalCardPatchTracker
 	skillsMu          sync.Mutex
@@ -124,7 +123,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		turnStreams:         newTurnStreamTracker(),
 		turnItems:           newTurnItemTracker(),
 		workspaceCloneOps:   map[string]*workspaceCloneOperation{},
-		liveThreads:         map[string]string{},
+		liveThreads:         newLiveThreadTracker(),
 		turnBindings:        newTurnBindingTracker(),
 		finalCardPatches:    newFinalCardPatchTracker(),
 		autoRetries:         map[string]*autoRetryState{},
