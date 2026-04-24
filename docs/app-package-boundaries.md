@@ -2,6 +2,8 @@
 
 `internal/app` is the Feishu-facing application coordinator. It owns product orchestration, session and turn lifecycle integration, pending request handling, card callbacks, and all behavior that must be checked against `docs/codex-app-server-state-machine-audit.md`. Code in this package may call Feishu adapters, backend runtime facades, the persistent store, and the extracted `internal/app/*` helper packages. It should not grow new pure parsing, formatting, or backend-agnostic workflow logic when that logic can live behind a smaller package boundary.
 
+App carries 8 receiver methods (lifecycle: `Start`/`Stop`; event handlers: 5 `Handle*` methods; transport error coordination: `handleCodexTransportError`) and 209 package-level functions that take `*App` as their first parameter. Business logic is organized into ~30 small `{app *App}` service structs and package-level functions. There is no `commandService` or `conversationWorkflowService` — command routing and conversation workflows are package-level functions dispatched by the registries.
+
 ## Physical Subpackages
 
 ### `internal/app/delivery`
@@ -102,6 +104,35 @@ Current owner surface:
 - workspace creation/clone payloads
 - clone plan/progress/error value types
 
+### `internal/app/quietmode`
+
+Responsibility: quiet-mode delivery predicates that determine which turn events should be delivered to the user.
+
+Allowed dependencies: `internal/config` plus Go standard library.
+
+Must not: depend on `internal/app`, read or mutate sessions, send Feishu messages, or inspect submissions.
+
+Current owner surface:
+
+- `ShouldDeliverTurnKind`, `ShouldDeliverTurnItem`, `ShouldDeliverTurnItemPayload`
+- `StatusText` for quiet-mode display
+- `IsClaudeTodoToolPayload` classifier
+
+### `internal/app/sessionctx`
+
+Responsibility: session thread-context lifecycle and effective-value computation shared by app code.
+
+Allowed dependencies: `internal/state`, `internal/config`, `internal/app/runtime` plus Go standard library.
+
+Must not: depend on `internal/app`, call backend RPC, send Feishu messages, or start/stop threads.
+
+Current owner surface:
+
+- thread context lifecycle: `ClearThreadContext`, `SetThreadContext`, `SetThreadDefaults`
+- effective values: `EffectiveApprovalPolicy`, `EffectiveSandboxMode`, `EffectiveClaudePermissionMode`
+- workspace switching: `SwitchSessionWorkspace`, `CanResumeThreadForSubmission`
+- backend thread snapshots: `BackendThreadSnapshot`, `StoreBackendThread`, `ClearBackendThread`, `RestoreBackendThread`
+
 ### `internal/app/cards`
 
 Responsibility: reusable Feishu card element construction that is independent of `App`.
@@ -120,12 +151,25 @@ Current owner surface:
 
 `internal/app` remains the composition root for behavior that crosses boundaries:
 
-- Feishu event routing, command/action registries, and card callback acknowledgement
+- Feishu event routing through the 5 `Handle*` receiver methods
+- command dispatch via package-level `handleCommand` and local command registries (`localCommandSpec`)
+- card action dispatch via package-level `dispatchCardAction` and action registries
 - session, thread, turn, submission, queue, pending request, and recovery lifecycle
 - Codex App Server state-machine integration documented by the audit
 - backend runtime selection and facade calls
 - review UI/form orchestration and review submission enqueueing
 - download, workspace orchestration, model, approval completion, compaction, history, and notification product flows
+
+Service structs group related behavior without introducing package boundaries:
+
+- `workspaceService` / `workspaceConfigService` / `workspaceManagementService` / `workspaceRenderService` / `workspaceThreadService` — workspace lifecycle, config, rendering
+- `threadService` — thread and session command/action handlers
+- `backendConfigurationService` / `backendSelectionService` / `backendUpgradeService` — backend facade coordination
+- `replyContinuationService` / `pendingInputService` / `pendingQueueService` — inbound message staging and queue
+- `turnStreamService` / `outboundCardService` / `finalCardPatchService` — turn output streaming and card delivery
+- `reviewFormService` / `reviewGitService` / `skillsService` — review and skills integration
+- `runtimeStateService` / `runtimeMaintenanceService` / `autoRetryService` — runtime state and recovery
+- `historyService` / `usageService` / `debugService` / `menuActionService` / `modelConfigService` — tools and diagnostics
 
 When a new helper is pure or can be expressed behind a small interface, place it in a subpackage before adding more package-private functions to `internal/app`.
 
@@ -145,3 +189,8 @@ These are not fully physical packages yet because current code still crosses app
 - `runtime`: move capability probing and transition-state helpers after backend facade ownership is explicit.
 - `approval`: move decision formatting only after backend reply/resume semantics are isolated behind tests.
 - `cards`: move app-specific renderers only after markdown normalization and submission context dependencies are parameterized.
+
+### Previously planned, now realized
+
+- `quietmode` (was: "quiet mode evaluation") — extracted as `internal/app/quietmode` with pure delivery predicates.
+- `sessionctx` (was: "session thread context") — extracted as `internal/app/sessionctx` with thread lifecycle and effective-value computation.
