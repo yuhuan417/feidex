@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appdelivery "feidex/internal/app/delivery"
 	"fmt"
 	"strings"
 
@@ -17,12 +18,12 @@ type replyChunkRenderSpec struct {
 	EnablePreview bool
 }
 
-func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, enablePreview bool) []replyChunkRenderSpec {
+func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
 	if a == nil {
 		return nil
 	}
 	if strings.TrimSpace(title) == "最终答复" && len(chunks) > 0 {
-		copied := append([]replyCardChunk(nil), chunks...)
+		copied := append([]appdelivery.ReplyCardChunk(nil), chunks...)
 		copied[0].Body = prependAttentionMentionMarkdown(copied[0].Body, a.turnStopAttentionUserID(sub, sub.TurnID))
 		chunks = copied
 	}
@@ -50,9 +51,9 @@ func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submi
 	return specs
 }
 
-func (a *App) sendReplyChunk(ctx context.Context, sub *state.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (sentReplyChunk, bool) {
+func (a *App) sendReplyChunk(ctx context.Context, sub *state.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
-		return sentReplyChunk{}, false
+		return appdelivery.SentReplyChunk{}, false
 	}
 
 	card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, spec.Title, spec.Color, spec.ShowHeader, spec.Body, nil, spec.EnablePreview)
@@ -83,9 +84,9 @@ func (a *App) sendReplyChunk(ctx context.Context, sub *state.Submission, spec re
 		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
-		return sentReplyChunk{}, false
+		return appdelivery.SentReplyChunk{}, false
 	}
-	return sentReplyChunk{
+	return appdelivery.SentReplyChunk{
 		MessageID:   strings.TrimSpace(id),
 		CardID:      cardID,
 		Title:       spec.Title,

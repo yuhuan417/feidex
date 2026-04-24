@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appreview "feidex/internal/app/review"
 	"fmt"
 	"strings"
 	"time"
@@ -136,13 +137,13 @@ func (s reviewFormService) renderReviewBaseCard(sessionKey, requestID string, pa
 		return nil, fmt.Errorf("当前仓库没有可选 branch")
 	}
 	selected := strings.TrimSpace(payload.Branch)
-	if selected == "" || !reviewBranchExists(options, selected) {
+	if selected == "" || !appreview.BranchExists(options, selected) {
 		selected = options[0].Name
 	}
 	selectedLabel := selected
 	for _, option := range options {
 		if option.Name == selected {
-			selectedLabel = reviewBranchOptionLabel(option)
+			selectedLabel = appreview.BranchOptionLabel(option)
 			break
 		}
 	}
@@ -155,7 +156,7 @@ func (s reviewFormService) renderReviewBaseCard(sessionKey, requestID string, pa
 	selectOptions := make([]selectStaticOption, 0, len(options))
 	for _, option := range options {
 		selectOptions = append(selectOptions, selectStaticOption{
-			Text:  reviewBranchOptionLabel(option),
+			Text:  appreview.BranchOptionLabel(option),
 			Value: option.Name,
 		})
 	}
@@ -196,13 +197,13 @@ func (s reviewFormService) renderReviewCommitCard(sessionKey, requestID string, 
 		return nil, fmt.Errorf("当前仓库没有可选 commit")
 	}
 	selected := strings.TrimSpace(payload.CommitSHA)
-	if selected == "" || !reviewCommitExists(options, selected) {
+	if selected == "" || !appreview.CommitExists(options, selected) {
 		selected = options[0].SHA
 	}
 	selectedLabel := selected
 	for _, option := range options {
 		if option.SHA == selected {
-			selectedLabel = reviewCommitOptionLabel(option)
+			selectedLabel = appreview.CommitOptionLabel(option)
 			break
 		}
 	}
@@ -215,7 +216,7 @@ func (s reviewFormService) renderReviewCommitCard(sessionKey, requestID string, 
 	selectOptions := make([]selectStaticOption, 0, len(options))
 	for _, option := range options {
 		selectOptions = append(selectOptions, selectStaticOption{
-			Text:  reviewCommitOptionLabel(option),
+			Text:  appreview.CommitOptionLabel(option),
 			Value: option.SHA,
 		})
 	}
@@ -437,14 +438,14 @@ func (s reviewFormService) completeReviewFormSubmitSync(action *feishu.CardActio
 	payload := reviewPendingPayloadFromPending(pending)
 	payload = mergeReviewCustomFormValues(payload, action.FormValue)
 
-	var target reviewTargetSpec
+	var target appreview.TargetSpec
 	switch strings.TrimSpace(payload.Mode) {
 	case reviewFormModeBase:
-		target = reviewTargetSpec{Type: reviewTargetBaseBranch, Branch: strings.TrimSpace(payload.Branch)}
+		target = appreview.TargetSpec{Type: appreview.TargetBaseBranch, Branch: strings.TrimSpace(payload.Branch)}
 	case reviewFormModeCommit:
-		target = reviewTargetSpec{Type: reviewTargetCommit, CommitSHA: strings.TrimSpace(payload.CommitSHA), CommitTitle: strings.TrimSpace(payload.CommitTitle)}
+		target = appreview.TargetSpec{Type: appreview.TargetCommit, CommitSHA: strings.TrimSpace(payload.CommitSHA), CommitTitle: strings.TrimSpace(payload.CommitTitle)}
 	case reviewFormModeCustom:
-		target = reviewTargetSpec{Type: reviewTargetCustom, Instructions: strings.TrimSpace(payload.Instructions)}
+		target = appreview.TargetSpec{Type: appreview.TargetCustom, Instructions: strings.TrimSpace(payload.Instructions)}
 	default:
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未知 review 表单"}}, nil
 	}

@@ -46,6 +46,76 @@ Current owner surface:
 - branch/commit option models and labels
 - Git repository, branch, commit, diff, and working-tree probes used by review flows
 
+
+### `internal/app/runtime`
+
+Responsibility: backend identity normalization and backend-agnostic runtime helper types.
+
+Allowed dependencies: `internal/config` plus Go standard library.
+
+Must not: start or stop backend processes, read or mutate sessions, perform recovery, send cards, or decide frontend switching eligibility.
+
+Current owner surface:
+
+- canonical Codex/Claude backend constants
+- backend normalization
+- session in-flight mode primitives
+
+### `internal/app/lifecycle`
+
+Responsibility: pure lifecycle predicates that are shared by protocol-sensitive app code.
+
+Allowed dependencies: `internal/state` plus Go standard library.
+
+Must not: mutate pending requests, call backend RPC, finish turns, resume submissions, or send Feishu updates.
+
+Current owner surface:
+
+- server-resolved pending request kind classification
+- pending request open/closed status predicate
+
+### `internal/app/approval`
+
+Responsibility: approval request presentation helpers.
+
+Allowed dependencies: `internal/feishu`, `internal/pathdisplay`, and Go standard library.
+
+Must not: complete approvals, reply to app-server requests, update pending request state, interrupt turns, or resume submissions.
+
+Current owner surface:
+
+- command approval body rendering
+- file approval body rendering and file-entry extraction
+- approval button construction
+
+### `internal/app/workspace`
+
+Responsibility: workspace workflow data models and workspace-local value objects.
+
+Allowed dependencies: Go standard library only.
+
+Must not: mutate config files, create pending forms, send cards, clone repositories, or decide active session binding.
+
+Current owner surface:
+
+- path picker payloads and entries
+- workspace creation/clone payloads
+- clone plan/progress/error value types
+
+### `internal/app/cards`
+
+Responsibility: reusable Feishu card element construction that is independent of `App`.
+
+Allowed dependencies: `internal/feishu` plus Go standard library.
+
+Must not: call Feishu APIs, inspect submissions/sessions, normalize app-specific markdown, or decide card delivery/reuse.
+
+Current owner surface:
+
+- markdown body card skeletons
+- action rows
+- static select elements
+
 ## Root App Responsibilities
 
 `internal/app` remains the composition root for behavior that crosses boundaries:
@@ -55,7 +125,7 @@ Current owner surface:
 - Codex App Server state-machine integration documented by the audit
 - backend runtime selection and facade calls
 - review UI/form orchestration and review submission enqueueing
-- download, workspace, model, approval, compaction, history, and notification product flows
+- download, workspace orchestration, model, approval completion, compaction, history, and notification product flows
 
 When a new helper is pure or can be expressed behind a small interface, place it in a subpackage before adding more package-private functions to `internal/app`.
 
@@ -63,7 +133,7 @@ When a new helper is pure or can be expressed behind a small interface, place it
 
 - Subpackages must not import `internal/app`; use exported data structures or narrow interfaces instead.
 - Lifecycle-sensitive code stays in `internal/app` until its protocol contract is explicit and covered by tests.
-- Keep compatibility wrappers in `internal/app` only as migration shims; new code should import the owning subpackage directly when it does not need app coordination.
+- Keep compatibility wrappers in `internal/app` only as migration shims; new code should import the owning subpackage directly when it does not need app coordination. Existing aliases for app-wide vocabulary should be removed once dependent call sites are migrated.
 - Any change touching approvals, turn lifecycle, thread lifecycle, review submission, compaction, tool input, or server requests must be checked against the state-machine audit before merge.
 - Prefer pure packages with standard-library dependencies. If a subpackage needs `config`, `state`, `codexrpc`, or `feishu`, document why that dependency belongs below the app coordinator.
 
@@ -71,7 +141,7 @@ When a new helper is pure or can be expressed behind a small interface, place it
 
 These are not fully physical packages yet because current code still crosses app state, Feishu rendering, and lifecycle boundaries:
 
-- `workspace`: workspace config/create/clone primitives. App should keep message ownership, pending forms, and callback acknowledgement.
-- `runtime`: backend normalization, capability probing, and runtime state helpers. App should keep session binding and recovery decisions.
-- `approvals`: approval summary/decision formatting once the protocol-sensitive request lifecycle is isolated behind interfaces.
-- `cards`: reusable card rendering primitives that do not call Feishu or mutate state.
+- `workspace`: move validation and filesystem planning helpers after config mutation boundaries are explicit.
+- `runtime`: move capability probing and transition-state helpers after backend facade ownership is explicit.
+- `approval`: move decision formatting only after backend reply/resume semantics are isolated behind tests.
+- `cards`: move app-specific renderers only after markdown normalization and submission context dependencies are parameterized.

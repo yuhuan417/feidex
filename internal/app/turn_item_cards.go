@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appdelivery "feidex/internal/app/delivery"
 	"strings"
 	"time"
 
@@ -82,7 +83,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			sub,
 			replyTurnItemCardTitle(payload),
 			payload.Color,
-			buildReplyCardChunks(body, payload.IsFinalAnswer, footerLines),
+			appdelivery.BuildReplyCardChunks(body, payload.IsFinalAnswer, footerLines),
 			s.app.replyInThreadForSubmission(sub),
 			payload.IsFinalAnswer,
 			reuseMessageID,

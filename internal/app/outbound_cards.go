@@ -4,93 +4,29 @@ import (
 	"context"
 	"strings"
 
+	appcards "feidex/internal/app/cards"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
 func newMarkdownBodyCard(title, color string) map[string]any {
-	return newMarkdownBodyCardWithHeader(title, color, strings.TrimSpace(title) != "")
+	return appcards.NewMarkdownBodyCard(title, color)
 }
 
 func newMarkdownBodyCardWithHeader(title, color string, showHeader bool) map[string]any {
-	if strings.TrimSpace(color) == "" {
-		color = "blue"
-	}
-	card := map[string]any{
-		"schema": "2.0",
-		"config": map[string]any{
-			"wide_screen_mode": true,
-			"update_multi":     true,
-		},
-		"body": map[string]any{
-			"elements": []map[string]any{},
-		},
-	}
-	if showHeader {
-		headerTitle := strings.TrimSpace(title)
-		if headerTitle == "" {
-			headerTitle = " "
-		}
-		header := map[string]any{"template": color}
-		header["title"] = map[string]any{
-			"tag":     "plain_text",
-			"content": headerTitle,
-		}
-		card["header"] = header
-	}
-	return card
+	return appcards.NewMarkdownBodyCardWithHeader(title, color, showHeader)
 }
 
 func appendMarkdownBodyCardElement(card map[string]any, elem map[string]any) {
-	body, _ := card["body"].(map[string]any)
-	if body == nil {
-		body = map[string]any{"elements": []map[string]any{}}
-		card["body"] = body
-	}
-	elements, _ := body["elements"].([]map[string]any)
-	body["elements"] = append(elements, elem)
+	appcards.AppendMarkdownBodyCardElement(card, elem)
 }
 
 func buildMarkdownBodyCardActionElement(buttons []feishu.Button) map[string]any {
-	columns := make([]map[string]any, 0, len(buttons))
-	for _, btn := range buttons {
-		button := map[string]any{
-			"tag":  "button",
-			"type": firstNonEmpty(strings.TrimSpace(btn.Type), "default"),
-			"text": map[string]any{"tag": "plain_text", "content": btn.Text},
-			"behaviors": []map[string]any{{
-				"type":  "callback",
-				"value": btn.Value,
-			}},
-		}
-		if strings.TrimSpace(btn.Name) != "" {
-			button["name"] = btn.Name
-		}
-		columns = append(columns, map[string]any{
-			"tag":    "column",
-			"width":  "weighted",
-			"weight": 1,
-			"elements": []map[string]any{
-				button,
-			},
-		})
-	}
-	return map[string]any{
-		"tag":                "column_set",
-		"horizontal_spacing": "8px",
-		"columns":            columns,
-	}
+	return appcards.BuildMarkdownBodyCardActionElement(buttons)
 }
 
 func buildMarkdownBodyCardActionElements(buttons []feishu.Button) []map[string]any {
-	if len(buttons) == 0 {
-		return nil
-	}
-	rows := make([]map[string]any, 0, len(buttons))
-	for _, btn := range buttons {
-		rows = append(rows, buildMarkdownBodyCardActionElement([]feishu.Button{btn}))
-	}
-	return rows
+	return appcards.BuildMarkdownBodyCardActionElements(buttons)
 }
 
 type cardRenderer struct {

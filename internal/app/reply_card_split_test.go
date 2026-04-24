@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	appdelivery "feidex/internal/app/delivery"
 	"strings"
 	"testing"
 
@@ -36,9 +37,9 @@ func TestSplitMarkdownByTableLimitSplitsRealTablesOnly(t *testing.T) {
 		markdownTestTable("t3"),
 	}, "\n")
 
-	parts := splitMarkdownByTableLimit(text, 2)
+	parts := appdelivery.SplitMarkdownByTableLimit(text, 2)
 	if len(parts) != 2 {
-		t.Fatalf("splitMarkdownByTableLimit() parts = %d, want 2", len(parts))
+		t.Fatalf("appdelivery.SplitMarkdownByTableLimit() parts = %d, want 2", len(parts))
 	}
 	if tables := countTablesInMarkdown(parts[0]); tables != 2 {
 		t.Fatalf("first part tables = %d, want 2", tables)
@@ -64,9 +65,9 @@ func TestSplitMarkdownByTableLimitKeepsFourBacktickFences(t *testing.T) {
 		markdownTestTable("t1"),
 	}, "\n")
 
-	parts := splitMarkdownByTableLimit(text, 1)
+	parts := appdelivery.SplitMarkdownByTableLimit(text, 1)
 	if len(parts) != 1 {
-		t.Fatalf("splitMarkdownByTableLimit() parts = %d, want 1", len(parts))
+		t.Fatalf("appdelivery.SplitMarkdownByTableLimit() parts = %d, want 1", len(parts))
 	}
 	if tables := countTablesInMarkdown(parts[0]); tables != 1 {
 		t.Fatalf("table count = %d, want 1 real table", tables)
@@ -248,7 +249,7 @@ func TestSendFinalMessagesWithFooterSplitsLargePayload(t *testing.T) {
 
 func countTablesInMarkdown(text string) int {
 	count := 0
-	for _, block := range splitMarkdownBlocks(text) {
+	for _, block := range appdelivery.SplitMarkdownBlocks(text) {
 		count += block.TableCount
 	}
 	return count

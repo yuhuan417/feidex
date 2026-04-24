@@ -3,34 +3,16 @@ package app
 import (
 	"strings"
 
+	applifecycle "feidex/internal/app/lifecycle"
 	"feidex/internal/state"
 )
 
 func isServerResolvedPendingKind(kind string) bool {
-	switch strings.TrimSpace(kind) {
-	case "command",
-		"file",
-		"permissions",
-		"tool_request_user_input",
-		"tool_request_user_input_form",
-		"mcp_elicitation_url",
-		"mcp_elicitation_form":
-		return true
-	default:
-		return false
-	}
+	return applifecycle.IsServerResolvedPendingKind(kind)
 }
 
 func isPendingRequestOpen(req *state.PendingRequest) bool {
-	if req == nil {
-		return false
-	}
-	switch strings.TrimSpace(req.Status) {
-	case "pending", "replied":
-		return true
-	default:
-		return false
-	}
+	return applifecycle.IsPendingRequestOpen(req)
 }
 
 func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.PendingRequest {

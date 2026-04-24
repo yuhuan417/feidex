@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appreview "feidex/internal/app/review"
 	"testing"
 
 	"feidex/internal/codexrpc"
@@ -13,28 +14,28 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	repo, commits := initReviewGitRepoWithCommits(t, a.cfg.Workspaces[0].Cwd)
 
-	resolvedBase, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{
-		Type:   reviewTargetBaseBranch,
+	resolvedBase, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
+		Type:   appreview.TargetBaseBranch,
 		Branch: "main",
 	})
 	if err != nil {
 		t.Fatalf("resolveReviewTarget(base) error = %v", err)
 	}
-	if resolvedBase.Type != reviewTargetBaseBranch || resolvedBase.Branch != "main" {
+	if resolvedBase.Type != appreview.TargetBaseBranch || resolvedBase.Branch != "main" {
 		t.Fatalf("resolved base target = %+v, want base branch main", resolvedBase)
 	}
 	if got := reviewSubmissionInputText(resolvedBase); got != "Review: base branch main" {
 		t.Fatalf("reviewSubmissionInputText(base) = %q", got)
 	}
 
-	resolvedCommit, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{
-		Type:      reviewTargetCommit,
+	resolvedCommit, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
+		Type:      appreview.TargetCommit,
 		CommitSHA: commits[1][:8],
 	})
 	if err != nil {
 		t.Fatalf("resolveReviewTarget(commit) error = %v", err)
 	}
-	if resolvedCommit.Type != reviewTargetCommit || resolvedCommit.CommitSHA != commits[1] || resolvedCommit.CommitTitle != "feature change" {
+	if resolvedCommit.Type != appreview.TargetCommit || resolvedCommit.CommitSHA != commits[1] || resolvedCommit.CommitTitle != "feature change" {
 		t.Fatalf("resolved commit target = %+v, want full sha and title", resolvedCommit)
 	}
 	if got := reviewTargetSummary(resolvedCommit); got != "commit `"+shortReviewCommitSHA(commits[1])+"` feature change" {
@@ -42,22 +43,22 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	}
 
 	writeFile(t, repo+"/main.go", "package main\n\nfunc main() { println(\"dirty\") }\n")
-	resolvedUncommitted, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{Type: reviewTargetUncommitted})
+	resolvedUncommitted, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	if err != nil {
 		t.Fatalf("resolveReviewTarget(uncommitted) error = %v", err)
 	}
-	if resolvedUncommitted.Type != reviewTargetUncommitted {
+	if resolvedUncommitted.Type != appreview.TargetUncommitted {
 		t.Fatalf("resolved uncommitted target = %+v, want uncommitted", resolvedUncommitted)
 	}
 
-	resolvedCustom, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{
-		Type:         reviewTargetCustom,
+	resolvedCustom, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
+		Type:         appreview.TargetCustom,
 		Instructions: "focus on regressions",
 	})
 	if err != nil {
 		t.Fatalf("resolveReviewTarget(custom) error = %v", err)
 	}
-	if resolvedCustom.Type != reviewTargetCustom || resolvedCustom.Instructions != "focus on regressions" {
+	if resolvedCustom.Type != appreview.TargetCustom || resolvedCustom.Instructions != "focus on regressions" {
 		t.Fatalf("resolved custom target = %+v, want custom instructions", resolvedCustom)
 	}
 	if got := reviewSubmissionInputText(resolvedCustom); got != "Review: focus on regressions" {
@@ -82,7 +83,7 @@ func TestStartSubmissionReviewUsesStoredTargetPayload(t *testing.T) {
 
 	turnID, err := a.startSubmissionReview(context.Background(), "thread-1", &state.Submission{
 		Kind:              submissionKindReview,
-		ReviewTargetType:  reviewTargetCommit,
+		ReviewTargetType:  appreview.TargetCommit,
 		ReviewCommitSHA:   "abcdef1234567890",
 		ReviewCommitTitle: "feature change",
 	})
@@ -99,7 +100,7 @@ func TestStartSubmissionReviewUsesStoredTargetPayload(t *testing.T) {
 		t.Fatalf("review/start threadId = %q, want thread-1", got)
 	}
 	target, _ := gotParams["target"].(map[string]any)
-	if got, _ := target["type"].(string); got != reviewTargetCommit {
+	if got, _ := target["type"].(string); got != appreview.TargetCommit {
 		t.Fatalf("review/start target.type = %q, want commit", got)
 	}
 	if got, _ := target["sha"].(string); got != "abcdef1234567890" {

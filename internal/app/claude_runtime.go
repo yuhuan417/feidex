@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	appapproval "feidex/internal/app/approval"
+	appdelivery "feidex/internal/app/delivery"
 	"fmt"
 	"log/slog"
 	"os"
@@ -52,7 +54,7 @@ type claudeTurnState struct {
 	Thinking   string
 
 	LastAssistantText        string
-	LastTextChunks           []sentReplyChunk
+	LastTextChunks           []appdelivery.SentReplyChunk
 	DeliveredAnyText         bool
 	SuppressFailedCompletion bool
 }
@@ -716,7 +718,7 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 	if turn := state.turns[event.TurnNumber]; turn != nil {
 		if len(chunks) > 0 {
 			turn.DeliveredAnyText = true
-			turn.LastTextChunks = append([]sentReplyChunk(nil), chunks...)
+			turn.LastTextChunks = append([]appdelivery.SentReplyChunk(nil), chunks...)
 		}
 	}
 	state.mu.Unlock()
@@ -755,13 +757,13 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	suppressFailedCompletion := false
 	deliveredAnyText := false
 	lastAssistantText := ""
-	lastTextChunks := []sentReplyChunk(nil)
+	lastTextChunks := []appdelivery.SentReplyChunk(nil)
 	if turn != nil {
 		turnID = strings.TrimSpace(turn.TurnID)
 		suppressFailedCompletion = turn.SuppressFailedCompletion && !event.Success
 		deliveredAnyText = turn.DeliveredAnyText
 		lastAssistantText = strings.TrimSpace(turn.LastAssistantText)
-		lastTextChunks = append([]sentReplyChunk(nil), turn.LastTextChunks...)
+		lastTextChunks = append([]appdelivery.SentReplyChunk(nil), turn.LastTextChunks...)
 	}
 	if suppressFailedCompletion {
 		delete(state.turns, event.TurnNumber)
@@ -1077,7 +1079,7 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 	case "Bash", "KillShell":
 		kind = "command"
 		payload["command"] = strings.TrimSpace(firstNonEmpty(stringValue(req.Input["command"]), stringValue(req.Input["cmd"])))
-		body = renderCommandApprovalBody(payload)
+		body = appapproval.RenderCommandBody(payload)
 	case "Write", "Edit", "NotebookEdit":
 		kind = "file"
 		path := strings.TrimSpace(firstNonEmpty(
@@ -1089,7 +1091,7 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 			path = strings.TrimSpace(*req.BlockedPath)
 		}
 		payload["changes"] = []map[string]any{{"path": path, "kind": strings.TrimSpace(req.ToolName)}}
-		body = renderFileApprovalBodyWithWorkspace(payload, r.app.workspaceCwd(workspaceID))
+		body = appapproval.RenderFileBodyWithWorkspace(payload, r.app.workspaceCwd(workspaceID))
 	default:
 		kind = "permissions"
 		payload["permissions"] = map[string]any{

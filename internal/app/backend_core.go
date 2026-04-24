@@ -3,21 +3,21 @@ package app
 import (
 	"strings"
 
-	"feidex/internal/config"
+	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/state"
 )
 
 const (
-	backendCodex  = config.RuntimeBackendCodex
-	backendClaude = config.RuntimeBackendClaude
+	backendCodex  = appruntime.BackendCodex
+	backendClaude = appruntime.BackendClaude
 )
 
-type sessionInflightMode string
+type sessionInflightMode = appruntime.SessionInflightMode
 
 const (
-	sessionInflightSingle     sessionInflightMode = "single"
-	sessionInflightSerialized sessionInflightMode = "serialized"
-	sessionInflightParallel   sessionInflightMode = "parallel"
+	sessionInflightSingle     sessionInflightMode = appruntime.SessionInflightSingle
+	sessionInflightSerialized sessionInflightMode = appruntime.SessionInflightSerialized
+	sessionInflightParallel   sessionInflightMode = appruntime.SessionInflightParallel
 )
 
 type claudeApprovalResolution struct {
@@ -38,24 +38,15 @@ const (
 )
 
 func normalizeRuntimeBackend(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "":
-		return ""
-	case backendClaude:
-		return backendClaude
-	case backendCodex:
-		return backendCodex
-	default:
-		return ""
-	}
+	return appruntime.NormalizeBackend(value)
 }
 
-func sessionInflightModeForBackend(string) sessionInflightMode {
-	return sessionInflightSingle
+func sessionInflightModeForBackend(backend string) sessionInflightMode {
+	return appruntime.SessionInflightModeForBackend(backend)
 }
 
 func sessionInflightAllowsAdditional(mode sessionInflightMode) bool {
-	return mode == sessionInflightSerialized || mode == sessionInflightParallel
+	return appruntime.SessionInflightAllowsAdditional(mode)
 }
 
 func (a *App) configuredBackend() string {

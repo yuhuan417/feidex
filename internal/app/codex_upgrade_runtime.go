@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	appmaintenance "feidex/internal/app/maintenance"
 	"fmt"
 	"os"
 	"strings"
@@ -27,14 +28,14 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 			snapshot.Message = message
 		},
 	)
-	runMaintenanceUpgradeWorkflow(maintenanceUpgradeWorkflow{
+	appmaintenance.RunUpgradeWorkflow(appmaintenance.UpgradeWorkflow{
 		PackageName:    "@openai/codex",
 		BackendName:    "Codex",
 		CurrentVersion: payload.CurrentVersion,
 		TargetVersion:  payload.TargetVersion,
-		Probe: func(ctx context.Context) (maintenanceUpgradeProbe, error) {
+		Probe: func(ctx context.Context) (appmaintenance.UpgradeProbe, error) {
 			probe, err := manager.Probe(ctx)
-			return maintenanceUpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
+			return appmaintenance.UpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
 		},
 		InstallVersion:    manager.InstallVersion,
 		SmokeTest:         newBackendUpgradeService(s.app).codexSmokeTest,

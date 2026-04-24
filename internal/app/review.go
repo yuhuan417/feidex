@@ -17,11 +17,6 @@ const (
 	submissionKindReview = "review"
 	pendingKindReview    = "review_form"
 
-	reviewTargetUncommitted = appreview.TargetUncommitted
-	reviewTargetBaseBranch  = appreview.TargetBaseBranch
-	reviewTargetCommit      = appreview.TargetCommit
-	reviewTargetCustom      = appreview.TargetCustom
-
 	reviewFormModeBase   = "base"
 	reviewFormModeCommit = "commit"
 	reviewFormModeCustom = "custom"
@@ -29,8 +24,6 @@ const (
 	gitRecordSep = "\x1e"
 	gitFieldSep  = "\x1f"
 )
-
-type reviewTargetSpec = appreview.TargetSpec
 
 type reviewPendingPayload struct {
 	Mode         string `json:"mode"`
@@ -64,21 +57,21 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		return nil
 	}
 	if len(args) == 0 {
-		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{Type: reviewTargetUncommitted})
+		return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "uncommitted", "uncommittedChanges":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /review | /review uncommitted | /review base [branch] | /review commit [rev] | /review custom [instructions]")
 		}
-		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{Type: reviewTargetUncommitted})
+		return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	case "base":
 		switch len(args) {
 		case 1:
 			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeBase)
 		case 2:
-			return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
-				Type:   reviewTargetBaseBranch,
+			return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{
+				Type:   appreview.TargetBaseBranch,
 				Branch: strings.TrimSpace(args[1]),
 			})
 		default:
@@ -89,8 +82,8 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		case 1:
 			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCommit)
 		case 2:
-			return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
-				Type:      reviewTargetCommit,
+			return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{
+				Type:      appreview.TargetCommit,
 				CommitSHA: strings.TrimSpace(args[1]),
 			})
 		default:
@@ -100,8 +93,8 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		if len(args) == 1 {
 			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCustom)
 		}
-		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
-			Type:         reviewTargetCustom,
+		return s.app.startInlineReviewFromMessage(msg, appreview.TargetSpec{
+			Type:         appreview.TargetCustom,
 			Instructions: strings.TrimSpace(strings.Join(args[1:], " ")),
 		})
 	default:
@@ -109,7 +102,7 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 	}
 }
 
-func (a *App) startInlineReviewFromMessage(msg *feishu.InboundMessage, target reviewTargetSpec) error {
+func (a *App) startInlineReviewFromMessage(msg *feishu.InboundMessage, target appreview.TargetSpec) error {
 	confirmation, err := a.startInlineReview(msg, target)
 	if err != nil {
 		return err
@@ -117,7 +110,7 @@ func (a *App) startInlineReviewFromMessage(msg *feishu.InboundMessage, target re
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, confirmation, a.replyInThreadEnabled(msg.ChatType))
 }
 
-func (a *App) startInlineReview(msg *feishu.InboundMessage, target reviewTargetSpec) (string, error) {
+func (a *App) startInlineReview(msg *feishu.InboundMessage, target appreview.TargetSpec) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("nil message")
 	}
@@ -148,7 +141,7 @@ func (a *App) startInlineReview(msg *feishu.InboundMessage, target reviewTargetS
 	return reviewConfirmationText(resolved), nil
 }
 
-func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target reviewTargetSpec) error {
+func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
 	if a == nil || a.store == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -221,41 +214,41 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 	return nil
 }
 
-func reviewSubmissionInputText(target reviewTargetSpec) string {
+func reviewSubmissionInputText(target appreview.TargetSpec) string {
 	switch strings.TrimSpace(target.Type) {
-	case reviewTargetUncommitted:
+	case appreview.TargetUncommitted:
 		return "Review: uncommitted changes"
-	case reviewTargetBaseBranch:
+	case appreview.TargetBaseBranch:
 		return "Review: base branch " + strings.TrimSpace(target.Branch)
-	case reviewTargetCommit:
+	case appreview.TargetCommit:
 		label := shortReviewCommitSHA(target.CommitSHA)
 		if strings.TrimSpace(target.CommitTitle) != "" {
 			label += " " + strings.TrimSpace(target.CommitTitle)
 		}
 		return "Review: commit " + strings.TrimSpace(label)
-	case reviewTargetCustom:
+	case appreview.TargetCustom:
 		return "Review: " + truncate(strings.TrimSpace(target.Instructions), 80)
 	default:
 		return "Review"
 	}
 }
 
-func reviewConfirmationText(target reviewTargetSpec) string {
+func reviewConfirmationText(target appreview.TargetSpec) string {
 	return "已启动 review，目标：" + reviewTargetSummary(target) + "。"
 }
 
-func reviewTargetSummary(target reviewTargetSpec) string {
+func reviewTargetSummary(target appreview.TargetSpec) string {
 	switch strings.TrimSpace(target.Type) {
-	case reviewTargetUncommitted:
+	case appreview.TargetUncommitted:
 		return "未提交改动"
-	case reviewTargetBaseBranch:
+	case appreview.TargetBaseBranch:
 		return "base branch `" + inlineCodeText(target.Branch) + "`"
-	case reviewTargetCommit:
+	case appreview.TargetCommit:
 		if title := strings.TrimSpace(target.CommitTitle); title != "" {
 			return "commit `" + inlineCodeText(shortReviewCommitSHA(target.CommitSHA)) + "` " + title
 		}
 		return "commit `" + inlineCodeText(shortReviewCommitSHA(target.CommitSHA)) + "`"
-	case reviewTargetCustom:
+	case appreview.TargetCustom:
 		return "自定义 instructions"
 	default:
 		return "review"
@@ -298,11 +291,11 @@ func (a *App) startSubmissionReview(ctx context.Context, threadID string, sub *s
 	return turnID, nil
 }
 
-func reviewTargetFromSubmission(sub *state.Submission) reviewTargetSpec {
+func reviewTargetFromSubmission(sub *state.Submission) appreview.TargetSpec {
 	if sub == nil {
-		return reviewTargetSpec{}
+		return appreview.TargetSpec{}
 	}
-	return reviewTargetSpec{
+	return appreview.TargetSpec{
 		Type:         strings.TrimSpace(sub.ReviewTargetType),
 		Branch:       strings.TrimSpace(sub.ReviewBranch),
 		CommitSHA:    strings.TrimSpace(sub.ReviewCommitSHA),
@@ -311,21 +304,21 @@ func reviewTargetFromSubmission(sub *state.Submission) reviewTargetSpec {
 	}
 }
 
-func reviewTargetParams(target reviewTargetSpec) map[string]any {
+func reviewTargetParams(target appreview.TargetSpec) map[string]any {
 	switch strings.TrimSpace(target.Type) {
-	case reviewTargetUncommitted:
-		return map[string]any{"type": reviewTargetUncommitted}
-	case reviewTargetBaseBranch:
-		return map[string]any{"type": reviewTargetBaseBranch, "branch": strings.TrimSpace(target.Branch)}
-	case reviewTargetCommit:
-		params := map[string]any{"type": reviewTargetCommit, "sha": strings.TrimSpace(target.CommitSHA)}
+	case appreview.TargetUncommitted:
+		return map[string]any{"type": appreview.TargetUncommitted}
+	case appreview.TargetBaseBranch:
+		return map[string]any{"type": appreview.TargetBaseBranch, "branch": strings.TrimSpace(target.Branch)}
+	case appreview.TargetCommit:
+		params := map[string]any{"type": appreview.TargetCommit, "sha": strings.TrimSpace(target.CommitSHA)}
 		if title := strings.TrimSpace(target.CommitTitle); title != "" {
 			params["title"] = title
 		}
 		return params
-	case reviewTargetCustom:
-		return map[string]any{"type": reviewTargetCustom, "instructions": strings.TrimSpace(target.Instructions)}
+	case appreview.TargetCustom:
+		return map[string]any{"type": appreview.TargetCustom, "instructions": strings.TrimSpace(target.Instructions)}
 	default:
-		return map[string]any{"type": reviewTargetUncommitted}
+		return map[string]any{"type": appreview.TargetUncommitted}
 	}
 }

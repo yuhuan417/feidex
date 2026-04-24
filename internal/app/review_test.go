@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	appreview "feidex/internal/app/review"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,8 +52,8 @@ func TestCommandReviewUncommittedCallsReviewStart(t *testing.T) {
 		t.Fatalf("delivery = %q, want inline", got)
 	}
 	target, _ := gotParams["target"].(map[string]any)
-	if got, _ := target["type"].(string); got != reviewTargetUncommitted {
-		t.Fatalf("target.type = %q, want %q", got, reviewTargetUncommitted)
+	if got, _ := target["type"].(string); got != appreview.TargetUncommitted {
+		t.Fatalf("target.type = %q, want %q", got, appreview.TargetUncommitted)
 	}
 	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "未提交改动") {
 		t.Fatalf("review confirmation = %#v, want uncommitted target text", ff.replyTexts)
@@ -228,8 +229,8 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 		t.Fatalf("review submit response = %#v, want success", resp)
 	}
 	target, _ := gotParams["target"].(map[string]any)
-	if got, _ := target["type"].(string); got != reviewTargetCustom {
-		t.Fatalf("custom target.type = %q, want %q", got, reviewTargetCustom)
+	if got, _ := target["type"].(string); got != appreview.TargetCustom {
+		t.Fatalf("custom target.type = %q, want %q", got, appreview.TargetCustom)
 	}
 	if got, _ := target["instructions"].(string); got != "focus on tests and regressions" {
 		t.Fatalf("custom instructions = %q", got)

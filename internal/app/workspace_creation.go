@@ -11,86 +11,19 @@ import (
 	"strings"
 	"time"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
-type workspaceNewPayload struct {
-	RootPath    string             `json:"root_path"`
-	SelectedCWD string             `json:"selected_cwd"`
-	DraftID     string             `json:"draft_id,omitempty"`
-	AutoDraftID string             `json:"auto_draft_id,omitempty"`
-	DraftName   string             `json:"draft_name,omitempty"`
-	Notice      string             `json:"notice,omitempty"`
-	Picker      *pathPickerPayload `json:"picker,omitempty"`
-}
-
-type workspaceClonePayload struct {
-	RootPath          string             `json:"root_path"`
-	SelectedParentDir string             `json:"selected_parent_dir,omitempty"`
-	RepoURL           string             `json:"repo_url,omitempty"`
-	DraftID           string             `json:"draft_id,omitempty"`
-	ErrorMessage      string             `json:"error_message,omitempty"`
-	Picker            *pathPickerPayload `json:"picker,omitempty"`
-}
-
-type workspaceCloneTakeoverError struct {
-	WorkspaceID string
-	TargetDir   string
-	Err         error
-}
-
-type workspaceCloneExistingDirError struct {
-	WorkspaceID string
-	TargetDir   string
-}
-
-type workspaceCloneExistingWorkspaceError struct {
-	WorkspaceID string
-	TargetDir   string
-}
-
-type workspaceCloneProgressSnapshot struct {
-	StartedAt      time.Time
-	LastProgressAt time.Time
-	State          string
-	Lines          []string
-}
-
-type workspaceClonePlan struct {
-	RepoName    string
-	WorkspaceID string
-	TargetDir   string
-}
-
-func (e *workspaceCloneTakeoverError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return fmt.Sprintf("仓库已拉取到 %q，但创建工作区失败: %v", e.TargetDir, e.Err)
-}
-
-func (e *workspaceCloneTakeoverError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
-}
-
-func (e *workspaceCloneExistingDirError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return fmt.Sprintf("目标目录已存在: %s", e.TargetDir)
-}
-
-func (e *workspaceCloneExistingWorkspaceError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return fmt.Sprintf("目标目录 %q 已由工作区 %q 接管", e.TargetDir, e.WorkspaceID)
-}
+type workspaceNewPayload = appworkspace.NewPayload
+type workspaceClonePayload = appworkspace.ClonePayload
+type workspaceCloneTakeoverError = appworkspace.CloneTakeoverError
+type workspaceCloneExistingDirError = appworkspace.CloneExistingDirError
+type workspaceCloneExistingWorkspaceError = appworkspace.CloneExistingWorkspaceError
+type workspaceCloneProgressSnapshot = appworkspace.CloneProgressSnapshot
+type workspaceClonePlan = appworkspace.ClonePlan
 
 func workspaceNewPayloadFromPending(pending *state.PendingRequest) workspaceNewPayload {
 	var payload workspaceNewPayload

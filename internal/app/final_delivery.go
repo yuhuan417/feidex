@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appdelivery "feidex/internal/app/delivery"
 	"strings"
 
 	"feidex/internal/state"
@@ -51,14 +52,14 @@ func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submis
 	return ids
 }
 
-func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []sentReplyChunk {
+func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
 	if a.quietModeEnabled() && !shouldDeliverTurnKindInQuiet(a.quietMode(), "final_message") {
 		return nil
 	}
-	chunks := buildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
+	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
 	results := a.sendReplyCardChunksWithReuseIDs(ctx, sub, "最终答复", "green", chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil

@@ -2,11 +2,12 @@ package app
 
 import (
 	"context"
+	appdelivery "feidex/internal/app/delivery"
 	"strings"
 	"time"
 )
 
-func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]sentReplyChunk, bool) {
+func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
 	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, reuseMessageID)
 }
 
@@ -15,7 +16,7 @@ func (a *App) finalizeClaudeOutputSegment(ctx context.Context, threadID, turnID,
 	return ok
 }
 
-func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]sentReplyChunk, bool) {
+func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
 	if a == nil {
 		return nil, false
 	}
@@ -50,14 +51,14 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 		if len(ids) == 0 {
 			return nil, false
 		}
-		return []sentReplyChunk{{MessageID: ids[0], Body: body, Title: title, ShowHeader: showHeader}}, true
+		return []appdelivery.SentReplyChunk{{MessageID: ids[0], Body: body, Title: title, ShowHeader: showHeader}}, true
 	}
 	results := a.sendReplyCardChunksWithReuseIDs(
 		ctx,
 		sub,
 		title,
 		color,
-		buildReplyCardChunks(body, showHeader, nil),
+		appdelivery.BuildReplyCardChunks(body, showHeader, nil),
 		a.replyInThreadForSubmission(sub),
 		false,
 		func() []string {

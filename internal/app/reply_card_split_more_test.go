@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appdelivery "feidex/internal/app/delivery"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,7 @@ func TestReplyCardSplitHelpersAndExpansion(t *testing.T) {
 
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	chunk := replyCardChunk{
+	chunk := appdelivery.ReplyCardChunk{
 		ShowHeader:  true,
 		Body:        strings.Repeat("abcdef", 7000),
 		FooterLines: []string{"footer line"},

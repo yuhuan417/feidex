@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	appapproval "feidex/internal/app/approval"
 	"log/slog"
 	"strings"
 
@@ -145,14 +146,14 @@ func (a *App) approvalBodyText(pending *state.PendingRequest) string {
 			}
 			if pending.Kind == "command" {
 				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(renderCommandApprovalBody(request)); body != "" {
+					if body := strings.TrimSpace(appapproval.RenderCommandBody(request)); body != "" {
 						return body
 					}
 				}
 			}
 			if pending.Kind == "file" {
 				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(renderFileApprovalBody(request)); body != "" {
+					if body := strings.TrimSpace(appapproval.RenderFileBody(request)); body != "" {
 						return body
 					}
 				}

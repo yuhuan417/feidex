@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appreview "feidex/internal/app/review"
 	"os"
 	"strings"
 	"testing"
@@ -129,8 +130,8 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 		t.Fatalf("review patched body = %q, want uncommitted review confirmation", body)
 	}
 	target, _ := gotParams["target"].(map[string]any)
-	if got, _ := target["type"].(string); got != reviewTargetUncommitted {
-		t.Fatalf("target.type = %q, want %q", got, reviewTargetUncommitted)
+	if got, _ := target["type"].(string); got != appreview.TargetUncommitted {
+		t.Fatalf("target.type = %q, want %q", got, appreview.TargetUncommitted)
 	}
 }
 
@@ -258,8 +259,8 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 		t.Fatalf("patched review submit body = %q", body)
 	}
 	target, _ := gotParams["target"].(map[string]any)
-	if got, _ := target["type"].(string); got != reviewTargetBaseBranch {
-		t.Fatalf("target.type = %q, want %q", got, reviewTargetBaseBranch)
+	if got, _ := target["type"].(string); got != appreview.TargetBaseBranch {
+		t.Fatalf("target.type = %q, want %q", got, appreview.TargetBaseBranch)
 	}
 	if got, _ := target["branch"].(string); got != "main" {
 		t.Fatalf("target.branch = %q, want main", got)

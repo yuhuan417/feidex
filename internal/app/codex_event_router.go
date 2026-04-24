@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	appapproval "feidex/internal/app/approval"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -164,7 +165,7 @@ func (r *codexEventRouter) onCommandApproval(req codexrpc.RequestEnvelope) {
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
 	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
-	newOutboundCardService(a).sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, renderCommandApprovalBody(raw), raw)
+	newOutboundCardService(a).sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, appapproval.RenderCommandBody(raw), raw)
 }
 
 func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
@@ -184,7 +185,7 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 			workspaceCwd = ws.Cwd
 		}
 	}
-	newOutboundCardService(a).sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, renderFileApprovalBodyWithWorkspace(raw, workspaceCwd), raw)
+	newOutboundCardService(a).sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, appapproval.RenderFileBodyWithWorkspace(raw, workspaceCwd), raw)
 }
 
 func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appmaintenance "feidex/internal/app/maintenance"
 	"fmt"
 	"strings"
 	"time"
@@ -27,14 +28,14 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 			snapshot.Message = message
 		},
 	)
-	runMaintenanceUpgradeWorkflow(maintenanceUpgradeWorkflow{
+	appmaintenance.RunUpgradeWorkflow(appmaintenance.UpgradeWorkflow{
 		PackageName:    "@anthropic-ai/claude-code",
 		BackendName:    "Claude",
 		CurrentVersion: payload.CurrentVersion,
 		TargetVersion:  payload.TargetVersion,
-		Probe: func(ctx context.Context) (maintenanceUpgradeProbe, error) {
+		Probe: func(ctx context.Context) (appmaintenance.UpgradeProbe, error) {
 			probe, err := manager.Probe(ctx)
-			return maintenanceUpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
+			return appmaintenance.UpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
 		},
 		InstallVersion:    manager.InstallVersion,
 		SmokeTest:         func(ctx context.Context) error { return runClaudeSmokeTest(s.app, ctx) },

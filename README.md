@@ -71,9 +71,14 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
 cmd/feidex/                 主程序入口
 cmd/feishu_card_demo/       飞书卡片 demo
 internal/app/               飞书侧应用协调层（frontend、session、菜单、审批、turn lifecycle）
+internal/app/approval/      审批卡片文案、按钮、文件摘要等纯 presentation helper
+internal/app/cards/         飞书卡片 skeleton/action/select 等通用构造 helper
 internal/app/delivery/      回复卡片分片、markdown 拆分等纯 outbound delivery helper
+internal/app/lifecycle/     pending request / lifecycle 共享谓词
 internal/app/maintenance/   backend-agnostic 升级/维护 workflow helper
 internal/app/review/        review target 数据结构与 Git target 解析/查询 helper
+internal/app/runtime/       backend 标识规范化、in-flight mode 等 runtime helper
+internal/app/workspace/     workspace/path picker/clone payload 与值对象
 internal/feishu/            飞书适配层
 internal/codexrpc/          Codex App Server RPC 客户端与类型
 internal/claudecli/         Claude CLI stream-json 适配层
@@ -94,7 +99,7 @@ config.example.toml         配置样例
 关键边界：
 
 - `frontend` 是运行时隔离边界；backend 选择、session lineage、pending request、message link 和运行时缓存都必须按 frontend 隔离。
-- `internal/app` 拥有产品语义；Codex/Claude 协议细节应收敛在 backend adapter/facade，避免散落到消息、菜单和审批编排里。已物理拆出的 `internal/app/delivery`、`internal/app/maintenance`、`internal/app/review` 只承载无 `*App` 依赖的纯逻辑/窄职责 helper。
+- `internal/app` 拥有产品语义；Codex/Claude 协议细节应收敛在 backend adapter/facade，避免散落到消息、菜单和审批编排里。已物理拆出的 `internal/app/*` 子包只承载无 `*App` 依赖的纯逻辑、值对象或窄职责 helper。
 - `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；不要让它理解飞书、session 或卡片。
 - app 物理子包的职责边界见 [docs/app-package-boundaries.md](docs/app-package-boundaries.md)；新增子包不得反向 import `internal/app`。
 - `internal/feishu` 只负责飞书 SDK、消息/卡片发送、文件分享、链接改写和权限问题转换；不要把业务策略放进适配层。
@@ -103,7 +108,7 @@ config.example.toml         配置样例
 
 ### 目前的架构问题
 
-- `internal/app` 已开始从 God package 向 composition root 收敛：reply delivery、maintenance upgrade workflow、review Git target 逻辑已经拆到物理子包。剩余高耦合区域主要是 lifecycle coordinator、审批/表单、workspace/runtime 状态和卡片渲染，继续拆分前必须先定义接口边界并对照状态机审计。
+- `internal/app` 已开始从 God package 向 composition root 收敛：reply delivery、maintenance upgrade workflow、review Git target、approval presentation、runtime/lifecycle predicates、workspace payloads 和通用 card builders 已经拆到物理子包。剩余高耦合区域主要是 lifecycle coordinator、审批 completion、workspace/runtime 状态变更和带 submission 上下文的卡片渲染，继续拆分前必须先定义接口边界并对照状态机审计。
 - backend 抽象已经有 `backendRuntimeFacade`，但 Codex/Claude 逻辑仍有不少直接分支和专用状态散在 `internal/app`。新增 backend 或改 backend 行为时，应先补 facade/helper，不要在命令和卡片路径继续增加 `if backend == ...`。
 - 状态同时存在内存 map 与 `internal/state` 持久化快照，字段已包含 frontend/backend 归属但仍容易发生跨 frontend 污染。新增 pending/form/message-link/session 数据时，必须明确 frontend scope，并补恢复与迁移测试。
 - README、`DEVELOPER.md` 和状态机审计共同构成开发契约。协议行为变化不能只改代码；如果改变 Codex app-server lifecycle 或审批语义，应同时更新审计文档和对应测试映射。

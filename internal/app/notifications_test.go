@@ -1,6 +1,7 @@
 package app
 
 import (
+	appapproval "feidex/internal/app/approval"
 	"strings"
 	"testing"
 
@@ -28,7 +29,7 @@ func TestMarkdownCodeBlockWithLangUsesDynamicOuterFence(t *testing.T) {
 }
 
 func TestApprovalButtonsCoverFullDecisionSet(t *testing.T) {
-	commandButtons := approvalButtons("command", "req-1")
+	commandButtons := appapproval.Buttons("command", "req-1")
 	if len(commandButtons) != 4 {
 		t.Fatalf("expected 4 command approval buttons, got %d", len(commandButtons))
 	}
@@ -47,7 +48,7 @@ func TestApprovalButtonsCoverFullDecisionSet(t *testing.T) {
 		}
 	}
 
-	fileButtons := approvalButtons("file", "req-2")
+	fileButtons := appapproval.Buttons("file", "req-2")
 	if len(fileButtons) != 4 {
 		t.Fatalf("expected 4 file approval buttons, got %d", len(fileButtons))
 	}

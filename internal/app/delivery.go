@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appdelivery "feidex/internal/app/delivery"
 	"strings"
 
 	"feidex/internal/config"
@@ -36,7 +37,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	}
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
 	if replyClass {
-		results := a.sendReplyCardChunksWithReuse(ctx, sub, title, color, buildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
+		results := a.sendReplyCardChunksWithReuse(ctx, sub, title, color, appdelivery.BuildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
 		if len(results) == 0 {
 			return nil
 		}
@@ -96,7 +97,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	return []string{id}
 }
 
-func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []sentReplyChunk {
+func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []appdelivery.SentReplyChunk {
 	reuseMessageIDs := []string(nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		reuseMessageIDs = []string{strings.TrimSpace(reuseMessageID)}
@@ -104,12 +105,12 @@ func (a *App) sendReplyCardChunksWithReuse(ctx context.Context, sub *state.Submi
 	return a.sendReplyCardChunksWithReuseIDs(ctx, sub, title, color, chunks, inThread, enablePreview, reuseMessageIDs)
 }
 
-func (a *App) sendReplyCardChunksWithReuseIDs(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, inThread bool, enablePreview bool, reuseMessageIDs []string) []sentReplyChunk {
+func (a *App) sendReplyCardChunksWithReuseIDs(ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
 	specs := a.prepareReplyChunkRenderSpecs(ctx, sub, title, color, chunks, enablePreview)
-	results := make([]sentReplyChunk, 0, len(specs))
+	results := make([]appdelivery.SentReplyChunk, 0, len(specs))
 	for i, spec := range specs {
 		currentReuse := ""
 		if i < len(reuseMessageIDs) {

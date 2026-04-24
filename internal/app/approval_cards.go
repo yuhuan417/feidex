@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	appapproval "feidex/internal/app/approval"
 	"strings"
 
 	"feidex/internal/feishu"
@@ -18,7 +19,7 @@ func (s outboundCardService) sendApprovalCardWithPayload(kind string, requestID 
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	buttons := approvalButtons(kind, requestKey, requestPayload)
+	buttons := appapproval.Buttons(kind, requestKey, requestPayload)
 	card := s.app.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
 	payload := map[string]any{}
 	if strings.TrimSpace(body) != "" {

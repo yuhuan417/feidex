@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	appapproval "feidex/internal/app/approval"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -32,14 +33,14 @@ func TestFileApprovalHydratesFromStartedItem(t *testing.T) {
 		t.Fatalf("unmarshal pending payload: %v", err)
 	}
 	request, _ := payload["request"].(map[string]any)
-	entries := collectFileApprovalEntriesWithWorkspace(request, a.cfg.Workspaces[0].Cwd)
+	entries := appapproval.CollectFileEntriesWithWorkspace(request, a.cfg.Workspaces[0].Cwd)
 	if len(entries) != 1 {
 		t.Fatalf("approval entries = %+v, want 1 hydrated entry", entries)
 	}
 	if entries[0].Path != "dir/main.go" || entries[0].Kind != "update" {
 		t.Fatalf("approval entry = %+v, want relative hydrated file change", entries[0])
 	}
-	if got := renderFileApprovalBodyWithWorkspace(request, a.cfg.Workspaces[0].Cwd); !strings.Contains(got, "授权根目录") || !strings.Contains(got, "`dir`") {
+	if got := appapproval.RenderFileBodyWithWorkspace(request, a.cfg.Workspaces[0].Cwd); !strings.Contains(got, "授权根目录") || !strings.Contains(got, "`dir`") {
 		t.Fatalf("approval body = %q, want relative grantRoot", got)
 	}
 }

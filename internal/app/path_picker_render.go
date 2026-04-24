@@ -7,30 +7,20 @@ import (
 	"sort"
 	"strings"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
 
 const (
-	pathPickerKind          = "path_picker"
-	pathPickerModeDirectory = "directory"
-	pathPickerModeFile      = "file"
-	pathPickerStyleDropdown = "dropdown"
+	pathPickerKind          = appworkspace.PathPickerKind
+	pathPickerModeDirectory = appworkspace.PathPickerModeDirectory
+	pathPickerModeFile      = appworkspace.PathPickerModeFile
+	pathPickerStyleDropdown = appworkspace.PathPickerStyleDropdown
 )
 
-type pathPickerPayload struct {
-	Mode         string `json:"mode"`
-	Style        string `json:"style"`
-	RootPath     string `json:"root_path"`
-	CurrentPath  string `json:"current_path"`
-	SelectedPath string `json:"selected_path,omitempty"`
-}
-
-type pathPickerEntry struct {
-	Name  string
-	Path  string
-	IsDir bool
-}
+type pathPickerPayload = appworkspace.PathPickerPayload
+type pathPickerEntry = appworkspace.PathPickerEntry
 
 func normalizePathPickerMode(mode string) string {
 	switch strings.TrimSpace(mode) {

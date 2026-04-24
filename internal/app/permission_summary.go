@@ -1,6 +1,7 @@
 package app
 
 import (
+	appapproval "feidex/internal/app/approval"
 	"fmt"
 	"sort"
 	"strings"
@@ -41,7 +42,7 @@ func renderPermissionsApprovalBody(params map[string]any) string {
 		}
 	}
 	if len(sections) == 0 && len(lines) == 1 {
-		if requestSummary := strings.TrimSpace(truncatedApprovalRequestJSON(params)); requestSummary != "" {
+		if requestSummary := strings.TrimSpace(appapproval.TruncatedRequestJSON(params)); requestSummary != "" {
 			lines = append(lines, markdownCodeBlock(requestSummary))
 		}
 	}

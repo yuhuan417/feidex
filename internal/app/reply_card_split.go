@@ -12,45 +12,29 @@ import (
 const feishuReplyCardMaxPayloadBytes = appdelivery.ReplyCardMaxPayloadBytes
 const feishuReplyCardMaxComponentCount = appdelivery.ReplyCardMaxComponentCount
 
-type markdownSplitBlock = appdelivery.MarkdownSplitBlock
-type replyCardChunk = appdelivery.ReplyCardChunk
-type sentReplyChunk = appdelivery.SentReplyChunk
-
-func buildReplyCardChunks(body string, showHeader bool, footerLines []string) []replyCardChunk {
-	return appdelivery.BuildReplyCardChunks(body, showHeader, footerLines)
-}
-
-func splitMarkdownByTableLimit(text string, maxTables int) []string {
-	return appdelivery.SplitMarkdownByTableLimit(text, maxTables)
-}
-
-func splitMarkdownBlocks(text string) []markdownSplitBlock {
-	return appdelivery.SplitMarkdownBlocks(text)
-}
-
-func (a *App) fitReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []replyCardChunk, enablePreview bool) []replyCardChunk {
+func (a *App) fitReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if len(chunks) == 0 {
 		return nil
 	}
-	fitted := make([]replyCardChunk, 0, len(chunks))
+	fitted := make([]appdelivery.ReplyCardChunk, 0, len(chunks))
 	for _, chunk := range chunks {
 		fitted = append(fitted, a.expandReplyCardChunkToFit(ctx, sub, title, color, chunk, enablePreview)...)
 	}
 	return fitted
 }
 
-func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submission, title, color string, chunk replyCardChunk, enablePreview bool) []replyCardChunk {
+func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if a.replyCardChunkFits(ctx, sub, title, color, chunk, enablePreview) {
-		return []replyCardChunk{chunk}
+		return []appdelivery.ReplyCardChunk{chunk}
 	}
 
-	blocks := splitMarkdownBlocks(chunk.Body)
+	blocks := appdelivery.SplitMarkdownBlocks(chunk.Body)
 	if len(blocks) == 0 {
-		return []replyCardChunk{chunk}
+		return []appdelivery.ReplyCardChunk{chunk}
 	}
 
-	result := make([]replyCardChunk, 0, len(blocks))
-	current := replyCardChunk{ShowHeader: chunk.ShowHeader}
+	result := make([]appdelivery.ReplyCardChunk, 0, len(blocks))
+	current := appdelivery.ReplyCardChunk{ShowHeader: chunk.ShowHeader}
 	for len(blocks) > 0 {
 		block := blocks[0]
 		blocks = blocks[1:]
@@ -62,18 +46,18 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 		}
 		if strings.TrimSpace(current.Body) != "" {
 			result = append(result, current)
-			current = replyCardChunk{ShowHeader: false}
-			blocks = append([]markdownSplitBlock{block}, blocks...)
+			current = appdelivery.ReplyCardChunk{ShowHeader: false}
+			blocks = append([]appdelivery.MarkdownSplitBlock{block}, blocks...)
 			continue
 		}
 		if block.TableCount > 0 {
 			current.Body = strings.TrimSpace(block.Text)
 			result = append(result, current)
-			current = replyCardChunk{ShowHeader: false}
+			current = appdelivery.ReplyCardChunk{ShowHeader: false}
 			continue
 		}
 		parts := splitReplyTextBlockToFit(block.Text, func(part string) bool {
-			return a.replyCardChunkFits(ctx, sub, title, color, replyCardChunk{
+			return a.replyCardChunkFits(ctx, sub, title, color, appdelivery.ReplyCardChunk{
 				Body:       part,
 				ShowHeader: current.ShowHeader,
 			}, enablePreview)
@@ -81,7 +65,7 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 		if len(parts) <= 1 {
 			current.Body = strings.TrimSpace(block.Text)
 			result = append(result, current)
-			current = replyCardChunk{ShowHeader: false}
+			current = appdelivery.ReplyCardChunk{ShowHeader: false}
 			continue
 		}
 		for _, part := range parts {
@@ -89,11 +73,11 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 			if part == "" {
 				continue
 			}
-			result = append(result, replyCardChunk{
+			result = append(result, appdelivery.ReplyCardChunk{
 				Body:       part,
 				ShowHeader: current.ShowHeader,
 			})
-			current = replyCardChunk{ShowHeader: false}
+			current = appdelivery.ReplyCardChunk{ShowHeader: false}
 		}
 	}
 	if strings.TrimSpace(current.Body) != "" || len(result) == 0 {
@@ -106,7 +90,7 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 		return result
 	}
 
-	footerOnly := replyCardChunk{
+	footerOnly := appdelivery.ReplyCardChunk{
 		ShowHeader:  false,
 		FooterLines: append([]string(nil), chunk.FooterLines...),
 	}
@@ -190,7 +174,7 @@ func joinReplyChunkBodies(current, next string) string {
 	}
 }
 
-func (a *App) replyCardChunkFits(ctx context.Context, sub *state.Submission, title, color string, chunk replyCardChunk, enablePreview bool) bool {
+func (a *App) replyCardChunkFits(ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
 	card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
 	payload, err := json.Marshal(card)
