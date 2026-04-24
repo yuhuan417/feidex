@@ -11,16 +11,16 @@ import (
 
 var menuCardActionHandlers = map[string]cardActionHandler{
 	"menu.root": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuRoot(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuRoot(action, actionSessionKey(action))
 	},
 	"menu.tools": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuTools(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuTools(action, actionSessionKey(action))
 	},
 	"menu.group.model": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuGroupModel(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuGroupModel(action, actionSessionKey(action))
 	},
 	"menu.group.system": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuGroupSystem(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuGroupSystem(action, actionSessionKey(action))
 	},
 	"menu.group.backend": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuBackend(action, actionSessionKey(action))
@@ -35,13 +35,13 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeMenuDownload(action, actionSessionKey(action))
 	},
 	"menu.quiet": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuQuiet(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuQuiet(action, actionSessionKey(action))
 	},
 	"menu.compact": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuCompact(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuCompact(action, actionSessionKey(action))
 	},
 	"menu.review": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuReview(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuReview(action, actionSessionKey(action))
 	},
 	"menu.review.uncommitted": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuReviewUncommitted(action, actionSessionKey(action))
@@ -59,19 +59,19 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeMenuFork(action, actionSessionKey(action))
 	},
 	"menu.usage": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuUsage(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuUsage(action, actionSessionKey(action))
 	},
 	"menu.skills": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuSkills(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuSkills(action, actionSessionKey(action))
 	},
 	"menu.model": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuModel(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuModel(action, actionSessionKey(action))
 	},
 	"menu.fast": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuFast(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuFast(action, actionSessionKey(action))
 	},
 	"menu.status": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuStatus(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuStatus(action, actionSessionKey(action))
 	},
 	"menu.debug": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuDebug(action, actionSessionKey(action))
@@ -80,19 +80,19 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeMenuDebugLogs(action, actionSessionKey(action))
 	},
 	"menu.backend": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuBackendSwitch(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuBackendSwitch(action, actionSessionKey(action))
 	},
 	"menu.backend.switch": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuBackendSwitch(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuBackendSwitch(action, actionSessionKey(action))
 	},
 	"menu.auto_retry": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuCommand(action, actionSessionKey(action), "/backend retry", "menu.group.backend")
 	},
 	"menu.help": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuHelp(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuHelp(action, actionSessionKey(action))
 	},
 	"menu.history": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuHistory(action, actionSessionKey(action))
+		return newMenuActionService(s.app).completeMenuHistory(action, actionSessionKey(action))
 	},
 	"menu.interrupt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
@@ -107,13 +107,13 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeMenuClaudeUpgrade(action)
 	},
 	"menu.upgrade": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuUpgrade(action)
+		return newMenuActionService(s.app).completeMenuUpgrade(action)
 	},
 	"quiet.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
+		return newMenuActionService(s.app).completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
 	},
 	"service_tier.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeServiceTierSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "service_tier"))
+		return newMenuActionService(s.app).completeServiceTierSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "service_tier"))
 	},
 	"model.config.set_model": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeGlobalModelSet(action, actionStringValue(action, "model_id"))
@@ -136,17 +136,17 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeGlobalReasoningEffortSet(action, reasoningEffort)
 	},
 	"history.page": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeHistoryPage(action, actionSessionKey(action), actionIntValue(action, "page"))
+		return newMenuActionService(s.app).completeHistoryPage(action, actionSessionKey(action), actionIntValue(action, "page"))
 	},
 	"history.detail": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeHistoryDetail(action, actionSessionKey(action), actionIntValue(action, "index"))
+		return newMenuActionService(s.app).completeHistoryDetail(action, actionSessionKey(action), actionIntValue(action, "index"))
 	},
 	"history.detail.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		errResp, index, ok := actionIndexOption(action, "未收到有效 turn 选项")
 		if !ok {
 			return errResp, nil
 		}
-		return s.app.completeHistoryDetail(action, actionSessionKey(action), index)
+		return newMenuActionService(s.app).completeHistoryDetail(action, actionSessionKey(action), index)
 	},
 	"skills.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeSkillsSelect(action, actionSessionKey(action), strings.TrimSpace(action.Option))

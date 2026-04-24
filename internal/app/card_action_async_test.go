@@ -60,7 +60,7 @@ func TestCompleteUpgradeDevReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	currentVersion = func() string { return "0.1.0" }
 	currentGOARCH = func() string { return "amd64" }
 
-	resp, err := a.completeUpgradeDev(&feishu.CardAction{
+	resp, err := newMenuActionService(a).completeUpgradeDev(&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-upgrade-dev",
 		ActionValue: map[string]any{"session_key": "sess-1"},

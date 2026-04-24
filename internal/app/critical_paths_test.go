@@ -194,7 +194,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 func TestCompleteMenuReviewReturnsReviewEntryCard(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	resp, err := a.completeMenuReview(&feishu.CardAction{}, "sess-review")
+	resp, err := newMenuActionService(a).completeMenuReview(&feishu.CardAction{}, "sess-review")
 	if err != nil {
 		t.Fatalf("completeMenuReview() error = %v", err)
 	}

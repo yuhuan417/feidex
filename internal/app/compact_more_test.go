@@ -242,7 +242,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 		return nil
 	}
 
-	resp, err := a.completeMenuCompact(&feishu.CardAction{
+	resp, err := newMenuActionService(a).completeMenuCompact(&feishu.CardAction{
 		MessageID: "card-1",
 		ChatID:    "chat",
 		UserID:    "user",
@@ -325,7 +325,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := a.completeMenuCompact(&feishu.CardAction{
+	resp, err := newMenuActionService(a).completeMenuCompact(&feishu.CardAction{
 		MessageID: "card-claude",
 		ChatID:    "chat",
 		UserID:    "user",
@@ -389,7 +389,7 @@ func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := a.completeMenuCompact(&feishu.CardAction{
+	resp, err := newMenuActionService(a).completeMenuCompact(&feishu.CardAction{
 		MessageID: "card-fail",
 		ChatID:    "chat",
 		UserID:    "user",

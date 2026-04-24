@@ -17,7 +17,7 @@ var maintenanceCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeUpgradeLocalPick(action)
 	},
 	"upgrade.dev": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeUpgradeDev(action)
+		return newMenuActionService(s.app).completeUpgradeDev(action)
 	},
 	"codex_upgrade.refresh": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeCodexUpgradeRefresh(action)

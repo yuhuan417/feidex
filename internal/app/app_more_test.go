@@ -1535,10 +1535,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 
 	for name, fn := range map[string]func() (*callback.CardActionTriggerResponse, error){
 		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuRoot(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuRoot(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.tools": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuTools(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuThread(action, action.ActionValue["session_key"].(string))
@@ -1583,28 +1583,28 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("UpsertSession(compact) error = %v", err)
 			}
-			return a.completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{
+			return newMenuActionService(a).completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{
 				"session_key":   compactSessionKey,
 				"parent_action": "menu.tools",
 			}}, compactSessionKey)
 		},
 		"menu.group.model": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuGroupModel(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuGroupModel(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.group.system": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuGroupSystem(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuGroupSystem(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.quiet": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuQuiet(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuQuiet(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.fast": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuFast(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuFast(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.model": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuModel(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuModel(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.status": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuStatus(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuDebug(action, action.ActionValue["session_key"].(string))
@@ -1613,13 +1613,13 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return a.completeMenuDebugLogs(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuHelp(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.history": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuHistory(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuHistory(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.skills": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuSkills(action, action.ActionValue["session_key"].(string))
+			return newMenuActionService(a).completeMenuSkills(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
 			return a.completeMenuWorkspace(action, action.ActionValue["session_key"].(string))
@@ -1912,7 +1912,7 @@ func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testi
 	a.claude = claude
 	sessionKey := "feishu:p2p:chat:user"
 
-	resp, err := a.completeMenuReview(&feishu.CardAction{
+	resp, err := newMenuActionService(a).completeMenuReview(&feishu.CardAction{
 		ActionValue: map[string]any{"session_key": sessionKey},
 	}, sessionKey)
 	if err != nil {
@@ -2751,7 +2751,7 @@ func TestCompleteMenuUpgradeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	currentVersion = func() string { return "0.1.0" }
 	currentGOARCH = func() string { return "amd64" }
 
-	resp, err := a.completeMenuUpgrade(&feishu.CardAction{
+	resp, err := newMenuActionService(a).completeMenuUpgrade(&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-upgrade",
 		ActionValue: map[string]any{"session_key": "sess-1"},
@@ -3512,7 +3512,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeGlobalReasoningEffortSet() = %#v, %v", resp, err)
 	}
-	resp, err = a.completeQuietSet(&feishu.CardAction{}, config.QuietModeProgress)
+	resp, err = newMenuActionService(a).completeQuietSet(&feishu.CardAction{}, config.QuietModeProgress)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeQuietSet() = %#v, %v", resp, err)
 	}
@@ -3818,7 +3818,7 @@ func TestCompleteHistoryDetailShowsInputs(t *testing.T) {
 		return nil
 	}
 
-	resp, err := a.completeHistoryDetail(&feishu.CardAction{}, sessionKey, 0)
+	resp, err := newMenuActionService(a).completeHistoryDetail(&feishu.CardAction{}, sessionKey, 0)
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completeHistoryDetail() = %#v, %v", resp, err)
 	}
