@@ -10,6 +10,8 @@ import (
 	"feidex/internal/feishu"
 )
 
+const claudeSmokeInitGracePeriod = time.Second
+
 func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload claudeUpgradePendingPayload) {
 	manager := newClaudeInstallManager(a.cfg.Claude.Command)
 	_, update, finalize := maintenanceSnapshotLifecycle(
@@ -140,28 +142,60 @@ func (a *App) claudeSmokeTest(ctx context.Context) error {
 		return err
 	}
 	defer session.Stop()
+	if err := session.Initialize(ctx); err != nil {
+		return err
+	}
+	return waitForClaudeSmokeStable(ctx, session, claudeSmokeInitGracePeriod)
+}
+
+func waitForClaudeSmokeStable(ctx context.Context, session *claudecli.Session, grace time.Duration) error {
+	if session == nil {
+		return fmt.Errorf("claude session not initialized")
+	}
+	if grace <= 0 {
+		grace = claudeSmokeInitGracePeriod
+	}
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-timer.C:
+			if err := session.ExitError(); err != nil {
+				return err
+			}
+			return nil
 		case event, ok := <-session.Events():
 			if !ok {
 				if err := session.ExitError(); err != nil {
 					return err
 				}
-				return fmt.Errorf("claude session exited before ready")
+				return fmt.Errorf("claude session exited after initialize")
 			}
 			switch value := event.(type) {
 			case claudecli.ReadyEvent:
 				return nil
 			case claudecli.ErrorEvent:
-				if value.Error != nil {
-					return value.Error
-				}
-				return fmt.Errorf("claude session startup failed")
+				return claudeSmokeEventError(session, value)
 			}
 		}
 	}
+}
+
+func claudeSmokeEventError(session *claudecli.Session, event claudecli.ErrorEvent) error {
+	if event.Error == nil {
+		return fmt.Errorf("claude session startup failed after initialize")
+	}
+	if event.Context == "stdout_eof" || (event.Context == "read_line" && strings.Contains(strings.ToLower(event.Error.Error()), "file already closed")) {
+		if session != nil {
+			if err := session.ExitError(); err != nil {
+				return fmt.Errorf("claude session exited after initialize: %w", err)
+			}
+		}
+		return fmt.Errorf("claude session exited after initialize")
+	}
+	return event.Error
 }
 
 func (a *App) refreshClaudeRuntimeAfterMaintenance(ctx context.Context) (bool, error) {

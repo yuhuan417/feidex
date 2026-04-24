@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -375,4 +377,57 @@ func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing
 	if claude.closed {
 		t.Fatal("existing Claude runtime should not be closed on non-Claude backend")
 	}
+}
+
+func TestClaudeSmokeTestUsesInitializeForIdleStartup(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Claude.Command = writeFakeClaudeSmokeScript(t, `#!/bin/sh
+while IFS= read -r line; do
+  rid=$(printf '%s\n' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"subtype":"initialize"'*)
+      printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$rid"
+      while IFS= read -r _; do :; done
+      exit 0
+      ;;
+  esac
+done
+`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := a.claudeSmokeTest(ctx); err != nil {
+		t.Fatalf("claudeSmokeTest() error = %v", err)
+	}
+}
+
+func TestClaudeSmokeTestFailsWhenSessionExitsAfterInitialize(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Claude.Command = writeFakeClaudeSmokeScript(t, `#!/bin/sh
+while IFS= read -r line; do
+  rid=$(printf '%s\n' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"subtype":"initialize"'*)
+      printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$rid"
+      exit 0
+      ;;
+  esac
+done
+`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := a.claudeSmokeTest(ctx)
+	if err == nil || !strings.Contains(err.Error(), "exited after initialize") {
+		t.Fatalf("claudeSmokeTest() error = %v, want exited after initialize", err)
+	}
+}
+
+func writeFakeClaudeSmokeScript(t *testing.T, script string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-claude-smoke.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake smoke script) error = %v", err)
+	}
+	return path
 }
