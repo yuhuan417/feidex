@@ -7,7 +7,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) renderApprovalCard(_ string, sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+func renderApprovalCard(a *App, _ string, sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
 	attentionUserID := ""
 	if sub != nil {
 		attentionUserID = sub.UserID

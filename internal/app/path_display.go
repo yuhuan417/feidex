@@ -7,11 +7,11 @@ import (
 	"feidex/internal/pathdisplay"
 )
 
-func (a *App) workspaceCwd(workspaceID string) string {
-	if a == nil {
+func workspaceCwd(cfg *config.Config, workspaceID string) string {
+	if cfg == nil {
 		return ""
 	}
-	if ws := config.FindWorkspace(a.cfg, workspaceID); ws != nil {
+	if ws := config.FindWorkspace(cfg, workspaceID); ws != nil {
 		return strings.TrimSpace(ws.Cwd)
 	}
 	return ""

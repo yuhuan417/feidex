@@ -8,6 +8,6 @@ import (
 
 // dispatchCardAction is the synchronous Feishu callback entrypoint.
 // Handlers must acknowledge quickly and must not block on heavy workflows.
-func (a *App) dispatchCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return newCardActionService(a).dispatch(action)
 }

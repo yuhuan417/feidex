@@ -45,7 +45,7 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 	}
 
 	newTurnStreamService(a).noteTurnStarted("sess-1", &state.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
-	a.finishTurn("thread-1", "turn-1", "completed")
+	finishTurn(a, "thread-1", "turn-1", "completed")
 
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected empty green final card to be sent")
@@ -81,7 +81,7 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("expected both final cards to be sent immediately, got %d", len(ff.replyCards))
 	}
-	a.finishTurn("thread-1", "turn-1", "completed")
+	finishTurn(a, "thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("expected no replay on completion, got %d cards", len(ff.replyCards))
 	}
@@ -99,7 +99,7 @@ func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.markSessionThreadLive("sess-1", "thread-1")
 
-	a.finishTurn("thread-1", "turn-1", "failed")
+	finishTurn(a, "thread-1", "turn-1", "failed")
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply cards = %d, want 1 auto-retry card only", len(ff.replyCards))

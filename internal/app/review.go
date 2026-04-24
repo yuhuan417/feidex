@@ -202,7 +202,7 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 		return err
 	}
 	if shouldAttemptStart {
-		if err := a.startNextSubmission(sessionKey); err != nil {
+		if err := startNextSubmission(a, sessionKey); err != nil {
 			return err
 		}
 		if !willWaitInQueue {

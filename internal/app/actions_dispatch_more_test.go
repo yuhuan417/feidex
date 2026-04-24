@@ -242,7 +242,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resp, err := a.dispatchCardAction(&tc)
+		resp, err := dispatchCardAction(a, &tc)
 		if err != nil {
 			t.Fatalf("dispatchCardAction(%q) error = %v", tc.Name, err)
 		}

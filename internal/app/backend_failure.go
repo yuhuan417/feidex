@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"time"
 
+	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
 
@@ -17,7 +19,10 @@ func (a *App) configureCodexClientRuntime(client codexClient) {
 	if client == nil {
 		return
 	}
-	client.SetHandlers(a.handleNotification, a.handleServerRequest)
+	client.SetHandlers(
+		func(method string, params json.RawMessage) { handleNotification(a, method, params) },
+		func(req codexrpc.RequestEnvelope) { handleServerRequest(a, req) },
+	)
 	if aware, ok := client.(codexErrorAware); ok {
 		aware.SetErrorHandler(func(err error) {
 			a.handleCodexTransportError(client, err)

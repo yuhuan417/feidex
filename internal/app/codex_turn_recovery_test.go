@@ -59,7 +59,7 @@ func TestEnqueueSubmissionReconcilesCompletedCodexTurnFromThreadRead(t *testing.
 		UserID:        msg1.UserID,
 		Text:          "follow-up task",
 	}
-	if err := a.enqueueSubmission(msg2); err != nil {
+	if err := enqueueSubmission(a, msg2); err != nil {
 		t.Fatalf("enqueueSubmission() error = %v", err)
 	}
 

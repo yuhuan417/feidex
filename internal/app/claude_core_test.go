@@ -387,7 +387,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
 
-	if err := a.startNextSubmission(sessionKey); err != nil {
+	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(claude.ensureCalls) != 1 {
@@ -488,7 +488,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 		t.Fatalf("queued notice cards = %+v", replyCards)
 	}
 
-	a.finishTurn("claude-thread-1", "claude-turn-current", "completed")
+	finishTurn(a, "claude-thread-1", "claude-turn-current", "completed")
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -571,7 +571,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
 
-	if err := a.startNextSubmission(sessionKey); err != nil {
+	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(claude.ensureCalls) != 2 {
@@ -723,7 +723,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
 
-	if err := a.startNextSubmission(sessionKey); err != nil {
+	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 
@@ -875,7 +875,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
 
-	if err := a.startNextSubmission(sessionKey); err != nil {
+	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(claude.ensureCalls) != 0 {

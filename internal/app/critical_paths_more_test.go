@@ -123,7 +123,7 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 	}
 	queuedSubID := sess.Queue[0]
 
-	a.handleNotification("turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1"}}`))
+	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1"}}`))
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveTurnID != "turn-1" || sess.ActiveSubmissionID != firstSubID || sess.Status != "turn_in_progress" {
@@ -134,7 +134,7 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 		t.Fatalf("submission after delayed turn/started = %+v", firstSub)
 	}
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	select {
 	case <-secondTurnStarted:
@@ -247,7 +247,7 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 	}
 	queuedSubID := sess.Queue[0]
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	select {
 	case <-secondTurnStarted:
@@ -302,7 +302,7 @@ func TestToolUserInputFormFlowRepliesByTextAndResumesAfterServerResolution(t *te
 	}
 	sessionKey, sub := seedActiveSubmissionForInboundMessage(t, a, msg, "thread-1", "turn-1")
 
-	a.handleServerRequest(codexrpc.RequestEnvelope{
+	handleServerRequest(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"input-form-1"`),
 		Method: "item/tool/requestUserInput",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","questions":[{"id":"mode","question":"Pick mode","options":[{"label":"Fast"},{"label":"Safe"},{"label":"Balanced"},{"label":"Thorough"}]}]}`),
@@ -350,7 +350,7 @@ func TestToolUserInputFormFlowRepliesByTextAndResumesAfterServerResolution(t *te
 		t.Fatalf("session after text answer = %+v, want same in-flight submission", sess)
 	}
 
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"input-form-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"input-form-1"}`))
 
 	if pending := a.store.PendingByID("input-form-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after serverRequest/resolved = %+v, want resolved", pending)

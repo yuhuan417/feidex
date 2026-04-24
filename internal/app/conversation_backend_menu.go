@@ -172,7 +172,7 @@ func (a *App) renderClaudeThreadsCardForCurrentBackend(sessionKey string, includ
 }
 
 func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
-	items, err := a.listClaudeSessions(sessionKey, ws, includeAll)
+	items, err := listClaudeSessions(sessionKey, ws, includeAll)
 	if err != nil {
 		return nil, err
 	}

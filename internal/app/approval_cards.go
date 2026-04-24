@@ -20,7 +20,7 @@ func (s outboundCardService) sendApprovalCardWithPayload(kind string, requestID 
 	}
 	requestKey := requestIDKey(requestID)
 	buttons := appapproval.Buttons(kind, requestKey, requestPayload)
-	card := s.app.renderApprovalCard(sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
+	card := renderApprovalCard(s.app, sessionKey, sub, "等待审批", "orange", strings.TrimSpace(body), buttons)
 	payload := map[string]any{}
 	if strings.TrimSpace(body) != "" {
 		payload["body"] = body
@@ -59,7 +59,7 @@ func (s outboundCardService) sendPermissionsCardWithPayload(requestID json.RawMe
 		return
 	}
 	requestKey := requestIDKey(requestID)
-	card := s.app.renderApprovalCard(sessionKey, sub, "权限请求", "orange", strings.TrimSpace(body), []feishu.Button{
+	card := renderApprovalCard(s.app, sessionKey, sub, "权限请求", "orange", strings.TrimSpace(body), []feishu.Button{
 		{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
 		{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
 	})

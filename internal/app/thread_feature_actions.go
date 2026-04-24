@@ -187,7 +187,7 @@ func interruptStatusButtons(sessionKey, parentAction, targetTurnID string, inclu
 	return buttons
 }
 
-func (a *App) renderInterruptPreparingCard(sessionKey, parentAction string) map[string]any {
+func renderInterruptPreparingCard(a *App, sessionKey, parentAction string) map[string]any {
 	return a.feishu.SimpleStatusCard(
 		"中断任务",
 		"blue",
@@ -196,7 +196,7 @@ func (a *App) renderInterruptPreparingCard(sessionKey, parentAction string) map[
 	)
 }
 
-func (a *App) renderInterruptResultCard(sessionKey, parentAction, text string) map[string]any {
+func renderInterruptResultCard(a *App, sessionKey, parentAction, text string) map[string]any {
 	return a.feishu.SimpleStatusCard(
 		"中断任务",
 		"green",
@@ -205,7 +205,7 @@ func (a *App) renderInterruptResultCard(sessionKey, parentAction, text string) m
 	)
 }
 
-func (a *App) renderInterruptFailedCard(sessionKey, parentAction, targetTurnID, errText string) map[string]any {
+func renderInterruptFailedCard(a *App, sessionKey, parentAction, targetTurnID, errText string) map[string]any {
 	body := "请求中断当前任务失败。"
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text

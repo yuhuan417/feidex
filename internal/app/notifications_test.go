@@ -103,7 +103,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 		t.Fatalf("create submission: %v", err)
 	}
 
-	a.onTurnStartedNotification("thread-1", "turn-1")
+	onTurnStartedNotification(a, "thread-1", "turn-1")
 
 	sess := a.store.GetSession("sess-1")
 	if sess == nil {

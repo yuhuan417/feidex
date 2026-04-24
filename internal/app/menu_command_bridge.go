@@ -118,7 +118,7 @@ func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, us
 	return chatType, chatID, rootMessageID, userID
 }
 
-func (a *App) commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
+func commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
 	if actionValue == nil {
 		actionValue = map[string]any{}
 	}
@@ -226,5 +226,5 @@ func (a *App) renderMenuCommandFallback(actionName, sessionKey string) (map[stri
 	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
 		return nil, false
 	}
-	return a.renderMenuNodeCard(actionName, sessionKey)
+	return renderMenuNodeCard(a, actionName, sessionKey)
 }

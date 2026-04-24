@@ -15,9 +15,9 @@ func TestHandleNotificationAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"agent-1","type":"agent_message","text":"done"}}`))
-	a.handleNotification("turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-2"}}`))
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
+	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"agent-1","type":"agent_message","text":"done"}}`))
+	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-2"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
 
 	if len(ff.replyCards) == 0 && len(ff.replyTextWithIDs) == 0 {
 		t.Fatal("expected completed/failed notifications to deliver output")
@@ -28,11 +28,11 @@ func TestHandleServerRequestRoutesKnownMethods(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Method: "item/commandExecution/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`)})
-	a.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-1"`), Method: "item/fileChange/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","files":["main.go"]}`)})
-	a.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Method: "item/permissions/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","permissions":{"mode":"read"}}`)})
-	a.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Method: "item/tool/requestUserInput", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"Pick","options":[{"label":"A"}]}]}`)})
-	a.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Method: "mcpServer/elicitation/request", Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"open","url":"https://example.test"}`)})
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Method: "item/commandExecution/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`)})
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-1"`), Method: "item/fileChange/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","files":["main.go"]}`)})
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Method: "item/permissions/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","permissions":{"mode":"read"}}`)})
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Method: "item/tool/requestUserInput", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"Pick","options":[{"label":"A"}]}]}`)})
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Method: "mcpServer/elicitation/request", Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"open","url":"https://example.test"}`)})
 
 	if len(ff.sendCards) < 5 {
 		t.Fatalf("expected routed server requests to send cards, got %d", len(ff.sendCards))
@@ -52,12 +52,12 @@ func TestFinishTurnStatuses(t *testing.T) {
 		t.Fatalf("UpdateSubmission() error = %v", err)
 	}
 
-	a.finishTurn("thread-1", "turn-1", "interrupted")
+	finishTurn(a, "thread-1", "turn-1", "interrupted")
 	if sess := a.store.GetSession("sess-1"); sess == nil || sess.Status != "idle" {
 		t.Fatalf("session after interrupted finish = %+v", sess)
 	}
 
-	a.finishTurn("missing", "missing", "failed")
+	finishTurn(a, "missing", "missing", "failed")
 }
 
 func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {
@@ -74,11 +74,11 @@ func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
 	if sess := a.store.GetSession("sess-compact"); sess == nil || sess.ActiveTurnID != "turn-compact" || sess.Status != sessionStatusCompacting {
 		t.Fatalf("session after item/started = %+v", sess)
 	}
-	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
+	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
 	sess := a.store.GetSession("sess-compact")
 	if sess == nil || sess.ActiveTurnID != "" || sess.Status != "idle" {
 		t.Fatalf("session after item/completed = %+v", sess)
@@ -108,9 +108,9 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 		if method != "thread/compact/start" {
 			return nil
 		}
-		a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
-		a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
-		a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
+		handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+		handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
+		handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
 		return nil
 	}
 
@@ -140,9 +140,9 @@ func TestStandaloneCompactSuccessIgnoresLaterFailedCompletion(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
-	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"failed"}}`))
+	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"failed"}}`))
 
 	if len(ff.sentTexts) != 1 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
 		t.Fatalf("compact notifications should only report success once, got %#v", ff.sentTexts)
@@ -163,7 +163,7 @@ func TestStandaloneCompactErrorReportsRealMessage(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("error", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","error":{"message":"context window not eligible"}}`))
+	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","error":{"message":"context window not eligible"}}`))
 
 	sess := a.store.GetSession("sess-compact")
 	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
@@ -187,10 +187,10 @@ func TestNotificationHelperWrappers(t *testing.T) {
 	}
 
 	fc.replyErrors = nil
-	a.onFileApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-file"`), Params: json.RawMessage(`{`)})
-	a.onPermissionsApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-perm"`), Params: json.RawMessage(`{`)})
-	a.onToolUserInput(codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-input"`), Params: json.RawMessage(`{`)})
-	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-json"`), Params: json.RawMessage(`{`)})
+	onFileApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-file"`), Params: json.RawMessage(`{`)})
+	onPermissionsApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-perm"`), Params: json.RawMessage(`{`)})
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-input"`), Params: json.RawMessage(`{`)})
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-json"`), Params: json.RawMessage(`{`)})
 	if len(fc.replyErrors) < 4 {
 		t.Fatalf("expected invalid request params to reply with errors, got %+v", fc.replyErrors)
 	}

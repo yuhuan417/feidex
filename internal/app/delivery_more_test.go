@@ -14,10 +14,10 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	if got := a.workspaceCwd(a.cfg.Workspaces[0].ID); got != a.cfg.Workspaces[0].Cwd {
+	if got := workspaceCwd(a.cfg, a.cfg.Workspaces[0].ID); got != a.cfg.Workspaces[0].Cwd {
 		t.Fatalf("workspaceCwd(default) = %q", got)
 	}
-	if got := a.workspaceCwd("missing"); got != "" {
+	if got := workspaceCwd(a.cfg, "missing"); got != "" {
 		t.Fatalf("workspaceCwd(missing) = %q", got)
 	}
 
@@ -48,7 +48,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 
 	ff.replyCardErr = errors.New("boom")
 	ff.replyTextWithIDs = nil
-	if ids := a.sendReplyMessages(context.Background(), sub, "", false, "turn_reasoning"); len(ids) != 1 {
+	if ids := sendReplyMessages(a, context.Background(), sub, "", false, "turn_reasoning"); len(ids) != 1 {
 		t.Fatalf("sendReplyMessages(fallback ids) = %#v", ids)
 	}
 	if len(ff.replyTextWithIDs) != 1 || ff.replyTextWithIDs[0] != "任务已结束。" {
@@ -57,7 +57,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 
 	ff.replyCardErr = nil
 	before := len(ff.replyCards)
-	if ids := a.sendReplyMessages(context.Background(), sub, "agent body", false, "turn_output"); len(ids) != 1 {
+	if ids := sendReplyMessages(a, context.Background(), sub, "agent body", false, "turn_output"); len(ids) != 1 {
 		t.Fatalf("sendReplyMessages(turn_output) = %#v", ids)
 	}
 	if len(ff.replyCards) != before+1 {
@@ -65,7 +65,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
-	if ids := a.sendReplyMessages(context.Background(), sub, "hidden", false, "turn_reasoning"); ids != nil {
+	if ids := sendReplyMessages(a, context.Background(), sub, "hidden", false, "turn_reasoning"); ids != nil {
 		t.Fatalf("sendReplyMessages(quiet gated) = %#v, want nil", ids)
 	}
 

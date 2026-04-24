@@ -29,7 +29,7 @@ type claudeSessionListMeta struct {
 	UpdatedAt time.Time
 }
 
-func (a *App) listClaudeSessions(_ string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
+func listClaudeSessions(_ string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
@@ -48,7 +48,7 @@ func (a *App) listClaudeSessions(_ string, ws *config.Workspace, includeAll bool
 	return items, nil
 }
 
-func (a *App) findClaudeSessionEntry(sessionID string) (*codexrpc.ThreadListEntry, error) {
+func findClaudeSessionEntry(sessionID string) (*codexrpc.ThreadListEntry, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, nil

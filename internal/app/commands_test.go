@@ -36,7 +36,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err = a.commandNew(&feishu.InboundMessage{
+	err = commandNew(a, &feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",

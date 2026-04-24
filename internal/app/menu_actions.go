@@ -63,7 +63,7 @@ func (s menuActionService) renderMenuNodeCard(actionName, sessionKey string) (ma
 	return renderer(s.app, sessionKey)
 }
 
-func (a *App) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
+func renderMenuNodeCard(a *App, actionName, sessionKey string) (map[string]any, bool) {
 	return newMenuActionService(a).renderMenuNodeCard(actionName, sessionKey)
 }
 
@@ -78,9 +78,9 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 		return s.app.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
 	}
 	s.app.runAsync(func() {
-		card := s.app.renderCompactAcceptedCard(sessionKey)
+		card := renderCompactAcceptedCard(s.app, sessionKey)
 		if err := newConversationWorkflowService(s.app).runMenuCompactAction(action, sessionKey); err != nil {
-			card = s.app.renderCompactFailedCard(sessionKey, err.Error())
+			card = renderCompactFailedCard(s.app, sessionKey, err.Error())
 		}
 		s.app.patchMaintenanceCard(messageID, card, "compact menu patch failed",
 			"session_key", sessionKey,
@@ -90,7 +90,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在请求压缩当前线程上下文"},
-		Card:  rawCard(s.app.renderCompactPreparingCard(sessionKey)),
+		Card:  rawCard(renderCompactPreparingCard(s.app, sessionKey)),
 	}, nil
 }
 

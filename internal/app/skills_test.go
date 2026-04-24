@@ -197,7 +197,7 @@ func TestEnqueueSubmissionUsesPendingSkillWithoutListingSkills(t *testing.T) {
 		return nil
 	}
 
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission() error = %v", err)
 	}
 	if len(seenInputs) != 2 || seenInputs[0]["type"] != "skill" || seenInputs[1]["type"] != "text" {
@@ -250,7 +250,7 @@ func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 		}
 	}
 
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission(explicit skill) error = %v", err)
 	}
 	if skillsListCalls != 1 {
@@ -297,7 +297,7 @@ func TestEnqueueSubmissionInvalidSkillPrefixFallsBackToTextAndConsumesPending(t 
 		return nil
 	}
 
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission(invalid skill) error = %v", err)
 	}
 	if len(seenInputs) != 1 || seenInputs[0]["type"] != "text" || seenInputs[0]["text"] != "$bad/name keep raw" {
@@ -333,7 +333,7 @@ func TestEnqueueSubmissionSkillOnlySetsPendingSkill(t *testing.T) {
 		return nil
 	}
 
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission(skill-only) error = %v", err)
 	}
 	if turnStarted {
@@ -393,7 +393,7 @@ func TestEnqueueSubmissionSkillOnlyWithAttachmentStartsTurn(t *testing.T) {
 		}
 	}
 
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission(skill + attachment) error = %v", err)
 	}
 	if len(seenInputs) != 2 || seenInputs[0]["type"] != "skill" || seenInputs[1]["type"] != "localImage" {

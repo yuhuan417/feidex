@@ -27,7 +27,7 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 	}
 	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	appState := s.app.appState()
-	payload, err := s.app.newDownloadPathPickerPayload(ws)
+	payload, err := newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (s conversationWorkflowService) completeMenuDownload(action *feishu.CardAct
 	return s.app.completeMenuCommand(action, sessionKey, "/download", "menu.tools")
 }
 
-func (a *App) newDownloadPathPickerPayload(ws *config.Workspace) (pathPickerPayload, error) {
+func newDownloadPathPickerPayload(ws *config.Workspace) (pathPickerPayload, error) {
 	root, err := resolvePathPickerRoot(ws)
 	if err != nil {
 		return pathPickerPayload{}, err
@@ -80,7 +80,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 	if strings.TrimSpace(pending.Status) == "processing" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在生成下载链接，请稍候"},
-			Card:  rawCard(a.renderDownloadPreparingCard(selectedPath, payload.RootPath)),
+			Card:  rawCard(renderDownloadPreparingCard(a, selectedPath, payload.RootPath)),
 		}, nil
 	}
 	appState := a.appState()
@@ -110,7 +110,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在生成下载链接"},
-		Card:  rawCard(a.renderDownloadPreparingCard(selectedPath, workspaceCWD)),
+		Card:  rawCard(renderDownloadPreparingCard(a, selectedPath, workspaceCWD)),
 	}, nil
 }
 
@@ -145,7 +145,7 @@ func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathP
 				"message_id", messageID,
 				"error", renderErr,
 			)
-			_ = a.feishu.PatchCard(context.Background(), messageID, a.renderDownloadFailedCard(selectedPath, workspaceCWD, err.Error()))
+			_ = a.feishu.PatchCard(context.Background(), messageID, renderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
 			return
 		}
 		_ = a.feishu.PatchCard(context.Background(), messageID, card)
@@ -164,10 +164,10 @@ func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathP
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = a.feishu.PatchCard(context.Background(), messageID, a.renderDownloadReadyCard(selectedPath, workspaceCWD, result))
+	_ = a.feishu.PatchCard(context.Background(), messageID, renderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
 }
 
-func (a *App) renderDownloadPreparingCard(selectedPath, workspaceCWD string) map[string]any {
+func renderDownloadPreparingCard(a *App, selectedPath, workspaceCWD string) map[string]any {
 	displayPath := renderDownloadDisplayPath(selectedPath, workspaceCWD)
 	lines := []string{
 		"正在生成文件下载链接（飞书云盘中转）。",
@@ -180,7 +180,7 @@ func (a *App) renderDownloadPreparingCard(selectedPath, workspaceCWD string) map
 	return a.feishu.SimpleStatusCard("文件下载", "blue", strings.Join(lines, "\n"), nil)
 }
 
-func (a *App) renderDownloadReadyCard(selectedPath, workspaceCWD string, result feishu.SharedFileResult) map[string]any {
+func renderDownloadReadyCard(a *App, selectedPath, workspaceCWD string, result feishu.SharedFileResult) map[string]any {
 	displayPath := renderDownloadDisplayPath(selectedPath, workspaceCWD)
 	lines := []string{
 		"已生成文件下载链接（飞书云盘中转）。",
@@ -197,7 +197,7 @@ func (a *App) renderDownloadReadyCard(selectedPath, workspaceCWD string, result 
 	return a.feishu.SimpleStatusCard("文件下载", "green", strings.Join(lines, "\n"), nil)
 }
 
-func (a *App) renderDownloadFailedCard(selectedPath, workspaceCWD, errText string) map[string]any {
+func renderDownloadFailedCard(a *App, selectedPath, workspaceCWD, errText string) map[string]any {
 	displayPath := renderDownloadDisplayPath(selectedPath, workspaceCWD)
 	lines := []string{
 		"生成下载链接失败。",

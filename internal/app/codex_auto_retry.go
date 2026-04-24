@@ -729,7 +729,7 @@ func (s autoRetryService) commandAutoRetry(msg *feishu.InboundMessage, args []st
 	default:
 		return fmt.Errorf("usage: /backend retry | /backend retry status | /backend retry on | /backend retry off")
 	}
-	resp, err := s.completeAutoRetrySet(s.app.commandActionFromMessage(msg, nil), enabled)
+	resp, err := s.completeAutoRetrySet(commandActionFromMessage(msg, nil), enabled)
 	if err != nil {
 		return err
 	}

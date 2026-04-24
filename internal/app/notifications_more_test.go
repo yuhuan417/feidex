@@ -183,7 +183,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	empty := &App{store: a.store, codex: fc, feishu: ff}
 	newOutboundCardService(empty).sendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
 	newOutboundCardService(empty).sendUserInputCard(json.RawMessage(`"missing-input"`), toolUserInputPayload{})
-	empty.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})
+	handleServerRequest(empty, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})
 	if len(fc.replyErrors) < 3 {
 		t.Fatalf("replyErrors = %+v, want errors for missing session/input/unknown method", fc.replyErrors)
 	}

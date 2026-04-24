@@ -76,7 +76,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		if json.Unmarshal(params, &p) == nil {
 			turnID := strings.TrimSpace(firstNonEmpty(p.Turn.ID, p.TurnID))
 			if turnID != "" {
-				a.onTurnStartedNotification(p.ThreadID, turnID)
+				onTurnStartedNotification(a, p.ThreadID, turnID)
 			}
 		}
 	case "turn/completed":
@@ -93,12 +93,12 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 				"turn_id", p.Turn.ID,
 				"status", p.Turn.Status,
 			)
-			a.finishTurn(p.ThreadID, p.Turn.ID, p.Turn.Status)
+			finishTurn(a, p.ThreadID, p.Turn.ID, p.Turn.Status)
 		}
 	case "thread/tokenUsage/updated":
 		var p codexrpc.ThreadTokenUsageUpdatedNotification
 		if json.Unmarshal(params, &p) == nil {
-			a.onThreadTokenUsageUpdated(p.ThreadID, p.TurnID, p.TokenUsage)
+			onThreadTokenUsageUpdated(a, p.ThreadID, p.TurnID, p.TokenUsage)
 		}
 	case "error":
 		var p struct {
@@ -140,15 +140,15 @@ func (r *codexEventRouter) handleServerRequest(req codexrpc.RequestEnvelope) {
 	slog.Debug("codex server request", "method", req.Method)
 	switch req.Method {
 	case "item/commandExecution/requestApproval":
-		a.onCommandApproval(req)
+		onCommandApproval(a, req)
 	case "item/fileChange/requestApproval":
-		a.onFileApproval(req)
+		onFileApproval(a, req)
 	case "item/permissions/requestApproval":
-		a.onPermissionsApproval(req)
+		onPermissionsApproval(a, req)
 	case "item/tool/requestUserInput":
-		a.onToolUserInput(req)
+		onToolUserInput(a, req)
 	case "mcpServer/elicitation/request":
-		a.onMcpElicitationRequest(req)
+		onMcpElicitationRequest(a, req)
 	default:
 		a.replyCodexError(req.ID, -32601, "unsupported server request")
 	}

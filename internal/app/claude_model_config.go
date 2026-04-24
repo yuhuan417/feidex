@@ -295,7 +295,7 @@ func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args 
 	}
 	sessionKey := s.app.makeSessionKey(msg)
 	if len(args) > 0 {
-		action := s.app.commandActionFromMessage(msg, map[string]any{
+		action := commandActionFromMessage(msg, map[string]any{
 			"menu_action": "menu.model",
 			"session_key": sessionKey,
 		})

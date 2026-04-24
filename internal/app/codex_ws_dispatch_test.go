@@ -102,7 +102,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 	default:
 	}
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	select {
 	case <-secondTurnStarted:

@@ -39,7 +39,7 @@ func TestEnqueueSubmissionBindsStagedImagesToNextText(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	if err := a.enqueueSubmission(&feishu.InboundMessage{
+	if err := enqueueSubmission(a, &feishu.InboundMessage{
 		MessageID: "msg-2",
 		ChatID:    "chat",
 		ChatType:  "p2p",

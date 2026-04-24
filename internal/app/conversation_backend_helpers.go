@@ -42,7 +42,7 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 	selectedName := strings.TrimSpace(selection.Name)
 	selectedPreview := strings.TrimSpace(selection.Preview)
 	selectedCWD := strings.TrimSpace(selection.Cwd)
-	entry, err := a.findClaudeSessionEntry(threadID)
+	entry, err := findClaudeSessionEntry(threadID)
 	if err != nil {
 		return nil, err
 	}

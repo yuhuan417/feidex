@@ -67,7 +67,7 @@ func (claudeBackendActions) runMenuCompactAction(a *App, action *feishu.CardActi
 		return nil
 	}
 	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
-	return a.enqueueSubmission(msg)
+	return enqueueSubmission(a, msg)
 }
 
 func (claudeBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {
@@ -85,12 +85,12 @@ func (claudeBackendActions) completeMenuInterrupt(a *App, action *feishu.CardAct
 		"/stop",
 		parentAction,
 		"正在请求中断当前任务",
-		a.renderInterruptPreparingCard(sessionKey, parentAction),
+		renderInterruptPreparingCard(a, sessionKey, parentAction),
 		func(sessionKey, text string) map[string]any {
-			return a.renderInterruptResultCard(sessionKey, parentAction, text)
+			return renderInterruptResultCard(a, sessionKey, parentAction, text)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return a.renderInterruptFailedCard(sessionKey, parentAction, targetTurnID, errText)
+			return renderInterruptFailedCard(a, sessionKey, parentAction, targetTurnID, errText)
 		},
 		"interrupt patch failed",
 	)

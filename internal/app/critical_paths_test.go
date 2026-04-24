@@ -82,7 +82,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		t.Fatalf("session missing active submission after first message: %+v", sess)
 	}
 
-	a.handleServerRequest(codexrpc.RequestEnvelope{
+	handleServerRequest(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"cmd-1"`),
 		Method: "item/commandExecution/requestApproval",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`),
@@ -135,7 +135,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		t.Fatalf("pending approval after user reply = %+v, want replied", pending)
 	}
 
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
 
 	firstSub = a.store.GetSubmission(firstSubID)
 	if firstSub == nil || firstSub.Status != "running" {
@@ -147,7 +147,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 	default:
 	}
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	select {
 	case <-secondTurnStarted:

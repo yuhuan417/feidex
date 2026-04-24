@@ -25,7 +25,7 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, workspace.Cwd, "session-newer", "Named Session", "newer prompt", time.Unix(200, 0))
 	writeClaudeSessionFixture(t, configDir, altCwd, "session-alt", "Alt Session", "alt prompt", time.Unix(300, 0))
 
-	items, err := a.listClaudeSessions("sess-1", workspace, false)
+	items, err := listClaudeSessions("sess-1", workspace, false)
 	if err != nil {
 		t.Fatalf("listClaudeSessions(workspace) error = %v", err)
 	}
@@ -41,7 +41,7 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 		}
 	}
 
-	itemsAll, err := a.listClaudeSessions("sess-1", workspace, true)
+	itemsAll, err := listClaudeSessions("sess-1", workspace, true)
 	if err != nil {
 		t.Fatalf("listClaudeSessions(all) error = %v", err)
 	}

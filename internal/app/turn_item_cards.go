@@ -21,14 +21,14 @@ func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submiss
 	if sub == nil {
 		return
 	}
-	a.sendTurnEventMessages(ctx, sub, "已加入队列，等待当前任务结束后开始处理。", a.replyInThreadForSubmission(sub), "turn_queued")
+	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", a.replyInThreadForSubmission(sub), "turn_queued")
 }
 
 func (a *App) sendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
 	if sub == nil {
 		return
 	}
-	a.sendTurnEventMessages(ctx, sub, "已轮到这条消息，开始处理。", a.replyInThreadForSubmission(sub), "turn_started")
+	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", a.replyInThreadForSubmission(sub), "turn_started")
 }
 
 func (s outboundCardService) sendPlanCard(ctx context.Context, sub *state.Submission, planText string) string {
@@ -94,9 +94,9 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 				fallback = payload.DetailText
 			}
 			if payload.IsFinalAnswer {
-				s.app.sendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, s.app.replyInThreadForSubmission(sub))
+				sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, s.app.replyInThreadForSubmission(sub))
 			} else {
-				s.app.sendTurnEventMessages(ctx, sub, fallback, s.app.replyInThreadForSubmission(sub), kind)
+				sendTurnEventMessages(s.app, ctx, sub, fallback, s.app.replyInThreadForSubmission(sub), kind)
 			}
 			return ""
 		}
@@ -122,9 +122,9 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			fallback = payload.DetailText
 		}
 		if payload.IsFinalAnswer {
-			s.app.sendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, s.app.replyInThreadForSubmission(sub))
+			sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, s.app.replyInThreadForSubmission(sub))
 		} else {
-			s.app.sendTurnEventMessages(ctx, sub, fallback, s.app.replyInThreadForSubmission(sub), kind)
+			sendTurnEventMessages(s.app, ctx, sub, fallback, s.app.replyInThreadForSubmission(sub), kind)
 		}
 		return ""
 	}
@@ -174,7 +174,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	}
 	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, s.app.replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
-		s.app.sendTurnEventMessages(ctx, sub, body, s.app.replyInThreadForSubmission(sub), kind)
+		sendTurnEventMessages(s.app, ctx, sub, body, s.app.replyInThreadForSubmission(sub), kind)
 		return ""
 	}
 	s.app.recordMessageLink(id, kind, sub, itemID)

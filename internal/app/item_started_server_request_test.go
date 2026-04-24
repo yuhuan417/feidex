@@ -18,8 +18,8 @@ func TestFileApprovalHydratesFromStartedItem(t *testing.T) {
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	changedPath := filepath.Join(a.cfg.Workspaces[0].Cwd, "dir", "main.go")
 	grantRoot := filepath.ToSlash(filepath.Join(a.cfg.Workspaces[0].Cwd, "dir"))
-	a.handleNotification("item/started", json.RawMessage(fmt.Sprintf(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"item-2","type":"fileChange","status":"inProgress","changes":[{"path":%q,"kind":"update"}]}}`, changedPath)))
-	a.handleServerRequest(codexrpc.RequestEnvelope{
+	handleNotification(a, "item/started", json.RawMessage(fmt.Sprintf(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"item-2","type":"fileChange","status":"inProgress","changes":[{"path":%q,"kind":"update"}]}}`, changedPath)))
+	handleServerRequest(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"file-1"`),
 		Method: "item/fileChange/requestApproval",
 		Params: json.RawMessage(fmt.Sprintf(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"need review","grantRoot":%q}`, grantRoot)),
@@ -48,7 +48,7 @@ func TestFileApprovalHydratesFromStartedItem(t *testing.T) {
 func TestApprovalActionWaitsForServerRequestResolved(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.onCommandApproval(codexrpc.RequestEnvelope{
+	onCommandApproval(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"cmd-1"`),
 		Method: "item/commandExecution/requestApproval",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`),
@@ -68,7 +68,7 @@ func TestApprovalActionWaitsForServerRequestResolved(t *testing.T) {
 	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_approval" {
 		t.Fatalf("submission after user reply = %+v, want waiting_approval", updated)
 	}
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
 	if pending := a.store.PendingByID("cmd-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after serverRequest/resolved = %+v, want resolved", pending)
 	}
@@ -80,12 +80,12 @@ func TestApprovalActionWaitsForServerRequestResolved(t *testing.T) {
 func TestServerRequestResolvedWaitsForOtherOpenRequests(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.onCommandApproval(codexrpc.RequestEnvelope{
+	onCommandApproval(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"cmd-1"`),
 		Method: "item/commandExecution/requestApproval",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`),
 	})
-	a.onFileApproval(codexrpc.RequestEnvelope{
+	onFileApproval(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"file-1"`),
 		Method: "item/fileChange/requestApproval",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","files":["README.md"]}`),
@@ -96,11 +96,11 @@ func TestServerRequestResolvedWaitsForOtherOpenRequests(t *testing.T) {
 	if err := a.store.UpdatePending("file-1", func(req *state.PendingRequest) { req.Status = "replied" }); err != nil {
 		t.Fatalf("UpdatePending(file-1) error = %v", err)
 	}
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
 	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_approval" {
 		t.Fatalf("submission after first resolved = %+v, want waiting_approval", updated)
 	}
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"file-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"file-1"}`))
 	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "running" {
 		t.Fatalf("submission after all resolved = %+v, want running", updated)
 	}

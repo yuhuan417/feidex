@@ -87,7 +87,7 @@ func (s appUpgradeService) createUpgradeLocalPickerRequest(sessionKey string, ws
 		return "", pathPickerPayload{}, err
 	}
 	appState := s.app.appState()
-	payload, err := s.app.newDownloadPathPickerPayload(ws)
+	payload, err := newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return "", pathPickerPayload{}, err
 	}

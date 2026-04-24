@@ -31,11 +31,11 @@ func reviewAsyncButtons(sessionKey, retryAction string) []feishu.Button {
 	return buttons
 }
 
-func (a *App) renderReviewPreparingCard(sessionKey, body string) map[string]any {
+func renderReviewPreparingCard(a *App, sessionKey, body string) map[string]any {
 	return a.feishu.SimpleStatusCard("代码审查", "blue", menuCardBody("menu.review", strings.TrimSpace(body)), nil)
 }
 
-func (a *App) renderReviewFailureCard(sessionKey, errText, retryAction string) map[string]any {
+func renderReviewFailureCard(a *App, sessionKey, errText, retryAction string) map[string]any {
 	body := "这次 review 操作失败了。"
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
@@ -43,7 +43,7 @@ func (a *App) renderReviewFailureCard(sessionKey, errText, retryAction string) m
 	return a.feishu.SimpleStatusCard("代码审查", "orange", menuCardBody("menu.review", body), reviewAsyncButtons(sessionKey, retryAction))
 }
 
-func (a *App) renderReviewResultCard(sessionKey, text string) map[string]any {
+func renderReviewResultCard(a *App, sessionKey, text string) map[string]any {
 	return a.feishu.SimpleStatusCard("代码审查", "green", menuCardBody("menu.review", firstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
 }
 
@@ -54,10 +54,10 @@ func (s conversationWorkflowService) completeMenuReviewUncommitted(action *feish
 		"/review",
 		"menu.review",
 		"正在准备 review",
-		s.app.renderReviewPreparingCard(sessionKey, "正在准备 review，请稍候。\n\n这张卡片会自动刷新。"),
-		s.app.renderReviewResultCard,
+		renderReviewPreparingCard(s.app, sessionKey, "正在准备 review，请稍候。\n\n这张卡片会自动刷新。"),
+		func(sessionKey, text string) map[string]any { return renderReviewResultCard(s.app, sessionKey, text) },
 		func(sessionKey, errText string) map[string]any {
-			return s.app.renderReviewFailureCard(sessionKey, errText, "menu.review.uncommitted")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "menu.review.uncommitted")
 		},
 		"review uncommitted patch failed",
 	)
@@ -70,10 +70,10 @@ func (s conversationWorkflowService) completeMenuReviewBase(action *feishu.CardA
 		"/review base",
 		"menu.review",
 		"正在加载 review 表单",
-		s.app.renderReviewPreparingCard(sessionKey, "正在加载 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, sessionKey, "正在加载 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 		func(sessionKey, errText string) map[string]any {
-			return s.app.renderReviewFailureCard(sessionKey, errText, "menu.review.base")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "menu.review.base")
 		},
 		"review base patch failed",
 	)
@@ -86,10 +86,10 @@ func (s conversationWorkflowService) completeMenuReviewCommit(action *feishu.Car
 		"/review commit",
 		"menu.review",
 		"正在加载 review 表单",
-		s.app.renderReviewPreparingCard(sessionKey, "正在加载 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, sessionKey, "正在加载 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 		func(sessionKey, errText string) map[string]any {
-			return s.app.renderReviewFailureCard(sessionKey, errText, "menu.review.commit")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "menu.review.commit")
 		},
 		"review commit patch failed",
 	)

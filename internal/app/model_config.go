@@ -266,7 +266,7 @@ func (s modelConfigService) commandModel(msg *feishu.InboundMessage, args []stri
 func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args []string) error {
 	sessionKey := s.app.makeSessionKey(msg)
 	if len(args) > 0 {
-		action := s.app.commandActionFromMessage(msg, map[string]any{
+		action := commandActionFromMessage(msg, map[string]any{
 			"menu_action": "menu.model",
 			"session_key": sessionKey,
 		})

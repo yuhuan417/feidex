@@ -16,7 +16,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	selectedPath := filepath.Join(workspace, "report.txt")
 
-	payload, err := a.newDownloadPathPickerPayload(&a.cfg.Workspaces[0])
+	payload, err := newDownloadPathPickerPayload(&a.cfg.Workspaces[0])
 	if err != nil {
 		t.Fatalf("newDownloadPathPickerPayload() error = %v", err)
 	}

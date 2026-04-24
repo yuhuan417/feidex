@@ -9,11 +9,11 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) sendTurnEventMessages(ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
-	return a.sendReplyMessages(ctx, sub, text, inThread, kind)
+func sendTurnEventMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
+	return sendReplyMessages(a, ctx, sub, text, inThread, kind)
 }
 
-func (a *App) sendReplyMessages(ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
+func sendReplyMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
 	return a.sendReplyMessagesWithReuse(ctx, sub, text, inThread, kind, "")
 }
 

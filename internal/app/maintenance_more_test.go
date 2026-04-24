@@ -91,10 +91,10 @@ func TestMiscAppFunctions(t *testing.T) {
 
 	started := time.Now()
 	app := &App{started: started}
-	if !app.isStaleInboundMessage(&feishu.InboundMessage{CreatedAt: started.Add(-31 * time.Second).Unix()}) {
+	if !isStaleInboundMessage(app.started, &feishu.InboundMessage{CreatedAt: started.Add(-31 * time.Second).Unix()}) {
 		t.Fatal("expected old inbound message to be stale")
 	}
-	if app.isStaleInboundMessage(&feishu.InboundMessage{CreatedAt: started.Unix()}) {
+	if isStaleInboundMessage(app.started, &feishu.InboundMessage{CreatedAt: started.Unix()}) {
 		t.Fatal("expected recent inbound message to be fresh")
 	}
 	if got := nonZero(0, 0, 7, 9); got != 7 {

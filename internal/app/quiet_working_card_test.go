@@ -285,7 +285,7 @@ func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
-	a.finishTurn("thread-1", "turn-1", "completed")
+	finishTurn(a, "thread-1", "turn-1", "completed")
 
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched card count after finishTurn = %d, want 1", len(ff.patchedCards))
@@ -325,7 +325,7 @@ func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeFinal
-	a.finishTurn("thread-1", "turn-1", "failed")
+	finishTurn(a, "thread-1", "turn-1", "failed")
 
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched card count after failed finishTurn = %d, want 1", len(ff.patchedCards))

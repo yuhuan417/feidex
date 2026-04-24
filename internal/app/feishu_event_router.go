@@ -22,7 +22,7 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 	if msg == nil {
 		return
 	}
-	if a.isStaleInboundMessage(msg) {
+	if isStaleInboundMessage(a.started, msg) {
 		slog.Debug("feishu stale message ignored", "message_id", msg.MessageID, "created_at", msg.CreatedAt)
 		return
 	}
@@ -128,7 +128,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			)
 		}
 	}
-	if err := a.enqueueSubmissionWithSessionKey(msg, targetSessionKey, replyLink != nil); err != nil {
+	if err := enqueueSubmissionWithSessionKey(a, msg, targetSessionKey, replyLink != nil); err != nil {
 		return err
 	}
 	return nil

@@ -41,7 +41,7 @@ func (s commandService) enqueuePassthroughCommand(msg *feishu.InboundMessage, ra
 	}
 	cloned := *msg
 	cloned.Text = raw
-	return s.app.enqueueSubmission(&cloned)
+	return enqueueSubmission(s.app, &cloned)
 }
 
 func isLocalCommandForBackend(backend, raw string) bool {

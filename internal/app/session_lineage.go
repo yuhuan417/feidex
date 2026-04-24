@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 
+	"feidex/internal/app/sessionctx"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -60,157 +61,54 @@ func (a *App) clearSessionLiveThread(sessionKey string) {
 	delete(tracker.threads, strings.TrimSpace(sessionKey))
 }
 
+// Wrappers delegating to sessionctx subpackage
+
 func sessionHasInFlightSubmission(sess *state.Session) bool {
-	if sess == nil {
-		return false
-	}
-	if sessionHasActiveOperations(sess) {
-		return true
-	}
-	return strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != ""
+	return sessionctx.HasInFlightSubmission(sess)
 }
 
 func clearSessionThreadContext(sess *state.Session) {
-	if sess == nil {
-		return
-	}
-	sess.ActiveThreadID = ""
-	sess.ActiveThreadWorkspaceID = ""
-	sess.ActiveThreadApprovalPolicy = ""
-	sess.ActiveThreadSandboxMode = ""
-	sess.ActiveClaudePermissionMode = ""
-	sess.ActiveThreadServiceTier = ""
-	sess.ActiveThreadName = ""
-	sess.ActiveThreadPreview = ""
+	sessionctx.ClearThreadContext(sess)
 }
 
 func sessionBackendThreadSnapshot(sess *state.Session) state.SessionBackendThread {
-	if sess == nil {
-		return state.SessionBackendThread{}
-	}
-	return state.SessionBackendThread{
-		ThreadID:             strings.TrimSpace(sess.ActiveThreadID),
-		WorkspaceID:          strings.TrimSpace(sess.ActiveThreadWorkspaceID),
-		ApprovalPolicy:       strings.TrimSpace(sess.ActiveThreadApprovalPolicy),
-		SandboxMode:          strings.TrimSpace(sess.ActiveThreadSandboxMode),
-		ClaudePermissionMode: strings.TrimSpace(sess.ActiveClaudePermissionMode),
-		ServiceTier:          strings.TrimSpace(sess.ActiveThreadServiceTier),
-		Name:                 strings.TrimSpace(sess.ActiveThreadName),
-		Preview:              strings.TrimSpace(sess.ActiveThreadPreview),
-	}
+	return sessionctx.BackendThreadSnapshot(sess)
 }
 
 func sessionStoreBackendThread(sess *state.Session, backend string) {
-	if sess == nil {
-		return
-	}
-	backend = normalizeRuntimeBackend(backend)
-	if backend == "" {
-		return
-	}
-	if sess.BackendThreads == nil {
-		sess.BackendThreads = map[string]state.SessionBackendThread{}
-	}
-	snapshot := sessionBackendThreadSnapshot(sess)
-	if snapshot == (state.SessionBackendThread{}) {
-		delete(sess.BackendThreads, backend)
-		if len(sess.BackendThreads) == 0 {
-			sess.BackendThreads = nil
-		}
-		return
-	}
-	sess.BackendThreads[backend] = snapshot
+	sessionctx.StoreBackendThread(sess, backend)
 }
 
 func sessionClearBackendThread(sess *state.Session, backend string) {
-	if sess == nil {
-		return
-	}
-	backend = normalizeRuntimeBackend(backend)
-	if backend == "" || len(sess.BackendThreads) == 0 {
-		return
-	}
-	delete(sess.BackendThreads, backend)
-	if len(sess.BackendThreads) == 0 {
-		sess.BackendThreads = nil
-	}
+	sessionctx.ClearBackendThread(sess, backend)
 }
 
 func sessionRestoreBackendThread(sess *state.Session, backend string) bool {
-	if sess == nil {
-		return false
-	}
-	backend = normalizeRuntimeBackend(backend)
-	if backend == "" || len(sess.BackendThreads) == 0 {
-		clearSessionThreadContext(sess)
-		return false
-	}
-	snapshot, ok := sess.BackendThreads[backend]
-	if !ok {
-		clearSessionThreadContext(sess)
-		return false
-	}
-	if strings.TrimSpace(snapshot.WorkspaceID) != "" {
-		sess.WorkspaceID = strings.TrimSpace(snapshot.WorkspaceID)
-	}
-	setSessionThreadContext(sess, snapshot.WorkspaceID, snapshot.ThreadID, snapshot.Name, snapshot.Preview)
-	sess.ActiveThreadApprovalPolicy = strings.TrimSpace(snapshot.ApprovalPolicy)
-	sess.ActiveThreadSandboxMode = strings.TrimSpace(snapshot.SandboxMode)
-	sess.ActiveClaudePermissionMode = strings.TrimSpace(snapshot.ClaudePermissionMode)
-	sess.ActiveThreadServiceTier = normalizeServiceTier(snapshot.ServiceTier)
-	return true
+	return sessionctx.RestoreBackendThread(sess, backend)
 }
 
 func clearSessionBackendThreads(sess *state.Session) {
-	if sess == nil {
-		return
-	}
-	sess.BackendThreads = nil
+	sessionctx.ClearBackendThreads(sess)
 }
 
 func setSessionThreadContext(sess *state.Session, workspaceID, threadID, name, preview string) {
-	if sess == nil {
-		return
-	}
-	sess.ActiveThreadID = strings.TrimSpace(threadID)
-	sess.ActiveThreadWorkspaceID = strings.TrimSpace(workspaceID)
-	sess.ActiveThreadName = strings.TrimSpace(name)
-	sess.ActiveThreadPreview = strings.TrimSpace(preview)
+	sessionctx.SetThreadContext(sess, workspaceID, threadID, name, preview)
 }
 
 func setSessionThreadDefaults(sess *state.Session, approvalPolicy, sandboxMode string) {
-	if sess == nil {
-		return
-	}
-	sess.ActiveThreadApprovalPolicy = strings.TrimSpace(approvalPolicy)
-	sess.ActiveThreadSandboxMode = strings.TrimSpace(sandboxMode)
+	sessionctx.SetThreadDefaults(sess, approvalPolicy, sandboxMode)
 }
 
 func effectiveThreadApprovalPolicy(sess *state.Session, ws *config.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
-		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
-	}
-	if ws != nil {
-		return strings.TrimSpace(ws.ApprovalPolicy)
-	}
-	return ""
+	return sessionctx.EffectiveApprovalPolicy(sess, ws)
 }
 
 func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
-		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
-	}
-	if ws != nil {
-		return strings.TrimSpace(ws.SandboxMode)
-	}
-	return ""
+	return sessionctx.EffectiveSandboxMode(sess, ws)
 }
 
 func effectiveThreadServiceTier(sess *state.Session) string {
-	if sess != nil {
-		return normalizeServiceTier(sess.ActiveThreadServiceTier)
-	}
-	return ""
+	return sessionctx.EffectiveServiceTier(sess)
 }
 
 func normalizeClaudePermissionModeValue(value string) string {
@@ -239,30 +137,9 @@ func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cf
 }
 
 func switchSessionWorkspace(sess *state.Session, workspaceID string) {
-	if sess == nil {
-		return
-	}
-	previousWorkspaceID := strings.TrimSpace(sess.WorkspaceID)
-	sess.WorkspaceID = strings.TrimSpace(workspaceID)
-	if !sessionHasInFlightSubmission(sess) {
-		clearSessionBackendThreads(sess)
-		clearSessionThreadContext(sess)
-		return
-	}
-	if sess.ActiveThreadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-		sess.ActiveThreadWorkspaceID = previousWorkspaceID
-	}
+	sessionctx.SwitchSessionWorkspace(sess, workspaceID)
 }
 
 func sessionCanResumeThreadForSubmission(sess *state.Session, sub *state.Submission) bool {
-	if sess == nil || sub == nil {
-		return false
-	}
-	if strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return false
-	}
-	if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-		return false
-	}
-	return strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(sub.WorkspaceID)
+	return sessionctx.CanResumeThreadForSubmission(sess, sub)
 }

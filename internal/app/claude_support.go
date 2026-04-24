@@ -46,7 +46,7 @@ func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey stri
 		}
 	}
 
-	card := a.renderApprovalCard(sessionKey, sub, title, "orange", strings.TrimSpace(body), buttons)
+	card := renderApprovalCard(a, sessionKey, sub, title, "orange", strings.TrimSpace(body), buttons)
 	return a.deliverPendingCard(sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: claudeRequestIDStored(requestKey),

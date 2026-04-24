@@ -973,10 +973,10 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 		t.Fatalf("handleBotMenu() did not send command failure: %+v", ff.sentTexts)
 	}
 
-	if !a.isStaleInboundMessage(&feishu.InboundMessage{CreatedAt: a.started.Add(-31 * time.Second).Unix()}) {
+	if !isStaleInboundMessage(a.started, &feishu.InboundMessage{CreatedAt: a.started.Add(-31 * time.Second).Unix()}) {
 		t.Fatal("expected stale inbound message")
 	}
-	if a.isStaleInboundMessage(&feishu.InboundMessage{CreatedAt: a.started.Unix()}) {
+	if isStaleInboundMessage(a.started, &feishu.InboundMessage{CreatedAt: a.started.Unix()}) {
 		t.Fatal("expected fresh inbound message")
 	}
 	if got := nonZero(0, 0, 3, 4); got != 3 {
@@ -1163,7 +1163,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	ff.sendCards = nil
 	ff.replyTexts = nil
 	fc.replyErrors = nil
-	a.onCommandApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"ls -la","cwd":"/repo","reason":"need approval"}`)})
+	onCommandApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"ls -la","cwd":"/repo","reason":"need approval"}`)})
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected command approval to send a card")
 	}
@@ -1184,7 +1184,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	a.onPermissionsApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"sandbox","permissions":{"mode":"write","network":true,"sandbox":{"type":"workspace-write"},"writable_roots":["/repo","/tmp/work"]}}`)})
+	onPermissionsApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"sandbox","permissions":{"mode":"write","network":true,"sandbox":{"type":"workspace-write"},"writable_roots":["/repo","/tmp/work"]}}`)})
 	if len(ff.sendCards) == 0 {
 		t.Fatal("expected permissions approval to send a card")
 	}
@@ -1199,7 +1199,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	a.onToolUserInput(codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","questions":[{"id":"q1","question":"Choose","options":[{"label":"A"},{"label":"B"}]}]}`)})
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","questions":[{"id":"q1","question":"Choose","options":[{"label":"A"},{"label":"B"}]}]}`)})
 	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" {
 		t.Fatalf("tool user input pending = %+v, want quick-pick request", pending)
 	}
@@ -1208,7 +1208,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	a.onToolUserInput(codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-2"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"A"},{"id":"q2","question":"B"}]}`)})
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-2"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"A"},{"id":"q2","question":"B"}]}`)})
 	if pending := a.store.PendingByID("input-2"); pending == nil || pending.Kind != "tool_request_user_input_form" {
 		t.Fatalf("tool user input form pending = %+v, want form request", pending)
 	}
@@ -1224,7 +1224,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	a.onToolUserInput(codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-3"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-5","questions":[{"id":"q1","question":"Pick targets","multiSelect":true,"options":[{"label":"A"},{"label":"B"},{"label":"C"}]}]}`)})
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-3"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-5","questions":[{"id":"q1","question":"Pick targets","multiSelect":true,"options":[{"label":"A"},{"label":"B"},{"label":"C"}]}]}`)})
 	if pending := a.store.PendingByID("input-3"); pending == nil || pending.Kind != "tool_request_user_input_form" {
 		t.Fatalf("tool user input multi-select pending = %+v, want form request", pending)
 	}
@@ -1234,7 +1234,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"visit","url":"https://example.test"}`)})
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"visit","url":"https://example.test"}`)})
 	if pending := a.store.PendingByID("elicit-1"); pending == nil || pending.Kind != "mcp_elicitation_url" {
 		t.Fatalf("elicitation url pending = %+v, want url request", pending)
 	}
@@ -1242,7 +1242,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 		t.Fatalf("elicitation url body = %q", got)
 	}
 
-	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-2"`), Params: json.RawMessage(`{"mode":"form","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"fill","requestedSchema":{"properties":{"name":{"type":"string"}}}}`)})
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-2"`), Params: json.RawMessage(`{"mode":"form","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"fill","requestedSchema":{"properties":{"name":{"type":"string"}}}}`)})
 	if pending := a.store.PendingByID("elicit-2"); pending == nil || pending.Kind != "mcp_elicitation_form" {
 		t.Fatalf("elicitation form pending = %+v, want form request", pending)
 	}
@@ -1423,19 +1423,19 @@ func TestCommandWorkspaceCloneRejectsExistingWorkspaceID(t *testing.T) {
 func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
 	a, _, fc := newTestApp(t)
 
-	a.handleServerRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"req-1"`), Method: "unknown"})
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req-1"`), Method: "unknown"})
 	if len(fc.replyErrors) == 0 || fc.replyErrors[0].code != -32601 {
 		t.Fatalf("handleServerRequest(unknown) replyErrors = %+v", fc.replyErrors)
 	}
 
 	fc.replyErrors = nil
-	a.onCommandApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-cmd"`), Params: json.RawMessage(`{`)})
+	onCommandApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-cmd"`), Params: json.RawMessage(`{`)})
 	if len(fc.replyErrors) == 0 || fc.replyErrors[0].code != -32602 {
 		t.Fatalf("onCommandApproval(invalid params) = %+v", fc.replyErrors)
 	}
 
 	fc.replyErrors = nil
-	a.onMcpElicitationRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-elicit"`), Params: json.RawMessage(`{"mode":"other"}`)})
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-elicit"`), Params: json.RawMessage(`{"mode":"other"}`)})
 	if len(fc.replyErrors) == 0 || fc.replyErrors[0].code != -32601 {
 		t.Fatalf("onMcpElicitationRequest(unsupported mode) = %+v", fc.replyErrors)
 	}
@@ -1519,14 +1519,14 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 	}
 
-	if resp, err := a.dispatchCardAction(nil); err != nil || resp == nil {
+	if resp, err := dispatchCardAction(a, nil); err != nil || resp == nil {
 		t.Fatalf("dispatchCardAction(nil) = %#v, %v", resp, err)
 	}
-	if resp, err := a.dispatchCardAction(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := dispatchCardAction(a, &feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
 	}
 	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
-	if resp, err := a.dispatchCardAction(&feishu.CardAction{
+	if resp, err := dispatchCardAction(a, &feishu.CardAction{
 		ActionValue: map[string]any{"action": "menu.root"},
 	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
 		t.Fatalf("dispatchCardAction(blocked) = %#v, %v", resp, err)
@@ -2917,7 +2917,7 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
-	if err := a.startNextSubmission(sessionKey); err != nil {
+	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
@@ -2938,7 +2938,7 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("submission after startNextSubmission = %+v", sub)
 	}
 
-	a.finishTurn("thread-1", "turn-1", "completed")
+	finishTurn(a, "thread-1", "turn-1", "completed")
 	time.Sleep(20 * time.Millisecond)
 	sub = a.store.GetSubmission(subID)
 	if sub != nil {
@@ -2986,9 +2986,9 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("UpsertPending(notification) error = %v", err)
 	}
 
-	a.handleNotification("turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"a","status":"completed"}]}`))
-	a.handleNotification("error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
+	handleNotification(a, "turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"a","status":"completed"}]}`))
+	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
 
 	stream := newTurnStreamService(a).turnStreamTracker().streams["turn-1"]
 	if stream == nil || !strings.Contains(stream.PendingPlan, "a") {
@@ -3007,7 +3007,7 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
 	}
 
-	a.startNextSubmissionAsync("", "test")
+	startNextSubmissionAsync(a, "", "test")
 	if got := truncate("  abcdef  ", 3); got != "abc..." {
 		t.Fatalf("truncate() = %q, want abc...", got)
 	}
@@ -3230,7 +3230,7 @@ func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
 			return nil
 		}
 	}
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission() error = %v", err)
 	}
 	if link := a.store.GetMessageLink("root-msg"); link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
@@ -3284,7 +3284,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 		Text:          "describe images",
 		RootMessageID: "c",
 	}
-	if err := a.enqueueSubmission(msg); err != nil {
+	if err := enqueueSubmission(a, msg); err != nil {
 		t.Fatalf("enqueueSubmission() error = %v", err)
 	}
 	if len(seenInputs) != 3 || seenInputs[0]["type"] != "text" || seenInputs[1]["type"] != "localImage" || seenInputs[2]["type"] != "localImage" {
@@ -3558,7 +3558,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 
 	seedActiveSubmission(t, a, sessionKey, "thread-9", "turn-1")
 	ff.sendCards = nil
-	a.onFileApproval(codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-approval"`), Params: json.RawMessage(`{"threadId":"thread-9","turnId":"turn-1","itemId":"item-2","reason":"need review","changes":[{"path":"internal/app/notifications.go","kind":"modified"},{"path":"README.md","kind":"added"}]}`)})
+	onFileApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-approval"`), Params: json.RawMessage(`{"threadId":"thread-9","turnId":"turn-1","itemId":"item-2","reason":"need review","changes":[{"path":"internal/app/notifications.go","kind":"modified"},{"path":"README.md","kind":"added"}]}`)})
 	if pending := a.store.PendingByID("file-approval"); pending == nil || pending.Kind != "file" {
 		t.Fatalf("file approval pending = %+v, want file request", pending)
 	}

@@ -59,7 +59,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		t.Fatalf("submission after turn/interrupt request = %+v, want running non-finalized", updated)
 	}
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"interrupted"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"interrupted"}}`))
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveTurnID != "" || sess.ActiveSubmissionID != "" || sess.Status != "idle" {
@@ -82,7 +82,7 @@ func TestErrorNotificationKeepsSessionBoundUntilFailedCompletion(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
+	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
 
 	sess = a.store.GetSession("sess-1")
 	if sess == nil || sess.ActiveTurnID != "turn-1" || sess.ActiveSubmissionID != sub.ID || sess.Status != "turn_in_progress" {
@@ -93,7 +93,7 @@ func TestErrorNotificationKeepsSessionBoundUntilFailedCompletion(t *testing.T) {
 		t.Fatalf("submission after error notification = %+v, want failed but not finalized", updated)
 	}
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
 
 	sess = a.store.GetSession("sess-1")
 	if sess == nil || sess.ActiveTurnID != "" || sess.ActiveSubmissionID != "" || sess.Status != "idle" {
@@ -111,7 +111,7 @@ func TestPermissionsApprovalLifecycleResumesOnlyAfterServerRequestResolved(t *te
 	a, _, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.handleServerRequest(codexrpc.RequestEnvelope{
+	handleServerRequest(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"perm-1"`),
 		Method: "item/permissions/requestApproval",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","reason":"need write","permissions":{"mode":"write","network":true}}`),
@@ -145,7 +145,7 @@ func TestPermissionsApprovalLifecycleResumesOnlyAfterServerRequestResolved(t *te
 		t.Fatalf("submission before serverRequest/resolved = %+v, want waiting_approval", updated)
 	}
 
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"perm-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"perm-1"}`))
 
 	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after permissions resolve = %+v, want resolved", pending)
@@ -159,7 +159,7 @@ func TestMcpElicitationURLLifecycleResumesOnlyAfterServerRequestResolved(t *test
 	a, _, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.handleServerRequest(codexrpc.RequestEnvelope{
+	handleServerRequest(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"elicit-1"`),
 		Method: "mcpServer/elicitation/request",
 		Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"open","url":"https://example.test"}`),
@@ -193,7 +193,7 @@ func TestMcpElicitationURLLifecycleResumesOnlyAfterServerRequestResolved(t *test
 		t.Fatalf("submission before serverRequest/resolved = %+v, want waiting_user_input", updated)
 	}
 
-	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"elicit-1"}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"elicit-1"}`))
 
 	if pending := a.store.PendingByID("elicit-1"); pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after elicitation resolve = %+v, want resolved", pending)
@@ -207,8 +207,8 @@ func TestDynamicToolCallServerRequestIsExplicitlyRejected(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"tool-1","type":"dynamicToolCall","tool":"dangerous"}}`))
-	a.handleServerRequest(codexrpc.RequestEnvelope{
+	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"tool-1","type":"dynamicToolCall","tool":"dangerous"}}`))
+	handleServerRequest(a, codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"tool-call-1"`),
 		Method: "item/tool/call",
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"tool-1","tool":"dangerous"}`),

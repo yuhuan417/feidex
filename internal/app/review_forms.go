@@ -311,12 +311,12 @@ func (s reviewFormService) completeReviewBaseSelect(action *feishu.CardAction) (
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
-		s.app.renderReviewPreparingCard(pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
 			return newReviewFormService(s.app).completeReviewBaseSelectSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return s.app.renderReviewFailureCard(sessionKey, errText, "")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "")
 		},
 		"review base select patch failed",
 	)
@@ -354,12 +354,12 @@ func (s reviewFormService) completeReviewCommitSelect(action *feishu.CardAction)
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
-		s.app.renderReviewPreparingCard(pending.SessionKey, "正在刷新 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, pending.SessionKey, "正在刷新 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
 			return newReviewFormService(s.app).completeReviewCommitSelectSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return s.app.renderReviewFailureCard(sessionKey, errText, "")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "")
 		},
 		"review commit select patch failed",
 	)
@@ -414,12 +414,12 @@ func (s reviewFormService) completeReviewFormSubmit(action *feishu.CardAction) (
 		action,
 		pending.SessionKey,
 		"正在启动 review",
-		s.app.renderReviewPreparingCard(pending.SessionKey, "正在启动 review，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, pending.SessionKey, "正在启动 review，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
 			return newReviewFormService(s.app).completeReviewFormSubmitSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return s.app.renderReviewFailureCard(sessionKey, errText, "")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "")
 		},
 		"review submit patch failed",
 	)

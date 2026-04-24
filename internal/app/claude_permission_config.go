@@ -23,11 +23,11 @@ type claudePermissionModeOption struct {
 	Label string
 }
 
-func (a *App) isClaudeBypassPermissionsEnabled() bool {
-	if a == nil || a.cfg == nil {
+func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
+	if cfg == nil {
 		return false
 	}
-	return a.cfg.Claude.DangerouslySkipPermissions
+	return cfg.Claude.DangerouslySkipPermissions
 }
 
 func claudePermissionModeOptions(includeBypass bool) []claudePermissionModeOption {
@@ -57,7 +57,7 @@ func (a *App) normalizeRequestedClaudePermissionMode(ctx context.Context, raw st
 	default:
 		return "", "", fmt.Errorf("不支持的 Claude 权限模式 `%s`", strings.TrimSpace(raw))
 	}
-	if mode == string(claudePermissionModeBypass) && !a.isClaudeBypassPermissionsEnabled() {
+	if mode == string(claudePermissionModeBypass) && !isClaudeBypassPermissionsEnabled(a.cfg) {
 		return "", "", fmt.Errorf("当前未启用 `claude.dangerously_skip_permissions`，不能切到 `bypassPermissions`")
 	}
 	return mode, "", nil
@@ -129,7 +129,7 @@ func (a *App) renderClaudeSessionPermissionMenuCard(sessionKey string) (map[stri
 			"mode":        "",
 		},
 	})
-	for _, opt := range claudePermissionModeOptions(a.isClaudeBypassPermissionsEnabled()) {
+	for _, opt := range claudePermissionModeOptions(isClaudeBypassPermissionsEnabled(a.cfg)) {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == override {
@@ -249,7 +249,7 @@ func (a *App) renderClaudeWorkspacePermissionMenuCard(sessionKey string) (map[st
 			"mode":         "",
 		},
 	})
-	for _, opt := range claudePermissionModeOptions(a.isClaudeBypassPermissionsEnabled()) {
+	for _, opt := range claudePermissionModeOptions(isClaudeBypassPermissionsEnabled(a.cfg)) {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == override {

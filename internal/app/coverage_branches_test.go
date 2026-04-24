@@ -32,7 +32,7 @@ func TestMenuWrapperCardsAndActionUserID(t *testing.T) {
 func TestRenderDownloadFailedCard(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	card := a.renderDownloadFailedCard("/workspace/repo/docs/report.txt", "/workspace/repo", " permission denied ")
+	card := renderDownloadFailedCard(a, "/workspace/repo/docs/report.txt", "/workspace/repo", " permission denied ")
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
 		"生成下载链接失败。",

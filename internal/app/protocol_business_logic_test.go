@@ -12,7 +12,7 @@ func TestItemStartedBindsPendingSubmissionBeforeTurnStarted(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedStartingSubmission(t, a, "sess-1", "sub-early", "thread-1", "")
 
-	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-early","item":{"id":"item-1","type":"commandExecution","command":"pwd"}}`))
+	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-early","item":{"id":"item-1","type":"commandExecution","command":"pwd"}}`))
 
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.ActiveSubmissionID != sub.ID || sess.ActiveTurnID != "turn-early" || sess.Status != "turn_in_progress" {
@@ -40,27 +40,27 @@ func TestReviewLifecycleBindsAndDeliversWithoutTurnStarted(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedStartingSubmission(t, a, "sess-1", "sub-review", "thread-1", submissionKindReview)
 
-	a.handleNotification("item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"review-turn-a","item":{"id":"enter-1","type":"enteredReviewMode"}}`))
+	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"review-turn-a","item":{"id":"enter-1","type":"enteredReviewMode"}}`))
 
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.ActiveSubmissionID != sub.ID || sess.ActiveTurnID != "review-turn-a" || sess.Status != "turn_in_progress" {
 		t.Fatalf("session after enteredReviewMode = %+v, want review turn bound before turn/started", sess)
 	}
 
-	a.handleNotification("turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"persisted-turn-b"}}`))
+	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"persisted-turn-b"}}`))
 
 	sess = a.store.GetSession("sess-1")
 	if sess == nil || sess.ActiveTurnID != "review-turn-a" {
 		t.Fatalf("review turn should stay on early bound turn after later turn/started, got %+v", sess)
 	}
 
-	a.handleNotification("item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"review-turn-a","itemId":"exit-1","item":{"id":"exit-1","type":"exitedReviewMode","review":"Looks good overall."}}`))
+	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"review-turn-a","itemId":"exit-1","item":{"id":"exit-1","type":"exitedReviewMode","review":"Looks good overall."}}`))
 
 	if body := lastDeliveredCardMarkdown(t, ff); !strings.Contains(body, "Looks good overall.") {
 		t.Fatalf("review final card body = %q, want exitedReviewMode review text", body)
 	}
 
-	a.handleNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"review-turn-a","status":"completed"}}`))
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"review-turn-a","status":"completed"}}`))
 
 	sess = a.store.GetSession("sess-1")
 	if sess == nil || sess.ActiveTurnID != "" || sess.ActiveSubmissionID != "" || sess.Status != "idle" {

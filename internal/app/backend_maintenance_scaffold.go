@@ -43,7 +43,7 @@ func (a *App) completeMaintenanceAsyncAction(
 	)
 }
 
-func (a *App) maintenanceFallbackResponse(
+func maintenanceFallbackResponse(
 	sessionKey string,
 	cause error,
 	loadStatusCard func(context.Context) (map[string]any, error),
@@ -77,7 +77,7 @@ func completeMaintenanceRestartRun[S any](
 	sessionKey := actionSessionKey(action)
 	snapshot, err := begin()
 	if err != nil {
-		return a.maintenanceFallbackResponse(sessionKey, err, loadStatusCard, failureCard)
+		return maintenanceFallbackResponse(sessionKey, err, loadStatusCard, failureCard)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
 	go run(messageID, sessionKey)

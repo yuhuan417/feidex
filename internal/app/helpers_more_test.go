@@ -723,11 +723,11 @@ func TestDeliveryHelpers(t *testing.T) {
 	}
 
 	var a *App
-	if got := a.sendFinalMessages(nil, nil, "ignored", false); got != nil {
+	if got := sendFinalMessages(a, nil, nil, "ignored", false); got != nil {
 		t.Fatalf("sendFinalMessages(nil app) = %+v, want nil", got)
 	}
 	a = &App{cfg: config.Default()}
-	if got := a.sendReplyMessages(nil, &state.Submission{}, "ignored", false, "final_message"); got != nil {
+	if got := sendReplyMessages(a, nil, &state.Submission{}, "ignored", false, "final_message"); got != nil {
 		t.Fatalf("sendReplyMessages(without feishu) = %+v, want nil", got)
 	}
 }

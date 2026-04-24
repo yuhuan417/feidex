@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"feidex/internal/app/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -60,70 +61,23 @@ func (a *App) quietWorkingCardEnabled() bool {
 }
 
 func quietModeStatusText(mode config.QuietMode) string {
-	return mode.String()
+	return quietmode.StatusText(mode)
 }
 
 func shouldDeliverTurnKindInQuiet(mode config.QuietMode, kind string) bool {
-	switch mode {
-	case config.QuietModeProgress:
-		switch strings.TrimSpace(kind) {
-		case "final_message", "turn_output", "turn_plan", "turn_queued", "turn_started", "turn_terminal":
-			return true
-		default:
-			return false
-		}
-	case config.QuietModeNormal:
-		switch strings.TrimSpace(kind) {
-		case "final_message", "turn_output", "turn_plan", "turn_started":
-			return true
-		default:
-			return false
-		}
-	case config.QuietModeFinal:
-		return strings.TrimSpace(kind) == "final_message"
-	default:
-		return true
-	}
+	return quietmode.ShouldDeliverTurnKind(mode, kind)
 }
 
 func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFinalAnswer bool) bool {
-	switch mode {
-	case config.QuietModeProgress, config.QuietModeNormal:
-		switch normalizeTurnItemType(itemType) {
-		case "plan", "agent_message", "exited_review_mode":
-			return true
-		default:
-			return false
-		}
-	case config.QuietModeFinal:
-		switch normalizeTurnItemType(itemType) {
-		case "agent_message", "exited_review_mode":
-			return isFinalAnswer
-		default:
-			return false
-		}
-	default:
-		return true
-	}
+	return quietmode.ShouldDeliverTurnItem(mode, itemType, isFinalAnswer)
 }
 
 func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnItemCardPayload) bool {
-	if shouldDeliverTurnItemInQuiet(mode, payload.ItemType, payload.IsFinalAnswer) {
-		return true
-	}
-	if !isClaudeTodoToolPayload(payload) {
-		return false
-	}
-	switch mode {
-	case config.QuietModeProgress, config.QuietModeNormal:
-		return true
-	default:
-		return false
-	}
+	return quietmode.ShouldDeliverTurnItemPayload(mode, payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)
 }
 
 func isClaudeTodoToolPayload(payload turnItemCardPayload) bool {
-	return normalizeTurnItemType(payload.ProtocolItemType) == "dynamic_tool_call" && strings.TrimSpace(payload.ToolName) == "TodoWrite"
+	return quietmode.IsClaudeTodoToolPayload(payload.ProtocolItemType, payload.ToolName)
 }
 
 func (a *App) renderQuietModeCard() map[string]any {

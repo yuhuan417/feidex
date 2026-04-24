@@ -199,11 +199,11 @@ func (a *App) handleFeishuReaction(reaction *feishu.MessageReaction) {
 	newFeishuEventRouter(a).handleReaction(reaction)
 }
 
-func (a *App) isStaleInboundMessage(msg *feishu.InboundMessage) bool {
+func isStaleInboundMessage(started time.Time, msg *feishu.InboundMessage) bool {
 	if msg == nil || msg.CreatedAt == 0 {
 		return false
 	}
-	return msg.CreatedAt < a.started.Add(-30*time.Second).Unix()
+	return msg.CreatedAt < started.Add(-30*time.Second).Unix()
 }
 
 func nonZero(values ...int64) int64 {
@@ -220,19 +220,18 @@ func (a *App) handleBotMenu(click *feishu.BotMenuClick) {
 }
 
 func (a *App) handleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	// implemented in actions.go
-	return a.dispatchCardAction(action)
+	return dispatchCardAction(a, action)
 }
 
-func (a *App) enqueueSubmission(msg *feishu.InboundMessage) error {
-	return a.enqueueSubmissionWithSessionKey(msg, a.makeSessionKey(msg), false)
+func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
+	return enqueueSubmissionWithSessionKey(a, msg, a.makeSessionKey(msg), false)
 }
 
-func (a *App) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
+func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
 	return newLifecycleCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot)
 }
 
-func (a *App) startNextSubmission(sessionKey string) error {
+func startNextSubmission(a *App, sessionKey string) error {
 	return newLifecycleCoordinator(a).startNextSubmission(sessionKey)
 }
 

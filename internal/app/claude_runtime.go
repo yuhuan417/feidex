@@ -674,7 +674,7 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	if sub == nil {
 		return
 	}
-	workspaceCwd := r.app.workspaceCwd(sub.WorkspaceID)
+	workspaceCwd := workspaceCwd(r.app.cfg, sub.WorkspaceID)
 	var op quietWorkingCardOp
 	op = newTurnStreamService(r.app).prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
@@ -710,7 +710,7 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 	if sub != nil {
 		r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
 	}
-	chunks, ok := r.app.updateClaudeOutputSegmentWithReuse(context.Background(), threadID, turnID, body, boundary.ReuseMessageID)
+	chunks, ok := updateClaudeOutputSegmentWithReuse(r.app, context.Background(), threadID, turnID, body, boundary.ReuseMessageID)
 	if !ok {
 		return
 	}
@@ -820,7 +820,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
 					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
-				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+				} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {
 					newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
@@ -845,7 +845,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
 					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
-				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+				} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {
 					newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
@@ -853,7 +853,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 						"phase": "final_answer",
 					})
 				}
-			} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+			} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {
 				newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 					"type":  "agent_message",
 					"id":    "claude-agent-" + turn.TurnID,
@@ -871,7 +871,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 			status = "failed"
 		}
 	}
-	r.app.finishTurn(threadID, turn.TurnID, status)
+	finishTurn(r.app, threadID, turn.TurnID, status)
 }
 
 func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event claudecli.ErrorEvent) {
@@ -1038,7 +1038,7 @@ func (r *claudeRuntime) handleExitPlanMode(ctx context.Context, state *claudeSes
 		return "", fmt.Errorf("no active submission for plan confirmation")
 	}
 	workspaceID = firstNonEmpty(strings.TrimSpace(sub.WorkspaceID), workspaceID)
-	plan = enrichClaudePlanForDisplay(plan, planFilePath, r.app.workspaceCwd(workspaceID), startedAt)
+	plan = enrichClaudePlanForDisplay(plan, planFilePath, workspaceCwd(r.app.cfg, workspaceID), startedAt)
 	requestID := "claude-plan-" + strings.TrimSpace(turnID)
 	if nextID, err := r.app.appState().nextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
 		requestID = nextID
@@ -1091,7 +1091,7 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 			path = strings.TrimSpace(*req.BlockedPath)
 		}
 		payload["changes"] = []map[string]any{{"path": path, "kind": strings.TrimSpace(req.ToolName)}}
-		body = appapproval.RenderFileBodyWithWorkspace(payload, r.app.workspaceCwd(workspaceID))
+		body = appapproval.RenderFileBodyWithWorkspace(payload, workspaceCwd(r.app.cfg, workspaceID))
 	default:
 		kind = "permissions"
 		payload["permissions"] = map[string]any{

@@ -119,7 +119,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 	if sub == nil {
 		return
 	}
-	workspaceCwd := s.app.workspaceCwd(sub.WorkspaceID)
+	workspaceCwd := workspaceCwd(s.app.cfg, sub.WorkspaceID)
 	payload, hasPayload := buildTurnItemCardPayloadWithWorkspace(itemID, item, workspaceCwd)
 
 	var (

@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-func (a *App) updateClaudeOutputSegmentWithReuse(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
+func updateClaudeOutputSegmentWithReuse(a *App, ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
 	return a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, false, reuseMessageID)
 }
 
-func (a *App) finalizeClaudeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
+func finalizeClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, body string) bool {
 	_, ok := a.deliverClaudeOutputSegment(ctx, threadID, turnID, body, true, "")
 	return ok
 }

@@ -62,17 +62,17 @@ func compactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {
 	return buttons
 }
 
-func (a *App) renderCompactPreparingCard(sessionKey string) map[string]any {
+func renderCompactPreparingCard(a *App, sessionKey string) map[string]any {
 	body := "正在请求当前线程上下文压缩，请稍候。\n\n这张卡片会自动刷新。"
 	return a.feishu.SimpleStatusCard("压缩上下文", "blue", menuCardBody("menu.tools", body), compactMenuButtons(sessionKey, false))
 }
 
-func (a *App) renderCompactAcceptedCard(sessionKey string) map[string]any {
+func renderCompactAcceptedCard(a *App, sessionKey string) map[string]any {
 	body := "已提交 `/compact`。\n\n后续结果会通过正常消息流返回。"
 	return a.feishu.SimpleStatusCard("压缩上下文", "green", menuCardBody("menu.tools", body), compactMenuButtons(sessionKey, false))
 }
 
-func (a *App) renderCompactFailedCard(sessionKey, errText string) map[string]any {
+func renderCompactFailedCard(a *App, sessionKey, errText string) map[string]any {
 	body := "请求 `/compact` 失败。"
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text

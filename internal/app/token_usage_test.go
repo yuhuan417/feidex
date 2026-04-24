@@ -59,7 +59,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
+	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{
@@ -160,7 +160,7 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
-	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
+	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{
@@ -196,7 +196,7 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	}
 
 	beforeComplete := len(ff.replyCards)
-	a.finishTurn("thread-1", "turn-1", "completed")
+	finishTurn(a, "thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != beforeComplete {
 		t.Fatalf("expected completion not to replay final answer, got %d -> %d cards", beforeComplete, len(ff.replyCards))
 	}
@@ -208,7 +208,7 @@ func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
-	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
+	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{

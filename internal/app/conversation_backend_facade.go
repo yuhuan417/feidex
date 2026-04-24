@@ -116,7 +116,7 @@ type claudeConversationBackend struct {
 }
 
 func (b claudeConversationBackend) listWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return b.app.listClaudeSessions(sessionKey, ws, includeAll)
+	return listClaudeSessions(sessionKey, ws, includeAll)
 }
 
 func (b claudeConversationBackend) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {

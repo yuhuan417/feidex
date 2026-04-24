@@ -143,7 +143,7 @@ func (c claudeBackendConfigurationFacade) handleWorkspacePermissionCommand(msg *
 	if ws == nil {
 		return fmt.Errorf("workspace not found")
 	}
-	resp, err := newWorkspaceActionService(c.app).completeClaudeWorkspacePermissionModeSet(c.app.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+	resp, err := newWorkspaceActionService(c.app).completeClaudeWorkspacePermissionModeSet(commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 	if err != nil {
 		return err
 	}

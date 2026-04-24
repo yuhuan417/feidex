@@ -8,11 +8,11 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) sendFinalMessages(ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
-	return a.sendFinalMessagesWithFooter(ctx, sub, text, nil, inThread)
+func sendFinalMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
+	return sendFinalMessagesWithFooter(a, ctx, sub, text, nil, inThread)
 }
 
-func (a *App) sendEmptyFinalCard(ctx context.Context, sub *state.Submission, footerLines []string) string {
+func sendEmptyFinalCard(a *App, ctx context.Context, sub *state.Submission, footerLines []string) string {
 	return a.sendEmptyFinalCardWithReuse(ctx, sub, footerLines, "")
 }
 
@@ -40,7 +40,7 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 	return id
 }
 
-func (a *App) sendFinalMessagesWithFooter(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {
+func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {
 	results := a.sendFinalMessagesWithFooterAndReuse(ctx, sub, text, footerLines, inThread, nil)
 	if len(results) == 0 {
 		return nil
