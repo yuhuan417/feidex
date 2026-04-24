@@ -5,10 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"feidex/internal/feishu"
 	"feidex/internal/state"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type claudeRuntimeFacade struct{}
@@ -50,40 +47,6 @@ func (claudeRuntimeFacade) configuration(a *App) backendConfigurationFacade {
 
 func (claudeRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
 	return claudeServerRequestAdapter{app: a}
-}
-
-func (claudeRuntimeFacade) runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
-	if a == nil {
-		return nil
-	}
-	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
-	return a.enqueueSubmission(msg)
-}
-
-func (claudeRuntimeFacade) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {
-	if a == nil || msg == nil {
-		return nil
-	}
-	return a.enqueuePassthroughCommand(msg, "/compact")
-}
-
-func (claudeRuntimeFacade) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
-	parentAction := actionStringValue(action, "parent_action")
-	return a.completeAsyncCommandAction(
-		action,
-		sessionKey,
-		"/stop",
-		parentAction,
-		"正在请求中断当前任务",
-		a.renderInterruptPreparingCard(sessionKey, parentAction),
-		func(sessionKey, text string) map[string]any {
-			return a.renderInterruptResultCard(sessionKey, parentAction, text)
-		},
-		func(sessionKey, errText string) map[string]any {
-			return a.renderInterruptFailedCard(sessionKey, parentAction, targetTurnID, errText)
-		},
-		"interrupt patch failed",
-	)
 }
 
 func (claudeRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {

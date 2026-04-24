@@ -26,8 +26,8 @@ func (a *App) handleBackendCompactCommand(msg *feishu.InboundMessage) error {
 	if a == nil || msg == nil {
 		return nil
 	}
-	if runtime := a.backendRuntime(); runtime != nil {
-		return runtime.handleCompactCommand(a, msg)
+	if actions := a.backendActions(); actions != nil {
+		return actions.handleCompactCommand(a, msg)
 	}
 	return nil
 }

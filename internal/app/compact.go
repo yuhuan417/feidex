@@ -84,8 +84,8 @@ func (a *App) runMenuCompactAction(action *feishu.CardAction, sessionKey string)
 	if a == nil {
 		return nil
 	}
-	if runtime := a.backendRuntime(); runtime != nil {
-		return runtime.runMenuCompactAction(a, action, sessionKey)
+	if actions := a.backendActions(); actions != nil {
+		return actions.runMenuCompactAction(a, action, sessionKey)
 	}
 	return nil
 }

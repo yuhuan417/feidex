@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"feidex/internal/feishu"
 	"feidex/internal/state"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type backendRuntimeHandle struct {
@@ -56,9 +53,6 @@ type backendRuntimeFacade interface {
 	conversationBackend(a *App) conversationBackendFacade
 	configuration(a *App) backendConfigurationFacade
 	serverRequestAdapter(a *App) serverRequestBackendAdapter
-	runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error
-	handleCompactCommand(a *App, msg *feishu.InboundMessage) error
-	completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error)
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error
 	maintenanceActive(a *App) bool

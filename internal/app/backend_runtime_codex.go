@@ -5,10 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"feidex/internal/feishu"
 	"feidex/internal/state"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type codexRuntimeFacade struct{}
@@ -56,31 +53,6 @@ func (codexRuntimeFacade) configuration(a *App) backendConfigurationFacade {
 
 func (codexRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
 	return codexServerRequestAdapter{app: a}
-}
-
-func (codexRuntimeFacade) runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
-	if a == nil {
-		return nil
-	}
-	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
-	sessionKey = firstNonEmpty(a.makeSessionKey(msg), strings.TrimSpace(sessionKey))
-	_, err := a.startThreadCompaction(sessionKey)
-	return err
-}
-
-func (codexRuntimeFacade) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {
-	if a == nil || msg == nil {
-		return nil
-	}
-	if _, err := a.startThreadCompaction(a.makeSessionKey(msg)); err != nil {
-		return err
-	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", a.replyInThreadEnabled(msg.ChatType))
-}
-
-func (codexRuntimeFacade) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
-	parentAction := actionStringValue(action, "parent_action")
-	return a.completeMenuCommand(action, sessionKey, "/stop", parentAction)
 }
 
 func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {

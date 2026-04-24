@@ -26,8 +26,8 @@ func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targe
 			}, nil
 		}
 	}
-	if runtime := a.backendRuntime(); runtime != nil {
-		return runtime.completeMenuInterrupt(a, action, sessionKey, targetTurnID)
+	if actions := a.backendActions(); actions != nil {
+		return actions.completeMenuInterrupt(a, action, sessionKey, targetTurnID)
 	}
 	return a.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
 }
