@@ -14,34 +14,34 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 		return completeUserInputMultiToggle(s.app,action)
 	},
 	"approval.command.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.command.accept")
+		return completeApprovalAction(s.app,action, "approval.command.accept")
 	},
 	"approval.command.accept_session": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.command.accept_session")
+		return completeApprovalAction(s.app,action, "approval.command.accept_session")
 	},
 	"approval.command.decline": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.command.decline")
+		return completeApprovalAction(s.app,action, "approval.command.decline")
 	},
 	"approval.command.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.command.cancel")
+		return completeApprovalAction(s.app,action, "approval.command.cancel")
 	},
 	"approval.file.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.file.accept")
+		return completeApprovalAction(s.app,action, "approval.file.accept")
 	},
 	"approval.file.accept_session": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.file.accept_session")
+		return completeApprovalAction(s.app,action, "approval.file.accept_session")
 	},
 	"approval.file.decline": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.file.decline")
+		return completeApprovalAction(s.app,action, "approval.file.decline")
 	},
 	"approval.file.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.file.cancel")
+		return completeApprovalAction(s.app,action, "approval.file.cancel")
 	},
 	"approval.permissions.accept_turn": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.permissions.accept_turn")
+		return completeApprovalAction(s.app,action, "approval.permissions.accept_turn")
 	},
 	"approval.permissions.accept_session": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeApprovalAction(action, "approval.permissions.accept_session")
+		return completeApprovalAction(s.app,action, "approval.permissions.accept_session")
 	},
 	"pending_form.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completePendingFormCancel(action)

@@ -67,7 +67,7 @@ func (s backendUpgradeService) startVerifiedCodexClient(ctx context.Context) (co
 	if client == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
-	s.app.configureCodexClientRuntime(client)
+	configureCodexClientRuntime(s.app,client)
 	if err := client.Start(ctx, s.app.cfg.Codex.ExperimentalAPI); err != nil {
 		return nil, err
 	}

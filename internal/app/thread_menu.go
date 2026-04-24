@@ -215,7 +215,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		return replyCommandActionResponse(s.app, msg, resp)
 	case "permissions":
 		if len(args) == 1 {
-			return s.app.showClaudeSessionPermissionMenu(msg)
+			return showClaudeSessionPermissionMenu(s.app, msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session permissions [MODE|inherit]")

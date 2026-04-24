@@ -130,7 +130,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		if json.Unmarshal(params, &p) == nil {
 			reqID := requestIDKey(p.RequestID)
 			pending := newRuntimeStateService(a).resolveServerPendingRequest(reqID)
-			a.resumeSubmissionAfterRequest(pending)
+			resumeSubmissionAfterRequest(a,pending)
 		}
 	}
 }

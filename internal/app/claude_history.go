@@ -34,8 +34,8 @@ type claudeHistoryTurnSummary struct {
 	IsCurrent bool
 }
 
-func (a *App) historyTurnIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	_, _, turns, err := a.fetchClaudeCurrentSessionTurns(sessionKey)
+func historyTurnIndexForOrdinal(a *App, sessionKey string, ordinal int) (int, error) {
+	_, _, turns, err := fetchClaudeCurrentSessionTurns(a, sessionKey)
 	if err != nil {
 		return 0, err
 	}
@@ -47,8 +47,8 @@ func (a *App) historyTurnIndexForOrdinal(sessionKey string, ordinal int) (int, e
 	return 0, fmt.Errorf("Turn #%d 不存在", ordinal)
 }
 
-func (a *App) renderClaudeHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	sess, thread, turns, err := a.fetchClaudeCurrentSessionTurns(sessionKey)
+func renderClaudeHistoryCard(a *App, sessionKey string, page int) (map[string]any, error) {
+	sess, thread, turns, err := fetchClaudeCurrentSessionTurns(a, sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +147,8 @@ func (a *App) renderClaudeHistoryCard(sessionKey string, page int) (map[string]a
 	return card, nil
 }
 
-func (a *App) renderClaudeHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	sess, thread, turns, err := a.fetchClaudeCurrentSessionTurns(sessionKey)
+func renderClaudeHistoryDetailCard(a *App, sessionKey string, index int) (map[string]any, error) {
+	sess, thread, turns, err := fetchClaudeCurrentSessionTurns(a, sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (a *App) renderClaudeHistoryDetailCard(sessionKey string, index int) (map[s
 	return a.feishu.SimpleStatusCard("Turn 详情", "blue", menuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
-func (a *App) fetchClaudeCurrentSessionTurns(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []claudeHistoryTurnSummary, error) {
+func fetchClaudeCurrentSessionTurns(a *App, sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []claudeHistoryTurnSummary, error) {
 	if a == nil || a.store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}

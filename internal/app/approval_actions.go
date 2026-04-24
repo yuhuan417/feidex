@@ -12,7 +12,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) completeApprovalAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+func completeApprovalAction(a *App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(a)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
@@ -79,7 +79,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 		}, nil
 	}
 	_ = newRuntimeStateService(a).finalizePendingReply(pending)
-	card := a.renderResolvedApprovalCard(pending, action, actionName)
+	card := renderResolvedApprovalCard(a, pending, action, actionName)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "审批已提交"},
 		Card: &callback.Card{
@@ -120,7 +120,7 @@ func approvalRequestPayload(pending *state.PendingRequest) map[string]any {
 	return payload
 }
 
-func (a *App) renderResolvedApprovalCard(pending *state.PendingRequest, action *feishu.CardAction, actionName string) map[string]any {
+func renderResolvedApprovalCard(a *App, pending *state.PendingRequest, action *feishu.CardAction, actionName string) map[string]any {
 	decision := approvalDecisionText(actionName)
 	body := strings.TrimSpace(approvalBodyText(pending))
 	lines := []string{"处理结果: " + decision}
@@ -220,7 +220,7 @@ func approvalDecisionColor(action string) string {
 	}
 }
 
-func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
+func resumeSubmissionAfterRequest(a *App, pending *state.PendingRequest) {
 	appState := appState(a)
 	if pending == nil {
 		return

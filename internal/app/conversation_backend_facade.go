@@ -151,15 +151,15 @@ func (b claudeConversationBackend) renderThreadsCard(sessionKey string, includeA
 }
 
 func (b claudeConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return b.app.historyTurnIndexForOrdinal(sessionKey, ordinal)
+	return historyTurnIndexForOrdinal(b.app, sessionKey, ordinal)
 }
 
 func (b claudeConversationBackend) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return b.app.renderClaudeHistoryCard(sessionKey, page)
+	return renderClaudeHistoryCard(b.app, sessionKey, page)
 }
 
 func (b claudeConversationBackend) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return b.app.renderClaudeHistoryDetailCard(sessionKey, index)
+	return renderClaudeHistoryDetailCard(b.app, sessionKey, index)
 }
 
 func (b claudeConversationBackend) renderUsageBody(sess *state.Session) string {

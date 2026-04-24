@@ -118,7 +118,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		t.Fatalf("queued submission = %+v", queuedSub)
 	}
 
-	resp, err := a.completeApprovalAction(&feishu.CardAction{
+	resp, err := completeApprovalAction(a,&feishu.CardAction{
 		UserID:      msg1.UserID,
 		ActionValue: map[string]any{"request_id": "cmd-1"},
 	}, "approval.command.accept")

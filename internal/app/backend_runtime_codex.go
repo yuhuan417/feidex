@@ -60,7 +60,7 @@ func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
 		return &backendRuntimeHandle{backend: backendCodex}
 	}
 	client := newCodexClient(a.cfg.Codex)
-	a.configureCodexClientRuntime(client)
+	configureCodexClientRuntime(a,client)
 	return &backendRuntimeHandle{
 		backend: backendCodex,
 		codex:   client,

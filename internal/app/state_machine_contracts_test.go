@@ -125,7 +125,7 @@ func TestPermissionsApprovalLifecycleResumesOnlyAfterServerRequestResolved(t *te
 		t.Fatalf("submission after permissions request = %+v, want waiting_approval", updated)
 	}
 
-	resp, err := a.completeApprovalAction(&feishu.CardAction{
+	resp, err := completeApprovalAction(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "perm-1"},
 	}, "approval.permissions.accept_session")

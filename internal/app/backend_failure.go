@@ -15,7 +15,7 @@ type codexErrorAware interface {
 	SetErrorHandler(func(error))
 }
 
-func (a *App) configureCodexClientRuntime(client codexClient) {
+func configureCodexClientRuntime(a *App, client codexClient) {
 	if client == nil {
 		return
 	}

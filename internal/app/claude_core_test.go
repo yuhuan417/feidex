@@ -918,7 +918,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.completeApprovalAction(&feishu.CardAction{
+	resp, err := completeApprovalAction(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "approve-1"},
 	}, "approval.command.accept_session")

@@ -49,7 +49,7 @@ func claudePermissionModeLabel(value string) string {
 	return "`" + value + "`"
 }
 
-func (a *App) normalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error) {
+func normalizeRequestedClaudePermissionMode(a *App, ctx context.Context, raw string) (string, string, error) {
 	_ = ctx
 	mode := normalizeClaudePermissionModeValue(raw)
 	switch mode {
@@ -72,7 +72,7 @@ func normalizeClaudePermissionOverrideValue(raw string) (string, bool) {
 	}
 }
 
-func (a *App) applyClaudePermissionModeToRuntime(sessionKey, mode string) error {
+func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 	if a == nil || a.claude == nil {
 		return nil
 	}
@@ -88,7 +88,7 @@ func (a *App) applyClaudePermissionModeToRuntime(sessionKey, mode string) error 
 	return a.claude.SetPermissionMode(ctx, sessionKey, mode)
 }
 
-func (a *App) renderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error) {
+func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	sess := appState(a).session(sessionKey)
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -158,8 +158,8 @@ func (a *App) renderClaudeSessionPermissionMenuCard(sessionKey string) (map[stri
 	return a.feishu.SimpleStatusCard("配置会话权限", "blue", menuCardBodyForBackend(configuredBackend(a), "thread.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
-func (a *App) showClaudeSessionPermissionMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderClaudeSessionPermissionMenuCard(makeSessionKey(a, msg))
+func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
+	card, err := renderClaudeSessionPermissionMenuCard(a, makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func (s threadActionService) completeClaudeSessionPermissionModeSet(action *feis
 		mode = override
 	} else {
 		var err error
-		mode, warning, err = s.app.normalizeRequestedClaudePermissionMode(context.Background(), rawMode)
+		mode, warning, err = normalizeRequestedClaudePermissionMode(s.app, context.Background(), rawMode)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -189,10 +189,10 @@ func (s threadActionService) completeClaudeSessionPermissionModeSet(action *feis
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, sess.WorkspaceID), s.app.cfg.Claude)
-	if err := s.app.applyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
+	if err := applyClaudePermissionModeToRuntime(s.app, sessionKey, effective); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, err := s.app.renderClaudeSessionPermissionMenuCard(sessionKey)
+	card, err := renderClaudeSessionPermissionMenuCard(s.app, sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -206,7 +206,7 @@ func (s threadActionService) completeClaudeSessionPermissionModeSet(action *feis
 	}, nil
 }
 
-func (a *App) renderClaudeWorkspacePermissionMenuCard(sessionKey string) (map[string]any, error) {
+func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if a.store != nil {
 		sess = appState(a).session(sessionKey)
@@ -278,8 +278,8 @@ func (a *App) renderClaudeWorkspacePermissionMenuCard(sessionKey string) (map[st
 	return a.feishu.SimpleStatusCard("配置默认权限", "blue", menuCardBodyForBackend(configuredBackend(a), "workspace.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
-func (a *App) showClaudeWorkspacePermissionMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderClaudeWorkspacePermissionMenuCard(makeSessionKey(a, msg))
+func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {
+	card, err := renderClaudeWorkspacePermissionMenuCard(a, makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func (s workspaceActionService) completeClaudeWorkspacePermissionModeSet(action 
 		mode = override
 	} else {
 		var err error
-		mode, warning, err = s.app.normalizeRequestedClaudePermissionMode(context.Background(), rawMode)
+		mode, warning, err = normalizeRequestedClaudePermissionMode(s.app, context.Background(), rawMode)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -308,11 +308,11 @@ func (s workspaceActionService) completeClaudeWorkspacePermissionModeSet(action 
 	sess := appState(s.app).session(sessionKey)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) == strings.TrimSpace(workspaceID) && strings.TrimSpace(sess.ActiveClaudePermissionMode) == "" {
 		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, workspaceID), s.app.cfg.Claude)
-		if err := s.app.applyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
+		if err := applyClaudePermissionModeToRuntime(s.app, sessionKey, effective); err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 		}
 	}
-	card, renderErr := s.app.renderClaudeWorkspacePermissionMenuCard(sessionKey)
+	card, renderErr := renderClaudeWorkspacePermissionMenuCard(s.app, sessionKey)
 	if renderErr != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
 	}

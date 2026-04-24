@@ -66,7 +66,7 @@ func (s runtimeStateService) finalizePendingReply(pending *state.PendingRequest)
 	}
 	if s.backendResolvesPendingLocally(pending) {
 		resolved := s.markPendingRequestResolved(pending.ID)
-		s.app.resumeSubmissionAfterRequest(pending)
+		resumeSubmissionAfterRequest(s.app,pending)
 		return resolved
 	}
 	return s.markPendingRequestReplied(pending.ID)

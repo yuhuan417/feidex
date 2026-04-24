@@ -134,7 +134,7 @@ func (claudeBackendConfigurationFacade) supportsWorkspacePermissionMode() bool {
 
 func (c claudeBackendConfigurationFacade) handleWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
 	if len(args) == 1 {
-		return c.app.showClaudeWorkspacePermissionMenu(msg)
+		return showClaudeWorkspacePermissionMenu(c.app, msg)
 	}
 	if len(args) != 2 {
 		return fmt.Errorf("usage: /workspace permissions [MODE|inherit]")
