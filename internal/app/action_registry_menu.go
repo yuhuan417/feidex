@@ -149,10 +149,10 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeHistoryDetail(action, actionSessionKey(action), index)
 	},
 	"skills.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeSkillsSelect(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+		return newSkillsService(s.app).completeSkillsSelect(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 	},
 	"skills.reload": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeSkillsReload(action, actionSessionKey(action))
+		return newSkillsService(s.app).completeSkillsReload(action, actionSessionKey(action))
 	},
 	"backend.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))

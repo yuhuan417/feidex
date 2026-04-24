@@ -46,7 +46,7 @@ func matchSkillsCommand(fields []string) bool {
 	return exactOrSingleArgCommand(fields, skillConfigReloadArg)
 }
 
-func (a *App) commandSkills(msg *feishu.InboundMessage, args []string) error {
+func (s skillsService) commandSkills(msg *feishu.InboundMessage, args []string) error {
 	forceReload := false
 	switch len(args) {
 	case 0:
@@ -58,47 +58,47 @@ func (a *App) commandSkills(msg *feishu.InboundMessage, args []string) error {
 	default:
 		return fmt.Errorf("usage: /skills | /skills reload")
 	}
-	card, err := a.renderSkillsCard(a.makeSessionKey(msg), forceReload)
+	card, err := newSkillsService(s.app).renderSkillsCard(s.app.makeSessionKey(msg), forceReload)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) currentWorkspaceForSessionKey(sessionKey string) (*config.Workspace, error) {
-	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
+func (s skillsService) currentWorkspaceForSessionKey(sessionKey string) (*config.Workspace, error) {
+	if s.app == nil || s.app.cfg == nil || len(s.app.cfg.Workspaces) == 0 {
 		return nil, fmt.Errorf("当前没有可用工作区")
 	}
-	workspaceID := a.defaultWorkspaceID()
-	if sess := a.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	workspaceID := s.app.defaultWorkspaceID()
+	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = strings.TrimSpace(sess.WorkspaceID)
 	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
+	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
 	return ws, nil
 }
 
-func (a *App) workspaceByID(workspaceID string) (*config.Workspace, error) {
-	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
+func (s skillsService) workspaceByID(workspaceID string) (*config.Workspace, error) {
+	if s.app == nil || s.app.cfg == nil || len(s.app.cfg.Workspaces) == 0 {
 		return nil, fmt.Errorf("当前没有可用工作区")
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
-		workspaceID = a.defaultWorkspaceID()
+		workspaceID = s.app.defaultWorkspaceID()
 	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
+	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
 	return ws, nil
 }
 
-func (a *App) fetchSkillsForCWD(ctx context.Context, cwd string, forceReload bool) (codexrpc.SkillsListEntry, error) {
+func (s skillsService) fetchSkillsForCWD(ctx context.Context, cwd string, forceReload bool) (codexrpc.SkillsListEntry, error) {
 	var result codexrpc.SkillsListResult
-	client, err := a.requireCodexClient()
+	client, err := s.app.requireCodexClient()
 	if err != nil {
 		return codexrpc.SkillsListEntry{}, err
 	}
@@ -122,20 +122,20 @@ func (a *App) fetchSkillsForCWD(ctx context.Context, cwd string, forceReload boo
 	return codexrpc.SkillsListEntry{Cwd: strings.TrimSpace(cwd)}, nil
 }
 
-func (a *App) fetchSkillsForSessionKey(ctx context.Context, sessionKey string, forceReload bool) (codexrpc.SkillsListEntry, error) {
-	ws, err := a.currentWorkspaceForSessionKey(sessionKey)
+func (s skillsService) fetchSkillsForSessionKey(ctx context.Context, sessionKey string, forceReload bool) (codexrpc.SkillsListEntry, error) {
+	ws, err := newSkillsService(s.app).currentWorkspaceForSessionKey(sessionKey)
 	if err != nil {
 		return codexrpc.SkillsListEntry{}, err
 	}
-	return a.fetchSkillsForCWD(ctx, ws.Cwd, forceReload)
+	return newSkillsService(s.app).fetchSkillsForCWD(ctx, ws.Cwd, forceReload)
 }
 
-func (a *App) fetchSkillsForWorkspaceID(ctx context.Context, workspaceID string, forceReload bool) (codexrpc.SkillsListEntry, error) {
-	ws, err := a.workspaceByID(workspaceID)
+func (s skillsService) fetchSkillsForWorkspaceID(ctx context.Context, workspaceID string, forceReload bool) (codexrpc.SkillsListEntry, error) {
+	ws, err := newSkillsService(s.app).workspaceByID(workspaceID)
 	if err != nil {
 		return codexrpc.SkillsListEntry{}, err
 	}
-	return a.fetchSkillsForCWD(ctx, ws.Cwd, forceReload)
+	return newSkillsService(s.app).fetchSkillsForCWD(ctx, ws.Cwd, forceReload)
 }
 
 func sortSkillsForDisplay(skills []codexrpc.SkillMetadata) []codexrpc.SkillMetadata {
@@ -171,14 +171,14 @@ func skillOptionText(skill codexrpc.SkillMetadata) string {
 	return label
 }
 
-func (a *App) renderSkillsCard(sessionKey string, forceReload bool) (map[string]any, error) {
+func (s skillsService) renderSkillsCard(sessionKey string, forceReload bool) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	entry, err := a.fetchSkillsForSessionKey(ctx, sessionKey, forceReload)
+	entry, err := newSkillsService(s.app).fetchSkillsForSessionKey(ctx, sessionKey, forceReload)
 	if err != nil {
 		return nil, err
 	}
-	pending, hasPending := a.sessionPendingSkill(sessionKey)
+	pending, hasPending := newSkillsService(s.app).sessionPendingSkill(sessionKey)
 	skills := sortSkillsForDisplay(entry.Skills)
 	enabledCount := 0
 	disabledCount := 0
@@ -263,8 +263,8 @@ func (a *App) renderSkillsCard(sessionKey string, forceReload bool) (map[string]
 	return card, nil
 }
 
-func (a *App) completeSkillsReload(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderSkillsCard(sessionKey, true)
+func (s skillsService) completeSkillsReload(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	card, err := newSkillsService(s.app).renderSkillsCard(sessionKey, true)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -274,10 +274,10 @@ func (a *App) completeSkillsReload(action *feishu.CardAction, sessionKey string)
 	}, nil
 }
 
-func (a *App) completeSkillsSelect(action *feishu.CardAction, sessionKey, selectedValue string) (*callback.CardActionTriggerResponse, error) {
+func (s skillsService) completeSkillsSelect(action *feishu.CardAction, sessionKey, selectedValue string) (*callback.CardActionTriggerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	entry, err := a.fetchSkillsForSessionKey(ctx, sessionKey, false)
+	entry, err := newSkillsService(s.app).fetchSkillsForSessionKey(ctx, sessionKey, false)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -286,7 +286,7 @@ func (a *App) completeSkillsSelect(action *feishu.CardAction, sessionKey, select
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未找到所选 skill"}}, nil
 	}
 	if !skill.Enabled {
-		card, renderErr := a.renderSkillsCard(sessionKey, false)
+		card, renderErr := newSkillsService(s.app).renderSkillsCard(sessionKey, false)
 		if renderErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "该 skill 当前为 disabled"}}, nil
 		}
@@ -295,8 +295,8 @@ func (a *App) completeSkillsSelect(action *feishu.CardAction, sessionKey, select
 			Card:  rawCard(card),
 		}, nil
 	}
-	a.setSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: strings.TrimSpace(skill.Name), Path: strings.TrimSpace(skill.Path)})
-	card, err := a.renderSkillsCard(sessionKey, false)
+	newSkillsService(s.app).setSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: strings.TrimSpace(skill.Name), Path: strings.TrimSpace(skill.Path)})
+	card, err := newSkillsService(s.app).renderSkillsCard(sessionKey, false)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: skillPendingConfirmationText(skill.Name)},
@@ -349,21 +349,21 @@ func newPendingSkillTracker() *pendingSkillTracker {
 	return &pendingSkillTracker{skills: map[string]state.SubmissionSkill{}}
 }
 
-func (a *App) pendingSkillTracker() *pendingSkillTracker {
-	if a == nil {
+func (s skillsService) pendingSkillTracker() *pendingSkillTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.pendingSkills == nil {
-		a.pendingSkills = newPendingSkillTracker()
+	if s.app.pendingSkills == nil {
+		s.app.pendingSkills = newPendingSkillTracker()
 	}
-	return a.pendingSkills
+	return s.app.pendingSkills
 }
 
-func (a *App) sessionPendingSkill(sessionKey string) (state.SubmissionSkill, bool) {
-	if a == nil {
+func (s skillsService) sessionPendingSkill(sessionKey string) (state.SubmissionSkill, bool) {
+	if s.app == nil {
 		return state.SubmissionSkill{}, false
 	}
-	tracker := a.pendingSkillTracker()
+	tracker := newSkillsService(s.app).pendingSkillTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	skill, ok := tracker.skills[strings.TrimSpace(sessionKey)]
@@ -373,11 +373,11 @@ func (a *App) sessionPendingSkill(sessionKey string) (state.SubmissionSkill, boo
 	return skill, true
 }
 
-func (a *App) setSessionPendingSkill(sessionKey string, skill state.SubmissionSkill) {
-	if a == nil || strings.TrimSpace(sessionKey) == "" {
+func (s skillsService) setSessionPendingSkill(sessionKey string, skill state.SubmissionSkill) {
+	if s.app == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	tracker := a.pendingSkillTracker()
+	tracker := newSkillsService(s.app).pendingSkillTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.skills == nil {
@@ -392,11 +392,11 @@ func (a *App) setSessionPendingSkill(sessionKey string, skill state.SubmissionSk
 	tracker.skills[strings.TrimSpace(sessionKey)] = skill
 }
 
-func (a *App) clearSessionPendingSkill(sessionKey string) {
-	if a == nil || strings.TrimSpace(sessionKey) == "" {
+func (s skillsService) clearSessionPendingSkill(sessionKey string) {
+	if s.app == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	tracker := a.pendingSkillTracker()
+	tracker := newSkillsService(s.app).pendingSkillTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	delete(tracker.skills, strings.TrimSpace(sessionKey))
@@ -448,11 +448,11 @@ func validSkillPrefixName(name string) bool {
 	return hasAlphaNum
 }
 
-func (a *App) resolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []state.SubmissionAttachment) submissionSkillResolution {
+func (s skillsService) resolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []state.SubmissionAttachment) submissionSkillResolution {
 	resolution := submissionSkillResolution{
 		InputText: strings.TrimSpace(inputText),
 	}
-	pending, hasPending := a.sessionPendingSkill(sessionKey)
+	pending, hasPending := newSkillsService(s.app).sessionPendingSkill(sessionKey)
 	if hasPending {
 		resolution.ConsumePending = true
 	}
@@ -470,7 +470,7 @@ func (a *App) resolveSubmissionSkill(sessionKey, workspaceID, inputText string, 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	entry, err := a.fetchSkillsForWorkspaceID(ctx, workspaceID, false)
+	entry, err := newSkillsService(s.app).fetchSkillsForWorkspaceID(ctx, workspaceID, false)
 	if err != nil {
 		return resolution
 	}

@@ -56,9 +56,9 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	bucketSessionKey := a.pendingInputSessionKey(msg)
 	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
 	attachments := append(stagedImageAttachments(stagedImages), inboundAttachments...)
-	skillResolution := a.resolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
+	skillResolution := newSkillsService(a).resolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
-		a.setSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
+		newSkillsService(a).setSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
 		if err := a.feishu.ReplyText(context.Background(), msg.MessageID, skillPendingConfirmationText(skillResolution.PendingReplacement.Name), a.replyInThreadEnabled(msg.ChatType)); err != nil {
 			return err
 		}
@@ -119,7 +119,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 		}
 	}
 	if skillResolution.ConsumePending {
-		a.clearSessionPendingSkill(sessionKey)
+		newSkillsService(a).clearSessionPendingSkill(sessionKey)
 	}
 	slog.Debug("submission queued",
 		"submission_id", id,

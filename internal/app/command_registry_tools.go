@@ -28,7 +28,7 @@ func localCommandCommonToolSpecs() []localCommandSpec {
 				return matchSkillsCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandSkills(msg, args)
+				return newSkillsService(a).commandSkills(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
