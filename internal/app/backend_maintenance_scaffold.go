@@ -11,7 +11,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) patchMaintenanceCard(messageID string, card map[string]any, warnMsg string, attrs ...any) {
+func patchMaintenanceCard(a *App, messageID string, card map[string]any, warnMsg string, attrs ...any) {
 	if a == nil || a.feishu == nil || strings.TrimSpace(messageID) == "" || card == nil {
 		return
 	}
@@ -123,7 +123,7 @@ func maintenanceSnapshotLifecycle[S any](
 	setProgress func(snapshot *S, phase, message string),
 ) (func(S), func(string, string) S, func(string, string)) {
 	patch := func(snapshot S) {
-		a.patchMaintenanceCard(messageID, renderCard(sessionKey, snapshot), warnMsg,
+		patchMaintenanceCard(a, messageID, renderCard(sessionKey, snapshot), warnMsg,
 			"message_id", messageID,
 		)
 	}
