@@ -2,8 +2,29 @@ package app
 
 import (
 	"strings"
+	"sync"
 	"time"
 )
+
+type claudeMaintenanceTracker struct {
+	mu      sync.Mutex
+	upgrade claudeUpgradeSnapshot
+	restart claudeRestartSnapshot
+}
+
+func newClaudeMaintenanceTracker() *claudeMaintenanceTracker {
+	return &claudeMaintenanceTracker{}
+}
+
+func (a *App) claudeMaintenanceTracker() *claudeMaintenanceTracker {
+	if a == nil {
+		return nil
+	}
+	if a.claudeMaintenance == nil {
+		a.claudeMaintenance = newClaudeMaintenanceTracker()
+	}
+	return a.claudeMaintenance
+}
 
 type claudeUpgradeSnapshot struct {
 	Running         bool
@@ -32,27 +53,30 @@ func (a *App) claudeUpgradeState() claudeUpgradeSnapshot {
 	if a == nil {
 		return claudeUpgradeSnapshot{}
 	}
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	return a.claudeUpgrade
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.upgrade
 }
 
 func (a *App) claudeRestartState() claudeRestartSnapshot {
 	if a == nil {
 		return claudeRestartSnapshot{}
 	}
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	return a.claudeRestart
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.restart
 }
 
 func (a *App) claudeMaintenanceActive() bool {
 	if a == nil {
 		return false
 	}
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	return a.claudeUpgrade.Running || a.claudeRestart.Running
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.upgrade.Running || tracker.restart.Running
 }
 
 func (a *App) beginClaudeUpgrade(snapshot claudeUpgradeSnapshot) bool {
@@ -69,12 +93,13 @@ func (a *App) beginClaudeUpgrade(snapshot claudeUpgradeSnapshot) bool {
 	}
 	snapshot.UpdatedAt = now
 
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	if a.claudeUpgrade.Running || a.claudeRestart.Running {
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.upgrade.Running || tracker.restart.Running {
 		return false
 	}
-	a.claudeUpgrade = snapshot
+	tracker.upgrade = snapshot
 	return true
 }
 
@@ -92,12 +117,13 @@ func (a *App) beginClaudeRestart(snapshot claudeRestartSnapshot) bool {
 	}
 	snapshot.UpdatedAt = now
 
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	if a.claudeUpgrade.Running || a.claudeRestart.Running {
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.upgrade.Running || tracker.restart.Running {
 		return false
 	}
-	a.claudeRestart = snapshot
+	tracker.restart = snapshot
 	return true
 }
 
@@ -105,22 +131,24 @@ func (a *App) updateClaudeUpgrade(mutate func(*claudeUpgradeSnapshot)) claudeUpg
 	if a == nil {
 		return claudeUpgradeSnapshot{}
 	}
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	mutate(&a.claudeUpgrade)
-	a.claudeUpgrade.UpdatedAt = time.Now()
-	return a.claudeUpgrade
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	mutate(&tracker.upgrade)
+	tracker.upgrade.UpdatedAt = time.Now()
+	return tracker.upgrade
 }
 
 func (a *App) updateClaudeRestart(mutate func(*claudeRestartSnapshot)) claudeRestartSnapshot {
 	if a == nil {
 		return claudeRestartSnapshot{}
 	}
-	a.claudeUpgradeMu.Lock()
-	defer a.claudeUpgradeMu.Unlock()
-	mutate(&a.claudeRestart)
-	a.claudeRestart.UpdatedAt = time.Now()
-	return a.claudeRestart
+	tracker := a.claudeMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	mutate(&tracker.restart)
+	tracker.restart.UpdatedAt = time.Now()
+	return tracker.restart
 }
 
 func (a *App) finishClaudeUpgrade(result, message string) claudeUpgradeSnapshot {

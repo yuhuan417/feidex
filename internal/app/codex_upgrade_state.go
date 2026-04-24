@@ -2,8 +2,29 @@ package app
 
 import (
 	"strings"
+	"sync"
 	"time"
 )
+
+type codexMaintenanceTracker struct {
+	mu      sync.Mutex
+	upgrade codexUpgradeSnapshot
+	restart codexRestartSnapshot
+}
+
+func newCodexMaintenanceTracker() *codexMaintenanceTracker {
+	return &codexMaintenanceTracker{}
+}
+
+func (a *App) codexMaintenanceTracker() *codexMaintenanceTracker {
+	if a == nil {
+		return nil
+	}
+	if a.codexMaintenance == nil {
+		a.codexMaintenance = newCodexMaintenanceTracker()
+	}
+	return a.codexMaintenance
+}
 
 type codexUpgradeSnapshot struct {
 	Running         bool
@@ -32,27 +53,30 @@ func (a *App) codexUpgradeState() codexUpgradeSnapshot {
 	if a == nil {
 		return codexUpgradeSnapshot{}
 	}
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	return a.codexUpgrade
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.upgrade
 }
 
 func (a *App) codexRestartState() codexRestartSnapshot {
 	if a == nil {
 		return codexRestartSnapshot{}
 	}
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	return a.codexRestart
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.restart
 }
 
 func (a *App) codexMaintenanceActive() bool {
 	if a == nil {
 		return false
 	}
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	return a.codexUpgrade.Running || a.codexRestart.Running
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	return tracker.upgrade.Running || tracker.restart.Running
 }
 
 func (a *App) beginCodexUpgrade(snapshot codexUpgradeSnapshot) bool {
@@ -69,12 +93,13 @@ func (a *App) beginCodexUpgrade(snapshot codexUpgradeSnapshot) bool {
 	}
 	snapshot.UpdatedAt = now
 
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	if a.codexUpgrade.Running || a.codexRestart.Running {
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.upgrade.Running || tracker.restart.Running {
 		return false
 	}
-	a.codexUpgrade = snapshot
+	tracker.upgrade = snapshot
 	return true
 }
 
@@ -92,12 +117,13 @@ func (a *App) beginCodexRestart(snapshot codexRestartSnapshot) bool {
 	}
 	snapshot.UpdatedAt = now
 
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	if a.codexUpgrade.Running || a.codexRestart.Running {
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.upgrade.Running || tracker.restart.Running {
 		return false
 	}
-	a.codexRestart = snapshot
+	tracker.restart = snapshot
 	return true
 }
 
@@ -105,22 +131,24 @@ func (a *App) updateCodexUpgrade(mutate func(*codexUpgradeSnapshot)) codexUpgrad
 	if a == nil {
 		return codexUpgradeSnapshot{}
 	}
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	mutate(&a.codexUpgrade)
-	a.codexUpgrade.UpdatedAt = time.Now()
-	return a.codexUpgrade
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	mutate(&tracker.upgrade)
+	tracker.upgrade.UpdatedAt = time.Now()
+	return tracker.upgrade
 }
 
 func (a *App) updateCodexRestart(mutate func(*codexRestartSnapshot)) codexRestartSnapshot {
 	if a == nil {
 		return codexRestartSnapshot{}
 	}
-	a.codexUpgradeMu.Lock()
-	defer a.codexUpgradeMu.Unlock()
-	mutate(&a.codexRestart)
-	a.codexRestart.UpdatedAt = time.Now()
-	return a.codexRestart
+	tracker := a.codexMaintenanceTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	mutate(&tracker.restart)
+	tracker.restart.UpdatedAt = time.Now()
+	return tracker.restart
 }
 
 func (a *App) finishCodexUpgrade(result, message string) codexUpgradeSnapshot {
