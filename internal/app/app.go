@@ -54,8 +54,7 @@ type App struct {
 	liveThreads       *liveThreadTracker
 	turnBindings      *turnBindingTracker
 	finalCardPatches  *finalCardPatchTracker
-	skillsMu          sync.Mutex
-	pendingSkills     map[string]state.SubmissionSkill
+	pendingSkills     *pendingSkillTracker
 	codexUpgradeMu    sync.Mutex
 	codexUpgrade      codexUpgradeSnapshot
 	codexRestart      codexRestartSnapshot
@@ -127,7 +126,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		turnBindings:        newTurnBindingTracker(),
 		finalCardPatches:    newFinalCardPatchTracker(),
 		autoRetries:         map[string]*autoRetryState{},
-		pendingSkills:       map[string]state.SubmissionSkill{},
+		pendingSkills:       newPendingSkillTracker(),
 	}
 	if backend != "" {
 		handle, err := app.buildBackendRuntimeHandle(backend)

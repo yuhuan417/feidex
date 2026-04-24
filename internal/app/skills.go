@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -339,16 +340,33 @@ func skillPendingConfirmationText(name string) string {
 	return "已选择 `$" + name + "`，请直接继续发送需求。下一条非命令消息会自动带上它。"
 }
 
+type pendingSkillTracker struct {
+	mu     sync.Mutex
+	skills map[string]state.SubmissionSkill
+}
+
+func newPendingSkillTracker() *pendingSkillTracker {
+	return &pendingSkillTracker{skills: map[string]state.SubmissionSkill{}}
+}
+
+func (a *App) pendingSkillTracker() *pendingSkillTracker {
+	if a == nil {
+		return nil
+	}
+	if a.pendingSkills == nil {
+		a.pendingSkills = newPendingSkillTracker()
+	}
+	return a.pendingSkills
+}
+
 func (a *App) sessionPendingSkill(sessionKey string) (state.SubmissionSkill, bool) {
 	if a == nil {
 		return state.SubmissionSkill{}, false
 	}
-	a.skillsMu.Lock()
-	defer a.skillsMu.Unlock()
-	if a.pendingSkills == nil {
-		return state.SubmissionSkill{}, false
-	}
-	skill, ok := a.pendingSkills[strings.TrimSpace(sessionKey)]
+	tracker := a.pendingSkillTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	skill, ok := tracker.skills[strings.TrimSpace(sessionKey)]
 	if !ok || strings.TrimSpace(skill.Name) == "" || strings.TrimSpace(skill.Path) == "" {
 		return state.SubmissionSkill{}, false
 	}
@@ -359,30 +377,29 @@ func (a *App) setSessionPendingSkill(sessionKey string, skill state.SubmissionSk
 	if a == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	a.skillsMu.Lock()
-	defer a.skillsMu.Unlock()
-	if a.pendingSkills == nil {
-		a.pendingSkills = map[string]state.SubmissionSkill{}
+	tracker := a.pendingSkillTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.skills == nil {
+		tracker.skills = map[string]state.SubmissionSkill{}
 	}
 	skill.Name = strings.TrimSpace(skill.Name)
 	skill.Path = strings.TrimSpace(skill.Path)
 	if skill.Name == "" || skill.Path == "" {
-		delete(a.pendingSkills, strings.TrimSpace(sessionKey))
+		delete(tracker.skills, strings.TrimSpace(sessionKey))
 		return
 	}
-	a.pendingSkills[strings.TrimSpace(sessionKey)] = skill
+	tracker.skills[strings.TrimSpace(sessionKey)] = skill
 }
 
 func (a *App) clearSessionPendingSkill(sessionKey string) {
 	if a == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	a.skillsMu.Lock()
-	defer a.skillsMu.Unlock()
-	if a.pendingSkills == nil {
-		return
-	}
-	delete(a.pendingSkills, strings.TrimSpace(sessionKey))
+	tracker := a.pendingSkillTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	delete(tracker.skills, strings.TrimSpace(sessionKey))
 }
 
 func parseLeadingSkillPrefix(text string) parsedSkillPrefix {
