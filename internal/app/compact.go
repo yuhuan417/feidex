@@ -90,7 +90,7 @@ func (s conversationWorkflowService) runMenuCompactAction(action *feishu.CardAct
 	return nil
 }
 
-func startThreadCompaction(a *App,sessionKey string) (*state.Session, error) {
+func startThreadCompaction(a *App, sessionKey string) (*state.Session, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
@@ -112,19 +112,19 @@ func startThreadCompaction(a *App,sessionKey string) (*state.Session, error) {
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	client, err := requireCodexClient(a)
 	if err != nil {
-		restoreStandaloneCompactSession(a,sessionKey, threadID, previousStatus)
+		restoreStandaloneCompactSession(a, sessionKey, threadID, previousStatus)
 		return nil, err
 	}
 	if err := client.Call(ctx, "thread/compact/start", map[string]any{
 		"threadId": threadID,
 	}, nil); err != nil {
-		restoreStandaloneCompactSession(a,sessionKey, threadID, previousStatus)
+		restoreStandaloneCompactSession(a, sessionKey, threadID, previousStatus)
 		return nil, err
 	}
 	return appState.session(sessionKey), nil
 }
 
-func bindStandaloneCompactTurn(a *App,threadID, turnID string) bool {
+func bindStandaloneCompactTurn(a *App, threadID, turnID string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
@@ -161,14 +161,14 @@ func bindStandaloneCompactTurn(a *App,threadID, turnID string) bool {
 	return false
 }
 
-func noteStandaloneCompactItemStarted(a *App,threadID, turnID string, item map[string]any) bool {
+func noteStandaloneCompactItemStarted(a *App, threadID, turnID string, item map[string]any) bool {
 	if !isContextCompactionItem(item) {
 		return false
 	}
-	return bindStandaloneCompactTurn(a,threadID, turnID)
+	return bindStandaloneCompactTurn(a, threadID, turnID)
 }
 
-func completeStandaloneCompactTurn(a *App,threadID, turnID string) bool {
+func completeStandaloneCompactTurn(a *App, threadID, turnID string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if a == nil || a.store == nil || threadID == "" {
@@ -212,21 +212,21 @@ func completeStandaloneCompactTurn(a *App,threadID, turnID string) bool {
 	return false
 }
 
-func completeStandaloneCompactItem(a *App,threadID, turnID string, item map[string]any) bool {
+func completeStandaloneCompactItem(a *App, threadID, turnID string, item map[string]any) bool {
 	if !isContextCompactionItem(item) {
 		return false
 	}
 	switch normalizeWorkingStatus(firstNonEmpty(stringValue(item["status"]), stringValue(item["state"]))) {
 	case "", "completed":
-		return completeStandaloneCompactTurn(a,threadID, turnID)
+		return completeStandaloneCompactTurn(a, threadID, turnID)
 	case "interrupted", "cancelled", "canceled":
-		return finishStandaloneCompactTurn(a,threadID, turnID, "interrupted")
+		return finishStandaloneCompactTurn(a, threadID, turnID, "interrupted")
 	default:
 		return false
 	}
 }
 
-func finishStandaloneCompactTurn(a *App,threadID, turnID, status string) bool {
+func finishStandaloneCompactTurn(a *App, threadID, turnID, status string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
@@ -261,7 +261,7 @@ func finishStandaloneCompactTurn(a *App,threadID, turnID, status string) bool {
 	return false
 }
 
-func failStandaloneCompactTurn(a *App,threadID, turnID, message string) bool {
+func failStandaloneCompactTurn(a *App, threadID, turnID, message string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	message = strings.TrimSpace(message)
@@ -310,7 +310,7 @@ func failStandaloneCompactTurn(a *App,threadID, turnID, message string) bool {
 	return false
 }
 
-func restoreStandaloneCompactSession(a *App,sessionKey, threadID, previousStatus string) {
+func restoreStandaloneCompactSession(a *App, sessionKey, threadID, previousStatus string) {
 	if a == nil || a.store == nil {
 		return
 	}

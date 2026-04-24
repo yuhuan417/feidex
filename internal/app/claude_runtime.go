@@ -679,7 +679,7 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	op = newTurnStreamService(r.app).prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
 	}, workspaceCwd)
-	executeQuietWorkingCardOp(r.app,context.Background(), sub, op)
+	executeQuietWorkingCardOp(r.app, context.Background(), sub, op)
 }
 
 func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
@@ -708,7 +708,7 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 	}
 	sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turnID)
 	if sub != nil {
-		executeQuietWorkingCardOp(r.app,context.Background(), sub, boundary.Op)
+		executeQuietWorkingCardOp(r.app, context.Background(), sub, boundary.Op)
 	}
 	chunks, ok := updateClaudeOutputSegmentWithReuse(r.app, context.Background(), threadID, turnID, body, boundary.ReuseMessageID)
 	if !ok {
@@ -804,7 +804,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		if finalText != "" {
 			sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				executeQuietWorkingCardOp(r.app,context.Background(), sub, boundary.Op)
+				executeQuietWorkingCardOp(r.app, context.Background(), sub, boundary.Op)
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
@@ -817,7 +817,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 					}
 				}
 				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
-				results := sendFinalMessagesWithFooterAndReuse(r.app,context.Background(), sub, finalText, footerLines, replyInThreadForSubmission(r.app, sub), reuseMessageIDs)
+				results := sendFinalMessagesWithFooterAndReuse(r.app, context.Background(), sub, finalText, footerLines, replyInThreadForSubmission(r.app, sub), reuseMessageIDs)
 				if len(results) > 0 {
 					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
 				} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {
@@ -836,13 +836,13 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		if finalText != "" {
 			sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				executeQuietWorkingCardOp(r.app,context.Background(), sub, boundary.Op)
+				executeQuietWorkingCardOp(r.app, context.Background(), sub, boundary.Op)
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
 				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
-				results := sendFinalMessagesWithFooterAndReuse(r.app,context.Background(), sub, finalText, footerLines, replyInThreadForSubmission(r.app, sub), reuseMessageIDs)
+				results := sendFinalMessagesWithFooterAndReuse(r.app, context.Background(), sub, finalText, footerLines, replyInThreadForSubmission(r.app, sub), reuseMessageIDs)
 				if len(results) > 0 {
 					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
 				} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {
@@ -894,7 +894,7 @@ func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event clau
 	)
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		if isFatalClaudeSessionError(state, event) {
-			failClaudeSessionActiveWork(r.app,sessionKey, threadID, event.Error)
+			failClaudeSessionActiveWork(r.app, sessionKey, threadID, event.Error)
 		}
 		return
 	}
@@ -902,7 +902,7 @@ func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event clau
 		newTurnStreamService(r.app).recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 	if isFatalClaudeSessionError(state, event) {
-		failClaudeSessionActiveWork(r.app,sessionKey, threadID, event.Error)
+		failClaudeSessionActiveWork(r.app, sessionKey, threadID, event.Error)
 	}
 }
 
@@ -942,7 +942,7 @@ func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessi
 	sessionUpdates := safeClaudeSessionPermissionUpdates(req.PermissionSuggestions)
 	sessionLabel := describeClaudeSessionPermissionUpdates(sessionUpdates)
 	kind, body, payload := r.claudeApprovalPresentation(sub.WorkspaceID, req)
-	if err := r.app.sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey, sub, threadID, turnID, requestID, body, payload, sessionLabel); err != nil {
+	if err := sendClaudeApprovalCardWithPayload(r.app, kind, requestID, sessionKey, sub, threadID, turnID, requestID, body, payload, sessionLabel); err != nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: err.Error()}, nil
 	}
 	pending := &claudePendingInteraction{
@@ -994,11 +994,11 @@ func (r *claudeRuntime) handleAskUserQuestion(ctx context.Context, state *claude
 		return nil, fmt.Errorf("Claude question payload was empty")
 	}
 	if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 && !payload.Questions[0].MultiSelect && !payload.Questions[0].IsOther {
-		if err := r.app.sendClaudeUserInputCard(requestID, sessionKey, sub, payload); err != nil {
+		if err := sendClaudeUserInputCard(r.app, requestID, sessionKey, sub, payload); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := r.app.sendClaudeUserInputFormCard(requestID, sessionKey, sub, payload); err != nil {
+		if err := sendClaudeUserInputFormCard(r.app, requestID, sessionKey, sub, payload); err != nil {
 			return nil, err
 		}
 	}
@@ -1043,7 +1043,7 @@ func (r *claudeRuntime) handleExitPlanMode(ctx context.Context, state *claudeSes
 	if nextID, err := appState(r.app).nextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
 		requestID = nextID
 	}
-	if err := r.app.sendClaudePlanModeCard(requestID, sessionKey, sub, threadID, turnID, claudePlanModeBody(plan)); err != nil {
+	if err := sendClaudePlanModeCard(r.app, requestID, sessionKey, sub, threadID, turnID, claudePlanModeBody(plan)); err != nil {
 		return "", err
 	}
 	pending := &claudePendingInteraction{

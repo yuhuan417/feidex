@@ -24,7 +24,7 @@ func sendUserInputFormCard(a *App, requestID json.RawMessage, payload toolUserIn
 	}
 	requestKey := requestIDKey(requestID)
 	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
-	err := deliverPendingCard(a,sub, card, pendingCardDelivery{
+	err := deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,

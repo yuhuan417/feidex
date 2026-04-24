@@ -135,7 +135,7 @@ func startInlineReview(a *App, msg *feishu.InboundMessage, target appreview.Targ
 	if sess != nil {
 		threadID = strings.TrimSpace(sess.ActiveThreadID)
 	}
-	if err := enqueueReviewSubmission(a,msg, sessionKey, ws, threadID, resolved); err != nil {
+	if err := enqueueReviewSubmission(a, msg, sessionKey, ws, threadID, resolved); err != nil {
 		return "", err
 	}
 	return appreview.ConfirmationText(resolved), nil
@@ -213,7 +213,6 @@ func enqueueReviewSubmission(a *App, msg *feishu.InboundMessage, sessionKey stri
 	sendSubmissionQueuedNotice(a, context.Background(), sub)
 	return nil
 }
-
 
 func startSubmissionReview(a *App, ctx context.Context, threadID string, sub *state.Submission) (string, error) {
 	if sub == nil {

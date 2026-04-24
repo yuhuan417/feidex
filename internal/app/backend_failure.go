@@ -31,7 +31,7 @@ func configureCodexClientRuntime(a *App, client codexClient) {
 }
 
 func handleCodexTransportError(a *App, client codexClient, err error) {
-	if a == nil || !beginCodexTransportRecovery(a,client) {
+	if a == nil || !beginCodexTransportRecovery(a, client) {
 		return
 	}
 	skipFrontendRecovery := codexAutoThreadRecoveryActive(a)
@@ -45,10 +45,10 @@ func handleCodexTransportError(a *App, client codexClient, err error) {
 	)
 	resetLiveThreadState(a)
 	runAsync(a, func() {
-		failBackendActiveWork(a,backendCodex, "", "", message)
+		failBackendActiveWork(a, backendCodex, "", "", message)
 	})
 	runAsync(a, func() {
-		recoverCodexRuntimeAfterTransportFailure(a,client, skipFrontendRecovery)
+		recoverCodexRuntimeAfterTransportFailure(a, client, skipFrontendRecovery)
 	})
 }
 
@@ -127,7 +127,7 @@ func failBackendActiveWork(a *App, backend, scopeSessionKey, scopeThreadID, mess
 			continue
 		}
 		seenCompacts[key] = struct{}{}
-		failStandaloneCompactTurn(a,target.threadID, target.turnID, message)
+		failStandaloneCompactTurn(a, target.threadID, target.turnID, message)
 	}
 }
 

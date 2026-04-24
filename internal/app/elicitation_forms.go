@@ -25,7 +25,7 @@ func sendElicitationFormCard(a *App, requestID json.RawMessage, payload elicitat
 	card := a.feishu.SimpleStatusCard("需要补充表单", "orange", prependAttentionMentionMarkdown(renderElicitationFormBody(payload), sub.UserID), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
-	err := deliverPendingCard(a,sub, card, pendingCardDelivery{
+	err := deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -60,7 +60,7 @@ func sendElicitationURLCard(a *App, requestID json.RawMessage, payload elicitati
 		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "elicitation_url.decline", "request_id": requestKey}},
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "elicitation_url.cancel", "request_id": requestKey}},
 	})
-	err := deliverPendingCard(a,sub, card, pendingCardDelivery{
+	err := deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,

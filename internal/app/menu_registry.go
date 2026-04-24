@@ -52,7 +52,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return newUpgradeRenderService(a).renderClaudeUpgradeStatusCard(sessionKey, view, false), true
 	},
 	"menu.thread": func(a *App, sessionKey string) (map[string]any, bool) {
-		card, err := renderThreadsCard(a,sessionKey, false)
+		card, err := renderThreadsCard(a, sessionKey, false)
 		if err != nil {
 			return nil, false
 		}

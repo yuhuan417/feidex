@@ -34,7 +34,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		}
 		if json.Unmarshal(params, &p) == nil {
 			newRuntimeStateService(a).noteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
-			noteStandaloneCompactItemStarted(a,p.ThreadID, p.TurnID, p.Item)
+			noteStandaloneCompactItemStarted(a, p.ThreadID, p.TurnID, p.Item)
 		}
 	case "item/completed":
 		var p struct {
@@ -114,7 +114,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 				"turn_id", p.TurnID,
 				"message", p.Error.Message,
 			)
-			if failStandaloneCompactTurn(a,p.ThreadID, p.TurnID, p.Error.Message) {
+			if failStandaloneCompactTurn(a, p.ThreadID, p.TurnID, p.Error.Message) {
 				return
 			}
 			newTurnStreamService(a).recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
@@ -130,7 +130,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		if json.Unmarshal(params, &p) == nil {
 			reqID := requestIDKey(p.RequestID)
 			pending := newRuntimeStateService(a).resolveServerPendingRequest(reqID)
-			resumeSubmissionAfterRequest(a,pending)
+			resumeSubmissionAfterRequest(a, pending)
 		}
 	}
 }
@@ -214,7 +214,7 @@ func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
 		newOutboundCardService(a).sendUserInputCard(req.ID, p)
 		return
 	}
-	sendUserInputFormCard(a,req.ID, p)
+	sendUserInputFormCard(a, req.ID, p)
 }
 
 func (r *codexEventRouter) onMcpElicitationRequest(req codexrpc.RequestEnvelope) {
@@ -238,14 +238,14 @@ func (r *codexEventRouter) onMcpElicitationRequest(req codexrpc.RequestEnvelope)
 			replyCodexError(a, req.ID, -32602, "invalid params")
 			return
 		}
-		sendElicitationURLCard(a,req.ID, payload)
+		sendElicitationURLCard(a, req.ID, payload)
 	case "form":
 		var payload elicitationFormPayload
 		if err := json.Unmarshal(req.Params, &payload); err != nil {
 			replyCodexError(a, req.ID, -32602, "invalid params")
 			return
 		}
-		sendElicitationFormCard(a,req.ID, payload)
+		sendElicitationFormCard(a, req.ID, payload)
 	default:
 		replyCodexError(a, req.ID, -32601, "unsupported elicitation mode")
 	}

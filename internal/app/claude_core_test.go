@@ -464,7 +464,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
 	}
 
-	a.handleFeishuMessage(&feishu.InboundMessage{
+	appHandleFeishuMessage(a,&feishu.InboundMessage{
 		MessageID: "msg-queued",
 		ChatID:    "chat",
 		ChatType:  "p2p",
@@ -950,7 +950,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 
 	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
 
-	if err := a.sendClaudeApprovalCardWithPayload(
+	if err := sendClaudeApprovalCardWithPayload(a,
 		"command",
 		"approve-card-1",
 		"sess-1",
@@ -968,7 +968,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 		t.Fatalf("approval pending = %+v, want Claude pending command", pending)
 	}
 
-	if err := a.sendClaudePlanModeCard("plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
+	if err := sendClaudePlanModeCard(a,"plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
 		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
 	}
 	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
@@ -1405,7 +1405,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 
-	a.handleFeishuMessage(&feishu.InboundMessage{
+	appHandleFeishuMessage(a,&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",

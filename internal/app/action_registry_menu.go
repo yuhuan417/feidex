@@ -98,7 +98,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newThreadActionService(s.app).completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
 	},
 	"menu.workspace": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return completeMenuWorkspace(s.app,action, actionSessionKey(action))
+		return completeMenuWorkspace(s.app, action, actionSessionKey(action))
 	},
 	"menu.codex_upgrade": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newBackendUpgradeService(s.app).completeMenuCodexUpgrade(action)

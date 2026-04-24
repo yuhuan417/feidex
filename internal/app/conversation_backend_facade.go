@@ -60,11 +60,11 @@ func (b codexConversationBackend) startWorkspaceThread(sessionKey string, sess *
 }
 
 func (b codexConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	return resumeCodexSelectedThread(b.app,sessionKey, sess, ws, selection)
+	return resumeCodexSelectedThread(b.app, sessionKey, sess, ws, selection)
 }
 
 func (b codexConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	return forkCodexActiveConversation(b.app,sessionKey, sess, ws)
+	return forkCodexActiveConversation(b.app, sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) forkReplyMessage(string) string {
@@ -72,11 +72,11 @@ func (b codexConversationBackend) forkReplyMessage(string) string {
 }
 
 func (b codexConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
-	recoverCodexStartupConversation(b.app,sessionKey, workspaceID, sess, ws, effectiveModel)
+	recoverCodexStartupConversation(b.app, sessionKey, workspaceID, sess, ws, effectiveModel)
 }
 
 func (b codexConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return renderCodexThreadsCard(b.app,sessionKey, includeAll)
+	return renderCodexThreadsCard(b.app, sessionKey, includeAll)
 }
 
 func (b codexConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
@@ -96,15 +96,15 @@ func (b codexConversationBackend) renderUsageBody(sess *state.Session) string {
 }
 
 func (b codexConversationBackend) interruptActiveTurn(ctx context.Context, _ string, sess *state.Session) error {
-	return interruptCodexActiveTurn(b.app,ctx, sess)
+	return interruptCodexActiveTurn(b.app, ctx, sess)
 }
 
 func (b codexConversationBackend) continueActiveTurn(sessionKey, text string) error {
-	return continueCodexActiveTurn(b.app,sessionKey, text)
+	return continueCodexActiveTurn(b.app, sessionKey, text)
 }
 
 func (b codexConversationBackend) tryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
-	return tryCodexReplyContinuation(b.app,msg, link, sessionKey, sess)
+	return tryCodexReplyContinuation(b.app, msg, link, sessionKey, sess)
 }
 
 func (b codexConversationBackend) startQueuedSubmission(w *lifecycleCoordinator, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
@@ -128,11 +128,11 @@ func (b claudeConversationBackend) startWorkspaceThread(sessionKey string, sess 
 }
 
 func (b claudeConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	return resumeClaudeSelectedThread(b.app,sessionKey, sess, ws, selection)
+	return resumeClaudeSelectedThread(b.app, sessionKey, sess, ws, selection)
 }
 
 func (b claudeConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	return forkClaudeActiveConversation(b.app,sessionKey, sess, ws)
+	return forkClaudeActiveConversation(b.app, sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
@@ -143,11 +143,11 @@ func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
 }
 
 func (b claudeConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, _ *config.Workspace, _ string) {
-	recoverClaudeStartupConversation(b.app,sessionKey, workspaceID, sess)
+	recoverClaudeStartupConversation(b.app, sessionKey, workspaceID, sess)
 }
 
 func (b claudeConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return renderClaudeThreadsCardForCurrentBackend(b.app,sessionKey, includeAll)
+	return renderClaudeThreadsCardForCurrentBackend(b.app, sessionKey, includeAll)
 }
 
 func (b claudeConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
@@ -167,7 +167,7 @@ func (b claudeConversationBackend) renderUsageBody(sess *state.Session) string {
 }
 
 func (b claudeConversationBackend) interruptActiveTurn(ctx context.Context, sessionKey string, _ *state.Session) error {
-	return interruptClaudeActiveTurn(b.app,ctx, sessionKey)
+	return interruptClaudeActiveTurn(b.app, ctx, sessionKey)
 }
 
 func (b claudeConversationBackend) continueActiveTurn(sessionKey, text string) error {

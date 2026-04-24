@@ -28,7 +28,7 @@ func (s outboundCardService) sendApprovalCardWithPayload(kind string, requestID 
 	if len(requestPayload) > 0 {
 		payload["request"] = requestPayload
 	}
-	err := deliverPendingCard(s.app,sub, card, pendingCardDelivery{
+	err := deliverPendingCard(s.app, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -70,7 +70,7 @@ func (s outboundCardService) sendPermissionsCardWithPayload(requestID json.RawMe
 	if len(requestPayload) > 0 {
 		payload["request"] = requestPayload
 	}
-	err := deliverPendingCard(s.app,sub, card, pendingCardDelivery{
+	err := deliverPendingCard(s.app, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -112,7 +112,7 @@ func (s outboundCardService) sendUserInputCard(requestID json.RawMessage, payloa
 	}
 	card := s.app.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
 	requestKey := requestIDKey(requestID)
-	err := deliverPendingCard(s.app,sub, card, pendingCardDelivery{
+	err := deliverPendingCard(s.app, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,

@@ -284,7 +284,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 	)
 
 	nextSessions := newBackendSelectionService(s.app).frontendSessionsAfterBackendSwitch(current, target)
-	newHandle, err := prepareBackendRuntime(s.app,ctx, target)
+	newHandle, err := prepareBackendRuntime(s.app, ctx, target)
 	if err != nil {
 		return err
 	}

@@ -64,7 +64,7 @@ func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction,
 	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, err := renderThreadSandboxMenuCard(s.app,sessionKey)
+	card, err := renderThreadSandboxMenuCard(s.app, sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -94,7 +94,7 @@ func (s threadActionService) completeThreadPolicySet(action *feishu.CardAction, 
 	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, err := renderThreadPolicyMenuCard(s.app,sessionKey)
+	card, err := renderThreadPolicyMenuCard(s.app, sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -146,7 +146,7 @@ func (s threadActionService) completeThreadResume(action *feishu.CardAction, ses
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: toastType, Content: err.Error()}}, nil
 	}
 	includeAll, _ := action.ActionValue["include_all"].(bool)
-	card, err := renderThreadsCard(s.app,sessionKey, includeAll)
+	card, err := renderThreadsCard(s.app, sessionKey, includeAll)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(configuredBackend(s.app))}}, nil
 	}

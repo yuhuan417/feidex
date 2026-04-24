@@ -128,7 +128,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-				return commandInterrupt(a,msg)
+				return commandInterrupt(a, msg)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{

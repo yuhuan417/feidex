@@ -456,9 +456,9 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 	turnID := ""
 	var err error
 	if isReviewSubmission(sub) {
-		turnID, err = a.startSubmissionReview(turnCtx, threadID, sub)
+		turnID, err = startSubmissionReview(a, turnCtx, threadID, sub)
 	} else {
-		turnID, err = a.startSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
+		turnID, err = startSubmissionTurn(a, turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
 	}
 	turnCancel()
 	if err != nil {

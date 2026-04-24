@@ -42,7 +42,7 @@ func localCommandModelSpecs() []localCommandSpec {
 				return exactOrSingleArgCommand(fields, "config", "verbose", "progress", "normal", "final")
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return commandQuiet(a,msg, args)
+				return commandQuiet(a, msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{

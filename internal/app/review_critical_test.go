@@ -81,7 +81,7 @@ func TestStartSubmissionReviewUsesStoredTargetPayload(t *testing.T) {
 		return nil
 	}
 
-	turnID, err := a.startSubmissionReview(context.Background(), "thread-1", &state.Submission{
+	turnID, err := startSubmissionReview(a,context.Background(), "thread-1", &state.Submission{
 		Kind:              submissionKindReview,
 		ReviewTargetType:  appreview.TargetCommit,
 		ReviewCommitSHA:   "abcdef1234567890",

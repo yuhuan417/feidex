@@ -53,4 +53,3 @@ func sessionFindActiveOperationByThread(sess *state.Session, threadID string) *s
 func sessionFindPendingSubmissionOperationByThread(sess *state.Session, threadID string) *state.SessionActiveOperation {
 	return sessionctx.FindPendingSubmissionOperationByThread(sess, threadID)
 }
-

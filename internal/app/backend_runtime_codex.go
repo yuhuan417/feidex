@@ -40,7 +40,7 @@ func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionK
 	if a == nil {
 		return sess
 	}
-	return reconcileCompletedCodexTurnFromFinalOutput(a,sessionKey, sess)
+	return reconcileCompletedCodexTurnFromFinalOutput(a, sessionKey, sess)
 }
 
 func (codexRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
@@ -60,7 +60,7 @@ func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
 		return &backendRuntimeHandle{backend: backendCodex}
 	}
 	client := newCodexClient(a.cfg.Codex)
-	configureCodexClientRuntime(a,client)
+	configureCodexClientRuntime(a, client)
 	return &backendRuntimeHandle{
 		backend: backendCodex,
 		codex:   client,
@@ -136,6 +136,6 @@ func (codexRuntimeFacade) handleTransportFailure(a *App, _, _ string, err error)
 		"error", err,
 	)
 	runAsync(a, func() {
-		failBackendActiveWork(a,backendCodex, "", "", message)
+		failBackendActiveWork(a, backendCodex, "", "", message)
 	})
 }

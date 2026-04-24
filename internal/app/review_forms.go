@@ -450,7 +450,7 @@ func (s reviewFormService) completeReviewFormSubmitSync(action *feishu.CardActio
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未知 review 表单"}}, nil
 	}
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/review")
-	confirmation, err := startInlineReview(s.app,msg, target)
+	confirmation, err := startInlineReview(s.app, msg, target)
 	if err != nil {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		card, renderErr := newReviewFormService(s.app).renderReviewFormCard(pending.SessionKey, requestID, payload)

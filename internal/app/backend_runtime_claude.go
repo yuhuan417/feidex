@@ -112,5 +112,5 @@ func (claudeRuntimeFacade) handleTransportFailure(a *App, sessionKey, threadID s
 		"thread_id", threadID,
 		"error", err,
 	)
-	failBackendActiveWork(a,backendClaude, sessionKey, threadID, message)
+	failBackendActiveWork(a, backendClaude, sessionKey, threadID, message)
 }

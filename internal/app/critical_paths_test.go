@@ -71,7 +71,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		return nil
 	}
 
-	a.handleFeishuMessage(msg1)
+	appHandleFeishuMessage(a,msg1)
 
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "turn-1" || sess.Status != "turn_in_progress" {
@@ -106,7 +106,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		UserID:    msg1.UserID,
 		Text:      "follow-up task",
 	}
-	a.handleFeishuMessage(msg2)
+	appHandleFeishuMessage(a,msg2)
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || len(sess.Queue) != 1 || sess.ActiveTurnID != "turn-1" {

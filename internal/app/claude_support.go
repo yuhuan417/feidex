@@ -47,7 +47,7 @@ func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey strin
 	}
 
 	card := renderApprovalCard(a, sessionKey, sub, title, "orange", strings.TrimSpace(body), buttons)
-	return deliverPendingCard(a,sub, card, pendingCardDelivery{
+	return deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: claudeRequestIDStored(requestKey),
 		backend:         backendClaude,
@@ -199,7 +199,7 @@ func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *state.Su
 		})
 	}
 	card := a.feishu.SimpleStatusCard("需要补充输入", "orange", prependAttentionMentionMarkdown(q.Question, sub.UserID), buttons)
-	return deliverPendingCard(a,sub, card, pendingCardDelivery{
+	return deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: claudeRequestIDStored(requestKey),
 		backend:         backendClaude,
@@ -224,7 +224,7 @@ func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *stat
 		return fmt.Errorf("missing request id")
 	}
 	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
-	return deliverPendingCard(a,sub, card, pendingCardDelivery{
+	return deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: claudeRequestIDStored(requestKey),
 		backend:         backendClaude,
@@ -251,7 +251,7 @@ func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *state.Sub
 	card := a.feishu.SimpleStatusCard("Claude 计划确认", "orange", prependAttentionMentionMarkdown(strings.TrimSpace(body), sub.UserID), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
-	return deliverPendingCard(a,sub, card, pendingCardDelivery{
+	return deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: claudeRequestIDStored(requestKey),
 		backend:         backendClaude,

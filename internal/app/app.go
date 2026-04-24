@@ -124,7 +124,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		claudeMaintenance:   newClaudeMaintenanceTracker(),
 	}
 	if backend != "" {
-		handle, err := buildBackendRuntimeHandle(app,backend)
+		handle, err := buildBackendRuntimeHandle(app, backend)
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,9 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 	}
 	app.feishu.SetHandlers(
 		func(msg *feishu.InboundMessage) { appHandleFeishuMessage(app, msg) },
-		func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) { return appHandleCardAction(app, action) },
+		func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return appHandleCardAction(app, action)
+		},
 		func(click *feishu.BotMenuClick) { appHandleBotMenu(app, click) },
 		func(recall *feishu.MessageRecall) { appHandleFeishuRecall(app, recall) },
 		func(reaction *feishu.MessageReaction) { appHandleFeishuReaction(app, reaction) },

@@ -66,7 +66,7 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 	if w.bindPendingSubmissionTurn(threadID, turnID, false) {
 		return
 	}
-	if bindStandaloneCompactTurn(a,threadID, turnID) {
+	if bindStandaloneCompactTurn(a, threadID, turnID) {
 		return
 	}
 
@@ -235,7 +235,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		sessionKey, sub = w.bindPendingSubmissionForTurnCompletion(threadID, turnID)
 	}
 	if sub == nil {
-		if finishStandaloneCompactTurn(a,threadID, turnID, status) {
+		if finishStandaloneCompactTurn(a, threadID, turnID, status) {
 			return
 		}
 		slog.Warn("finishTurn missing submission",
@@ -280,7 +280,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		terminalText = turnCompletionTerminalText(sub.Status, flush.LastError)
 		attentionUserID = turnStopAttentionUserID(a, sub, turnID)
 		if sub.Status == "completed" && !flush.SawFinal {
-			sendEmptyFinalCardWithReuse(a,context.Background(), sub, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
+			sendEmptyFinalCardWithReuse(a, context.Background(), sub, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
 			reuseMessageID = ""
 		}
 	}

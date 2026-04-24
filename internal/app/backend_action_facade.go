@@ -41,7 +41,7 @@ func (codexBackendActions) runMenuCompactAction(a *App, action *feishu.CardActio
 	}
 	msg := commandMessageFromAction(a, action, sessionKey, "/compact")
 	sessionKey = firstNonEmpty(makeSessionKey(a, msg), strings.TrimSpace(sessionKey))
-	_, err := startThreadCompaction(a,sessionKey)
+	_, err := startThreadCompaction(a, sessionKey)
 	return err
 }
 
@@ -49,7 +49,7 @@ func (codexBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMessa
 	if a == nil || msg == nil {
 		return nil
 	}
-	if _, err := startThreadCompaction(a,makeSessionKey(a, msg)); err != nil {
+	if _, err := startThreadCompaction(a, makeSessionKey(a, msg)); err != nil {
 		return err
 	}
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", replyInThreadEnabled(a, msg.ChatType))
