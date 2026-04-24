@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (a *App) beginCodexTransportRecovery(client codexClient) bool {
+func beginCodexTransportRecovery(a *App, client codexClient) bool {
 	if a == nil || client == nil {
 		return false
 	}
@@ -72,7 +72,7 @@ func replyCodexError(a *App, requestID json.RawMessage, code int, message string
 	_ = client.ReplyError(requestID, code, message)
 }
 
-func (a *App) completeCodexTransportRecovery(next codexClient) bool {
+func completeCodexTransportRecovery(a *App, next codexClient) bool {
 	if a == nil {
 		return false
 	}
@@ -114,7 +114,7 @@ func codexAutoThreadRecoveryActive(a *App) bool {
 	return a.codexAutoThreading
 }
 
-func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient, skipFrontendRecovery bool) {
+func recoverCodexRuntimeAfterTransportFailure(a *App, failed codexClient, skipFrontendRecovery bool) {
 	if a == nil {
 		return
 	}
@@ -134,14 +134,14 @@ func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient, skipF
 
 	next, err := newBackendUpgradeService(a).startVerifiedCodexClient(ctx)
 	if err != nil {
-		_ = a.completeCodexTransportRecovery(nil)
+		_ = completeCodexTransportRecovery(a, nil)
 		slog.Error("codex runtime recovery failed",
 			"frontend_id", a.frontendID,
 			"error", err,
 		)
 		return
 	}
-	if !a.completeCodexTransportRecovery(next) {
+	if !completeCodexTransportRecovery(a, next) {
 		_ = next.Close()
 		return
 	}
@@ -152,10 +152,10 @@ func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient, skipF
 	if !skipFrontendRecovery {
 		recoverFrontendRuntimeState(a)
 	}
-	a.resumeQueuedFrontendSessionsAfterCodexRecovery()
+	resumeQueuedFrontendSessionsAfterCodexRecovery(a)
 }
 
-func (a *App) resumeQueuedFrontendSessionsAfterCodexRecovery() {
+func resumeQueuedFrontendSessionsAfterCodexRecovery(a *App) {
 	if a == nil || a.store == nil {
 		return
 	}

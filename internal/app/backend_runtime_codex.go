@@ -40,7 +40,7 @@ func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionK
 	if a == nil {
 		return sess
 	}
-	return a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
+	return reconcileCompletedCodexTurnFromFinalOutput(a,sessionKey, sess)
 }
 
 func (codexRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {

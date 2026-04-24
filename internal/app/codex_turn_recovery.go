@@ -19,7 +19,7 @@ func isTerminalTurnStatus(status string) bool {
 	}
 }
 
-func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
+func reconcileCompletedCodexTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
 	if a == nil || sess == nil {
 		return sess
 	}

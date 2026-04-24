@@ -31,7 +31,7 @@ func configureCodexClientRuntime(a *App, client codexClient) {
 }
 
 func (a *App) handleCodexTransportError(client codexClient, err error) {
-	if a == nil || !a.beginCodexTransportRecovery(client) {
+	if a == nil || !beginCodexTransportRecovery(a,client) {
 		return
 	}
 	skipFrontendRecovery := codexAutoThreadRecoveryActive(a)
@@ -48,7 +48,7 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 		failBackendActiveWork(a,backendCodex, "", "", message)
 	})
 	runAsync(a, func() {
-		a.recoverCodexRuntimeAfterTransportFailure(client, skipFrontendRecovery)
+		recoverCodexRuntimeAfterTransportFailure(a,client, skipFrontendRecovery)
 	})
 }
 

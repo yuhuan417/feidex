@@ -45,14 +45,14 @@ func NewService(cfg *config.Config, cfgPath string) (*Service, error) {
 func (s *Service) Start(ctx context.Context) error {
 	started := make([]*App, 0, len(s.apps))
 	for _, app := range s.apps {
-		if err := app.startBackend(ctx); err != nil {
+		if err := startBackend(app,ctx); err != nil {
 			_ = stopApps(ctx, started)
 			return err
 		}
 		started = append(started, app)
 	}
 	for _, app := range s.apps {
-		app.startInboundDeduperLoop(ctx)
+		startInboundDeduperLoop(app,ctx)
 	}
 	if len(s.apps) > 0 {
 		recoverSharedRuntimeState(s.apps[0])
@@ -61,7 +61,7 @@ func (s *Service) Start(ctx context.Context) error {
 		recoverFrontendRuntimeState(app)
 	}
 	for _, app := range s.apps {
-		if err := app.startFrontend(ctx); err != nil {
+		if err := startFrontend(app,ctx); err != nil {
 			_ = stopApps(ctx, s.apps)
 			return err
 		}

@@ -48,7 +48,7 @@ func (s backendUpgradeService) completeClaudeRestartRun(action *feishu.CardActio
 }
 
 func (s backendUpgradeService) completeClaudeUpgradeAsyncAction(action *feishu.CardAction, rawCommand, toastText, preparingText string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMaintenanceAsyncAction(
+	return completeMaintenanceAsyncAction(s.app,
 		action,
 		rawCommand,
 		toastText,

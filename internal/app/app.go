@@ -124,7 +124,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		claudeMaintenance:   newClaudeMaintenanceTracker(),
 	}
 	if backend != "" {
-		handle, err := app.buildBackendRuntimeHandle(backend)
+		handle, err := buildBackendRuntimeHandle(app,backend)
 		if err != nil {
 			return nil, err
 		}
@@ -136,13 +136,13 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 }
 
 func (a *App) Start(ctx context.Context) error {
-	if err := a.startBackend(ctx); err != nil {
+	if err := startBackend(a,ctx); err != nil {
 		return err
 	}
-	a.startInboundDeduperLoop(ctx)
+	startInboundDeduperLoop(a,ctx)
 	recoverSharedRuntimeState(a)
 	recoverFrontendRuntimeState(a)
-	if err := a.startFrontend(ctx); err != nil {
+	if err := startFrontend(a,ctx); err != nil {
 		return err
 	}
 	newRuntimeMaintenanceService(a).startDriveArtifactGCLoop(ctx)

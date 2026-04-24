@@ -254,7 +254,7 @@ func commandInterrupt(a *App, msg *feishu.InboundMessage) error {
 	sessionKey := makeSessionKey(a, msg)
 	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
 	sess := appState(a).session(sessionKey)
-	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
+	sess = reconcileCompletedCodexTurnFromFinalOutput(a,sessionKey, sess)
 	if sess == nil {
 		sess = appState(a).session(sessionKey)
 	}

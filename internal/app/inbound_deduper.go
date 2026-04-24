@@ -147,7 +147,7 @@ func (d *inboundDeduper) enforceCapLocked() {
 	}
 }
 
-func (a *App) startInboundDeduperLoop(ctx context.Context) {
+func startInboundDeduperLoop(a *App, ctx context.Context) {
 	if a == nil || a.deduper == nil {
 		return
 	}

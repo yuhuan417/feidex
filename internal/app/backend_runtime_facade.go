@@ -101,7 +101,7 @@ func currentBackendRuntimeHandle(a *App) *backendRuntimeHandle {
 	}
 }
 
-func (a *App) buildBackendRuntimeHandle(target string) (*backendRuntimeHandle, error) {
+func buildBackendRuntimeHandle(a *App, target string) (*backendRuntimeHandle, error) {
 	runtime := backendRuntimeForKind(target)
 	if runtime == nil {
 		return nil, fmt.Errorf("unsupported backend %q", target)
@@ -109,7 +109,7 @@ func (a *App) buildBackendRuntimeHandle(target string) (*backendRuntimeHandle, e
 	return runtime.buildRuntime(a), nil
 }
 
-func (a *App) startPreparedBackendRuntime(ctx context.Context, handle *backendRuntimeHandle) error {
+func startPreparedBackendRuntime(a *App, ctx context.Context, handle *backendRuntimeHandle) error {
 	if a == nil || handle == nil {
 		return nil
 	}
@@ -120,8 +120,8 @@ func (a *App) startPreparedBackendRuntime(ctx context.Context, handle *backendRu
 	return runtime.startRuntime(ctx, a, handle)
 }
 
-func (a *App) prepareBackendRuntime(ctx context.Context, target string) (*backendRuntimeHandle, error) {
-	handle, err := a.buildBackendRuntimeHandle(target)
+func prepareBackendRuntime(a *App, ctx context.Context, target string) (*backendRuntimeHandle, error) {
+	handle, err := buildBackendRuntimeHandle(a, target)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (a *App) prepareBackendRuntime(ctx context.Context, target string) (*backen
 	}
 	startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if err := a.startPreparedBackendRuntime(startCtx, handle); err != nil {
+	if err := startPreparedBackendRuntime(a, startCtx, handle); err != nil {
 		_ = handle.close()
 		return nil, err
 	}

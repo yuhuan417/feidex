@@ -7,14 +7,14 @@ import (
 	"feidex/internal/config"
 )
 
-func (a *App) startBackend(ctx context.Context) error {
+func startBackend(a *App, ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	return a.startPreparedBackendRuntime(ctx, currentBackendRuntimeHandle(a))
+	return startPreparedBackendRuntime(a, ctx, currentBackendRuntimeHandle(a))
 }
 
-func (a *App) startFrontend(ctx context.Context) error {
+func startFrontend(a *App, ctx context.Context) error {
 	if a == nil || a.feishu == nil {
 		return nil
 	}

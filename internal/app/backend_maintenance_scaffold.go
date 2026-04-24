@@ -21,7 +21,7 @@ func patchMaintenanceCard(a *App, messageID string, card map[string]any, warnMsg
 	}
 }
 
-func (a *App) completeMaintenanceAsyncAction(
+func completeMaintenanceAsyncAction(a *App,
 	action *feishu.CardAction,
 	rawCommand string,
 	toastText string,

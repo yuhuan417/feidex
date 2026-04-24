@@ -27,7 +27,7 @@ func (a *App) forkClaudeActiveConversation(sessionKey string, sess *state.Sessio
 	if err != nil {
 		return "", err
 	}
-	if err := a.persistForkedConversation(sessionKey, sess, workspaceID, forkedID, currentName, currentPreview, true); err != nil {
+	if err := persistForkedConversation(a, sessionKey, sess, workspaceID, forkedID, currentName, currentPreview, true); err != nil {
 		return "", err
 	}
 	return forkedID, nil
@@ -62,13 +62,13 @@ func (a *App) forkCodexActiveConversation(sessionKey string, sess *state.Session
 	if forkedID == "" {
 		return "", fmt.Errorf("fork thread returned empty thread id")
 	}
-	if err := a.persistForkedConversation(sessionKey, sess, workspaceID, forkedID, result.Thread.Name, result.Thread.Preview, false); err != nil {
+	if err := persistForkedConversation(a, sessionKey, sess, workspaceID, forkedID, result.Thread.Name, result.Thread.Preview, false); err != nil {
 		return "", err
 	}
 	return forkedID, nil
 }
 
-func (a *App) persistForkedConversation(sessionKey string, sess *state.Session, workspaceID, threadID, name, preview string, resetThreadSettings bool) error {
+func persistForkedConversation(a *App, sessionKey string, sess *state.Session, workspaceID, threadID, name, preview string, resetThreadSettings bool) error {
 	if sess == nil {
 		return fmt.Errorf("session not found")
 	}
