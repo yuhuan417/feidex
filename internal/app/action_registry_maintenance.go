@@ -7,52 +7,52 @@ import (
 )
 
 var maintenanceCardActionHandlers = map[string]cardActionHandler{
-	"upgrade.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeUpgradeAction(action, "upgrade.confirm")
+	"upgrade.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeUpgradeAction(action, "upgrade.confirm")
 	},
-	"upgrade.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeUpgradeAction(action, "upgrade.cancel")
+	"upgrade.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeUpgradeAction(action, "upgrade.cancel")
 	},
-	"upgrade.local.pick": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeUpgradeLocalPick(action)
+	"upgrade.local.pick": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeUpgradeLocalPick(action)
 	},
-	"upgrade.dev": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeUpgradeDev(action)
+	"upgrade.dev": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeUpgradeDev(action)
 	},
-	"codex_upgrade.refresh": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeCodexUpgradeRefresh(action)
+	"codex_upgrade.refresh": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeCodexUpgradeRefresh(action)
 	},
-	"codex_upgrade.check": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeCodexUpgradeCheck(action)
+	"codex_upgrade.check": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeCodexUpgradeCheck(action)
 	},
-	"codex_upgrade.prepare": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeCodexUpgradePrepare(action)
+	"codex_upgrade.prepare": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeCodexUpgradePrepare(action)
 	},
-	"codex_restart.run": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeCodexRestartRun(action)
+	"codex_restart.run": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeCodexRestartRun(action)
 	},
-	"codex_upgrade.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeCodexUpgradeAction(action, "codex_upgrade.confirm")
+	"codex_upgrade.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeCodexUpgradeAction(action, "codex_upgrade.confirm")
 	},
-	"codex_upgrade.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeCodexUpgradeAction(action, "codex_upgrade.cancel")
+	"codex_upgrade.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeCodexUpgradeAction(action, "codex_upgrade.cancel")
 	},
-	"claude_upgrade.refresh": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeUpgradeRefresh(action)
+	"claude_upgrade.refresh": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeUpgradeRefresh(action)
 	},
-	"claude_upgrade.check": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeUpgradeCheck(action)
+	"claude_upgrade.check": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeUpgradeCheck(action)
 	},
-	"claude_upgrade.prepare": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeUpgradePrepare(action)
+	"claude_upgrade.prepare": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeUpgradePrepare(action)
 	},
-	"claude_restart.run": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeRestartRun(action)
+	"claude_restart.run": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeRestartRun(action)
 	},
-	"claude_upgrade.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeUpgradeAction(action, "claude_upgrade.confirm")
+	"claude_upgrade.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeUpgradeAction(action, "claude_upgrade.confirm")
 	},
-	"claude_upgrade.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeUpgradeAction(action, "claude_upgrade.cancel")
+	"claude_upgrade.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeUpgradeAction(action, "claude_upgrade.cancel")
 	},
 }

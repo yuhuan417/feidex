@@ -43,5 +43,5 @@ func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardAc
 			Toast: &callback.Toast{Type: "warning", Content: "未知操作"},
 		}, nil
 	}
-	return handler(s.app, action)
+	return handler(s, action)
 }

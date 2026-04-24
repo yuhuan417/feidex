@@ -9,7 +9,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type cardActionHandler func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
+type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 
 // Card action handlers run on the Feishu callback ack path.
 // Keep them fast: validate input, persist state, enqueue work, and return.

@@ -9,103 +9,103 @@ import (
 )
 
 var workspaceCardActionHandlers = map[string]cardActionHandler{
-	"workspace.use.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceUse(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+	"workspace.use.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceUse(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 	},
-	"workspace.use.existing": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+	"workspace.use.existing": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
-	"workspace.new": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceNew(action, actionSessionKey(action))
+	"workspace.new": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceNew(action, actionSessionKey(action))
 	},
-	"workspace.new.takeover": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceNewTakeover(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "target_dir"))
+	"workspace.new.takeover": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceNewTakeover(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "target_dir"))
 	},
-	"workspace.clone": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceClone(action, actionSessionKey(action))
+	"workspace.clone": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceClone(action, actionSessionKey(action))
 	},
-	"workspace.clone.use_existing": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceCloneUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+	"workspace.clone.use_existing": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceCloneUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
-	"workspace.clone.pickdir": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceClonePickDir(action)
+	"workspace.clone.pickdir": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceClonePickDir(action)
 	},
-	"workspace.clone.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceCloneCancel(action)
+	"workspace.clone.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceCloneCancel(action)
 	},
-	"workspace.clone.submit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceCloneSubmit(action)
+	"workspace.clone.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceCloneSubmit(action)
 	},
-	"workspace.new.pickdir": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceNewPickDir(action)
+	"workspace.new.pickdir": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceNewPickDir(action)
 	},
-	"workspace.new.submit": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceNewSubmit(action)
+	"workspace.new.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceNewSubmit(action)
 	},
-	"workspace.sandbox.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceSandboxMenu(action, actionSessionKey(action))
+	"workspace.sandbox.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceSandboxMenu(action, actionSessionKey(action))
 	},
-	"workspace.policy.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspacePolicyMenu(action, actionSessionKey(action))
+	"workspace.policy.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspacePolicyMenu(action, actionSessionKey(action))
 	},
-	"workspace.permission_mode.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeWorkspacePermissionMenu(action, actionSessionKey(action))
+	"workspace.permission_mode.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeWorkspacePermissionMenu(action, actionSessionKey(action))
 	},
-	"workspace.delete.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceDeleteMenu(action, actionSessionKey(action))
+	"workspace.delete.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceDeleteMenu(action, actionSessionKey(action))
 	},
-	"workspace.delete.prompt": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceDeletePrompt(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+	"workspace.delete.prompt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceDeletePrompt(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
-	"workspace.delete.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceDeleteConfirm(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+	"workspace.delete.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceDeleteConfirm(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
-	"workspace.sandbox.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspaceSandboxSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "sandbox_mode"))
+	"workspace.sandbox.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspaceSandboxSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "sandbox_mode"))
 	},
-	"workspace.policy.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeWorkspacePolicySet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "approval_policy"))
+	"workspace.policy.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeWorkspacePolicySet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "approval_policy"))
 	},
-	"workspace.permission_mode.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeWorkspacePermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "mode"))
+	"workspace.permission_mode.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeWorkspacePermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "mode"))
 	},
-	"thread.sandbox.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeThreadSandboxMenu(action, actionSessionKey(action))
+	"thread.sandbox.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeThreadSandboxMenu(action, actionSessionKey(action))
 	},
-	"thread.policy.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeThreadPolicyMenu(action, actionSessionKey(action))
+	"thread.policy.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeThreadPolicyMenu(action, actionSessionKey(action))
 	},
-	"thread.permission_mode.menu": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeSessionPermissionMenu(action, actionSessionKey(action))
+	"thread.permission_mode.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeSessionPermissionMenu(action, actionSessionKey(action))
 	},
-	"thread.sandbox.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeThreadSandboxSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "sandbox_mode"))
+	"thread.sandbox.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeThreadSandboxSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "sandbox_mode"))
 	},
-	"thread.policy.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
+	"thread.policy.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
 	},
-	"thread.permission_mode.set": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))
+	"thread.permission_mode.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))
 	},
-	"thread.resume.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completeThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+	"thread.resume.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completeThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 	},
-	"path_picker.dropdown": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completePathPickerAction(action, "path_picker.dropdown")
+	"path_picker.dropdown": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completePathPickerAction(action, "path_picker.dropdown")
 	},
-	"path_picker.up": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completePathPickerAction(action, "path_picker.up")
+	"path_picker.up": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completePathPickerAction(action, "path_picker.up")
 	},
-	"path_picker.open": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completePathPickerAction(action, "path_picker.open")
+	"path_picker.open": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completePathPickerAction(action, "path_picker.open")
 	},
-	"path_picker.select": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completePathPickerAction(action, "path_picker.select")
+	"path_picker.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completePathPickerAction(action, "path_picker.select")
 	},
-	"path_picker.confirm": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completePathPickerAction(action, "path_picker.confirm")
+	"path_picker.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completePathPickerAction(action, "path_picker.confirm")
 	},
-	"path_picker.cancel": func(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return a.completePathPickerAction(action, "path_picker.cancel")
+	"path_picker.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.completePathPickerAction(action, "path_picker.cancel")
 	},
 }
