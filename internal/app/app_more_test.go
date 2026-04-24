@@ -1622,7 +1622,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuSkills(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuWorkspace(action, action.ActionValue["session_key"].(string))
+			return completeMenuWorkspace(a,action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
 			return newWorkspaceActionService(a).completeWorkspaceNew(action, action.ActionValue["session_key"].(string))
@@ -2080,7 +2080,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("permissions resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.completeUserInputAnswer(&feishu.CardAction{
+	resp, err = completeUserInputAnswer(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-1", "question_id": "q-1", "answer": "A"},
 	})
@@ -2150,7 +2150,7 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
 	}
 
-	resp, err := a.completeUserInputAnswer(&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-form-1"},
 		FormValue: map[string]any{
@@ -2213,7 +2213,7 @@ func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 		t.Fatalf("UpsertPending(input-toggle-1) error = %v", err)
 	}
 
-	resp, err := a.completeUserInputMultiToggle(&feishu.CardAction{
+	resp, err := completeUserInputMultiToggle(a,&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id":   "input-toggle-1",
@@ -2836,7 +2836,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(url) error = %v", err)
 	}
-	resp, err := a.completeElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
+	resp, err := completeElicitationURLAction(a,&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeElicitationURLAction() = %#v, %v", resp, err)
 	}

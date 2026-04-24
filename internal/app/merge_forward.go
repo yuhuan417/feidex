@@ -12,7 +12,7 @@ import (
 
 const mergeForwardPrefetchTimeout = 30 * time.Second
 
-func (a *App) startMergeForwardPrefetch(msg *feishu.InboundMessage) {
+func startMergeForwardPrefetch(a *App, msg *feishu.InboundMessage) {
 	if a == nil || a.feishu == nil || msg == nil || len(msg.MergeForwardMessageIDs) == 0 {
 		return
 	}

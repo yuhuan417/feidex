@@ -25,7 +25,7 @@ type pendingCardDelivery struct {
 	ttl             time.Duration
 }
 
-func (a *App) deliverPendingCard(sub *state.Submission, card map[string]any, delivery pendingCardDelivery) error {
+func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, delivery pendingCardDelivery) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("pending card delivery unavailable")
 	}

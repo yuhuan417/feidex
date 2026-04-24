@@ -1009,7 +1009,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.completeUserInputAnswer(&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-1", "question_id": "q1", "answer": "Fast"},
 	})
@@ -1059,7 +1059,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.completeUserInputAnswer(&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-form-1"},
 		FormValue: map[string]any{

@@ -15,7 +15,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicitationFormPayload) {
+func sendElicitationFormCard(a *App, requestID json.RawMessage, payload elicitationFormPayload) {
 	sessionKey, sub := findSubmissionByTurn(a, payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		replyCodexError(a, requestID, -32602, "no active session for elicitation")
@@ -25,7 +25,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 	card := a.feishu.SimpleStatusCard("需要补充表单", "orange", prependAttentionMentionMarkdown(renderElicitationFormBody(payload), sub.UserID), []feishu.Button{
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
 	})
-	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+	err := deliverPendingCard(a,sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -44,7 +44,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 	replyCodexError(a, requestID, -32603, err.Error())
 }
 
-func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitationURLPayload) {
+func sendElicitationURLCard(a *App, requestID json.RawMessage, payload elicitationURLPayload) {
 	sessionKey, sub := findSubmissionByTurn(a, payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		replyCodexError(a, requestID, -32602, "no active session for elicitation")
@@ -60,7 +60,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "elicitation_url.decline", "request_id": requestKey}},
 		{Text: "取消", Type: "default", Value: map[string]any{"action": "elicitation_url.cancel", "request_id": requestKey}},
 	})
-	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+	err := deliverPendingCard(a,sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,
@@ -79,7 +79,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 	replyCodexError(a, requestID, -32603, err.Error())
 }
 
-func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+func completeElicitationURLAction(a *App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(a)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)

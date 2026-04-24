@@ -190,7 +190,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	}
 
 	newTurnStreamService(a).turnStreamTracker().streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &quietWorkingCard{}}
-	a.executeQuietWorkingCardOp(context.Background(), sub, quietWorkingCardOp{
+	executeQuietWorkingCardOp(a,context.Background(), sub, quietWorkingCardOp{
 		TurnID: "turn-1",
 		Body:   "Read `quiet_mode.go`",
 	})
@@ -202,7 +202,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	}
 
 	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
-	a.executeQuietWorkingCardOp(context.Background(), sub, quietWorkingCardOp{
+	executeQuietWorkingCardOp(a,context.Background(), sub, quietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "Update `quiet_mode.go`",
@@ -216,7 +216,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 
 	ff.patchCardErr = errors.New("boom")
 	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
-	a.executeQuietWorkingCardOp(context.Background(), sub, quietWorkingCardOp{
+	executeQuietWorkingCardOp(a,context.Background(), sub, quietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "after error",

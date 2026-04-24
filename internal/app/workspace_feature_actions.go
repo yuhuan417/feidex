@@ -16,7 +16,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func completeMenuWorkspace(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(a, action, sessionKey, "/workspace", "menu.root")
 }
 

@@ -16,7 +16,7 @@ type toolUserInputFormDrafts struct {
 	Multi  map[string][]string
 }
 
-func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserInputPayload) {
+func sendUserInputFormCard(a *App, requestID json.RawMessage, payload toolUserInputPayload) {
 	sessionKey, sub := findSubmissionByTurn(a, payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		replyCodexError(a, requestID, -32602, "no active session for request_user_input")
@@ -24,7 +24,7 @@ func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserI
 	}
 	requestKey := requestIDKey(requestID)
 	card := renderToolUserInputFormCard(requestKey, payload, toolUserInputFormDrafts{}, sub.UserID)
-	err := a.deliverPendingCard(sub, card, pendingCardDelivery{
+	err := deliverPendingCard(a,sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
 		requestIDStored: requestIDStored(requestID),
 		backend:         backendCodex,

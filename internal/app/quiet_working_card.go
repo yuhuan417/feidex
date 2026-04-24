@@ -107,7 +107,7 @@ func prepareQuietWorkingCardBoundaryLocked(stream *turnStream) quietWorkingBound
 	return quietWorkingBoundary{Op: op}
 }
 
-func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op quietWorkingCardOp) {
+func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *state.Submission, op quietWorkingCardOp) {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return
 	}

@@ -11,7 +11,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func completeUserInputAnswer(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(a)
 	requestID := actionStringValue(action, "request_id")
 	questionID := actionStringValue(action, "question_id")
@@ -30,12 +30,12 @@ func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.Card
 	}
 
 	if strings.TrimSpace(questionID) != "" || strings.TrimSpace(answer) != "" {
-		return a.completeUserInputQuickAnswer(action, pending, payload, questionID, answer)
+		return completeUserInputQuickAnswer(a, action, pending, payload, questionID, answer)
 	}
-	return a.completeUserInputFormSubmit(action, pending, payload)
+	return completeUserInputFormSubmit(a, action, pending, payload)
 }
 
-func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload, questionID, answer string) (*callback.CardActionTriggerResponse, error) {
+func completeUserInputQuickAnswer(a *App, action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload, questionID, answer string) (*callback.CardActionTriggerResponse, error) {
 	requestID := strings.TrimSpace(pending.ID)
 	adapter := serverRequestAdapterForPending(a, pending)
 	selectionSummary, err := adapter.replyQuickUserInput(pending, payload, questionID, answer)
@@ -62,7 +62,7 @@ func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *s
 	}, nil
 }
 
-func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload) (*callback.CardActionTriggerResponse, error) {
+func completeUserInputFormSubmit(a *App, action *feishu.CardAction, pending *state.PendingRequest, payload toolUserInputPayload) (*callback.CardActionTriggerResponse, error) {
 	requestID := strings.TrimSpace(pending.ID)
 	drafts := toolUserInputDraftsFromCardAction(payload, action)
 	selections := toolUserInputSelectionsFromDrafts(payload, drafts)
@@ -93,7 +93,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 	}, nil
 }
 
-func (a *App) completeUserInputMultiToggle(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func completeUserInputMultiToggle(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(a)
 	requestID := actionStringValue(action, "request_id")
 	questionID := actionStringValue(action, "question_id")

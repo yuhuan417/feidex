@@ -73,7 +73,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	)
 	flushPendingFrontendCardNotifications(a, msg)
 	if len(msg.MergeForwardMessageIDs) > 0 {
-		a.startMergeForwardPrefetch(msg)
+		startMergeForwardPrefetch(a, msg)
 		return nil
 	}
 	if !hasConfiguredBackend(a) {

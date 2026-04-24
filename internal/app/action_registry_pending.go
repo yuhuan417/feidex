@@ -8,10 +8,10 @@ import (
 
 var pendingCardActionHandlers = map[string]cardActionHandler{
 	"user_input.answer": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeUserInputAnswer(action)
+		return completeUserInputAnswer(s.app,action)
 	},
 	"user_input.toggle_multi": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeUserInputMultiToggle(action)
+		return completeUserInputMultiToggle(s.app,action)
 	},
 	"approval.command.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeApprovalAction(action, "approval.command.accept")
@@ -56,12 +56,12 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 		return newReviewFormService(s.app).completeReviewFormSubmit(action)
 	},
 	"elicitation_url.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeElicitationURLAction(action, "elicitation_url.accept")
+		return completeElicitationURLAction(s.app,action, "elicitation_url.accept")
 	},
 	"elicitation_url.decline": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeElicitationURLAction(action, "elicitation_url.decline")
+		return completeElicitationURLAction(s.app,action, "elicitation_url.decline")
 	},
 	"elicitation_url.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeElicitationURLAction(action, "elicitation_url.cancel")
+		return completeElicitationURLAction(s.app,action, "elicitation_url.cancel")
 	},
 }

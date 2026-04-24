@@ -214,7 +214,7 @@ func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
 		newOutboundCardService(a).sendUserInputCard(req.ID, p)
 		return
 	}
-	a.sendUserInputFormCard(req.ID, p)
+	sendUserInputFormCard(a,req.ID, p)
 }
 
 func (r *codexEventRouter) onMcpElicitationRequest(req codexrpc.RequestEnvelope) {
@@ -238,14 +238,14 @@ func (r *codexEventRouter) onMcpElicitationRequest(req codexrpc.RequestEnvelope)
 			replyCodexError(a, req.ID, -32602, "invalid params")
 			return
 		}
-		a.sendElicitationURLCard(req.ID, payload)
+		sendElicitationURLCard(a,req.ID, payload)
 	case "form":
 		var payload elicitationFormPayload
 		if err := json.Unmarshal(req.Params, &payload); err != nil {
 			replyCodexError(a, req.ID, -32602, "invalid params")
 			return
 		}
-		a.sendElicitationFormCard(req.ID, payload)
+		sendElicitationFormCard(a,req.ID, payload)
 	default:
 		replyCodexError(a, req.ID, -32601, "unsupported elicitation mode")
 	}

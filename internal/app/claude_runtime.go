@@ -679,7 +679,7 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	op = newTurnStreamService(r.app).prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
 	}, workspaceCwd)
-	r.app.executeQuietWorkingCardOp(context.Background(), sub, op)
+	executeQuietWorkingCardOp(r.app,context.Background(), sub, op)
 }
 
 func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
@@ -708,7 +708,7 @@ func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudec
 	}
 	sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turnID)
 	if sub != nil {
-		r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
+		executeQuietWorkingCardOp(r.app,context.Background(), sub, boundary.Op)
 	}
 	chunks, ok := updateClaudeOutputSegmentWithReuse(r.app, context.Background(), threadID, turnID, body, boundary.ReuseMessageID)
 	if !ok {
@@ -804,7 +804,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		if finalText != "" {
 			sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
+				executeQuietWorkingCardOp(r.app,context.Background(), sub, boundary.Op)
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
@@ -836,7 +836,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		if finalText != "" {
 			sub, boundary := r.prepareClaudeQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				r.app.executeQuietWorkingCardOp(context.Background(), sub, boundary.Op)
+				executeQuietWorkingCardOp(r.app,context.Background(), sub, boundary.Op)
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)

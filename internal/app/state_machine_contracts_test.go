@@ -173,7 +173,7 @@ func TestMcpElicitationURLLifecycleResumesOnlyAfterServerRequestResolved(t *test
 		t.Fatalf("submission after elicitation request = %+v, want waiting_user_input", updated)
 	}
 
-	resp, err := a.completeElicitationURLAction(&feishu.CardAction{
+	resp, err := completeElicitationURLAction(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "elicit-1"},
 	}, "elicitation_url.accept")
