@@ -30,7 +30,7 @@ func (a *App) completeMaintenanceAsyncAction(
 	patchWarnMsg string,
 ) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	return a.completeAsyncCommandAction(
+	return completeAsyncCommandAction(a,
 		action,
 		sessionKey,
 		rawCommand,

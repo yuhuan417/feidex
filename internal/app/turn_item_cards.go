@@ -78,7 +78,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		if body == "" {
 			body = payload.DetailText
 		}
-		results := s.app.sendReplyCardChunksWithReuse(
+		results := sendReplyCardChunksWithReuse(s.app,
 			ctx,
 			sub,
 			replyTurnItemCardTitle(payload),

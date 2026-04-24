@@ -12,19 +12,19 @@ import (
 const feishuReplyCardMaxPayloadBytes = appdelivery.ReplyCardMaxPayloadBytes
 const feishuReplyCardMaxComponentCount = appdelivery.ReplyCardMaxComponentCount
 
-func (a *App) fitReplyCardChunks(ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
+func fitReplyCardChunks(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if len(chunks) == 0 {
 		return nil
 	}
 	fitted := make([]appdelivery.ReplyCardChunk, 0, len(chunks))
 	for _, chunk := range chunks {
-		fitted = append(fitted, a.expandReplyCardChunkToFit(ctx, sub, title, color, chunk, enablePreview)...)
+		fitted = append(fitted, expandReplyCardChunkToFit(a, ctx, sub, title, color, chunk, enablePreview)...)
 	}
 	return fitted
 }
 
-func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
-	if a.replyCardChunkFits(ctx, sub, title, color, chunk, enablePreview) {
+func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
+	if replyCardChunkFits(a, ctx, sub, title, color, chunk, enablePreview) {
 		return []appdelivery.ReplyCardChunk{chunk}
 	}
 
@@ -40,7 +40,7 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 		blocks = blocks[1:]
 		candidate := current
 		candidate.Body = joinReplyChunkBodies(current.Body, block.Text)
-		if a.replyCardChunkFits(ctx, sub, title, color, candidate, enablePreview) {
+		if replyCardChunkFits(a, ctx, sub, title, color, candidate, enablePreview) {
 			current = candidate
 			continue
 		}
@@ -57,7 +57,7 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 			continue
 		}
 		parts := splitReplyTextBlockToFit(block.Text, func(part string) bool {
-			return a.replyCardChunkFits(ctx, sub, title, color, appdelivery.ReplyCardChunk{
+			return replyCardChunkFits(a, ctx, sub, title, color, appdelivery.ReplyCardChunk{
 				Body:       part,
 				ShowHeader: current.ShowHeader,
 			}, enablePreview)
@@ -86,7 +86,7 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 
 	last := len(result) - 1
 	result[last].FooterLines = append([]string(nil), chunk.FooterLines...)
-	if a.replyCardChunkFits(ctx, sub, title, color, result[last], enablePreview) {
+	if replyCardChunkFits(a, ctx, sub, title, color, result[last], enablePreview) {
 		return result
 	}
 
@@ -95,7 +95,7 @@ func (a *App) expandReplyCardChunkToFit(ctx context.Context, sub *state.Submissi
 		FooterLines: append([]string(nil), chunk.FooterLines...),
 	}
 	result[last].FooterLines = nil
-	if a.replyCardChunkFits(ctx, sub, title, color, result[last], enablePreview) && a.replyCardChunkFits(ctx, sub, title, color, footerOnly, enablePreview) {
+	if replyCardChunkFits(a, ctx, sub, title, color, result[last], enablePreview) && replyCardChunkFits(a, ctx, sub, title, color, footerOnly, enablePreview) {
 		return append(result, footerOnly)
 	}
 	result[last].FooterLines = append([]string(nil), chunk.FooterLines...)
@@ -174,7 +174,7 @@ func joinReplyChunkBodies(current, next string) string {
 	}
 }
 
-func (a *App) replyCardChunkFits(ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
+func replyCardChunkFits(a *App, ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
 	payload, err := json.Marshal(card)

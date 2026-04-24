@@ -18,7 +18,7 @@ type replyChunkRenderSpec struct {
 	EnablePreview bool
 }
 
-func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
+func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
 	if a == nil {
 		return nil
 	}
@@ -27,7 +27,7 @@ func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submi
 		copied[0].Body = prependAttentionMentionMarkdown(copied[0].Body, turnStopAttentionUserID(a, sub, sub.TurnID))
 		chunks = copied
 	}
-	chunks = a.fitReplyCardChunks(ctx, sub, title, color, chunks, enablePreview)
+	chunks = fitReplyCardChunks(a, ctx, sub, title, color, chunks, enablePreview)
 	if len(chunks) == 0 {
 		return nil
 	}
@@ -51,7 +51,7 @@ func (a *App) prepareReplyChunkRenderSpecs(ctx context.Context, sub *state.Submi
 	return specs
 }
 
-func (a *App) sendReplyChunk(ctx context.Context, sub *state.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
+func sendReplyChunk(a *App, ctx context.Context, sub *state.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return appdelivery.SentReplyChunk{}, false
 	}

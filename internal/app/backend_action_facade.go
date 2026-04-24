@@ -79,7 +79,7 @@ func (claudeBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMess
 
 func (claudeBackendActions) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	parentAction := actionStringValue(action, "parent_action")
-	return a.completeAsyncCommandAction(
+	return completeAsyncCommandAction(a,
 		action,
 		sessionKey,
 		"/stop",

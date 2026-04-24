@@ -280,7 +280,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		terminalText = turnCompletionTerminalText(sub.Status, flush.LastError)
 		attentionUserID = turnStopAttentionUserID(a, sub, turnID)
 		if sub.Status == "completed" && !flush.SawFinal {
-			a.sendEmptyFinalCardWithReuse(context.Background(), sub, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
+			sendEmptyFinalCardWithReuse(a,context.Background(), sub, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
 			reuseMessageID = ""
 		}
 	}

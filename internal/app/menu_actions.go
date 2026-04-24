@@ -213,7 +213,7 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 
 func (s menuActionService) completeUpgradeDev(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	return s.app.completeAsyncCommandAction(
+	return completeAsyncCommandAction(s.app,
 		action,
 		sessionKey,
 		"/upgrade dev",

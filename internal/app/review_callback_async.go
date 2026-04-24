@@ -48,7 +48,7 @@ func renderReviewResultCard(a *App, sessionKey, text string) map[string]any {
 }
 
 func (s conversationWorkflowService) completeMenuReviewUncommitted(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeAsyncCommandAction(
+	return completeAsyncCommandAction(s.app,
 		action,
 		sessionKey,
 		"/review",
@@ -64,7 +64,7 @@ func (s conversationWorkflowService) completeMenuReviewUncommitted(action *feish
 }
 
 func (s conversationWorkflowService) completeMenuReviewBase(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeAsyncCommandAction(
+	return completeAsyncCommandAction(s.app,
 		action,
 		sessionKey,
 		"/review base",
@@ -80,7 +80,7 @@ func (s conversationWorkflowService) completeMenuReviewBase(action *feishu.CardA
 }
 
 func (s conversationWorkflowService) completeMenuReviewCommit(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeAsyncCommandAction(
+	return completeAsyncCommandAction(s.app,
 		action,
 		sessionKey,
 		"/review commit",

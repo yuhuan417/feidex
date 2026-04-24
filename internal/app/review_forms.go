@@ -307,7 +307,7 @@ func (s reviewFormService) completeReviewBaseSelect(action *feishu.CardAction) (
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
 		return newReviewFormService(s.app).completeReviewBaseSelectSync(action)
 	}
-	return s.app.completeAsyncRenderedCardAction(
+	return completeAsyncRenderedCardAction(s.app,
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
@@ -350,7 +350,7 @@ func (s reviewFormService) completeReviewCommitSelect(action *feishu.CardAction)
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
 		return newReviewFormService(s.app).completeReviewCommitSelectSync(action)
 	}
-	return s.app.completeAsyncRenderedCardAction(
+	return completeAsyncRenderedCardAction(s.app,
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
@@ -410,7 +410,7 @@ func (s reviewFormService) completeReviewFormSubmit(action *feishu.CardAction) (
 	if action == nil || strings.TrimSpace(action.MessageID) == "" || strings.TrimSpace(payload.Mode) == reviewFormModeCustom {
 		return newReviewFormService(s.app).completeReviewFormSubmitSync(action)
 	}
-	return s.app.completeAsyncRenderedCardAction(
+	return completeAsyncRenderedCardAction(s.app,
 		action,
 		pending.SessionKey,
 		"正在启动 review",

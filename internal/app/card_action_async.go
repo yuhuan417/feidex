@@ -23,7 +23,8 @@ func callbackResponseToastText(resp *callback.CardActionTriggerResponse) string 
 	return strings.TrimSpace(resp.Toast.Content)
 }
 
-func (a *App) completeAsyncCommandAction(
+func completeAsyncCommandAction(
+	a *App,
 	action *feishu.CardAction,
 	sessionKey, rawCommand, fallbackAction, toastText string,
 	preparingCard map[string]any,
@@ -57,7 +58,8 @@ func (a *App) completeAsyncCommandAction(
 	}, nil
 }
 
-func (a *App) completeAsyncRenderedCardAction(
+func completeAsyncRenderedCardAction(
+	a *App,
 	action *feishu.CardAction,
 	sessionKey, toastText string,
 	preparingCard map[string]any,

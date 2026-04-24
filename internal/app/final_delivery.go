@@ -13,10 +13,10 @@ func sendFinalMessages(a *App, ctx context.Context, sub *state.Submission, text 
 }
 
 func sendEmptyFinalCard(a *App, ctx context.Context, sub *state.Submission, footerLines []string) string {
-	return a.sendEmptyFinalCardWithReuse(ctx, sub, footerLines, "")
+	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, "")
 }
 
-func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string {
+func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -41,7 +41,7 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 }
 
 func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {
-	results := a.sendFinalMessagesWithFooterAndReuse(ctx, sub, text, footerLines, inThread, nil)
+	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, inThread, nil)
 	if len(results) == 0 {
 		return nil
 	}
@@ -52,7 +52,7 @@ func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *state.Submiss
 	return ids
 }
 
-func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
@@ -60,7 +60,7 @@ func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *stat
 		return nil
 	}
 	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
-	results := a.sendReplyCardChunksWithReuseIDs(ctx, sub, "最终答复", "green", chunks, inThread, true, reuseMessageIDs)
+	results := sendReplyCardChunksWithReuseIDs(a, ctx, sub, "最终答复", "green", chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil
 	}
