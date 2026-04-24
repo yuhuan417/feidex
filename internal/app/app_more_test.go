@@ -3002,7 +3002,7 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("submission after error notification = %+v", updated)
 	}
 
-	a.updateSubmissionByTurn("thread-1", "turn-1", func(s *state.Submission) { s.Status = "custom" })
+	updateSubmissionByTurn(a, "thread-1", "turn-1", func(s *state.Submission) { s.Status = "custom" })
 	if got := a.store.GetSubmission(sub.ID); got == nil || got.Status != "custom" {
 		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
 	}

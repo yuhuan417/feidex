@@ -242,7 +242,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 			sub,
 			"任务状态",
 			"grey",
-			prependAttentionMentionMarkdown(terminalText, a.turnStopAttentionUserID(sub, turnID)),
+			prependAttentionMentionMarkdown(terminalText, turnStopAttentionUserID(a, sub, turnID)),
 			"turn_terminal",
 			"",
 			reuseMessageID,

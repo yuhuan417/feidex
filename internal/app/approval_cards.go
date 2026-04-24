@@ -13,7 +13,7 @@ func (s outboundCardService) sendApprovalCard(kind string, requestID json.RawMes
 }
 
 func (s outboundCardService) sendApprovalCardWithPayload(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string, requestPayload map[string]any) {
-	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, threadID, turnID)
 	if sub == nil {
 		replyCodexError(s.app, requestID, -32602, "no active session for approval")
 		return
@@ -53,7 +53,7 @@ func (s outboundCardService) sendPermissionsCard(requestID json.RawMessage, thre
 }
 
 func (s outboundCardService) sendPermissionsCardWithPayload(requestID json.RawMessage, threadID, turnID, itemID, body string, permissions map[string]any, requestPayload map[string]any) {
-	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, threadID, turnID)
 	if sub == nil {
 		replyCodexError(s.app, requestID, -32602, "no active session for permissions approval")
 		return
@@ -91,7 +91,7 @@ func (s outboundCardService) sendPermissionsCardWithPayload(requestID json.RawMe
 }
 
 func (s outboundCardService) sendUserInputCard(requestID json.RawMessage, payload toolUserInputPayload) {
-	sessionKey, sub := s.app.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, payload.ThreadID, payload.TurnID)
 	if sub == nil || len(payload.Questions) == 0 {
 		replyCodexError(s.app, requestID, -32602, "no active session for request_user_input")
 		return

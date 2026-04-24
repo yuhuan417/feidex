@@ -16,7 +16,7 @@ import (
 )
 
 func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicitationFormPayload) {
-	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
+	sessionKey, sub := findSubmissionByTurn(a, payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		replyCodexError(a, requestID, -32602, "no active session for elicitation")
 		return
@@ -45,7 +45,7 @@ func (a *App) sendElicitationFormCard(requestID json.RawMessage, payload elicita
 }
 
 func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitationURLPayload) {
-	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
+	sessionKey, sub := findSubmissionByTurn(a, payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		replyCodexError(a, requestID, -32602, "no active session for elicitation")
 		return

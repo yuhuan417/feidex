@@ -642,7 +642,7 @@ func (r *claudeRuntime) prepareClaudeQuietWorkingBoundary(threadID, turnID strin
 	if r == nil || r.app == nil || strings.TrimSpace(turnID) == "" {
 		return nil, quietWorkingBoundary{}
 	}
-	_, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	_, sub := findSubmissionByTurn(r.app, threadID, turnID)
 	if sub == nil {
 		return nil, quietWorkingBoundary{}
 	}
@@ -670,7 +670,7 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	if r == nil || r.app == nil || !quietWorkingCardEnabled(feishuConfig(r.app)) || turnID == "" {
 		return
 	}
-	sessionKey, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(r.app, threadID, turnID)
 	if sub == nil {
 		return
 	}
@@ -934,7 +934,7 @@ func (r *claudeRuntime) handlePermission(ctx context.Context, state *claudeSessi
 		turnID = strings.TrimSpace(turn.TurnID)
 	}
 	state.mu.Unlock()
-	sessionKey, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(r.app, threadID, turnID)
 	if sub == nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "no active submission for approval"}, nil
 	}
@@ -976,7 +976,7 @@ func (r *claudeRuntime) handleAskUserQuestion(ctx context.Context, state *claude
 		turnID = strings.TrimSpace(turn.TurnID)
 	}
 	state.mu.Unlock()
-	sessionKey, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(r.app, threadID, turnID)
 	if sub == nil {
 		return nil, fmt.Errorf("no active submission for question")
 	}
@@ -1033,7 +1033,7 @@ func (r *claudeRuntime) handleExitPlanMode(ctx context.Context, state *claudeSes
 	planFilePath := strings.TrimSpace(state.lastPlanFilePath)
 	startedAt := state.startedAt
 	state.mu.Unlock()
-	sessionKey, sub := r.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(r.app, threadID, turnID)
 	if sub == nil {
 		return "", fmt.Errorf("no active submission for plan confirmation")
 	}

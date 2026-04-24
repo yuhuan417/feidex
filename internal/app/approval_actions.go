@@ -228,7 +228,7 @@ func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
 	if newRuntimeStateService(a).hasOpenPendingRequestForTurn(pending.ThreadID, pending.TurnID, pending.ID) {
 		return
 	}
-	_, sub := a.findSubmissionByTurn(pending.ThreadID, pending.TurnID)
+	_, sub := findSubmissionByTurn(a, pending.ThreadID, pending.TurnID)
 	if sub == nil {
 		return
 	}

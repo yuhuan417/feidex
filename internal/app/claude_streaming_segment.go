@@ -24,7 +24,7 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 	if body == "" {
 		return nil, false
 	}
-	_, sub := a.findSubmissionByTurn(threadID, turnID)
+	_, sub := findSubmissionByTurn(a, threadID, turnID)
 	if sub == nil {
 		return nil, false
 	}

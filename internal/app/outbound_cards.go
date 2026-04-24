@@ -45,7 +45,7 @@ func (r cardRenderer) prepareCardMarkdown(sub *state.Submission, text string) st
 	if sub == nil || r.app == nil {
 		return normalizeCardMarkdown(text)
 	}
-	return r.app.prepareSubmissionCardMarkdown(sub, text)
+	return prepareSubmissionCardMarkdown(r.app, sub, text)
 }
 
 func (r cardRenderer) renderReplyMarkdownCard(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {

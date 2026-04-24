@@ -23,7 +23,7 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
 		return ""
 	}
-	body := prependAttentionMentionMarkdown("", a.turnStopAttentionUserID(sub, sub.TurnID))
+	body := prependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, body, nil, true)
 	appendReplyCardFooter(card, footerLines)
 	if strings.TrimSpace(reuseMessageID) != "" {

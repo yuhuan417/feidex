@@ -29,7 +29,7 @@ func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
 	}
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-old", "sess-1", "sub-old")
 
-	sessionKey, sub := a.findSubmissionByTurn("thread-1", "turn-old")
+	sessionKey, sub := findSubmissionByTurn(a, "thread-1", "turn-old")
 	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-old" {
 		t.Fatalf("findSubmissionByTurn() = %q %+v, want sub-old", sessionKey, sub)
 	}

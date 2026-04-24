@@ -7,9 +7,9 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state.Submission)) {
+func updateSubmissionByTurn(a *App, threadID, turnID string, mutate func(*state.Submission)) {
 	appState := appState(a)
-	_, sub := a.findSubmissionByTurn(threadID, turnID)
+	_, sub := findSubmissionByTurn(a, threadID, turnID)
 	if sub == nil {
 		return
 	}
@@ -42,7 +42,7 @@ func turnCompletionTerminalText(status, lastError string) string {
 	}
 }
 
-func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+func findSubmissionByTurn(a *App, threadID, turnID string) (string, *state.Submission) {
 	appState := appState(a)
 	if strings.TrimSpace(turnID) != "" {
 		if sessionKey, sub := newRuntimeStateService(a).boundSubmissionForTurn(turnID); sub != nil {
@@ -81,7 +81,7 @@ func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 	return "", nil
 }
 
-func (a *App) prepareSubmissionCardMarkdown(sub *state.Submission, text string) string {
+func prepareSubmissionCardMarkdown(a *App, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""

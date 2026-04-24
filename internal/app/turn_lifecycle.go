@@ -230,7 +230,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 	a := w.app
 	appState := appState(a)
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(a, threadID, turnID)
 	if sub == nil {
 		sessionKey, sub = w.bindPendingSubmissionForTurnCompletion(threadID, turnID)
 	}
@@ -278,7 +278,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 			"status", sub.Status,
 		)
 		terminalText = turnCompletionTerminalText(sub.Status, flush.LastError)
-		attentionUserID = a.turnStopAttentionUserID(sub, turnID)
+		attentionUserID = turnStopAttentionUserID(a, sub, turnID)
 		if sub.Status == "completed" && !flush.SawFinal {
 			a.sendEmptyFinalCardWithReuse(context.Background(), sub, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
 			reuseMessageID = ""

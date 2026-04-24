@@ -118,7 +118,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 				return
 			}
 			newTurnStreamService(a).recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
-			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
+			updateSubmissionByTurn(a, p.ThreadID, p.TurnID, func(sub *state.Submission) {
 				sub.Status = "failed"
 			})
 		}
@@ -180,7 +180,7 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
 	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	workspaceCwd := ""
-	if _, sub := a.findSubmissionByTurn(threadID, turnID); sub != nil {
+	if _, sub := findSubmissionByTurn(a, threadID, turnID); sub != nil {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 			workspaceCwd = ws.Cwd
 		}

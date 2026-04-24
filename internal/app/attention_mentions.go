@@ -29,14 +29,14 @@ func prependAttentionMentionMarkdown(body, userID string) string {
 	return mention + "\n\n" + body
 }
 
-func (a *App) turnStopAttentionUserID(sub *state.Submission, turnID string) string {
-	if !a.shouldMentionOnTurnStop(sub, turnID) {
+func turnStopAttentionUserID(a *App, sub *state.Submission, turnID string) string {
+	if !shouldMentionOnTurnStop(a, sub, turnID) {
 		return ""
 	}
 	return strings.TrimSpace(sub.UserID)
 }
 
-func (a *App) shouldMentionOnTurnStop(sub *state.Submission, turnID string) bool {
+func shouldMentionOnTurnStop(a *App, sub *state.Submission, turnID string) bool {
 	if a == nil || sub == nil || strings.TrimSpace(sub.UserID) == "" {
 		return false
 	}

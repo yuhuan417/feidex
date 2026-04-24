@@ -82,7 +82,7 @@ func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context,
 }
 
 func (s turnStreamService) updatePendingPlan(turnID, plan string) {
-	sessionKey, sub := s.app.findSubmissionByTurn("", turnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, "", turnID)
 	if sub == nil {
 		return
 	}
@@ -94,7 +94,7 @@ func (s turnStreamService) updatePendingPlan(turnID, plan string) {
 }
 
 func (s turnStreamService) recordTurnError(threadID, turnID, message string) {
-	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, threadID, turnID)
 	if sub == nil {
 		return
 	}
@@ -115,7 +115,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 	if s.app.completeStandaloneCompactItem(threadID, turnID, item) {
 		return
 	}
-	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, threadID, turnID)
 	if sub == nil {
 		return
 	}
@@ -190,7 +190,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 }
 
 func (s turnStreamService) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
-	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := findSubmissionByTurn(s.app, threadID, turnID)
 	if sub == nil {
 		s.deleteTurnStream(turnID)
 		newRuntimeStateService(s.app).clearTurnItemStates(turnID)

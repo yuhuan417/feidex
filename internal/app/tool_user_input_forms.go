@@ -17,7 +17,7 @@ type toolUserInputFormDrafts struct {
 }
 
 func (a *App) sendUserInputFormCard(requestID json.RawMessage, payload toolUserInputPayload) {
-	sessionKey, sub := a.findSubmissionByTurn(payload.ThreadID, payload.TurnID)
+	sessionKey, sub := findSubmissionByTurn(a, payload.ThreadID, payload.TurnID)
 	if sub == nil {
 		replyCodexError(a, requestID, -32602, "no active session for request_user_input")
 		return

@@ -145,7 +145,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create submission: %v", err)
 	}
-	sessionKey, sub := a.findSubmissionByTurn("thread-1", "")
+	sessionKey, sub := findSubmissionByTurn(a, "thread-1", "")
 	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-1" {
 		t.Fatalf("unexpected fallback result: session=%q sub=%#v", sessionKey, sub)
 	}
