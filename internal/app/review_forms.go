@@ -62,7 +62,7 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 	payload := reviewPendingPayload{Mode: strings.TrimSpace(mode)}
 	switch payload.Mode {
 	case reviewFormModeBase:
-		options, err := a.listReviewBranches(ws.Cwd)
+		options, err := newReviewGitService(a).listReviewBranches(ws.Cwd)
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 		}
 		payload.Branch = options[0].Name
 	case reviewFormModeCommit:
-		options, err := a.listReviewCommits(ws.Cwd, 100)
+		options, err := newReviewGitService(a).listReviewCommits(ws.Cwd, 100)
 		if err != nil {
 			return err
 		}
@@ -124,11 +124,11 @@ func (a *App) renderReviewFormCard(sessionKey, requestID string, payload reviewP
 }
 
 func (a *App) renderReviewBaseCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
-	ws := a.workspaceForSessionKey(sessionKey)
+	ws := newReviewGitService(a).workspaceForSessionKey(sessionKey)
 	if ws == nil {
 		return nil, fmt.Errorf("current workspace not found")
 	}
-	options, err := a.listReviewBranches(ws.Cwd)
+	options, err := newReviewGitService(a).listReviewBranches(ws.Cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -184,11 +184,11 @@ func (a *App) renderReviewBaseCard(sessionKey, requestID string, payload reviewP
 }
 
 func (a *App) renderReviewCommitCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
-	ws := a.workspaceForSessionKey(sessionKey)
+	ws := newReviewGitService(a).workspaceForSessionKey(sessionKey)
 	if ws == nil {
 		return nil, fmt.Errorf("current workspace not found")
 	}
-	options, err := a.listReviewCommits(ws.Cwd, 100)
+	options, err := newReviewGitService(a).listReviewCommits(ws.Cwd, 100)
 	if err != nil {
 		return nil, err
 	}
@@ -374,8 +374,8 @@ func (a *App) completeReviewCommitSelectSync(action *feishu.CardAction) (*callba
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 commit"}}, nil
 	}
 	payload.CommitSHA = selected
-	if ws := a.workspaceForSessionKey(pending.SessionKey); ws != nil {
-		options, err := a.listReviewCommits(ws.Cwd, 100)
+	if ws := newReviewGitService(a).workspaceForSessionKey(pending.SessionKey); ws != nil {
+		options, err := newReviewGitService(a).listReviewCommits(ws.Cwd, 100)
 		if err == nil {
 			for _, option := range options {
 				if option.SHA == selected {

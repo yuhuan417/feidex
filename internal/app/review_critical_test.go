@@ -13,7 +13,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	repo, commits := initReviewGitRepoWithCommits(t, a.cfg.Workspaces[0].Cwd)
 
-	resolvedBase, err := a.resolveReviewTarget(repo, reviewTargetSpec{
+	resolvedBase, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{
 		Type:   reviewTargetBaseBranch,
 		Branch: "main",
 	})
@@ -27,7 +27,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 		t.Fatalf("reviewSubmissionInputText(base) = %q", got)
 	}
 
-	resolvedCommit, err := a.resolveReviewTarget(repo, reviewTargetSpec{
+	resolvedCommit, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{
 		Type:      reviewTargetCommit,
 		CommitSHA: commits[1][:8],
 	})
@@ -42,7 +42,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	}
 
 	writeFile(t, repo+"/main.go", "package main\n\nfunc main() { println(\"dirty\") }\n")
-	resolvedUncommitted, err := a.resolveReviewTarget(repo, reviewTargetSpec{Type: reviewTargetUncommitted})
+	resolvedUncommitted, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{Type: reviewTargetUncommitted})
 	if err != nil {
 		t.Fatalf("resolveReviewTarget(uncommitted) error = %v", err)
 	}
@@ -50,7 +50,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 		t.Fatalf("resolved uncommitted target = %+v, want uncommitted", resolvedUncommitted)
 	}
 
-	resolvedCustom, err := a.resolveReviewTarget(repo, reviewTargetSpec{
+	resolvedCustom, err := newReviewGitService(a).resolveReviewTarget(repo, reviewTargetSpec{
 		Type:         reviewTargetCustom,
 		Instructions: "focus on regressions",
 	})

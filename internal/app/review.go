@@ -139,7 +139,7 @@ func (a *App) startInlineReview(msg *feishu.InboundMessage, target reviewTargetS
 	if sess != nil && len(sess.StagedImages) > 0 {
 		return "", fmt.Errorf("当前有暂存图片输入，请先发送或丢弃")
 	}
-	resolved, err := a.resolveReviewTarget(ws.Cwd, target)
+	resolved, err := newReviewGitService(a).resolveReviewTarget(ws.Cwd, target)
 	if err != nil {
 		return "", err
 	}

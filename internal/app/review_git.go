@@ -27,14 +27,14 @@ type reviewCommitOption struct {
 	Subject  string
 }
 
-func (a *App) resolveReviewTarget(cwd string, target reviewTargetSpec) (reviewTargetSpec, error) {
+func (s reviewGitService) resolveReviewTarget(cwd string, target reviewTargetSpec) (reviewTargetSpec, error) {
 	target.Type = strings.TrimSpace(target.Type)
 	switch target.Type {
 	case reviewTargetUncommitted:
-		if _, err := a.gitRepoRoot(cwd); err != nil {
+		if _, err := newReviewGitService(s.app).gitRepoRoot(cwd); err != nil {
 			return reviewTargetSpec{}, err
 		}
-		hasChanges, err := a.gitHasWorkingTreeChanges(cwd)
+		hasChanges, err := newReviewGitService(s.app).gitHasWorkingTreeChanges(cwd)
 		if err != nil {
 			return reviewTargetSpec{}, err
 		}
@@ -43,21 +43,21 @@ func (a *App) resolveReviewTarget(cwd string, target reviewTargetSpec) (reviewTa
 		}
 		return reviewTargetSpec{Type: reviewTargetUncommitted}, nil
 	case reviewTargetBaseBranch:
-		if _, err := a.gitRepoRoot(cwd); err != nil {
+		if _, err := newReviewGitService(s.app).gitRepoRoot(cwd); err != nil {
 			return reviewTargetSpec{}, err
 		}
 		target.Branch = strings.TrimSpace(target.Branch)
 		if target.Branch == "" {
 			return reviewTargetSpec{}, fmt.Errorf("base branch 不能为空")
 		}
-		if err := a.gitVerifyCommitish(cwd, target.Branch); err != nil {
+		if err := newReviewGitService(s.app).gitVerifyCommitish(cwd, target.Branch); err != nil {
 			return reviewTargetSpec{}, fmt.Errorf("branch 不存在或不可见")
 		}
-		hasWorkingChanges, err := a.gitHasWorkingTreeChanges(cwd)
+		hasWorkingChanges, err := newReviewGitService(s.app).gitHasWorkingTreeChanges(cwd)
 		if err != nil {
 			return reviewTargetSpec{}, err
 		}
-		hasCommittedDiff, err := a.gitHasDiffFromBase(cwd, target.Branch)
+		hasCommittedDiff, err := newReviewGitService(s.app).gitHasDiffFromBase(cwd, target.Branch)
 		if err != nil {
 			return reviewTargetSpec{}, err
 		}
@@ -66,20 +66,20 @@ func (a *App) resolveReviewTarget(cwd string, target reviewTargetSpec) (reviewTa
 		}
 		return reviewTargetSpec{Type: reviewTargetBaseBranch, Branch: target.Branch}, nil
 	case reviewTargetCommit:
-		if _, err := a.gitRepoRoot(cwd); err != nil {
+		if _, err := newReviewGitService(s.app).gitRepoRoot(cwd); err != nil {
 			return reviewTargetSpec{}, err
 		}
 		target.CommitSHA = strings.TrimSpace(target.CommitSHA)
 		if target.CommitSHA == "" {
 			return reviewTargetSpec{}, fmt.Errorf("commit 不能为空")
 		}
-		resolvedSHA, err := a.gitResolveCommitSHA(cwd, target.CommitSHA)
+		resolvedSHA, err := newReviewGitService(s.app).gitResolveCommitSHA(cwd, target.CommitSHA)
 		if err != nil {
 			return reviewTargetSpec{}, fmt.Errorf("commit 不存在或不唯一")
 		}
 		title := strings.TrimSpace(target.CommitTitle)
 		if title == "" {
-			title, _ = a.gitCommitTitle(cwd, resolvedSHA)
+			title, _ = newReviewGitService(s.app).gitCommitTitle(cwd, resolvedSHA)
 		}
 		return reviewTargetSpec{Type: reviewTargetCommit, CommitSHA: resolvedSHA, CommitTitle: title}, nil
 	case reviewTargetCustom:
@@ -137,26 +137,26 @@ func reviewCommitExists(options []reviewCommitOption, sha string) bool {
 	return false
 }
 
-func (a *App) workspaceForSessionKey(sessionKey string) *config.Workspace {
-	sess := a.appState().session(sessionKey)
-	workspaceID := a.defaultWorkspaceID()
+func (s reviewGitService) workspaceForSessionKey(sessionKey string) *config.Workspace {
+	sess := s.app.appState().session(sessionKey)
+	workspaceID := s.app.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = strings.TrimSpace(sess.WorkspaceID)
 	}
-	return config.FindWorkspace(a.cfg, workspaceID)
+	return config.FindWorkspace(s.app.cfg, workspaceID)
 }
 
-func (a *App) listReviewBranches(cwd string) ([]reviewBranchOption, error) {
-	if _, err := a.gitRepoRoot(cwd); err != nil {
+func (s reviewGitService) listReviewBranches(cwd string) ([]reviewBranchOption, error) {
+	if _, err := newReviewGitService(s.app).gitRepoRoot(cwd); err != nil {
 		return nil, err
 	}
-	output, err := a.gitOutput(cwd, "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)"+gitFieldSep+"%(committerdate:unix)"+gitRecordSep, "refs/heads")
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)"+gitFieldSep+"%(committerdate:unix)"+gitRecordSep, "refs/heads")
 	if err != nil {
 		return nil, err
 	}
-	currentBranch, _ := a.gitCurrentBranch(cwd)
+	currentBranch, _ := newReviewGitService(s.app).gitCurrentBranch(cwd)
 	defaultBranch := ""
-	if value, err := a.gitDefaultBranch(cwd); err == nil {
+	if value, err := newReviewGitService(s.app).gitDefaultBranch(cwd); err == nil {
 		defaultBranch = value
 	}
 	options := make([]reviewBranchOption, 0)
@@ -197,14 +197,14 @@ func (a *App) listReviewBranches(cwd string) ([]reviewBranchOption, error) {
 	return options, nil
 }
 
-func (a *App) listReviewCommits(cwd string, limit int) ([]reviewCommitOption, error) {
-	if _, err := a.gitRepoRoot(cwd); err != nil {
+func (s reviewGitService) listReviewCommits(cwd string, limit int) ([]reviewCommitOption, error) {
+	if _, err := newReviewGitService(s.app).gitRepoRoot(cwd); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
 		limit = 100
 	}
-	output, err := a.gitOutput(cwd, "log", "--date=short", "--pretty=format:%H"+gitFieldSep+"%h"+gitFieldSep+"%cd"+gitFieldSep+"%s"+gitRecordSep, "-n", strconv.Itoa(limit))
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "log", "--date=short", "--pretty=format:%H"+gitFieldSep+"%h"+gitFieldSep+"%cd"+gitFieldSep+"%s"+gitRecordSep, "-n", strconv.Itoa(limit))
 	if err != nil {
 		return nil, err
 	}
@@ -245,24 +245,24 @@ func parseGitStructuredOutput(output string) []string {
 	return out
 }
 
-func (a *App) gitRepoRoot(cwd string) (string, error) {
-	output, err := a.gitOutput(cwd, "rev-parse", "--show-toplevel")
+func (s reviewGitService) gitRepoRoot(cwd string) (string, error) {
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", fmt.Errorf("当前 workspace 不是 git 仓库")
 	}
 	return strings.TrimSpace(output), nil
 }
 
-func (a *App) gitCurrentBranch(cwd string) (string, error) {
-	output, err := a.gitOutput(cwd, "branch", "--show-current")
+func (s reviewGitService) gitCurrentBranch(cwd string) (string, error) {
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "branch", "--show-current")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(output), nil
 }
 
-func (a *App) gitDefaultBranch(cwd string) (string, error) {
-	output, err := a.gitOutput(cwd, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+func (s reviewGitService) gitDefaultBranch(cwd string) (string, error) {
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
 	if err != nil {
 		return "", err
 	}
@@ -271,40 +271,40 @@ func (a *App) gitDefaultBranch(cwd string) (string, error) {
 	return strings.TrimSpace(branch), nil
 }
 
-func (a *App) gitVerifyCommitish(cwd, ref string) error {
-	_, err := a.gitOutput(cwd, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+func (s reviewGitService) gitVerifyCommitish(cwd, ref string) error {
+	_, err := newReviewGitService(s.app).gitOutput(cwd, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	return err
 }
 
-func (a *App) gitResolveCommitSHA(cwd, ref string) (string, error) {
-	output, err := a.gitOutput(cwd, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+func (s reviewGitService) gitResolveCommitSHA(cwd, ref string) (string, error) {
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(output), nil
 }
 
-func (a *App) gitCommitTitle(cwd, sha string) (string, error) {
-	output, err := a.gitOutput(cwd, "log", "-1", "--format=%s", sha)
+func (s reviewGitService) gitCommitTitle(cwd, sha string) (string, error) {
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "log", "-1", "--format=%s", sha)
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(output), nil
 }
 
-func (a *App) gitHasWorkingTreeChanges(cwd string) (bool, error) {
-	output, err := a.gitOutput(cwd, "status", "--porcelain=v1", "--untracked-files=all")
+func (s reviewGitService) gitHasWorkingTreeChanges(cwd string) (bool, error) {
+	output, err := newReviewGitService(s.app).gitOutput(cwd, "status", "--porcelain=v1", "--untracked-files=all")
 	if err != nil {
 		return false, err
 	}
 	return strings.TrimSpace(output) != "", nil
 }
 
-func (a *App) gitHasDiffFromBase(cwd, branch string) (bool, error) {
-	return a.gitCommandHasDiff(cwd, "diff", "--quiet", branch+"...HEAD", "--")
+func (s reviewGitService) gitHasDiffFromBase(cwd, branch string) (bool, error) {
+	return newReviewGitService(s.app).gitCommandHasDiff(cwd, "diff", "--quiet", branch+"...HEAD", "--")
 }
 
-func (a *App) gitCommandHasDiff(cwd string, args ...string) (bool, error) {
+func (s reviewGitService) gitCommandHasDiff(cwd string, args ...string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
@@ -326,7 +326,7 @@ func (a *App) gitCommandHasDiff(cwd string, args ...string) (bool, error) {
 	return false, fmt.Errorf("git %s failed: %s", strings.Join(args, " "), message)
 }
 
-func (a *App) gitOutput(cwd string, args ...string) (string, error) {
+func (s reviewGitService) gitOutput(cwd string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
