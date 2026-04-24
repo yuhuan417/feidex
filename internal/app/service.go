@@ -80,7 +80,7 @@ func (s *Service) Stop(ctx context.Context) error {
 func stopApps(ctx context.Context, apps []*App) error {
 	var firstErr error
 	for i := len(apps) - 1; i >= 0; i-- {
-		if err := apps[i].Stop(ctx); err != nil && firstErr == nil {
+		if err := appStop(apps[i], ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}

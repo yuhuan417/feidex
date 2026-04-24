@@ -774,24 +774,24 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	fc.startErr = errors.New("codex start failed")
-	if err := a.Start(context.Background()); err == nil {
+	if err := appStart(a, context.Background()); err == nil {
 		t.Fatal("expected Start() to fail on codex start error")
 	}
 
 	a, ff, fc = newTestApp(t)
 	ff.startErr = errors.New("feishu start failed")
-	if err := a.Start(context.Background()); err == nil {
+	if err := appStart(a, context.Background()); err == nil {
 		t.Fatal("expected Start() to fail on feishu start error")
 	}
 
 	a, ff, fc = newTestApp(t)
-	if err := a.Start(context.Background()); err != nil {
+	if err := appStart(a, context.Background()); err != nil {
 		t.Fatalf("Start(success) error = %v", err)
 	}
 	if !fc.started || !ff.started {
 		t.Fatalf("expected both clients to start, codex=%v feishu=%v", fc.started, ff.started)
 	}
-	if err := a.Stop(context.Background()); err != nil {
+	if err := appStop(a, context.Background()); err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
 	if !fc.closed || !ff.stopped {
@@ -968,7 +968,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 		t.Fatalf("replyError() did not send fallback text: %+v", ff.sentTexts)
 	}
 
-	a.handleBotMenu(&feishu.BotMenuClick{UserID: "u-1", Command: "/unknown"})
+	appHandleBotMenu(a,&feishu.BotMenuClick{UserID: "u-1", Command: "/unknown"})
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[len(ff.sentTexts)-1], "命令执行失败") {
 		t.Fatalf("handleBotMenu() did not send command failure: %+v", ff.sentTexts)
 	}
@@ -1440,8 +1440,8 @@ func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
 		t.Fatalf("onMcpElicitationRequest(unsupported mode) = %+v", fc.replyErrors)
 	}
 
-	a.handleFeishuRecall(nil)
-	a.handleFeishuReaction(&feishu.MessageReaction{EmojiType: "smile"})
+	appHandleFeishuRecall(a,nil)
+	appHandleFeishuReaction(a,&feishu.MessageReaction{EmojiType: "smile"})
 }
 
 func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
@@ -2910,10 +2910,10 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("buildTurnSandboxPolicy(bad) = %+v, want nil", got)
 	}
 
-	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
+	if _, err := startSubmissionTurn(a,context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
 	}
-	if _, err := a.startSubmissionTurn(context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
+	if _, err := startSubmissionTurn(a,context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
@@ -2967,7 +2967,7 @@ func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
 		return nil
 	}
 	sub := &state.Submission{ID: "sub-1", InputText: "hello"}
-	if _, err := a.startSubmissionTurn(context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", ""); err != nil {
+	if _, err := startSubmissionTurn(a,context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", ""); err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
 	if gotParams == nil {
@@ -3011,7 +3011,7 @@ func TestNotificationHelpers(t *testing.T) {
 	if got := truncate("  abcdef  ", 3); got != "abc..." {
 		t.Fatalf("truncate() = %q, want abc...", got)
 	}
-	if _, err := a.handleCardAction(&feishu.CardAction{Name: "unknown"}); err != nil {
+	if _, err := appHandleCardAction(a,&feishu.CardAction{Name: "unknown"}); err != nil {
 		t.Fatalf("handleCardAction() error = %v", err)
 	}
 	if len(fc.replyErrors) != 0 {
@@ -3056,7 +3056,7 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 		return nil
 	}
 
-	a.handleFeishuMessage(&feishu.InboundMessage{
+	appHandleFeishuMessage(a,&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",
@@ -3131,7 +3131,7 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 		return nil
 	}
 
-	a.handleFeishuMessage(&feishu.InboundMessage{
+	appHandleFeishuMessage(a,&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",
@@ -3195,7 +3195,7 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 		RootMessageID:   "root-msg",
 		ParentMessageID: "target-msg",
 	}
-	a.handleFeishuMessage(msg)
+	appHandleFeishuMessage(a,msg)
 
 	if steerAttempts != 1 {
 		t.Fatalf("steer attempts = %d, want 1", steerAttempts)
@@ -3372,7 +3372,7 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 		RootMessageID:   "reply-root",
 		ParentMessageID: "some-parent",
 	}
-	a.handleFeishuMessage(msg)
+	appHandleFeishuMessage(a,msg)
 
 	if steerAttempts != 1 {
 		t.Fatalf("steer attempts = %d, want 1", steerAttempts)
@@ -3679,13 +3679,13 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		t.Fatalf("UpsertSession(with pending) error = %v", err)
 	}
 
-	a.handleFeishuRecall(&feishu.MessageRecall{MessageID: "staged-msg", ChatID: "chat-1"})
+	appHandleFeishuRecall(a,&feishu.MessageRecall{MessageID: "staged-msg", ChatID: "chat-1"})
 	updated := a.store.GetSession(sessionKey)
 	if len(updated.StagedImages) != 0 {
 		t.Fatalf("handleFeishuRecall() did not discard staged image: %+v", updated.StagedImages)
 	}
 
-	a.handleFeishuReaction(&feishu.MessageReaction{MessageID: "queued-msg", EmojiType: discardReactionEmoji, ChatID: "chat-1"})
+	appHandleFeishuReaction(a,&feishu.MessageReaction{MessageID: "queued-msg", EmojiType: discardReactionEmoji, ChatID: "chat-1"})
 	updated = a.store.GetSession(sessionKey)
 	if len(updated.Queue) != 0 {
 		t.Fatalf("handleFeishuReaction() did not discard queued submission: %+v", updated.Queue)

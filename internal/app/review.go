@@ -135,13 +135,13 @@ func startInlineReview(a *App, msg *feishu.InboundMessage, target appreview.Targ
 	if sess != nil {
 		threadID = strings.TrimSpace(sess.ActiveThreadID)
 	}
-	if err := a.enqueueReviewSubmission(msg, sessionKey, ws, threadID, resolved); err != nil {
+	if err := enqueueReviewSubmission(a,msg, sessionKey, ws, threadID, resolved); err != nil {
 		return "", err
 	}
 	return appreview.ConfirmationText(resolved), nil
 }
 
-func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
+func enqueueReviewSubmission(a *App, msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
 	if a == nil || a.store == nil {
 		return fmt.Errorf("store not initialized")
 	}
@@ -215,7 +215,7 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 }
 
 
-func (a *App) startSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
+func startSubmissionReview(a *App, ctx context.Context, threadID string, sub *state.Submission) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}

@@ -130,19 +130,25 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		}
 		handle.install(app)
 	}
-	app.feishu.SetHandlers(app.handleFeishuMessage, app.handleCardAction, app.handleBotMenu, app.handleFeishuRecall, app.handleFeishuReaction)
+	app.feishu.SetHandlers(
+		func(msg *feishu.InboundMessage) { appHandleFeishuMessage(app, msg) },
+		func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) { return appHandleCardAction(app, action) },
+		func(click *feishu.BotMenuClick) { appHandleBotMenu(app, click) },
+		func(recall *feishu.MessageRecall) { appHandleFeishuRecall(app, recall) },
+		func(reaction *feishu.MessageReaction) { appHandleFeishuReaction(app, reaction) },
+	)
 	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }
 
-func (a *App) Start(ctx context.Context) error {
-	if err := startBackend(a,ctx); err != nil {
+func appStart(a *App, ctx context.Context) error {
+	if err := startBackend(a, ctx); err != nil {
 		return err
 	}
-	startInboundDeduperLoop(a,ctx)
+	startInboundDeduperLoop(a, ctx)
 	recoverSharedRuntimeState(a)
 	recoverFrontendRuntimeState(a)
-	if err := startFrontend(a,ctx); err != nil {
+	if err := startFrontend(a, ctx); err != nil {
 		return err
 	}
 	newRuntimeMaintenanceService(a).startDriveArtifactGCLoop(ctx)
@@ -150,7 +156,7 @@ func (a *App) Start(ctx context.Context) error {
 	return nil
 }
 
-func (a *App) Stop(ctx context.Context) error {
+func appStop(a *App, ctx context.Context) error {
 	a.feishu.Stop()
 	if a == nil {
 		return nil
@@ -187,15 +193,15 @@ func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, e
 	return params
 }
 
-func (a *App) handleFeishuMessage(msg *feishu.InboundMessage) {
+func appHandleFeishuMessage(a *App, msg *feishu.InboundMessage) {
 	newFeishuEventRouter(a).handleMessage(msg)
 }
 
-func (a *App) handleFeishuRecall(recall *feishu.MessageRecall) {
+func appHandleFeishuRecall(a *App, recall *feishu.MessageRecall) {
 	newFeishuEventRouter(a).handleRecall(recall)
 }
 
-func (a *App) handleFeishuReaction(reaction *feishu.MessageReaction) {
+func appHandleFeishuReaction(a *App, reaction *feishu.MessageReaction) {
 	newFeishuEventRouter(a).handleReaction(reaction)
 }
 
@@ -215,11 +221,11 @@ func nonZero(values ...int64) int64 {
 	return 0
 }
 
-func (a *App) handleBotMenu(click *feishu.BotMenuClick) {
+func appHandleBotMenu(a *App, click *feishu.BotMenuClick) {
 	newFeishuEventRouter(a).handleBotMenu(click)
 }
 
-func (a *App) handleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func appHandleCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return dispatchCardAction(a, action)
 }
 
@@ -248,7 +254,7 @@ func buildTurnSandboxPolicy(mode string) map[string]any {
 	}
 }
 
-func (a *App) startSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error) {
+func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}

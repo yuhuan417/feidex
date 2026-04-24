@@ -11,7 +11,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) forkClaudeActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func forkClaudeActiveConversation(a *App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
 	if a == nil || a.claude == nil {
 		return "", fmt.Errorf("claude backend not initialized")
 	}
@@ -33,7 +33,7 @@ func (a *App) forkClaudeActiveConversation(sessionKey string, sess *state.Sessio
 	return forkedID, nil
 }
 
-func (a *App) forkCodexActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func forkCodexActiveConversation(a *App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
 	client, err := requireCodexClient(a)
 	if err != nil {
 		return "", err

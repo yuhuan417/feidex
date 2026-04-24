@@ -18,7 +18,7 @@ func claudeRequestIDStored(requestID string) string {
 	return mustJSON(requestID)
 }
 
-func (a *App) sendClaudeApprovalCardWithPayload(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude approval delivery unavailable")
 	}
@@ -176,7 +176,7 @@ func describeClaudeSessionPermissionUpdates(updates []map[string]any) string {
 	return "应用建议（当前会话）"
 }
 
-func (a *App) sendClaudeUserInputCard(requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
+func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
 	if a == nil || a.feishu == nil || sub == nil || len(payload.Questions) == 0 {
 		return fmt.Errorf("claude question delivery unavailable")
 	}
@@ -215,7 +215,7 @@ func (a *App) sendClaudeUserInputCard(requestID, sessionKey string, sub *state.S
 	})
 }
 
-func (a *App) sendClaudeUserInputFormCard(requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
+func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude question delivery unavailable")
 	}
@@ -240,7 +240,7 @@ func (a *App) sendClaudeUserInputFormCard(requestID, sessionKey string, sub *sta
 	})
 }
 
-func (a *App) sendClaudePlanModeCard(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
+func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("claude plan confirmation unavailable")
 	}

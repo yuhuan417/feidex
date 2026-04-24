@@ -60,11 +60,11 @@ func (b codexConversationBackend) startWorkspaceThread(sessionKey string, sess *
 }
 
 func (b codexConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	return b.app.resumeCodexSelectedThread(sessionKey, sess, ws, selection)
+	return resumeCodexSelectedThread(b.app,sessionKey, sess, ws, selection)
 }
 
 func (b codexConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	return b.app.forkCodexActiveConversation(sessionKey, sess, ws)
+	return forkCodexActiveConversation(b.app,sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) forkReplyMessage(string) string {
@@ -96,15 +96,15 @@ func (b codexConversationBackend) renderUsageBody(sess *state.Session) string {
 }
 
 func (b codexConversationBackend) interruptActiveTurn(ctx context.Context, _ string, sess *state.Session) error {
-	return b.app.interruptCodexActiveTurn(ctx, sess)
+	return interruptCodexActiveTurn(b.app,ctx, sess)
 }
 
 func (b codexConversationBackend) continueActiveTurn(sessionKey, text string) error {
-	return b.app.continueCodexActiveTurn(sessionKey, text)
+	return continueCodexActiveTurn(b.app,sessionKey, text)
 }
 
 func (b codexConversationBackend) tryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
-	return b.app.tryCodexReplyContinuation(msg, link, sessionKey, sess)
+	return tryCodexReplyContinuation(b.app,msg, link, sessionKey, sess)
 }
 
 func (b codexConversationBackend) startQueuedSubmission(w *lifecycleCoordinator, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
@@ -128,11 +128,11 @@ func (b claudeConversationBackend) startWorkspaceThread(sessionKey string, sess 
 }
 
 func (b claudeConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	return b.app.resumeClaudeSelectedThread(sessionKey, sess, ws, selection)
+	return resumeClaudeSelectedThread(b.app,sessionKey, sess, ws, selection)
 }
 
 func (b claudeConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	return b.app.forkClaudeActiveConversation(sessionKey, sess, ws)
+	return forkClaudeActiveConversation(b.app,sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
@@ -167,7 +167,7 @@ func (b claudeConversationBackend) renderUsageBody(sess *state.Session) string {
 }
 
 func (b claudeConversationBackend) interruptActiveTurn(ctx context.Context, sessionKey string, _ *state.Session) error {
-	return b.app.interruptClaudeActiveTurn(ctx, sessionKey)
+	return interruptClaudeActiveTurn(b.app,ctx, sessionKey)
 }
 
 func (b claudeConversationBackend) continueActiveTurn(sessionKey, text string) error {

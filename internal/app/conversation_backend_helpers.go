@@ -31,7 +31,7 @@ func isUIWarningError(err error) bool {
 	return errors.As(err, &target)
 }
 
-func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
+func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
 	if a == nil || a.claude == nil {
 		return nil, fmt.Errorf("claude backend not initialized")
 	}
@@ -83,7 +83,7 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 	}, nil
 }
 
-func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
+func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
 	client, err := requireCodexClient(a)
 	if err != nil {
 		return nil, err
@@ -134,14 +134,14 @@ func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, 
 	}, nil
 }
 
-func (a *App) interruptClaudeActiveTurn(ctx context.Context, sessionKey string) error {
+func interruptClaudeActiveTurn(a *App, ctx context.Context, sessionKey string) error {
 	if a == nil || a.claude == nil {
 		return fmt.Errorf("claude backend not initialized")
 	}
 	return a.claude.Interrupt(ctx, sessionKey)
 }
 
-func (a *App) interruptCodexActiveTurn(ctx context.Context, sess *state.Session) error {
+func interruptCodexActiveTurn(a *App, ctx context.Context, sess *state.Session) error {
 	client, err := requireCodexClient(a)
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func (a *App) interruptCodexActiveTurn(ctx context.Context, sess *state.Session)
 	}, nil)
 }
 
-func (a *App) continueCodexActiveTurn(sessionKey, text string) error {
+func continueCodexActiveTurn(a *App, sessionKey, text string) error {
 	client, err := requireCodexClient(a)
 	if err != nil {
 		return err
@@ -179,7 +179,7 @@ func (a *App) continueCodexActiveTurn(sessionKey, text string) error {
 	}, nil)
 }
 
-func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func tryCodexReplyContinuation(a *App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
 	if a == nil || msg == nil || link == nil {
 		return false, nil
 	}
