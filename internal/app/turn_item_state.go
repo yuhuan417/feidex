@@ -3,7 +3,27 @@ package app
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 )
+
+type turnItemTracker struct {
+	mu    sync.Mutex
+	items map[string]*turnItemState
+}
+
+func newTurnItemTracker() *turnItemTracker {
+	return &turnItemTracker{items: map[string]*turnItemState{}}
+}
+
+func (a *App) turnItemTracker() *turnItemTracker {
+	if a == nil {
+		return nil
+	}
+	if a.turnItems == nil {
+		a.turnItems = newTurnItemTracker()
+	}
+	return a.turnItems
+}
 
 type turnItemState struct {
 	ThreadID  string
@@ -34,19 +54,20 @@ func (a *App) noteTurnItemStarted(threadID, turnID string, item map[string]any) 
 		return
 	}
 	started := cloneJSONMap(item)
-	a.turnItemsMu.Lock()
-	defer a.turnItemsMu.Unlock()
-	if a.turnItems == nil {
-		a.turnItems = map[string]*turnItemState{}
+	tracker := a.turnItemTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.items == nil {
+		tracker.items = map[string]*turnItemState{}
 	}
-	state := a.turnItems[key]
+	state := tracker.items[key]
 	if state == nil {
 		state = &turnItemState{
 			ThreadID: strings.TrimSpace(threadID),
 			TurnID:   strings.TrimSpace(turnID),
 			ItemID:   itemID,
 		}
-		a.turnItems[key] = state
+		tracker.items[key] = state
 	}
 	if strings.TrimSpace(threadID) != "" {
 		state.ThreadID = strings.TrimSpace(threadID)
@@ -63,9 +84,10 @@ func (a *App) turnItemSnapshot(threadID, turnID, itemID string) map[string]any {
 	if key == "" {
 		return nil
 	}
-	a.turnItemsMu.Lock()
-	state := a.turnItems[key]
-	a.turnItemsMu.Unlock()
+	tracker := a.turnItemTracker()
+	tracker.mu.Lock()
+	state := tracker.items[key]
+	tracker.mu.Unlock()
 	if state == nil {
 		return nil
 	}
@@ -85,8 +107,9 @@ func (a *App) completeTurnItemState(threadID, turnID, itemID string, item map[st
 		return cloneJSONMap(item)
 	}
 	completed := cloneJSONMap(item)
-	a.turnItemsMu.Lock()
-	state := a.turnItems[key]
+	tracker := a.turnItemTracker()
+	tracker.mu.Lock()
+	state := tracker.items[key]
 	if state != nil {
 		if strings.TrimSpace(threadID) != "" {
 			state.ThreadID = strings.TrimSpace(threadID)
@@ -94,8 +117,8 @@ func (a *App) completeTurnItemState(threadID, turnID, itemID string, item map[st
 		state.Status = "completed"
 		state.Completed = completed
 	}
-	delete(a.turnItems, key)
-	a.turnItemsMu.Unlock()
+	delete(tracker.items, key)
+	tracker.mu.Unlock()
 	if state == nil {
 		return completed
 	}
@@ -111,11 +134,12 @@ func (a *App) clearTurnItemStates(turnID string) {
 		return
 	}
 	prefix := turnID + "\x00"
-	a.turnItemsMu.Lock()
-	defer a.turnItemsMu.Unlock()
-	for key := range a.turnItems {
+	tracker := a.turnItemTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	for key := range tracker.items {
 		if strings.HasPrefix(key, prefix) {
-			delete(a.turnItems, key)
+			delete(tracker.items, key)
 		}
 	}
 }
