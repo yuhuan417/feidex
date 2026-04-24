@@ -70,8 +70,8 @@ func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction
 	msg := s.app.commandMessageFromAction(action, sessionKey, "")
 	_, _, ws := s.app.currentWorkspaceForMessage(msg)
 	payload := workspaceClonePayload{
-		RootPath:          s.app.defaultWorkspaceCloneRoot(ws),
-		SelectedParentDir: firstNonEmpty(strings.TrimSpace(s.app.defaultWorkspaceCloneParent(ws)), "/"),
+		RootPath:          newWorkspaceManagementService(s.app).defaultWorkspaceCloneRoot(ws),
+		SelectedParentDir: firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/"),
 	}
 	if err := appState.savePending(&state.PendingRequest{
 		ID:          requestID,
@@ -113,7 +113,7 @@ func (s workspaceActionService) completeWorkspaceNewTakeover(action *feishu.Card
 	if strings.TrimSpace(payload.SelectedCWD) == "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "缺少可接管的目录"}}, nil
 	}
-	requestID, err := s.app.createWorkspaceNewPending(sessionKey, action.UserID, "", payload)
+	requestID, err := newWorkspaceManagementService(s.app).createWorkspaceNewPending(sessionKey, action.UserID, "", payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -142,7 +142,7 @@ func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.Car
 	if currentPath == "" {
 		msg := s.app.commandMessageFromAction(action, pending.SessionKey, "")
 		_, _, ws := s.app.currentWorkspaceForMessage(msg)
-		currentPath = firstNonEmpty(strings.TrimSpace(s.app.defaultWorkspaceCloneParent(ws)), "/")
+		currentPath = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/")
 	}
 	payload.Picker = &pathPickerPayload{
 		Mode:        pathPickerModeDirectory,
@@ -169,7 +169,7 @@ func (s workspaceActionService) completeWorkspaceCloneCancel(action *feishu.Card
 	}
 	payload := workspaceClonePayloadFromPending(pending)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
-	if op := s.app.workspaceCloneOperation(requestID); op != nil {
+	if op := newWorkspaceManagementService(s.app).workspaceCloneOperation(requestID); op != nil {
 		snapshot := op.requestCancel()
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "cancelling"
@@ -243,7 +243,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 	if name == "" {
 		name = id
 	}
-	if existingWS := s.app.workspaceByIDAndCWD(id, cwd); existingWS != nil {
+	if existingWS := newWorkspaceManagementService(s.app).workspaceByIDAndCWD(id, cwd); existingWS != nil {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "resolved"
 			req.PayloadJSON = mustJSON(payload)
@@ -261,7 +261,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 		chatID = firstNonEmpty(chatID, sess.ChatID)
 		chatType = sess.ChatType
 	}
-	if err := s.app.createWorkspaceAndSwitch(pending.SessionKey, action.UserID, chatID, chatType, id, name, cwd); err != nil {
+	if err := newWorkspaceManagementService(s.app).createWorkspaceAndSwitch(pending.SessionKey, action.UserID, chatID, chatType, id, name, cwd); err != nil {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
@@ -302,13 +302,13 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = firstNonEmpty(strings.TrimSpace(s.app.defaultWorkspaceCloneParent(ws)), "/")
+		parentDir = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/")
 	}
 	payload.SelectedParentDir = parentDir
 	messageID := firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
 	if status := strings.TrimSpace(pending.Status); status == "processing" || status == "cancelling" {
 		snapshot := workspaceCloneProgressSnapshot{State: status}
-		if op := s.app.workspaceCloneOperation(requestID); op != nil {
+		if op := newWorkspaceManagementService(s.app).workspaceCloneOperation(requestID); op != nil {
 			snapshot = op.snapshot()
 		}
 		return &callback.CardActionTriggerResponse{
@@ -316,7 +316,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
 		}, nil
 	}
-	if _, err := s.app.prepareWorkspaceClone(payload.RepoURL, payload.DraftID, parentDir); err != nil {
+	if _, err := newWorkspaceManagementService(s.app).prepareWorkspaceClone(payload.RepoURL, payload.DraftID, parentDir); err != nil {
 		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
@@ -337,7 +337,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			takeoverPayload := workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir))
-			newRequestID, createErr := s.app.createWorkspaceNewPending(pending.SessionKey, action.UserID, "", takeoverPayload)
+			newRequestID, createErr := newWorkspaceManagementService(s.app).createWorkspaceNewPending(pending.SessionKey, action.UserID, "", takeoverPayload)
 			if createErr != nil {
 				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: createErr.Error()}}, nil
 			}
@@ -359,14 +359,14 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	op := newWorkspaceCloneOperation(cancel)
-	s.app.setWorkspaceCloneOperation(requestID, op)
+	newWorkspaceManagementService(s.app).setWorkspaceCloneOperation(requestID, op)
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = "processing"
 		req.PayloadJSON = mustJSON(payload)
 		req.FeishuMsgID = firstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 	})
-	go s.app.finishWorkspaceCloneSubmit(
+	go newWorkspaceManagementService(s.app).finishWorkspaceCloneSubmit(
 		ctx,
 		op,
 		requestID,

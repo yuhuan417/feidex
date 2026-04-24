@@ -107,14 +107,14 @@ func newWorkspaceCloneTracker() *workspaceCloneTracker {
 	return &workspaceCloneTracker{ops: map[string]*workspaceCloneOperation{}}
 }
 
-func (a *App) workspaceCloneTracker() *workspaceCloneTracker {
-	if a == nil {
+func (s workspaceManagementService) workspaceCloneTracker() *workspaceCloneTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.workspaceCloneOps == nil {
-		a.workspaceCloneOps = newWorkspaceCloneTracker()
+	if s.app.workspaceCloneOps == nil {
+		s.app.workspaceCloneOps = newWorkspaceCloneTracker()
 	}
-	return a.workspaceCloneOps
+	return s.app.workspaceCloneOps
 }
 
 type workspaceCloneOperation struct {
@@ -232,15 +232,15 @@ func readWorkspaceCloneOutput(r io.Reader, emit func(string)) error {
 	}
 }
 
-func (a *App) setWorkspaceCloneOperation(requestID string, op *workspaceCloneOperation) {
-	if a == nil {
+func (s workspaceManagementService) setWorkspaceCloneOperation(requestID string, op *workspaceCloneOperation) {
+	if s.app == nil {
 		return
 	}
 	requestID = strings.TrimSpace(requestID)
 	if requestID == "" || op == nil {
 		return
 	}
-	tracker := a.workspaceCloneTracker()
+	tracker := newWorkspaceManagementService(s.app).workspaceCloneTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.ops == nil {
@@ -252,32 +252,32 @@ func (a *App) setWorkspaceCloneOperation(requestID string, op *workspaceCloneOpe
 	tracker.ops[requestID] = op
 }
 
-func (a *App) workspaceCloneOperation(requestID string) *workspaceCloneOperation {
-	if a == nil {
+func (s workspaceManagementService) workspaceCloneOperation(requestID string) *workspaceCloneOperation {
+	if s.app == nil {
 		return nil
 	}
-	tracker := a.workspaceCloneTracker()
+	tracker := newWorkspaceManagementService(s.app).workspaceCloneTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	return tracker.ops[strings.TrimSpace(requestID)]
 }
 
-func (a *App) clearWorkspaceCloneOperation(requestID string) {
-	if a == nil {
+func (s workspaceManagementService) clearWorkspaceCloneOperation(requestID string) {
+	if s.app == nil {
 		return
 	}
-	tracker := a.workspaceCloneTracker()
+	tracker := newWorkspaceManagementService(s.app).workspaceCloneTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	delete(tracker.ops, strings.TrimSpace(requestID))
 }
 
-func (a *App) patchWorkspaceCloneProgressCard(messageID, requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) {
-	if a == nil || strings.TrimSpace(messageID) == "" {
+func (s workspaceManagementService) patchWorkspaceCloneProgressCard(messageID, requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) {
+	if s.app == nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
-	card := newWorkspaceRenderService(a).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
-	if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
+	card := newWorkspaceRenderService(s.app).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
+	if err := s.app.feishu.PatchCard(context.Background(), messageID, card); err != nil {
 		slog.Warn("workspace clone progress patch failed",
 			"request_id", requestID,
 			"message_id", messageID,
@@ -286,19 +286,19 @@ func (a *App) patchWorkspaceCloneProgressCard(messageID, requestID string, paylo
 	}
 }
 
-func (a *App) noteWorkspaceCloneProgress(op *workspaceCloneOperation, requestID, messageID string, payload workspaceClonePayload, parentDir, line string) {
+func (s workspaceManagementService) noteWorkspaceCloneProgress(op *workspaceCloneOperation, requestID, messageID string, payload workspaceClonePayload, parentDir, line string) {
 	if op == nil {
 		return
 	}
 	snapshot, shouldPatch := op.recordProgress(line)
 	if shouldPatch {
-		a.patchWorkspaceCloneProgressCard(messageID, requestID, payload, parentDir, snapshot)
+		newWorkspaceManagementService(s.app).patchWorkspaceCloneProgressCard(messageID, requestID, payload, parentDir, snapshot)
 	}
 }
 
-func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceCloneOperation, requestID, messageID, sessionKey, userID, chatID, chatType, parentDir string, payload workspaceClonePayload) {
-	appState := a.appState()
-	defer a.clearWorkspaceCloneOperation(requestID)
+func (s workspaceManagementService) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceCloneOperation, requestID, messageID, sessionKey, userID, chatID, chatType, parentDir string, payload workspaceClonePayload) {
+	appState := s.app.appState()
+	defer newWorkspaceManagementService(s.app).clearWorkspaceCloneOperation(requestID)
 	slog.Debug("workspace clone started",
 		"request_id", requestID,
 		"message_id", messageID,
@@ -306,7 +306,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 		"repo_url", payload.RepoURL,
 		"parent_dir", parentDir,
 	)
-	workspaceID, targetDir, err := a.cloneWorkspaceInParent(
+	workspaceID, targetDir, err := newWorkspaceManagementService(s.app).cloneWorkspaceInParent(
 		ctx,
 		sessionKey,
 		userID,
@@ -316,7 +316,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 		payload.DraftID,
 		parentDir,
 		func(line string) {
-			a.noteWorkspaceCloneProgress(op, requestID, messageID, payload, parentDir, line)
+			newWorkspaceManagementService(s.app).noteWorkspaceCloneProgress(op, requestID, messageID, payload, parentDir, line)
 		},
 	)
 	if err != nil {
@@ -336,7 +336,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.snapshot()))
+				s.app.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(s.app).renderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.snapshot()))
 			}
 			return
 		}
@@ -365,7 +365,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
+				_ = s.app.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(s.app).renderWorkspaceCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
 			}
 			return
 		}
@@ -385,7 +385,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneCard(sessionKey, requestID, payload))
+			_ = s.app.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -403,11 +403,11 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 		req.PayloadJSON = mustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir))
+		_ = s.app.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(s.app).renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir))
 	}
 }
 
-func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*workspaceClonePlan, error) {
+func (s workspaceManagementService) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*workspaceClonePlan, error) {
 	repoName, err := workspaceCloneRepoName(repoURL)
 	if err != nil {
 		return nil, err
@@ -429,7 +429,7 @@ func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*wor
 	}
 	targetDir := filepath.Join(parentDir, targetName)
 	if _, statErr := os.Stat(targetDir); statErr == nil {
-		if existingWS := a.workspaceByCWD(targetDir); existingWS != nil {
+		if existingWS := newWorkspaceManagementService(s.app).workspaceByCWD(targetDir); existingWS != nil {
 			return nil, &workspaceCloneExistingWorkspaceError{
 				WorkspaceID: existingWS.ID,
 				TargetDir:   targetDir,
@@ -442,7 +442,7 @@ func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*wor
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if config.FindWorkspace(a.cfg, workspaceID) != nil {
+	if config.FindWorkspace(s.app.cfg, workspaceID) != nil {
 		return nil, fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
 	}
 	return &workspaceClonePlan{
@@ -452,8 +452,8 @@ func (a *App) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*wor
 	}, nil
 }
 
-func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string, report workspaceCloneProgressReporter) (string, string, error) {
-	plan, err := a.prepareWorkspaceClone(repoURL, explicitID, parentDir)
+func (s workspaceManagementService) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string, report workspaceCloneProgressReporter) (string, string, error) {
+	plan, err := newWorkspaceManagementService(s.app).prepareWorkspaceClone(repoURL, explicitID, parentDir)
 	if err != nil {
 		return "", "", err
 	}
@@ -469,7 +469,7 @@ func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, ch
 	if err := ctx.Err(); err != nil {
 		return "", "", err
 	}
-	if err := a.createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
+	if err := newWorkspaceManagementService(s.app).createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
 		return "", "", &workspaceCloneTakeoverError{
 			WorkspaceID: plan.WorkspaceID,
 			TargetDir:   plan.TargetDir,
@@ -479,19 +479,19 @@ func (a *App) cloneWorkspaceInParent(ctx context.Context, sessionKey, userID, ch
 	return plan.WorkspaceID, plan.TargetDir, nil
 }
 
-func (a *App) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, explicitID string) error {
-	return a.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, explicitID, "")
+func (s workspaceManagementService) cloneWorkspaceAndSwitch(msg *feishu.InboundMessage, repoURL, explicitID string) error {
+	return newWorkspaceManagementService(s.app).cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, explicitID, "")
 }
 
-func (a *App) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage, repoURL, explicitID, parentDir string) error {
+func (s workspaceManagementService) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage, repoURL, explicitID, parentDir string) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
 	if strings.TrimSpace(parentDir) == "" {
-		parentDir = a.defaultWorkspaceCloneParent(ws)
+		parentDir = newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)
 	}
-	workspaceID, targetDir, err := a.cloneWorkspaceInParent(
+	workspaceID, targetDir, err := newWorkspaceManagementService(s.app).cloneWorkspaceInParent(
 		context.Background(),
 		sessionKey,
 		msg.UserID,
@@ -506,5 +506,5 @@ func (a *App) cloneWorkspaceAndSwitchInSelectedParent(msg *feishu.InboundMessage
 		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 }

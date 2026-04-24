@@ -108,18 +108,18 @@ func workspaceClonePayloadFromPending(pending *state.PendingRequest) workspaceCl
 	return payload
 }
 
-func (a *App) defaultWorkspaceNewRoot(ws *config.Workspace) string {
+func (s workspaceManagementService) defaultWorkspaceNewRoot(ws *config.Workspace) string {
 	return "/"
 }
 
-func (a *App) defaultWorkspaceCloneRoot(ws *config.Workspace) string {
+func (s workspaceManagementService) defaultWorkspaceCloneRoot(ws *config.Workspace) string {
 	return "/"
 }
 
-func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+func (s workspaceManagementService) beginWorkspaceNew(msg *feishu.InboundMessage) error {
+	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
 	payload := workspaceNewPayload{
-		RootPath: a.defaultWorkspaceNewRoot(ws),
+		RootPath: newWorkspaceManagementService(s.app).defaultWorkspaceNewRoot(ws),
 		SelectedCWD: firstNonEmpty(func() string {
 			if ws == nil {
 				return ""
@@ -127,17 +127,17 @@ func (a *App) beginWorkspaceNew(msg *feishu.InboundMessage) error {
 			return strings.TrimSpace(ws.Cwd)
 		}(), "/"),
 	}
-	return a.beginWorkspaceNewWithPayload(msg, sessionKey, payload)
+	return newWorkspaceManagementService(s.app).beginWorkspaceNewWithPayload(msg, sessionKey, payload)
 }
 
-func (a *App) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKey string, payload workspaceNewPayload) error {
-	appState := a.appState()
+func (s workspaceManagementService) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKey string, payload workspaceNewPayload) error {
+	appState := s.app.appState()
 	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return err
 	}
-	card := newWorkspaceRenderService(a).renderWorkspaceNewCard(sessionKey, requestID, payload)
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := newWorkspaceRenderService(s.app).renderWorkspaceNewCard(sessionKey, requestID, payload)
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -154,8 +154,8 @@ func (a *App) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKe
 	})
 }
 
-func (a *App) createWorkspaceNewPending(sessionKey, userID, feishuMsgID string, payload workspaceNewPayload) (string, error) {
-	appState := a.appState()
+func (s workspaceManagementService) createWorkspaceNewPending(sessionKey, userID, feishuMsgID string, payload workspaceNewPayload) (string, error) {
+	appState := s.app.appState()
 	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return "", err
@@ -303,24 +303,24 @@ func updateWorkspaceNewSuggestedID(payload workspaceNewPayload, selectedDir stri
 	return payload
 }
 
-func (a *App) defaultWorkspaceCloneParent(ws *config.Workspace) string {
+func (s workspaceManagementService) defaultWorkspaceCloneParent(ws *config.Workspace) string {
 	if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
 		return filepath.Dir(strings.TrimSpace(ws.Cwd))
 	}
-	if strings.TrimSpace(a.cfgPath) != "" {
-		return filepath.Dir(strings.TrimSpace(a.cfgPath))
+	if strings.TrimSpace(s.app.cfgPath) != "" {
+		return filepath.Dir(strings.TrimSpace(s.app.cfgPath))
 	}
 	return "."
 }
 
-func (a *App) workspaceByCWD(targetDir string) *config.Workspace {
+func (s workspaceManagementService) workspaceByCWD(targetDir string) *config.Workspace {
 	targetDir = strings.TrimSpace(targetDir)
-	if targetDir == "" || a == nil || a.cfg == nil {
+	if targetDir == "" || s.app == nil || s.app.cfg == nil {
 		return nil
 	}
 	cleanTarget := filepath.Clean(targetDir)
-	for i := range a.cfg.Workspaces {
-		ws := &a.cfg.Workspaces[i]
+	for i := range s.app.cfg.Workspaces {
+		ws := &s.app.cfg.Workspaces[i]
 		if filepath.Clean(strings.TrimSpace(ws.Cwd)) == cleanTarget {
 			return ws
 		}
@@ -328,22 +328,22 @@ func (a *App) workspaceByCWD(targetDir string) *config.Workspace {
 	return nil
 }
 
-func (a *App) workspaceByIDAndCWD(workspaceID, targetDir string) *config.Workspace {
-	ws := config.FindWorkspace(a.cfg, strings.TrimSpace(workspaceID))
+func (s workspaceManagementService) workspaceByIDAndCWD(workspaceID, targetDir string) *config.Workspace {
+	ws := config.FindWorkspace(s.app.cfg, strings.TrimSpace(workspaceID))
 	if ws == nil || !sameWorkspaceCWD(targetDir, ws.Cwd) {
 		return nil
 	}
 	return ws
 }
 
-func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
-	appState := a.appState()
-	a.configMu.Lock()
-	if config.FindWorkspace(a.cfg, id) != nil {
-		a.configMu.Unlock()
+func (s workspaceManagementService) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
+	appState := s.app.appState()
+	s.app.configMu.Lock()
+	if config.FindWorkspace(s.app.cfg, id) != nil {
+		s.app.configMu.Unlock()
 		return fmt.Errorf("workspace %q 已存在", id)
 	}
-	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{
+	s.app.cfg.Workspaces = append(s.app.cfg.Workspaces, config.Workspace{
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
@@ -351,18 +351,18 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 		ApprovalPolicy: "on-request",
 		SandboxMode:    "workspace-write",
 	})
-	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
-		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
-		a.configMu.Unlock()
+	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {
+		s.app.cfg.Workspaces = s.app.cfg.Workspaces[:len(s.app.cfg.Workspaces)-1]
+		s.app.configMu.Unlock()
 		return err
 	}
-	if err := config.Save(a.cfgPath, a.cfg); err != nil {
-		a.cfg.Workspaces = a.cfg.Workspaces[:len(a.cfg.Workspaces)-1]
-		a.configMu.Unlock()
+	if err := config.Save(s.app.cfgPath, s.app.cfg); err != nil {
+		s.app.cfg.Workspaces = s.app.cfg.Workspaces[:len(s.app.cfg.Workspaces)-1]
+		s.app.configMu.Unlock()
 		return err
 	}
-	ws := config.FindWorkspace(a.cfg, id)
-	a.configMu.Unlock()
+	ws := config.FindWorkspace(s.app.cfg, id)
+	s.app.configMu.Unlock()
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
@@ -377,7 +377,7 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 	if ws == nil {
 		return nil
 	}
-	if _, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws); err != nil {
+	if _, err := s.app.ensureWorkspaceThreadBinding(sessionKey, sess, ws); err != nil {
 		slog.Warn("workspace create thread binding failed",
 			"session_key", sessionKey,
 			"workspace_id", id,
@@ -410,7 +410,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 		return fmt.Errorf("请先选择目录")
 	}
 	sessionKey := s.app.makeSessionKey(msg)
-	if existingWS := s.app.workspaceByIDAndCWD(id, cwd); existingWS != nil {
+	if existingWS := newWorkspaceManagementService(s.app).workspaceByIDAndCWD(id, cwd); existingWS != nil {
 		payload.DraftID = id
 		payload.DraftName = name
 		_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) {
@@ -423,7 +423,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 		}
 		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, s.app.replyInThreadEnabled(msg.ChatType))
 	}
-	if err := s.app.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
+	if err := newWorkspaceManagementService(s.app).createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
 	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })

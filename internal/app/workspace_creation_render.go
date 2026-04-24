@@ -107,10 +107,10 @@ func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID s
 		workspaceID = sess.WorkspaceID
 	}
 	ws := config.FindWorkspace(s.app.cfg, workspaceID)
-	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), s.app.defaultWorkspaceCloneRoot(ws))
+	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), newWorkspaceManagementService(s.app).defaultWorkspaceCloneRoot(ws))
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = firstNonEmpty(strings.TrimSpace(s.app.defaultWorkspaceCloneParent(ws)), rootPath)
+		parentDir = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), rootPath)
 	}
 
 	card := newMarkdownBodyCard("从仓库创建工作区", "orange")

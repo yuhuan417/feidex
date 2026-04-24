@@ -61,7 +61,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		return s.app.showWorkspaceMenu(msg)
 	}
 	if args[0] == "new" {
-		return s.app.beginWorkspaceNew(msg)
+		return newWorkspaceManagementService(s.app).beginWorkspaceNew(msg)
 	}
 	if len(args) >= 2 && args[0] == "clone" {
 		repoURL, workspaceID, parentDir, err := parseWorkspaceCloneArgs(args)
@@ -69,13 +69,13 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 			return err
 		}
 		if parentDir != "" {
-			err = s.app.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
+			err = newWorkspaceManagementService(s.app).cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
 		} else {
-			err = s.app.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
+			err = newWorkspaceManagementService(s.app).cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
 		}
 		var existingDirErr *workspaceCloneExistingDirError
 		if errors.As(err, &existingDirErr) {
-			return s.app.beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir)))
+			return newWorkspaceManagementService(s.app).beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir)))
 		}
 		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {

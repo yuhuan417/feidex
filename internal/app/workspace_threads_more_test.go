@@ -29,7 +29,7 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenFrontendBackendIsClaude(t 
 	}
 
 	targetDir := filepath.Join(t.TempDir(), "claude-created")
-	if err := a.createWorkspaceAndSwitch(sessionKey, "user-1", "chat-1", "p2p", "claude-created", "Claude Created", targetDir); err != nil {
+	if err := newWorkspaceManagementService(a).createWorkspaceAndSwitch(sessionKey, "user-1", "chat-1", "p2p", "claude-created", "Claude Created", targetDir); err != nil {
 		t.Fatalf("createWorkspaceAndSwitch() error = %v", err)
 	}
 
