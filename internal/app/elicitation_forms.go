@@ -110,19 +110,19 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 	}, nil
 }
 
-func (a *App) completeElicitationFormText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+func (s pendingInputService) completeElicitationFormText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
 	var payload elicitationFormPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return err
 	}
-	adapter := a.serverRequestBackendAdapter(pending)
+	adapter := s.app.serverRequestBackendAdapter(pending)
 	summary, err := adapter.replyElicitationForm(pending, payload, msg.Text)
 	if err != nil {
 		return err
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = s.app.finalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
-		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("已提交", "green", summary, nil))
+		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 	}
 	return nil
 }

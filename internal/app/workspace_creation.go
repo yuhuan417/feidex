@@ -388,8 +388,8 @@ func (a *App) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id,
 	return nil
 }
 
-func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	appState := a.appState()
+func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+	appState := s.app.appState()
 	payload := workspaceNewPayloadFromPending(pending)
 	parts := strings.Fields(strings.TrimSpace(msg.Text))
 	if len(parts) < 1 {
@@ -409,8 +409,8 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 	if strings.TrimSpace(cwd) == "" {
 		return fmt.Errorf("请先选择目录")
 	}
-	sessionKey := a.makeSessionKey(msg)
-	if existingWS := a.workspaceByIDAndCWD(id, cwd); existingWS != nil {
+	sessionKey := s.app.makeSessionKey(msg)
+	if existingWS := s.app.workspaceByIDAndCWD(id, cwd); existingWS != nil {
 		payload.DraftID = id
 		payload.DraftName = name
 		_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) {
@@ -419,16 +419,16 @@ func (a *App) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *stat
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if pending.FeishuMsgID != "" {
-			_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
+			_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, a.replyInThreadEnabled(msg.ChatType))
+		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, s.app.replyInThreadEnabled(msg.ChatType))
 	}
-	if err := a.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
+	if err := s.app.createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
 	_ = appState.updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	if pending.FeishuMsgID != "" {
-		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
+		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, a.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "已创建并切换到工作区 "+id, s.app.replyInThreadEnabled(msg.ChatType))
 }

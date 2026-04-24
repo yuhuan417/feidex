@@ -1142,7 +1142,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 		}
 	}
 
-	if err := a.completeWorkspaceNewText(msg, pending); err != nil {
+	if err := newPendingInputService(a).completeWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
 	if config.FindWorkspace(a.cfg, "repo") == nil {
@@ -1271,7 +1271,7 @@ func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := a.completeWorkspaceNewText(msg, pending); err != nil {
+	if err := newPendingInputService(a).completeWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
 	if pending := a.store.PendingByID("req-existing-1"); pending == nil || pending.Status != "resolved" {
@@ -2799,7 +2799,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(tool form) error = %v", err)
 	}
-	if err := a.completeToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
+	if err := newPendingInputService(a).completeToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
 		t.Fatalf("completeToolUserInputText() error = %v", err)
 	}
 	if len(fc.replies) == 0 {
@@ -2821,7 +2821,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(elicitation form) error = %v", err)
 	}
-	if err := a.completeElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
+	if err := newPendingInputService(a).completeElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
 		t.Fatalf("completeElicitationFormText() error = %v", err)
 	}
 

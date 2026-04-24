@@ -84,7 +84,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	}
 	if !msg.ExpandedMergeForward {
 		if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
-			if err := a.handlePendingTextResponse(msg, pending); err != nil {
+			if err := newPendingInputService(a).handlePendingTextResponse(msg, pending); err != nil {
 				return err
 			}
 			return nil

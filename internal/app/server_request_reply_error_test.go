@@ -102,7 +102,7 @@ func TestCompleteToolUserInputTextKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	}
 	fc.replyErr = errors.New("write failed")
 
-	err := a.completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("input-text-1"))
+	err := newPendingInputService(a).completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("input-text-1"))
 	if err == nil || err.Error() != "write failed" {
 		t.Fatalf("completeToolUserInputText() error = %v, want write failed", err)
 	}
@@ -198,7 +198,7 @@ func TestCompleteElicitationFormTextKeepsPendingWhenCodexReplyFails(t *testing.T
 	}
 	fc.replyErr = errors.New("write failed")
 
-	err := a.completeElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicit-form-1"))
+	err := newPendingInputService(a).completeElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicit-form-1"))
 	if err == nil || err.Error() != "write failed" {
 		t.Fatalf("completeElicitationFormText() error = %v, want write failed", err)
 	}

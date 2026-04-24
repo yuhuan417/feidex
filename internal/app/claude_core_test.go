@@ -1115,7 +1115,7 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := a.completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
+	if err := newPendingInputService(a).completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
 		t.Fatalf("completeToolUserInputText() error = %v", err)
 	}
 	if len(claude.userInputCalls) != 1 {
@@ -1248,7 +1248,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := a.completeClaudePlanModeText(&feishu.InboundMessage{Text: "退出plan"}, pending); err != nil {
+	if err := newPendingInputService(a).completeClaudePlanModeText(&feishu.InboundMessage{Text: "退出plan"}, pending); err != nil {
 		t.Fatalf("completeClaudePlanModeText() error = %v", err)
 	}
 	if len(claude.planCalls) != 1 || claude.planCalls[0].requestID != "plan-1" || claude.planCalls[0].feedback != "退出plan" {

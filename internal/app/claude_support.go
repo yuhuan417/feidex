@@ -331,7 +331,7 @@ func claudeQuestionAnswer(raw string, q toolUserInputQuestion) (string, string, 
 	return strings.Join(answers, ", "), summarizeAnswers(answers, q.IsSecret), nil
 }
 
-func (a *App) completeClaudePlanModeText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
 	if msg == nil || pending == nil {
 		return nil
 	}
@@ -339,12 +339,12 @@ func (a *App) completeClaudePlanModeText(msg *feishu.InboundMessage, pending *st
 	if feedback == "" {
 		return fmt.Errorf("反馈不能为空")
 	}
-	if err := a.claude.ResolvePlanFeedback(pending.ID, feedback); err != nil {
+	if err := s.app.claude.ResolvePlanFeedback(pending.ID, feedback); err != nil {
 		return err
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = s.app.finalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
-		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID, a.feishu.SimpleStatusCard("计划反馈已提交", "green", claudePlanSubmittedBody(pending, feedback), nil))
+		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("计划反馈已提交", "green", claudePlanSubmittedBody(pending, feedback), nil))
 	}
 	return nil
 }

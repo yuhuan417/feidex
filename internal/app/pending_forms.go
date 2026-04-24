@@ -91,19 +91,19 @@ func (a *App) shouldRedactInboundText(sessionKey, userID string) bool {
 	return false
 }
 
-func (a *App) handlePendingTextResponse(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+func (s pendingInputService) handlePendingTextResponse(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
 	if msg == nil || pending == nil {
 		return nil
 	}
 	switch pending.Kind {
 	case "tool_request_user_input_form":
-		return a.completeToolUserInputText(msg, pending)
+		return s.completeToolUserInputText(msg, pending)
 	case "mcp_elicitation_form":
-		return a.completeElicitationFormText(msg, pending)
+		return s.completeElicitationFormText(msg, pending)
 	case "workspace_new":
-		return a.completeWorkspaceNewText(msg, pending)
+		return s.completeWorkspaceNewText(msg, pending)
 	case claudePlanModePendingKind:
-		return a.completeClaudePlanModeText(msg, pending)
+		return s.completeClaudePlanModeText(msg, pending)
 	default:
 		return nil
 	}
