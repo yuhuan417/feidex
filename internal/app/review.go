@@ -138,7 +138,7 @@ func (a *App) startInlineReview(msg *feishu.InboundMessage, target appreview.Tar
 	if err := a.enqueueReviewSubmission(msg, sessionKey, ws, threadID, resolved); err != nil {
 		return "", err
 	}
-	return reviewConfirmationText(resolved), nil
+	return appreview.ConfirmationText(resolved), nil
 }
 
 func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
@@ -183,7 +183,7 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 		TriggerMessageID:     msg.MessageID,
 		SourceMessageIDs:     uniqueStrings([]string{msg.MessageID}),
 		SourceRootMessageIDs: uniqueStrings([]string{firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))}),
-		InputText:            reviewSubmissionInputText(target),
+		InputText:            appreview.SubmissionInputText(target),
 		Kind:                 submissionKindReview,
 		ReviewTargetType:     strings.TrimSpace(target.Type),
 		ReviewBranch:         strings.TrimSpace(target.Branch),
@@ -214,54 +214,6 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 	return nil
 }
 
-func reviewSubmissionInputText(target appreview.TargetSpec) string {
-	switch strings.TrimSpace(target.Type) {
-	case appreview.TargetUncommitted:
-		return "Review: uncommitted changes"
-	case appreview.TargetBaseBranch:
-		return "Review: base branch " + strings.TrimSpace(target.Branch)
-	case appreview.TargetCommit:
-		label := shortReviewCommitSHA(target.CommitSHA)
-		if strings.TrimSpace(target.CommitTitle) != "" {
-			label += " " + strings.TrimSpace(target.CommitTitle)
-		}
-		return "Review: commit " + strings.TrimSpace(label)
-	case appreview.TargetCustom:
-		return "Review: " + truncate(strings.TrimSpace(target.Instructions), 80)
-	default:
-		return "Review"
-	}
-}
-
-func reviewConfirmationText(target appreview.TargetSpec) string {
-	return "已启动 review，目标：" + reviewTargetSummary(target) + "。"
-}
-
-func reviewTargetSummary(target appreview.TargetSpec) string {
-	switch strings.TrimSpace(target.Type) {
-	case appreview.TargetUncommitted:
-		return "未提交改动"
-	case appreview.TargetBaseBranch:
-		return "base branch `" + inlineCodeText(target.Branch) + "`"
-	case appreview.TargetCommit:
-		if title := strings.TrimSpace(target.CommitTitle); title != "" {
-			return "commit `" + inlineCodeText(shortReviewCommitSHA(target.CommitSHA)) + "` " + title
-		}
-		return "commit `" + inlineCodeText(shortReviewCommitSHA(target.CommitSHA)) + "`"
-	case appreview.TargetCustom:
-		return "自定义 instructions"
-	default:
-		return "review"
-	}
-}
-
-func shortReviewCommitSHA(value string) string {
-	value = strings.TrimSpace(value)
-	if len(value) <= 12 {
-		return value
-	}
-	return value[:12]
-}
 
 func (a *App) startSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
 	if sub == nil {

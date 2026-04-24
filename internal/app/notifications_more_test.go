@@ -24,7 +24,7 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 		t.Fatalf("appapproval.RenderCommandBody() = %q", commandBody)
 	}
 
-	permissionsBody := renderPermissionsApprovalBody(map[string]any{
+	permissionsBody := appapproval.RenderPermissionsApprovalBody(map[string]any{
 		"reason": "need access",
 		"permissions": map[string]any{
 			"scope": "session",
@@ -43,12 +43,12 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 		!strings.Contains(permissionsBody, "write: `/tmp/b`") ||
 		!strings.Contains(permissionsBody, "network") ||
 		!strings.Contains(permissionsBody, "enabled: 允许") {
-		t.Fatalf("renderPermissionsApprovalBody() = %q", permissionsBody)
+		t.Fatalf("appapproval.RenderPermissionsApprovalBody() = %q", permissionsBody)
 	}
-	if values := summarizePermissions(map[string]any{"nested": map[string]any{"enabled": true}}); len(values) == 0 {
-		t.Fatalf("summarizePermissions(flatten) = %+v, want fallback values", values)
+	if values := appapproval.SummarizePermissions(map[string]any{"nested": map[string]any{"enabled": true}}); len(values) == 0 {
+		t.Fatalf("appapproval.SummarizePermissions(flatten) = %+v, want fallback values", values)
 	}
-	claudeWebFetchBody := renderPermissionsApprovalBody(map[string]any{
+	claudeWebFetchBody := appapproval.RenderPermissionsApprovalBody(map[string]any{
 		"tool": "WebFetch",
 		"tool_input": map[string]any{
 			"url":    "https://docs.anthropic.com/en/docs/claude-code/sdk",
@@ -62,9 +62,9 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 		!strings.Contains(claudeWebFetchBody, "tool: `WebFetch`") ||
 		!strings.Contains(claudeWebFetchBody, "url: `https://docs.anthropic.com/en/docs/claude-code/sdk`") ||
 		!strings.Contains(claudeWebFetchBody, "prompt: `read the sdk docs`") {
-		t.Fatalf("renderPermissionsApprovalBody(claude webfetch) = %q", claudeWebFetchBody)
+		t.Fatalf("appapproval.RenderPermissionsApprovalBody(claude webfetch) = %q", claudeWebFetchBody)
 	}
-	claudeGrepBody := renderPermissionsApprovalBody(map[string]any{
+	claudeGrepBody := appapproval.RenderPermissionsApprovalBody(map[string]any{
 		"tool": "Grep",
 		"tool_input": map[string]any{
 			"path":    "README.md",
@@ -79,16 +79,13 @@ func TestApprovalRenderingHelpers(t *testing.T) {
 		!strings.Contains(claudeGrepBody, "path: `README.md`") ||
 		!strings.Contains(claudeGrepBody, "pattern: `sdk`") ||
 		!strings.Contains(claudeGrepBody, "glob: `*.md`") {
-		t.Fatalf("renderPermissionsApprovalBody(claude grep) = %q", claudeGrepBody)
+		t.Fatalf("appapproval.RenderPermissionsApprovalBody(claude grep) = %q", claudeGrepBody)
 	}
-	if values := collectPermissionPaths(map[string]any{"roots": []any{"/tmp/b", "/tmp/a", "/tmp/a"}}); len(values) != 2 || values[0] != "/tmp/a" {
-		t.Fatalf("collectPermissionPaths() = %+v, want sorted unique paths", values)
+	if values := appapproval.CollectPermissionPaths(map[string]any{"roots": []any{"/tmp/b", "/tmp/a", "/tmp/a"}}); len(values) != 2 || values[0] != "/tmp/a" {
+		t.Fatalf("appapproval.CollectPermissionPaths() = %+v, want sorted unique paths", values)
 	}
-	if got, ok := boolValue("deny"); !ok || got {
-		t.Fatalf("boolValue(deny) = %v, %v, want false/true", got, ok)
-	}
-	if got := flattenPermissionScalars("root", map[string]any{"enabled": true, "value": float64(1)}, 0); len(got) != 2 {
-		t.Fatalf("flattenPermissionScalars() = %+v, want scalar lines", got)
+	if got := appapproval.FlattenPermissionScalars("root", map[string]any{"enabled": true, "value": float64(1)}, 0); len(got) != 2 {
+		t.Fatalf("appapproval.FlattenPermissionScalars() = %+v, want scalar lines", got)
 	}
 
 	fileBody := appapproval.RenderFileBody(map[string]any{

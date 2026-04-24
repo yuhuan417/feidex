@@ -2091,16 +2091,16 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("user input pending = %+v, want replied", pending)
 	}
 
-	if got := a.approvalDecisionText("approval.command.accept"); got != "已允许本次执行" {
+	if got := approvalDecisionText("approval.command.accept"); got != "已允许本次执行" {
 		t.Fatalf("approvalDecisionText(command.accept) = %q", got)
 	}
-	if got := a.approvalDecisionText("approval.command.cancel"); got != "已拒绝并中断任务" {
+	if got := approvalDecisionText("approval.command.cancel"); got != "已拒绝并中断任务" {
 		t.Fatalf("approvalDecisionText(command.cancel) = %q", got)
 	}
-	if got := a.approvalDecisionText("approval.permissions.accept_session"); got != "已授权本会话权限请求" {
+	if got := approvalDecisionText("approval.permissions.accept_session"); got != "已授权本会话权限请求" {
 		t.Fatalf("approvalDecisionText(permissions.accept_session) = %q", got)
 	}
-	if got := a.approvalDecisionText("other"); got != "已拒绝" {
+	if got := approvalDecisionText("other"); got != "已拒绝" {
 		t.Fatalf("approvalDecisionText(default) = %q", got)
 	}
 }

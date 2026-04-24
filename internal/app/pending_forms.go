@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	appreview "feidex/internal/app/review"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -140,10 +141,10 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			Card:  rawCard(newWorkspaceConfigService(a).renderWorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	}
-	if body := a.cancelledPendingBody(pending); body != "" {
+	if body := cancelledPendingBody(pending); body != "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消"},
-			Card:  rawCard(a.feishu.SimpleStatusCard(a.cancelledPendingTitle(pending), "grey", body, nil)),
+			Card:  rawCard(a.feishu.SimpleStatusCard(cancelledPendingTitle(pending), "grey", body, nil)),
 		}, nil
 	}
 	return &callback.CardActionTriggerResponse{
@@ -152,7 +153,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 	}, nil
 }
 
-func (a *App) cancelledPendingTitle(pending *state.PendingRequest) string {
+func cancelledPendingTitle(pending *state.PendingRequest) string {
 	if pending == nil {
 		return "已取消"
 	}
@@ -170,7 +171,7 @@ func (a *App) cancelledPendingTitle(pending *state.PendingRequest) string {
 	}
 }
 
-func (a *App) cancelledPendingBody(pending *state.PendingRequest) string {
+func cancelledPendingBody(pending *state.PendingRequest) string {
 	if pending == nil {
 		return ""
 	}
@@ -211,7 +212,7 @@ func (a *App) cancelledPendingBody(pending *state.PendingRequest) string {
 		case reviewFormModeCommit:
 			lines = append(lines, "模式: commit")
 			if sha := strings.TrimSpace(payload.CommitSHA); sha != "" {
-				lines = append(lines, "当前选择: `"+shortReviewCommitSHA(sha)+"`")
+				lines = append(lines, "当前选择: `"+appreview.ShortCommitSHA(sha)+"`")
 			}
 			if title := strings.TrimSpace(payload.CommitTitle); title != "" {
 				lines = append(lines, title)

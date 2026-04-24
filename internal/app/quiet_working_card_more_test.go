@@ -118,12 +118,12 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	workspace := a.cfg.Workspaces[0].Cwd
 
-	if got := a.prepareQuietWorkingCardUpdateLocked(nil, "noop", map[string]any{"type": "reasoning"}, workspace); got != (quietWorkingCardOp{}) {
+	if got := prepareQuietWorkingCardUpdateLocked(nil, "noop", map[string]any{"type": "reasoning"}, workspace); got != (quietWorkingCardOp{}) {
 		t.Fatalf("prepareQuietWorkingCardUpdateLocked(nil) = %+v", got)
 	}
 
 	stream := &turnStream{TurnID: "turn-1"}
-	if got := a.prepareQuietWorkingCardUpdateLocked(stream, "noop", map[string]any{
+	if got := prepareQuietWorkingCardUpdateLocked(stream, "noop", map[string]any{
 		"type": "webSearch",
 		"action": map[string]any{
 			"type": "openPage",
@@ -139,7 +139,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 		Entries:      map[string]string{reasoningKey: "思考中..."},
 		RenderedBody: "思考中...",
 	}
-	op := a.prepareQuietWorkingCardUpdateLocked(stream, "cmd-1", map[string]any{
+	op := prepareQuietWorkingCardUpdateLocked(stream, "cmd-1", map[string]any{
 		"type":   "commandExecution",
 		"status": "completed",
 		"commandActions": []any{
@@ -149,7 +149,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	if op.MessageID != "msg-work" || !strings.Contains(op.Body, "Read `quiet_mode.go`") || strings.Contains(op.Body, "思考中...") {
 		t.Fatalf("prepareQuietWorkingCardUpdateLocked(command) = %+v", op)
 	}
-	if got := a.prepareQuietWorkingCardUpdateLocked(stream, "cmd-1", map[string]any{
+	if got := prepareQuietWorkingCardUpdateLocked(stream, "cmd-1", map[string]any{
 		"type":   "commandExecution",
 		"status": "completed",
 		"commandActions": []any{
@@ -166,7 +166,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 			Entries:    map[string]string{reasoningKey: "思考中..."},
 		},
 	}
-	boundary := a.prepareQuietWorkingCardBoundaryLocked(reasoningOnly)
+	boundary := prepareQuietWorkingCardBoundaryLocked(reasoningOnly)
 	if boundary.ReuseMessageID != "reuse-1" || boundary.Op != (quietWorkingCardOp{}) || reasoningOnly.QuietWorking != nil {
 		t.Fatalf("prepareQuietWorkingCardBoundaryLocked(reasoning-only) = %+v, stream=%+v", boundary, reasoningOnly)
 	}
@@ -184,7 +184,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 			},
 		},
 	}
-	boundary = a.prepareQuietWorkingCardBoundaryLocked(mixed)
+	boundary = prepareQuietWorkingCardBoundaryLocked(mixed)
 	if boundary.ReuseMessageID != "" || boundary.Op.MessageID != "patch-1" || boundary.Op.Body != "Read `quiet_mode.go`" || mixed.QuietWorking != nil {
 		t.Fatalf("prepareQuietWorkingCardBoundaryLocked(mixed) = %+v, stream=%+v", boundary, mixed)
 	}

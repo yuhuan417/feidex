@@ -121,10 +121,10 @@ func approvalRequestPayload(pending *state.PendingRequest) map[string]any {
 }
 
 func (a *App) renderResolvedApprovalCard(pending *state.PendingRequest, action *feishu.CardAction, actionName string) map[string]any {
-	decision := a.approvalDecisionText(actionName)
-	body := strings.TrimSpace(a.approvalBodyText(pending))
+	decision := approvalDecisionText(actionName)
+	body := strings.TrimSpace(approvalBodyText(pending))
 	lines := []string{"处理结果: " + decision}
-	if detail := strings.TrimSpace(a.approvalDecisionDetail(pending, action, actionName)); detail != "" {
+	if detail := strings.TrimSpace(approvalDecisionDetail(pending, action, actionName)); detail != "" {
 		lines = append(lines, detail)
 	}
 	if body != "" {
@@ -134,7 +134,7 @@ func (a *App) renderResolvedApprovalCard(pending *state.PendingRequest, action *
 	return a.feishu.SimpleStatusCard("审批已处理", color, strings.Join(lines, "\n"), nil)
 }
 
-func (a *App) approvalBodyText(pending *state.PendingRequest) string {
+func approvalBodyText(pending *state.PendingRequest) string {
 	if pending == nil {
 		return ""
 	}
@@ -160,7 +160,7 @@ func (a *App) approvalBodyText(pending *state.PendingRequest) string {
 			}
 			if pending.Kind == "permissions" {
 				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(renderPermissionsApprovalBody(request)); body != "" {
+					if body := strings.TrimSpace(appapproval.RenderPermissionsApprovalBody(request)); body != "" {
 						return body
 					}
 				}
@@ -184,7 +184,7 @@ func (a *App) approvalBodyText(pending *state.PendingRequest) string {
 	}
 }
 
-func (a *App) approvalDecisionText(action string) string {
+func approvalDecisionText(action string) string {
 	switch action {
 	case "approval.command.accept", "approval.file.accept":
 		return "已允许本次执行"
@@ -201,7 +201,7 @@ func (a *App) approvalDecisionText(action string) string {
 	}
 }
 
-func (a *App) approvalDecisionDetail(pending *state.PendingRequest, action *feishu.CardAction, actionName string) string {
+func approvalDecisionDetail(pending *state.PendingRequest, action *feishu.CardAction, actionName string) string {
 	switch actionName {
 	case "approval.command.cancel", "approval.file.cancel":
 		return "该 turn 会立即中断。"

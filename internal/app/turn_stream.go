@@ -143,7 +143,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 		stream.LastSentPlan = text
 		stream.PendingPlan = ""
 		if stream.QuietWorking != nil {
-			planBoundary = s.app.prepareQuietWorkingCardBoundaryLocked(stream)
+			planBoundary = prepareQuietWorkingCardBoundaryLocked(stream)
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
@@ -168,11 +168,11 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 	}
 	if hasPayload && isQuietBoundaryTurnPayload(payload) {
 		if stream.QuietWorking != nil {
-			itemBoundary = s.app.prepareQuietWorkingCardBoundaryLocked(stream)
+			itemBoundary = prepareQuietWorkingCardBoundaryLocked(stream)
 			itemReuseMessage = itemBoundary.ReuseMessageID
 		}
 	} else if s.app.quietWorkingCardEnabled() {
-		workingUpdate = s.app.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
+		workingUpdate = prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	}
 	tracker.mu.Unlock()
 
@@ -216,7 +216,7 @@ func (s turnStreamService) flushTurnStream(ctx context.Context, threadID, turnID
 	if pendingPlan != "" && pendingPlan != stream.LastSentPlan {
 		planText = pendingPlan
 		if stream.QuietWorking != nil {
-			planBoundary = s.app.prepareQuietWorkingCardBoundaryLocked(stream)
+			planBoundary = prepareQuietWorkingCardBoundaryLocked(stream)
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
@@ -313,7 +313,7 @@ func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) quietWo
 		return quietWorkingBoundary{}
 	}
 	tracker.mu.Lock()
-	boundary := s.app.prepareQuietWorkingCardBoundaryLocked(tracker.streams[turnID])
+	boundary := prepareQuietWorkingCardBoundaryLocked(tracker.streams[turnID])
 	tracker.mu.Unlock()
 	return boundary
 }
@@ -328,7 +328,7 @@ func (s turnStreamService) prepareTurnStreamQuietUpdate(sessionKey string, sub *
 	if strings.TrimSpace(threadID) != "" {
 		stream.ThreadID = strings.TrimSpace(threadID)
 	}
-	op := s.app.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
+	op := prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	tracker.mu.Unlock()
 	return op
 }

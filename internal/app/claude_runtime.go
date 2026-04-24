@@ -1103,7 +1103,7 @@ func (r *claudeRuntime) claudeApprovalPresentation(workspaceID string, req *clau
 				return strings.TrimSpace(*req.BlockedPath)
 			}(), ""),
 		}
-		body = renderPermissionsApprovalBody(payload)
+		body = appapproval.RenderPermissionsApprovalBody(payload)
 	}
 	return kind, body, payload
 }

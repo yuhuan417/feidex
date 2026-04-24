@@ -24,8 +24,8 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	if resolvedBase.Type != appreview.TargetBaseBranch || resolvedBase.Branch != "main" {
 		t.Fatalf("resolved base target = %+v, want base branch main", resolvedBase)
 	}
-	if got := reviewSubmissionInputText(resolvedBase); got != "Review: base branch main" {
-		t.Fatalf("reviewSubmissionInputText(base) = %q", got)
+	if got := appreview.SubmissionInputText(resolvedBase); got != "Review: base branch main" {
+		t.Fatalf("appreview.SubmissionInputText(base) = %q", got)
 	}
 
 	resolvedCommit, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
@@ -38,8 +38,8 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	if resolvedCommit.Type != appreview.TargetCommit || resolvedCommit.CommitSHA != commits[1] || resolvedCommit.CommitTitle != "feature change" {
 		t.Fatalf("resolved commit target = %+v, want full sha and title", resolvedCommit)
 	}
-	if got := reviewTargetSummary(resolvedCommit); got != "commit `"+shortReviewCommitSHA(commits[1])+"` feature change" {
-		t.Fatalf("reviewTargetSummary(commit) = %q", got)
+	if got := appreview.TargetSummary(resolvedCommit); got != "commit `"+appreview.ShortCommitSHA(commits[1])+"` feature change" {
+		t.Fatalf("appreview.TargetSummary(commit) = %q", got)
 	}
 
 	writeFile(t, repo+"/main.go", "package main\n\nfunc main() { println(\"dirty\") }\n")
@@ -61,8 +61,8 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	if resolvedCustom.Type != appreview.TargetCustom || resolvedCustom.Instructions != "focus on regressions" {
 		t.Fatalf("resolved custom target = %+v, want custom instructions", resolvedCustom)
 	}
-	if got := reviewSubmissionInputText(resolvedCustom); got != "Review: focus on regressions" {
-		t.Fatalf("reviewSubmissionInputText(custom) = %q", got)
+	if got := appreview.SubmissionInputText(resolvedCustom); got != "Review: focus on regressions" {
+		t.Fatalf("appreview.SubmissionInputText(custom) = %q", got)
 	}
 }
 

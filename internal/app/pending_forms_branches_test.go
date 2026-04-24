@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appreview "feidex/internal/app/review"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -107,7 +108,7 @@ func TestPendingFormCancelPreservesReviewSummary(t *testing.T) {
 		t.Fatalf("card title = %q", got)
 	}
 	body := cardMarkdownContent(t, card)
-	for _, want := range []string{"已取消本次 review 请求。", "模式: commit", "当前选择: `" + shortReviewCommitSHA("1234567890abcdef") + "`", "Fix cancel card rendering"} {
+	for _, want := range []string{"已取消本次 review 请求。", "模式: commit", "当前选择: `" + appreview.ShortCommitSHA("1234567890abcdef") + "`", "Fix cancel card rendering"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("card body missing %q: %q", want, body)
 		}

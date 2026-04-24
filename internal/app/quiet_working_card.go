@@ -43,7 +43,7 @@ func isQuietBoundaryTurnItem(itemType string) bool {
 	}
 }
 
-func (a *App) prepareQuietWorkingCardUpdateLocked(stream *turnStream, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
+func prepareQuietWorkingCardUpdateLocked(stream *turnStream, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
 	if stream == nil {
 		return quietWorkingCardOp{}
 	}
@@ -82,7 +82,7 @@ func (a *App) prepareQuietWorkingCardUpdateLocked(stream *turnStream, itemID str
 	}
 }
 
-func (a *App) prepareQuietWorkingCardBoundaryLocked(stream *turnStream) quietWorkingBoundary {
+func prepareQuietWorkingCardBoundaryLocked(stream *turnStream) quietWorkingBoundary {
 	if stream == nil || stream.QuietWorking == nil {
 		return quietWorkingBoundary{}
 	}

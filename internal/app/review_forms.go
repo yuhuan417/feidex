@@ -211,7 +211,7 @@ func (s reviewFormService) renderReviewCommitCard(sessionKey, requestID string, 
 	appendMarkdownBodyCardElement(card, map[string]any{
 		"tag": "markdown",
 		"content": menuCardBody("menu.review",
-			"从最近 100 个 commit 中选择一个 target。\n\n当前选择: `"+inlineCodeText(shortReviewCommitSHA(selected))+"`\n"+selectedLabel),
+			"从最近 100 个 commit 中选择一个 target。\n\n当前选择: `"+inlineCodeText(appreview.ShortCommitSHA(selected))+"`\n"+selectedLabel),
 	})
 	selectOptions := make([]selectStaticOption, 0, len(options))
 	for _, option := range options {

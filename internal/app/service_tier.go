@@ -5,44 +5,21 @@ import (
 	"fmt"
 	"strings"
 
+	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
-const (
-	serviceTierFast = "fast"
-)
+const serviceTierFast = appruntime.ServiceTierFast
 
-func normalizeServiceTier(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case serviceTierFast:
-		return serviceTierFast
-	default:
-		return ""
-	}
-}
+func normalizeServiceTier(value string) string { return appruntime.NormalizeServiceTier(value) }
 
-func toggleServiceTier(value string) string {
-	if normalizeServiceTier(value) == serviceTierFast {
-		return ""
-	}
-	return serviceTierFast
-}
+func toggleServiceTier(value string) string { return appruntime.ToggleServiceTier(value) }
 
-func renderServiceTierValue(value string) string {
-	value = normalizeServiceTier(value)
-	if value == "" {
-		return "-"
-	}
-	return "`" + value + "`"
-}
+func renderServiceTierValue(value string) string { return appruntime.RenderServiceTierValue(value) }
 
 func renderServiceTierReplyValue(value string) string {
-	value = normalizeServiceTier(value)
-	if value == "" {
-		return "未设置"
-	}
-	return "`" + value + "`"
+	return appruntime.RenderServiceTierReplyValue(value)
 }
 
 func (a *App) renderServiceTierMenuCard(sessionKey string) map[string]any {

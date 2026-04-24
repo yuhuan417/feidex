@@ -200,7 +200,7 @@ func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
 	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	permissions, _ := raw["permissions"].(map[string]any)
-	newOutboundCardService(a).sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, renderPermissionsApprovalBody(raw), permissions, raw)
+	newOutboundCardService(a).sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, appapproval.RenderPermissionsApprovalBody(raw), permissions, raw)
 }
 
 func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
