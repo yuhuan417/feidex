@@ -27,74 +27,30 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 			snapshot.Message = message
 		},
 	)
-	rollback := func(previousVersion string, cause error) {
-		update("rolling_back", "升级失败，正在回滚到 "+firstNonEmpty(previousVersion, "-"))
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if strings.TrimSpace(previousVersion) == "" {
-			finalize("rollback_failed", "升级失败，且缺少可回滚的旧版本。原因: "+cause.Error())
-			return
-		}
-		if err := manager.InstallVersion(ctx, previousVersion); err != nil {
-			finalize("rollback_failed", "升级失败，自动回滚也失败。原始错误: "+cause.Error()+"；回滚错误: "+err.Error())
-			return
-		}
-		if err := a.codexSmokeTest(ctx); err != nil {
-			finalize("rollback_failed", "升级失败，回滚后的 smoke test 也失败。原始错误: "+cause.Error()+"；回滚验证错误: "+err.Error())
-			return
-		}
-		finalize("rolled_back", "升级失败，已自动回滚到 `"+previousVersion+"`。原因: "+cause.Error())
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	probe, err := manager.Probe(ctx)
-	cancel()
-	if err != nil {
-		finalize("failed", "升级前检查失败: "+err.Error())
-		return
-	}
-	if !probe.Supported {
-		finalize("failed", "当前环境不支持自动升级: "+firstNonEmpty(probe.Reason, "unknown"))
-		return
-	}
-	previousVersion := firstNonEmpty(probe.CurrentVersion, payload.CurrentVersion)
-	a.updateCodexUpgrade(func(snapshot *codexUpgradeSnapshot) {
-		snapshot.CurrentVersion = previousVersion
-		snapshot.PreviousVersion = previousVersion
-		snapshot.TargetVersion = payload.TargetVersion
-		snapshot.LatestVersion = payload.TargetVersion
+	runMaintenanceUpgradeWorkflow(maintenanceUpgradeWorkflow{
+		PackageName:    "@openai/codex",
+		BackendName:    "Codex",
+		CurrentVersion: payload.CurrentVersion,
+		TargetVersion:  payload.TargetVersion,
+		Probe: func(ctx context.Context) (maintenanceUpgradeProbe, error) {
+			probe, err := manager.Probe(ctx)
+			return maintenanceUpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
+		},
+		InstallVersion:    manager.InstallVersion,
+		SmokeTest:         a.codexSmokeTest,
+		RefreshRuntime:    a.refreshCodexRuntimeAfterMaintenance,
+		RuntimeBusyReason: a.codexUpgradeRuntimeBusyReason,
+		RecordVersions: func(previousVersion, targetVersion string) {
+			a.updateCodexUpgrade(func(snapshot *codexUpgradeSnapshot) {
+				snapshot.CurrentVersion = previousVersion
+				snapshot.PreviousVersion = previousVersion
+				snapshot.TargetVersion = targetVersion
+				snapshot.LatestVersion = targetVersion
+			})
+		},
+		Update:   func(phase, message string) { update(phase, message) },
+		Finalize: finalize,
 	})
-	if reason := a.codexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
-		finalize("failed", "升级前检查失败: "+reason)
-		return
-	}
-	if strings.TrimSpace(previousVersion) == strings.TrimSpace(payload.TargetVersion) {
-		finalize("success", "当前已经是最新稳定版 `"+payload.TargetVersion+"`")
-		return
-	}
-
-	update("installing", "正在安装 @openai/codex@"+payload.TargetVersion)
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
-	err = manager.InstallVersion(ctx, payload.TargetVersion)
-	cancel()
-	if err != nil {
-		rollback(previousVersion, err)
-		return
-	}
-
-	update("smoke_testing", "正在验证新版本")
-	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	switched, err := a.refreshCodexRuntimeAfterMaintenance(ctx)
-	cancel()
-	if err != nil {
-		rollback(previousVersion, err)
-		return
-	}
-	if switched {
-		finalize("success", "升级成功，已切换到 `"+payload.TargetVersion+"`")
-		return
-	}
-	finalize("success", "升级成功，已验证 `"+payload.TargetVersion+"` 可用；当前 frontend 未启用 Codex backend")
 }
 
 func (a *App) codexSmokeTest(ctx context.Context) error {
