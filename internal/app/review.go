@@ -52,25 +52,25 @@ func mergeReviewCustomFormValues(payload reviewPendingPayload, values map[string
 	return payload
 }
 
-func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, args []string) error {
+func commandReview(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
 	if len(args) == 0 {
-		return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
+		return startInlineReviewFromMessage(a, msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "uncommitted", "uncommittedChanges":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /review | /review uncommitted | /review base [branch] | /review commit [rev] | /review custom [instructions]")
 		}
-		return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
+		return startInlineReviewFromMessage(a, msg, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	case "base":
 		switch len(args) {
 		case 1:
-			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeBase)
+			return newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase)
 		case 2:
-			return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{
+			return startInlineReviewFromMessage(a, msg, appreview.TargetSpec{
 				Type:   appreview.TargetBaseBranch,
 				Branch: strings.TrimSpace(args[1]),
 			})
@@ -80,9 +80,9 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 	case "commit":
 		switch len(args) {
 		case 1:
-			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCommit)
+			return newReviewFormService(a).beginReviewForm(msg, reviewFormModeCommit)
 		case 2:
-			return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{
+			return startInlineReviewFromMessage(a, msg, appreview.TargetSpec{
 				Type:      appreview.TargetCommit,
 				CommitSHA: strings.TrimSpace(args[1]),
 			})
@@ -91,9 +91,9 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		}
 	case "custom":
 		if len(args) == 1 {
-			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCustom)
+			return newReviewFormService(a).beginReviewForm(msg, reviewFormModeCustom)
 		}
-		return startInlineReviewFromMessage(s.app, msg, appreview.TargetSpec{
+		return startInlineReviewFromMessage(a, msg, appreview.TargetSpec{
 			Type:         appreview.TargetCustom,
 			Instructions: strings.TrimSpace(strings.Join(args[1:], " ")),
 		})

@@ -918,7 +918,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeApprovalAction(a,&feishu.CardAction{
+	resp, err := completeApprovalAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "approve-1"},
 	}, "approval.command.accept_session")
@@ -968,7 +968,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 		t.Fatalf("approval pending = %+v, want Claude pending command", pending)
 	}
 
-	if err := sendClaudePlanModeCard(a,"plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
+	if err := sendClaudePlanModeCard(a, "plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
 		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
 	}
 	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
@@ -1009,7 +1009,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-1", "question_id": "q1", "answer": "Fast"},
 	})
@@ -1059,7 +1059,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-form-1"},
 		FormValue: map[string]any{
@@ -1175,7 +1175,7 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := commandInterrupt(a,msg); err != nil {
+	if err := commandInterrupt(a, msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if len(claude.interruptCalls) != 1 || claude.interruptCalls[0] != sessionKey {
@@ -1293,7 +1293,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completePendingFormCancel(a,&feishu.CardAction{
+	resp, err := completePendingFormCancel(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "plan-cancel-1"},
 	})
@@ -1339,7 +1339,7 @@ func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completePendingFormCancel(a,&feishu.CardAction{
+	resp, err := completePendingFormCancel(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "review-cancel-1"},
 	})
@@ -1548,7 +1548,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
 	}
 
-	if err := commandAppend(a,msg, "  append from command  "); err != nil {
+	if err := commandAppend(a, msg, "  append from command  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
 	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "append from command") {

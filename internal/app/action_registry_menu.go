@@ -26,13 +26,13 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newBackendSelectionService(s.app).completeMenuBackend(action, actionSessionKey(action))
 	},
 	"menu.thread": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadActionService(s.app).completeMenuThread(action, actionSessionKey(action))
+		return newThreadService(s.app).completeMenuThread(action, actionSessionKey(action))
 	},
 	"menu.new": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadActionService(s.app).completeMenuNew(action, actionSessionKey(action))
+		return newThreadService(s.app).completeMenuNew(action, actionSessionKey(action))
 	},
 	"menu.download": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newConversationWorkflowService(s.app).completeMenuDownload(action, actionSessionKey(action))
+		return completeMenuDownload(s.app, action, actionSessionKey(action))
 	},
 	"menu.quiet": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuQuiet(action, actionSessionKey(action))
@@ -44,19 +44,19 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuReview(action, actionSessionKey(action))
 	},
 	"menu.review.uncommitted": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newConversationWorkflowService(s.app).completeMenuReviewUncommitted(action, actionSessionKey(action))
+		return completeMenuReviewUncommitted(s.app, action, actionSessionKey(action))
 	},
 	"menu.review.base": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newConversationWorkflowService(s.app).completeMenuReviewBase(action, actionSessionKey(action))
+		return completeMenuReviewBase(s.app, action, actionSessionKey(action))
 	},
 	"menu.review.commit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newConversationWorkflowService(s.app).completeMenuReviewCommit(action, actionSessionKey(action))
+		return completeMenuReviewCommit(s.app, action, actionSessionKey(action))
 	},
 	"menu.review.custom": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return completeMenuCommand(s.app, action, actionSessionKey(action), "/review custom", "menu.review")
 	},
 	"menu.fork": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newConversationWorkflowService(s.app).completeMenuFork(action, actionSessionKey(action))
+		return completeMenuFork(s.app, action, actionSessionKey(action))
 	},
 	"menu.usage": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuUsage(action, actionSessionKey(action))
@@ -95,7 +95,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuHistory(action, actionSessionKey(action))
 	},
 	"menu.interrupt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadActionService(s.app).completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
+		return newThreadService(s.app).completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
 	},
 	"menu.workspace": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return completeMenuWorkspace(s.app, action, actionSessionKey(action))

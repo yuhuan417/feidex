@@ -28,7 +28,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newConversationWorkflowService(a).commandCompact(msg, args)
+				return commandCompact(a, msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
@@ -44,7 +44,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newConversationWorkflowService(a).commandFork(msg, args)
+				return commandFork(a, msg, args)
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
@@ -60,7 +60,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-				return newThreadCommandService(a).commandThreadsNew(msg)
+				return newThreadService(a).commandThreadsNew(msg)
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
@@ -76,7 +76,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return matchThreadCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newThreadCommandService(a).commandThread(msg, args)
+				return newThreadService(a).commandThread(msg, args)
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
@@ -99,7 +99,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return matchSessionCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newThreadCommandService(a).commandSession(msg, args)
+				return newThreadService(a).commandSession(msg, args)
 			},
 			HelpGroup:   "thread",
 			HelpEntries: claudeSessionHelpEntries(),
@@ -114,7 +114,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				if len(args) > 0 {
 					return fmt.Errorf("usage: /threads")
 				}
-				return newThreadCommandService(a).commandThread(msg, []string{"list"})
+				return newThreadService(a).commandThread(msg, []string{"list"})
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{

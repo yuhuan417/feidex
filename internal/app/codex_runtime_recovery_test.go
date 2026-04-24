@@ -26,7 +26,7 @@ func waitForTestCondition(t *testing.T, label string, fn func() bool) {
 
 func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	configureCodexClientRuntime(a,fc)
+	configureCodexClientRuntime(a, fc)
 
 	sessionKey := "sess-transport-recovery"
 	activeSub := seedActiveSubmission(t, a, sessionKey, "thread-dead", "turn-dead")
@@ -189,7 +189,7 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 
 func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecoveryFailure(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	configureCodexClientRuntime(a,fc)
+	configureCodexClientRuntime(a, fc)
 
 	sessionKey := "sess-auto-thread-recovery"
 	if err := a.store.UpsertSession(&state.Session{

@@ -52,7 +52,7 @@ func parseWorkspaceCloneArgs(args []string) (repoURL, workspaceID, parentDir str
 	}
 }
 
-func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
+func (s workspaceService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
 		return newWorkspaceConfigService(s.app).showWorkspaceMenu(msg)
 	}
@@ -114,7 +114,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
-		resp, err := newWorkspaceActionService(s.app).completeWorkspaceSandboxSet(commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		resp, err := newWorkspaceService(s.app).completeWorkspaceSandboxSet(commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
-		resp, err := newWorkspaceActionService(s.app).completeWorkspacePolicySet(commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		resp, err := newWorkspaceService(s.app).completeWorkspacePolicySet(commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}

@@ -23,7 +23,7 @@ func TestCompleteUserInputAnswerKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	})
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-1", "question_id": "mode", "answer": "Fast"},
 	})
@@ -62,7 +62,7 @@ func TestCompleteUserInputFormAnswerKeepsPendingWhenCodexReplyFails(t *testing.T
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := completeUserInputAnswer(a,&feishu.CardAction{
+	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-form-1"},
 		FormValue:   map[string]any{"mode": "Fast"},
@@ -130,7 +130,7 @@ func TestCompleteElicitationURLActionKeepsPendingWhenCodexReplyFails(t *testing.
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := completeElicitationURLAction(a,&feishu.CardAction{
+	resp, err := completeElicitationURLAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "url-1"},
 	}, "elicitation_url.accept")
@@ -161,7 +161,7 @@ func TestCompletePendingFormCancelKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := completePendingFormCancel(a,&feishu.CardAction{
+	resp, err := completePendingFormCancel(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "form-1"},
 	})

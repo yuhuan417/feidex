@@ -8,7 +8,7 @@ import (
 	"feidex/internal/feishu"
 )
 
-func (s commandService) handleCommand(msg *feishu.InboundMessage, raw string) error {
+func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	raw = strings.TrimSpace(raw)
 	fields := strings.Fields(raw)
 	if len(fields) == 0 {
@@ -18,21 +18,21 @@ func (s commandService) handleCommand(msg *feishu.InboundMessage, raw string) er
 	if spec == nil {
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
-	if !hasConfiguredBackend(s.app) && fields[0] != "/backend" {
-		return newBackendSelectionService(s.app).replyBackendSelectionCard(msg, "")
+	if !hasConfiguredBackend(a) && fields[0] != "/backend" {
+		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
-	backend := configuredBackend(s.app)
-	if err := handleBackendMaintenanceBlock(s.app, raw); err != nil {
+	backend := configuredBackend(a)
+	if err := handleBackendMaintenanceBlock(a, raw); err != nil {
 		return err
 	}
 	if !commandHandlesLocallyForBackend(spec, backend, fields) {
-		return newCommandService(s.app).enqueuePassthroughCommand(msg, raw)
+		return enqueuePassthroughCommand(a, msg, raw)
 	}
-	return spec.Handle(s.app, msg, fields[1:])
+	return spec.Handle(a, msg, fields[1:])
 }
 
-func (s commandService) enqueuePassthroughCommand(msg *feishu.InboundMessage, raw string) error {
-	if s.app == nil || msg == nil {
+func enqueuePassthroughCommand(a *App, msg *feishu.InboundMessage, raw string) error {
+	if a == nil || msg == nil {
 		return nil
 	}
 	raw = strings.TrimSpace(raw)
@@ -41,7 +41,7 @@ func (s commandService) enqueuePassthroughCommand(msg *feishu.InboundMessage, ra
 	}
 	cloned := *msg
 	cloned.Text = raw
-	return enqueueSubmission(s.app, &cloned)
+	return enqueueSubmission(a, &cloned)
 }
 
 func isLocalCommandForBackend(backend, raw string) bool {
@@ -61,45 +61,45 @@ func isLocalCommand(raw string) bool {
 	return isLocalCommandForBackend(backendCodex, raw)
 }
 
-func (s commandService) commandHelp(msg *feishu.InboundMessage, args []string) error {
+func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /help")
 	}
-	card := newCommandService(s.app).renderHelpCard(makeSessionKey(s.app, msg))
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	card := renderHelpCard(a, makeSessionKey(a, msg))
+	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 
-func (s commandService) renderToolsMenuCard(sessionKey string) map[string]any {
+func renderToolsMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.tools")
-	return s.app.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(configuredBackend(s.app), spec.Action, sessionKey))
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 
-func (s commandService) renderSessionMenuCard(sessionKey string) map[string]any {
-	return newCommandService(s.app).renderToolsMenuCard(sessionKey)
+func renderSessionMenuCard(a *App, sessionKey string) map[string]any {
+	return renderToolsMenuCard(a, sessionKey)
 }
 
-func (s commandService) renderContextMenuCard(sessionKey string) map[string]any {
-	return renderCommandMenuCard(s.app, sessionKey)
+func renderContextMenuCard(a *App, sessionKey string) map[string]any {
+	return renderCommandMenuCard(a, sessionKey)
 }
 
-func (s commandService) renderSystemMenuCard(sessionKey string) map[string]any {
+func renderSystemMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
-	backend := firstNonEmpty(configuredBackend(s.app), "unset")
+	backend := firstNonEmpty(configuredBackend(a), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + renderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
-	return s.app.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(configuredBackend(s.app), spec.Action, sessionKey))
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 
-func (s commandService) renderBackendMenuCard(sessionKey string) map[string]any {
+func renderBackendMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.backend")
-	backend := firstNonEmpty(configuredBackend(s.app), "unset")
+	backend := firstNonEmpty(configuredBackend(a), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`"
-	return s.app.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(configuredBackend(s.app), spec.Action, sessionKey))
+	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 
-func (s commandService) renderHelpCard(sessionKey string) map[string]any {
+func renderHelpCard(a *App, sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return s.app.feishu.SimpleStatusCard("帮助说明", "blue", menuCardBody("menu.help", renderHelpBodyFromRegistry(configuredBackend(s.app))), buttons)
+	return a.feishu.SimpleStatusCard("帮助说明", "blue", menuCardBody("menu.help", renderHelpBodyFromRegistry(configuredBackend(a))), buttons)
 }

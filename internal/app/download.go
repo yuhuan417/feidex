@@ -18,15 +18,15 @@ import (
 
 const downloadFilePendingKind = "download_file"
 
-func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage, args []string) error {
+func commandDownload(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /download")
 	}
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
-	appState := appState(s.app)
+	sessionKey, _, ws := newWorkspaceConfigService(a).currentWorkspaceForMessage(msg)
+	appState := appState(a)
 	payload, err := newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return err
@@ -35,11 +35,11 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 	if err != nil {
 		return err
 	}
-	card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(a).renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -56,8 +56,8 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 	})
 }
 
-func (s conversationWorkflowService) completeMenuDownload(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/download", "menu.tools")
+func completeMenuDownload(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return completeMenuCommand(a, action, sessionKey, "/download", "menu.tools")
 }
 
 func newDownloadPathPickerPayload(ws *config.Workspace) (pathPickerPayload, error) {

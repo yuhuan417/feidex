@@ -31,11 +31,11 @@ func sessionHasActiveWork(sess *state.Session) bool {
 	}
 }
 
-func (s conversationWorkflowService) commandCompact(msg *feishu.InboundMessage, args []string) error {
+func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /compact")
 	}
-	return handleBackendCompactCommand(s.app, msg)
+	return handleBackendCompactCommand(a, msg)
 }
 
 func compactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {
@@ -80,12 +80,12 @@ func renderCompactFailedCard(a *App, sessionKey, errText string) map[string]any 
 	return a.feishu.SimpleStatusCard("压缩上下文", "orange", menuCardBody("menu.tools", body), compactMenuButtons(sessionKey, true))
 }
 
-func (s conversationWorkflowService) runMenuCompactAction(action *feishu.CardAction, sessionKey string) error {
-	if s.app == nil {
+func runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
+	if a == nil {
 		return nil
 	}
-	if actions := backendActions(s.app); actions != nil {
-		return actions.runMenuCompactAction(s.app, action, sessionKey)
+	if actions := backendActions(a); actions != nil {
+		return actions.runMenuCompactAction(a, action, sessionKey)
 	}
 	return nil
 }

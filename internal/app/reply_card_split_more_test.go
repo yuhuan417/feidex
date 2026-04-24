@@ -40,7 +40,7 @@ func TestReplyCardSplitHelpersAndExpansion(t *testing.T) {
 		FooterLines: []string{"footer line"},
 	}
 
-	expanded := expandReplyCardChunkToFit(a,context.Background(), sub, "最终答复", "green", chunk, false)
+	expanded := expandReplyCardChunkToFit(a, context.Background(), sub, "最终答复", "green", chunk, false)
 	if len(expanded) < 2 {
 		t.Fatalf("expandReplyCardChunkToFit() = %#v", expanded)
 	}

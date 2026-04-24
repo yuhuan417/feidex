@@ -76,7 +76,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("create submission: %v", err)
 	}
 
-	err = newCommandService(a).handleCommand(&feishu.InboundMessage{
+	err = handleCommand(a, &feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -107,7 +107,7 @@ func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 		UserID:    "user-1",
 		Text:      "/quiet",
 	}
-	err := newCommandService(a).handleCommand(msg, "/quiet")
+	err := handleCommand(a, msg, "/quiet")
 	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
 		t.Fatalf("handleCommand() error = %v, want backend switch block", err)
 	}
@@ -283,7 +283,7 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 				UserID:    "user",
 				Text:      raw,
 			}
-			if err := newCommandService(a).handleCommand(msg, raw); err != nil {
+			if err := handleCommand(a, msg, raw); err != nil {
 				t.Fatalf("handleCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.startTurnCalls) != 1 {
@@ -353,20 +353,20 @@ func TestCommandFastTogglesAndSupportsConfigCard(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := commandFast(a,msg, nil); err != nil {
+	if err := commandFast(a, msg, nil); err != nil {
 		t.Fatalf("commandFast(toggle to fast) error = %v", err)
 	}
 	sess := a.store.GetSession("feishu:p2p:chat:user")
 	if sess == nil || sess.ActiveThreadServiceTier != "fast" {
 		t.Fatalf("expected service tier fast, got %#v", sess)
 	}
-	if err := commandFast(a,msg, []string{"config"}); err != nil {
+	if err := commandFast(a, msg, []string{"config"}); err != nil {
 		t.Fatalf("commandFast(config) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
 	}
-	if err := commandFast(a,msg, []string{"default"}); err != nil {
+	if err := commandFast(a, msg, []string{"default"}); err != nil {
 		t.Fatalf("commandFast(set default) error = %v", err)
 	}
 	sess = a.store.GetSession("feishu:p2p:chat:user")
@@ -401,7 +401,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := newConversationWorkflowService(a).commandCompact(msg, nil); err != nil {
+	if err := commandCompact(a, msg, nil); err != nil {
 		t.Fatalf("commandCompact() error = %v", err)
 	}
 	if gotMethod != "thread/compact/start" || gotThreadID != "thread-1" {
@@ -433,7 +433,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := newConversationWorkflowService(a).commandCompact(msg, nil); err == nil {
+	if err := commandCompact(a, msg, nil); err == nil {
 		t.Fatal("expected commandCompact() to fail")
 	}
 	sess := a.store.GetSession("feishu:p2p:chat:user")
@@ -459,7 +459,7 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 		UserID:    "user",
 		Text:      "/compact",
 	}
-	if err := newCommandService(a).handleCommand(msg, "/compact"); err != nil {
+	if err := handleCommand(a, msg, "/compact"); err != nil {
 		t.Fatalf("handleCommand(/compact) error = %v", err)
 	}
 	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "/compact") {
@@ -510,7 +510,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := newConversationWorkflowService(a).commandFork(msg, nil); err != nil {
+	if err := commandFork(a, msg, nil); err != nil {
 		t.Fatalf("commandFork() error = %v", err)
 	}
 	if gotMethod != "thread/fork" {
@@ -599,7 +599,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			}
 
 			msg := &feishu.InboundMessage{MessageID: "m-claude-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-			if err := newCommandService(a).handleCommand(msg, raw); err != nil {
+			if err := handleCommand(a, msg, raw); err != nil {
 				t.Fatalf("handleCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.forkCalls) != 1 {
@@ -648,7 +648,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, "claude-parent")
 
 	msg := &feishu.InboundMessage{MessageID: "m-claude-fork-pending", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := newCommandService(a).handleCommand(msg, "/fork"); err != nil {
+	if err := handleCommand(a, msg, "/fork"); err != nil {
 		t.Fatalf("handleCommand(/fork) error = %v", err)
 	}
 	if len(claude.forkCalls) != 1 {

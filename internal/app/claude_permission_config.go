@@ -167,7 +167,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 	return err
 }
 
-func (s threadActionService) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
@@ -287,7 +287,7 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 	return err
 }
 
-func (s workspaceActionService) completeClaudeWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeClaudeWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
 	mode := ""
 	warning := ""
 	if override, ok := normalizeClaudePermissionOverrideValue(rawMode); ok {

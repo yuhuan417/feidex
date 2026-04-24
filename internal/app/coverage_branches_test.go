@@ -11,12 +11,12 @@ import (
 func TestMenuWrapperCardsAndActionUserID(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	sessionCard := newCommandService(a).renderSessionMenuCard("sess-1")
+	sessionCard := renderSessionMenuCard(a, "sess-1")
 	if body := cardMarkdownContent(t, sessionCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") {
 		t.Fatalf("renderSessionMenuCard() body = %q", body)
 	}
 
-	contextCard := newCommandService(a).renderContextMenuCard("sess-1")
+	contextCard := renderContextMenuCard(a, "sess-1")
 	if body := cardMarkdownContent(t, contextCard); !strings.Contains(body, "当前位置：主菜单") {
 		t.Fatalf("renderContextMenuCard() body = %q", body)
 	}

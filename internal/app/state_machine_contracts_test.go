@@ -40,7 +40,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		return nil
 	}
 
-	if err := commandInterrupt(a,msg); err != nil {
+	if err := commandInterrupt(a, msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {
@@ -125,7 +125,7 @@ func TestPermissionsApprovalLifecycleResumesOnlyAfterServerRequestResolved(t *te
 		t.Fatalf("submission after permissions request = %+v, want waiting_approval", updated)
 	}
 
-	resp, err := completeApprovalAction(a,&feishu.CardAction{
+	resp, err := completeApprovalAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "perm-1"},
 	}, "approval.permissions.accept_session")
@@ -173,7 +173,7 @@ func TestMcpElicitationURLLifecycleResumesOnlyAfterServerRequestResolved(t *test
 		t.Fatalf("submission after elicitation request = %+v, want waiting_user_input", updated)
 	}
 
-	resp, err := completeElicitationURLAction(a,&feishu.CardAction{
+	resp, err := completeElicitationURLAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "elicit-1"},
 	}, "elicitation_url.accept")

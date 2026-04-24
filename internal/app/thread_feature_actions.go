@@ -10,15 +10,15 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (s threadActionService) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, primaryConversationSlash(configuredBackend(s.app)), "menu.root")
 }
 
-func (s threadActionService) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" new", "menu.thread")
 }
 
-func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	if strings.TrimSpace(targetTurnID) != "" {
 		if sess := appState(s.app).session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveTurnID) != strings.TrimSpace(targetTurnID) {
 			return &callback.CardActionTriggerResponse{
@@ -32,19 +32,19 @@ func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, se
 	return completeMenuCommand(s.app, action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
 }
 
-func (s threadActionService) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/thread sandbox", "menu.thread")
 }
 
-func (s threadActionService) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/thread policy", "menu.thread")
 }
 
-func (s threadActionService) completeClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/session permissions", "menu.thread")
 }
 
-func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	valid := false
 	for _, opt := range workspaceSandboxOptions() {
@@ -74,7 +74,7 @@ func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction,
 	}, nil
 }
 
-func (s threadActionService) completeThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	valid := false
 	for _, opt := range workspaceApprovalPolicyOptions() {
@@ -104,7 +104,7 @@ func (s threadActionService) completeThreadPolicySet(action *feishu.CardAction, 
 	}, nil
 }
 
-func (s threadActionService) completeThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
+func (s threadService) completeThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil {

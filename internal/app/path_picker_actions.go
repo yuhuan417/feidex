@@ -12,7 +12,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (s workspaceActionService) completePathPickerAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completePathPickerAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)

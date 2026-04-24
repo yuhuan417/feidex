@@ -20,7 +20,7 @@ func completeMenuWorkspace(a *App, action *feishu.CardAction, sessionKey string)
 	return completeMenuCommand(a, action, sessionKey, "/workspace", "menu.root")
 }
 
-func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
@@ -53,15 +53,15 @@ func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, 
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceUseExisting(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceUseExisting(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	return s.completeWorkspaceUse(action, sessionKey, workspaceID)
 }
 
-func (s workspaceActionService) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/workspace new", "menu.workspace")
 }
 
-func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceClone(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
@@ -108,7 +108,7 @@ func workspaceNewTakeoverPayloadWithNotice(workspaceID, targetDir, notice string
 	}
 }
 
-func (s workspaceActionService) completeWorkspaceNewTakeover(action *feishu.CardAction, sessionKey, workspaceID, targetDir string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceNewTakeover(action *feishu.CardAction, sessionKey, workspaceID, targetDir string) (*callback.CardActionTriggerResponse, error) {
 	payload := workspaceNewTakeoverPayload(workspaceID, targetDir)
 	if strings.TrimSpace(payload.SelectedCWD) == "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "缺少可接管的目录"}}, nil
@@ -123,11 +123,11 @@ func (s workspaceActionService) completeWorkspaceNewTakeover(action *feishu.Card
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceCloneUseExisting(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceCloneUseExisting(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	return s.completeWorkspaceUse(action, sessionKey, workspaceID)
 }
 
-func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceClonePickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
@@ -157,7 +157,7 @@ func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.Car
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceCloneCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceCloneCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
@@ -187,7 +187,7 @@ func (s workspaceActionService) completeWorkspaceCloneCancel(action *feishu.Card
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
@@ -212,7 +212,7 @@ func (s workspaceActionService) completeWorkspaceNewPickDir(action *feishu.CardA
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
@@ -279,7 +279,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
@@ -384,15 +384,15 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/workspace sandbox", "menu.workspace")
 }
 
-func (s workspaceActionService) completeWorkspacePolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspacePolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/workspace policy", "menu.workspace")
 }
 
-func (s workspaceActionService) completeClaudeWorkspacePermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeClaudeWorkspacePermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/workspace permissions", "menu.workspace")
 }
 
@@ -413,7 +413,7 @@ func updateWorkspaceDefaults(a *App, workspaceID string, mutate func(*config.Wor
 	return config.FindWorkspace(a.cfg, workspaceID), nil
 }
 
-func (s workspaceActionService) completeWorkspaceSandboxSet(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceSandboxSet(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 	valid := false
 	for _, opt := range workspaceSandboxOptions() {
 		if opt.Value == sandboxMode {
@@ -440,7 +440,7 @@ func (s workspaceActionService) completeWorkspaceSandboxSet(action *feishu.CardA
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspacePolicySet(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspacePolicySet(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
 	valid := false
 	for _, opt := range workspaceApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {

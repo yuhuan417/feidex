@@ -110,7 +110,7 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 		return nil
 	}
 
-	resp, err := newConversationWorkflowService(a).completeMenuReviewUncommitted(&feishu.CardAction{
+	resp, err := completeMenuReviewUncommitted(a, &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -144,7 +144,7 @@ func TestCompleteMenuReviewBaseReturnsPreparingCardAndPatchesAsync(t *testing.T)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	resp, err := newConversationWorkflowService(a).completeMenuReviewBase(&feishu.CardAction{
+	resp, err := completeMenuReviewBase(a, &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -292,7 +292,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadActionService(a).completeMenuInterrupt(&feishu.CardAction{
+	resp, err := newThreadService(a).completeMenuInterrupt(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-stop",

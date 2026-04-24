@@ -25,7 +25,7 @@ func localCommandWorkspaceSpecs() []localCommandSpec {
 				return matchWorkspaceCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newWorkspaceCommandService(a).commandWorkspace(msg, args)
+				return newWorkspaceService(a).commandWorkspace(msg, args)
 			},
 			HelpGroup: "workspace",
 			HelpEntries: []helpCommandSpec{

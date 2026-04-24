@@ -47,7 +47,7 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := newCommandService(a).handleCommand(msg, "/history"); err != nil {
+	if err := handleCommand(a, msg, "/history"); err != nil {
 		t.Fatalf("handleCommand(/history) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -73,7 +73,7 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 		t.Fatalf("history option label = %q, want latest Claude turn", label)
 	}
 
-	if err := newCommandService(a).handleCommand(msg, "/history detail 1"); err != nil {
+	if err := handleCommand(a, msg, "/history detail 1"); err != nil {
 		t.Fatalf("handleCommand(/history detail 1) error = %v", err)
 	}
 	if len(ff.replyCards) != 2 {

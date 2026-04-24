@@ -123,7 +123,7 @@ func TestUpgradeBranches(t *testing.T) {
 	if picker == nil {
 		t.Fatal("expected local upgrade picker pending request")
 	}
-	resp, err = newWorkspaceActionService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"request_id": picker.ID},
@@ -132,7 +132,7 @@ func TestUpgradeBranches(t *testing.T) {
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("local picker dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceActionService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"request_id": picker.ID},

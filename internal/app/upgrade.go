@@ -241,7 +241,7 @@ func (s appUpgradeService) completeUpgradeAction(action *feishu.CardAction, acti
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-			Card:  rawCard(newCommandService(s.app).renderSystemMenuCard(sessionKey)),
+			Card:  rawCard(renderSystemMenuCard(s.app, sessionKey)),
 		}, nil
 	}
 

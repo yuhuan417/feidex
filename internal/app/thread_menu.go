@@ -16,7 +16,7 @@ import (
 const threadCommandUsage = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY]"
 
 func commandNew(a *App, msg *feishu.InboundMessage) error {
-	return newThreadCommandService(a).commandThreadsNew(msg)
+	return newThreadService(a).commandThreadsNew(msg)
 }
 
 func startFreshThread(a *App, sessionKey, userID, chatID, chatType string) (int, *workspaceThreadBinding, error) {
@@ -76,7 +76,7 @@ func startFreshThread(a *App, sessionKey, userID, chatID, chatType string) (int,
 	return discarded, binding, nil
 }
 
-func (s threadCommandService) commandThreadsNew(msg *feishu.InboundMessage) error {
+func (s threadService) commandThreadsNew(msg *feishu.InboundMessage) error {
 	sessionKey := makeSessionKey(s.app, msg)
 	discarded, binding, err := startFreshThread(s.app, sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
 	if err != nil {
@@ -93,7 +93,7 @@ func (s threadCommandService) commandThreadsNew(msg *feishu.InboundMessage) erro
 	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 }
 
-func (s threadCommandService) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
+func (s threadService) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
 	card, err := renderThreadsCard(s.app, makeSessionKey(s.app, msg), includeAll)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (s threadCommandService) commandThreads(msg *feishu.InboundMessage, include
 	return err
 }
 
-func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []string) error {
+func (s threadService) commandThread(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
 		return s.commandThreads(msg, false)
 	}
@@ -129,12 +129,12 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /thread fork")
 		}
-		return newConversationWorkflowService(s.app).commandFork(msg, nil)
+		return commandFork(s.app, msg, nil)
 	case "resume":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread resume THREAD_ID")
 		}
-		resp, err := newThreadActionService(s.app).completeThreadResume(commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		resp, err := newThreadService(s.app).completeThreadResume(commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if err != nil {
 			return err
 		}
-		resp, err := newThreadActionService(s.app).completeThreadSandboxSet(commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadService(s.app).completeThreadSandboxSet(commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if err != nil {
 			return err
 		}
-		resp, err := newThreadActionService(s.app).completeThreadPolicySet(commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadService(s.app).completeThreadPolicySet(commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 	}
 }
 
-func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []string) error {
+func (s threadService) commandSession(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
 		return s.commandThreads(msg, false)
 	}
@@ -203,12 +203,12 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /session fork")
 		}
-		return newConversationWorkflowService(s.app).commandFork(msg, nil)
+		return commandFork(s.app, msg, nil)
 	case "resume":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session resume SESSION_ID")
 		}
-		resp, err := newThreadActionService(s.app).completeThreadResume(commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		resp, err := newThreadService(s.app).completeThreadResume(commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		if err != nil {
 			return err
 		}
-		resp, err := newThreadActionService(s.app).completeClaudeSessionPermissionModeSet(commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadService(s.app).completeClaudeSessionPermissionModeSet(commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}

@@ -36,7 +36,7 @@ func TestServiceTierHelpersAndMenu(t *testing.T) {
 	cfg := config.Default()
 	a := &App{cfg: cfg, store: store, feishu: feishu.New(cfg.Feishu)}
 
-	card := renderServiceTierMenuCard(a,"sess-1")
+	card := renderServiceTierMenuCard(a, "sess-1")
 	if body := cardElementsForTest(card)[0]["content"].(string); !strings.Contains(body, "当前没有活动线程") {
 		t.Fatalf("renderServiceTierMenuCard(no thread) = %q", body)
 	}
@@ -50,7 +50,7 @@ func TestServiceTierHelpersAndMenu(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	card = renderServiceTierMenuCard(a,"sess-1")
+	card = renderServiceTierMenuCard(a, "sess-1")
 	rows := cardElementsForTest(card)
 	var primaryFound bool
 	for _, row := range rows[1:] {
@@ -76,7 +76,7 @@ func TestSetThreadServiceTierAndCommandFastValidation(t *testing.T) {
 	}
 	a := &App{store: store, feishu: &fakeFeishuClient{}, cfg: config.Default()}
 
-	if _, err := setThreadServiceTier(a,"sess-1", "thread-1", serviceTierFast); err == nil || !strings.Contains(err.Error(), "没有活动线程") {
+	if _, err := setThreadServiceTier(a, "sess-1", "thread-1", serviceTierFast); err == nil || !strings.Contains(err.Error(), "没有活动线程") {
 		t.Fatalf("setThreadServiceTier(no thread) error = %v", err)
 	}
 	if err := a.store.UpsertSession(&state.Session{
@@ -86,18 +86,18 @@ func TestSetThreadServiceTierAndCommandFastValidation(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := setThreadServiceTier(a,"sess-1", "thread-x", serviceTierFast); err == nil || !strings.Contains(err.Error(), "已失效") {
+	if _, err := setThreadServiceTier(a, "sess-1", "thread-x", serviceTierFast); err == nil || !strings.Contains(err.Error(), "已失效") {
 		t.Fatalf("setThreadServiceTier(stale) error = %v", err)
 	}
-	sess, err := setThreadServiceTier(a,"sess-1", "thread-1", serviceTierFast)
+	sess, err := setThreadServiceTier(a, "sess-1", "thread-1", serviceTierFast)
 	if err != nil || sess.ActiveThreadServiceTier != serviceTierFast {
 		t.Fatalf("setThreadServiceTier() = %+v, %v", sess, err)
 	}
 
-	if err := commandFast(a,nil, []string{"extra"}); err == nil {
+	if err := commandFast(a, nil, []string{"extra"}); err == nil {
 		t.Fatal("expected commandFast(args) to fail")
 	}
-	if err := commandFast(a,nil, nil); err != nil {
+	if err := commandFast(a, nil, nil); err != nil {
 		t.Fatalf("commandFast(nil msg) error = %v", err)
 	}
 }

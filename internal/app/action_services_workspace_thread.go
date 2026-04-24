@@ -1,17 +1,17 @@
 package app
 
-type workspaceActionService struct {
+type workspaceService struct {
 	app *App
 }
 
-func newWorkspaceActionService(app *App) workspaceActionService {
-	return workspaceActionService{app: app}
+func newWorkspaceService(app *App) workspaceService {
+	return workspaceService{app: app}
 }
 
-type threadActionService struct {
+type threadService struct {
 	app *App
 }
 
-func newThreadActionService(app *App) threadActionService {
-	return threadActionService{app: app}
+func newThreadService(app *App) threadService {
+	return threadService{app: app}
 }

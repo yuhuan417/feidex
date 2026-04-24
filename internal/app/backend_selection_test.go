@@ -309,7 +309,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 			codexCalls = append(codexCalls, method)
 			switch method {
 			case "thread/resume":
-				if !beginCodexTransportRecovery(app,client) {
+				if !beginCodexTransportRecovery(app, client) {
 					t.Fatal("expected beginCodexTransportRecovery() to start recovery")
 				}
 				return errors.New("codex app-server read failed: read |0: file already closed")

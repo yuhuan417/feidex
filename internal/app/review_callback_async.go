@@ -47,49 +47,49 @@ func renderReviewResultCard(a *App, sessionKey, text string) map[string]any {
 	return a.feishu.SimpleStatusCard("代码审查", "green", menuCardBody("menu.review", firstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
 }
 
-func (s conversationWorkflowService) completeMenuReviewUncommitted(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(s.app,
+func completeMenuReviewUncommitted(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return completeAsyncCommandAction(a,
 		action,
 		sessionKey,
 		"/review",
 		"menu.review",
 		"正在准备 review",
-		renderReviewPreparingCard(s.app, sessionKey, "正在准备 review，请稍候。\n\n这张卡片会自动刷新。"),
-		func(sessionKey, text string) map[string]any { return renderReviewResultCard(s.app, sessionKey, text) },
+		renderReviewPreparingCard(a, sessionKey, "正在准备 review，请稍候。\n\n这张卡片会自动刷新。"),
+		func(sessionKey, text string) map[string]any { return renderReviewResultCard(a, sessionKey, text) },
 		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(s.app, sessionKey, errText, "menu.review.uncommitted")
+			return renderReviewFailureCard(a, sessionKey, errText, "menu.review.uncommitted")
 		},
 		"review uncommitted patch failed",
 	)
 }
 
-func (s conversationWorkflowService) completeMenuReviewBase(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(s.app,
+func completeMenuReviewBase(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return completeAsyncCommandAction(a,
 		action,
 		sessionKey,
 		"/review base",
 		"menu.review",
 		"正在加载 review 表单",
-		renderReviewPreparingCard(s.app, sessionKey, "正在加载 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(a, sessionKey, "正在加载 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(s.app, sessionKey, errText, "menu.review.base")
+			return renderReviewFailureCard(a, sessionKey, errText, "menu.review.base")
 		},
 		"review base patch failed",
 	)
 }
 
-func (s conversationWorkflowService) completeMenuReviewCommit(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(s.app,
+func completeMenuReviewCommit(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return completeAsyncCommandAction(a,
 		action,
 		sessionKey,
 		"/review commit",
 		"menu.review",
 		"正在加载 review 表单",
-		renderReviewPreparingCard(s.app, sessionKey, "正在加载 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(a, sessionKey, "正在加载 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(s.app, sessionKey, errText, "menu.review.commit")
+			return renderReviewFailureCard(a, sessionKey, errText, "menu.review.commit")
 		},
 		"review commit patch failed",
 	)

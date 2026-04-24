@@ -29,7 +29,7 @@ func (s menuActionService) completeMenuRoot(action *feishu.CardAction, sessionKe
 func (s menuActionService) completeMenuTools(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开常用工具"},
-		Card:  rawCard(newCommandService(s.app).renderToolsMenuCard(sessionKey)),
+		Card:  rawCard(renderToolsMenuCard(s.app, sessionKey)),
 	}, nil
 }
 
@@ -43,7 +43,7 @@ func (s menuActionService) completeMenuGroupModel(action *feishu.CardAction, ses
 func (s menuActionService) completeMenuGroupSystem(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 system"},
-		Card:  rawCard(newCommandService(s.app).renderSystemMenuCard(sessionKey)),
+		Card:  rawCard(renderSystemMenuCard(s.app, sessionKey)),
 	}, nil
 }
 
@@ -79,7 +79,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	}
 	runAsync(s.app, func() {
 		card := renderCompactAcceptedCard(s.app, sessionKey)
-		if err := newConversationWorkflowService(s.app).runMenuCompactAction(action, sessionKey); err != nil {
+		if err := runMenuCompactAction(s.app, action, sessionKey); err != nil {
 			card = renderCompactFailedCard(s.app, sessionKey, err.Error())
 		}
 		patchMaintenanceCard(s.app, messageID, card, "compact menu patch failed",

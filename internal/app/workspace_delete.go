@@ -117,7 +117,7 @@ func (s workspaceConfigService) renderWorkspaceDeleteConfirmCard(sessionKey, wor
 	return s.app.feishu.SimpleStatusCard("确认删除工作区", "red", menuCardBody("workspace.delete.confirm", strings.Join(body, "\n")), buttons), nil
 }
 
-func (s workspaceActionService) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	card, err := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -128,7 +128,7 @@ func (s workspaceActionService) completeWorkspaceDeleteMenu(action *feishu.CardA
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	workspaceID = firstNonEmpty(strings.TrimSpace(workspaceID), strings.TrimSpace(action.Option))
 	if err := newWorkspaceConfigService(s.app).validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
 		card, renderErr := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(sessionKey)
@@ -150,7 +150,7 @@ func (s workspaceActionService) completeWorkspaceDeletePrompt(action *feishu.Car
 	}, nil
 }
 
-func (s workspaceActionService) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceService) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	if err := newWorkspaceConfigService(s.app).deleteWorkspace(sessionKey, workspaceID); err != nil {
 		card, renderErr := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(sessionKey)
 		if renderErr != nil {

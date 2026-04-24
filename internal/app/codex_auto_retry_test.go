@@ -176,7 +176,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		ChatType:   sess.ChatType,
 		UserID:     sess.OwnerUserID,
 	}
-	if err := commandInterrupt(a,msg); err != nil {
+	if err := commandInterrupt(a, msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if len(scheduled) != 1 || !scheduled[0].task.stopped {

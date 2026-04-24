@@ -111,7 +111,7 @@ func TestActionHelperBranches(t *testing.T) {
 		t.Fatalf("completeMenuUpgrade() = %#v, %v", resp, err)
 	}
 
-	if resp, err := newThreadActionService(a).completeMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
+	if resp, err := newThreadService(a).completeMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
 		t.Fatalf("completeMenuInterrupt() = %#v, %v", resp, err)
 	}
 

@@ -29,7 +29,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadActionService(a).completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "acceptEdits")
+	resp, err := newThreadService(a).completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "acceptEdits")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	sessionCard, err := renderClaudeSessionPermissionMenuCard(a,sessionKey)
+	sessionCard, err := renderClaudeSessionPermissionMenuCard(a, sessionKey)
 	if err != nil {
 		t.Fatalf("renderClaudeSessionPermissionMenuCard() error = %v", err)
 	}
@@ -75,7 +75,7 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 		t.Fatalf("session permission card should expose bypassPermissions: %#v", cardButtonsForTest(sessionCard))
 	}
 
-	workspaceCard, err := renderClaudeWorkspacePermissionMenuCard(a,sessionKey)
+	workspaceCard, err := renderClaudeWorkspacePermissionMenuCard(a, sessionKey)
 	if err != nil {
 		t.Fatalf("renderClaudeWorkspacePermissionMenuCard() error = %v", err)
 	}
@@ -109,7 +109,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := renderClaudeSessionPermissionMenuCard(a,sessionKey)
+	card, err := renderClaudeSessionPermissionMenuCard(a, sessionKey)
 	if err != nil {
 		t.Fatalf("renderClaudeSessionPermissionMenuCard() error = %v", err)
 	}
@@ -117,7 +117,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 		t.Fatalf("session permission card should hide bypassPermissions when disabled: %#v", cardButtonsForTest(card))
 	}
 
-	resp, err := newThreadActionService(a).completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
+	resp, err := newThreadService(a).completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
@@ -147,7 +147,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadActionService(a).completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
+	resp, err := newThreadService(a).completeClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}

@@ -66,14 +66,14 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 		return nil
 	}
 
-	sess, err := startThreadCompaction(a,sessionKey)
+	sess, err := startThreadCompaction(a, sessionKey)
 	if err != nil {
 		t.Fatalf("startThreadCompaction() error = %v", err)
 	}
 	if sess == nil || sess.Status != sessionStatusCompacting {
 		t.Fatalf("startThreadCompaction() = %+v", sess)
 	}
-	if !noteStandaloneCompactItemStarted(a,"thread-1", "turn-1", map[string]any{
+	if !noteStandaloneCompactItemStarted(a, "thread-1", "turn-1", map[string]any{
 		"id":   "item-compact",
 		"type": "contextCompaction",
 	}) {
@@ -82,7 +82,7 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 	if updated := a.store.GetSession(sessionKey); updated == nil || updated.ActiveTurnID != "turn-1" || updated.Status != sessionStatusCompacting {
 		t.Fatalf("session after bind = %+v", updated)
 	}
-	if !completeStandaloneCompactItem(a,"thread-1", "turn-1", map[string]any{
+	if !completeStandaloneCompactItem(a, "thread-1", "turn-1", map[string]any{
 		"id":     "item-compact",
 		"type":   "contextCompaction",
 		"status": "completed",
@@ -115,7 +115,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}
 
 	a, ff, fc := newTestApp(t)
-	if _, err := startThreadCompaction(a,"missing"); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
+	if _, err := startThreadCompaction(a, "missing"); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("startThreadCompaction(missing) error = %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-busy) error = %v", err)
 	}
-	if _, err := startThreadCompaction(a,"sess-busy"); err == nil || !strings.Contains(err.Error(), "当前任务仍在运行") {
+	if _, err := startThreadCompaction(a, "sess-busy"); err == nil || !strings.Contains(err.Error(), "当前任务仍在运行") {
 		t.Fatalf("startThreadCompaction(busy) error = %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("UpsertSession(sess-restore) error = %v", err)
 	}
 	fc.callErr = errors.New("compact boom")
-	if _, err := startThreadCompaction(a,"sess-restore"); err == nil || !strings.Contains(err.Error(), "compact boom") {
+	if _, err := startThreadCompaction(a, "sess-restore"); err == nil || !strings.Contains(err.Error(), "compact boom") {
 		t.Fatalf("startThreadCompaction(restore) error = %v", err)
 	}
 	if updated := a.store.GetSession("sess-restore"); updated == nil || updated.Status != "waiting" {
@@ -161,7 +161,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-fail) error = %v", err)
 	}
-	if !failStandaloneCompactTurn(a,"thread-fail", "", "boom") {
+	if !failStandaloneCompactTurn(a, "thread-fail", "", "boom") {
 		t.Fatal("failStandaloneCompactTurn() should succeed")
 	}
 	if updated := a.store.GetSession("sess-fail"); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
@@ -181,7 +181,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-complete) error = %v", err)
 	}
-	if !completeStandaloneCompactTurn(a,"thread-complete", "") {
+	if !completeStandaloneCompactTurn(a, "thread-complete", "") {
 		t.Fatal("completeStandaloneCompactTurn() should succeed")
 	}
 	if updated := a.store.GetSession("sess-complete"); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
@@ -201,8 +201,8 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("sendStandaloneCompactResult() sentTexts = %#v", ff.sentTexts)
 	}
 
-	restoreStandaloneCompactSession(a,"sess-complete", "thread-other", "idle")
-	restoreStandaloneCompactSession(a,"missing", "thread-missing", "idle")
+	restoreStandaloneCompactSession(a, "sess-complete", "thread-other", "idle")
+	restoreStandaloneCompactSession(a, "missing", "thread-missing", "idle")
 }
 
 func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
