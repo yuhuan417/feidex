@@ -90,7 +90,7 @@ func (a *App) bindClaudeSessionThread(sessionKey, turnID, threadID string) {
 			current.ActiveThreadName = "Claude"
 		}
 	})
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 
 	if updatedSess != nil && strings.TrimSpace(updatedSess.RootMessageID) != "" && turnID != "" {
 		newReplyContinuationService(a).recordRootTurnBinding(updatedSess.RootMessageID, sessionKey, threadID, turnID)

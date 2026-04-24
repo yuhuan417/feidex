@@ -118,7 +118,7 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	msg := &feishu.InboundMessage{MessageID: "msg-review-select", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)

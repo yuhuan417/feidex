@@ -645,7 +645,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	a.markSessionThreadLive(sessionKey, "claude-parent")
+	markSessionThreadLive(a, sessionKey, "claude-parent")
 
 	msg := &feishu.InboundMessage{MessageID: "m-claude-fork-pending", ChatID: "chat", ChatType: "p2p", UserID: "user"}
 	if err := newCommandService(a).handleCommand(msg, "/fork"); err != nil {
@@ -658,7 +658,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	if sess == nil || sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadName != "Claude Parent" || sess.Status != "idle" {
 		t.Fatalf("session after pending /fork = %+v", sess)
 	}
-	if a.sessionHasLiveThread(sessionKey, "claude-parent") {
+	if sessionHasLiveThread(a, sessionKey, "claude-parent") {
 		t.Fatalf("expected old live thread binding to be cleared after pending /fork")
 	}
 	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "下一条消息") {

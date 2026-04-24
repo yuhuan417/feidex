@@ -77,9 +77,9 @@ func (a *App) persistForkedConversation(sessionKey string, sess *state.Session, 
 	}
 	setSessionThreadContext(sess, workspaceID, threadID, name, preview)
 	if strings.TrimSpace(threadID) != "" {
-		a.markSessionThreadLive(sessionKey, threadID)
+		markSessionThreadLive(a, sessionKey, threadID)
 	} else {
-		a.clearSessionLiveThread(sessionKey)
+		clearSessionLiveThread(a, sessionKey)
 	}
 	sessionResetActiveOperations(sess)
 	sess.Status = "idle"

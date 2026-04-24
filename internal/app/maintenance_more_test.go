@@ -109,7 +109,7 @@ func TestMiscAppFunctions(t *testing.T) {
 }
 
 func TestReplyAndStartupHelpersReturnEarly(t *testing.T) {
-	if err := (&App{}).replyError(nil, nil); err != nil {
+	if err := replyError(&App{}, nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 	var a *App

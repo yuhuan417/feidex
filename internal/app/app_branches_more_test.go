@@ -448,7 +448,7 @@ func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testi
 	if _, ok := sess.BackendThreads[backendCodex]; ok {
 		t.Fatalf("session after runtime start failure kept codex backend snapshot: %+v", sess.BackendThreads)
 	}
-	if a.sessionHasLiveThread(sessionKey, "thread-1") {
+	if sessionHasLiveThread(a, sessionKey, "thread-1") {
 		t.Fatal("expected failed runtime start to clear live thread binding")
 	}
 }

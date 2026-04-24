@@ -135,7 +135,7 @@ func (codexRuntimeFacade) handleTransportFailure(a *App, _, _ string, err error)
 		"frontend_id", a.frontendID,
 		"error", err,
 	)
-	a.runAsync(func() {
+	runAsync(a, func() {
 		a.failBackendActiveWork(backendCodex, "", "", message)
 	})
 }

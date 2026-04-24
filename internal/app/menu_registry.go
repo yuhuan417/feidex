@@ -9,7 +9,7 @@ type menuNodeRenderer func(a *App, sessionKey string) (map[string]any, bool)
 
 var menuNodeRenderers = map[string]menuNodeRenderer{
 	"menu.root": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderCommandMenuCard(sessionKey), true
+		return renderCommandMenuCard(a, sessionKey), true
 	},
 	"menu.tools": func(a *App, sessionKey string) (map[string]any, bool) {
 		return newCommandService(a).renderToolsMenuCard(sessionKey), true

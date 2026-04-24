@@ -43,11 +43,11 @@ func (a *App) handleCodexTransportError(client codexClient, err error) {
 		"frontend_id", a.frontendID,
 		"error", err,
 	)
-	a.resetLiveThreadState()
-	a.runAsync(func() {
+	resetLiveThreadState(a)
+	runAsync(a, func() {
 		a.failBackendActiveWork(backendCodex, "", "", message)
 	})
-	a.runAsync(func() {
+	runAsync(a, func() {
 		a.recoverCodexRuntimeAfterTransportFailure(client, skipFrontendRecovery)
 	})
 }
@@ -250,7 +250,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	}
 	newRuntimeMaintenanceService(a).cleanupSubmissionRuntimeState(sub)
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
-		a.runAsync(func() {
+		runAsync(a, func() {
 			newLifecycleCoordinator(a).startNextSubmissionAsync(sessionKey, "backendFailed")
 		})
 	}

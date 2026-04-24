@@ -78,15 +78,15 @@ func TestSessionCanResumeThreadForSubmissionRequiresMatchingWorkspace(t *testing
 
 func TestSessionLiveThreadMarkers(t *testing.T) {
 	a := &App{}
-	if a.sessionHasLiveThread("sess-1", "thread-1") {
+	if sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("expected empty live-thread map to return false")
 	}
-	a.markSessionThreadLive("sess-1", "thread-1")
-	if !a.sessionHasLiveThread("sess-1", "thread-1") {
+	markSessionThreadLive(a, "sess-1", "thread-1")
+	if !sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("expected live-thread marker to be stored")
 	}
-	a.clearSessionLiveThread("sess-1")
-	if a.sessionHasLiveThread("sess-1", "thread-1") {
+	clearSessionLiveThread(a, "sess-1")
+	if sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("expected live-thread marker to be cleared")
 	}
 }

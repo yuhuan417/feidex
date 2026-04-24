@@ -25,7 +25,7 @@ func TestCommandReviewUncommittedCallsReviewStart(t *testing.T) {
 	msg := &feishu.InboundMessage{MessageID: "msg-review", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	var gotMethod string
 	var gotParams map[string]any
@@ -126,7 +126,7 @@ func TestCommandReviewBaseOpensBranchPicker(t *testing.T) {
 	msg := &feishu.InboundMessage{MessageID: "msg-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	if err := newConversationWorkflowService(a).commandReview(msg, []string{"base"}); err != nil {
 		t.Fatalf("commandReview(base) error = %v", err)
@@ -164,7 +164,7 @@ func TestCommandReviewCommitOpensRecentCommitPicker(t *testing.T) {
 	msg := &feishu.InboundMessage{MessageID: "msg-commit", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	if err := newConversationWorkflowService(a).commandReview(msg, []string{"commit"}); err != nil {
 		t.Fatalf("commandReview(commit) error = %v", err)
@@ -195,7 +195,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 	msg := &feishu.InboundMessage{MessageID: "msg-custom", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeCustom); err != nil {
 		t.Fatalf("beginReviewForm(custom) error = %v", err)
@@ -313,7 +313,7 @@ func TestReviewTurnStartedNotificationDoesNotOverrideResponseTurnID(t *testing.T
 	msg := &feishu.InboundMessage{MessageID: "msg-review", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		if method == "review/start" {

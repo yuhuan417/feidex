@@ -95,7 +95,7 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 	msg := &feishu.InboundMessage{MessageID: "msg-review-uncommitted", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	var gotParams map[string]any
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -142,7 +142,7 @@ func TestCompleteMenuReviewBaseReturnsPreparingCardAndPatchesAsync(t *testing.T)
 	msg := &feishu.InboundMessage{MessageID: "msg-review-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	resp, err := newConversationWorkflowService(a).completeMenuReviewBase(&feishu.CardAction{
 		UserID:      msg.UserID,
@@ -175,7 +175,7 @@ func TestCompleteReviewBaseSelectReturnsPreparingCardAndPatchesAsync(t *testing.
 	msg := &feishu.InboundMessage{MessageID: "msg-review-select-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
@@ -214,7 +214,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 	msg := &feishu.InboundMessage{MessageID: "msg-review-submit-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 
 	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)

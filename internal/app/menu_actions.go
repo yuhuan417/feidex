@@ -22,7 +22,7 @@ func newMenuActionService(app *App) menuActionService {
 func (s menuActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
-		Card:  rawCard(s.app.renderCommandMenuCard(sessionKey)),
+		Card:  rawCard(renderCommandMenuCard(s.app, sessionKey)),
 	}, nil
 }
 
@@ -77,7 +77,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	if messageID == "" {
 		return s.app.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
 	}
-	s.app.runAsync(func() {
+	runAsync(s.app, func() {
 		card := renderCompactAcceptedCard(s.app, sessionKey)
 		if err := newConversationWorkflowService(s.app).runMenuCompactAction(action, sessionKey); err != nil {
 			card = renderCompactFailedCard(s.app, sessionKey, err.Error())

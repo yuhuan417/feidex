@@ -71,7 +71,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	threadID := "thread-retry-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
@@ -157,7 +157,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	threadID := "thread-stop-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
@@ -214,7 +214,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	threadID := "claude-session-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),

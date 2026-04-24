@@ -110,7 +110,7 @@ func (s workspaceThreadService) ensureClaudeWorkspaceThreadBinding(sessionKey st
 			if saveErr := appState(s.app).saveSession(sess); saveErr != nil {
 				return nil, saveErr
 			}
-			s.app.markSessionThreadLive(sessionKey, threadID)
+			markSessionThreadLive(s.app, sessionKey, threadID)
 			return &workspaceThreadBinding{
 				ThreadID: threadID,
 				Name:     sess.ActiveThreadName,
@@ -206,7 +206,7 @@ func (s workspaceThreadService) resumeCodexWorkspaceThread(sessionKey string, se
 	if err := appState.saveSession(sess); err != nil {
 		return nil, err
 	}
-	s.app.markSessionThreadLive(sessionKey, boundThreadID)
+	markSessionThreadLive(s.app, sessionKey, boundThreadID)
 	return &workspaceThreadBinding{
 		ThreadID: boundThreadID,
 		Name:     sess.ActiveThreadName,
@@ -238,7 +238,7 @@ func (s workspaceThreadService) startClaudeWorkspaceThread(sessionKey string, se
 	if err := appState(s.app).saveSession(sess); err != nil {
 		return nil, err
 	}
-	s.app.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(s.app, sessionKey, threadID)
 	return &workspaceThreadBinding{
 		ThreadID: threadID,
 		Name:     sess.ActiveThreadName,
@@ -254,7 +254,7 @@ func (s workspaceThreadService) startCodexWorkspaceThread(sessionKey string, ses
 	}
 	appState := appState(s.app)
 	effectiveModel := configuredGlobalModel(s.app.cfg)
-	threadParams := s.app.buildThreadStartParams(ws, sess, effectiveModel)
+	threadParams := buildThreadStartParams(s.app, ws, sess, effectiveModel)
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -272,7 +272,7 @@ func (s workspaceThreadService) startCodexWorkspaceThread(sessionKey string, ses
 	if err := appState.saveSession(sess); err != nil {
 		return nil, err
 	}
-	s.app.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(s.app, sessionKey, threadID)
 	return &workspaceThreadBinding{
 		ThreadID: threadID,
 		Name:     sess.ActiveThreadName,

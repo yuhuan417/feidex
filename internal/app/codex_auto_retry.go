@@ -271,7 +271,7 @@ func (s autoRetryService) scheduleAutoRetryAfterFailure(sessionKey, threadID str
 		state.TimerSeq++
 		seq := state.TimerSeq
 		state.Timer = s.scheduleDelayedTask(delay, func() {
-			s.app.runAsync(func() {
+			runAsync(s.app, func() {
 				s.runAutoRetryTimer(sessionKey, seq)
 			})
 		})
@@ -398,7 +398,7 @@ func (s autoRetryService) bumpAutoRetryBackoffAndReschedule(sessionKey, notice s
 	state.TimerSeq++
 	seq := state.TimerSeq
 	state.Timer = s.scheduleDelayedTask(delay, func() {
-		s.app.runAsync(func() {
+		runAsync(s.app, func() {
 			s.runAutoRetryTimer(sessionKey, seq)
 		})
 	})
@@ -414,7 +414,7 @@ func (s autoRetryService) startAutoRetrySubmission(sessionKey string, sess *stat
 	if strings.TrimSpace(snapshot.ThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(snapshot.ThreadID) {
 		return nil, fmt.Errorf("active thread changed")
 	}
-	if !s.app.sessionHasLiveThread(sessionKey, snapshot.ThreadID) {
+	if !sessionHasLiveThread(s.app, sessionKey, snapshot.ThreadID) {
 		return nil, fmt.Errorf("active thread is not live")
 	}
 	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(snapshot.WorkspaceID), defaultWorkspaceID(s.app))

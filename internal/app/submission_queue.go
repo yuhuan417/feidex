@@ -232,14 +232,14 @@ func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID
 		newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 	}
 	if clearedThreadLineage {
-		a.clearSessionLiveThread(sessionKey)
+		clearSessionLiveThread(a, sessionKey)
 	}
 	if notifyFailure && sub != nil {
 		w.notifySubmissionStartFailure(context.Background(), sub, err, shouldStartNext)
 	}
 	newRuntimeMaintenanceService(a).cleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
-		a.runAsync(func() {
+		runAsync(a, func() {
 			w.startNextSubmissionAsync(sessionKey, "turnStartFailed")
 		})
 	}
@@ -371,7 +371,7 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 		threadID = ""
 		clearSessionThreadContext(sess)
 	}
-	if threadID != "" && !a.sessionHasLiveThread(sessionKey, threadID) {
+	if threadID != "" && !sessionHasLiveThread(a, sessionKey, threadID) {
 		slog.Warn("dropping non-live session thread before submission",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -393,7 +393,7 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 			logSessionState("startNextSubmission thread-client-missing", sessionKey, appState.session(sessionKey))
 			return err
 		}
-		threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
+		threadParams := buildThreadStartParams(a, ws, sess, effectiveModel)
 		var threadResp codexrpc.ThreadStartResult
 		slog.Debug("thread start request",
 			"session_key", sessionKey,
@@ -425,13 +425,13 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 			"model", effectiveModel,
 		)
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, threadResp.Thread.Name, threadResp.Thread.Preview)
-		a.markSessionThreadLive(sessionKey, threadID)
+		markSessionThreadLive(a, sessionKey, threadID)
 	}
 	if threadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 		setSessionThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	}
 	if threadID != "" {
-		a.markSessionThreadLive(sessionKey, threadID)
+		markSessionThreadLive(a, sessionKey, threadID)
 	}
 	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
 		Kind:         sessionOpKindSubmission,

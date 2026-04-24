@@ -158,7 +158,7 @@ func (a *App) Stop(ctx context.Context) error {
 	return currentBackendRuntimeHandle(a).close()
 }
 
-func (a *App) runAsync(fn func()) {
+func runAsync(a *App, fn func()) {
 	if fn == nil {
 		return
 	}
@@ -169,7 +169,7 @@ func (a *App) runAsync(fn func()) {
 	go fn()
 }
 
-func (a *App) buildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
+func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
 	params := map[string]any{
 		"cwd":                    ws.Cwd,
 		"approvalPolicy":         effectiveThreadApprovalPolicy(sess, ws),
@@ -341,7 +341,7 @@ func defaultWorkspaceID(a *App) string {
 	return a.cfg.Workspaces[0].ID
 }
 
-func (a *App) replyError(msg *feishu.InboundMessage, err error) error {
+func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {
 		return nil
 	}
@@ -351,12 +351,12 @@ func (a *App) replyError(msg *feishu.InboundMessage, err error) error {
 	return a.feishu.SendText(context.Background(), msg.ChatID, "执行失败: "+err.Error())
 }
 
-func (a *App) sendCommandMenu(msg *feishu.InboundMessage) error {
-	card := a.renderCommandMenuCard(makeSessionKey(a, msg))
+func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
+	card := renderCommandMenuCard(a, makeSessionKey(a, msg))
 	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }
 
-func (a *App) renderCommandMenuCard(sessionKey string) map[string]any {
+func renderCommandMenuCard(a *App, sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(configuredBackend(a), sessionKey))
 }

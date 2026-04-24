@@ -242,7 +242,7 @@ func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey str
 	}
 
 	if updatedSess == nil || !sessionHasActiveOperations(updatedSess) {
-		a.clearSessionLiveThread(sessionKey)
+		clearSessionLiveThread(a, sessionKey)
 	}
 	return updatedSess, refreshedSub, nil
 }
@@ -287,9 +287,9 @@ func (w *lifecycleCoordinator) bindClaudeSubmissionStartState(sessionKey string,
 	newReplyContinuationService(a).recordRootTurnBinding(rootMessageID, sessionKey, claudeThreadID, turnID)
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	if strings.TrimSpace(claudeThreadID) != "" {
-		a.markSessionThreadLive(sessionKey, claudeThreadID)
+		markSessionThreadLive(a, sessionKey, claudeThreadID)
 	} else {
-		a.clearSessionLiveThread(sessionKey)
+		clearSessionLiveThread(a, sessionKey)
 	}
 	return updatedSess, nil
 }

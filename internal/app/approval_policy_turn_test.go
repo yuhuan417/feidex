@@ -105,7 +105,7 @@ func TestStartNextSubmissionUsesThreadApprovalOverrideForTurnStart(t *testing.T)
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	a.markSessionThreadLive(sessionKey, "thread-existing")
+	markSessionThreadLive(a, sessionKey, "thread-existing")
 
 	var turnParams map[string]any
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {

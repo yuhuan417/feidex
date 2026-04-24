@@ -28,7 +28,7 @@ func TestEnqueueSubmissionReconcilesCompletedCodexTurnFromThreadRead(t *testing.
 	}); err != nil {
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
-	a.markSessionThreadLive(sessionKey, "thread-1")
+	markSessionThreadLive(a, sessionKey, "thread-1")
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].SentFinal = true
 

@@ -79,7 +79,7 @@ func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAu
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.markSessionThreadLive("sess-1", "thread-1")
+	markSessionThreadLive(a, "sess-1", "thread-1")
 
 	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
 

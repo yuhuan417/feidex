@@ -17,7 +17,7 @@ func (a *App) recoverRuntimeState() {
 }
 
 func (a *App) recoverSharedRuntimeState() {
-	a.resetLiveThreadState()
+	resetLiveThreadState(a)
 	appState := appState(a)
 	sessions := appState.sessions()
 	cleared := 0
@@ -67,7 +67,7 @@ func (a *App) recoverFrontendRuntimeState() {
 	}
 	a.frontendRecoveryMu.Lock()
 	defer a.frontendRecoveryMu.Unlock()
-	a.resetLiveThreadState()
+	resetLiveThreadState(a)
 	if !hasConfiguredBackend(a) {
 		return
 	}
@@ -79,7 +79,7 @@ func (a *App) recoverFrontendRuntimeState() {
 	a.recoverSessionThreadsOnStartup()
 }
 
-func (a *App) resetLiveThreadState() {
+func resetLiveThreadState(a *App) {
 	if a == nil {
 		return
 	}
@@ -124,7 +124,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			clearSessionThreadContext(sess)
 			sess.Status = "idle"
 			_ = appState.saveSession(sess)
-			a.clearSessionLiveThread(sessionKey)
+			clearSessionLiveThread(a, sessionKey)
 			continue
 		}
 		conversationBackend(a).recoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)

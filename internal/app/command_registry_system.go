@@ -10,7 +10,7 @@ func localCommandSystemIntroSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-				return a.sendCommandMenu(msg)
+				return sendCommandMenu(a, msg)
 			},
 			HelpEntries: []helpCommandSpec{
 				{Command: "/menu", Summary: "打开命令菜单。"},

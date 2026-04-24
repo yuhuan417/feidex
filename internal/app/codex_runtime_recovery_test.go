@@ -128,7 +128,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	if !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	if !a.sessionHasLiveThread(sessionKey, "thread-recovered") {
+	if !sessionHasLiveThread(a, sessionKey, "thread-recovered") {
 		t.Fatal("expected recovered thread to be marked live")
 	}
 
@@ -266,7 +266,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	}
 	promotedCallsMu.Unlock()
 
-	if a.sessionHasLiveThread(sessionKey, "thread-1") {
+	if sessionHasLiveThread(a, sessionKey, "thread-1") {
 		t.Fatal("unexpected live-thread mark after skipped frontend thread recovery")
 	}
 	sess := a.store.GetSession(sessionKey)

@@ -28,7 +28,7 @@ func TestItemStartedBindsPendingSubmissionBeforeTurnStarted(t *testing.T) {
 	if boundSessionKey, boundSub := newRuntimeStateService(a).boundSubmissionForTurn("turn-early"); boundSessionKey != "sess-1" || boundSub == nil || boundSub.ID != sub.ID {
 		t.Fatalf("turn binding after early item/started = %q / %+v, want sess-1 / %s", boundSessionKey, boundSub, sub.ID)
 	}
-	if !a.sessionHasLiveThread("sess-1", "thread-1") {
+	if !sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("early item/started should mark thread live for the session")
 	}
 	if newTurnStreamService(a).turnStreamTracker().streams["turn-early"] == nil {

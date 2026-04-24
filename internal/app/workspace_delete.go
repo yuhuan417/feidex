@@ -247,7 +247,7 @@ func (s workspaceConfigService) deleteWorkspace(sessionKey, workspaceID string) 
 		if !updated {
 			continue
 		}
-		s.app.clearSessionLiveThread(sess.Key)
+		clearSessionLiveThread(s.app, sess.Key)
 		if err := appState.saveSession(sess); err != nil {
 			return err
 		}

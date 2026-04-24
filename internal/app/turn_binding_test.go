@@ -97,7 +97,7 @@ func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.markSessionThreadLive("sess-1", "thread-1")
+	markSessionThreadLive(a, "sess-1", "thread-1")
 
 	finishTurn(a, "thread-1", "turn-1", "failed")
 

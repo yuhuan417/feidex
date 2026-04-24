@@ -43,7 +43,7 @@ func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.Inb
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	return sessionKey, a.store.GetSubmission(subID)
 }
 

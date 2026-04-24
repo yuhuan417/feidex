@@ -50,7 +50,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string
 	newReplyContinuationService(a).recordSubmissionSourceLinks(sub)
 	newReplyContinuationService(a).recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	return true
 }
 
@@ -140,7 +140,7 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 	newReplyContinuationService(a).recordSubmissionSourceLinks(sub)
 	newReplyContinuationService(a).recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	slog.Debug("turn started notification rebound pending submission",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
@@ -217,7 +217,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 	newReplyContinuationService(a).recordSubmissionSourceLinks(sub)
 	newReplyContinuationService(a).recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
-	a.markSessionThreadLive(sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
 	slog.Debug("turn completed rebound pending submission without prior turn start notification",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
@@ -329,7 +329,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 			"session_key", sessionKey,
 			"thread_id", updatedSess.ActiveThreadID,
 		)
-		a.runAsync(func() {
+		runAsync(a, func() {
 			w.startNextSubmissionAsync(sessionKey, "finishTurn")
 		})
 	}

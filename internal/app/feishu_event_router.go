@@ -45,7 +45,7 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 		releaseClaim = false
 	}
 	if err := r.processMessage(msg); err != nil {
-		_ = a.replyError(msg, err)
+		_ = replyError(a, msg, err)
 		return
 	}
 	markHandled()

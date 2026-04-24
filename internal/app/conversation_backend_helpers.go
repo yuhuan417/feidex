@@ -74,7 +74,7 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 	if err := appState(a).saveSession(sess); err != nil {
 		return nil, err
 	}
-	a.markSessionThreadLive(sessionKey, resumedID)
+	markSessionThreadLive(a, sessionKey, resumedID)
 	return &workspaceThreadBinding{
 		ThreadID: resumedID,
 		Name:     sess.ActiveThreadName,
@@ -120,7 +120,7 @@ func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, 
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
 	setSessionThreadContext(sess, firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)), boundThreadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
-	a.markSessionThreadLive(sessionKey, boundThreadID)
+	markSessionThreadLive(a, sessionKey, boundThreadID)
 	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
 	if err := appState(a).saveSession(sess); err != nil {

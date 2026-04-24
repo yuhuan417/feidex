@@ -15,7 +15,7 @@ func (a *App) recoverClaudeStartupConversation(sessionKey, workspaceID string, s
 	if a == nil || sess == nil {
 		return
 	}
-	a.markSessionThreadLive(sessionKey, sess.ActiveThreadID)
+	markSessionThreadLive(a, sessionKey, sess.ActiveThreadID)
 	slog.Debug("startup Claude session lineage preserved",
 		"session_key", sessionKey,
 		"thread_id", sess.ActiveThreadID,
@@ -66,7 +66,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 			)
 			return
 		}
-		a.markSessionThreadLive(sessionKey, sess.ActiveThreadID)
+		markSessionThreadLive(a, sessionKey, sess.ActiveThreadID)
 		slog.Debug("startup thread resumed",
 			"session_key", sessionKey,
 			"thread_id", sess.ActiveThreadID,
@@ -104,7 +104,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		)
 		return
 	}
-	threadParams := a.buildThreadStartParams(ws, sess, effectiveModel)
+	threadParams := buildThreadStartParams(a, ws, sess, effectiveModel)
 	var threadResp codexrpc.ThreadStartResult
 	slog.Debug("startup thread start request",
 		"session_key", sessionKey,
@@ -136,7 +136,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		clearSessionThreadContext(sess)
 		sess.Status = "idle"
 		_ = appState(a).saveSession(sess)
-		a.clearSessionLiveThread(sessionKey)
+		clearSessionLiveThread(a, sessionKey)
 		return
 	}
 	setSessionThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
@@ -150,7 +150,7 @@ func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, se
 		)
 		return
 	}
-	a.markSessionThreadLive(sessionKey, threadResp.Thread.ID)
+	markSessionThreadLive(a, sessionKey, threadResp.Thread.ID)
 	slog.Debug("startup thread started",
 		"session_key", sessionKey,
 		"thread_id", threadResp.Thread.ID,

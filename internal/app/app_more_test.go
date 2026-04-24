@@ -887,7 +887,7 @@ func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveThreadName != "Recovered" || sess.ActiveThreadPreview != "preview" {
 		t.Fatalf("session after startup resume = %+v", sess)
 	}
-	if !a.sessionHasLiveThread(sessionKey, "thread-1") {
+	if !sessionHasLiveThread(a, sessionKey, "thread-1") {
 		t.Fatal("expected resumed thread to be marked live")
 	}
 }
@@ -940,7 +940,7 @@ func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
 	if sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveThreadName != "Fresh" || sess.ActiveThreadPreview != "preview" {
 		t.Fatalf("session after startup fresh thread = %+v", sess)
 	}
-	if !a.sessionHasLiveThread(sessionKey, "thread-new") {
+	if !sessionHasLiveThread(a, sessionKey, "thread-new") {
 		t.Fatal("expected fresh thread to be marked live")
 	}
 }
@@ -948,11 +948,11 @@ func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
 func TestAppMiscMessageHelpers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 
-	if err := a.replyError(nil, nil); err != nil {
+	if err := replyError(a, nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group"}
-	if err := a.replyError(msg, errors.New("boom")); err != nil {
+	if err := replyError(a, msg, errors.New("boom")); err != nil {
 		t.Fatalf("replyError(reply) error = %v", err)
 	}
 	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "执行失败: boom") {
@@ -961,7 +961,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 
 	ff.replyTexts = nil
 	ff.sentTexts = nil
-	if err := a.replyError(&feishu.InboundMessage{ChatID: "chat-1"}, errors.New("boom2")); err != nil {
+	if err := replyError(a, &feishu.InboundMessage{ChatID: "chat-1"}, errors.New("boom2")); err != nil {
 		t.Fatalf("replyError(send) error = %v", err)
 	}
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "执行失败: boom2") {
@@ -1002,7 +1002,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 
 func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	if err := a.sendCommandMenu(&feishu.InboundMessage{MessageID: "m-1", ChatType: "group"}); err != nil {
+	if err := sendCommandMenu(a, &feishu.InboundMessage{MessageID: "m-1", ChatType: "group"}); err != nil {
 		t.Fatalf("sendCommandMenu() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1794,7 +1794,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sessionKey := "feishu:p2p:chat:user"
 
-	rootCard := a.renderCommandMenuCard(sessionKey)
+	rootCard := renderCommandMenuCard(a, sessionKey)
 	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：主菜单") {
 		t.Fatalf("root menu missing breadcrumb: %q", body)
 	}

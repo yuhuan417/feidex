@@ -18,7 +18,7 @@ func newLiveThreadTracker() *liveThreadTracker {
 	return &liveThreadTracker{threads: map[string]string{}}
 }
 
-func (a *App) liveThreadTracker() *liveThreadTracker {
+func getAppLiveThreadTracker(a *App) *liveThreadTracker {
 	if a == nil {
 		return nil
 	}
@@ -28,11 +28,11 @@ func (a *App) liveThreadTracker() *liveThreadTracker {
 	return a.liveThreads
 }
 
-func (a *App) markSessionThreadLive(sessionKey, threadID string) {
+func markSessionThreadLive(a *App, sessionKey, threadID string) {
 	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return
 	}
-	tracker := a.liveThreadTracker()
+	tracker := getAppLiveThreadTracker(a)
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.threads == nil {
@@ -41,21 +41,21 @@ func (a *App) markSessionThreadLive(sessionKey, threadID string) {
 	tracker.threads[strings.TrimSpace(sessionKey)] = strings.TrimSpace(threadID)
 }
 
-func (a *App) sessionHasLiveThread(sessionKey, threadID string) bool {
+func sessionHasLiveThread(a *App, sessionKey, threadID string) bool {
 	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return false
 	}
-	tracker := a.liveThreadTracker()
+	tracker := getAppLiveThreadTracker(a)
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	return tracker.threads[strings.TrimSpace(sessionKey)] == strings.TrimSpace(threadID)
 }
 
-func (a *App) clearSessionLiveThread(sessionKey string) {
+func clearSessionLiveThread(a *App, sessionKey string) {
 	if a == nil || strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	tracker := a.liveThreadTracker()
+	tracker := getAppLiveThreadTracker(a)
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	delete(tracker.threads, strings.TrimSpace(sessionKey))

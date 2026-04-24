@@ -80,7 +80,7 @@ func (s commandService) renderSessionMenuCard(sessionKey string) map[string]any 
 }
 
 func (s commandService) renderContextMenuCard(sessionKey string) map[string]any {
-	return s.app.renderCommandMenuCard(sessionKey)
+	return renderCommandMenuCard(s.app, sessionKey)
 }
 
 func (s commandService) renderSystemMenuCard(sessionKey string) map[string]any {
