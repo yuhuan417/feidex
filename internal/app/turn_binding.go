@@ -2,11 +2,39 @@ package app
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
+
+type turnBindingTracker struct {
+	mu          sync.Mutex
+	bindings    map[string]turnBinding
+	pending     map[string][]turnBinding
+	threadUsage map[string]codexrpc.ThreadTokenUsage
+	claudeUsage map[string]claudeThreadUsageSnapshot
+}
+
+func newTurnBindingTracker() *turnBindingTracker {
+	return &turnBindingTracker{
+		bindings:    map[string]turnBinding{},
+		pending:     map[string][]turnBinding{},
+		threadUsage: map[string]codexrpc.ThreadTokenUsage{},
+		claudeUsage: map[string]claudeThreadUsageSnapshot{},
+	}
+}
+
+func (a *App) turnBindingTracker() *turnBindingTracker {
+	if a == nil {
+		return nil
+	}
+	if a.turnBindings == nil {
+		a.turnBindings = newTurnBindingTracker()
+	}
+	return a.turnBindings
+}
 
 func (a *App) notePendingTurnBinding(threadID, sessionKey, submissionID string) {
 	if a == nil {
@@ -17,17 +45,18 @@ func (a *App) notePendingTurnBinding(threadID, sessionKey, submissionID string) 
 	if threadID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	if a.pendingTurns == nil {
-		a.pendingTurns = map[string][]turnBinding{}
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.pending == nil {
+		tracker.pending = map[string][]turnBinding{}
 	}
-	for _, binding := range a.pendingTurns[threadID] {
+	for _, binding := range tracker.pending[threadID] {
 		if strings.TrimSpace(binding.SubmissionID) == submissionID {
 			return
 		}
 	}
-	a.pendingTurns[threadID] = append(a.pendingTurns[threadID], turnBinding{
+	tracker.pending[threadID] = append(tracker.pending[threadID], turnBinding{
 		ThreadID:     threadID,
 		SessionKey:   strings.TrimSpace(sessionKey),
 		SubmissionID: submissionID,
@@ -43,8 +72,9 @@ func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submis
 		return "", nil
 	}
 	appState := a.appState()
-	a.turnBindMu.Lock()
-	bindings := append([]turnBinding(nil), a.pendingTurns[threadID]...)
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	bindings := append([]turnBinding(nil), tracker.pending[threadID]...)
 	next := make([]turnBinding, 0, len(bindings))
 	var matched turnBinding
 	found := false
@@ -60,11 +90,11 @@ func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submis
 		}
 	}
 	if len(next) == 0 {
-		delete(a.pendingTurns, threadID)
+		delete(tracker.pending, threadID)
 	} else {
-		a.pendingTurns[threadID] = next
+		tracker.pending[threadID] = next
 	}
-	a.turnBindMu.Unlock()
+	tracker.mu.Unlock()
 	if !found {
 		return "", nil
 	}
@@ -84,9 +114,10 @@ func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string
 	if threadID == "" || submissionID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	bindings := a.pendingTurns[threadID]
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	bindings := tracker.pending[threadID]
 	if len(bindings) == 0 {
 		return
 	}
@@ -98,10 +129,10 @@ func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string
 		next = append(next, binding)
 	}
 	if len(next) == 0 {
-		delete(a.pendingTurns, threadID)
+		delete(tracker.pending, threadID)
 		return
 	}
-	a.pendingTurns[threadID] = next
+	tracker.pending[threadID] = next
 }
 
 func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID string) {
@@ -112,12 +143,13 @@ func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID stri
 	if turnID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	if a.turnBindings == nil {
-		a.turnBindings = map[string]turnBinding{}
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.bindings == nil {
+		tracker.bindings = map[string]turnBinding{}
 	}
-	a.turnBindings[turnID] = turnBinding{
+	tracker.bindings[turnID] = turnBinding{
 		ThreadID:     strings.TrimSpace(threadID),
 		SessionKey:   strings.TrimSpace(sessionKey),
 		SubmissionID: strings.TrimSpace(submissionID),
@@ -133,14 +165,15 @@ func (a *App) rebindTurnThreadID(turnID, threadID string) {
 	if turnID == "" || threadID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	binding, ok := a.turnBindings[turnID]
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	binding, ok := tracker.bindings[turnID]
 	if !ok {
 		return
 	}
 	binding.ThreadID = threadID
-	a.turnBindings[turnID] = binding
+	tracker.bindings[turnID] = binding
 }
 
 func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) {
@@ -151,9 +184,10 @@ func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) 
 	if turnID == "" {
 		return "", nil
 	}
-	a.turnBindMu.Lock()
-	binding, ok := a.turnBindings[turnID]
-	a.turnBindMu.Unlock()
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	binding, ok := tracker.bindings[turnID]
+	tracker.mu.Unlock()
 	if !ok {
 		return "", nil
 	}
@@ -172,9 +206,10 @@ func (a *App) clearTurnBinding(turnID string) {
 	if turnID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	delete(a.turnBindings, turnID)
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	delete(tracker.bindings, turnID)
 }
 
 func (a *App) markTurnStartedAt(turnID string, startedAt time.Time) {
@@ -185,15 +220,16 @@ func (a *App) markTurnStartedAt(turnID string, startedAt time.Time) {
 	if turnID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	binding, ok := a.turnBindings[turnID]
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	binding, ok := tracker.bindings[turnID]
 	if !ok {
 		return
 	}
 	if binding.StartedAt.IsZero() {
 		binding.StartedAt = startedAt
-		a.turnBindings[turnID] = binding
+		tracker.bindings[turnID] = binding
 	}
 }
 
@@ -203,24 +239,25 @@ func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.Threa
 	}
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	if a.threadUsage == nil {
-		a.threadUsage = map[string]codexrpc.ThreadTokenUsage{}
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.threadUsage == nil {
+		tracker.threadUsage = map[string]codexrpc.ThreadTokenUsage{}
 	}
 	if threadID != "" {
-		a.threadUsage[threadID] = usage
+		tracker.threadUsage[threadID] = usage
 	}
 	if turnID == "" {
 		return
 	}
-	binding, ok := a.turnBindings[turnID]
+	binding, ok := tracker.bindings[turnID]
 	if !ok {
 		return
 	}
 	binding.LastUsage = usage.Last
 	binding.HasLastUsage = true
-	a.turnBindings[turnID] = binding
+	tracker.bindings[turnID] = binding
 }
 
 func (a *App) recordTurnContextUsagePercent(turnID string, percentage float64) {
@@ -231,15 +268,16 @@ func (a *App) recordTurnContextUsagePercent(turnID string, percentage float64) {
 	if turnID == "" {
 		return
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	binding, ok := a.turnBindings[turnID]
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	binding, ok := tracker.bindings[turnID]
 	if !ok {
 		return
 	}
 	binding.ContextUsagePercent = percentage
 	binding.HasContextUsagePercent = true
-	a.turnBindings[turnID] = binding
+	tracker.bindings[turnID] = binding
 }
 
 func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, contextLine, elapsedLine string) {
@@ -250,9 +288,10 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 	if turnID == "" {
 		return "", "", ""
 	}
-	a.turnBindMu.Lock()
-	binding, ok := a.turnBindings[turnID]
-	a.turnBindMu.Unlock()
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	binding, ok := tracker.bindings[turnID]
+	tracker.mu.Unlock()
 	if ok && binding.HasLastUsage {
 		usageLine = formatTurnUsageLine(binding.LastUsage)
 	}
@@ -291,8 +330,9 @@ func (a *App) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bo
 	if threadID == "" {
 		return codexrpc.ThreadTokenUsage{}, false
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	usage, ok := a.threadUsage[threadID]
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	usage, ok := tracker.threadUsage[threadID]
 	return usage, ok
 }

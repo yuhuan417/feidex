@@ -171,12 +171,13 @@ func (a *App) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage
 		snapshot.HasContextUsagePercent = true
 	}
 
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	if a.claudeUsage == nil {
-		a.claudeUsage = map[string]claudeThreadUsageSnapshot{}
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	if tracker.claudeUsage == nil {
+		tracker.claudeUsage = map[string]claudeThreadUsageSnapshot{}
 	}
-	a.claudeUsage[threadID] = snapshot
+	tracker.claudeUsage[threadID] = snapshot
 }
 
 func (a *App) currentClaudeThreadUsage(threadID string) (claudeThreadUsageSnapshot, bool) {
@@ -187,9 +188,10 @@ func (a *App) currentClaudeThreadUsage(threadID string) (claudeThreadUsageSnapsh
 	if threadID == "" {
 		return claudeThreadUsageSnapshot{}, false
 	}
-	a.turnBindMu.Lock()
-	defer a.turnBindMu.Unlock()
-	usage, ok := a.claudeUsage[threadID]
+	tracker := a.turnBindingTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	usage, ok := tracker.claudeUsage[threadID]
 	return usage, ok
 }
 

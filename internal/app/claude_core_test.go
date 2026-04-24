@@ -755,7 +755,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("submission after Claude ready = %+v", sub)
 	}
 
-	binding := a.turnBindings[sub.TurnID]
+	binding := a.turnBindingTracker().bindings[sub.TurnID]
 	if binding.ThreadID != "claude-session-ready" {
 		t.Fatalf("turn binding after Claude ready = %+v", binding)
 	}

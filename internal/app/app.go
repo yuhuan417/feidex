@@ -54,11 +54,7 @@ type App struct {
 	workspaceCloneOps map[string]*workspaceCloneOperation
 	liveThreadMu      sync.Mutex
 	liveThreads       map[string]string
-	turnBindMu        sync.Mutex
-	turnBindings      map[string]turnBinding
-	pendingTurns      map[string][]turnBinding
-	threadUsage       map[string]codexrpc.ThreadTokenUsage
-	claudeUsage       map[string]claudeThreadUsageSnapshot
+	turnBindings      *turnBindingTracker
 	finalCardPatches  *finalCardPatchTracker
 	skillsMu          sync.Mutex
 	pendingSkills     map[string]state.SubmissionSkill
@@ -130,10 +126,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		turnItems:           map[string]*turnItemState{},
 		workspaceCloneOps:   map[string]*workspaceCloneOperation{},
 		liveThreads:         map[string]string{},
-		turnBindings:        map[string]turnBinding{},
-		pendingTurns:        map[string][]turnBinding{},
-		threadUsage:         map[string]codexrpc.ThreadTokenUsage{},
-		claudeUsage:         map[string]claudeThreadUsageSnapshot{},
+		turnBindings:        newTurnBindingTracker(),
 		finalCardPatches:    newFinalCardPatchTracker(),
 		autoRetries:         map[string]*autoRetryState{},
 		pendingSkills:       map[string]state.SubmissionSkill{},
