@@ -12,7 +12,7 @@ import (
 
 const frontendCardNotificationKindFeishuPermissionIssue = "feishu_permission_issue"
 
-func (a *App) queueFrontendCardNotification(note state.FrontendCardNotification) {
+func queueFrontendCardNotification(a *App, note state.FrontendCardNotification) {
 	if a == nil || a.store == nil {
 		return
 	}
@@ -25,7 +25,7 @@ func (a *App) queueFrontendCardNotification(note state.FrontendCardNotification)
 	}
 }
 
-func (a *App) flushPendingFrontendCardNotifications(msg *feishu.InboundMessage) {
+func flushPendingFrontendCardNotifications(a *App, msg *feishu.InboundMessage) {
 	if a == nil || a.feishu == nil || a.store == nil || msg == nil {
 		return
 	}
@@ -46,7 +46,7 @@ func (a *App) flushPendingFrontendCardNotifications(msg *feishu.InboundMessage) 
 	}
 	failed := make([]state.FrontendCardNotification, 0, len(notes))
 	for _, note := range notes {
-		if err := a.sendFrontendCardNotification(target, note); err != nil {
+		if err := sendFrontendCardNotification(a, target, note); err != nil {
 			slog.Warn("deliver pending frontend card notification failed",
 				"frontend_id", strings.TrimSpace(a.frontendID),
 				"chat_id", target.ChatID,
@@ -57,11 +57,11 @@ func (a *App) flushPendingFrontendCardNotifications(msg *feishu.InboundMessage) 
 		}
 	}
 	for _, note := range failed {
-		a.queueFrontendCardNotification(note)
+		queueFrontendCardNotification(a, note)
 	}
 }
 
-func (a *App) sendFrontendCardNotification(target feishuNotifyTarget, note state.FrontendCardNotification) error {
+func sendFrontendCardNotification(a *App, target feishuNotifyTarget, note state.FrontendCardNotification) error {
 	if a == nil || a.feishu == nil {
 		return nil
 	}

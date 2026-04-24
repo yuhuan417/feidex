@@ -164,7 +164,7 @@ func (s runtimeMaintenanceService) notifyDriveArtifactGCPermissionIssue(source s
 	notifier, ok := s.app.feishu.(permissionIssueDiagnosticSender)
 	chatIDs := s.app.startupReadyChatIDs(appState(s.app).sessions())
 	if len(chatIDs) == 0 {
-		s.app.queueFrontendCardNotification(state.FrontendCardNotification{
+		queueFrontendCardNotification(s.app, state.FrontendCardNotification{
 			Kind:        frontendCardNotificationKindFeishuPermissionIssue,
 			CollapseKey: frontendCardNotificationKindFeishuPermissionIssue,
 			Title:       "飞书权限错误",
@@ -179,7 +179,7 @@ func (s runtimeMaintenanceService) notifyDriveArtifactGCPermissionIssue(source s
 		return
 	}
 	if !ok {
-		s.app.queueFrontendCardNotification(state.FrontendCardNotification{
+		queueFrontendCardNotification(s.app, state.FrontendCardNotification{
 			Kind:        frontendCardNotificationKindFeishuPermissionIssue,
 			CollapseKey: frontendCardNotificationKindFeishuPermissionIssue,
 			Title:       "飞书权限错误",
