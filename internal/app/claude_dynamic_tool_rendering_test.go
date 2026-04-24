@@ -157,8 +157,8 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
 		"id":   "item-read",
 		"type": "dynamic_tool_call",
 		"tool": "Read",
@@ -173,7 +173,7 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 		t.Fatalf("working card body after dynamic read = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
 		"id":   "item-task",
 		"type": "dynamic_tool_call",
 		"tool": "TaskUpdate",
@@ -191,7 +191,7 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 
 	replyCount := len(ff.replyCards)
 	patchCount := len(ff.patchedCards)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-unknown", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-unknown", map[string]any{
 		"id":   "item-unknown",
 		"type": "dynamic_tool_call",
 		"tool": "StrangeTool",
@@ -210,8 +210,8 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
 		"id":   "item-read",
 		"type": "dynamic_tool_call",
 		"tool": "Read",
@@ -226,7 +226,7 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 		t.Fatalf("initial card title = %q, want %q", got, quietWorkingCardTitle)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
 		"id":   "item-todo",
 		"type": "dynamic_tool_call",
 		"tool": "TodoWrite",
@@ -247,7 +247,7 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 		t.Fatalf("TodoWrite card body = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
 		"id":   "item-task",
 		"type": "dynamic_tool_call",
 		"tool": "TaskUpdate",

@@ -35,7 +35,7 @@ func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	turnID := strings.TrimSpace(sess.ActiveTurnID)
-	if threadID == "" || turnID == "" || !a.turnStreamSawFinal(turnID) {
+	if threadID == "" || turnID == "" || !newTurnStreamService(a).turnStreamSawFinal(turnID) {
 		return sess
 	}
 

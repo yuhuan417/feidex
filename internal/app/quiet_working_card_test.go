@@ -106,8 +106,8 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
 		"id":   "reason-1",
 		"type": "reasoning",
 	})
@@ -121,7 +121,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("working card body after reasoning = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
 		"id":     "cmd-1",
 		"type":   "commandExecution",
 		"status": "completed",
@@ -150,7 +150,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		}
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
 		"id":   "agent-1",
 		"type": "agentMessage",
 		"text": "first reply",
@@ -162,7 +162,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("agent message body = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "web-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "web-1", map[string]any{
 		"id":    "web-1",
 		"type":  "webSearch",
 		"query": "latest golang release",
@@ -180,7 +180,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("second working card body = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "file-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "file-1", map[string]any{
 		"id":     "file-1",
 		"type":   "fileChange",
 		"status": "completed",
@@ -198,7 +198,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("patched second working card body = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "file-2", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "file-2", map[string]any{
 		"id":     "file-2",
 		"type":   "fileChange",
 		"status": "completed",
@@ -216,7 +216,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("patched second working card body = %q", body)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-2", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-2", map[string]any{
 		"id":   "agent-2",
 		"type": "agentMessage",
 		"text": "second reply",
@@ -234,8 +234,8 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
 		"id":   "reason-1",
 		"type": "reasoning",
 	})
@@ -245,7 +245,7 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T
 
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
 		"id":   "agent-1",
 		"type": "agentMessage",
 		"text": "reply after reasoning",
@@ -267,8 +267,8 @@ func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
 		"id":     "cmd-1",
 		"type":   "commandExecution",
 		"status": "completed",
@@ -307,8 +307,8 @@ func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
 		"id":     "cmd-1",
 		"type":   "commandExecution",
 		"status": "completed",

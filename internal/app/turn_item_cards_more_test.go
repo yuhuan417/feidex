@@ -184,7 +184,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 		t.Fatal("submission missing after queue flag update")
 	}
 	before = len(ff.replyCards)
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("noteTurnStarted(waited in queue) replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}
@@ -195,7 +195,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	if updatedSub == nil || !updatedSub.StartNoticeSent {
 		t.Fatalf("submission after started notice = %+v, want StartNoticeSent", updatedSub)
 	}
-	a.noteTurnStarted("sess-1", updatedSub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", updatedSub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("noteTurnStarted() should not duplicate started notice, replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}

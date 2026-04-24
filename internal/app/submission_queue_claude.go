@@ -238,7 +238,7 @@ func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey str
 		})
 		newRuntimeStateService(a).clearTurnBinding(turnID)
 		newRuntimeStateService(a).clearTurnItemStates(turnID)
-		a.deleteTurnStream(turnID)
+		newTurnStreamService(a).deleteTurnStream(turnID)
 	}
 
 	if updatedSess == nil || !sessionHasActiveOperations(updatedSess) {
@@ -285,7 +285,7 @@ func (w *lifecycleCoordinator) bindClaudeSubmissionStartState(sessionKey string,
 		rootMessageID = strings.TrimSpace(updatedSess.RootMessageID)
 	}
 	a.recordRootTurnBinding(rootMessageID, sessionKey, claudeThreadID, turnID)
-	a.noteTurnStarted(sessionKey, sub)
+	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	if strings.TrimSpace(claudeThreadID) != "" {
 		a.markSessionThreadLive(sessionKey, claudeThreadID)
 	} else {

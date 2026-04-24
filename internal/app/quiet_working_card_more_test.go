@@ -189,7 +189,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 		t.Fatalf("prepareQuietWorkingCardBoundaryLocked(mixed) = %+v, stream=%+v", boundary, mixed)
 	}
 
-	a.turnStreamTracker().streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &quietWorkingCard{}}
+	newTurnStreamService(a).turnStreamTracker().streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &quietWorkingCard{}}
 	a.executeQuietWorkingCardOp(context.Background(), sub, quietWorkingCardOp{
 		TurnID: "turn-1",
 		Body:   "Read `quiet_mode.go`",
@@ -197,11 +197,11 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
 	}
-	if got := a.turnStreamTracker().streams["turn-1"].QuietWorking; got == nil || got.MessageID == "" || got.RenderedBody != "Read `quiet_mode.go`" {
+	if got := newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking; got == nil || got.MessageID == "" || got.RenderedBody != "Read `quiet_mode.go`" {
 		t.Fatalf("commitQuietWorkingCardRender(reply) = %+v", got)
 	}
 
-	a.turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
+	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
 	a.executeQuietWorkingCardOp(context.Background(), sub, quietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
@@ -210,18 +210,18 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patchedCards = %d, want 1", len(ff.patchedCards))
 	}
-	if got := a.turnStreamTracker().streams["turn-1"].QuietWorking.RenderedBody; got != "Update `quiet_mode.go`" {
+	if got := newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking.RenderedBody; got != "Update `quiet_mode.go`" {
 		t.Fatalf("commitQuietWorkingCardRender(patch) = %q", got)
 	}
 
 	ff.patchCardErr = errors.New("boom")
-	a.turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
+	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
 	a.executeQuietWorkingCardOp(context.Background(), sub, quietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "after error",
 	})
-	if got := a.turnStreamTracker().streams["turn-1"].QuietWorking.RenderedBody; got != "stable" {
+	if got := newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking.RenderedBody; got != "stable" {
 		t.Fatalf("patch error should not commit render, got %q", got)
 	}
 }

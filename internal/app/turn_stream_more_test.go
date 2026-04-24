@@ -64,9 +64,9 @@ func TestTurnStreamLifecycleDeliversItemCardsWithoutStoringAccumulation(t *testi
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.noteTurnStarted("sess-1", sub)
-	a.updatePendingPlan("turn-1", "- [in_progress] run")
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).updatePendingPlan("turn-1", "- [in_progress] run")
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
 		"type":    "reasoning",
 		"summary": []any{map[string]any{"type": "summary_text", "text": "thinking"}},
 	})
@@ -76,12 +76,12 @@ func TestTurnStreamLifecycleDeliversItemCardsWithoutStoringAccumulation(t *testi
 		t.Fatalf("submission after completeTurnItem = %+v", updated)
 	}
 
-	result := a.flushTurnStream(context.Background(), "thread-1", "turn-1")
+	result := newTurnStreamService(a).flushTurnStream(context.Background(), "thread-1", "turn-1")
 	updated = a.store.GetSubmission(sub.ID)
 	if result.SawFinal || updated == nil {
 		t.Fatalf("flushTurnStream() = %+v, submission=%+v", result, updated)
 	}
-	if a.turnStreamTracker().streams["turn-1"] != nil {
+	if newTurnStreamService(a).turnStreamTracker().streams["turn-1"] != nil {
 		t.Fatal("expected turn stream to be cleared after flush")
 	}
 	if len(ff.replyCards) < 2 {

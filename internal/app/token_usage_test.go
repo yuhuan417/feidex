@@ -169,7 +169,7 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 			"modelContextWindow":1000
 		}
 	}`))
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "final text",
 		"phase": "final_answer",
@@ -218,7 +218,7 @@ func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 		}
 	}`))
 	newRuntimeStateService(a).recordTurnContextUsagePercent("turn-1", 73.25)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "final text",
 		"phase": "final_answer",

@@ -192,11 +192,11 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	threadID = firstNonEmpty(strings.TrimSpace(threadID), strings.TrimSpace(sub.ThreadID))
 	turnID = firstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
 	if turnID != "" && message != "" {
-		a.recordTurnError(threadID, turnID, message)
+		newTurnStreamService(a).recordTurnError(threadID, turnID, message)
 	}
 	flush := turnStreamFlushResult{}
 	if turnID != "" {
-		flush = a.flushTurnStream(context.Background(), threadID, turnID)
+		flush = newTurnStreamService(a).flushTurnStream(context.Background(), threadID, turnID)
 	}
 	a.resolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
 	_ = appState.finalizeSubmission(sub.ID, "failed")

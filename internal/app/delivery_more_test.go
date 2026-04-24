@@ -77,18 +77,18 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 
-	a.turnStreamTracker().streams["ghost"] = &turnStream{TurnID: "ghost"}
-	if result := a.flushTurnStream(context.Background(), "", "ghost"); result != (turnStreamFlushResult{}) {
+	newTurnStreamService(a).turnStreamTracker().streams["ghost"] = &turnStream{TurnID: "ghost"}
+	if result := newTurnStreamService(a).flushTurnStream(context.Background(), "", "ghost"); result != (turnStreamFlushResult{}) {
 		t.Fatalf("flushTurnStream(missing submission) = %+v", result)
 	}
-	if a.turnStreamTracker().streams["ghost"] != nil {
+	if newTurnStreamService(a).turnStreamTracker().streams["ghost"] != nil {
 		t.Fatal("flushTurnStream(missing submission) should remove stream")
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
-	stream := a.turnStreamTracker().streams["turn-1"]
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	stream := newTurnStreamService(a).turnStreamTracker().streams["turn-1"]
 	stream.PendingPlan = "- [in_progress] run"
 	reasoningKey := quietWorkingEntryKey(quietWorkingReasoningKey, 0)
 	stream.QuietWorking = &quietWorkingCard{
@@ -98,10 +98,10 @@ func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	}
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
-	if result := a.flushTurnStream(context.Background(), "thread-1", "turn-1"); result != (turnStreamFlushResult{}) {
+	if result := newTurnStreamService(a).flushTurnStream(context.Background(), "thread-1", "turn-1"); result != (turnStreamFlushResult{}) {
 		t.Fatalf("flushTurnStream(plan reuse) = %+v", result)
 	}
-	if a.turnStreamTracker().streams["turn-1"] != nil {
+	if newTurnStreamService(a).turnStreamTracker().streams["turn-1"] != nil {
 		t.Fatal("flushTurnStream(plan reuse) should clear stream")
 	}
 	if len(ff.patchedCards) != 1 {

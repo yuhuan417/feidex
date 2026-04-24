@@ -17,14 +17,14 @@ func newTurnStreamTracker() *turnStreamTracker {
 	return &turnStreamTracker{streams: map[string]*turnStream{}}
 }
 
-func (a *App) turnStreamTracker() *turnStreamTracker {
-	if a == nil {
+func (s turnStreamService) turnStreamTracker() *turnStreamTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.turnStreams == nil {
-		a.turnStreams = newTurnStreamTracker()
+	if s.app.turnStreams == nil {
+		s.app.turnStreams = newTurnStreamTracker()
 	}
-	return a.turnStreams
+	return s.app.turnStreams
 }
 
 type turnStream struct {
@@ -48,22 +48,22 @@ type turnStreamFlushResult struct {
 	WorkingMessageID string
 }
 
-func (a *App) noteTurnStarted(sessionKey string, sub *state.Submission) {
+func (s turnStreamService) noteTurnStarted(sessionKey string, sub *state.Submission) {
 	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
 		return
 	}
-	a.maybeSendSubmissionStartedNotice(context.Background(), sub)
-	tracker := a.turnStreamTracker()
+	s.maybeSendSubmissionStartedNotice(context.Background(), sub)
+	tracker := s.turnStreamTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
-	a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	s.ensureTurnStreamLocked(tracker, sessionKey, sub)
 }
 
-func (a *App) maybeSendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
-	if a == nil || sub == nil || strings.TrimSpace(sub.ID) == "" {
+func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
+	if s.app == nil || sub == nil || strings.TrimSpace(sub.ID) == "" {
 		return
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	shouldSend := false
 	if err := appState.updateSubmission(sub.ID, func(current *state.Submission) {
 		if current == nil || !current.WaitedInQueue || current.StartNoticeSent {
@@ -78,48 +78,48 @@ func (a *App) maybeSendSubmissionStartedNotice(ctx context.Context, sub *state.S
 	if updated != nil {
 		sub = updated
 	}
-	a.sendSubmissionStartedNotice(ctx, sub)
+	s.app.sendSubmissionStartedNotice(ctx, sub)
 }
 
-func (a *App) updatePendingPlan(turnID, plan string) {
-	sessionKey, sub := a.findSubmissionByTurn("", turnID)
+func (s turnStreamService) updatePendingPlan(turnID, plan string) {
+	sessionKey, sub := s.app.findSubmissionByTurn("", turnID)
 	if sub == nil {
 		return
 	}
-	tracker := a.turnStreamTracker()
+	tracker := s.turnStreamTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
-	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	stream := s.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	stream.PendingPlan = strings.TrimSpace(plan)
 }
 
-func (a *App) recordTurnError(threadID, turnID, message string) {
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+func (s turnStreamService) recordTurnError(threadID, turnID, message string) {
+	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return
 	}
-	tracker := a.turnStreamTracker()
+	tracker := s.turnStreamTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
-	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	stream := s.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	stream.LastError = strings.TrimSpace(message)
 }
 
-func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
-	if a == nil {
+func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
+	if s.app == nil {
 		return
 	}
-	newLifecycleCoordinator(a).bindPendingSubmissionTurn(threadID, turnID, true)
-	item = newRuntimeStateService(a).completeTurnItemState(threadID, turnID, itemID, item)
+	newLifecycleCoordinator(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
+	item = newRuntimeStateService(s.app).completeTurnItemState(threadID, turnID, itemID, item)
 	itemID = strings.TrimSpace(firstNonEmpty(strings.TrimSpace(itemID), stringValue(item["id"])))
-	if a.completeStandaloneCompactItem(threadID, turnID, item) {
+	if s.app.completeStandaloneCompactItem(threadID, turnID, item) {
 		return
 	}
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return
 	}
-	workspaceCwd := a.workspaceCwd(sub.WorkspaceID)
+	workspaceCwd := s.app.workspaceCwd(sub.WorkspaceID)
 	payload, hasPayload := buildTurnItemCardPayloadWithWorkspace(itemID, item, workspaceCwd)
 
 	var (
@@ -132,9 +132,9 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		skipPayload      bool
 	)
 
-	tracker := a.turnStreamTracker()
+	tracker := s.turnStreamTracker()
 	tracker.mu.Lock()
-	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	stream := s.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	if strings.TrimSpace(threadID) != "" {
 		stream.ThreadID = threadID
 	}
@@ -143,7 +143,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		stream.LastSentPlan = text
 		stream.PendingPlan = ""
 		if stream.QuietWorking != nil {
-			planBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
+			planBoundary = s.app.prepareQuietWorkingCardBoundaryLocked(stream)
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
@@ -168,32 +168,32 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 	}
 	if hasPayload && isQuietBoundaryTurnPayload(payload) {
 		if stream.QuietWorking != nil {
-			itemBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
+			itemBoundary = s.app.prepareQuietWorkingCardBoundaryLocked(stream)
 			itemReuseMessage = itemBoundary.ReuseMessageID
 		}
-	} else if a.quietWorkingCardEnabled() {
-		workingUpdate = a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
+	} else if s.app.quietWorkingCardEnabled() {
+		workingUpdate = s.app.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	}
 	tracker.mu.Unlock()
 
-	a.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
+	s.app.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		a.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
+		s.app.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
-	a.executeQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
-	if a.quietWorkingCardEnabled() {
-		a.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
+	s.app.executeQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
+	if s.app.quietWorkingCardEnabled() {
+		s.app.executeQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
-	if hasPayload && !skipPayload && (!a.quietModeEnabled() || shouldDeliverTurnItemPayloadInQuiet(a.quietMode(), payload)) {
-		a.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
+	if hasPayload && !skipPayload && (!s.app.quietModeEnabled() || shouldDeliverTurnItemPayloadInQuiet(s.app.quietMode(), payload)) {
+		s.app.sendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
 }
 
-func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
-	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
+func (s turnStreamService) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
+	sessionKey, sub := s.app.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		a.deleteTurnStream(turnID)
-		newRuntimeStateService(a).clearTurnItemStates(turnID)
+		s.deleteTurnStream(turnID)
+		newRuntimeStateService(s.app).clearTurnItemStates(turnID)
 		return turnStreamFlushResult{}
 	}
 
@@ -204,9 +204,9 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 		result           turnStreamFlushResult
 	)
 
-	tracker := a.turnStreamTracker()
+	tracker := s.turnStreamTracker()
 	tracker.mu.Lock()
-	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	stream := s.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	result.SawFinal = stream.SentFinal
 	result.LastError = stream.LastError
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
@@ -216,32 +216,32 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	if pendingPlan != "" && pendingPlan != stream.LastSentPlan {
 		planText = pendingPlan
 		if stream.QuietWorking != nil {
-			planBoundary = a.prepareQuietWorkingCardBoundaryLocked(stream)
+			planBoundary = s.app.prepareQuietWorkingCardBoundaryLocked(stream)
 			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
 	delete(tracker.streams, turnID)
 	tracker.mu.Unlock()
 
-	a.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
+	s.app.executeQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		a.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
+		s.app.sendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
 	}
 	return result
 }
 
-func (a *App) turnStreamSawFinal(turnID string) bool {
-	if a == nil || strings.TrimSpace(turnID) == "" {
+func (s turnStreamService) turnStreamSawFinal(turnID string) bool {
+	if s.app == nil || strings.TrimSpace(turnID) == "" {
 		return false
 	}
-	tracker := a.turnStreamTracker()
+	tracker := s.turnStreamTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	stream := tracker.streams[strings.TrimSpace(turnID)]
 	return stream != nil && stream.SentFinal
 }
 
-func (a *App) ensureTurnStreamLocked(tracker *turnStreamTracker, sessionKey string, sub *state.Submission) *turnStream {
+func (s turnStreamService) ensureTurnStreamLocked(tracker *turnStreamTracker, sessionKey string, sub *state.Submission) *turnStream {
 	if tracker == nil {
 		return nil
 	}
@@ -273,8 +273,8 @@ func isQuietBoundaryTurnPayload(payload turnItemCardPayload) bool {
 	return isQuietBoundaryTurnItem(payload.ItemType) || isClaudeTodoToolPayload(payload)
 }
 
-func (a *App) deleteTurnStream(turnID string) {
-	tracker := a.turnStreamTracker()
+func (s turnStreamService) deleteTurnStream(turnID string) {
+	tracker := s.turnStreamTracker()
 	if tracker == nil {
 		return
 	}
@@ -287,8 +287,8 @@ func (a *App) deleteTurnStream(turnID string) {
 	tracker.mu.Unlock()
 }
 
-func (a *App) markTurnStreamFinal(turnID string) {
-	tracker := a.turnStreamTracker()
+func (s turnStreamService) markTurnStreamFinal(turnID string) {
+	tracker := s.turnStreamTracker()
 	if tracker == nil {
 		return
 	}
@@ -303,8 +303,8 @@ func (a *App) markTurnStreamFinal(turnID string) {
 	tracker.mu.Unlock()
 }
 
-func (a *App) prepareTurnStreamQuietBoundary(turnID string) quietWorkingBoundary {
-	tracker := a.turnStreamTracker()
+func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) quietWorkingBoundary {
+	tracker := s.turnStreamTracker()
 	if tracker == nil {
 		return quietWorkingBoundary{}
 	}
@@ -313,28 +313,28 @@ func (a *App) prepareTurnStreamQuietBoundary(turnID string) quietWorkingBoundary
 		return quietWorkingBoundary{}
 	}
 	tracker.mu.Lock()
-	boundary := a.prepareQuietWorkingCardBoundaryLocked(tracker.streams[turnID])
+	boundary := s.app.prepareQuietWorkingCardBoundaryLocked(tracker.streams[turnID])
 	tracker.mu.Unlock()
 	return boundary
 }
 
-func (a *App) prepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
-	tracker := a.turnStreamTracker()
+func (s turnStreamService) prepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
+	tracker := s.turnStreamTracker()
 	if tracker == nil || sub == nil {
 		return quietWorkingCardOp{}
 	}
 	tracker.mu.Lock()
-	stream := a.ensureTurnStreamLocked(tracker, sessionKey, sub)
+	stream := s.ensureTurnStreamLocked(tracker, sessionKey, sub)
 	if strings.TrimSpace(threadID) != "" {
 		stream.ThreadID = strings.TrimSpace(threadID)
 	}
-	op := a.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
+	op := s.app.prepareQuietWorkingCardUpdateLocked(stream, itemID, item, workspaceCwd)
 	tracker.mu.Unlock()
 	return op
 }
 
-func (a *App) commitTurnStreamQuietRender(turnID, messageID, body string) {
-	tracker := a.turnStreamTracker()
+func (s turnStreamService) commitTurnStreamQuietRender(turnID, messageID, body string) {
+	tracker := s.turnStreamTracker()
 	if tracker == nil {
 		return
 	}

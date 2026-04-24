@@ -644,7 +644,7 @@ func (r *claudeRuntime) prepareClaudeQuietWorkingBoundary(threadID, turnID strin
 	if sub == nil {
 		return nil, quietWorkingBoundary{}
 	}
-	boundary := r.app.prepareTurnStreamQuietBoundary(turnID)
+	boundary := newTurnStreamService(r.app).prepareTurnStreamQuietBoundary(turnID)
 	return sub, boundary
 }
 
@@ -674,7 +674,7 @@ func (r *claudeRuntime) handleThinkingEvent(state *claudeSessionState, event cla
 	}
 	workspaceCwd := r.app.workspaceCwd(sub.WorkspaceID)
 	var op quietWorkingCardOp
-	op = r.app.prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
+	op = newTurnStreamService(r.app).prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
 	}, workspaceCwd)
 	r.app.executeQuietWorkingCardOp(context.Background(), sub, op)
@@ -743,7 +743,7 @@ func (r *claudeRuntime) handleToolComplete(state *claudeSessionState, event clau
 		"status": "completed",
 		"input":  event.Input,
 	}
-	r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+	newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 }
 
 func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event claudecli.TurnCompleteEvent) {
@@ -795,7 +795,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		newRuntimeStateService(r.app).recordTurnContextUsagePercent(turn.TurnID, percentage)
 	}
 	if event.Error != nil {
-		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
+		newTurnStreamService(r.app).recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 	if deliveredAnyText && event.Success {
 		finalText := strings.TrimSpace(firstNonEmpty(lastAssistantText, strings.TrimSpace(event.Result)))
@@ -817,9 +817,9 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
-					r.app.markTurnStreamFinal(turn.TurnID)
+					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
 				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-					r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+					newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
 						"text":  finalText,
@@ -842,9 +842,9 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
-					r.app.markTurnStreamFinal(turn.TurnID)
+					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
 				} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-					r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+					newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
 						"text":  finalText,
@@ -852,7 +852,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 					})
 				}
 			} else if !r.app.finalizeClaudeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-				r.app.completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+				newTurnStreamService(r.app).completeTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 					"type":  "agent_message",
 					"id":    "claude-agent-" + turn.TurnID,
 					"text":  finalText,
@@ -897,7 +897,7 @@ func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event clau
 		return
 	}
 	if event.Error != nil {
-		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
+		newTurnStreamService(r.app).recordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 	if isFatalClaudeSessionError(state, event) {
 		r.app.failClaudeSessionActiveWork(sessionKey, threadID, event.Error)

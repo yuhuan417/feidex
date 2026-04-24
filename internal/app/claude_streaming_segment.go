@@ -40,7 +40,7 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 		if len(results) == 0 {
 			return nil, false
 		}
-		a.markTurnStreamFinal(turnID)
+		newTurnStreamService(a).markTurnStreamFinal(turnID)
 		return results, true
 	}
 

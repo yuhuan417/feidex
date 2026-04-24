@@ -44,7 +44,7 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 		t.Fatalf("UpdateSubmission() error = %v", err)
 	}
 
-	a.noteTurnStarted("sess-1", &state.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
+	newTurnStreamService(a).noteTurnStarted("sess-1", &state.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
 	a.finishTurn("thread-1", "turn-1", "completed")
 
 	if len(ff.replyCards) == 0 {
@@ -65,14 +65,14 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now())
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "first final",
 		"phase": "final_answer",
 	})
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-2", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-2", map[string]any{
 		"type":  "agent_message",
 		"text":  "second final",
 		"phase": "final_answer",

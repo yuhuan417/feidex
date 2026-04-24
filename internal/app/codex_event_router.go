@@ -46,7 +46,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 			if p.ItemID == "" {
 				p.ItemID = strings.TrimSpace(stringValue(p.Item["id"]))
 			}
-			a.completeTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, p.Item)
+			newTurnStreamService(a).completeTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, p.Item)
 		}
 	case "turn/plan/updated":
 		var p struct {
@@ -61,7 +61,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 			for _, item := range p.Plan {
 				plan = append(plan, fmt.Sprintf("- [%s] %s", item.Status, item.Step))
 			}
-			a.updatePendingPlan(p.TurnID, strings.Join(plan, "\n"))
+			newTurnStreamService(a).updatePendingPlan(p.TurnID, strings.Join(plan, "\n"))
 		}
 	case "turn/started":
 		var p struct {
@@ -116,7 +116,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 			if a.failStandaloneCompactTurn(p.ThreadID, p.TurnID, p.Error.Message) {
 				return
 			}
-			a.recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
+			newTurnStreamService(a).recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
 			a.updateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
 				sub.Status = "failed"
 			})

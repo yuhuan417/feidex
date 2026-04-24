@@ -2990,7 +2990,7 @@ func TestNotificationHelpers(t *testing.T) {
 	a.handleNotification("error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
 	a.handleNotification("serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
 
-	stream := a.turnStreamTracker().streams["turn-1"]
+	stream := newTurnStreamService(a).turnStreamTracker().streams["turn-1"]
 	if stream == nil || !strings.Contains(stream.PendingPlan, "a") {
 		t.Fatalf("turn stream after notifications = %+v", stream)
 	}

@@ -245,7 +245,7 @@ func TestExitedReviewModeDeliversFinalInQuietFinal(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeFinal
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
 		"id":     "review-1",
 		"type":   "exitedReviewMode",
 		"review": "Looks solid overall...",
@@ -275,7 +275,7 @@ func TestReviewResultSuppressesTrailingAgentMessageAndKeepsFooterOnLastSplitCard
 	})
 
 	longReview := strings.Repeat("review-detail ", 1800)
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
 		"id":     "review-1",
 		"type":   "exitedReviewMode",
 		"review": longReview,
@@ -294,7 +294,7 @@ func TestReviewResultSuppressesTrailingAgentMessageAndKeepsFooterOnLastSplitCard
 		t.Fatalf("review split last card missing footer lines: %q", lastFooter)
 	}
 
-	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
 		"id":   "agent-1",
 		"type": "agentMessage",
 		"text": "trailing review summary",

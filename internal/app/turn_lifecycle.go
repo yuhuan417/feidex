@@ -49,7 +49,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string
 	sub.Status = "running"
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
-	a.noteTurnStarted(sessionKey, sub)
+	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	a.markSessionThreadLive(sessionKey, threadID)
 	return true
 }
@@ -139,7 +139,7 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 	newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
-	a.noteTurnStarted(sessionKey, sub)
+	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	a.markSessionThreadLive(sessionKey, threadID)
 	slog.Debug("turn started notification rebound pending submission",
 		"session_key", sessionKey,
@@ -216,7 +216,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 	}
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
-	a.noteTurnStarted(sessionKey, sub)
+	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	a.markSessionThreadLive(sessionKey, threadID)
 	slog.Debug("turn completed rebound pending submission without prior turn start notification",
 		"session_key", sessionKey,
@@ -254,7 +254,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		return
 	}
 
-	flush := a.flushTurnStream(context.Background(), threadID, turnID)
+	flush := newTurnStreamService(a).flushTurnStream(context.Background(), threadID, turnID)
 
 	switch status {
 	case "completed":

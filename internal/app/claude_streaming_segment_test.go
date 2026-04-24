@@ -16,7 +16,7 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -53,7 +53,7 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -108,7 +108,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -171,7 +171,7 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -227,7 +227,7 @@ func TestClaudeRuntimeThinkingRemainsHiddenOutsideProgress(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Quiet = mode
 			sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-			a.noteTurnStarted("sess-1", sub)
+			newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 			runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 			session := &claudeSessionState{
@@ -253,7 +253,7 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -287,7 +287,7 @@ func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
@@ -330,7 +330,7 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -376,7 +376,7 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -426,7 +426,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{
@@ -494,7 +494,7 @@ func TestClaudeRuntimeQuietFinalSuppressesIntermediateTextButStillDeliversFinalA
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeFinal
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{

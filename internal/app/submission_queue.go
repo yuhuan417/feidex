@@ -511,7 +511,7 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 	}
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
-	a.noteTurnStarted(sessionKey, sub)
+	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	slog.Debug("startNextSubmission completed",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
