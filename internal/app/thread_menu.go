@@ -16,7 +16,7 @@ import (
 const threadCommandUsage = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY]"
 
 func (a *App) commandNew(msg *feishu.InboundMessage) error {
-	return a.commandThreadsNew(msg)
+	return newThreadCommandService(a).commandThreadsNew(msg)
 }
 
 func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int, *workspaceThreadBinding, error) {
@@ -76,37 +76,37 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 	return discarded, binding, nil
 }
 
-func (a *App) commandThreadsNew(msg *feishu.InboundMessage) error {
-	sessionKey := a.makeSessionKey(msg)
-	discarded, binding, err := a.startFreshThread(sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
+func (s threadCommandService) commandThreadsNew(msg *feishu.InboundMessage) error {
+	sessionKey := s.app.makeSessionKey(msg)
+	discarded, binding, err := s.app.startFreshThread(sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
 	if err != nil {
 		return err
 	}
-	noun := primaryConversationNoun(a.configuredBackend())
+	noun := primaryConversationNoun(s.app.configuredBackend())
 	reply := "已创建新" + noun + "并切换过去。"
 	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
-		reply += " " + primaryConversationSummaryLabel(a.configuredBackend()) + ": `" + binding.ThreadID + "`。"
+		reply += " " + primaryConversationSummaryLabel(s.app.configuredBackend()) + ": `" + binding.ThreadID + "`。"
 	}
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 }
 
-func (a *App) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
-	card, err := a.renderThreadsCard(a.makeSessionKey(msg), includeAll)
+func (s threadCommandService) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
+	card, err := s.app.renderThreadsCard(s.app.makeSessionKey(msg), includeAll)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
+func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
-		return a.commandThreads(msg, false)
+		return s.commandThreads(msg, false)
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := s.app.makeSessionKey(msg)
 	switch strings.TrimSpace(args[0]) {
 	case "list":
 		includeAll := false
@@ -119,68 +119,68 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 			}
 			includeAll = true
 		}
-		return a.commandThreads(msg, includeAll)
+		return s.commandThreads(msg, includeAll)
 	case "new":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /thread new")
 		}
-		return a.commandThreadsNew(msg)
+		return s.commandThreadsNew(msg)
 	case "fork":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /thread fork")
 		}
-		return a.commandFork(msg, nil)
+		return s.app.commandFork(msg, nil)
 	case "resume":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread resume THREAD_ID")
 		}
-		resp, err := newThreadActionService(a).completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(s.app).completeThreadResume(s.app.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	case "sandbox":
 		if len(args) == 1 {
-			return a.showThreadSandboxMenu(msg)
+			return s.app.showThreadSandboxMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread sandbox [MODE]")
 		}
-		_, _, _, threadID, err := a.currentThreadForMessage(msg)
+		_, _, _, threadID, err := s.app.currentThreadForMessage(msg)
 		if err != nil {
 			return err
 		}
-		resp, err := newThreadActionService(a).completeThreadSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(s.app).completeThreadSandboxSet(s.app.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	case "policy":
 		if len(args) == 1 {
-			return a.showThreadPolicyMenu(msg)
+			return s.app.showThreadPolicyMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread policy [POLICY]")
 		}
-		_, _, _, threadID, err := a.currentThreadForMessage(msg)
+		_, _, _, threadID, err := s.app.currentThreadForMessage(msg)
 		if err != nil {
 			return err
 		}
-		resp, err := newThreadActionService(a).completeThreadPolicySet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(s.app).completeThreadPolicySet(s.app.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	default:
 		return fmt.Errorf("usage: %s", threadCommandUsage)
 	}
 }
 
-func (a *App) commandSession(msg *feishu.InboundMessage, args []string) error {
+func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
-		return a.commandThreads(msg, false)
+		return s.commandThreads(msg, false)
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := s.app.makeSessionKey(msg)
 	switch strings.TrimSpace(args[0]) {
 	case "list":
 		includeAll := false
@@ -193,42 +193,42 @@ func (a *App) commandSession(msg *feishu.InboundMessage, args []string) error {
 			}
 			includeAll = true
 		}
-		return a.commandThreads(msg, includeAll)
+		return s.commandThreads(msg, includeAll)
 	case "new":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /session new")
 		}
-		return a.commandThreadsNew(msg)
+		return s.commandThreadsNew(msg)
 	case "fork":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /session fork")
 		}
-		return a.commandFork(msg, nil)
+		return s.app.commandFork(msg, nil)
 	case "resume":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session resume SESSION_ID")
 		}
-		resp, err := newThreadActionService(a).completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(s.app).completeThreadResume(s.app.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	case "permissions":
 		if len(args) == 1 {
-			return a.showClaudeSessionPermissionMenu(msg)
+			return s.app.showClaudeSessionPermissionMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session permissions [MODE|inherit]")
 		}
-		_, _, _, threadID, err := a.currentThreadForMessage(msg)
+		_, _, _, threadID, err := s.app.currentThreadForMessage(msg)
 		if err != nil {
 			return err
 		}
-		resp, err := newThreadActionService(a).completeClaudeSessionPermissionModeSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(s.app).completeClaudeSessionPermissionModeSet(s.app.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	default:
 		return fmt.Errorf("usage: %s", claudeSessionCommandUsage)
 	}

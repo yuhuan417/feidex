@@ -52,16 +52,16 @@ func parseWorkspaceCloneArgs(args []string) (repoURL, workspaceID, parentDir str
 	}
 }
 
-func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
+func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
-		return a.showWorkspaceMenu(msg)
+		return s.app.showWorkspaceMenu(msg)
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := s.app.makeSessionKey(msg)
 	if args[0] == "list" {
-		return a.showWorkspaceMenu(msg)
+		return s.app.showWorkspaceMenu(msg)
 	}
 	if args[0] == "new" {
-		return a.beginWorkspaceNew(msg)
+		return s.app.beginWorkspaceNew(msg)
 	}
 	if len(args) >= 2 && args[0] == "clone" {
 		repoURL, workspaceID, parentDir, err := parseWorkspaceCloneArgs(args)
@@ -69,77 +69,77 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 			return err
 		}
 		if parentDir != "" {
-			err = a.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
+			err = s.app.cloneWorkspaceAndSwitchInSelectedParent(msg, repoURL, workspaceID, parentDir)
 		} else {
-			err = a.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
+			err = s.app.cloneWorkspaceAndSwitch(msg, repoURL, workspaceID)
 		}
 		var existingDirErr *workspaceCloneExistingDirError
 		if errors.As(err, &existingDirErr) {
-			return a.beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir)))
+			return s.app.beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir)))
 		}
 		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {
-			return a.replyCommandActionResponse(msg, &callback.CardActionTriggerResponse{
+			return s.app.replyCommandActionResponse(msg, &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
-				Card:  rawCard(a.renderWorkspaceCloneSwitchExistingCard(sessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
+				Card:  rawCard(s.app.renderWorkspaceCloneSwitchExistingCard(sessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
 			})
 		}
 		return err
 	}
 	if args[0] == "delete" {
 		if len(args) == 1 {
-			return a.showWorkspaceDeleteMenu(msg)
+			return s.app.showWorkspaceDeleteMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /workspace delete [ID]")
 		}
 		workspaceID := strings.TrimSpace(args[1])
-		if err := a.deleteWorkspace(sessionKey, workspaceID); err != nil {
+		if err := s.app.deleteWorkspace(sessionKey, workspaceID); err != nil {
 			return err
 		}
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 	}
 	if args[0] == "permissions" {
-		return a.handleBackendWorkspacePermissionCommand(msg, args, sessionKey)
+		return s.app.handleBackendWorkspacePermissionCommand(msg, args, sessionKey)
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
-			return a.showWorkspaceSandboxMenu(msg)
+			return s.app.showWorkspaceSandboxMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /workspace sandbox [MODE]")
 		}
-		_, _, ws := a.currentWorkspaceForMessage(msg)
+		_, _, ws := s.app.currentWorkspaceForMessage(msg)
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
-		resp, err := newWorkspaceActionService(a).completeWorkspaceSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		resp, err := newWorkspaceActionService(s.app).completeWorkspaceSandboxSet(s.app.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	}
 	if args[0] == "policy" {
 		if len(args) == 1 {
-			return a.showWorkspacePolicyMenu(msg)
+			return s.app.showWorkspacePolicyMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /workspace policy [POLICY]")
 		}
-		_, _, ws := a.currentWorkspaceForMessage(msg)
+		_, _, ws := s.app.currentWorkspaceForMessage(msg)
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
-		resp, err := newWorkspaceActionService(a).completeWorkspacePolicySet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		resp, err := newWorkspaceActionService(s.app).completeWorkspacePolicySet(s.app.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
-		return a.replyCommandActionResponse(msg, resp)
+		return s.app.replyCommandActionResponse(msg, resp)
 	}
 	if len(args) >= 2 && args[0] == "use" {
-		appState := a.appState()
-		ws := config.FindWorkspace(a.cfg, args[1])
+		appState := s.app.appState()
+		ws := config.FindWorkspace(s.app.cfg, args[1])
 		if ws == nil {
 			return fmt.Errorf("workspace %q not found", args[1])
 		}
@@ -153,10 +153,10 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		}
 		reply := "已切换工作区到 " + ws.ID
 		if sessionHasInFlightSubmission(sess) {
-			reply += a.backendWorkspaceSwitchInFlightNotice()
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+			reply += s.app.backendWorkspaceSwitchInFlightNotice()
+			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 		}
-		binding, err := a.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+		binding, err := s.app.ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
 			slog.Warn("workspace switch thread binding failed",
 				"session_key", sessionKey,
@@ -164,13 +164,13 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			reply += a.backendWorkspaceSwitchBindingFailureNotice()
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+			reply += s.app.backendWorkspaceSwitchBindingFailureNotice()
+			return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 		}
-		reply += a.backendWorkspaceSwitchBindingNotice(binding)
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+		reply += s.app.backendWorkspaceSwitchBindingNotice(binding)
+		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 	}
-	return fmt.Errorf("usage: %s", a.backendWorkspaceCommandUsage())
+	return fmt.Errorf("usage: %s", s.app.backendWorkspaceCommandUsage())
 }
 
 func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {

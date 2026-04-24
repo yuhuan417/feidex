@@ -1029,7 +1029,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
-	if err := a.commandWorkspace(msg, []string{"list"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"list"}); err != nil {
 		t.Fatalf("commandWorkspace(list) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -1052,7 +1052,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 			return nil
 		}
 	}
-	if err := a.commandWorkspace(msg, []string{"use", "alt"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"use", "alt"}); err != nil {
 		t.Fatalf("commandWorkspace(use) error = %v", err)
 	}
 	sess := a.store.GetSession(a.makeSessionKey(msg))
@@ -1064,7 +1064,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := a.commandWorkspace(msg, nil); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, nil); err != nil {
 		t.Fatalf("commandWorkspace(menu) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1075,7 +1075,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := a.commandWorkspace(msg, []string{"sandbox"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"sandbox"}); err != nil {
 		t.Fatalf("commandWorkspace(sandbox) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1083,7 +1083,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := a.commandWorkspace(msg, []string{"policy"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"policy"}); err != nil {
 		t.Fatalf("commandWorkspace(policy) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1091,7 +1091,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := a.commandWorkspace(msg, []string{"new"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"new"}); err != nil {
 		t.Fatalf("commandWorkspace(new) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1108,7 +1108,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 	ff.replyTexts = nil
 	ff.replyCards = nil
-	if err := a.commandThreads(msg, false); err != nil {
+	if err := newThreadCommandService(a).commandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(empty) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -1326,7 +1326,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	repoURL := "git@github.com:example/repo.git"
-	if err := a.commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
 		t.Fatalf("commandWorkspace(clone) error = %v", err)
 	}
 
@@ -1362,7 +1362,7 @@ func TestCommandWorkspaceCloneExistingDirectoryOpensWorkspaceNewCard(t *testing.
 	a.cfg.Workspaces[0].Cwd = currentDir
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := a.commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
 		t.Fatalf("commandWorkspace(clone existing dir) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1392,7 +1392,7 @@ func TestCommandWorkspaceCloneExistingWorkspacePromptsSwitch(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := a.commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+	if err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
 		t.Fatalf("commandWorkspace(clone existing workspace) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1411,7 +1411,7 @@ func TestCommandWorkspaceCloneRejectsExistingWorkspaceID(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: t.TempDir()})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
-	err := a.commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"})
+	err := newWorkspaceCommandService(a).commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"})
 	if err == nil {
 		t.Fatal("expected existing workspace id to fail clone")
 	}
@@ -3454,7 +3454,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)
 	}
-	if err := a.commandThreadsNew(msg); err != nil {
+	if err := newThreadCommandService(a).commandThreadsNew(msg); err != nil {
 		t.Fatalf("commandThreadsNew() error = %v", err)
 	}
 }
@@ -3875,7 +3875,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		return nil
 	}
 
-	if err := a.commandThreads(msg, false); err != nil {
+	if err := newThreadCommandService(a).commandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(display) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -4009,7 +4009,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 		return nil
 	}
 
-	if err := a.commandThreads(msg, false); err != nil {
+	if err := newThreadCommandService(a).commandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(filter) error = %v", err)
 	}
 	if attempts != 3 {
