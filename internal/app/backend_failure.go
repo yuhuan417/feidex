@@ -206,18 +206,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	}
 	a.clearSubmissionProcessingReactions(sub)
 	terminalText := turnCompletionTerminalText(sub.Status, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
-	if terminalText != "" {
-		a.replaceTurnEventCardWithReuse(
-			context.Background(),
-			sub,
-			"任务状态",
-			"grey",
-			prependAttentionMentionMarkdown(terminalText, a.turnStopAttentionUserID(sub, turnID)),
-			"turn_terminal",
-			"",
-			strings.TrimSpace(flush.WorkingMessageID),
-		)
-	}
+	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
 	updatedSess, _ := appState.updateSession(sessionKey, func(sess *state.Session) {
 		if sess == nil {
 			return
@@ -238,7 +227,22 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 			sess.Status = "idle"
 		}
 	})
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub)
+	suppressTerminalCard := false
+	if updatedSess != nil {
+		suppressTerminalCard = a.observeAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub, reuseMessageID)
+	}
+	if terminalText != "" && !suppressTerminalCard {
+		a.replaceTurnEventCardWithReuse(
+			context.Background(),
+			sub,
+			"任务状态",
+			"grey",
+			prependAttentionMentionMarkdown(terminalText, a.turnStopAttentionUserID(sub, turnID)),
+			"turn_terminal",
+			"",
+			reuseMessageID,
+		)
+	}
 	a.cleanupSubmissionRuntimeState(sub)
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		a.runAsync(func() {

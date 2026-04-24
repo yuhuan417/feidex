@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/claudecli"
 	"feidex/internal/state"
@@ -65,6 +66,34 @@ func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
 	if strings.Contains(body, `<at id=user-1></at>`) {
 		t.Fatalf("terminal failure body should not mention user while queue pending: %q", body)
+	}
+}
+
+func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAutoRetry(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.asyncRunner = func(fn func()) { fn() }
+	a.autoRetryAfter = func(time.Duration, func()) delayedTask {
+		return &fakeDelayedTask{}
+	}
+	if err := a.updateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
+	}
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.markSessionThreadLive("sess-1", "thread-1")
+
+	a.failSubmissionWithoutTerminalCompletion("sess-1", sub, "thread-1", "turn-1", "Codex 后端异常退出：stdio EOF")
+
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply cards = %d, want 1 auto-retry card only", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "Codex 自动重试" {
+		t.Fatalf("reply card title = %q, want Codex 自动重试", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "自动发送“继续”") {
+		t.Fatalf("auto retry card body = %q", body)
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched cards = %d, want 0", len(ff.patchedCards))
 	}
 }
 

@@ -155,21 +155,21 @@ func (a *App) currentAutoRetryState(sessionKey string) (autoRetryState, bool) {
 	return cloneAutoRetryState(state), true
 }
 
-func (a *App) observeAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission) {
+func (a *App) observeAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID string) bool {
 	if a == nil {
-		return
+		return false
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	threadID = strings.TrimSpace(threadID)
 	status = strings.TrimSpace(status)
 	if sessionKey == "" || threadID == "" {
-		return
+		return false
 	}
 	if status != "failed" {
 		a.finishAutoRetryOnTerminal(sessionKey, threadID, status)
-		return
+		return false
 	}
-	a.scheduleAutoRetryAfterFailure(sessionKey, threadID, updatedSess, sub)
+	return a.scheduleAutoRetryAfterFailure(sessionKey, threadID, updatedSess, sub, reuseMessageID)
 }
 
 func (a *App) finishAutoRetryOnTerminal(sessionKey, threadID, status string) {
@@ -210,26 +210,29 @@ func (a *App) finishAutoRetryOnTerminal(sessionKey, threadID, status string) {
 	}
 }
 
-func (a *App) scheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *state.Session, sub *state.Submission) {
+func (a *App) scheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *state.Session, sub *state.Submission, reuseMessageID string) bool {
 	if a == nil {
-		return
+		return false
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	threadID = strings.TrimSpace(threadID)
 	if sessionKey == "" || threadID == "" {
-		return
+		return false
 	}
 	if !a.autoRetryEnabled() {
-		return
+		return false
 	}
 	if updatedSess == nil || strings.TrimSpace(updatedSess.ActiveThreadID) != threadID || strings.TrimSpace(updatedSess.ActiveThreadID) == "" {
-		return
+		return false
 	}
 	if firstNonEmpty(strings.TrimSpace(updatedSess.Status), "idle") != "idle" || sessionHasActiveWork(updatedSess) || len(updatedSess.Queue) > 0 {
-		return
+		return false
 	}
 
-	var snapshot autoRetryState
+	var (
+		snapshot autoRetryState
+		waiting  bool
+	)
 	a.autoRetryMu.Lock()
 	a.ensureAutoRetryMapLocked()
 	state := a.autoRetries[sessionKey]
@@ -242,6 +245,9 @@ func (a *App) scheduleAutoRetryAfterFailure(sessionKey, threadID string, updated
 	}
 	state.Canceled = false
 	refreshAutoRetryState(state, updatedSess, sub, threadID)
+	if strings.TrimSpace(state.StatusMessageID) == "" {
+		state.StatusMessageID = strings.TrimSpace(reuseMessageID)
+	}
 	if state.Timer == nil {
 		delay := autoRetryDelayForStep(state.BackoffStep)
 		state.TimerSeq++
@@ -252,9 +258,11 @@ func (a *App) scheduleAutoRetryAfterFailure(sessionKey, threadID string, updated
 			})
 		})
 	}
+	waiting = autoRetryStateWaiting(state)
 	snapshot = cloneAutoRetryState(state)
 	a.autoRetryMu.Unlock()
 	a.deliverAutoRetryCard(snapshot, a.renderAutoRetryLoopCard(snapshot, "waiting", "当前任务 failed，准备自动发送“继续”。"))
+	return waiting
 }
 
 func refreshAutoRetryState(state *autoRetryState, sess *state.Session, sub *state.Submission, threadID string) {
@@ -563,8 +571,11 @@ func (a *App) deliverAutoRetryCard(snapshot autoRetryState, card map[string]any)
 		return
 	}
 	a.autoRetryMu.Lock()
-	if state := a.autoRetries[snapshot.SessionKey]; state != nil && strings.TrimSpace(state.StatusMessageID) == "" {
-		state.StatusMessageID = strings.TrimSpace(sentID)
+	if state := a.autoRetries[snapshot.SessionKey]; state != nil {
+		current := strings.TrimSpace(state.StatusMessageID)
+		if current == "" || current == messageID {
+			state.StatusMessageID = strings.TrimSpace(sentID)
+		}
 	}
 	a.autoRetryMu.Unlock()
 }

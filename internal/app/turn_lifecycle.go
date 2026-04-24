@@ -264,6 +264,9 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 	default:
 		_ = appState.finalizeSubmission(sub.ID, "failed")
 	}
+	terminalText := ""
+	attentionUserID := ""
+	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
 	sub = appState.submission(sub.ID)
 	if sub != nil {
 		a.clearSubmissionProcessingReactions(sub)
@@ -274,24 +277,11 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 			"turn_id", turnID,
 			"status", sub.Status,
 		)
-		terminalText := turnCompletionTerminalText(sub.Status, flush.LastError)
-		attentionUserID := a.turnStopAttentionUserID(sub, turnID)
-		reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
+		terminalText = turnCompletionTerminalText(sub.Status, flush.LastError)
+		attentionUserID = a.turnStopAttentionUserID(sub, turnID)
 		if sub.Status == "completed" && !flush.SawFinal {
 			a.sendEmptyFinalCardWithReuse(context.Background(), sub, a.turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
 			reuseMessageID = ""
-		}
-		if terminalText != "" {
-			a.replaceTurnEventCardWithReuse(
-				context.Background(),
-				sub,
-				"任务状态",
-				"grey",
-				prependAttentionMentionMarkdown(terminalText, attentionUserID),
-				"turn_terminal",
-				"",
-				reuseMessageID,
-			)
 		}
 	}
 	if sess := appState.session(sessionKey); sess != nil {
@@ -317,18 +307,31 @@ func (w *submissionWorkflow) finishTurn(threadID, turnID, status string) {
 			sess.Status = "idle"
 		}
 	})
+	suppressTerminalCard := false
 	if updatedSess != nil {
 		logSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
-		a.observeAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub)
-		if sessionShouldStartNextSubmissionAsync(updatedSess) {
-			slog.Debug("finishTurn scheduling next submission asynchronously",
-				"session_key", sessionKey,
-				"thread_id", updatedSess.ActiveThreadID,
-			)
-			a.runAsync(func() {
-				w.startNextSubmissionAsync(sessionKey, "finishTurn")
-			})
-		}
+		suppressTerminalCard = a.observeAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
+	}
+	if terminalText != "" && !suppressTerminalCard {
+		a.replaceTurnEventCardWithReuse(
+			context.Background(),
+			sub,
+			"任务状态",
+			"grey",
+			prependAttentionMentionMarkdown(terminalText, attentionUserID),
+			"turn_terminal",
+			"",
+			reuseMessageID,
+		)
+	}
+	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
+		slog.Debug("finishTurn scheduling next submission asynchronously",
+			"session_key", sessionKey,
+			"thread_id", updatedSess.ActiveThreadID,
+		)
+		a.runAsync(func() {
+			w.startNextSubmissionAsync(sessionKey, "finishTurn")
+		})
 	}
 	a.cleanupSubmissionRuntimeState(sub)
 }

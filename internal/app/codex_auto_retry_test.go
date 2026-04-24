@@ -82,7 +82,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		Status:               "failed",
 	}
 
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
+	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
@@ -167,7 +167,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
+	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 
 	msg := &feishu.InboundMessage{
 		SessionKey: sessionKey,
@@ -225,7 +225,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		Status:               "failed",
 	}
 
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub)
+	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1 before timer fires", len(scheduled))
 	}

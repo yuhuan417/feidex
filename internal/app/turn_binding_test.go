@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,34 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 	a.finishTurn("thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("expected no replay on completion, got %d cards", len(ff.replyCards))
+	}
+}
+
+func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.asyncRunner = func(fn func()) { fn() }
+	a.autoRetryAfter = func(time.Duration, func()) delayedTask {
+		return &fakeDelayedTask{}
+	}
+	if err := a.updateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
+	}
+	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	a.markSessionThreadLive("sess-1", "thread-1")
+
+	a.finishTurn("thread-1", "turn-1", "failed")
+
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply cards = %d, want 1 auto-retry card only", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "Codex 自动重试" {
+		t.Fatalf("reply card title = %q, want Codex 自动重试", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "自动发送“继续”") {
+		t.Fatalf("auto retry card body = %q", body)
+	}
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched cards = %d, want 0", len(ff.patchedCards))
 	}
 }
 
