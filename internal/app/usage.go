@@ -143,8 +143,8 @@ func renderClaudeThreadUsageCardBody(threadLabel, threadID string, usage claudeT
 	return strings.Join(lines, "\n")
 }
 
-func (a *App) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage) {
-	if a == nil {
+func (s usageService) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage) {
+	if s.app == nil {
 		return
 	}
 	threadID = strings.TrimSpace(threadID)
@@ -171,7 +171,7 @@ func (a *App) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage
 		snapshot.HasContextUsagePercent = true
 	}
 
-	tracker := newRuntimeStateService(a).turnBindingTracker()
+	tracker := newRuntimeStateService(s.app).turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.claudeUsage == nil {
@@ -180,58 +180,58 @@ func (a *App) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage
 	tracker.claudeUsage[threadID] = snapshot
 }
 
-func (a *App) currentClaudeThreadUsage(threadID string) (claudeThreadUsageSnapshot, bool) {
-	if a == nil {
+func (s usageService) currentClaudeThreadUsage(threadID string) (claudeThreadUsageSnapshot, bool) {
+	if s.app == nil {
 		return claudeThreadUsageSnapshot{}, false
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
 		return claudeThreadUsageSnapshot{}, false
 	}
-	tracker := newRuntimeStateService(a).turnBindingTracker()
+	tracker := newRuntimeStateService(s.app).turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	usage, ok := tracker.claudeUsage[threadID]
 	return usage, ok
 }
 
-func (a *App) commandUsage(msg *feishu.InboundMessage, args []string) error {
+func (s usageService) commandUsage(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /usage")
 	}
-	card := a.renderUsageCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := newUsageService(s.app).renderUsageCard(s.app.makeSessionKey(msg))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) renderUsageCard(sessionKey string) map[string]any {
-	sess := a.appState().session(sessionKey)
-	body := primaryConversationMissingLabel(a.configuredBackend()) + "。"
+func (s usageService) renderUsageCard(sessionKey string) map[string]any {
+	sess := s.app.appState().session(sessionKey)
+	body := primaryConversationMissingLabel(s.app.configuredBackend()) + "。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		body = a.conversationBackend().renderUsageBody(sess)
+		body = s.app.conversationBackend().renderUsageBody(sess)
 	}
-	return a.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{
+	return s.app.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
 	})
 }
 
-func (a *App) renderClaudeUsageBody(sess *state.Session) string {
+func (s usageService) renderClaudeUsageBody(sess *state.Session) string {
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return primaryConversationMissingLabel(backendClaude) + "。"
 	}
 	body := "当前会话暂无 Claude usage 数据。"
-	if usage, ok := a.currentClaudeThreadUsage(sess.ActiveThreadID); ok {
+	if usage, ok := newUsageService(s.app).currentClaudeThreadUsage(sess.ActiveThreadID); ok {
 		body = renderClaudeThreadUsageCardBody(currentThreadLabel(sess), sess.ActiveThreadID, usage)
 	}
 	return body
 }
 
-func (a *App) renderCodexUsageBody(sess *state.Session) string {
+func (s usageService) renderCodexUsageBody(sess *state.Session) string {
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return primaryConversationMissingLabel(backendCodex) + "。"
 	}
 	body := "当前线程暂无 token usage 数据。"
-	if usage, ok := newRuntimeStateService(a).currentThreadUsage(sess.ActiveThreadID); ok {
+	if usage, ok := newRuntimeStateService(s.app).currentThreadUsage(sess.ActiveThreadID); ok {
 		contextLine := ""
 		if usage.ModelContextWindow != nil {
 			contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)

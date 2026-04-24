@@ -92,7 +92,7 @@ func (b codexConversationBackend) renderHistoryDetailCard(sessionKey string, ind
 }
 
 func (b codexConversationBackend) renderUsageBody(sess *state.Session) string {
-	return b.app.renderCodexUsageBody(sess)
+	return newUsageService(b.app).renderCodexUsageBody(sess)
 }
 
 func (b codexConversationBackend) interruptActiveTurn(ctx context.Context, _ string, sess *state.Session) error {
@@ -163,7 +163,7 @@ func (b claudeConversationBackend) renderHistoryDetailCard(sessionKey string, in
 }
 
 func (b claudeConversationBackend) renderUsageBody(sess *state.Session) string {
-	return b.app.renderClaudeUsageBody(sess)
+	return newUsageService(b.app).renderClaudeUsageBody(sess)
 }
 
 func (b claudeConversationBackend) interruptActiveTurn(ctx context.Context, sessionKey string, _ *state.Session) error {

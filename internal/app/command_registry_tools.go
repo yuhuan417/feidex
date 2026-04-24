@@ -44,7 +44,7 @@ func localCommandCommonToolSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandUsage(msg, args)
+				return newUsageService(a).commandUsage(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{

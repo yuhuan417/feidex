@@ -789,7 +789,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
-	r.app.recordClaudeThreadUsage(threadID, event.Usage)
+	newUsageService(r.app).recordClaudeThreadUsage(threadID, event.Usage)
 	newRuntimeStateService(r.app).recordTurnTokenUsage(threadID, turn.TurnID, claudeTurnUsageAsThreadUsage(event.Usage))
 	if percentage, ok := claudeTurnContextUsagePercent(event.Usage); ok {
 		newRuntimeStateService(r.app).recordTurnContextUsagePercent(turn.TurnID, percentage)
