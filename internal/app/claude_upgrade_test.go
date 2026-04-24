@@ -68,6 +68,38 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 	}
 }
 
+func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      false,
+			Reason:         "当前 claude 所属安装目录与 npm global prefix 不一致",
+		},
+	}
+	origManager := newClaudeInstallManager
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	defer func() { newClaudeInstallManager = origManager }()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandClaude(msg, nil); err != nil {
+		t.Fatalf("commandClaude() error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
+	}
+	body := cardMarkdownContent(t, replyCards[0])
+	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 claude 所属安装目录与 npm global prefix 不一致"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("status card body = %q, want %q", body, want)
+		}
+	}
+}
+
 func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeClaudeInstallManager{

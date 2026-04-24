@@ -66,6 +66,11 @@ func (m *Manager) Probe(ctx context.Context) (Probe, error) {
 	if realPath, realErr := filepath.EvalSymlinks(commandPath); realErr == nil {
 		probe.RealCommandPath = filepath.Clean(realPath)
 	}
+	commandPackagePath, commandVersion, commandPackageFound := packageFromCommandPath(probe.RealCommandPath, packageName)
+	if commandPackageFound {
+		probe.PackagePath = commandPackagePath
+		probe.CurrentVersion = commandVersion
+	}
 
 	npmPath, err := exec.LookPath("npm")
 	if err != nil {
@@ -76,28 +81,39 @@ func (m *Manager) Probe(ctx context.Context) (Probe, error) {
 
 	npmRoot, err := m.npmRoot(ctx)
 	if err != nil {
-		return probe, err
+		probe.Reason = err.Error()
+		return probe, nil
 	}
 	probe.NPMRoot = npmRoot
-	probe.PackagePath = filepath.Join(npmRoot, filepath.FromSlash(packageName), "package.json")
+	npmPackageDir := filepath.Join(npmRoot, filepath.FromSlash(packageName))
+	npmPackagePath := filepath.Join(npmPackageDir, "package.json")
+	if commandPackageFound && !pathWithinRoot(npmPackageDir, probe.RealCommandPath) {
+		probe.Reason = "当前 codex 所属安装目录与 npm global prefix 不一致"
+		return probe, nil
+	}
 
 	version, err := m.currentVersion(ctx)
 	if err != nil {
-		return probe, err
+		probe.Reason = err.Error()
+		return probe, nil
 	}
 	if version == "" {
 		probe.Reason = "npm global 未安装 @openai/codex"
 		return probe, nil
 	}
-	probe.CurrentVersion = version
-	if _, statErr := os.Stat(probe.PackagePath); statErr != nil {
+	probe.CurrentVersion = firstNonEmpty(probe.CurrentVersion, version)
+	if strings.TrimSpace(probe.PackagePath) == "" {
+		probe.PackagePath = npmPackagePath
+	}
+	if _, statErr := os.Stat(npmPackagePath); statErr != nil {
 		probe.Reason = "npm global 的 @openai/codex 安装目录不可用"
 		return probe, nil
 	}
-	if !pathWithinRoot(filepath.Dir(probe.PackagePath), probe.RealCommandPath) {
+	if !pathWithinRoot(npmPackageDir, probe.RealCommandPath) {
 		probe.Reason = "当前 codex 不是 npm global 的 @openai/codex"
 		return probe, nil
 	}
+	probe.PackagePath = npmPackagePath
 	probe.Supported = true
 	return probe, nil
 }
@@ -174,6 +190,43 @@ func pathWithinRoot(root, candidate string) bool {
 		return true
 	}
 	return strings.HasPrefix(candidate, root+string(filepath.Separator))
+}
+
+func packageFromCommandPath(commandPath, expectedPackageName string) (string, string, bool) {
+	dir := filepath.Clean(strings.TrimSpace(commandPath))
+	if dir == "" {
+		return "", "", false
+	}
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+	for {
+		packageJSON := filepath.Join(dir, "package.json")
+		name, version, err := readPackageManifest(packageJSON)
+		if err == nil && strings.TrimSpace(name) == strings.TrimSpace(expectedPackageName) {
+			return packageJSON, strings.TrimSpace(version), true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", "", false
+		}
+		dir = parent
+	}
+}
+
+func readPackageManifest(path string) (string, string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	var payload struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", "", err
+	}
+	return strings.TrimSpace(payload.Name), strings.TrimSpace(payload.Version), nil
 }
 
 func parseJSONMaybeString(raw string) (string, error) {

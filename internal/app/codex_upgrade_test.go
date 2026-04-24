@@ -69,6 +69,38 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 	}
 }
 
+func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	manager := &fakeCodexInstallManager{
+		probe: codexinstall.Probe{
+			Command:        "codex",
+			CommandPath:    "/usr/local/bin/codex",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      false,
+			Reason:         "当前 codex 所属安装目录与 npm global prefix 不一致",
+		},
+	}
+	origManager := newCodexInstallManager
+	newCodexInstallManager = func(string) codexInstallManager { return manager }
+	defer func() { newCodexInstallManager = origManager }()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := a.commandCodex(msg, nil); err != nil {
+		t.Fatalf("commandCodex() error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
+	}
+	body := cardMarkdownContent(t, replyCards[0])
+	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 codex 所属安装目录与 npm global prefix 不一致"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("status card body = %q, want %q", body, want)
+		}
+	}
+}
+
 func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeCodexInstallManager{

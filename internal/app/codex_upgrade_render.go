@@ -19,6 +19,9 @@ func (a *App) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeV
 		"npm: `" + firstNonEmpty(view.Probe.NPMPath, "-") + "`",
 		"当前版本: `" + firstNonEmpty(view.Probe.CurrentVersion, "-") + "`",
 	}
+	if strings.TrimSpace(view.Probe.Reason) != "" {
+		lines = append(lines, "原因: "+strings.TrimSpace(view.Probe.Reason))
+	}
 	if latestChecked {
 		switch {
 		case strings.TrimSpace(view.LatestVersion) != "":
