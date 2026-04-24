@@ -1697,7 +1697,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	workspaceCard := a.renderWorkspaceMenuCard(sessionKey)
+	workspaceCard := newWorkspaceConfigService(a).renderWorkspaceMenuCard(sessionKey)
 	workspaceActions := cardButtonsForTest(workspaceCard)
 	foundBackToMenu := false
 	foundClone := false
@@ -1730,7 +1730,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		t.Fatalf("workspace menu missing delete button: %+v", workspaceActions)
 	}
 
-	sandboxCard, err := a.renderWorkspaceSandboxMenuCard(sessionKey)
+	sandboxCard, err := newWorkspaceConfigService(a).renderWorkspaceSandboxMenuCard(sessionKey)
 	if err != nil {
 		t.Fatalf("renderWorkspaceSandboxMenuCard() error = %v", err)
 	}
@@ -1766,7 +1766,7 @@ func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := a.renderWorkspaceDeleteMenuCard(sessionKey)
+	card, err := newWorkspaceConfigService(a).renderWorkspaceDeleteMenuCard(sessionKey)
 	if err != nil {
 		t.Fatalf("renderWorkspaceDeleteMenuCard() error = %v", err)
 	}

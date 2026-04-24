@@ -49,7 +49,7 @@ func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, 
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: toast},
-		Card:  rawCard(s.app.renderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(newWorkspaceConfigService(s.app).renderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -68,7 +68,7 @@ func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	msg := s.app.commandMessageFromAction(action, sessionKey, "")
-	_, _, ws := s.app.currentWorkspaceForMessage(msg)
+	_, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	payload := workspaceClonePayload{
 		RootPath:          newWorkspaceManagementService(s.app).defaultWorkspaceCloneRoot(ws),
 		SelectedParentDir: firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/"),
@@ -141,7 +141,7 @@ func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.Car
 	currentPath := strings.TrimSpace(payload.SelectedParentDir)
 	if currentPath == "" {
 		msg := s.app.commandMessageFromAction(action, pending.SessionKey, "")
-		_, _, ws := s.app.currentWorkspaceForMessage(msg)
+		_, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 		currentPath = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/")
 	}
 	payload.Picker = &pathPickerPayload{
@@ -299,7 +299,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 		}, nil
 	}
 	msg := s.app.commandMessageFromAction(action, pending.SessionKey, "")
-	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
 		parentDir = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/")
@@ -430,7 +430,7 @@ func (s workspaceActionService) completeWorkspaceSandboxSet(action *feishu.CardA
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, renderErr := s.app.renderWorkspaceSandboxMenuCard(sessionKey)
+	card, renderErr := newWorkspaceConfigService(s.app).renderWorkspaceSandboxMenuCard(sessionKey)
 	if renderErr != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
 	}
@@ -457,7 +457,7 @@ func (s workspaceActionService) completeWorkspacePolicySet(action *feishu.CardAc
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, renderErr := s.app.renderWorkspacePolicyMenuCard(sessionKey)
+	card, renderErr := newWorkspaceConfigService(s.app).renderWorkspacePolicyMenuCard(sessionKey)
 	if renderErr != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
 	}

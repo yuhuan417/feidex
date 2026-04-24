@@ -139,7 +139,7 @@ func (c claudeBackendConfigurationFacade) handleWorkspacePermissionCommand(msg *
 	if len(args) != 2 {
 		return fmt.Errorf("usage: /workspace permissions [MODE|inherit]")
 	}
-	_, _, ws := c.app.currentWorkspaceForMessage(msg)
+	_, _, ws := newWorkspaceConfigService(c.app).currentWorkspaceForMessage(msg)
 	if ws == nil {
 		return fmt.Errorf("workspace not found")
 	}

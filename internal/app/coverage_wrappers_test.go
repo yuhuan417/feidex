@@ -404,10 +404,10 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1", MessageID: "msg-1"}
-	if _, _, _, threadID, err := a.currentThreadForMessage(msg); err != nil || threadID != "thread-1" {
+	if _, _, _, threadID, err := newWorkspaceConfigService(a).currentThreadForMessage(msg); err != nil || threadID != "thread-1" {
 		t.Fatalf("currentThreadForMessage() = %q, %v", threadID, err)
 	}
-	if _, _, _, _, err := (&App{cfg: a.cfg, store: a.store}).currentThreadForMessage(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-2", UserID: "user-2"}); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
+	if _, _, _, _, err := newWorkspaceConfigService(&App{cfg: a.cfg, store: a.store}).currentThreadForMessage(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-2", UserID: "user-2"}); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("currentThreadForMessage(no thread) error = %v", err)
 	}
 }

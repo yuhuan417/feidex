@@ -54,11 +54,11 @@ func parseWorkspaceCloneArgs(args []string) (repoURL, workspaceID, parentDir str
 
 func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
-		return s.app.showWorkspaceMenu(msg)
+		return newWorkspaceConfigService(s.app).showWorkspaceMenu(msg)
 	}
 	sessionKey := s.app.makeSessionKey(msg)
 	if args[0] == "list" {
-		return s.app.showWorkspaceMenu(msg)
+		return newWorkspaceConfigService(s.app).showWorkspaceMenu(msg)
 	}
 	if args[0] == "new" {
 		return newWorkspaceManagementService(s.app).beginWorkspaceNew(msg)
@@ -88,13 +88,13 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 	}
 	if args[0] == "delete" {
 		if len(args) == 1 {
-			return s.app.showWorkspaceDeleteMenu(msg)
+			return newWorkspaceConfigService(s.app).showWorkspaceDeleteMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /workspace delete [ID]")
 		}
 		workspaceID := strings.TrimSpace(args[1])
-		if err := s.app.deleteWorkspace(sessionKey, workspaceID); err != nil {
+		if err := newWorkspaceConfigService(s.app).deleteWorkspace(sessionKey, workspaceID); err != nil {
 			return err
 		}
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
@@ -105,12 +105,12 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
-			return s.app.showWorkspaceSandboxMenu(msg)
+			return newWorkspaceConfigService(s.app).showWorkspaceSandboxMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /workspace sandbox [MODE]")
 		}
-		_, _, ws := s.app.currentWorkspaceForMessage(msg)
+		_, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
@@ -122,12 +122,12 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 	}
 	if args[0] == "policy" {
 		if len(args) == 1 {
-			return s.app.showWorkspacePolicyMenu(msg)
+			return newWorkspaceConfigService(s.app).showWorkspacePolicyMenu(msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /workspace policy [POLICY]")
 		}
-		_, _, ws := s.app.currentWorkspaceForMessage(msg)
+		_, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
@@ -173,27 +173,27 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 	return fmt.Errorf("usage: %s", newBackendConfigurationService(s.app).backendWorkspaceCommandUsage())
 }
 
-func (a *App) showWorkspaceMenu(msg *feishu.InboundMessage) error {
-	card := a.renderWorkspaceMenuCard(a.makeSessionKey(msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+func (s workspaceConfigService) showWorkspaceMenu(msg *feishu.InboundMessage) error {
+	card := newWorkspaceConfigService(s.app).renderWorkspaceMenuCard(s.app.makeSessionKey(msg))
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
+func (s workspaceConfigService) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 	var sess *state.Session
-	if a.store != nil {
-		sess = a.appState().session(sessionKey)
+	if s.app.store != nil {
+		sess = s.app.appState().session(sessionKey)
 	}
-	currentID := a.defaultWorkspaceID()
+	currentID := s.app.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = sess.WorkspaceID
 	}
-	currentWS := config.FindWorkspace(a.cfg, currentID)
+	currentWS := config.FindWorkspace(s.app.cfg, currentID)
 	bodyLines := []string{"当前工作区: `" + currentID + "`"}
-	bodyLines = newBackendConfigurationService(a).appendBackendWorkspaceSummaryLines(bodyLines, currentWS)
+	bodyLines = newBackendConfigurationService(s.app).appendBackendWorkspaceSummaryLines(bodyLines, currentWS)
 	buttons := make([]feishu.Button, 0, 6)
-	selectOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
-	for _, ws := range a.cfg.Workspaces {
+	selectOptions := make([]selectStaticOption, 0, len(s.app.cfg.Workspaces))
+	for _, ws := range s.app.cfg.Workspaces {
 		label := ws.ID
 		if ws.ID == currentID {
 			label = "当前 · " + ws.ID
@@ -221,7 +221,7 @@ func (a *App) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 			},
 		},
 	)
-	buttons = append(buttons, newBackendConfigurationService(a).backendWorkspaceConfigButtons(sessionKey)...)
+	buttons = append(buttons, newBackendConfigurationService(s.app).backendWorkspaceConfigButtons(sessionKey)...)
 	buttons = append(buttons,
 		feishu.Button{
 			Text: submenuCommandLabel("删除工作区", "/workspace delete"),
@@ -271,43 +271,43 @@ func workspaceApprovalPolicyOptions() []workspaceSettingOption {
 	}
 }
 
-func (a *App) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
-	sessionKey = a.makeSessionKey(msg)
-	sess = a.appState().session(sessionKey)
-	workspaceID := a.defaultWorkspaceID()
+func (s workspaceConfigService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
+	sessionKey = s.app.makeSessionKey(msg)
+	sess = s.app.appState().session(sessionKey)
+	workspaceID := s.app.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	return sessionKey, sess, config.FindWorkspace(a.cfg, workspaceID)
+	return sessionKey, sess, config.FindWorkspace(s.app.cfg, workspaceID)
 }
 
-func (a *App) currentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
-	sessionKey, sess, ws = a.currentWorkspaceForMessage(msg)
+func (s workspaceConfigService) currentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
+	sessionKey, sess, ws = newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(a.configuredBackend()))
+		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(s.app.configuredBackend()))
 	}
 	return sessionKey, sess, ws, strings.TrimSpace(sess.ActiveThreadID), nil
 }
 
-func (a *App) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderWorkspaceSandboxMenuCard(a.makeSessionKey(msg))
+func (s workspaceConfigService) showWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
+	card, err := newWorkspaceConfigService(s.app).renderWorkspaceSandboxMenuCard(s.app.makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
+func (s workspaceConfigService) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
-	if a.store != nil {
-		sess = a.appState().session(sessionKey)
+	if s.app.store != nil {
+		sess = s.app.appState().session(sessionKey)
 	}
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := s.app.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
+	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("current workspace not found")
 	}
@@ -339,28 +339,28 @@ func (a *App) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any,
 			"session_key": sessionKey,
 		},
 	})
-	return a.feishu.SimpleStatusCard("配置 Sandbox", "blue", menuCardBody("workspace.sandbox.menu", body), buttons), nil
+	return s.app.feishu.SimpleStatusCard("配置 Sandbox", "blue", menuCardBody("workspace.sandbox.menu", body), buttons), nil
 }
 
-func (a *App) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderWorkspacePolicyMenuCard(a.makeSessionKey(msg))
+func (s workspaceConfigService) showWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
+	card, err := newWorkspaceConfigService(s.app).renderWorkspacePolicyMenuCard(s.app.makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
+func (s workspaceConfigService) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
-	if a.store != nil {
-		sess = a.appState().session(sessionKey)
+	if s.app.store != nil {
+		sess = s.app.appState().session(sessionKey)
 	}
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := s.app.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
+	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("current workspace not found")
 	}
@@ -392,5 +392,5 @@ func (a *App) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, 
 			"session_key": sessionKey,
 		},
 	})
-	return a.feishu.SimpleStatusCard("配置 Policy", "blue", menuCardBody("workspace.policy.menu", body), buttons), nil
+	return s.app.feishu.SimpleStatusCard("配置 Policy", "blue", menuCardBody("workspace.policy.menu", body), buttons), nil
 }

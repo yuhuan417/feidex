@@ -22,7 +22,7 @@ func (a *App) commandUpgradeLocalPick(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(a).currentWorkspaceForMessage(msg)
 	requestID, payload, err := a.createUpgradeLocalPickerRequest(sessionKey, ws, msg.UserID, "")
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (a *App) commandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(a).currentWorkspaceForMessage(msg)
 	selectedPath, err := resolveUpgradeLocalSourcePath(ws, rawPath)
 	if err != nil {
 		return err

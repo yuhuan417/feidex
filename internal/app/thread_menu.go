@@ -146,7 +146,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread sandbox [MODE]")
 		}
-		_, _, _, threadID, err := s.app.currentThreadForMessage(msg)
+		_, _, _, threadID, err := newWorkspaceConfigService(s.app).currentThreadForMessage(msg)
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread policy [POLICY]")
 		}
-		_, _, _, threadID, err := s.app.currentThreadForMessage(msg)
+		_, _, _, threadID, err := newWorkspaceConfigService(s.app).currentThreadForMessage(msg)
 		if err != nil {
 			return err
 		}
@@ -220,7 +220,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session permissions [MODE|inherit]")
 		}
-		_, _, _, threadID, err := s.app.currentThreadForMessage(msg)
+		_, _, _, threadID, err := newWorkspaceConfigService(s.app).currentThreadForMessage(msg)
 		if err != nil {
 			return err
 		}

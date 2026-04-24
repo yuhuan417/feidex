@@ -117,7 +117,7 @@ func (s workspaceManagementService) defaultWorkspaceCloneRoot(ws *config.Workspa
 }
 
 func (s workspaceManagementService) beginWorkspaceNew(msg *feishu.InboundMessage) error {
-	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	payload := workspaceNewPayload{
 		RootPath: newWorkspaceManagementService(s.app).defaultWorkspaceNewRoot(ws),
 		SelectedCWD: firstNonEmpty(func() string {

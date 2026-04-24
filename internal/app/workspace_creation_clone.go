@@ -487,7 +487,7 @@ func (s workspaceManagementService) cloneWorkspaceAndSwitchInSelectedParent(msg 
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	if strings.TrimSpace(parentDir) == "" {
 		parentDir = newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)
 	}

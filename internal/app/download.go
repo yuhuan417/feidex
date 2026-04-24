@@ -24,7 +24,7 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 	if msg == nil {
 		return nil
 	}
-	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	appState := s.app.appState()
 	payload, err := s.app.newDownloadPathPickerPayload(ws)
 	if err != nil {

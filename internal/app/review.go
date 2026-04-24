@@ -126,7 +126,7 @@ func (a *App) startInlineReview(msg *feishu.InboundMessage, target reviewTargetS
 	if msg == nil {
 		return "", fmt.Errorf("nil message")
 	}
-	sessionKey, sess, ws := a.currentWorkspaceForMessage(msg)
+	sessionKey, sess, ws := newWorkspaceConfigService(a).currentWorkspaceForMessage(msg)
 	if ws == nil {
 		return "", fmt.Errorf("current workspace not found")
 	}

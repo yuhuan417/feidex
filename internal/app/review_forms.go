@@ -52,7 +52,7 @@ func (s reviewFormService) renderReviewMenuCard(sessionKey string) map[string]an
 }
 
 func (s reviewFormService) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
-	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
+	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	if ws == nil {
 		return fmt.Errorf("current workspace not found")
 	}

@@ -137,7 +137,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 	if pending.Kind == "workspace_new" || pending.Kind == "workspace_clone" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},
-			Card:  rawCard(a.renderWorkspaceMenuCard(pending.SessionKey)),
+			Card:  rawCard(newWorkspaceConfigService(a).renderWorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	}
 	if body := a.cancelledPendingBody(pending); body != "" {

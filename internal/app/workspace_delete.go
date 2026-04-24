@@ -13,18 +13,18 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) showWorkspaceDeleteMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderWorkspaceDeleteMenuCard(a.makeSessionKey(msg))
+func (s workspaceConfigService) showWorkspaceDeleteMenu(msg *feishu.InboundMessage) error {
+	card, err := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(s.app.makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
-	currentID := a.defaultWorkspaceID()
-	if sess := a.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+func (s workspaceConfigService) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
+	currentID := s.app.defaultWorkspaceID()
+	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = strings.TrimSpace(sess.WorkspaceID)
 	}
 	lines := []string{
@@ -33,8 +33,8 @@ func (a *App) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, 
 		"当前工作区: `" + currentID + "`",
 		"当前工作区不可删除，请先切换到其他工作区。",
 	}
-	deleteOptions := make([]selectStaticOption, 0, len(a.cfg.Workspaces))
-	for _, ws := range a.cfg.Workspaces {
+	deleteOptions := make([]selectStaticOption, 0, len(s.app.cfg.Workspaces))
+	for _, ws := range s.app.cfg.Workspaces {
 		if strings.TrimSpace(ws.ID) == "" || ws.ID == currentID {
 			continue
 		}
@@ -80,9 +80,9 @@ func (a *App) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, 
 	return card, nil
 }
 
-func (a *App) renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID string) (map[string]any, error) {
+func (s workspaceConfigService) renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID string) (map[string]any, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	ws := config.FindWorkspace(a.cfg, workspaceID)
+	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("workspace %q 不存在", workspaceID)
 	}
@@ -114,11 +114,11 @@ func (a *App) renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID string) (
 			},
 		},
 	}
-	return a.feishu.SimpleStatusCard("确认删除工作区", "red", menuCardBody("workspace.delete.confirm", strings.Join(body, "\n")), buttons), nil
+	return s.app.feishu.SimpleStatusCard("确认删除工作区", "red", menuCardBody("workspace.delete.confirm", strings.Join(body, "\n")), buttons), nil
 }
 
 func (s workspaceActionService) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := s.app.renderWorkspaceDeleteMenuCard(sessionKey)
+	card, err := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -130,8 +130,8 @@ func (s workspaceActionService) completeWorkspaceDeleteMenu(action *feishu.CardA
 
 func (s workspaceActionService) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	workspaceID = firstNonEmpty(strings.TrimSpace(workspaceID), strings.TrimSpace(action.Option))
-	if err := s.app.validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
-		card, renderErr := s.app.renderWorkspaceDeleteMenuCard(sessionKey)
+	if err := newWorkspaceConfigService(s.app).validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
+		card, renderErr := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(sessionKey)
 		if renderErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -140,7 +140,7 @@ func (s workspaceActionService) completeWorkspaceDeletePrompt(action *feishu.Car
 			Card:  rawCard(card),
 		}, nil
 	}
-	card, err := s.app.renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+	card, err := newWorkspaceConfigService(s.app).renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -151,8 +151,8 @@ func (s workspaceActionService) completeWorkspaceDeletePrompt(action *feishu.Car
 }
 
 func (s workspaceActionService) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
-	if err := s.app.deleteWorkspace(sessionKey, workspaceID); err != nil {
-		card, renderErr := s.app.renderWorkspaceDeleteMenuCard(sessionKey)
+	if err := newWorkspaceConfigService(s.app).deleteWorkspace(sessionKey, workspaceID); err != nil {
+		card, renderErr := newWorkspaceConfigService(s.app).renderWorkspaceDeleteMenuCard(sessionKey)
 		if renderErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -163,31 +163,31 @@ func (s workspaceActionService) completeWorkspaceDeleteConfirm(action *feishu.Ca
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已删除工作区 " + strings.TrimSpace(workspaceID)},
-		Card:  rawCard(s.app.renderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(newWorkspaceConfigService(s.app).renderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
-func (a *App) validateWorkspaceDeletion(sessionKey, workspaceID string) error {
-	a.configMu.RLock()
-	defer a.configMu.RUnlock()
+func (s workspaceConfigService) validateWorkspaceDeletion(sessionKey, workspaceID string) error {
+	s.app.configMu.RLock()
+	defer s.app.configMu.RUnlock()
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return fmt.Errorf("请指定 workspace_id")
 	}
-	if config.FindWorkspace(a.cfg, workspaceID) == nil {
+	if config.FindWorkspace(s.app.cfg, workspaceID) == nil {
 		return fmt.Errorf("workspace %q 不存在", workspaceID)
 	}
-	if len(a.cfg.Workspaces) <= 1 {
+	if len(s.app.cfg.Workspaces) <= 1 {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
-	currentID := a.defaultWorkspaceID()
-	if sess := a.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	currentID := s.app.defaultWorkspaceID()
+	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = strings.TrimSpace(sess.WorkspaceID)
 	}
 	if workspaceID == currentID {
 		return fmt.Errorf("不能删除当前 workspace，请先切换到其他 workspace")
 	}
-	for _, sess := range a.appState().sessions() {
+	for _, sess := range s.app.appState().sessions() {
 		if sess == nil || !sessionHasInFlightSubmission(sess) {
 			continue
 		}
@@ -198,15 +198,15 @@ func (a *App) validateWorkspaceDeletion(sessionKey, workspaceID string) error {
 	return nil
 }
 
-func (a *App) deleteWorkspace(sessionKey, workspaceID string) error {
-	if err := a.validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
+func (s workspaceConfigService) deleteWorkspace(sessionKey, workspaceID string) error {
+	if err := newWorkspaceConfigService(s.app).validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
 		return err
 	}
-	a.configMu.Lock()
+	s.app.configMu.Lock()
 	workspaceID = strings.TrimSpace(workspaceID)
 	fallbackID := ""
-	nextWorkspaces := make([]config.Workspace, 0, len(a.cfg.Workspaces)-1)
-	for _, ws := range a.cfg.Workspaces {
+	nextWorkspaces := make([]config.Workspace, 0, len(s.app.cfg.Workspaces)-1)
+	for _, ws := range s.app.cfg.Workspaces {
 		if ws.ID == workspaceID {
 			continue
 		}
@@ -218,20 +218,20 @@ func (a *App) deleteWorkspace(sessionKey, workspaceID string) error {
 	if fallbackID == "" {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
-	prevWorkspaces := append([]config.Workspace(nil), a.cfg.Workspaces...)
-	a.cfg.Workspaces = nextWorkspaces
-	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
-		a.cfg.Workspaces = prevWorkspaces
-		a.configMu.Unlock()
+	prevWorkspaces := append([]config.Workspace(nil), s.app.cfg.Workspaces...)
+	s.app.cfg.Workspaces = nextWorkspaces
+	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {
+		s.app.cfg.Workspaces = prevWorkspaces
+		s.app.configMu.Unlock()
 		return err
 	}
-	if err := config.Save(a.cfgPath, a.cfg); err != nil {
-		a.cfg.Workspaces = prevWorkspaces
-		a.configMu.Unlock()
+	if err := config.Save(s.app.cfgPath, s.app.cfg); err != nil {
+		s.app.cfg.Workspaces = prevWorkspaces
+		s.app.configMu.Unlock()
 		return err
 	}
-	a.configMu.Unlock()
-	appState := a.appState()
+	s.app.configMu.Unlock()
+	appState := s.app.appState()
 	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
@@ -247,7 +247,7 @@ func (a *App) deleteWorkspace(sessionKey, workspaceID string) error {
 		if !updated {
 			continue
 		}
-		a.clearSessionLiveThread(sess.Key)
+		s.app.clearSessionLiveThread(sess.Key)
 		if err := appState.saveSession(sess); err != nil {
 			return err
 		}
