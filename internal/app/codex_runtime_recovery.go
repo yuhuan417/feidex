@@ -15,7 +15,7 @@ func (a *App) beginCodexTransportRecovery(client codexClient) bool {
 	}
 	a.codexRuntimeMu.Lock()
 	defer a.codexRuntimeMu.Unlock()
-	if a.configuredBackend() != backendCodex {
+	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
 		return false
 	}
 	if a.codexRecovering || a.codex != client {
@@ -81,7 +81,7 @@ func (a *App) completeCodexTransportRecovery(next codexClient) bool {
 	source := a.codexRecoverySource
 	a.codexRecovering = false
 	a.codexRecoverySource = nil
-	if a.configuredBackend() != backendCodex {
+	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
 		return false
 	}
 	if a.codex != nil && a.codex != source {

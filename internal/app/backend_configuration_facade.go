@@ -28,8 +28,8 @@ type backendConfigurationFacade interface {
 }
 
 func (a *App) backendConfiguration() backendConfigurationFacade {
-	if a != nil && a.isClaudeBackend() {
-		return claudeBackendConfigurationFacade{app: a}
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.configuration(a)
 	}
 	return codexBackendConfigurationFacade{app: a}
 }

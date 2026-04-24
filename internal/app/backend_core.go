@@ -95,10 +95,6 @@ func (a *App) hasConfiguredBackend() bool {
 	return strings.TrimSpace(a.configuredBackend()) != ""
 }
 
-func (a *App) isClaudeBackend() bool {
-	return a.configuredBackend() == backendClaude
-}
-
 func (a *App) configuredSessionInflightMode() sessionInflightMode {
 	return sessionInflightModeForBackend(a.configuredBackend())
 }

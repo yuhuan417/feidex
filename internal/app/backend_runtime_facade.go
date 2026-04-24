@@ -6,6 +6,11 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"feidex/internal/feishu"
+	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type backendRuntimeHandle struct {
@@ -46,12 +51,25 @@ type backendRuntimeFacade interface {
 	kind() string
 	displayName() string
 	configuredCommand(a *App) string
+	isActive(a *App) bool
 	runtimeReady(a *App) bool
+	beginStartupRecoveryScope(a *App) func()
+	reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session
+	conversationBackend(a *App) conversationBackendFacade
+	configuration(a *App) backendConfigurationFacade
+	serverRequestAdapter(a *App) serverRequestBackendAdapter
+	runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error
+	handleCompactCommand(a *App, msg *feishu.InboundMessage) error
+	completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error)
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error
 	maintenanceActive(a *App) bool
 	maintenanceBlocksCommand(a *App, raw string) error
 	idleMaintenanceBlockedReason() string
+	resolvesPendingLocally(kind string) bool
+	deferQueuedSubmissionsDuringRecovery(a *App) bool
+	dropThreadLineageAfterStartFailure(a *App, err error) bool
+	failsStandaloneCompaction() bool
 	handleTransportFailure(a *App, sessionKey, threadID string, err error)
 }
 
@@ -104,8 +122,63 @@ func (codexRuntimeFacade) configuredCommand(a *App) string {
 	return strings.TrimSpace(a.cfg.Codex.Command)
 }
 
+func (codexRuntimeFacade) isActive(a *App) bool {
+	return a != nil && a.configuredBackend() == backendCodex
+}
+
 func (codexRuntimeFacade) runtimeReady(a *App) bool {
 	return a != nil && a.currentCodexClient() != nil
+}
+
+func (codexRuntimeFacade) beginStartupRecoveryScope(a *App) func() {
+	if a == nil {
+		return func() {}
+	}
+	return a.beginCodexAutoThreadRecoveryScope()
+}
+
+func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
+	if a == nil {
+		return sess
+	}
+	return a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
+}
+
+func (codexRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
+	return codexConversationBackend{app: a}
+}
+
+func (codexRuntimeFacade) configuration(a *App) backendConfigurationFacade {
+	return codexBackendConfigurationFacade{app: a}
+}
+
+func (codexRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
+	return codexServerRequestAdapter{app: a}
+}
+
+func (codexRuntimeFacade) runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
+	if a == nil {
+		return nil
+	}
+	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
+	sessionKey = firstNonEmpty(a.makeSessionKey(msg), strings.TrimSpace(sessionKey))
+	_, err := a.startThreadCompaction(sessionKey)
+	return err
+}
+
+func (codexRuntimeFacade) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {
+	if a == nil || msg == nil {
+		return nil
+	}
+	if _, err := a.startThreadCompaction(a.makeSessionKey(msg)); err != nil {
+		return err
+	}
+	return a.feishu.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", a.replyInThreadEnabled(msg.ChatType))
+}
+
+func (codexRuntimeFacade) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
+	parentAction := actionStringValue(action, "parent_action")
+	return a.completeMenuCommand(action, sessionKey, "/stop", parentAction)
 }
 
 func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
@@ -142,6 +215,40 @@ func (codexRuntimeFacade) idleMaintenanceBlockedReason() string {
 	return "当前正在执行 Codex 维护，请稍后再切换 backend"
 }
 
+func (codexRuntimeFacade) resolvesPendingLocally(kind string) bool {
+	return !isServerResolvedPendingKind(kind)
+}
+
+func (codexRuntimeFacade) deferQueuedSubmissionsDuringRecovery(a *App) bool {
+	return a != nil && a.codexRuntimeRecovering()
+}
+
+func (codexRuntimeFacade) dropThreadLineageAfterStartFailure(a *App, err error) bool {
+	if a == nil || err == nil {
+		return false
+	}
+	if a.codexRuntimeRecovering() {
+		return true
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(text, "codex client not initialized"):
+		return true
+	case strings.Contains(text, "codex app-server read failed"):
+		return true
+	case strings.Contains(text, "codex app-server stdin write failed"):
+		return true
+	case strings.Contains(text, "codex app-server process exited"):
+		return true
+	default:
+		return false
+	}
+}
+
+func (codexRuntimeFacade) failsStandaloneCompaction() bool {
+	return true
+}
+
 func (codexRuntimeFacade) handleTransportFailure(a *App, _, _ string, err error) {
 	if a == nil {
 		return
@@ -172,8 +279,66 @@ func (claudeRuntimeFacade) configuredCommand(a *App) string {
 	return strings.TrimSpace(a.cfg.Claude.Command)
 }
 
+func (claudeRuntimeFacade) isActive(a *App) bool {
+	return a != nil && a.configuredBackend() == backendClaude
+}
+
 func (claudeRuntimeFacade) runtimeReady(a *App) bool {
 	return a != nil && a.claude != nil
+}
+
+func (claudeRuntimeFacade) beginStartupRecoveryScope(*App) func() {
+	return func() {}
+}
+
+func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(_ *App, _ string, sess *state.Session) *state.Session {
+	return sess
+}
+
+func (claudeRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
+	return claudeConversationBackend{app: a}
+}
+
+func (claudeRuntimeFacade) configuration(a *App) backendConfigurationFacade {
+	return claudeBackendConfigurationFacade{app: a}
+}
+
+func (claudeRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
+	return claudeServerRequestAdapter{app: a}
+}
+
+func (claudeRuntimeFacade) runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
+	if a == nil {
+		return nil
+	}
+	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
+	return a.enqueueSubmission(msg)
+}
+
+func (claudeRuntimeFacade) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {
+	if a == nil || msg == nil {
+		return nil
+	}
+	return a.enqueuePassthroughCommand(msg, "/compact")
+}
+
+func (claudeRuntimeFacade) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
+	parentAction := actionStringValue(action, "parent_action")
+	return a.completeAsyncCommandAction(
+		action,
+		sessionKey,
+		"/stop",
+		parentAction,
+		"正在请求中断当前任务",
+		a.renderInterruptPreparingCard(sessionKey, parentAction),
+		func(sessionKey, text string) map[string]any {
+			return a.renderInterruptResultCard(sessionKey, parentAction, text)
+		},
+		func(sessionKey, errText string) map[string]any {
+			return a.renderInterruptFailedCard(sessionKey, parentAction, targetTurnID, errText)
+		},
+		"interrupt patch failed",
+	)
 }
 
 func (claudeRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
@@ -203,6 +368,22 @@ func (claudeRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 
 func (claudeRuntimeFacade) idleMaintenanceBlockedReason() string {
 	return "当前正在执行 Claude 维护，请稍后再切换 backend"
+}
+
+func (claudeRuntimeFacade) resolvesPendingLocally(string) bool {
+	return true
+}
+
+func (claudeRuntimeFacade) deferQueuedSubmissionsDuringRecovery(*App) bool {
+	return false
+}
+
+func (claudeRuntimeFacade) dropThreadLineageAfterStartFailure(*App, error) bool {
+	return false
+}
+
+func (claudeRuntimeFacade) failsStandaloneCompaction() bool {
+	return false
 }
 
 func (claudeRuntimeFacade) handleTransportFailure(a *App, sessionKey, threadID string, err error) {

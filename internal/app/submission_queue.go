@@ -32,7 +32,9 @@ func (w *submissionWorkflow) enqueueSubmissionWithSessionKey(msg *feishu.Inbound
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
-	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
+	if runtime := a.backendRuntime(); runtime != nil {
+		sess = runtime.reconcileCompletedTurnFromFinalOutput(a, sessionKey, sess)
+	}
 	if sess == nil {
 		sess = appState.session(sessionKey)
 	}
@@ -244,25 +246,13 @@ func (w *submissionWorkflow) handleSubmissionStartFailure(sessionKey, threadID s
 }
 
 func shouldDropCodexThreadLineageAfterStartFailure(a *App, err error) bool {
-	if a == nil || a.configuredBackend() != backendCodex || err == nil {
+	if a == nil || err == nil {
 		return false
 	}
-	if a.codexRuntimeRecovering() {
-		return true
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.dropThreadLineageAfterStartFailure(a, err)
 	}
-	text := strings.ToLower(strings.TrimSpace(err.Error()))
-	switch {
-	case strings.Contains(text, "codex client not initialized"):
-		return true
-	case strings.Contains(text, "codex app-server read failed"):
-		return true
-	case strings.Contains(text, "codex app-server stdin write failed"):
-		return true
-	case strings.Contains(text, "codex app-server process exited"):
-		return true
-	default:
-		return false
-	}
+	return false
 }
 
 func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey string, notifyFailure bool) error {
@@ -290,7 +280,7 @@ func (w *submissionWorkflow) startNextSubmissionWithFailureNotice(sessionKey str
 		)
 		return nil
 	}
-	if !a.isClaudeBackend() && a.codexRuntimeRecovering() {
+	if runtime := a.backendRuntime(); runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(a) {
 		slog.Debug("startNextSubmission deferred",
 			"session_key", sessionKey,
 			"reason", "codex_runtime_recovering",

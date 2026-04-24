@@ -13,6 +13,7 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
 项目面向中文使用场景，README 也以中文为主。
 
 开发约束、模块边界、构建产物放置规则见 [DEVELOPER.md](DEVELOPER.md)。
+Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-audit.md](docs/codex-app-server-state-machine-audit.md)。
 
 ## 最近更新
 
@@ -69,16 +70,40 @@ Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务�
 ```text
 cmd/feidex/                 主程序入口
 cmd/feishu_card_demo/       飞书卡片 demo
-internal/app/               核心业务逻辑（消息、菜单、审批、历史、steer）
+internal/app/               核心业务逻辑（frontend、session、菜单、审批、turn lifecycle）
 internal/feishu/            飞书适配层
 internal/codexrpc/          Codex App Server RPC 客户端与类型
+internal/claudecli/         Claude CLI stream-json 适配层
 internal/config/            配置与飞书绑定流程
 internal/state/             本地状态存储（session/submission/message links）
 internal/daemon/            daemon 安装、运行与升级
 internal/release/           GitHub Release 查询与版本比较
+internal/codexinstall/      Codex CLI 安装与探测
+internal/claudeinstall/     Claude CLI 安装与探测
 scripts/create_github_release.sh  发布 tag 脚本
 config.example.toml         配置样例
 ```
+
+## 架构视图
+
+当前主路径是：飞书事件进入 `internal/feishu`，由 `internal/app` 做 frontend/session/thread 归属、命令分发、审批与卡片渲染，再通过 backend runtime facade 调用 `internal/codexrpc` 或 `internal/claudecli`，运行时和可恢复状态写入 `internal/state`。
+
+关键边界：
+
+- `frontend` 是运行时隔离边界；backend 选择、session lineage、pending request、message link 和运行时缓存都必须按 frontend 隔离。
+- `internal/app` 拥有产品语义；Codex/Claude 协议细节应收敛在 backend adapter/facade，避免散落到消息、菜单和审批编排里。
+- `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；不要让它理解飞书、session 或卡片。
+- `internal/feishu` 只负责飞书 SDK、消息/卡片发送、文件分享、链接改写和权限问题转换；不要把业务策略放进适配层。
+- 慢操作必须走“快速 callback ack -> 异步执行 -> patch card / follow-up”，尤其是 clone、review、upgrade、download 和外部网络请求。
+- 触碰 `internal/app`、`internal/codexrpc`、审批、turn/thread lifecycle、review、compaction、tool input 或 server request 时，要同步检查状态机审计文档。
+
+### 目前的架构问题
+
+- `internal/app` 仍是事实上的 God package：`App` 聚合了 frontend、backend runtime、turn stream、审批、升级、菜单、文件下载、Claude/Codex usage 等大量状态。短期改动应优先复用现有 helper；中期建议按 lifecycle coordinator、command/action registry、backend adapter、card renderer、maintenance workflow 分离更小的内部组件。
+- backend 抽象已经有 `backendRuntimeFacade`，但 Codex/Claude 逻辑仍有不少直接分支和专用状态散在 `internal/app`。新增 backend 或改 backend 行为时，应先补 facade/helper，不要在命令和卡片路径继续增加 `if backend == ...`。
+- 状态同时存在内存 map 与 `internal/state` 持久化快照，字段已包含 frontend/backend 归属但仍容易发生跨 frontend 污染。新增 pending/form/message-link/session 数据时，必须明确 frontend scope，并补恢复与迁移测试。
+- README、`DEVELOPER.md` 和状态机审计共同构成开发契约。协议行为变化不能只改代码；如果改变 Codex app-server lifecycle 或审批语义，应同时更新审计文档和对应测试映射。
+- 升级链路是救援路径，但它和普通 app 编排仍共处 `internal/app`。相关改动要保持 daemon/release/pending store 最小依赖，避免因为 Codex/Claude runtime 不可用而阻断 `/upgrade`。
 
 ## 运行前提
 

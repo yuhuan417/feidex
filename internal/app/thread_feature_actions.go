@@ -26,25 +26,10 @@ func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targe
 			}, nil
 		}
 	}
-	parentAction := actionStringValue(action, "parent_action")
-	if a.isClaudeBackend() {
-		return a.completeAsyncCommandAction(
-			action,
-			sessionKey,
-			"/stop",
-			parentAction,
-			"正在请求中断当前任务",
-			a.renderInterruptPreparingCard(sessionKey, parentAction),
-			func(sessionKey, text string) map[string]any {
-				return a.renderInterruptResultCard(sessionKey, parentAction, text)
-			},
-			func(sessionKey, errText string) map[string]any {
-				return a.renderInterruptFailedCard(sessionKey, parentAction, targetTurnID, errText)
-			},
-			"interrupt patch failed",
-		)
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.completeMenuInterrupt(a, action, sessionKey, targetTurnID)
 	}
-	return a.completeMenuCommand(action, sessionKey, "/stop", parentAction)
+	return a.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
 }
 
 func (a *App) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

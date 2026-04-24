@@ -20,8 +20,14 @@ func isTerminalTurnStatus(status string) bool {
 }
 
 func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
+	if a == nil || sess == nil {
+		return sess
+	}
+	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
+		return sess
+	}
 	client := a.currentCodexClient()
-	if a == nil || a.isClaudeBackend() || client == nil || sess == nil {
+	if client == nil {
 		return sess
 	}
 	if !sessionHasInFlightSubmission(sess) {

@@ -19,8 +19,8 @@ type serverRequestBackendAdapter interface {
 }
 
 func (a *App) serverRequestBackendAdapter(pending *state.PendingRequest) serverRequestBackendAdapter {
-	if pendingBackend(a, pending) == backendClaude {
-		return claudeServerRequestAdapter{app: a}
+	if runtime := backendRuntimeForKind(pendingBackend(a, pending)); runtime != nil {
+		return runtime.serverRequestAdapter(a)
 	}
 	return codexServerRequestAdapter{app: a}
 }

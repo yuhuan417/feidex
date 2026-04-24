@@ -96,7 +96,7 @@ func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, mes
 				a.failSubmissionWithoutTerminalCompletion(sess.Key, sub, strings.TrimSpace(op.ThreadID), strings.TrimSpace(op.TurnID), message)
 				continue
 			}
-			if normalizeRuntimeBackend(backend) != backendCodex {
+			if runtime := backendRuntimeForKind(backend); runtime == nil || !runtime.failsStandaloneCompaction() {
 				continue
 			}
 			threadID := firstNonEmpty(strings.TrimSpace(op.ThreadID), strings.TrimSpace(sess.ActiveThreadID))
@@ -108,7 +108,7 @@ func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, mes
 				turnID:   strings.TrimSpace(op.TurnID),
 			})
 		}
-		if normalizeRuntimeBackend(backend) == backendCodex && strings.TrimSpace(sess.Status) == sessionStatusCompacting {
+		if runtime := backendRuntimeForKind(backend); runtime != nil && runtime.failsStandaloneCompaction() && strings.TrimSpace(sess.Status) == sessionStatusCompacting {
 			threadID := strings.TrimSpace(sess.ActiveThreadID)
 			if threadID != "" {
 				compactTargets = append(compactTargets, compactTarget{threadID: threadID})

@@ -73,7 +73,10 @@ func normalizeClaudePermissionOverrideValue(raw string) (string, bool) {
 }
 
 func (a *App) applyClaudePermissionModeToRuntime(sessionKey, mode string) error {
-	if a == nil || a.claude == nil || !a.isClaudeBackend() {
+	if a == nil || a.claude == nil {
+		return nil
+	}
+	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(a) {
 		return nil
 	}
 	sess := a.appState().session(sessionKey)

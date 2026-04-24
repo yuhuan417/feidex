@@ -72,8 +72,8 @@ func (a *App) backendResolvesPendingLocally(pending *state.PendingRequest) bool 
 	if pending == nil {
 		return false
 	}
-	if pendingBackend(a, pending) == backendClaude {
-		return true
+	if runtime := backendRuntimeForKind(pendingBackend(a, pending)); runtime != nil {
+		return runtime.resolvesPendingLocally(pending.Kind)
 	}
 	return !isServerResolvedPendingKind(pending.Kind)
 }

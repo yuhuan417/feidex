@@ -84,13 +84,10 @@ func (a *App) runMenuCompactAction(action *feishu.CardAction, sessionKey string)
 	if a == nil {
 		return nil
 	}
-	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
-	sessionKey = firstNonEmpty(a.makeSessionKey(msg), strings.TrimSpace(sessionKey))
-	if a.isClaudeBackend() {
-		return a.enqueueSubmission(msg)
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.runMenuCompactAction(a, action, sessionKey)
 	}
-	_, err := a.startThreadCompaction(sessionKey)
-	return err
+	return nil
 }
 
 func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {

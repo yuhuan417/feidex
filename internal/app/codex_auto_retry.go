@@ -342,7 +342,7 @@ func (a *App) runAutoRetryTimer(sessionKey string, expectedSeq uint64) {
 		a.finishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不再处于空闲态。")
 		return
 	}
-	if normalizeRuntimeBackend(a.configuredBackend()) == backendCodex && a.codexRuntimeRecovering() {
+	if runtime := a.backendRuntime(); runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(a) {
 		a.bumpAutoRetryBackoffAndReschedule(sessionKey, "运行时正在恢复，继续等待后重试。")
 		return
 	}

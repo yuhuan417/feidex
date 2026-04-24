@@ -130,7 +130,7 @@ func (a *App) refreshCodexRuntimeAfterMaintenance(ctx context.Context) (bool, er
 	if a == nil {
 		return false, fmt.Errorf("app not initialized")
 	}
-	if a.configuredBackend() != backendCodex {
+	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
 		return false, a.codexSmokeTest(ctx)
 	}
 	next, err := a.startVerifiedCodexClient(ctx)

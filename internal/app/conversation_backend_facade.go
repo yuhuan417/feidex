@@ -37,8 +37,8 @@ type conversationBackendFacade interface {
 }
 
 func (a *App) conversationBackend() conversationBackendFacade {
-	if a != nil && a.isClaudeBackend() {
-		return claudeConversationBackend{app: a}
+	if runtime := a.backendRuntime(); runtime != nil {
+		return runtime.conversationBackend(a)
 	}
 	return codexConversationBackend{app: a}
 }

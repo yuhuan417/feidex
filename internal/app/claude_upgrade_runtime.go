@@ -205,7 +205,7 @@ func (a *App) refreshClaudeRuntimeAfterMaintenance(ctx context.Context) (bool, e
 	if err := runClaudeSmokeTest(a, ctx); err != nil {
 		return false, err
 	}
-	if a.configuredBackend() != backendClaude {
+	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(a) {
 		return false, nil
 	}
 	if a.claude == nil {
