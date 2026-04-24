@@ -229,7 +229,7 @@ func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID
 		)
 	} else if sess != nil {
 		shouldStartNext = sessionShouldStartNextSubmissionAsync(sess)
-		a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+		newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 	}
 	if clearedThreadLineage {
 		a.clearSessionLiveThread(sessionKey)

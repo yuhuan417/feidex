@@ -59,12 +59,12 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	a.autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
+	newAutoRetryService(a).autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := a.updateAutoRetryEnabled(true); err != nil {
+	if err := newAutoRetryService(a).updateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		Status:               "failed",
 	}
 
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
@@ -90,7 +90,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	if scheduled[0].delay != time.Second {
 		t.Fatalf("scheduled delay = %s, want %s", scheduled[0].delay, time.Second)
 	}
-	if snapshot, ok := a.currentAutoRetryState(sessionKey); !ok {
+	if snapshot, ok := newAutoRetryService(a).currentAutoRetryState(sessionKey); !ok {
 		t.Fatal("currentAutoRetryState() missing state")
 	} else if snapshot.RetryCount != 0 {
 		t.Fatalf("retry count = %d, want 0 before timer fires", snapshot.RetryCount)
@@ -121,7 +121,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 
 	scheduled[0].task.fire()
 
-	snapshot, ok := a.currentAutoRetryState(sessionKey)
+	snapshot, ok := newAutoRetryService(a).currentAutoRetryState(sessionKey)
 	if !ok {
 		t.Fatal("currentAutoRetryState() missing state after firing timer")
 	}
@@ -145,12 +145,12 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	a.autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
+	newAutoRetryService(a).autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := a.updateAutoRetryEnabled(true); err != nil {
+	if err := newAutoRetryService(a).updateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 
 	msg := &feishu.InboundMessage{
 		SessionKey: sessionKey,
@@ -182,7 +182,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	if len(scheduled) != 1 || !scheduled[0].task.stopped {
 		t.Fatalf("scheduled retry task stopped = %v, want true", len(scheduled) == 1 && scheduled[0].task.stopped)
 	}
-	if _, ok := a.currentAutoRetryState(sessionKey); ok {
+	if _, ok := newAutoRetryService(a).currentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState() still present after /stop")
 	}
 	replies := ff.replyTextsSnapshot()
@@ -202,12 +202,12 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	}
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	a.autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
+	newAutoRetryService(a).autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := a.updateAutoRetryEnabled(true); err != nil {
+	if err := newAutoRetryService(a).updateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -225,7 +225,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		Status:               "failed",
 	}
 
-	a.observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1 before timer fires", len(scheduled))
 	}
@@ -238,14 +238,14 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	if scheduled[1].delay != time.Second {
 		t.Fatalf("rescheduled delay = %s, want %s", scheduled[1].delay, time.Second)
 	}
-	snapshot, ok := a.currentAutoRetryState(sessionKey)
+	snapshot, ok := newAutoRetryService(a).currentAutoRetryState(sessionKey)
 	if !ok {
 		t.Fatal("currentAutoRetryState() missing state after Claude start failure")
 	}
 	if snapshot.RetryCount != 0 {
 		t.Fatalf("retry count = %d, want 0 after failed start", snapshot.RetryCount)
 	}
-	if !a.hasPendingAutoRetry(sessionKey) {
+	if !newAutoRetryService(a).hasPendingAutoRetry(sessionKey) {
 		t.Fatal("hasPendingAutoRetry(sessionKey) = false, want true")
 	}
 

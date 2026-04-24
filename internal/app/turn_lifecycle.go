@@ -310,7 +310,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 	suppressTerminalCard := false
 	if updatedSess != nil {
 		logSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
-		suppressTerminalCard = a.observeAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
+		suppressTerminalCard = newAutoRetryService(a).observeAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
 	}
 	if terminalText != "" && !suppressTerminalCard {
 		a.replaceTurnEventCardWithReuse(

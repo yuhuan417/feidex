@@ -258,7 +258,7 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	if sess == nil {
 		sess = a.appState().session(sessionKey)
 	}
-	canceledRetry := a.cancelAutoRetry(sessionKey, sess != nil && sess.ActiveTurnID != "" && sess.ActiveThreadID != "", "已停止当前 session 的自动重试。")
+	canceledRetry := newAutoRetryService(a).cancelAutoRetry(sessionKey, sess != nil && sess.ActiveTurnID != "" && sess.ActiveThreadID != "", "已停止当前 session 的自动重试。")
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		if canceledRetry {
 			reply := "已停止当前 session 的自动重试。"

@@ -158,6 +158,6 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))
 	},
 	"auto_retry.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
+		return newAutoRetryService(s.app).completeAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
 	},
 }
