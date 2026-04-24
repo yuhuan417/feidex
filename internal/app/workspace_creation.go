@@ -136,7 +136,7 @@ func (a *App) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKe
 	if err != nil {
 		return err
 	}
-	card := a.renderWorkspaceNewCard(sessionKey, requestID, payload)
+	card := newWorkspaceRenderService(a).renderWorkspaceNewCard(sessionKey, requestID, payload)
 	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
@@ -419,7 +419,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if pending.FeishuMsgID != "" {
-			_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
+			_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, newWorkspaceRenderService(s.app).renderWorkspaceSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice()))
 		}
 		return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, s.app.replyInThreadEnabled(msg.ChatType))
 	}

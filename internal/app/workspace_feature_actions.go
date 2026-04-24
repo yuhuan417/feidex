@@ -88,7 +88,7 @@ func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "请填写 git 地址"},
-		Card:  rawCard(s.app.renderWorkspaceCloneCard(sessionKey, requestID, payload)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(sessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -119,7 +119,7 @@ func (s workspaceActionService) completeWorkspaceNewTakeover(action *feishu.Card
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "clone 目标目录已存在，已转为预填好的新建工作区"},
-		Card:  rawCard(s.app.renderWorkspaceNewCard(sessionKey, requestID, payload)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(sessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -153,7 +153,7 @@ func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.Car
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开父目录选择"},
-		Card:  rawCard(s.app.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -178,12 +178,12 @@ func (s workspaceActionService) completeWorkspaceCloneCancel(action *feishu.Card
 		})
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "已请求取消仓库克隆"},
-			Card:  rawCard(s.app.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
 		}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "warning", Content: "当前没有进行中的仓库克隆"},
-		Card:  rawCard(s.app.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -208,7 +208,7 @@ func (s workspaceActionService) completeWorkspaceNewPickDir(action *feishu.CardA
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开目录选择"},
-		Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -228,7 +228,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请填写 workspace_id"},
-			Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
 	cwd := strings.TrimSpace(payload.SelectedCWD)
@@ -236,7 +236,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请先选择目录"},
-			Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
 	name := strings.TrimSpace(payload.DraftName)
@@ -251,7 +251,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 		})
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "工作区已存在且目录一致，可直接切换"},
-			Card:  rawCard(s.app.renderWorkspaceSwitchExistingCard(pending.SessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice())),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceSwitchExistingCard(pending.SessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice())),
 		}, nil
 	}
 	sess := appState.session(pending.SessionKey)
@@ -265,7 +265,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
@@ -295,7 +295,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请填写 git 地址"},
-			Card:  rawCard(s.app.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
 	msg := s.app.commandMessageFromAction(action, pending.SessionKey, "")
@@ -313,7 +313,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在从仓库创建工作区"},
-			Card:  rawCard(s.app.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)),
 		}, nil
 	}
 	if _, err := s.app.prepareWorkspaceClone(payload.RepoURL, payload.DraftID, parentDir); err != nil {
@@ -326,7 +326,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 			})
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
-				Card:  rawCard(s.app.renderWorkspaceCloneSwitchExistingCard(pending.SessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
+				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneSwitchExistingCard(pending.SessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
 			}, nil
 		}
 		var existingDirErr *workspaceCloneExistingDirError
@@ -343,7 +343,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 			}
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "info", Content: "clone 目标目录已存在，已打开预填好的新建工作区"},
-				Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, newRequestID, takeoverPayload)),
+				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, newRequestID, takeoverPayload)),
 			}, nil
 		}
 		payload.ErrorMessage = err.Error()
@@ -354,7 +354,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 		})
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(s.app.renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -380,7 +380,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 	)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已开始从仓库创建工作区"},
-		Card:  rawCard(s.app.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, op.snapshot())),
+		Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, op.snapshot())),
 	}, nil
 }
 

@@ -276,7 +276,7 @@ func (a *App) patchWorkspaceCloneProgressCard(messageID, requestID string, paylo
 	if a == nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
-	card := a.renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
+	card := newWorkspaceRenderService(a).renderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
 	if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
 		slog.Warn("workspace clone progress patch failed",
 			"request_id", requestID,
@@ -336,7 +336,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.snapshot()))
+				a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.snapshot()))
 			}
 			return
 		}
@@ -365,7 +365,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
+				_ = a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
 			}
 			return
 		}
@@ -385,7 +385,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneCard(sessionKey, requestID, payload))
+			_ = a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -403,7 +403,7 @@ func (a *App) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceClone
 		req.PayloadJSON = mustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = a.feishu.PatchCard(context.Background(), messageID, a.renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir))
+		_ = a.feishu.PatchCard(context.Background(), messageID, newWorkspaceRenderService(a).renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir))
 	}
 }
 

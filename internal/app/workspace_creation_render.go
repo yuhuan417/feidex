@@ -9,9 +9,9 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload workspaceNewPayload) map[string]any {
+func (s workspaceRenderService) renderWorkspaceNewCard(sessionKey, requestID string, payload workspaceNewPayload) map[string]any {
 	if payload.Picker != nil {
-		card, err := a.renderPathPickerCard(requestID, *payload.Picker)
+		card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, *payload.Picker)
 		if err == nil {
 			return card
 		}
@@ -90,27 +90,27 @@ func (a *App) renderWorkspaceNewCard(sessionKey, requestID string, payload works
 	return card
 }
 
-func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload workspaceClonePayload) map[string]any {
+func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID string, payload workspaceClonePayload) map[string]any {
 	if payload.Picker != nil {
-		card, err := a.renderPathPickerCard(requestID, *payload.Picker)
+		card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, *payload.Picker)
 		if err == nil {
 			return card
 		}
 		payload.Picker = nil
 	}
 	var sess *state.Session
-	if a.store != nil {
-		sess = a.appState().session(sessionKey)
+	if s.app.store != nil {
+		sess = s.app.appState().session(sessionKey)
 	}
-	workspaceID := a.defaultWorkspaceID()
+	workspaceID := s.app.defaultWorkspaceID()
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
-	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), a.defaultWorkspaceCloneRoot(ws))
+	ws := config.FindWorkspace(s.app.cfg, workspaceID)
+	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), s.app.defaultWorkspaceCloneRoot(ws))
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = firstNonEmpty(strings.TrimSpace(a.defaultWorkspaceCloneParent(ws)), rootPath)
+		parentDir = firstNonEmpty(strings.TrimSpace(s.app.defaultWorkspaceCloneParent(ws)), rootPath)
 	}
 
 	card := newMarkdownBodyCard("从仓库创建工作区", "orange")
@@ -185,7 +185,7 @@ func (a *App) renderWorkspaceCloneCard(sessionKey, requestID string, payload wor
 	return card
 }
 
-func (a *App) renderWorkspaceClonePreparingCard(requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) map[string]any {
+func (s workspaceRenderService) renderWorkspaceClonePreparingCard(requestID string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) map[string]any {
 	repoURL := strings.TrimSpace(payload.RepoURL)
 	parentDir = firstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
 	workspaceID := strings.TrimSpace(payload.DraftID)
@@ -225,10 +225,10 @@ func (a *App) renderWorkspaceClonePreparingCard(requestID string, payload worksp
 			},
 		}
 	}
-	return a.feishu.SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+	return s.app.feishu.SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
 }
 
-func (a *App) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
+func (s workspaceRenderService) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
 	buttons := []feishu.Button{
 		{
 			Text: "返回工作区管理",
@@ -240,10 +240,10 @@ func (a *App) renderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir
 		},
 	}
 	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
-	return a.feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
+	return s.app.feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
 }
 
-func (a *App) renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice string) map[string]any {
+func (s workspaceRenderService) renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice string) map[string]any {
 	body := strings.TrimSpace(notice)
 	if body == "" {
 		body = "该目录已经由现有工作区接管。"
@@ -271,14 +271,14 @@ func (a *App) renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetD
 			},
 		},
 	}
-	return a.feishu.SimpleStatusCard("工作区已存在", "blue", body, buttons)
+	return s.app.feishu.SimpleStatusCard("工作区已存在", "blue", body, buttons)
 }
 
-func (a *App) renderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir string) map[string]any {
-	return a.renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, "clone 目标目录已存在，并且已经由现有工作区接管。")
+func (s workspaceRenderService) renderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir string) map[string]any {
+	return newWorkspaceRenderService(s.app).renderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, "clone 目标目录已存在，并且已经由现有工作区接管。")
 }
 
-func (a *App) renderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText string) map[string]any {
+func (s workspaceRenderService) renderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText string) map[string]any {
 	lines := []string{
 		"仓库已拉取，可手动接管。",
 		"",
@@ -301,10 +301,10 @@ func (a *App) renderWorkspaceCloneManualHintCard(sessionKey, workspaceID, target
 			},
 		},
 	}
-	return a.feishu.SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
+	return s.app.feishu.SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
 }
 
-func (a *App) renderWorkspaceCloneCanceledCard(sessionKey string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) map[string]any {
+func (s workspaceRenderService) renderWorkspaceCloneCanceledCard(sessionKey string, payload workspaceClonePayload, parentDir string, snapshot workspaceCloneProgressSnapshot) map[string]any {
 	repoURL := strings.TrimSpace(payload.RepoURL)
 	parentDir = firstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
 	workspaceID := strings.TrimSpace(payload.DraftID)
@@ -333,5 +333,5 @@ func (a *App) renderWorkspaceCloneCanceledCard(sessionKey string, payload worksp
 			},
 		},
 	}
-	return a.feishu.SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
+	return s.app.feishu.SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
 }

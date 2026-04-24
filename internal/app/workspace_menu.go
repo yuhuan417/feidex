@@ -81,7 +81,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		if errors.As(err, &existingWorkspaceErr) {
 			return s.app.replyCommandActionResponse(msg, &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
-				Card:  rawCard(s.app.renderWorkspaceCloneSwitchExistingCard(sessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
+				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneSwitchExistingCard(sessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
 			})
 		}
 		return err

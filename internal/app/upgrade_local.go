@@ -27,7 +27,7 @@ func (a *App) commandUpgradeLocalPick(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	card, err := a.renderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(a).renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (a *App) completeUpgradeLocalPick(action *feishu.CardAction) (*callback.Car
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	card, err := a.renderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(a).renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}

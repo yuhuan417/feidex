@@ -34,7 +34,7 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 	if err != nil {
 		return err
 	}
-	card, err := s.app.renderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathP
 		if strings.TrimSpace(messageID) == "" {
 			return
 		}
-		card, renderErr := a.renderPathPickerCard(requestID, payload)
+		card, renderErr := newWorkspaceRenderService(a).renderPathPickerCard(requestID, payload)
 		if renderErr != nil {
 			slog.Error("download failure card render failed",
 				"request_id", requestID,

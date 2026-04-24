@@ -28,7 +28,7 @@ func TestRenderPathPickerCardShowsDropdownAndShortButtons(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(current, "file-a.txt"), []byte("a"), 0o644); err != nil {
 		t.Fatalf("WriteFile(file-a.txt) error = %v", err)
 	}
-	card, err := a.renderPathPickerCard("path-1", pathPickerPayload{
+	card, err := newWorkspaceRenderService(a).renderPathPickerCard("path-1", pathPickerPayload{
 		Mode:        pathPickerModeDirectory,
 		Style:       pathPickerStyleDropdown,
 		RootPath:    root,
@@ -376,7 +376,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 func TestWorkspaceFormOrdering(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	newForm := workspaceNewForm(t, a.renderWorkspaceNewCard("sess-1", "req-new", workspaceNewPayload{
+	newForm := workspaceNewForm(t, newWorkspaceRenderService(a).renderWorkspaceNewCard("sess-1", "req-new", workspaceNewPayload{
 		RootPath:    "/",
 		SelectedCWD: a.cfg.Workspaces[0].Cwd,
 	}))
@@ -385,7 +385,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 		t.Fatalf("workspace new first form element = %q, want column_set", got)
 	}
 
-	cloneForm := workspaceCloneForm(t, a.renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+	cloneForm := workspaceCloneForm(t, newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 	}))

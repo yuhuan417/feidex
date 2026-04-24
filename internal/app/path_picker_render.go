@@ -110,7 +110,7 @@ func pathPickerWithinRoot(rootPath, candidate string) bool {
 	return strings.HasPrefix(candidate, rootPath+string(filepath.Separator))
 }
 
-func (a *App) renderPathPickerCard(requestID string, payload pathPickerPayload) (map[string]any, error) {
+func (s workspaceRenderService) renderPathPickerCard(requestID string, payload pathPickerPayload) (map[string]any, error) {
 	payload.Mode = normalizePathPickerMode(payload.Mode)
 	payload.Style = normalizePathPickerStyle(payload.Style)
 	currentPath, err := resolvePathPickerPath(payload.RootPath, payload.CurrentPath)
