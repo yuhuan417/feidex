@@ -204,7 +204,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	if sub == nil {
 		return
 	}
-	a.clearSubmissionProcessingReactions(sub)
+	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	terminalText := turnCompletionTerminalText(sub.Status, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
 	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
 	updatedSess, _ := appState.updateSession(sessionKey, func(sess *state.Session) {

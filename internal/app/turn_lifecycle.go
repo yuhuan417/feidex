@@ -269,7 +269,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
 	sub = appState.submission(sub.ID)
 	if sub != nil {
-		a.clearSubmissionProcessingReactions(sub)
+		newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 		slog.Debug("submission finalized",
 			"submission_id", sub.ID,
 			"session_key", sessionKey,

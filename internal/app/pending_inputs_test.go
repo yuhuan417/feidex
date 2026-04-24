@@ -113,7 +113,7 @@ func TestDiscardPendingInputByMessageIDCancelsStagedAndQueuedInputs(t *testing.T
 		t.Fatalf("create submission: %v", err)
 	}
 
-	if !a.discardPendingInputByMessageID("img-staged") {
+	if !newPendingQueueService(a).discardPendingInputByMessageID("img-staged") {
 		t.Fatal("expected staged image discard to succeed")
 	}
 	sess := a.store.GetSession(sessionKey)
@@ -121,7 +121,7 @@ func TestDiscardPendingInputByMessageIDCancelsStagedAndQueuedInputs(t *testing.T
 		t.Fatalf("expected staged images to be removed, got %#v", sess)
 	}
 
-	if !a.discardPendingInputByMessageID("msg-queued") {
+	if !newPendingQueueService(a).discardPendingInputByMessageID("msg-queued") {
 		t.Fatal("expected queued submission discard to succeed")
 	}
 	sess = a.store.GetSession(sessionKey)

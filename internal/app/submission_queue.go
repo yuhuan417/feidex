@@ -140,7 +140,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 			return nil
 		}
 	}
-	a.markSubmissionQueuedReactions(sub)
+	newPendingQueueService(a).markSubmissionQueuedReactions(sub)
 	a.sendSubmissionQueuedNotice(context.Background(), sub)
 	return nil
 }
@@ -190,7 +190,7 @@ func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID
 	if sub != nil {
 		newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	}
-	a.clearSubmissionProcessingReactions(sub)
+	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	if sub != nil {
 		_ = appState.finalizeSubmission(sub.ID, "failed")
 	}
@@ -450,7 +450,7 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 		newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 		return err
 	}
-	a.markSubmissionRunningReactions(sub)
+	newPendingQueueService(a).markSubmissionRunningReactions(sub)
 	logSessionState("startNextSubmission session starting", sessionKey, appState.session(sessionKey))
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	turnID := ""

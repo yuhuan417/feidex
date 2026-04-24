@@ -166,7 +166,7 @@ func (w *lifecycleCoordinator) startClaudeSubmissionAttempt(sessionKey string, s
 		return nil, turnID, err
 	}
 	newRuntimeStateService(a).markTurnStartedAt(turnID, time.Now())
-	a.markSubmissionRunningReactions(sub)
+	newPendingQueueService(a).markSubmissionRunningReactions(sub)
 
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	err = a.claude.StartTurn(turnCtx, sessionKey, claudeThreadID, turnID, prompt)

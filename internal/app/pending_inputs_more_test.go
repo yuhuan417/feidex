@@ -57,14 +57,14 @@ func TestPendingInputHelpersAndStageImages(t *testing.T) {
 		RootMessageID: "root-1",
 		Attachments:   []feishu.Attachment{{Kind: "image", ResourceKey: "img-key"}},
 	}
-	if !a.shouldStageInboundImages(msg) {
+	if !newPendingQueueService(a).shouldStageInboundImages(msg) {
 		t.Fatal("shouldStageInboundImages() should accept image-only message")
 	}
-	if a.shouldStageInboundImages(&feishu.InboundMessage{Text: "hello", Attachments: msg.Attachments}) {
+	if newPendingQueueService(a).shouldStageInboundImages(&feishu.InboundMessage{Text: "hello", Attachments: msg.Attachments}) {
 		t.Fatal("shouldStageInboundImages() should reject text+image message")
 	}
 
-	if err := a.stageInboundImagesForSession(msg, "sess-1"); err != nil {
+	if err := newPendingQueueService(a).stageInboundImagesForSession(msg, "sess-1"); err != nil {
 		t.Fatalf("stageInboundImagesForSession() error = %v", err)
 	}
 	sess := a.store.GetSession("sess-1")
@@ -135,14 +135,14 @@ func TestPendingInputReactionWrappersAndDiscardSession(t *testing.T) {
 	}
 
 	sub := a.store.GetSubmission("sub-1")
-	a.markSubmissionQueuedReactions(sub)
-	a.markSubmissionRunningReactions(sub)
-	a.clearSubmissionProcessingReactions(sub)
+	newPendingQueueService(a).markSubmissionQueuedReactions(sub)
+	newPendingQueueService(a).markSubmissionRunningReactions(sub)
+	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	if len(stub.added) == 0 || len(stub.removed) == 0 {
 		t.Fatalf("reaction wrappers did not call feishu client: added=%+v removed=%+v", stub.added, stub.removed)
 	}
 
-	if discarded := a.discardSessionPendingInputs("sess-1"); discarded != 2 {
+	if discarded := newPendingQueueService(a).discardSessionPendingInputs("sess-1"); discarded != 2 {
 		t.Fatalf("discardSessionPendingInputs() = %d, want 2", discarded)
 	}
 	sess := a.store.GetSession("sess-1")
@@ -207,7 +207,7 @@ func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
 
-	if !a.discardQueuedSubmissionFromSessionSnapshot(staleSnapshot, "sub-queued", queuedSub) {
+	if !newPendingQueueService(a).discardQueuedSubmissionFromSessionSnapshot(staleSnapshot, "sub-queued", queuedSub) {
 		t.Fatal("discardQueuedSubmissionFromSessionSnapshot() should discard queued submission")
 	}
 

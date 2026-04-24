@@ -46,7 +46,7 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 	if ws == nil {
 		return 0, "", fmt.Errorf("workspace %q not found", workspaceID)
 	}
-	discarded := a.discardSessionPendingInputs(sessionKey)
+	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
 	sess = appState.session(sessionKey)
 	if sess == nil {
 		return 0, "", fmt.Errorf("session %q disappeared", sessionKey)

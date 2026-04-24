@@ -18,7 +18,7 @@ func (a *App) startMergeForwardPrefetch(msg *feishu.InboundMessage) {
 	}
 	ids := append([]string(nil), msg.MergeForwardMessageIDs...)
 	prepared := cloneInboundMessage(msg)
-	a.markMessagesQueuedReactions([]string{msg.MessageID})
+	newPendingQueueService(a).markMessagesQueuedReactions([]string{msg.MessageID})
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), mergeForwardPrefetchTimeout)
 		defer cancel()
@@ -29,7 +29,7 @@ func (a *App) startMergeForwardPrefetch(msg *feishu.InboundMessage) {
 		)
 		text, attachments, err := a.feishu.ResolveMergeForward(ctx, msg.MessageID, ids)
 		if err != nil {
-			a.clearMessageProcessingReactions([]string{msg.MessageID})
+			newPendingQueueService(a).clearMessageProcessingReactions([]string{msg.MessageID})
 			_ = a.replyError(msg, fmt.Errorf("合并转发预取失败: %w", err))
 			return
 		}
@@ -39,13 +39,13 @@ func (a *App) startMergeForwardPrefetch(msg *feishu.InboundMessage) {
 		prepared.MergeForwardMessageIDs = nil
 		prepared.ExpandedMergeForward = true
 		if strings.TrimSpace(prepared.Text) == "" && len(prepared.Attachments) == 0 {
-			a.clearMessageProcessingReactions([]string{msg.MessageID})
+			newPendingQueueService(a).clearMessageProcessingReactions([]string{msg.MessageID})
 			_ = a.replyError(msg, fmt.Errorf("合并转发预取失败: empty expanded content"))
 			return
 		}
 
 		if err := newFeishuEventRouter(a).processMessage(prepared); err != nil {
-			a.clearMessageProcessingReactions([]string{msg.MessageID})
+			newPendingQueueService(a).clearMessageProcessingReactions([]string{msg.MessageID})
 			_ = a.replyError(msg, err)
 			return
 		}

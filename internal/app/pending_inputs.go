@@ -16,7 +16,7 @@ const (
 	discardReactionEmoji = "ThumbsDown"
 )
 
-func (a *App) shouldStageInboundImages(msg *feishu.InboundMessage) bool {
+func (s pendingQueueService) shouldStageInboundImages(msg *feishu.InboundMessage) bool {
 	if msg == nil || msg.ExpandedMergeForward || strings.TrimSpace(msg.Text) != "" || len(msg.Attachments) == 0 {
 		return false
 	}
@@ -28,16 +28,16 @@ func (a *App) shouldStageInboundImages(msg *feishu.InboundMessage) bool {
 	return true
 }
 
-func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string) error {
+func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string) error {
 	if msg == nil {
 		return nil
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   a.defaultWorkspaceID(),
+			WorkspaceID:   s.app.defaultWorkspaceID(),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -46,9 +46,9 @@ func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKe
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = a.defaultWorkspaceID()
+		sess.WorkspaceID = s.app.defaultWorkspaceID()
 	}
-	attachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	attachments, err := s.app.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (a *App) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKe
 	if err := appState.saveSession(sess); err != nil {
 		return err
 	}
-	a.markMessagesQueuedReactions([]string{msg.MessageID})
+	newPendingQueueService(s.app).markMessagesQueuedReactions([]string{msg.MessageID})
 	return nil
 }
 
@@ -116,17 +116,17 @@ func stagedImageRootMessageIDs(images []state.SessionStagedImage) []string {
 	return uniqueStrings(ids)
 }
 
-func (a *App) discardPendingInputByMessageID(messageID string) bool {
+func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bool {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	for _, snapshot := range appState.sessions() {
 		if snapshot == nil {
 			continue
 		}
-		if a.discardStagedImageFromSessionSnapshot(snapshot, messageID) {
+		if newPendingQueueService(s.app).discardStagedImageFromSessionSnapshot(snapshot, messageID) {
 			return true
 		}
 		for _, submissionID := range append([]string(nil), snapshot.Queue...) {
@@ -134,7 +134,7 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 			if !submissionHasSourceMessage(sub, messageID) {
 				continue
 			}
-			if !a.discardQueuedSubmissionFromSessionSnapshot(snapshot, submissionID, sub) {
+			if !newPendingQueueService(s.app).discardQueuedSubmissionFromSessionSnapshot(snapshot, submissionID, sub) {
 				return false
 			}
 			return true
@@ -143,11 +143,11 @@ func (a *App) discardPendingInputByMessageID(messageID string) bool {
 	return false
 }
 
-func (a *App) discardStagedImageFromSessionSnapshot(snapshot *state.Session, messageID string) bool {
-	if a == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
+func (s pendingQueueService) discardStagedImageFromSessionSnapshot(snapshot *state.Session, messageID string) bool {
+	if s.app == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	discarded := false
 	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
 		if current == nil {
@@ -161,15 +161,15 @@ func (a *App) discardStagedImageFromSessionSnapshot(snapshot *state.Session, mes
 	if !discarded {
 		return false
 	}
-	a.markMessagesDiscardedReactions([]string{messageID})
+	newPendingQueueService(s.app).markMessagesDiscardedReactions([]string{messageID})
 	return true
 }
 
-func (a *App) discardQueuedSubmissionFromSessionSnapshot(snapshot *state.Session, submissionID string, sub *state.Submission) bool {
-	if a == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
+func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot *state.Session, submissionID string, sub *state.Submission) bool {
+	if s.app == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	discarded := false
 	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
 		if current == nil {
@@ -196,26 +196,26 @@ func (a *App) discardQueuedSubmissionFromSessionSnapshot(snapshot *state.Session
 		slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
 		return false
 	}
-	a.markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
-	a.cleanupSubmissionRuntimeState(sub)
+	newPendingQueueService(s.app).markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
+	s.app.cleanupSubmissionRuntimeState(sub)
 	return true
 }
 
-func (a *App) discardSessionPendingInputs(sessionKey string) int {
-	appState := a.appState()
+func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int {
+	appState := s.app.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		return 0
 	}
 	discarded := 0
 	for _, image := range sess.StagedImages {
-		a.markMessagesDiscardedReactions([]string{image.SourceMessageID})
+		newPendingQueueService(s.app).markMessagesDiscardedReactions([]string{image.SourceMessageID})
 		discarded++
 	}
 	queueIDs := append([]string(nil), sess.Queue...)
 	for _, submissionID := range queueIDs {
 		sub := appState.submission(submissionID)
-		a.markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
+		newPendingQueueService(s.app).markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
 		if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
 			value.Status = "discarded"
 			value.Finalized = true
@@ -224,7 +224,7 @@ func (a *App) discardSessionPendingInputs(sessionKey string) int {
 			continue
 		}
 		discarded++
-		a.cleanupSubmissionRuntimeState(sub)
+		s.app.cleanupSubmissionRuntimeState(sub)
 	}
 	sess.Queue = nil
 	sess.StagedImages = nil
@@ -281,50 +281,50 @@ func sourceMessageIDsForSubmission(sub *state.Submission) []string {
 	return uniqueStrings(ids)
 }
 
-func (a *App) markSubmissionQueuedReactions(sub *state.Submission) {
-	a.markMessagesQueuedReactions(sourceMessageIDsForSubmission(sub))
+func (s pendingQueueService) markSubmissionQueuedReactions(sub *state.Submission) {
+	newPendingQueueService(s.app).markMessagesQueuedReactions(sourceMessageIDsForSubmission(sub))
 }
 
-func (a *App) markSubmissionRunningReactions(sub *state.Submission) {
+func (s pendingQueueService) markSubmissionRunningReactions(sub *state.Submission) {
 	ids := sourceMessageIDsForSubmission(sub)
-	a.clearMessageProcessingReactions(ids)
-	a.markMessagesTypingReactions(ids)
+	newPendingQueueService(s.app).clearMessageProcessingReactions(ids)
+	newPendingQueueService(s.app).markMessagesTypingReactions(ids)
 }
 
-func (a *App) clearSubmissionProcessingReactions(sub *state.Submission) {
-	a.clearMessageProcessingReactions(sourceMessageIDsForSubmission(sub))
+func (s pendingQueueService) clearSubmissionProcessingReactions(sub *state.Submission) {
+	newPendingQueueService(s.app).clearMessageProcessingReactions(sourceMessageIDsForSubmission(sub))
 }
 
-func (a *App) markMessagesQueuedReactions(messageIDs []string) {
-	a.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		return a.feishu.AddReaction(ctx, messageID, queueReactionEmoji)
+func (s pendingQueueService) markMessagesQueuedReactions(messageIDs []string) {
+	newPendingQueueService(s.app).forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
+		return s.app.feishu.AddReaction(ctx, messageID, queueReactionEmoji)
 	})
 }
 
-func (a *App) markMessagesTypingReactions(messageIDs []string) {
-	a.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		return a.feishu.AddReaction(ctx, messageID, typingReactionEmoji)
+func (s pendingQueueService) markMessagesTypingReactions(messageIDs []string) {
+	newPendingQueueService(s.app).forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
+		return s.app.feishu.AddReaction(ctx, messageID, typingReactionEmoji)
 	})
 }
 
-func (a *App) markMessagesDiscardedReactions(messageIDs []string) {
-	a.clearMessageProcessingReactions(messageIDs)
-	a.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		return a.feishu.AddReaction(ctx, messageID, discardReactionEmoji)
+func (s pendingQueueService) markMessagesDiscardedReactions(messageIDs []string) {
+	newPendingQueueService(s.app).clearMessageProcessingReactions(messageIDs)
+	newPendingQueueService(s.app).forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
+		return s.app.feishu.AddReaction(ctx, messageID, discardReactionEmoji)
 	})
 }
 
-func (a *App) clearMessageProcessingReactions(messageIDs []string) {
-	a.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		if err := a.feishu.RemoveReaction(ctx, messageID, queueReactionEmoji); err != nil {
+func (s pendingQueueService) clearMessageProcessingReactions(messageIDs []string) {
+	newPendingQueueService(s.app).forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
+		if err := s.app.feishu.RemoveReaction(ctx, messageID, queueReactionEmoji); err != nil {
 			return err
 		}
-		return a.feishu.RemoveReaction(ctx, messageID, typingReactionEmoji)
+		return s.app.feishu.RemoveReaction(ctx, messageID, typingReactionEmoji)
 	})
 }
 
-func (a *App) forEachMessageID(messageIDs []string, fn func(context.Context, string) error) {
-	if a == nil || a.feishu == nil || fn == nil {
+func (s pendingQueueService) forEachMessageID(messageIDs []string, fn func(context.Context, string) error) {
+	if s.app == nil || s.app.feishu == nil || fn == nil {
 		return
 	}
 	ids := uniqueStrings(messageIDs)

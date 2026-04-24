@@ -44,7 +44,7 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = defaultWorkspaceID
 	}
-	discarded := a.discardSessionPendingInputs(sessionKey)
+	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
 	sess = appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
@@ -252,7 +252,7 @@ func renderThreadSettingValue(override, fallback string) string {
 
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := a.makeSessionKey(msg)
-	discarded := a.discardSessionPendingInputs(sessionKey)
+	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
 	sess := a.appState().session(sessionKey)
 	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
 	if sess == nil {

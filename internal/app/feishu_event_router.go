@@ -106,8 +106,8 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if replyLink != nil {
 		targetSessionKey = a.sessionKeyForInboundMessage(msg, replyLink)
 	}
-	if a.shouldStageInboundImages(msg) {
-		if err := a.stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
+	if newPendingQueueService(a).shouldStageInboundImages(msg) {
+		if err := newPendingQueueService(a).stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
 			return err
 		}
 		return nil
@@ -139,7 +139,7 @@ func (r *feishuEventRouter) handleRecall(recall *feishu.MessageRecall) {
 	if recall == nil || strings.TrimSpace(recall.MessageID) == "" {
 		return
 	}
-	if discarded := a.discardPendingInputByMessageID(recall.MessageID); discarded {
+	if discarded := newPendingQueueService(a).discardPendingInputByMessageID(recall.MessageID); discarded {
 		slog.Debug("feishu recall discarded pending input", "message_id", recall.MessageID, "chat_id", recall.ChatID)
 	}
 }
@@ -152,7 +152,7 @@ func (r *feishuEventRouter) handleReaction(reaction *feishu.MessageReaction) {
 	if !strings.EqualFold(strings.TrimSpace(reaction.EmojiType), discardReactionEmoji) {
 		return
 	}
-	if discarded := a.discardPendingInputByMessageID(reaction.MessageID); discarded {
+	if discarded := newPendingQueueService(a).discardPendingInputByMessageID(reaction.MessageID); discarded {
 		slog.Debug("feishu reaction discarded pending input",
 			"message_id", reaction.MessageID,
 			"chat_id", reaction.ChatID,
