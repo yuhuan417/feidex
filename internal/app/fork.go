@@ -59,5 +59,5 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 }
 
 func (s conversationWorkflowService) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" fork", "menu.thread")
+	return completeMenuCommand(s.app, action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" fork", "menu.thread")
 }

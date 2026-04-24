@@ -75,7 +75,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 		userID = strings.TrimSpace(action.UserID)
 	}
 	if messageID == "" {
-		return s.app.completeMenuCommand(action, sessionKey, "/compact", "menu.tools")
+		return completeMenuCommand(s.app, action, sessionKey, "/compact", "menu.tools")
 	}
 	runAsync(s.app, func() {
 		card := renderCompactAcceptedCard(s.app, sessionKey)
@@ -96,7 +96,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 
 func (s menuActionService) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	if !menuActionVisibleForBackend("menu.review", configuredBackend(s.app)) {
-		return s.app.completeMenuCommand(action, sessionKey, "/review", "menu.tools")
+		return completeMenuCommand(s.app, action, sessionKey, "/review", "menu.tools")
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
@@ -105,15 +105,15 @@ func (s menuActionService) completeMenuReview(action *feishu.CardAction, session
 }
 
 func (s menuActionService) completeMenuQuiet(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/quiet config", "menu.tools")
+	return completeMenuCommand(s.app, action, sessionKey, "/quiet config", "menu.tools")
 }
 
 func (s menuActionService) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/usage", "menu.tools")
+	return completeMenuCommand(s.app, action, sessionKey, "/usage", "menu.tools")
 }
 
 func (s menuActionService) completeMenuSkills(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/skills", "menu.tools")
+	return completeMenuCommand(s.app, action, sessionKey, "/skills", "menu.tools")
 }
 
 func (s menuActionService) completeQuietSet(action *feishu.CardAction, mode config.QuietMode) (*callback.CardActionTriggerResponse, error) {
@@ -128,19 +128,19 @@ func (s menuActionService) completeQuietSet(action *feishu.CardAction, mode conf
 }
 
 func (s menuActionService) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/model", "menu.group.model")
+	return completeMenuCommand(s.app, action, sessionKey, "/model", "menu.group.model")
 }
 
 func (s menuActionService) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/status", "menu.group.system")
+	return completeMenuCommand(s.app, action, sessionKey, "/status", "menu.group.system")
 }
 
 func (s menuActionService) completeMenuHelp(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/help", "menu.group.system")
+	return completeMenuCommand(s.app, action, sessionKey, "/help", "menu.group.system")
 }
 
 func (s menuActionService) completeMenuHistory(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/history", "menu.tools")
+	return completeMenuCommand(s.app, action, sessionKey, "/history", "menu.tools")
 }
 
 func (s menuActionService) completeHistoryPage(action *feishu.CardAction, sessionKey string, page int) (*callback.CardActionTriggerResponse, error) {
@@ -164,7 +164,7 @@ func (s menuActionService) completeHistoryDetail(action *feishu.CardAction, sess
 }
 
 func (s menuActionService) completeMenuFast(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/fast config", "menu.group.model")
+	return completeMenuCommand(s.app, action, sessionKey, "/fast config", "menu.group.model")
 }
 
 func (s menuActionService) completeServiceTierSet(action *feishu.CardAction, sessionKey, threadID, serviceTier string) (*callback.CardActionTriggerResponse, error) {
@@ -182,7 +182,7 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 	if action != nil && strings.TrimSpace(action.MessageID) != "" {
 		messageID := strings.TrimSpace(action.MessageID)
 		go func() {
-			_, card, err := s.app.runCommandFromCardAction(action, sessionKey, "/upgrade")
+			_, card, err := runCommandFromCardAction(s.app, action, sessionKey, "/upgrade")
 			if err != nil {
 				slog.Warn("upgrade panel render failed",
 					"session_key", sessionKey,
@@ -208,7 +208,7 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 			Card:  rawCard(newAppUpgradeService(s.app).renderUpgradePreparingCard(sessionKey)),
 		}, nil
 	}
-	return s.app.completeMenuCommand(action, sessionKey, "/upgrade", "menu.group.system")
+	return completeMenuCommand(s.app, action, sessionKey, "/upgrade", "menu.group.system")
 }
 
 func (s menuActionService) completeUpgradeDev(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

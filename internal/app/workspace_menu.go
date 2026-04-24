@@ -79,7 +79,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		}
 		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {
-			return s.app.replyCommandActionResponse(msg, &callback.CardActionTriggerResponse{
+			return replyCommandActionResponse(s.app, msg, &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneSwitchExistingCard(sessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir)),
 			})
@@ -118,7 +118,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	}
 	if args[0] == "policy" {
 		if len(args) == 1 {
@@ -135,7 +135,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	}
 	if len(args) >= 2 && args[0] == "use" {
 		appState := appState(s.app)

@@ -78,7 +78,7 @@ func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context,
 	if updated != nil {
 		sub = updated
 	}
-	s.app.sendSubmissionStartedNotice(ctx, sub)
+	sendSubmissionStartedNotice(s.app, ctx, sub)
 }
 
 func (s turnStreamService) updatePendingPlan(turnID, plan string) {

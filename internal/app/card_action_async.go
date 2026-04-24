@@ -32,11 +32,11 @@ func (a *App) completeAsyncCommandAction(
 	patchWarnMsg string,
 ) (*callback.CardActionTriggerResponse, error) {
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return a.completeMenuCommand(action, sessionKey, rawCommand, fallbackAction)
+		return completeMenuCommand(a, action, sessionKey, rawCommand, fallbackAction)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
 	runAsync(a, func() {
-		text, card, err := a.runCommandFromCardAction(action, sessionKey, rawCommand)
+		text, card, err := runCommandFromCardAction(a, action, sessionKey, rawCommand)
 		switch {
 		case err != nil:
 			card = failureCard(sessionKey, err.Error())

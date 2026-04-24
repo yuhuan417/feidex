@@ -11,11 +11,11 @@ import (
 )
 
 func (s threadActionService) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(configuredBackend(s.app)), "menu.root")
+	return completeMenuCommand(s.app, action, sessionKey, primaryConversationSlash(configuredBackend(s.app)), "menu.root")
 }
 
 func (s threadActionService) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" new", "menu.thread")
+	return completeMenuCommand(s.app, action, sessionKey, primaryConversationSlash(configuredBackend(s.app))+" new", "menu.thread")
 }
 
 func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
@@ -29,19 +29,19 @@ func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, se
 	if actions := backendActions(s.app); actions != nil {
 		return actions.completeMenuInterrupt(s.app, action, sessionKey, targetTurnID)
 	}
-	return s.app.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
+	return completeMenuCommand(s.app, action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
 }
 
 func (s threadActionService) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/thread sandbox", "menu.thread")
+	return completeMenuCommand(s.app, action, sessionKey, "/thread sandbox", "menu.thread")
 }
 
 func (s threadActionService) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/thread policy", "menu.thread")
+	return completeMenuCommand(s.app, action, sessionKey, "/thread policy", "menu.thread")
 }
 
 func (s threadActionService) completeClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/session permissions", "menu.thread")
+	return completeMenuCommand(s.app, action, sessionKey, "/session permissions", "menu.thread")
 }
 
 func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {

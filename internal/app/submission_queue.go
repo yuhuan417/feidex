@@ -141,7 +141,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 		}
 	}
 	newPendingQueueService(a).markSubmissionQueuedReactions(sub)
-	a.sendSubmissionQueuedNotice(context.Background(), sub)
+	sendSubmissionQueuedNotice(a, context.Background(), sub)
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (w *lifecycleCoordinator) notifySubmissionStartFailure(ctx context.Context,
 	} else {
 		body += "\n\n本条消息未开始执行，可稍后重试。"
 	}
-	inThread := a.replyInThreadForSubmission(sub)
+	inThread := replyInThreadForSubmission(a, sub)
 	if strings.TrimSpace(sub.TriggerMessageID) != "" {
 		if replyErr := a.feishu.ReplyText(ctx, sub.TriggerMessageID, body, inThread); replyErr == nil {
 			return

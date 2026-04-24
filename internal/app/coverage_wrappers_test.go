@@ -362,7 +362,7 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
 	sub := a.store.GetSubmission(subID)
-	if !a.replyInThreadForSubmission(sub) {
+	if !replyInThreadForSubmission(a, sub) {
 		t.Fatal("replyInThreadForSubmission() should be true for group session")
 	}
 	if got := newOutboundCardService(a).sendPlanCard(context.Background(), sub, "  do thing  "); got != "reply-card-id" {

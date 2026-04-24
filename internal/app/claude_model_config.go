@@ -308,7 +308,7 @@ func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args 
 			if err != nil {
 				return err
 			}
-			return s.app.replyCommandActionResponse(msg, resp)
+			return replyCommandActionResponse(s.app, msg, resp)
 		case "effort":
 			if len(args) != 2 {
 				return fmt.Errorf("usage: %s", modelCommandUsage)
@@ -321,7 +321,7 @@ func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args 
 			if err != nil {
 				return err
 			}
-			return s.app.replyCommandActionResponse(msg, resp)
+			return replyCommandActionResponse(s.app, msg, resp)
 		default:
 			return fmt.Errorf("usage: %s", modelCommandUsage)
 		}

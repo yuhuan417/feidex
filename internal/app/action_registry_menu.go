@@ -53,7 +53,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newConversationWorkflowService(s.app).completeMenuReviewCommit(action, actionSessionKey(action))
 	},
 	"menu.review.custom": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuCommand(action, actionSessionKey(action), "/review custom", "menu.review")
+		return completeMenuCommand(s.app, action, actionSessionKey(action), "/review custom", "menu.review")
 	},
 	"menu.fork": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newConversationWorkflowService(s.app).completeMenuFork(action, actionSessionKey(action))
@@ -86,7 +86,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuBackendSwitch(action, actionSessionKey(action))
 	},
 	"menu.auto_retry": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuCommand(action, actionSessionKey(action), "/backend retry", "menu.group.backend")
+		return completeMenuCommand(s.app, action, actionSessionKey(action), "/backend retry", "menu.group.backend")
 	},
 	"menu.help": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuHelp(action, actionSessionKey(action))

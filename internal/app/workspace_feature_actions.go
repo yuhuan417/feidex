@@ -17,7 +17,7 @@ import (
 )
 
 func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/workspace", "menu.root")
+	return completeMenuCommand(a, action, sessionKey, "/workspace", "menu.root")
 }
 
 func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
@@ -58,7 +58,7 @@ func (s workspaceActionService) completeWorkspaceUseExisting(action *feishu.Card
 }
 
 func (s workspaceActionService) completeWorkspaceNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/workspace new", "menu.workspace")
+	return completeMenuCommand(s.app, action, sessionKey, "/workspace new", "menu.workspace")
 }
 
 func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -67,7 +67,7 @@ func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	msg := s.app.commandMessageFromAction(action, sessionKey, "")
+	msg := commandMessageFromAction(s.app, action, sessionKey, "")
 	_, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	payload := workspaceClonePayload{
 		RootPath:          newWorkspaceManagementService(s.app).defaultWorkspaceCloneRoot(ws),
@@ -140,7 +140,7 @@ func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.Car
 	payload := mergeWorkspaceCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
 	currentPath := strings.TrimSpace(payload.SelectedParentDir)
 	if currentPath == "" {
-		msg := s.app.commandMessageFromAction(action, pending.SessionKey, "")
+		msg := commandMessageFromAction(s.app, action, pending.SessionKey, "")
 		_, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 		currentPath = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), "/")
 	}
@@ -298,7 +298,7 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
-	msg := s.app.commandMessageFromAction(action, pending.SessionKey, "")
+	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "")
 	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
@@ -385,15 +385,15 @@ func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.Card
 }
 
 func (s workspaceActionService) completeWorkspaceSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/workspace sandbox", "menu.workspace")
+	return completeMenuCommand(s.app, action, sessionKey, "/workspace sandbox", "menu.workspace")
 }
 
 func (s workspaceActionService) completeWorkspacePolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/workspace policy", "menu.workspace")
+	return completeMenuCommand(s.app, action, sessionKey, "/workspace policy", "menu.workspace")
 }
 
 func (s workspaceActionService) completeClaudeWorkspacePermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/workspace permissions", "menu.workspace")
+	return completeMenuCommand(s.app, action, sessionKey, "/workspace permissions", "menu.workspace")
 }
 
 func (a *App) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {

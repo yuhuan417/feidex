@@ -39,7 +39,7 @@ func (codexBackendActions) runMenuCompactAction(a *App, action *feishu.CardActio
 	if a == nil {
 		return nil
 	}
-	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
+	msg := commandMessageFromAction(a, action, sessionKey, "/compact")
 	sessionKey = firstNonEmpty(makeSessionKey(a, msg), strings.TrimSpace(sessionKey))
 	_, err := a.startThreadCompaction(sessionKey)
 	return err
@@ -57,7 +57,7 @@ func (codexBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMessa
 
 func (codexBackendActions) completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	parentAction := actionStringValue(action, "parent_action")
-	return a.completeMenuCommand(action, sessionKey, "/stop", parentAction)
+	return completeMenuCommand(a, action, sessionKey, "/stop", parentAction)
 }
 
 type claudeBackendActions struct{}
@@ -66,7 +66,7 @@ func (claudeBackendActions) runMenuCompactAction(a *App, action *feishu.CardActi
 	if a == nil {
 		return nil
 	}
-	msg := a.commandMessageFromAction(action, sessionKey, "/compact")
+	msg := commandMessageFromAction(a, action, sessionKey, "/compact")
 	return enqueueSubmission(a, msg)
 }
 

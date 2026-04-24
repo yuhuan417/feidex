@@ -57,7 +57,7 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 }
 
 func (s conversationWorkflowService) completeMenuDownload(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/download", "menu.tools")
+	return completeMenuCommand(s.app, action, sessionKey, "/download", "menu.tools")
 }
 
 func newDownloadPathPickerPayload(ws *config.Workspace) (pathPickerPayload, error) {

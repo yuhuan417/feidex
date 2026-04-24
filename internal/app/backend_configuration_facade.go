@@ -147,7 +147,7 @@ func (c claudeBackendConfigurationFacade) handleWorkspacePermissionCommand(msg *
 	if err != nil {
 		return err
 	}
-	return c.app.replyCommandActionResponse(msg, resp)
+	return replyCommandActionResponse(c.app, msg, resp)
 }
 
 func (c claudeBackendConfigurationFacade) appendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {

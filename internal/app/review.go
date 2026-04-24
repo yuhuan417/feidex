@@ -210,7 +210,7 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 		}
 	}
 	newPendingQueueService(a).markSubmissionQueuedReactions(sub)
-	a.sendSubmissionQueuedNotice(context.Background(), sub)
+	sendSubmissionQueuedNotice(a, context.Background(), sub)
 	return nil
 }
 

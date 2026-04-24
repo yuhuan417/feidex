@@ -817,7 +817,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 					}
 				}
 				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
-				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
+				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, replyInThreadForSubmission(r.app, sub), reuseMessageIDs)
 				if len(results) > 0 {
 					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
 				} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {
@@ -842,7 +842,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
 				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
-				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
+				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, replyInThreadForSubmission(r.app, sub), reuseMessageIDs)
 				if len(results) > 0 {
 					newTurnStreamService(r.app).markTurnStreamFinal(turn.TurnID)
 				} else if !finalizeClaudeOutputSegment(r.app, context.Background(), threadID, turn.TurnID, finalText) {

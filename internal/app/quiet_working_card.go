@@ -119,7 +119,7 @@ func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submissi
 		if strings.TrimSpace(op.Body) == "" {
 			return
 		}
-		messageID, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
+		messageID, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(a, sub))
 		if err != nil || strings.TrimSpace(messageID) == "" {
 			slog.Warn("send quiet working card failed",
 				"turn_id", op.TurnID,
@@ -127,7 +127,7 @@ func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submissi
 			)
 			return
 		}
-		a.recordMessageLink(messageID, "turn_working", sub, "")
+		recordMessageLink(a, messageID, "turn_working", sub, "")
 		a.commitQuietWorkingCardRender(op.TurnID, messageID, op.Body)
 		return
 	}

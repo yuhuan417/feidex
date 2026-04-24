@@ -67,7 +67,7 @@ func (s debugService) commandDebug(msg *feishu.InboundMessage, args []string) er
 }
 
 func (s debugService) completeMenuDebug(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/debug", "menu.group.system")
+	return completeMenuCommand(s.app, action, sessionKey, "/debug", "menu.group.system")
 }
 
 func (s debugService) commandDebugLogs(msg *feishu.InboundMessage, args []string) error {
@@ -88,7 +88,7 @@ func (s debugService) commandDebugLogs(msg *feishu.InboundMessage, args []string
 }
 
 func (s debugService) completeMenuDebugLogs(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.completeMenuCommand(action, sessionKey, "/debug logs", "menu.group.system")
+	return completeMenuCommand(s.app, action, sessionKey, "/debug logs", "menu.group.system")
 }
 
 func (s debugService) debugAccessAllowed(userID string) bool {

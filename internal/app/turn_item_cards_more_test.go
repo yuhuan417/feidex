@@ -165,7 +165,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	}
 
 	before := len(ff.replyCards)
-	a.sendSubmissionQueuedNotice(context.Background(), sub)
+	sendSubmissionQueuedNotice(a, context.Background(), sub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("sendSubmissionQueuedNotice() replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}
@@ -241,7 +241,7 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 		t.Fatalf("sendTurnEventCardWithReuse(reuse fallback) = %q", got)
 	}
 
-	if got := (&App{}).replyInThreadForSubmission(nil); got {
+	if got := replyInThreadForSubmission(&App{}, nil); got {
 		t.Fatal("replyInThreadForSubmission(nil) should be false")
 	}
 }

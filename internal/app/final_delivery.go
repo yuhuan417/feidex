@@ -28,15 +28,15 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 	appendReplyCardFooter(card, footerLines)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
-			a.recordMessageLink(reuseMessageID, "final_message", sub, "")
+			recordMessageLink(a, reuseMessageID, "final_message", sub, "")
 			return reuseMessageID
 		}
 	}
-	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, a.replyInThreadForSubmission(sub))
+	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(a, sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		return ""
 	}
-	a.recordMessageLink(id, "final_message", sub, "")
+	recordMessageLink(a, id, "final_message", sub, "")
 	return id
 }
 
@@ -65,7 +65,7 @@ func (a *App) sendFinalMessagesWithFooterAndReuse(ctx context.Context, sub *stat
 		return nil
 	}
 	for _, result := range results {
-		a.recordMessageLink(result.MessageID, "final_message", sub, "")
+		recordMessageLink(a, result.MessageID, "final_message", sub, "")
 		if result.CardID != "" {
 			newFinalCardPatchService(a).registerFinalCardPatchState(result.CardID, sub, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 			a.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)

@@ -6,7 +6,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) recordMessageLink(messageID, kind string, sub *state.Submission, requestID string) {
+func recordMessageLink(a *App, messageID, kind string, sub *state.Submission, requestID string) {
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}

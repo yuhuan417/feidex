@@ -9,7 +9,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
+func replyInThreadForSubmission(a *App, sub *state.Submission) bool {
 	if sub == nil {
 		return false
 	}
@@ -17,18 +17,18 @@ func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
 	return sess != nil && sess.ChatType == "group" && replyInThreadEnabled(a, sess.ChatType)
 }
 
-func (a *App) sendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {
+func sendSubmissionQueuedNotice(a *App, ctx context.Context, sub *state.Submission) {
 	if sub == nil {
 		return
 	}
-	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", a.replyInThreadForSubmission(sub), "turn_queued")
+	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(a, sub), "turn_queued")
 }
 
-func (a *App) sendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
+func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *state.Submission) {
 	if sub == nil {
 		return
 	}
-	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", a.replyInThreadForSubmission(sub), "turn_started")
+	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(a, sub), "turn_started")
 }
 
 func (s outboundCardService) sendPlanCard(ctx context.Context, sub *state.Submission, planText string) string {
@@ -84,7 +84,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			replyTurnItemCardTitle(payload),
 			payload.Color,
 			appdelivery.BuildReplyCardChunks(body, payload.IsFinalAnswer, footerLines),
-			s.app.replyInThreadForSubmission(sub),
+			replyInThreadForSubmission(s.app, sub),
 			payload.IsFinalAnswer,
 			reuseMessageID,
 		)
@@ -94,14 +94,14 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 				fallback = payload.DetailText
 			}
 			if payload.IsFinalAnswer {
-				sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, s.app.replyInThreadForSubmission(sub))
+				sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(s.app, sub))
 			} else {
-				sendTurnEventMessages(s.app, ctx, sub, fallback, s.app.replyInThreadForSubmission(sub), kind)
+				sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(s.app, sub), kind)
 			}
 			return ""
 		}
 		for _, result := range results {
-			s.app.recordMessageLink(result.MessageID, kind, sub, payload.ItemID)
+			recordMessageLink(s.app, result.MessageID, kind, sub, payload.ItemID)
 			if payload.IsFinalAnswer && result.CardID != "" {
 				s.app.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, payload.Color, result.ShowHeader, result.Body, result.FooterLines)
 			}
@@ -111,24 +111,24 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	card := newOutboundCardService(s.app).renderTurnItemCard(ctx, sub, payload, payload.IsFinalAnswer)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
-			s.app.recordMessageLink(reuseMessageID, kind, sub, payload.ItemID)
+			recordMessageLink(s.app, reuseMessageID, kind, sub, payload.ItemID)
 			return reuseMessageID
 		}
 	}
-	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, s.app.replyInThreadForSubmission(sub))
+	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
 		if fallback == "" {
 			fallback = payload.DetailText
 		}
 		if payload.IsFinalAnswer {
-			sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, s.app.replyInThreadForSubmission(sub))
+			sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(s.app, sub))
 		} else {
-			sendTurnEventMessages(s.app, ctx, sub, fallback, s.app.replyInThreadForSubmission(sub), kind)
+			sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(s.app, sub), kind)
 		}
 		return ""
 	}
-	s.app.recordMessageLink(id, kind, sub, payload.ItemID)
+	recordMessageLink(s.app, id, kind, sub, payload.ItemID)
 	return id
 }
 
@@ -147,7 +147,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 	if strings.TrimSpace(reuseMessageID) != "" {
 		card := cardRendererForApp(s.app).renderCompactMarkdownCard(sub, title, color, "", body, nil)
 		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
-			s.app.recordMessageLink(reuseMessageID, kind, sub, itemID)
+			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
 		}
 	}
@@ -168,16 +168,16 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	card := cardRendererForApp(s.app).renderCompactMarkdownCard(sub, title, color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
-			s.app.recordMessageLink(reuseMessageID, kind, sub, itemID)
+			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
 		}
 	}
-	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, s.app.replyInThreadForSubmission(sub))
+	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
 	if err != nil || strings.TrimSpace(id) == "" {
-		sendTurnEventMessages(s.app, ctx, sub, body, s.app.replyInThreadForSubmission(sub), kind)
+		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(s.app, sub), kind)
 		return ""
 	}
-	s.app.recordMessageLink(id, kind, sub, itemID)
+	recordMessageLink(s.app, id, kind, sub, itemID)
 	return id
 }
 

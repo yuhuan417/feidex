@@ -733,5 +733,5 @@ func (s autoRetryService) commandAutoRetry(msg *feishu.InboundMessage, args []st
 	if err != nil {
 		return err
 	}
-	return s.app.replyCommandActionResponse(msg, resp)
+	return replyCommandActionResponse(s.app, msg, resp)
 }

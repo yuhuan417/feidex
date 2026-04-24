@@ -138,7 +138,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	case "sandbox":
 		if len(args) == 1 {
 			return s.app.showThreadSandboxMenu(msg)
@@ -154,7 +154,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	case "policy":
 		if len(args) == 1 {
 			return s.app.showThreadPolicyMenu(msg)
@@ -170,7 +170,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	default:
 		return fmt.Errorf("usage: %s", threadCommandUsage)
 	}
@@ -212,7 +212,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	case "permissions":
 		if len(args) == 1 {
 			return s.app.showClaudeSessionPermissionMenu(msg)
@@ -228,7 +228,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		if err != nil {
 			return err
 		}
-		return s.app.replyCommandActionResponse(msg, resp)
+		return replyCommandActionResponse(s.app, msg, resp)
 	default:
 		return fmt.Errorf("usage: %s", claudeSessionCommandUsage)
 	}
