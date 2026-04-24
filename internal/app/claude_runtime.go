@@ -981,7 +981,7 @@ func (r *claudeRuntime) handleAskUserQuestion(ctx context.Context, state *claude
 		return nil, fmt.Errorf("no active submission for question")
 	}
 	requestID := "claude-question-" + strings.TrimSpace(turnID)
-	if nextID, err := r.app.appState().nextLocalID("claude-question"); err == nil && strings.TrimSpace(nextID) != "" {
+	if nextID, err := appState(r.app).nextLocalID("claude-question"); err == nil && strings.TrimSpace(nextID) != "" {
 		requestID = nextID
 	}
 	payload := toolUserInputPayload{
@@ -1040,7 +1040,7 @@ func (r *claudeRuntime) handleExitPlanMode(ctx context.Context, state *claudeSes
 	workspaceID = firstNonEmpty(strings.TrimSpace(sub.WorkspaceID), workspaceID)
 	plan = enrichClaudePlanForDisplay(plan, planFilePath, workspaceCwd(r.app.cfg, workspaceID), startedAt)
 	requestID := "claude-plan-" + strings.TrimSpace(turnID)
-	if nextID, err := r.app.appState().nextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
+	if nextID, err := appState(r.app).nextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
 		requestID = nextID
 	}
 	if err := r.app.sendClaudePlanModeCard(requestID, sessionKey, sub, threadID, turnID, claudePlanModeBody(plan)); err != nil {
@@ -1113,7 +1113,7 @@ func (r *claudeRuntime) permissionModeForSession(ctx context.Context, sessionKey
 	_ = sessionKey
 	var sess *state.Session
 	if r != nil && r.app != nil && r.app.store != nil {
-		sess = r.app.appState().session(sessionKey)
+		sess = appState(r.app).session(sessionKey)
 	}
 	return claudePermissionModeValue(effectiveClaudePermissionMode(sess, ws, cfg))
 }

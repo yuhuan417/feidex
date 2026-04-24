@@ -13,7 +13,7 @@ func (a *App) replyInThreadForSubmission(sub *state.Submission) bool {
 	if sub == nil {
 		return false
 	}
-	sess := a.appState().session(sub.SessionKey)
+	sess := appState(a).session(sub.SessionKey)
 	return sess != nil && sess.ChatType == "group" && replyInThreadEnabled(a, sess.ChatType)
 }
 
@@ -145,7 +145,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 		return ""
 	}
 	if strings.TrimSpace(reuseMessageID) != "" {
-		card := s.app.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", body, nil)
+		card := cardRendererForApp(s.app).renderCompactMarkdownCard(sub, title, color, "", body, nil)
 		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
 			s.app.recordMessageLink(reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
@@ -165,7 +165,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	if body == "" {
 		return ""
 	}
-	card := s.app.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", body, nil)
+	card := cardRendererForApp(s.app).renderCompactMarkdownCard(sub, title, color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
 			s.app.recordMessageLink(reuseMessageID, kind, sub, itemID)
@@ -183,10 +183,10 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 
 func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, enablePreview bool) map[string]any {
 	if isReplyTurnItem(payload.ItemType) {
-		return s.app.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
+		return cardRendererForApp(s.app).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
 	}
 	meta, body := compactTurnItemCardContent(payload)
-	return s.app.cardRenderer().renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
+	return cardRendererForApp(s.app).renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
 }
 
 func isReplyTurnItem(itemType string) bool {

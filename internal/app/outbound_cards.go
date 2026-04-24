@@ -33,7 +33,7 @@ type cardRenderer struct {
 	app *App
 }
 
-func (a *App) cardRenderer() cardRenderer {
+func cardRendererForApp(a *App) cardRenderer {
 	return cardRenderer{app: a}
 }
 

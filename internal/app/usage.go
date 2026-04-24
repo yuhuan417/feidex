@@ -205,10 +205,10 @@ func (s usageService) commandUsage(msg *feishu.InboundMessage, args []string) er
 }
 
 func (s usageService) renderUsageCard(sessionKey string) map[string]any {
-	sess := s.app.appState().session(sessionKey)
+	sess := appState(s.app).session(sessionKey)
 	body := primaryConversationMissingLabel(configuredBackend(s.app)) + "。"
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		body = s.app.conversationBackend().renderUsageBody(sess)
+		body = conversationBackend(s.app).renderUsageBody(sess)
 	}
 	return s.app.feishu.SimpleStatusCard("Token Usage", "blue", menuCardBody("menu.usage", body), []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},

@@ -122,7 +122,7 @@ func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessag
 	if got := len(ff.sendCards); got != 0 {
 		t.Fatalf("permission diagnostic send cards before inbound = %d, want 0", got)
 	}
-	if got := a.appState().frontendCardNotifications(); len(got) != 1 || !strings.Contains(got[0].Body, "drive.file.list") {
+	if got := appState(a).frontendCardNotifications(); len(got) != 1 || !strings.Contains(got[0].Body, "drive.file.list") {
 		t.Fatalf("frontendCardNotifications() = %+v", got)
 	}
 
@@ -141,7 +141,7 @@ func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessag
 	if got, want := ff.sendCardChatIDs, []string{"chat-next"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("permission diagnostic chat ids after inbound = %#v, want %#v", got, want)
 	}
-	if got := a.appState().frontendCardNotifications(); len(got) != 0 {
+	if got := appState(a).frontendCardNotifications(); len(got) != 0 {
 		t.Fatalf("frontendCardNotifications() after inbound = %+v, want empty", got)
 	}
 }
@@ -171,7 +171,7 @@ func TestRunDriveArtifactGCQueuesOnlyOneDeferredPermissionIssue(t *testing.T) {
 	}
 	newRuntimeMaintenanceService(a).runDriveArtifactGC("test")
 
-	got := a.appState().frontendCardNotifications()
+	got := appState(a).frontendCardNotifications()
 	if len(got) != 1 {
 		t.Fatalf("frontendCardNotifications() len = %d, want 1", len(got))
 	}

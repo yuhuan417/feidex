@@ -155,7 +155,7 @@ func (a *App) Stop(ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	return a.currentBackendRuntimeHandle().close()
+	return currentBackendRuntimeHandle(a).close()
 }
 
 func (a *App) runAsync(fn func()) {

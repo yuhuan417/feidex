@@ -61,7 +61,7 @@ func (s backendUpgradeService) completeCodexUpgradeAsyncAction(action *feishu.Ca
 }
 
 func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID := actionStringValue(action, "request_id")
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != codexUpgradePendingKind || strings.TrimSpace(pending.Status) != "pending" {

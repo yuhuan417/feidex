@@ -24,7 +24,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), kind) {
 		return nil
 	}
-	appState := a.appState()
+	appState := appState(a)
 	enablePreview := strings.TrimSpace(kind) == "final_message"
 	if !enablePreview {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
@@ -58,7 +58,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 		return ids
 	}
 
-	card := a.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", text, nil)
+	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, title, color, "", text, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
 			_ = appState.saveMessageLink(&state.MessageLink{

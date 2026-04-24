@@ -56,7 +56,7 @@ func (s historyService) commandHistory(msg *feishu.InboundMessage, args []string
 }
 
 func (s historyService) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return s.app.conversationBackend().historyIndexForOrdinal(sessionKey, ordinal)
+	return conversationBackend(s.app).historyIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (s historyService) codexHistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
@@ -73,7 +73,7 @@ func (s historyService) codexHistoryIndexForOrdinal(sessionKey string, ordinal i
 }
 
 func (s historyService) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return s.app.conversationBackend().renderHistoryCard(sessionKey, page)
+	return conversationBackend(s.app).renderHistoryCard(sessionKey, page)
 }
 
 func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map[string]any, error) {
@@ -179,7 +179,7 @@ func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map
 }
 
 func (s historyService) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return s.app.conversationBackend().renderHistoryDetailCard(sessionKey, index)
+	return conversationBackend(s.app).renderHistoryDetailCard(sessionKey, index)
 }
 
 func (s historyService) renderCodexHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
@@ -261,7 +261,7 @@ func (s historyService) fetchCurrentThreadHistory(sessionKey string) (*state.Ses
 	if s.app == nil || s.app.store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}
-	sess := s.app.appState().session(sessionKey)
+	sess := appState(s.app).session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
 	}

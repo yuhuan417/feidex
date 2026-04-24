@@ -18,7 +18,7 @@ func (a *App) recoverRuntimeState() {
 
 func (a *App) recoverSharedRuntimeState() {
 	a.resetLiveThreadState()
-	appState := a.appState()
+	appState := appState(a)
 	sessions := appState.sessions()
 	cleared := 0
 	for _, sess := range sessions {
@@ -72,7 +72,7 @@ func (a *App) recoverFrontendRuntimeState() {
 		return
 	}
 	endBackendRecovery := func() {}
-	if runtime := a.backendRuntime(); runtime != nil {
+	if runtime := backendRuntime(a); runtime != nil {
 		endBackendRecovery = runtime.beginStartupRecoveryScope(a)
 	}
 	defer endBackendRecovery()
@@ -90,7 +90,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 	if a == nil || a.store == nil {
 		return
 	}
-	appState := a.appState()
+	appState := appState(a)
 	effectiveModel := configuredGlobalModel(a.cfg)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
@@ -127,7 +127,7 @@ func (a *App) recoverSessionThreadsOnStartup() {
 			a.clearSessionLiveThread(sessionKey)
 			continue
 		}
-		a.conversationBackend().recoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
+		conversationBackend(a).recoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
 	}
 }
 
@@ -170,7 +170,7 @@ func (a *App) sendStartupReadyNotifications() {
 	if a == nil || a.feishu == nil || a.store == nil {
 		return
 	}
-	chatIDs := a.startupReadyChatIDs(a.appState().sessions())
+	chatIDs := a.startupReadyChatIDs(appState(a).sessions())
 	if len(chatIDs) == 0 {
 		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return

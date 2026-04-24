@@ -70,7 +70,7 @@ func (a *App) reconcileCompletedCodexTurnFromFinalOutput(sessionKey string, sess
 			"status", turn.Status,
 		)
 		finishTurn(a, threadID, turnID, turn.Status)
-		return a.appState().session(sessionKey)
+		return appState(a).session(sessionKey)
 	}
 	return sess
 }

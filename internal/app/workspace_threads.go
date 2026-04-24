@@ -21,7 +21,7 @@ type workspaceThreadBinding struct {
 }
 
 func (s workspaceThreadService) listWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return s.app.conversationBackend().listWorkspaceThreads(sessionKey, ws, includeAll)
+	return conversationBackend(s.app).listWorkspaceThreads(sessionKey, ws, includeAll)
 }
 
 func (s workspaceThreadService) listCodexWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
@@ -85,7 +85,7 @@ func sortThreadsByUpdated(items []codexrpc.ThreadListEntry) {
 }
 
 func (s workspaceThreadService) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return s.app.conversationBackend().ensureWorkspaceThreadBinding(sessionKey, sess, ws)
+	return conversationBackend(s.app).ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (s workspaceThreadService) ensureClaudeWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
@@ -107,7 +107,7 @@ func (s workspaceThreadService) ensureClaudeWorkspaceThreadBinding(sessionKey st
 			setSessionThreadContext(sess, ws.ID, threadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
 			sessionResetActiveOperations(sess)
 			sess.Status = "idle"
-			if saveErr := s.app.appState().saveSession(sess); saveErr != nil {
+			if saveErr := appState(s.app).saveSession(sess); saveErr != nil {
 				return nil, saveErr
 			}
 			s.app.markSessionThreadLive(sessionKey, threadID)
@@ -166,7 +166,7 @@ func (s workspaceThreadService) ensureCodexWorkspaceThreadBinding(sessionKey str
 }
 
 func (s workspaceThreadService) resumeCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*workspaceThreadBinding, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	client, err := requireCodexClient(s.app)
 	if err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func (s workspaceThreadService) resumeCodexWorkspaceThread(sessionKey string, se
 }
 
 func (s workspaceThreadService) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return s.app.conversationBackend().startWorkspaceThread(sessionKey, sess, ws)
+	return conversationBackend(s.app).startWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (s workspaceThreadService) startClaudeWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
@@ -235,7 +235,7 @@ func (s workspaceThreadService) startClaudeWorkspaceThread(sessionKey string, se
 	setSessionThreadContext(sess, ws.ID, threadID, "Claude", firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
 	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
-	if err := s.app.appState().saveSession(sess); err != nil {
+	if err := appState(s.app).saveSession(sess); err != nil {
 		return nil, err
 	}
 	s.app.markSessionThreadLive(sessionKey, threadID)
@@ -252,7 +252,7 @@ func (s workspaceThreadService) startCodexWorkspaceThread(sessionKey string, ses
 	if err != nil {
 		return nil, err
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	effectiveModel := configuredGlobalModel(s.app.cfg)
 	threadParams := s.app.buildThreadStartParams(ws, sess, effectiveModel)
 	var result codexrpc.ThreadStartResult

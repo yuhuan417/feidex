@@ -64,7 +64,7 @@ func (s workspaceManagementService) beginWorkspaceNew(msg *feishu.InboundMessage
 }
 
 func (s workspaceManagementService) beginWorkspaceNewWithPayload(msg *feishu.InboundMessage, sessionKey string, payload workspaceNewPayload) error {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (s workspaceManagementService) beginWorkspaceNewWithPayload(msg *feishu.Inb
 }
 
 func (s workspaceManagementService) createWorkspaceNewPending(sessionKey, userID, feishuMsgID string, payload workspaceNewPayload) (string, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return "", err
@@ -270,7 +270,7 @@ func (s workspaceManagementService) workspaceByIDAndCWD(workspaceID, targetDir s
 }
 
 func (s workspaceManagementService) createWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	s.app.configMu.Lock()
 	if config.FindWorkspace(s.app.cfg, id) != nil {
 		s.app.configMu.Unlock()
@@ -322,7 +322,7 @@ func (s workspaceManagementService) createWorkspaceAndSwitch(sessionKey, userID,
 }
 
 func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	payload := workspaceNewPayloadFromPending(pending)
 	parts := strings.Fields(strings.TrimSpace(msg.Text))
 	if len(parts) < 1 {

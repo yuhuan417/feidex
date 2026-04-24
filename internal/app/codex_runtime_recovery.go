@@ -159,7 +159,7 @@ func (a *App) resumeQueuedFrontendSessionsAfterCodexRecovery() {
 	if a == nil || a.store == nil {
 		return
 	}
-	for _, sess := range a.appState().sessions() {
+	for _, sess := range appState(a).sessions() {
 		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}

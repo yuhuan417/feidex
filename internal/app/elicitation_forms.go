@@ -80,7 +80,7 @@ func (a *App) sendElicitationURLCard(requestID json.RawMessage, payload elicitat
 }
 
 func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+	appState := appState(a)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "mcp_elicitation_url" {

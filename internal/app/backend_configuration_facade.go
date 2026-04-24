@@ -27,8 +27,8 @@ type backendConfigurationFacade interface {
 	statusCardBody(sess *state.Session) string
 }
 
-func (a *App) backendConfiguration() backendConfigurationFacade {
-	if runtime := a.backendRuntime(); runtime != nil {
+func backendConfiguration(a *App) backendConfigurationFacade {
+	if runtime := backendRuntime(a); runtime != nil {
 		return runtime.configuration(a)
 	}
 	return codexBackendConfigurationFacade{app: a}

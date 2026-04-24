@@ -17,7 +17,7 @@ func (a *App) bindClaudeSessionThread(sessionKey, turnID, threadID string) {
 		return
 	}
 
-	appState := a.appState()
+	appState := appState(a)
 	var workspaceID string
 
 	if turnID != "" {

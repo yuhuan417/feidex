@@ -32,7 +32,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	if msg == nil {
 		return nil
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
@@ -121,7 +121,7 @@ func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bo
 	if messageID == "" {
 		return false
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	for _, snapshot := range appState.sessions() {
 		if snapshot == nil {
 			continue
@@ -147,7 +147,7 @@ func (s pendingQueueService) discardStagedImageFromSessionSnapshot(snapshot *sta
 	if s.app == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
 		return false
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	discarded := false
 	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
 		if current == nil {
@@ -169,7 +169,7 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 	if s.app == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
 		return false
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	discarded := false
 	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
 		if current == nil {
@@ -202,7 +202,7 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 }
 
 func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		return 0

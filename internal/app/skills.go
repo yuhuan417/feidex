@@ -71,7 +71,7 @@ func (s skillsService) currentWorkspaceForSessionKey(sessionKey string) (*config
 		return nil, fmt.Errorf("当前没有可用工作区")
 	}
 	workspaceID := defaultWorkspaceID(s.app)
-	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	if sess := appState(s.app).session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = strings.TrimSpace(sess.WorkspaceID)
 	}
 	ws := config.FindWorkspace(s.app.cfg, workspaceID)

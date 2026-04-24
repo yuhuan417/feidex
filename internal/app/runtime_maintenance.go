@@ -75,7 +75,7 @@ func (s runtimeMaintenanceService) cleanupSubmissionRuntimeState(sub *state.Subm
 	if s.app == nil || s.app.store == nil || sub == nil {
 		return
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	submissionID := strings.TrimSpace(sub.ID)
 	turnID := strings.TrimSpace(sub.TurnID)
 	threadID := strings.TrimSpace(sub.ThreadID)
@@ -162,7 +162,7 @@ func (s runtimeMaintenanceService) notifyDriveArtifactGCPermissionIssue(source s
 		return
 	}
 	notifier, ok := s.app.feishu.(permissionIssueDiagnosticSender)
-	chatIDs := s.app.startupReadyChatIDs(s.app.appState().sessions())
+	chatIDs := s.app.startupReadyChatIDs(appState(s.app).sessions())
 	if len(chatIDs) == 0 {
 		s.app.queueFrontendCardNotification(state.FrontendCardNotification{
 			Kind:        frontendCardNotificationKindFeishuPermissionIssue,

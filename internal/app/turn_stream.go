@@ -63,7 +63,7 @@ func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context,
 	if s.app == nil || sub == nil || strings.TrimSpace(sub.ID) == "" {
 		return
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	shouldSend := false
 	if err := appState.updateSubmission(sub.ID, func(current *state.Submission) {
 		if current == nil || !current.WaitedInQueue || current.StartNoticeSent {

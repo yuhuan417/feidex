@@ -22,7 +22,7 @@ func (s conversationWorkflowService) commandFork(msg *feishu.InboundMessage, arg
 	if err != nil {
 		return err
 	}
-	reply := s.app.conversationBackend().forkReplyMessage(forkedID)
+	reply := conversationBackend(s.app).forkReplyMessage(forkedID)
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
@@ -33,7 +33,7 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 	if a == nil || a.store == nil {
 		return 0, "", fmt.Errorf("store not initialized")
 	}
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(configuredBackend(a)))
@@ -51,7 +51,7 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 	if sess == nil {
 		return 0, "", fmt.Errorf("session %q disappeared", sessionKey)
 	}
-	forkedID, err := a.conversationBackend().forkActiveConversation(sessionKey, sess, ws)
+	forkedID, err := conversationBackend(a).forkActiveConversation(sessionKey, sess, ws)
 	if err != nil {
 		return 0, "", err
 	}

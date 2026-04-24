@@ -148,7 +148,7 @@ func (a *App) enqueueReviewSubmission(msg *feishu.InboundMessage, sessionKey str
 	if msg == nil {
 		return fmt.Errorf("nil message")
 	}
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{

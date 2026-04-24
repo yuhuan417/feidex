@@ -112,7 +112,7 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	}
 
-	requestID, err := s.app.appState().nextLocalID("claude-upgrade")
+	requestID, err := appState(s.app).nextLocalID("claude-upgrade")
 	if err != nil {
 		return nil, "", err
 	}
@@ -123,7 +123,7 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 		CommandPath:    view.Probe.CommandPath,
 		NPMPath:        view.Probe.NPMPath,
 	}
-	if err := s.app.appState().savePending(&state.PendingRequest{
+	if err := appState(s.app).savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        claudeUpgradePendingKind,
 		SessionKey:  sessionKey,

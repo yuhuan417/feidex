@@ -66,7 +66,7 @@ func (s appUpgradeService) renderUpgradeDevCard(sessionKey, ownerUserID string) 
 }
 
 func (s appUpgradeService) renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion string, useDevRelease bool) (map[string]any, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	exePath, assetName, err := newAppUpgradeService(s.app).validateUpgradeRuntime()
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func normalizeUpgradeVersion(raw string) (string, error) {
 }
 
 func (s appUpgradeService) completeUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "upgrade_release" {

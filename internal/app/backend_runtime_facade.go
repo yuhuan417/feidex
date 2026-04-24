@@ -83,14 +83,14 @@ func backendRuntimeFacades() []backendRuntimeFacade {
 	}
 }
 
-func (a *App) backendRuntime() backendRuntimeFacade {
+func backendRuntime(a *App) backendRuntimeFacade {
 	if a == nil {
 		return nil
 	}
 	return backendRuntimeForKind(configuredBackend(a))
 }
 
-func (a *App) currentBackendRuntimeHandle() *backendRuntimeHandle {
+func currentBackendRuntimeHandle(a *App) *backendRuntimeHandle {
 	if a == nil {
 		return nil
 	}

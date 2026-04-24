@@ -11,7 +11,7 @@ import (
 
 func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -56,7 +56,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string
 
 func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -152,7 +152,7 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 
 func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -229,7 +229,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 
 func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		sessionKey, sub = w.bindPendingSubmissionForTurnCompletion(threadID, turnID)

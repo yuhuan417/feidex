@@ -36,8 +36,8 @@ type conversationBackendFacade interface {
 	startQueuedSubmission(w *lifecycleCoordinator, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
-func (a *App) conversationBackend() conversationBackendFacade {
-	if runtime := a.backendRuntime(); runtime != nil {
+func conversationBackend(a *App) conversationBackendFacade {
+	if runtime := backendRuntime(a); runtime != nil {
 		return runtime.conversationBackend(a)
 	}
 	return codexConversationBackend{app: a}

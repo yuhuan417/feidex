@@ -41,7 +41,7 @@ func (a *App) shouldMentionOnTurnStop(sub *state.Submission, turnID string) bool
 		return false
 	}
 	turnID = firstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
-	sess := a.appState().session(sub.SessionKey)
+	sess := appState(a).session(sub.SessionKey)
 	if sess == nil {
 		return true
 	}
@@ -56,7 +56,7 @@ func (a *App) shouldMentionOnTurnStop(sub *state.Submission, turnID string) bool
 	if len(cp.Queue) > 0 || len(cp.StagedImages) > 0 {
 		return false
 	}
-	for _, req := range a.appState().pendingRequests() {
+	for _, req := range appState(a).pendingRequests() {
 		if req == nil || !isPendingRequestOpen(req) {
 			continue
 		}

@@ -138,7 +138,7 @@ func (s workspaceCommandService) commandWorkspace(msg *feishu.InboundMessage, ar
 		return s.app.replyCommandActionResponse(msg, resp)
 	}
 	if len(args) >= 2 && args[0] == "use" {
-		appState := s.app.appState()
+		appState := appState(s.app)
 		ws := config.FindWorkspace(s.app.cfg, args[1])
 		if ws == nil {
 			return fmt.Errorf("workspace %q not found", args[1])
@@ -182,7 +182,7 @@ func (s workspaceConfigService) showWorkspaceMenu(msg *feishu.InboundMessage) er
 func (s workspaceConfigService) renderWorkspaceMenuCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	if s.app.store != nil {
-		sess = s.app.appState().session(sessionKey)
+		sess = appState(s.app).session(sessionKey)
 	}
 	currentID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -273,7 +273,7 @@ func workspaceApprovalPolicyOptions() []workspaceSettingOption {
 
 func (s workspaceConfigService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
 	sessionKey = makeSessionKey(s.app, msg)
-	sess = s.app.appState().session(sessionKey)
+	sess = appState(s.app).session(sessionKey)
 	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -301,7 +301,7 @@ func (s workspaceConfigService) showWorkspaceSandboxMenu(msg *feishu.InboundMess
 func (s workspaceConfigService) renderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if s.app.store != nil {
-		sess = s.app.appState().session(sessionKey)
+		sess = appState(s.app).session(sessionKey)
 	}
 	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -354,7 +354,7 @@ func (s workspaceConfigService) showWorkspacePolicyMenu(msg *feishu.InboundMessa
 func (s workspaceConfigService) renderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if s.app.store != nil {
-		sess = s.app.appState().session(sessionKey)
+		sess = appState(s.app).session(sessionKey)
 	}
 	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {

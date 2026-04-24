@@ -77,7 +77,7 @@ func (s finalCardPatchService) registerFinalCardPatchState(messageID string, sub
 		return
 	}
 
-	snapshotSub := s.app.appState().submission(sub.ID)
+	snapshotSub := appState(s.app).submission(sub.ID)
 	if snapshotSub == nil {
 		snapshotSub = sub
 	}
@@ -282,7 +282,7 @@ func (s finalCardPatchService) patchFinalCardSnapshot(ctx context.Context, messa
 	if s.app == nil || s.app.feishu == nil || snapshot.Submission == nil || strings.TrimSpace(messageID) == "" {
 		return nil
 	}
-	card := s.app.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, snapshot.Submission, snapshot.Title, snapshot.Color, snapshot.ShowHeader, snapshot.Body, nil, true)
+	card := cardRendererForApp(s.app).renderReplyMarkdownCardWithHeaderOptions(ctx, snapshot.Submission, snapshot.Title, snapshot.Color, snapshot.ShowHeader, snapshot.Body, nil, true)
 	appendReplyCardFooter(card, snapshot.FooterLines)
 	return s.app.feishu.PatchCard(ctx, messageID, card)
 }

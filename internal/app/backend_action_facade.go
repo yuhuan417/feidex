@@ -26,7 +26,7 @@ func backendActionForKind(kind string) backendActionFacade {
 	}
 }
 
-func (a *App) backendActions() backendActionFacade {
+func backendActions(a *App) backendActionFacade {
 	if a == nil {
 		return nil
 	}

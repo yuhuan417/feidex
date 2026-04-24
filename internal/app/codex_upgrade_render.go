@@ -112,7 +112,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	}
 
-	requestID, err := s.app.appState().nextLocalID("codex-upgrade")
+	requestID, err := appState(s.app).nextLocalID("codex-upgrade")
 	if err != nil {
 		return nil, "", err
 	}
@@ -123,7 +123,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 		CommandPath:    view.Probe.CommandPath,
 		NPMPath:        view.Probe.NPMPath,
 	}
-	if err := s.app.appState().savePending(&state.PendingRequest{
+	if err := appState(s.app).savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        codexUpgradePendingKind,
 		SessionKey:  sessionKey,

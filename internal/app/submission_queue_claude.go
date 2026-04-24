@@ -13,7 +13,7 @@ import (
 
 func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	if a == nil || a.claude == nil {
 		err := fmt.Errorf("claude backend not initialized")
 		threadID := ""
@@ -148,7 +148,7 @@ func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessio
 
 func (w *lifecycleCoordinator) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	if a == nil || a.claude == nil {
 		return nil, "", fmt.Errorf("claude backend not initialized")
 	}
@@ -179,7 +179,7 @@ func (w *lifecycleCoordinator) startClaudeSubmissionAttempt(sessionKey string, s
 
 func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string) (*state.Session, *state.Submission, error) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	submissionID := ""
 	if sub != nil {
 		submissionID = strings.TrimSpace(sub.ID)
@@ -249,7 +249,7 @@ func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey str
 
 func (w *lifecycleCoordinator) bindClaudeSubmissionStartState(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, turnID string) (*state.Session, error) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	setSessionThreadContext(sess, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), truncate(sub.InputText, 48)))
 	updatedSess, err := appState.updateSession(sessionKey, func(current *state.Session) {
 		if current == nil {

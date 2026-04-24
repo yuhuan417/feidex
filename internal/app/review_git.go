@@ -12,7 +12,7 @@ func (s reviewGitService) resolveReviewTarget(cwd string, target appreview.Targe
 }
 
 func (s reviewGitService) workspaceForSessionKey(sessionKey string) *config.Workspace {
-	sess := s.app.appState().session(sessionKey)
+	sess := appState(s.app).session(sessionKey)
 	workspaceID := defaultWorkspaceID(s.app)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = strings.TrimSpace(sess.WorkspaceID)

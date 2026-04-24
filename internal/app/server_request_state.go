@@ -16,7 +16,7 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 }
 
 func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.PendingRequest {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	pending := appState.pending(requestID)
 	if pending == nil {
 		return nil
@@ -32,7 +32,7 @@ func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.
 }
 
 func (s runtimeStateService) markPendingRequestResolved(requestID string) *state.PendingRequest {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	pending := appState.pending(requestID)
 	if pending == nil {
 		return nil
@@ -73,7 +73,7 @@ func (s runtimeStateService) finalizePendingReply(pending *state.PendingRequest)
 }
 
 func (s runtimeStateService) hasOpenPendingRequestForTurn(threadID, turnID, excludeID string) bool {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	excludeID = strings.TrimSpace(excludeID)

@@ -131,7 +131,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
 		}
 	}
-	pending := a.appState().pendingRequests()
+	pending := appState(a).pendingRequests()
 	if len(pending) != 1 || pending[0] == nil || pending[0].Kind != codexUpgradePendingKind {
 		t.Fatalf("pending requests = %+v", pending)
 	}

@@ -21,7 +21,7 @@ func (a *App) frontendIdleBlockedReason() string {
 	if newRuntimeStateService(a).frontendMessageTrafficCount() > 0 {
 		return "当前仍有消息处理中"
 	}
-	for _, sess := range a.appState().sessions() {
+	for _, sess := range appState(a).sessions() {
 		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
@@ -41,7 +41,7 @@ func (a *App) frontendIdleBlockedReason() string {
 	if newAutoRetryService(a).hasPendingAutoRetry("") {
 		return "当前仍有等待自动重试的任务"
 	}
-	for _, req := range a.appState().pendingRequests() {
+	for _, req := range appState(a).pendingRequests() {
 		if isPendingRequestOpen(req) {
 			return "当前仍有待处理审批或表单"
 		}

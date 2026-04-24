@@ -64,7 +64,7 @@ func TestAppStateFacadeBranches(t *testing.T) {
 	nilFacade.deleteMessageLinks(nil)
 
 	a, _, _ := newTestApp(t)
-	facade := a.appState()
+	facade := appState(a)
 	if facade == nil || facade.store != a.store {
 		t.Fatalf("appState() = %+v", facade)
 	}
@@ -381,11 +381,11 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("event card body = %q", body)
 	}
 
-	card := a.cardRenderer().renderReplyMarkdownCard(sub, "", "green", "hello", nil)
+	card := cardRendererForApp(a).renderReplyMarkdownCard(sub, "", "green", "hello", nil)
 	if body := cardMarkdownContent(t, card); !strings.Contains(body, "hello") {
 		t.Fatalf("renderReplyMarkdownCard() body = %q", body)
 	}
-	card = a.cardRenderer().renderReplyMarkdownCardWithOptions(context.Background(), sub, "", "green", "", nil, false)
+	card = cardRendererForApp(a).renderReplyMarkdownCardWithOptions(context.Background(), sub, "", "green", "", nil, false)
 	if body := cardMarkdownContent(t, card); strings.TrimSpace(body) != "" {
 		t.Fatalf("renderReplyMarkdownCardWithOptions(empty) body = %q", body)
 	}

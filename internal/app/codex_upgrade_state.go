@@ -204,7 +204,7 @@ func (s maintenanceStateService) codexUpgradeBlockingPendingCount() int {
 		return 0
 	}
 	count := 0
-	for _, req := range s.app.appState().pendingRequests() {
+	for _, req := range appState(s.app).pendingRequests() {
 		if req == nil || !isServerResolvedPendingKind(req.Kind) || !isPendingRequestOpen(req) {
 			continue
 		}
@@ -218,7 +218,7 @@ func (s maintenanceStateService) codexUpgradeRuntimeBusyReason() string {
 		return ""
 	}
 	activeSessions := 0
-	for _, sess := range s.app.appState().sessions() {
+	for _, sess := range appState(s.app).sessions() {
 		if sess != nil && sessionBelongsToFrontend(s.app, sess.Key) && sessionHasActiveWork(sess) {
 			activeSessions++
 		}

@@ -21,7 +21,7 @@ func (s replyContinuationService) replyRootTurnLink(msg *feishu.InboundMessage) 
 	if root == "" || root == strings.TrimSpace(msg.MessageID) {
 		return nil
 	}
-	link := s.app.appState().messageLink(root)
+	link := appState(s.app).messageLink(root)
 	if !newReplyContinuationService(s.app).messageLinkMatchesCurrentBackend(link) {
 		return nil
 	}
@@ -43,7 +43,7 @@ func (s replyContinuationService) messageLinkMatchesCurrentBackend(link *state.M
 	if strings.TrimSpace(link.SessionKey) == "" || strings.TrimSpace(link.ThreadID) == "" {
 		return false
 	}
-	sess := s.app.appState().session(link.SessionKey)
+	sess := appState(s.app).session(link.SessionKey)
 	if sess == nil {
 		return false
 	}
@@ -72,7 +72,7 @@ func (s replyContinuationService) pendingInputSessionKey(msg *feishu.InboundMess
 }
 
 func (s replyContinuationService) collectPendingStagedImages(targetSessionKey, bucketSessionKey string) []state.SessionStagedImage {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	images := []state.SessionStagedImage{}
 	seen := map[string]struct{}{}
 	for _, key := range []string{strings.TrimSpace(bucketSessionKey), strings.TrimSpace(targetSessionKey)} {
@@ -99,7 +99,7 @@ func (s replyContinuationService) collectPendingStagedImages(targetSessionKey, b
 }
 
 func (s replyContinuationService) clearPendingStagedImages(targetSessionKey, bucketSessionKey string) error {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	seen := map[string]struct{}{}
 	for _, key := range []string{strings.TrimSpace(bucketSessionKey), strings.TrimSpace(targetSessionKey)} {
 		if key == "" {
@@ -128,7 +128,7 @@ func (s replyContinuationService) trySteerInboundReply(msg *feishu.InboundMessag
 	if s.app == nil || msg == nil || link == nil {
 		return false, nil
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	threadID := strings.TrimSpace(link.ThreadID)
 	turnID := strings.TrimSpace(link.TurnID)
 	if threadID == "" || turnID == "" {
@@ -150,7 +150,7 @@ func (s replyContinuationService) trySteerInboundReply(msg *feishu.InboundMessag
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = defaultWorkspaceID(s.app)
 	}
-	return s.app.conversationBackend().tryReplyContinuation(msg, link, sessionKey, sess)
+	return conversationBackend(s.app).tryReplyContinuation(msg, link, sessionKey, sess)
 }
 
 func (s replyContinuationService) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
@@ -184,7 +184,7 @@ func (s replyContinuationService) continueClaudeSessionWithText(sessionKey, text
 	if text == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
@@ -241,7 +241,7 @@ func (s replyContinuationService) buildClaudeContinuationSubmissionFromMessage(m
 	if strings.TrimSpace(sub.InputText) == "" && len(sub.Attachments) == 0 {
 		return nil, nil
 	}
-	id, err := s.app.appState().createSubmission(sub)
+	id, err := appState(s.app).createSubmission(sub)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (s replyContinuationService) startClaudeContinuationSubmission(sessionKey s
 	if s.app == nil || sub == nil {
 		return nil
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		return fmt.Errorf("session %q missing", sessionKey)
@@ -295,7 +295,7 @@ func (s replyContinuationService) recordRootTurnBinding(rootMessageID, sessionKe
 	if s.app == nil || s.app.store == nil || strings.TrimSpace(rootMessageID) == "" {
 		return
 	}
-	_ = s.app.appState().saveMessageLink(&state.MessageLink{
+	_ = appState(s.app).saveMessageLink(&state.MessageLink{
 		MessageID:  strings.TrimSpace(rootMessageID),
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),
@@ -307,7 +307,7 @@ func (s replyContinuationService) recordTurnMessageLink(messageID, sessionKey, t
 	if s.app == nil || s.app.store == nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = s.app.appState().saveMessageLink(&state.MessageLink{
+	_ = appState(s.app).saveMessageLink(&state.MessageLink{
 		MessageID:  strings.TrimSpace(messageID),
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),

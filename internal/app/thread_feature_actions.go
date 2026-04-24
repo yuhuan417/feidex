@@ -20,13 +20,13 @@ func (s threadActionService) completeMenuNew(action *feishu.CardAction, sessionK
 
 func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	if strings.TrimSpace(targetTurnID) != "" {
-		if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveTurnID) != strings.TrimSpace(targetTurnID) {
+		if sess := appState(s.app).session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveTurnID) != strings.TrimSpace(targetTurnID) {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: "这个任务已经结束或已切换到其他任务"},
 			}, nil
 		}
 	}
-	if actions := s.app.backendActions(); actions != nil {
+	if actions := backendActions(s.app); actions != nil {
 		return actions.completeMenuInterrupt(s.app, action, sessionKey, targetTurnID)
 	}
 	return s.app.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
@@ -45,7 +45,7 @@ func (s threadActionService) completeClaudeSessionPermissionMenu(action *feishu.
 }
 
 func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	valid := false
 	for _, opt := range workspaceSandboxOptions() {
 		if opt.Value == sandboxMode {
@@ -75,7 +75,7 @@ func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction,
 }
 
 func (s threadActionService) completeThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	valid := false
 	for _, opt := range workspaceApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
@@ -105,7 +105,7 @@ func (s threadActionService) completeThreadPolicySet(action *feishu.CardAction, 
 }
 
 func (s threadActionService) completeThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
@@ -133,7 +133,7 @@ func (s threadActionService) completeThreadResume(action *feishu.CardAction, ses
 	selectedName, _ := action.ActionValue["thread_name"].(string)
 	selectedPreview, _ := action.ActionValue["thread_preview"].(string)
 	selectedCWD, _ := action.ActionValue["thread_cwd"].(string)
-	if _, err := s.app.conversationBackend().resumeSelectedThread(sessionKey, sess, ws, threadResumeSelection{
+	if _, err := conversationBackend(s.app).resumeSelectedThread(sessionKey, sess, ws, threadResumeSelection{
 		ThreadID: threadID,
 		Name:     selectedName,
 		Preview:  selectedPreview,

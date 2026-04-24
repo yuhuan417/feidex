@@ -11,7 +11,7 @@ func (a *App) startBackend(ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	return a.startPreparedBackendRuntime(ctx, a.currentBackendRuntimeHandle())
+	return a.startPreparedBackendRuntime(ctx, currentBackendRuntimeHandle(a))
 }
 
 func (a *App) startFrontend(ctx context.Context) error {

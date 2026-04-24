@@ -14,15 +14,15 @@ import (
 )
 
 func (s backendConfigurationService) backendWorkspaceCommandUsage() string {
-	return s.app.backendConfiguration().workspaceCommandUsage()
+	return backendConfiguration(s.app).workspaceCommandUsage()
 }
 
 func (s backendConfigurationService) handleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
-	return s.app.backendConfiguration().handleModelCommand(msg, args)
+	return backendConfiguration(s.app).handleModelCommand(msg, args)
 }
 
 func (s backendConfigurationService) handleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	config := s.app.backendConfiguration()
+	config := backendConfiguration(s.app)
 	if !config.supportsWorkspacePermissionMode() {
 		return fmt.Errorf("usage: %s", config.workspaceCommandUsage())
 	}
@@ -30,27 +30,27 @@ func (s backendConfigurationService) handleBackendWorkspacePermissionCommand(msg
 }
 
 func (s backendConfigurationService) appendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return s.app.backendConfiguration().appendWorkspaceSummaryLines(lines, currentWS)
+	return backendConfiguration(s.app).appendWorkspaceSummaryLines(lines, currentWS)
 }
 
 func (s backendConfigurationService) backendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return s.app.backendConfiguration().workspaceConfigButtons(sessionKey)
+	return backendConfiguration(s.app).workspaceConfigButtons(sessionKey)
 }
 
 func (s backendConfigurationService) backendWorkspaceSwitchInFlightNotice() string {
-	return s.app.backendConfiguration().workspaceSwitchInFlightNotice()
+	return backendConfiguration(s.app).workspaceSwitchInFlightNotice()
 }
 
 func (s backendConfigurationService) backendWorkspaceSwitchBindingFailureNotice() string {
-	return s.app.backendConfiguration().workspaceSwitchBindingFailureNotice()
+	return backendConfiguration(s.app).workspaceSwitchBindingFailureNotice()
 }
 
 func (s backendConfigurationService) backendWorkspaceSwitchBindingNotice(binding *workspaceThreadBinding) string {
-	return s.app.backendConfiguration().workspaceSwitchBindingNotice(binding)
+	return backendConfiguration(s.app).workspaceSwitchBindingNotice(binding)
 }
 
 func (s backendConfigurationService) renderModelMenuCard(sessionKey string) map[string]any {
-	return s.app.backendConfiguration().renderModelMenuCard(sessionKey)
+	return backendConfiguration(s.app).renderModelMenuCard(sessionKey)
 }
 
 func (s backendConfigurationService) renderClaudeModelMenuCard(sessionKey string) map[string]any {
@@ -74,7 +74,7 @@ func (s backendConfigurationService) renderCodexModelMenuCard(sessionKey string)
 	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(s.app.cfg), "(default)")
 	fastValue := "-"
 	if s.app.store != nil {
-		if sess := s.app.appState().session(sessionKey); sess != nil {
+		if sess := appState(s.app).session(sessionKey); sess != nil {
 			fastValue = renderServiceTierValue(sess.ActiveThreadServiceTier)
 		}
 	}
@@ -92,7 +92,7 @@ func (s backendConfigurationService) renderCodexModelMenuCard(sessionKey string)
 }
 
 func (s backendConfigurationService) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.backendConfiguration().completeGlobalModelSet(action, modelID)
+	return backendConfiguration(s.app).completeGlobalModelSet(action, modelID)
 }
 
 func (s backendConfigurationService) completeCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -119,7 +119,7 @@ func (s backendConfigurationService) completeCodexGlobalModelSet(action *feishu.
 }
 
 func (s backendConfigurationService) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.backendConfiguration().completeGlobalReasoningEffortSet(action, reasoningEffort)
+	return backendConfiguration(s.app).completeGlobalReasoningEffortSet(action, reasoningEffort)
 }
 
 func (s backendConfigurationService) completeCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
@@ -150,7 +150,7 @@ func (s backendConfigurationService) completeCodexGlobalReasoningEffortSet(actio
 }
 
 func (s backendConfigurationService) statusCardBody(sess *state.Session) string {
-	return s.app.backendConfiguration().statusCardBody(sess)
+	return backendConfiguration(s.app).statusCardBody(sess)
 }
 
 func (s backendConfigurationService) renderClaudeStatusBody(sess *state.Session) string {

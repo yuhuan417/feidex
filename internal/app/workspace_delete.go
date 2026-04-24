@@ -24,7 +24,7 @@ func (s workspaceConfigService) showWorkspaceDeleteMenu(msg *feishu.InboundMessa
 
 func (s workspaceConfigService) renderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
 	currentID := defaultWorkspaceID(s.app)
-	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	if sess := appState(s.app).session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = strings.TrimSpace(sess.WorkspaceID)
 	}
 	lines := []string{
@@ -181,13 +181,13 @@ func (s workspaceConfigService) validateWorkspaceDeletion(sessionKey, workspaceI
 		return fmt.Errorf("至少保留一个 workspace")
 	}
 	currentID := defaultWorkspaceID(s.app)
-	if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	if sess := appState(s.app).session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = strings.TrimSpace(sess.WorkspaceID)
 	}
 	if workspaceID == currentID {
 		return fmt.Errorf("不能删除当前 workspace，请先切换到其他 workspace")
 	}
-	for _, sess := range s.app.appState().sessions() {
+	for _, sess := range appState(s.app).sessions() {
 		if sess == nil || !sessionHasInFlightSubmission(sess) {
 			continue
 		}
@@ -231,7 +231,7 @@ func (s workspaceConfigService) deleteWorkspace(sessionKey, workspaceID string) 
 		return err
 	}
 	s.app.configMu.Unlock()
-	appState := s.app.appState()
+	appState := appState(s.app)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue

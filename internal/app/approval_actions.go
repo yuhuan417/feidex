@@ -13,7 +13,7 @@ import (
 )
 
 func (a *App) completeApprovalAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+	appState := appState(a)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil {
@@ -221,7 +221,7 @@ func approvalDecisionColor(action string) string {
 }
 
 func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
-	appState := a.appState()
+	appState := appState(a)
 	if pending == nil {
 		return
 	}

@@ -71,7 +71,7 @@ func (a *App) resumeClaudeSelectedThread(sessionKey string, sess *state.Session,
 	)
 	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
-	if err := a.appState().saveSession(sess); err != nil {
+	if err := appState(a).saveSession(sess); err != nil {
 		return nil, err
 	}
 	a.markSessionThreadLive(sessionKey, resumedID)
@@ -123,7 +123,7 @@ func (a *App) resumeCodexSelectedThread(sessionKey string, sess *state.Session, 
 	a.markSessionThreadLive(sessionKey, boundThreadID)
 	sessionResetActiveOperations(sess)
 	sess.Status = "idle"
-	if err := a.appState().saveSession(sess); err != nil {
+	if err := appState(a).saveSession(sess); err != nil {
 		return nil, err
 	}
 	return &workspaceThreadBinding{
@@ -164,7 +164,7 @@ func (a *App) continueCodexActiveTurn(sessionKey, text string) error {
 	if text == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
@@ -234,7 +234,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 		return false, err
 	}
 	sess.WorkspaceID = firstNonEmpty(sess.WorkspaceID, defaultWorkspaceID(a))
-	if err := a.appState().saveSession(sess); err != nil {
+	if err := appState(a).saveSession(sess); err != nil {
 		return false, err
 	}
 	if err := newReplyContinuationService(a).clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {

@@ -340,7 +340,7 @@ func (s autoRetryService) runAutoRetryTimer(sessionKey string, expectedSeq uint6
 		return
 	}
 
-	sess := s.app.appState().session(sessionKey)
+	sess := appState(s.app).session(sessionKey)
 	if sess == nil {
 		s.finishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不存在。")
 		return
@@ -361,7 +361,7 @@ func (s autoRetryService) runAutoRetryTimer(sessionKey string, expectedSeq uint6
 		s.finishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不再处于空闲态。")
 		return
 	}
-	if runtime := s.app.backendRuntime(); runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(s.app) {
+	if runtime := backendRuntime(s.app); runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(s.app) {
 		s.bumpAutoRetryBackoffAndReschedule(sessionKey, "运行时正在恢复，继续等待后重试。")
 		return
 	}
@@ -437,13 +437,13 @@ func (s autoRetryService) startAutoRetrySubmission(sessionKey string, sess *stat
 		InputText:            "继续",
 		Status:               "queued",
 	}
-	id, err := s.app.appState().createSubmission(sub)
+	id, err := appState(s.app).createSubmission(sub)
 	if err != nil {
 		return nil, err
 	}
 	sub.ID = id
-	if err := s.app.conversationBackend().startQueuedSubmission(newLifecycleCoordinator(s.app), sessionKey, sess, sub, ws, false); err != nil {
-		if current := s.app.appState().submission(sub.ID); current != nil {
+	if err := conversationBackend(s.app).startQueuedSubmission(newLifecycleCoordinator(s.app), sessionKey, sess, sub, ws, false); err != nil {
+		if current := appState(s.app).submission(sub.ID); current != nil {
 			sub = current
 		}
 		return sub, err
@@ -469,7 +469,7 @@ func (s autoRetryService) markAutoRetryAttemptStarted(sessionKey string, sub *st
 	}
 	state.RetryCount++
 	state.BackoffStep++
-	refreshAutoRetryState(state, s.app.appState().session(sessionKey), sub, firstNonEmpty(strings.TrimSpace(sub.ThreadID), state.ThreadID))
+	refreshAutoRetryState(state, appState(s.app).session(sessionKey), sub, firstNonEmpty(strings.TrimSpace(sub.ThreadID), state.ThreadID))
 	snapshot = cloneAutoRetryState(state)
 	tracker.mu.Unlock()
 	s.deliverAutoRetryCard(snapshot, s.renderAutoRetryLoopCard(snapshot, "running", "已自动发送“继续”，等待新的任务结果。"))
@@ -578,7 +578,7 @@ func (s autoRetryService) deliverAutoRetryCard(snapshot autoRetryState, card map
 	var sentID string
 	var err error
 	replyInThread := false
-	if sess := s.app.appState().session(snapshot.SessionKey); sess != nil {
+	if sess := appState(s.app).session(snapshot.SessionKey); sess != nil {
 		replyInThread = replyInThreadEnabled(s.app, sess.ChatType)
 	}
 	switch {

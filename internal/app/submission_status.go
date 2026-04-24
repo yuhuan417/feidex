@@ -8,7 +8,7 @@ import (
 )
 
 func (a *App) updateSubmissionByTurn(threadID, turnID string, mutate func(*state.Submission)) {
-	appState := a.appState()
+	appState := appState(a)
 	_, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return
@@ -43,7 +43,7 @@ func turnCompletionTerminalText(status, lastError string) string {
 }
 
 func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
-	appState := a.appState()
+	appState := appState(a)
 	if strings.TrimSpace(turnID) != "" {
 		if sessionKey, sub := newRuntimeStateService(a).boundSubmissionForTurn(turnID); sub != nil {
 			return sessionKey, sub

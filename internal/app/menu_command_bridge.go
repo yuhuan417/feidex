@@ -171,7 +171,7 @@ func (a *App) commandMessageFromAction(action *feishu.CardAction, sessionKey, ra
 	if msg.UserID == "" {
 		msg.UserID = sessionUserID
 	}
-	if sess := a.appState().session(sessionKey); sess != nil {
+	if sess := appState(a).session(sessionKey); sess != nil {
 		msg.ChatID = firstNonEmpty(msg.ChatID, strings.TrimSpace(sess.ChatID))
 		msg.ChatType = firstNonEmpty(msg.ChatType, strings.TrimSpace(sess.ChatType))
 		msg.UserID = firstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))

@@ -15,7 +15,7 @@ type appStateFacade struct {
 	legacyFallback bool
 }
 
-func (a *App) appState() *appStateFacade {
+func appState(a *App) *appStateFacade {
 	return &appStateFacade{
 		store:          a.store,
 		frontendID:     strings.TrimSpace(a.frontendID),

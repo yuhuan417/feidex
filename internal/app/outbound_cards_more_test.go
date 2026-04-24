@@ -31,13 +31,13 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	a := &App{cfg: cfg}
 	sub := &state.Submission{WorkspaceID: "default"}
 
-	reply := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(nil, sub, "Reply", "green", true, "", nil, false)
+	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(nil, sub, "Reply", "green", true, "", nil, false)
 	elements := reply["body"].(map[string]any)["elements"].([]map[string]any)
 	if len(elements) != 1 || elements[0]["content"] != " " {
 		t.Fatalf("reply placeholder elements = %#v, want single blank markdown", elements)
 	}
 
-	compact := a.cardRenderer().renderCompactMarkdownCard(sub, "Status", "orange", " status=running ", "hello", []feishu.Button{{Text: "More", Type: "default"}})
+	compact := cardRendererForApp(a).renderCompactMarkdownCard(sub, "Status", "orange", " status=running ", "hello", []feishu.Button{{Text: "More", Type: "default"}})
 	body := compact["body"].(map[string]any)["elements"].([]map[string]any)
 	if len(body) != 3 {
 		t.Fatalf("compact card elements = %#v, want meta + markdown + button row", body)

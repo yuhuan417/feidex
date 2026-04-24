@@ -21,7 +21,7 @@ func (a *App) completeMenuWorkspace(action *feishu.CardAction, sessionKey string
 }
 
 func (s workspaceActionService) completeWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	ws := config.FindWorkspace(s.app.cfg, workspaceID)
 	if ws == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "工作区不存在"}}, nil
@@ -62,7 +62,7 @@ func (s workspaceActionService) completeWorkspaceNew(action *feishu.CardAction, 
 }
 
 func (s workspaceActionService) completeWorkspaceClone(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, err := appState.nextLocalID("workspace")
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
@@ -128,7 +128,7 @@ func (s workspaceActionService) completeWorkspaceCloneUseExisting(action *feishu
 }
 
 func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_clone" {
@@ -158,7 +158,7 @@ func (s workspaceActionService) completeWorkspaceClonePickDir(action *feishu.Car
 }
 
 func (s workspaceActionService) completeWorkspaceCloneCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_clone" {
@@ -188,7 +188,7 @@ func (s workspaceActionService) completeWorkspaceCloneCancel(action *feishu.Card
 }
 
 func (s workspaceActionService) completeWorkspaceNewPickDir(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_new" {
@@ -213,7 +213,7 @@ func (s workspaceActionService) completeWorkspaceNewPickDir(action *feishu.CardA
 }
 
 func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_new" {
@@ -280,7 +280,7 @@ func (s workspaceActionService) completeWorkspaceNewSubmit(action *feishu.CardAc
 }
 
 func (s workspaceActionService) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != "workspace_clone" {

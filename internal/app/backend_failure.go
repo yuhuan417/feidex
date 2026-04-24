@@ -69,7 +69,7 @@ func (a *App) failBackendActiveWork(backend, scopeSessionKey, scopeThreadID, mes
 	if a == nil || a.store == nil {
 		return
 	}
-	appState := a.appState()
+	appState := appState(a)
 	sessions := appState.sessions()
 	seenSubmissions := map[string]struct{}{}
 	type compactTarget struct {
@@ -158,7 +158,7 @@ func (a *App) resolvePendingRequestsForTerminalFailure(sessionKey, threadID, tur
 	if a == nil || a.store == nil {
 		return
 	}
-	appState := a.appState()
+	appState := appState(a)
 	now := time.Now().Unix()
 	for _, req := range appState.pendingRequests() {
 		if req == nil || !isPendingRequestOpen(req) {
@@ -188,7 +188,7 @@ func (a *App) failSubmissionWithoutTerminalCompletion(sessionKey string, sub *st
 	if a == nil || a.store == nil || sub == nil {
 		return
 	}
-	appState := a.appState()
+	appState := appState(a)
 	current := appState.submission(sub.ID)
 	if current == nil || current.Finalized {
 		return

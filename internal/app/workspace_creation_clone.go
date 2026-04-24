@@ -297,7 +297,7 @@ func (s workspaceManagementService) noteWorkspaceCloneProgress(op *workspaceClon
 }
 
 func (s workspaceManagementService) finishWorkspaceCloneSubmit(ctx context.Context, op *workspaceCloneOperation, requestID, messageID, sessionKey, userID, chatID, chatType, parentDir string, payload workspaceClonePayload) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	defer newWorkspaceManagementService(s.app).clearWorkspaceCloneOperation(requestID)
 	slog.Debug("workspace clone started",
 		"request_id", requestID,

@@ -289,7 +289,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 		return err
 	}
 
-	oldHandle := s.app.currentBackendRuntimeHandle()
+	oldHandle := currentBackendRuntimeHandle(s.app)
 	oldBackend := currentRuntimeBackend(s.app)
 	if err := newBackendSelectionService(s.app).setConfiguredBackend(target); err != nil {
 		_ = newHandle.close()
@@ -321,7 +321,7 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 }
 
 func (s backendSelectionService) frontendSessionsAfterBackendSwitch(current, target string) []*state.Session {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	out := make([]*state.Session, 0, 8)
 	for _, sess := range appState.sessions() {
 		if sess == nil || !sessionBelongsToFrontend(s.app, sess.Key) {

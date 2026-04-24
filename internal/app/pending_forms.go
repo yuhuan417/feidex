@@ -53,7 +53,7 @@ type elicitationURLPayload struct {
 }
 
 func (a *App) pendingTextRequest(sessionKey, userID string) *state.PendingRequest {
-	pending := a.appState().pendingRequests()
+	pending := appState(a).pendingRequests()
 	sort.Slice(pending, func(i, j int) bool { return pending[i].CreatedAt > pending[j].CreatedAt })
 	for _, req := range pending {
 		if req == nil || req.Status != "pending" || req.SessionKey != sessionKey {
@@ -111,7 +111,7 @@ func (s pendingInputService) handlePendingTextResponse(msg *feishu.InboundMessag
 }
 
 func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+	appState := appState(a)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil {

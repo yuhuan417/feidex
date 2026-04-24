@@ -49,7 +49,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	if err != nil {
 		t.Fatalf("CreateSubmission(queued) error = %v", err)
 	}
-	if err := a.appState().queueSubmission(sessionKey, queuedID); err != nil {
+	if err := appState(a).queueSubmission(sessionKey, queuedID); err != nil {
 		t.Fatalf("queueSubmission() error = %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	if err := a.appState().queueSubmission(sessionKey, subID); err != nil {
+	if err := appState(a).queueSubmission(sessionKey, subID); err != nil {
 		t.Fatalf("queueSubmission() error = %v", err)
 	}
 

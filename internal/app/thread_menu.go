@@ -23,7 +23,7 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 	if a == nil || a.store == nil {
 		return 0, nil, fmt.Errorf("store not initialized")
 	}
-	appState := a.appState()
+	appState := appState(a)
 	defaultWorkspaceID := "default"
 	if a.cfg != nil && len(a.cfg.Workspaces) > 0 {
 		defaultWorkspaceID = a.cfg.Workspaces[0].ID
@@ -235,7 +235,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 }
 
 func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return a.conversationBackend().renderThreadsCard(sessionKey, includeAll)
+	return conversationBackend(a).renderThreadsCard(sessionKey, includeAll)
 }
 
 func renderThreadSettingValue(override, fallback string) string {
@@ -253,10 +253,10 @@ func renderThreadSettingValue(override, fallback string) string {
 func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := makeSessionKey(a, msg)
 	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	sess = a.reconcileCompletedCodexTurnFromFinalOutput(sessionKey, sess)
 	if sess == nil {
-		sess = a.appState().session(sessionKey)
+		sess = appState(a).session(sessionKey)
 	}
 	canceledRetry := newAutoRetryService(a).cancelAutoRetry(sessionKey, sess != nil && sess.ActiveTurnID != "" && sess.ActiveThreadID != "", "已停止当前 session 的自动重试。")
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
@@ -274,7 +274,7 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := a.conversationBackend().interruptActiveTurn(ctx, sessionKey, sess); err != nil {
+	if err := conversationBackend(a).interruptActiveTurn(ctx, sessionKey, sess); err != nil {
 		return err
 	}
 	reply := "已请求中断当前任务。"
@@ -289,11 +289,11 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 
 func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
 	sessionKey := makeSessionKey(a, msg)
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	return a.conversationBackend().continueActiveTurn(sessionKey, text)
+	return conversationBackend(a).continueActiveTurn(sessionKey, text)
 }
 
 func currentThreadLabel(sess *state.Session) string {
@@ -386,7 +386,7 @@ func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -438,7 +438,7 @@ func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
 }
 
 func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID

@@ -81,7 +81,7 @@ func TestCompleteUserInputFormAnswerKeepsPendingWhenCodexReplyFails(t *testing.T
 func TestCompleteToolUserInputTextKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	_ = a.appState().setSubmissionStatus(sub.ID, "waiting_user_input")
+	_ = appState(a).setSubmissionStatus(sub.ID, "waiting_user_input")
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:           "input-text-1",
 		RequestIDRaw: `"input-text-1"`,
@@ -179,7 +179,7 @@ func TestCompletePendingFormCancelKeepsPendingWhenCodexReplyFails(t *testing.T) 
 func TestCompleteElicitationFormTextKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	_ = a.appState().setSubmissionStatus(sub.ID, "waiting_user_input")
+	_ = appState(a).setSubmissionStatus(sub.ID, "waiting_user_input")
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:           "elicit-form-1",
 		RequestIDRaw: `"elicit-form-1"`,

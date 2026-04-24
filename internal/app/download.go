@@ -26,7 +26,7 @@ func (s conversationWorkflowService) commandDownload(msg *feishu.InboundMessage,
 		return nil
 	}
 	sessionKey, _, ws := newWorkspaceConfigService(s.app).currentWorkspaceForMessage(msg)
-	appState := s.app.appState()
+	appState := appState(s.app)
 	payload, err := newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 			Card:  rawCard(renderDownloadPreparingCard(a, selectedPath, payload.RootPath)),
 		}, nil
 	}
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(pending.SessionKey)
 	chatID := strings.TrimSpace(action.ChatID)
 	userID := strings.TrimSpace(action.UserID)
@@ -115,7 +115,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 }
 
 func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
-	appState := a.appState()
+	appState := appState(a)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	slog.Debug("download share started",

@@ -49,10 +49,10 @@ func BuildOutboundCardDemo(cfg *config.Config, opts OutboundCardDemoOptions) (ma
 
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
 	if replyClass {
-		card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, body, nil, kind == "final_message")
+		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, body, nil, kind == "final_message")
 		return card, kind, nil
 	}
-	card := a.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", body, nil)
+	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, title, color, "", body, nil)
 	return card, kind, nil
 }
 

@@ -76,7 +76,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = s.app.appState().updatePending(pendingID, func(req *state.PendingRequest) {
+		_ = appState(s.app).updatePending(pendingID, func(req *state.PendingRequest) {
 			req.FeishuMsgID = msgID
 		})
 	}

@@ -71,7 +71,7 @@ func (s runtimeStateService) pendingSubmissionForThread(threadID string) (string
 	if threadID == "" {
 		return "", nil
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	bindings := append([]turnBinding(nil), tracker.pending[threadID]...)
@@ -191,7 +191,7 @@ func (s runtimeStateService) boundSubmissionForTurn(turnID string) (string, *sta
 	if !ok {
 		return "", nil
 	}
-	sub := s.app.appState().submission(binding.SubmissionID)
+	sub := appState(s.app).submission(binding.SubmissionID)
 	if sub == nil {
 		return "", nil
 	}

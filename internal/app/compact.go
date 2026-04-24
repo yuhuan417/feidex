@@ -84,7 +84,7 @@ func (s conversationWorkflowService) runMenuCompactAction(action *feishu.CardAct
 	if s.app == nil {
 		return nil
 	}
-	if actions := s.app.backendActions(); actions != nil {
+	if actions := backendActions(s.app); actions != nil {
 		return actions.runMenuCompactAction(s.app, action, sessionKey)
 	}
 	return nil
@@ -94,7 +94,7 @@ func (a *App) startThreadCompaction(sessionKey string) (*state.Session, error) {
 	if a == nil || a.store == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动线程，无法压缩上下文")
@@ -130,7 +130,7 @@ func (a *App) bindStandaloneCompactTurn(threadID, turnID string) bool {
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := appState(a)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
@@ -174,7 +174,7 @@ func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 	if a == nil || a.store == nil || threadID == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := appState(a)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
@@ -232,7 +232,7 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool 
 	if a == nil || a.store == nil || threadID == "" || turnID == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := appState(a)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
@@ -268,7 +268,7 @@ func (a *App) failStandaloneCompactTurn(threadID, turnID, message string) bool {
 	if a == nil || a.store == nil || threadID == "" {
 		return false
 	}
-	appState := a.appState()
+	appState := appState(a)
 	for _, sess := range appState.sessions() {
 		if sess == nil {
 			continue
@@ -314,7 +314,7 @@ func (a *App) restoreStandaloneCompactSession(sessionKey, threadID, previousStat
 	if a == nil || a.store == nil {
 		return
 	}
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		return

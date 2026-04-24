@@ -12,7 +12,7 @@ import (
 )
 
 func (a *App) completeUserInputAnswer(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+	appState := appState(a)
 	requestID := actionStringValue(action, "request_id")
 	questionID := actionStringValue(action, "question_id")
 	answer := actionStringValue(action, "answer")
@@ -94,7 +94,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 }
 
 func (a *App) completeUserInputMultiToggle(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+	appState := appState(a)
 	requestID := actionStringValue(action, "request_id")
 	questionID := actionStringValue(action, "question_id")
 	optionLabel := actionStringValue(action, "option_label")

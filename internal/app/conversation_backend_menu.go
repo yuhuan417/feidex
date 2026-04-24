@@ -55,7 +55,7 @@ func buildConversationThreadsCard(sessionKey string, view conversationThreadsCar
 }
 
 func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
 		if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {
@@ -161,7 +161,7 @@ func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[st
 }
 
 func (a *App) renderClaudeThreadsCardForCurrentBackend(sessionKey string, includeAll bool) (map[string]any, error) {
-	sess := a.appState().session(sessionKey)
+	sess := appState(a).session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
 		if ws := config.FindWorkspace(a.cfg, sess.WorkspaceID); ws != nil {

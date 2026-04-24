@@ -85,7 +85,7 @@ func (s reviewFormService) beginReviewForm(msg *feishu.InboundMessage, mode stri
 	default:
 		return fmt.Errorf("unsupported review form mode %q", payload.Mode)
 	}
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID, err := appState.nextLocalID("review")
 	if err != nil {
 		return err
@@ -332,7 +332,7 @@ func (s reviewFormService) completeReviewBaseSelectSync(action *feishu.CardActio
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 branch"}}, nil
 	}
 	payload.Branch = selected
-	_ = s.app.appState().updatePending(pending.ID, func(req *state.PendingRequest) {
+	_ = appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) {
 		req.PayloadJSON = mustJSON(payload)
 	})
 	card, err := newReviewFormService(s.app).renderReviewBaseCard(pending.SessionKey, pending.ID, payload)
@@ -386,7 +386,7 @@ func (s reviewFormService) completeReviewCommitSelectSync(action *feishu.CardAct
 			}
 		}
 	}
-	_ = s.app.appState().updatePending(pending.ID, func(req *state.PendingRequest) {
+	_ = appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) {
 		req.PayloadJSON = mustJSON(payload)
 	})
 	card, err := newReviewFormService(s.app).renderReviewCommitCard(pending.SessionKey, pending.ID, payload)
@@ -397,7 +397,7 @@ func (s reviewFormService) completeReviewCommitSelectSync(action *feishu.CardAct
 }
 
 func (s reviewFormService) completeReviewFormSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID := actionStringValue(action, "request_id")
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != pendingKindReview {
@@ -426,7 +426,7 @@ func (s reviewFormService) completeReviewFormSubmit(action *feishu.CardAction) (
 }
 
 func (s reviewFormService) completeReviewFormSubmitSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.appState()
+	appState := appState(s.app)
 	requestID := actionStringValue(action, "request_id")
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != pendingKindReview {
@@ -474,7 +474,7 @@ func (s reviewFormService) completeReviewFormSubmitSync(action *feishu.CardActio
 
 func (s reviewFormService) reviewPendingForAction(action *feishu.CardAction, mode string) (*state.PendingRequest, reviewPendingPayload, *callback.CardActionTriggerResponse) {
 	requestID := actionStringValue(action, "request_id")
-	pending := s.app.appState().pending(requestID)
+	pending := appState(s.app).pending(requestID)
 	if pending == nil || pending.Kind != pendingKindReview {
 		return nil, reviewPendingPayload{}, &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "review 请求已过期"}}
 	}

@@ -16,7 +16,7 @@ import (
 
 func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
@@ -32,7 +32,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = defaultWorkspaceID(a)
 	}
-	if runtime := a.backendRuntime(); runtime != nil {
+	if runtime := backendRuntime(a); runtime != nil {
 		sess = runtime.reconcileCompletedTurnFromFinalOutput(a, sessionKey, sess)
 	}
 	if sess == nil {
@@ -173,7 +173,7 @@ func (w *lifecycleCoordinator) notifySubmissionStartFailure(ctx context.Context,
 
 func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	dropThreadLineage := shouldDropCodexThreadLineageAfterStartFailure(a, err)
 	if sub != nil {
 		current := appState.submission(sub.ID)
@@ -249,7 +249,7 @@ func shouldDropCodexThreadLineageAfterStartFailure(a *App, err error) bool {
 	if a == nil || err == nil {
 		return false
 	}
-	if runtime := a.backendRuntime(); runtime != nil {
+	if runtime := backendRuntime(a); runtime != nil {
 		return runtime.dropThreadLineageAfterStartFailure(a, err)
 	}
 	return false
@@ -257,7 +257,7 @@ func shouldDropCodexThreadLineageAfterStartFailure(a *App, err error) bool {
 
 func (w *lifecycleCoordinator) startNextSubmissionWithFailureNotice(sessionKey string, notifyFailure bool) error {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	sess := appState.session(sessionKey)
 	logSessionState("startNextSubmission entry", sessionKey, sess)
 	if sess == nil {
@@ -280,7 +280,7 @@ func (w *lifecycleCoordinator) startNextSubmissionWithFailureNotice(sessionKey s
 		)
 		return nil
 	}
-	if runtime := a.backendRuntime(); runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(a) {
+	if runtime := backendRuntime(a); runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(a) {
 		slog.Debug("startNextSubmission deferred",
 			"session_key", sessionKey,
 			"reason", "codex_runtime_recovering",
@@ -351,12 +351,12 @@ func (w *lifecycleCoordinator) startNextSubmissionWithFailureNotice(sessionKey s
 		"cwd", ws.Cwd,
 		"thread_id", sess.ActiveThreadID,
 	)
-	return a.conversationBackend().startQueuedSubmission(w, sessionKey, sess, sub, ws, notifyFailure)
+	return conversationBackend(a).startQueuedSubmission(w, sessionKey, sess, sub, ws, notifyFailure)
 }
 
 func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	if !sessionCanResumeThreadForSubmission(sess, sub) {
 		if strings.TrimSpace(sess.ActiveThreadID) != "" {
@@ -523,7 +523,7 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 
 func (w *lifecycleCoordinator) startNextSubmissionAsync(sessionKey, source string) {
 	a := w.app
-	appState := a.appState()
+	appState := appState(a)
 	if strings.TrimSpace(sessionKey) == "" {
 		return
 	}

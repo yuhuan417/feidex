@@ -51,7 +51,7 @@ func (a *App) deliverPendingCard(sub *state.Submission, card map[string]any, del
 	}
 	now := time.Now()
 	a.recordMessageLink(msgID, linkKind, sub, requestKey)
-	_ = a.appState().savePending(&state.PendingRequest{
+	_ = appState(a).savePending(&state.PendingRequest{
 		ID:           requestKey,
 		RequestIDRaw: strings.TrimSpace(delivery.requestIDStored),
 		Backend:      normalizeRuntimeBackend(delivery.backend),
@@ -67,6 +67,6 @@ func (a *App) deliverPendingCard(sub *state.Submission, card map[string]any, del
 		CreatedAt:    now.Unix(),
 		ExpiresAt:    now.Add(ttl).Unix(),
 	})
-	_ = a.appState().setSubmissionStatus(sub.ID, waitingStatus)
+	_ = appState(a).setSubmissionStatus(sub.ID, waitingStatus)
 	return nil
 }
