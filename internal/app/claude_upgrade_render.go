@@ -9,7 +9,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) renderClaudeUpgradeStatusCard(sessionKey string, view claudeUpgradeView, latestChecked bool) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradeStatusCard(sessionKey string, view claudeUpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
 	restart := view.Restart
 	lines := []string{
@@ -93,26 +93,26 @@ func (a *App) renderClaudeUpgradeStatusCard(sessionKey string, view claudeUpgrad
 	case strings.TrimSpace(restart.Result) != "":
 		color = "orange"
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), claudeUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
+	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), claudeUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
 }
 
-func (a *App) prepareClaudeUpgradeCard(sessionKey, ownerUserID string, view claudeUpgradeView) (map[string]any, string, error) {
+func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID string, view claudeUpgradeView) (map[string]any, string, error) {
 	switch {
 	case view.Snapshot.Running:
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	case !view.Probe.Supported:
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.BusyReason) != "":
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.LatestError) != "":
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.LatestVersion) == "":
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.Probe.CurrentVersion) == strings.TrimSpace(view.LatestVersion):
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, true), "", nil
 	}
 
-	requestID, err := a.appState().nextLocalID("claude-upgrade")
+	requestID, err := s.app.appState().nextLocalID("claude-upgrade")
 	if err != nil {
 		return nil, "", err
 	}
@@ -123,7 +123,7 @@ func (a *App) prepareClaudeUpgradeCard(sessionKey, ownerUserID string, view clau
 		CommandPath:    view.Probe.CommandPath,
 		NPMPath:        view.Probe.NPMPath,
 	}
-	if err := a.appState().savePending(&state.PendingRequest{
+	if err := s.app.appState().savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        claudeUpgradePendingKind,
 		SessionKey:  sessionKey,
@@ -135,10 +135,10 @@ func (a *App) prepareClaudeUpgradeCard(sessionKey, ownerUserID string, view clau
 	}); err != nil {
 		return nil, "", err
 	}
-	return a.renderClaudeUpgradeConfirmCard(sessionKey, requestID, payload), requestID, nil
+	return newUpgradeRenderService(s.app).renderClaudeUpgradeConfirmCard(sessionKey, requestID, payload), requestID, nil
 }
 
-func (a *App) renderClaudeUpgradeConfirmCard(sessionKey, requestID string, payload claudeUpgradePendingPayload) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradeConfirmCard(sessionKey, requestID string, payload claudeUpgradePendingPayload) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(payload.CurrentVersion, "-") + "`",
 		"目标版本: `" + firstNonEmpty(payload.TargetVersion, "-") + "`",
@@ -174,25 +174,25 @@ func (a *App) renderClaudeUpgradeConfirmCard(sessionKey, requestID string, paylo
 			},
 		},
 	}
-	return a.feishu.SimpleStatusCard("Claude 升级确认", "orange", menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard("Claude 升级确认", "orange", menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) renderClaudeUpgradePreparingCard(sessionKey, body string) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradePreparingCard(sessionKey, body string) map[string]any {
 	if strings.TrimSpace(body) == "" {
 		body = "正在准备 Claude 升级信息，请稍候。\n\n这张卡片会自动刷新。"
 	}
-	return a.feishu.SimpleStatusCard("Claude 管理", "blue", menuCardBody("menu.claude_upgrade", body), nil)
+	return s.app.feishu.SimpleStatusCard("Claude 管理", "blue", menuCardBody("menu.claude_upgrade", body), nil)
 }
 
-func (a *App) renderClaudeUpgradeFailedCard(sessionKey, errText string) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradeFailedCard(sessionKey, errText string) map[string]any {
 	body := "加载 Claude 升级面板失败。"
 	if strings.TrimSpace(errText) != "" {
 		body += "\n\n错误: " + strings.TrimSpace(errText)
 	}
-	return a.feishu.SimpleStatusCard("Claude 管理", "orange", menuCardBody("menu.claude_upgrade", body), claudeUpgradeStatusButtons(sessionKey, false))
+	return s.app.feishu.SimpleStatusCard("Claude 管理", "orange", menuCardBody("menu.claude_upgrade", body), claudeUpgradeStatusButtons(sessionKey, false))
 }
 
-func (a *App) renderClaudeUpgradeOperationCard(sessionKey string, snapshot claudeUpgradeSnapshot) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradeOperationCard(sessionKey string, snapshot claudeUpgradeSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"目标版本: `" + firstNonEmpty(snapshot.TargetVersion, "-") + "`",
@@ -225,10 +225,10 @@ func (a *App) renderClaudeUpgradeOperationCard(sessionKey string, snapshot claud
 		}
 		lines = append(lines, "结果: `"+claudeUpgradeResultText(snapshot.Result)+"`")
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) renderClaudeRestartOperationCard(sessionKey string, snapshot claudeRestartSnapshot) map[string]any {
+func (s upgradeRenderService) renderClaudeRestartOperationCard(sessionKey string, snapshot claudeRestartSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"阶段: `" + claudeRestartPhaseText(snapshot.Phase) + "`",
@@ -253,7 +253,7 @@ func (a *App) renderClaudeRestartOperationCard(sessionKey string, snapshot claud
 		}
 		lines = append(lines, "结果: `"+claudeRestartResultText(snapshot.Result)+"`")
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), claudeUpgradeStatusButtons(sessionKey, snapshot.Running))
+	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), claudeUpgradeStatusButtons(sessionKey, snapshot.Running))
 }
 
 func claudeUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button {

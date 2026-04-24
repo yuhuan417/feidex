@@ -40,7 +40,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		if err != nil {
 			return nil, false
 		}
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, false), true
+		return newUpgradeRenderService(a).renderCodexUpgradeStatusCard(sessionKey, view, false), true
 	},
 	"menu.claude_upgrade": func(a *App, sessionKey string) (map[string]any, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -49,7 +49,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		if err != nil {
 			return nil, false
 		}
-		return a.renderClaudeUpgradeStatusCard(sessionKey, view, false), true
+		return newUpgradeRenderService(a).renderClaudeUpgradeStatusCard(sessionKey, view, false), true
 	},
 	"menu.thread": func(a *App, sessionKey string) (map[string]any, bool) {
 		card, err := a.renderThreadsCard(sessionKey, false)

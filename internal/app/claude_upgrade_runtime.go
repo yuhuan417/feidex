@@ -19,7 +19,7 @@ func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload cl
 		messageID,
 		sessionKey,
 		"claude upgrade progress patch failed",
-		a.renderClaudeUpgradeOperationCard,
+		newUpgradeRenderService(a).renderClaudeUpgradeOperationCard,
 		newMaintenanceStateService(a).updateClaudeUpgrade,
 		newMaintenanceStateService(a).finishClaudeUpgrade,
 		func(snapshot *claudeUpgradeSnapshot, phase, message string) {
@@ -180,7 +180,7 @@ func (a *App) startClaudeRestartFromMessage(msg *feishu.InboundMessage) error {
 		msg,
 		a.beginClaudeRestartOperation,
 		a.runClaudeRestartOperation,
-		a.renderClaudeRestartOperationCard,
+		newUpgradeRenderService(a).renderClaudeRestartOperationCard,
 		func(message string) { newMaintenanceStateService(a).finishClaudeRestart("failed", message) },
 	)
 }
@@ -207,7 +207,7 @@ func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
 		messageID,
 		sessionKey,
 		"claude restart progress patch failed",
-		a.renderClaudeRestartOperationCard,
+		newUpgradeRenderService(a).renderClaudeRestartOperationCard,
 		newMaintenanceStateService(a).updateClaudeRestart,
 		newMaintenanceStateService(a).finishClaudeRestart,
 		func(snapshot *claudeRestartSnapshot, phase, message string) {

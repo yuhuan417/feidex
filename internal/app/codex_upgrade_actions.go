@@ -34,15 +34,15 @@ func (a *App) completeCodexRestartRun(action *feishu.CardAction) (*callback.Card
 		action,
 		a.beginCodexRestartOperation,
 		a.runCodexRestartOperation,
-		a.renderCodexRestartOperationCard,
+		newUpgradeRenderService(a).renderCodexRestartOperationCard,
 		func(ctx context.Context) (map[string]any, error) {
 			view, err := a.loadCodexUpgradeView(ctx, false)
 			if err != nil {
 				return nil, err
 			}
-			return a.renderCodexUpgradeStatusCard(actionSessionKey(action), view, false), nil
+			return newUpgradeRenderService(a).renderCodexUpgradeStatusCard(actionSessionKey(action), view, false), nil
 		},
-		a.renderCodexUpgradeFailedCard,
+		newUpgradeRenderService(a).renderCodexUpgradeFailedCard,
 		"正在重启 Codex runtime",
 	)
 }
@@ -53,9 +53,9 @@ func (a *App) completeCodexUpgradeAsyncAction(action *feishu.CardAction, rawComm
 		rawCommand,
 		toastText,
 		func(sessionKey string) map[string]any {
-			return a.renderCodexUpgradePreparingCard(sessionKey, preparingText)
+			return newUpgradeRenderService(a).renderCodexUpgradePreparingCard(sessionKey, preparingText)
 		},
-		a.renderCodexUpgradeFailedCard,
+		newUpgradeRenderService(a).renderCodexUpgradeFailedCard,
 		"codex upgrade panel patch failed",
 	)
 }
@@ -79,12 +79,12 @@ func (a *App) completeCodexUpgradeAction(action *feishu.CardAction, actionName s
 		if err != nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-				Card:  rawCard(a.renderCodexUpgradeFailedCard(sessionKey, err.Error())),
+				Card:  rawCard(newUpgradeRenderService(a).renderCodexUpgradeFailedCard(sessionKey, err.Error())),
 			}, nil
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-			Card:  rawCard(a.renderCodexUpgradeStatusCard(sessionKey, view, false)),
+			Card:  rawCard(newUpgradeRenderService(a).renderCodexUpgradeStatusCard(sessionKey, view, false)),
 		}, nil
 	}
 
@@ -108,12 +108,12 @@ func (a *App) completeCodexUpgradeAction(action *feishu.CardAction, actionName s
 		if err == nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: "Codex 正在维护中"},
-				Card:  rawCard(a.renderCodexUpgradeStatusCard(sessionKey, view, false)),
+				Card:  rawCard(newUpgradeRenderService(a).renderCodexUpgradeStatusCard(sessionKey, view, false)),
 			}, nil
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "Codex 正在维护中"},
-			Card:  rawCard(a.renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(a).codexUpgradeState())),
+			Card:  rawCard(newUpgradeRenderService(a).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(a).codexUpgradeState())),
 		}, nil
 	}
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -121,6 +121,6 @@ func (a *App) completeCodexUpgradeAction(action *feishu.CardAction, actionName s
 	go a.runCodexUpgradeOperation(messageID, sessionKey, payload)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "Codex 升级已开始"},
-		Card:  rawCard(a.renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(a).codexUpgradeState())),
+		Card:  rawCard(newUpgradeRenderService(a).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(a).codexUpgradeState())),
 	}, nil
 }

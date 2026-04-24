@@ -9,7 +9,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeView, latestChecked bool) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
 	restart := view.Restart
 	lines := []string{
@@ -93,26 +93,26 @@ func (a *App) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeV
 	case strings.TrimSpace(restart.Result) != "":
 		color = "orange"
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
+	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
 }
 
-func (a *App) prepareCodexUpgradeCard(sessionKey, ownerUserID string, view codexUpgradeView) (map[string]any, string, error) {
+func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID string, view codexUpgradeView) (map[string]any, string, error) {
 	switch {
 	case view.Snapshot.Running:
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	case !view.Probe.Supported:
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.BusyReason) != "":
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.LatestError) != "":
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.LatestVersion) == "":
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	case strings.TrimSpace(view.Probe.CurrentVersion) == strings.TrimSpace(view.LatestVersion):
-		return a.renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
+		return newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, true), "", nil
 	}
 
-	requestID, err := a.appState().nextLocalID("codex-upgrade")
+	requestID, err := s.app.appState().nextLocalID("codex-upgrade")
 	if err != nil {
 		return nil, "", err
 	}
@@ -123,7 +123,7 @@ func (a *App) prepareCodexUpgradeCard(sessionKey, ownerUserID string, view codex
 		CommandPath:    view.Probe.CommandPath,
 		NPMPath:        view.Probe.NPMPath,
 	}
-	if err := a.appState().savePending(&state.PendingRequest{
+	if err := s.app.appState().savePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        codexUpgradePendingKind,
 		SessionKey:  sessionKey,
@@ -135,10 +135,10 @@ func (a *App) prepareCodexUpgradeCard(sessionKey, ownerUserID string, view codex
 	}); err != nil {
 		return nil, "", err
 	}
-	return a.renderCodexUpgradeConfirmCard(sessionKey, requestID, payload), requestID, nil
+	return newUpgradeRenderService(s.app).renderCodexUpgradeConfirmCard(sessionKey, requestID, payload), requestID, nil
 }
 
-func (a *App) renderCodexUpgradeConfirmCard(sessionKey, requestID string, payload codexUpgradePendingPayload) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradeConfirmCard(sessionKey, requestID string, payload codexUpgradePendingPayload) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(payload.CurrentVersion, "-") + "`",
 		"目标版本: `" + firstNonEmpty(payload.TargetVersion, "-") + "`",
@@ -175,25 +175,25 @@ func (a *App) renderCodexUpgradeConfirmCard(sessionKey, requestID string, payloa
 			},
 		},
 	}
-	return a.feishu.SimpleStatusCard("Codex 升级确认", "orange", menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard("Codex 升级确认", "orange", menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) renderCodexUpgradePreparingCard(sessionKey, body string) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradePreparingCard(sessionKey, body string) map[string]any {
 	if strings.TrimSpace(body) == "" {
 		body = "正在准备 Codex 升级信息，请稍候。\n\n这张卡片会自动刷新。"
 	}
-	return a.feishu.SimpleStatusCard("Codex 管理", "blue", menuCardBody("menu.codex_upgrade", body), nil)
+	return s.app.feishu.SimpleStatusCard("Codex 管理", "blue", menuCardBody("menu.codex_upgrade", body), nil)
 }
 
-func (a *App) renderCodexUpgradeFailedCard(sessionKey, errText string) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradeFailedCard(sessionKey, errText string) map[string]any {
 	body := "加载 Codex 升级面板失败。"
 	if strings.TrimSpace(errText) != "" {
 		body += "\n\n错误: " + strings.TrimSpace(errText)
 	}
-	return a.feishu.SimpleStatusCard("Codex 管理", "orange", menuCardBody("menu.codex_upgrade", body), codexUpgradeStatusButtons(sessionKey, false))
+	return s.app.feishu.SimpleStatusCard("Codex 管理", "orange", menuCardBody("menu.codex_upgrade", body), codexUpgradeStatusButtons(sessionKey, false))
 }
 
-func (a *App) renderCodexUpgradeOperationCard(sessionKey string, snapshot codexUpgradeSnapshot) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradeOperationCard(sessionKey string, snapshot codexUpgradeSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"目标版本: `" + firstNonEmpty(snapshot.TargetVersion, "-") + "`",
@@ -226,10 +226,10 @@ func (a *App) renderCodexUpgradeOperationCard(sessionKey string, snapshot codexU
 		}
 		lines = append(lines, "结果: `"+codexUpgradeResultText(snapshot.Result)+"`")
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) renderCodexRestartOperationCard(sessionKey string, snapshot codexRestartSnapshot) map[string]any {
+func (s upgradeRenderService) renderCodexRestartOperationCard(sessionKey string, snapshot codexRestartSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"阶段: `" + codexRestartPhaseText(snapshot.Phase) + "`",
@@ -254,7 +254,7 @@ func (a *App) renderCodexRestartOperationCard(sessionKey string, snapshot codexR
 		}
 		lines = append(lines, "结果: `"+codexRestartResultText(snapshot.Result)+"`")
 	}
-	return a.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running))
+	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), codexUpgradeStatusButtons(sessionKey, snapshot.Running))
 }
 
 func codexUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button {

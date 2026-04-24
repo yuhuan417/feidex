@@ -63,11 +63,11 @@ func (a *App) commandCodex(msg *feishu.InboundMessage, args []string) error {
 		return err
 	}
 	if !prepareUpgrade {
-		card := a.renderCodexUpgradeStatusCard(sessionKey, view, includeLatest)
+		card := newUpgradeRenderService(a).renderCodexUpgradeStatusCard(sessionKey, view, includeLatest)
 		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
-	card, pendingID, err := a.prepareCodexUpgradeCard(sessionKey, msg.UserID, view)
+	card, pendingID, err := newUpgradeRenderService(a).prepareCodexUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}

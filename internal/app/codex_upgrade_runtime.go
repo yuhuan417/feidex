@@ -19,7 +19,7 @@ func (a *App) runCodexUpgradeOperation(messageID, sessionKey string, payload cod
 		messageID,
 		sessionKey,
 		"codex upgrade progress patch failed",
-		a.renderCodexUpgradeOperationCard,
+		newUpgradeRenderService(a).renderCodexUpgradeOperationCard,
 		newMaintenanceStateService(a).updateCodexUpgrade,
 		newMaintenanceStateService(a).finishCodexUpgrade,
 		func(snapshot *codexUpgradeSnapshot, phase, message string) {
@@ -110,7 +110,7 @@ func (a *App) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
 		msg,
 		a.beginCodexRestartOperation,
 		a.runCodexRestartOperation,
-		a.renderCodexRestartOperationCard,
+		newUpgradeRenderService(a).renderCodexRestartOperationCard,
 		func(message string) { newMaintenanceStateService(a).finishCodexRestart("failed", message) },
 	)
 }
@@ -137,7 +137,7 @@ func (a *App) runCodexRestartOperation(messageID, sessionKey string) {
 		messageID,
 		sessionKey,
 		"codex restart progress patch failed",
-		a.renderCodexRestartOperationCard,
+		newUpgradeRenderService(a).renderCodexRestartOperationCard,
 		newMaintenanceStateService(a).updateCodexRestart,
 		newMaintenanceStateService(a).finishCodexRestart,
 		func(snapshot *codexRestartSnapshot, phase, message string) {

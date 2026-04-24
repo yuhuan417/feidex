@@ -63,11 +63,11 @@ func (a *App) commandClaude(msg *feishu.InboundMessage, args []string) error {
 		return err
 	}
 	if !prepareUpgrade {
-		card := a.renderClaudeUpgradeStatusCard(sessionKey, view, includeLatest)
+		card := newUpgradeRenderService(a).renderClaudeUpgradeStatusCard(sessionKey, view, includeLatest)
 		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
-	card, pendingID, err := a.prepareClaudeUpgradeCard(sessionKey, msg.UserID, view)
+	card, pendingID, err := newUpgradeRenderService(a).prepareClaudeUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
