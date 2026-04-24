@@ -128,7 +128,7 @@ func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submissi
 			return
 		}
 		recordMessageLink(a, messageID, "turn_working", sub, "")
-		a.commitQuietWorkingCardRender(op.TurnID, messageID, op.Body)
+		commitQuietWorkingCardRender(a, op.TurnID, messageID, op.Body)
 		return
 	}
 	if err := a.feishu.PatchCard(ctx, op.MessageID, card); err != nil {
@@ -139,10 +139,10 @@ func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submissi
 		)
 		return
 	}
-	a.commitQuietWorkingCardRender(op.TurnID, op.MessageID, op.Body)
+	commitQuietWorkingCardRender(a, op.TurnID, op.MessageID, op.Body)
 }
 
-func (a *App) commitQuietWorkingCardRender(turnID, messageID, body string) {
+func commitQuietWorkingCardRender(a *App, turnID, messageID, body string) {
 	newTurnStreamService(a).commitTurnStreamQuietRender(turnID, messageID, body)
 }
 

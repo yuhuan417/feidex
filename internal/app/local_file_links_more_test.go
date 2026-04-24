@@ -66,7 +66,7 @@ func TestRewriteLocalFileLinksTextNormalizesInlineCodeRefsForPreview(t *testing.
 		ChatID:      "chat-1",
 		UserID:      "user-1",
 	}
-	got := a.rewriteLocalFileLinksText(context.Background(), sub, "See `docs/guide.md:12` for details.")
+	got := rewriteLocalFileLinksText(a, context.Background(), sub, "See `docs/guide.md:12` for details.")
 
 	if len(ff.rewriteLocalFileLinkReqs) != 1 {
 		t.Fatalf("RewriteLocalFileLinks request count = %d, want 1", len(ff.rewriteLocalFileLinkReqs))

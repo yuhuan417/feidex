@@ -14,7 +14,7 @@ import (
 
 var inlineCodeLocalPreviewTargetRe = regexp.MustCompile("`([^`\n]+)`")
 
-func (a *App) rewriteLocalFileLinksText(ctx context.Context, sub *state.Submission, text string) string {
+func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if a == nil || a.feishu == nil || sub == nil || text == "" {
 		return text
@@ -136,7 +136,7 @@ func escapeMarkdownLinkLabel(value string) string {
 	return value
 }
 
-func (a *App) prepareReplyCardMarkdown(ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
+func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
@@ -152,7 +152,7 @@ func (a *App) prepareReplyCardMarkdown(ctx context.Context, sub *state.Submissio
 	return cardRendererForApp(a).prepareCardMarkdown(sub, text)
 }
 
-func (a *App) scheduleLocalFileLinkPatch(sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
+func scheduleLocalFileLinkPatch(a *App, sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
 	messageID = strings.TrimSpace(messageID)
 	body = strings.TrimSpace(body)
 	if a == nil || a.feishu == nil || sub == nil || messageID == "" || body == "" {
@@ -165,7 +165,7 @@ func (a *App) scheduleLocalFileLinkPatch(sub *state.Submission, messageID, title
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		rewritten := a.rewriteLocalFileLinksText(ctx, sub, body)
+		rewritten := rewriteLocalFileLinksText(a, ctx, sub, body)
 		if strings.TrimSpace(rewritten) == "" || strings.TrimSpace(rewritten) == body {
 			return
 		}

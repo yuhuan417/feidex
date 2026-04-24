@@ -103,7 +103,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		for _, result := range results {
 			recordMessageLink(s.app, result.MessageID, kind, sub, payload.ItemID)
 			if payload.IsFinalAnswer && result.CardID != "" {
-				s.app.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, payload.Color, result.ShowHeader, result.Body, result.FooterLines)
+				scheduleLocalFileLinkPatch(s.app, sub, result.CardID, result.Title, payload.Color, result.ShowHeader, result.Body, result.FooterLines)
 			}
 		}
 		return results[0].MessageID

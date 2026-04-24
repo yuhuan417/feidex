@@ -52,7 +52,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 				TurnID:       sub.TurnID,
 			})
 			if strings.TrimSpace(kind) == "final_message" && result.CardID != "" {
-				a.scheduleLocalFileLinkPatch(sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
+				scheduleLocalFileLinkPatch(a, sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
 			}
 		}
 		return ids
@@ -91,7 +91,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	})
 	if strings.TrimSpace(kind) == "final_message" {
 		if cardID != "" {
-			a.scheduleLocalFileLinkPatch(sub, cardID, title, color, showHeader, text, nil)
+			scheduleLocalFileLinkPatch(a, sub, cardID, title, color, showHeader, text, nil)
 		}
 	}
 	return []string{id}

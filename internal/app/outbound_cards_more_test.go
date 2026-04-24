@@ -53,7 +53,7 @@ func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) 
 	a := &App{cfg: cfg}
 	sub := &state.Submission{WorkspaceID: "default"}
 
-	body := a.prepareReplyCardMarkdown(nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
+	body := prepareReplyCardMarkdown(a, nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
 	if !strings.Contains(body, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)") {
 		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want preview link preserved", body)
 	}

@@ -65,7 +65,7 @@ func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Conte
 				"content": content,
 			})
 		}
-	} else if content := r.app.prepareReplyCardMarkdown(ctx, sub, body, enablePreview); content != "" {
+	} else if content := prepareReplyCardMarkdown(r.app, ctx, sub, body, enablePreview); content != "" {
 		appendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,
