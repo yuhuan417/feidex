@@ -89,7 +89,7 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath}
-	if err := a.updateQuietMode(config.QuietModeNormal); err != nil {
+	if err := updateQuietMode(a,config.QuietModeNormal); err != nil {
 		t.Fatalf("updateQuietMode: %v", err)
 	}
 	if a.cfg.Feishu.Quiet != config.QuietModeNormal {
@@ -113,13 +113,13 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: ff}
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p"}
-	if err := a.commandQuiet(msg, nil); err != nil {
+	if err := commandQuiet(a,msg, nil); err != nil {
 		t.Fatalf("commandQuiet() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after /quiet = %d, want 1", len(ff.replyCards))
 	}
-	if err := a.commandQuiet(msg, []string{"normal"}); err != nil {
+	if err := commandQuiet(a,msg, []string{"normal"}); err != nil {
 		t.Fatalf("commandQuiet(normal) error = %v", err)
 	}
 	if quietMode(feishuConfig(a)) != config.QuietModeNormal {
@@ -128,7 +128,7 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 	if len(ff.replyTexts) != 1 {
 		t.Fatalf("reply text count after /quiet normal = %d, want 1", len(ff.replyTexts))
 	}
-	if err := a.commandQuiet(msg, []string{"config"}); err != nil {
+	if err := commandQuiet(a,msg, []string{"config"}); err != nil {
 		t.Fatalf("commandQuiet(config) error = %v", err)
 	}
 	if len(ff.replyCards) != 2 {

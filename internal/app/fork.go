@@ -18,7 +18,7 @@ func (s conversationWorkflowService) commandFork(msg *feishu.InboundMessage, arg
 	if msg == nil {
 		return nil
 	}
-	discarded, forkedID, err := s.app.startThreadFork(makeSessionKey(s.app, msg))
+	discarded, forkedID, err := startThreadFork(s.app, makeSessionKey(s.app, msg))
 	if err != nil {
 		return err
 	}
@@ -29,7 +29,7 @@ func (s conversationWorkflowService) commandFork(msg *feishu.InboundMessage, arg
 	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(s.app, msg.ChatType))
 }
 
-func (a *App) startThreadFork(sessionKey string) (int, string, error) {
+func startThreadFork(a *App, sessionKey string) (int, string, error) {
 	if a == nil || a.store == nil {
 		return 0, "", fmt.Errorf("store not initialized")
 	}

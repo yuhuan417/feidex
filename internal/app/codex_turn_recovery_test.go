@@ -127,7 +127,7 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 		return nil
 	}
 
-	if err := a.commandInterrupt(msg); err != nil {
+	if err := commandInterrupt(a,msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 

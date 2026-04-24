@@ -23,7 +23,7 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	if elems := cardElementsForTest(card); len(elems) != 5 {
 		t.Fatalf("renderQuietModeCard() elements = %#v", elems)
 	}
-	if err := a.commandQuiet(&feishu.InboundMessage{}, []string{"bad"}); err == nil {
+	if err := commandQuiet(a,&feishu.InboundMessage{}, []string{"bad"}); err == nil {
 		t.Fatal("expected commandQuiet(invalid arg) to fail")
 	}
 	if quietModeStatusText(config.QuietModeVerbose) != "verbose" || quietModeStatusText(config.QuietModeFinal) != "final" || buttonCount != 0 {

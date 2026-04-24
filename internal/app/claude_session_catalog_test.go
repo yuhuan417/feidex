@@ -104,7 +104,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := a.renderThreadsCard(sessionKey, false)
+	card, err := renderThreadsCard(a,sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}

@@ -3405,10 +3405,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := a.showThreadSandboxMenu(msg); err != nil {
+	if err := showThreadSandboxMenu(a,msg); err != nil {
 		t.Fatalf("showThreadSandboxMenu() error = %v", err)
 	}
-	if err := a.showThreadPolicyMenu(msg); err != nil {
+	if err := showThreadPolicyMenu(a,msg); err != nil {
 		t.Fatalf("showThreadPolicyMenu() error = %v", err)
 	}
 	if len(ff.replyCards) < 2 {
@@ -3423,7 +3423,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	emptyMsg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-2", ChatType: "group", RootMessageID: "root-2", UserID: "user-2"}
-	if err := a.commandAppend(emptyMsg, "  more text  "); err == nil {
+	if err := commandAppend(a,emptyMsg, "  more text  "); err == nil {
 		t.Fatal("expected commandAppend without active session to fail")
 	}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -3441,10 +3441,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 			return nil
 		}
 	}
-	if err := a.commandAppend(msg, "  more text  "); err != nil {
+	if err := commandAppend(a,msg, "  more text  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
-	if err := a.commandInterrupt(msg); err != nil {
+	if err := commandInterrupt(a,msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 
@@ -3917,7 +3917,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 		return nil
 	}
 
-	card, err := a.renderThreadsCard(sessionKey, false)
+	card, err := renderThreadsCard(a,sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
@@ -3963,7 +3963,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		return nil
 	}
 
-	card, err := a.renderThreadsCard(sessionKey, false)
+	card, err := renderThreadsCard(a,sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}

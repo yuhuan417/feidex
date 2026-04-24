@@ -11,7 +11,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) recoverClaudeStartupConversation(sessionKey, workspaceID string, sess *state.Session) {
+func recoverClaudeStartupConversation(a *App, sessionKey, workspaceID string, sess *state.Session) {
 	if a == nil || sess == nil {
 		return
 	}
@@ -23,7 +23,7 @@ func (a *App) recoverClaudeStartupConversation(sessionKey, workspaceID string, s
 	)
 }
 
-func (a *App) recoverCodexStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
 	if a == nil || sess == nil || ws == nil {
 		return
 	}

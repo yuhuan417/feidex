@@ -19,7 +19,7 @@ func commandNew(a *App, msg *feishu.InboundMessage) error {
 	return newThreadCommandService(a).commandThreadsNew(msg)
 }
 
-func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int, *workspaceThreadBinding, error) {
+func startFreshThread(a *App, sessionKey, userID, chatID, chatType string) (int, *workspaceThreadBinding, error) {
 	if a == nil || a.store == nil {
 		return 0, nil, fmt.Errorf("store not initialized")
 	}
@@ -78,7 +78,7 @@ func (a *App) startFreshThread(sessionKey, userID, chatID, chatType string) (int
 
 func (s threadCommandService) commandThreadsNew(msg *feishu.InboundMessage) error {
 	sessionKey := makeSessionKey(s.app, msg)
-	discarded, binding, err := s.app.startFreshThread(sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
+	discarded, binding, err := startFreshThread(s.app,sessionKey, msg.UserID, msg.ChatID, msg.ChatType)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (s threadCommandService) commandThreadsNew(msg *feishu.InboundMessage) erro
 }
 
 func (s threadCommandService) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
-	card, err := s.app.renderThreadsCard(makeSessionKey(s.app, msg), includeAll)
+	card, err := renderThreadsCard(s.app,makeSessionKey(s.app, msg), includeAll)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		return replyCommandActionResponse(s.app, msg, resp)
 	case "sandbox":
 		if len(args) == 1 {
-			return s.app.showThreadSandboxMenu(msg)
+			return showThreadSandboxMenu(s.app,msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread sandbox [MODE]")
@@ -157,7 +157,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		return replyCommandActionResponse(s.app, msg, resp)
 	case "policy":
 		if len(args) == 1 {
-			return s.app.showThreadPolicyMenu(msg)
+			return showThreadPolicyMenu(s.app,msg)
 		}
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread policy [POLICY]")
@@ -234,7 +234,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 	}
 }
 
-func (a *App) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
+func renderThreadsCard(a *App, sessionKey string, includeAll bool) (map[string]any, error) {
 	return conversationBackend(a).renderThreadsCard(sessionKey, includeAll)
 }
 
@@ -250,7 +250,7 @@ func renderThreadSettingValue(override, fallback string) string {
 	return "-"
 }
 
-func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
+func commandInterrupt(a *App, msg *feishu.InboundMessage) error {
 	sessionKey := makeSessionKey(a, msg)
 	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
 	sess := appState(a).session(sessionKey)
@@ -287,7 +287,7 @@ func (a *App) commandInterrupt(msg *feishu.InboundMessage) error {
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(a, msg.ChatType))
 }
 
-func (a *App) commandAppend(msg *feishu.InboundMessage, text string) error {
+func commandAppend(a *App, msg *feishu.InboundMessage, text string) error {
 	sessionKey := makeSessionKey(a, msg)
 	sess := appState(a).session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
@@ -376,8 +376,8 @@ func sameWorkspaceCWD(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderThreadSandboxMenuCard(makeSessionKey(a, msg))
+func showThreadSandboxMenu(a *App, msg *feishu.InboundMessage) error {
+	card, err := renderThreadSandboxMenuCard(a,makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
@@ -385,7 +385,7 @@ func (a *App) showThreadSandboxMenu(msg *feishu.InboundMessage) error {
 	return err
 }
 
-func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
+func renderThreadSandboxMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	sess := appState(a).session(sessionKey)
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -428,8 +428,8 @@ func (a *App) renderThreadSandboxMenuCard(sessionKey string) (map[string]any, er
 	return a.feishu.SimpleStatusCard("配置 Thread Sandbox", "blue", menuCardBody("thread.sandbox.menu", body), buttons), nil
 }
 
-func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
-	card, err := a.renderThreadPolicyMenuCard(makeSessionKey(a, msg))
+func showThreadPolicyMenu(a *App, msg *feishu.InboundMessage) error {
+	card, err := renderThreadPolicyMenuCard(a,makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}
@@ -437,7 +437,7 @@ func (a *App) showThreadPolicyMenu(msg *feishu.InboundMessage) error {
 	return err
 }
 
-func (a *App) renderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
+func renderThreadPolicyMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	sess := appState(a).session(sessionKey)
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {

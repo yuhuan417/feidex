@@ -124,7 +124,7 @@ func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard("Quiet Mode", "blue", menuCardBody("menu.quiet", strings.Join(lines, "\n")), buttons)
 }
 
-func (a *App) updateQuietMode(mode config.QuietMode) error {
+func updateQuietMode(a *App, mode config.QuietMode) error {
 	if a == nil || a.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
@@ -145,7 +145,7 @@ func (a *App) updateQuietMode(mode config.QuietMode) error {
 	return config.Save(a.cfgPath, a.cfg)
 }
 
-func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
+func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 1 {
 		return fmt.Errorf("usage: /quiet | /quiet <verbose|progress|normal|final> | /quiet config")
 	}
@@ -175,7 +175,7 @@ func (a *App) commandQuiet(msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			if err := a.updateQuietMode(mode); err != nil {
+			if err := updateQuietMode(a, mode); err != nil {
 				return err
 			}
 			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", replyInThreadEnabled(a, msg.ChatType))

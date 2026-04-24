@@ -73,7 +73,7 @@ func newDownloadPathPickerPayload(ws *config.Workspace) (pathPickerPayload, erro
 	}, nil
 }
 
-func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *state.PendingRequest, payload pathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
+func completeDownloadFileConfirm(a *App, action *feishu.CardAction, pending *state.PendingRequest, payload pathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "下载请求已过期"}}, nil
 	}
@@ -103,7 +103,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 			req.FeishuMsgID = messageID
 		}
 	})
-	go a.finishDownloadFileShare(pending.ID, messageID, payload, selectedPath, workspaceCWD, feishu.SharedFileRequest{
+	go finishDownloadFileShare(a, pending.ID, messageID, payload, selectedPath, workspaceCWD, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    chatID,
 		UserID:    firstNonEmpty(userID, pending.OwnerUserID),
@@ -114,7 +114,7 @@ func (a *App) completeDownloadFileConfirm(action *feishu.CardAction, pending *st
 	}, nil
 }
 
-func (a *App) finishDownloadFileShare(requestID, messageID string, payload pathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
+func finishDownloadFileShare(a *App, requestID, messageID string, payload pathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
 	appState := appState(a)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

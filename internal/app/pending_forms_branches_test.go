@@ -27,7 +27,7 @@ func TestPendingFormCancelBranches(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("UpsertPending(%s) error = %v", kind, err)
 		}
-		resp, err := a.completePendingFormCancel(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": kind}})
+		resp, err := completePendingFormCancel(a,&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": kind}})
 		if err != nil || resp == nil || resp.Toast == nil {
 			t.Fatalf("completePendingFormCancel(%s) = %#v, %v", kind, resp, err)
 		}
@@ -62,7 +62,7 @@ func TestPendingFormCancelPreservesToolUserInputBody(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.completePendingFormCancel(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "input-form-1"}})
+	resp, err := completePendingFormCancel(a,&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "input-form-1"}})
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completePendingFormCancel() = %#v, %v", resp, err)
 	}
@@ -99,7 +99,7 @@ func TestPendingFormCancelPreservesReviewSummary(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.completePendingFormCancel(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "review-1"}})
+	resp, err := completePendingFormCancel(a,&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "review-1"}})
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completePendingFormCancel() = %#v, %v", resp, err)
 	}

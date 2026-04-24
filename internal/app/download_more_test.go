@@ -52,7 +52,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 		URL:       "https://example.test/file",
 		SizeBytes: 2048,
 	}
-	a.finishDownloadFileShare("download-ok", "msg-ok", payload, selectedPath, workspace, feishu.SharedFileRequest{
+	finishDownloadFileShare(a,"download-ok", "msg-ok", payload, selectedPath, workspace, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    "chat-1",
 		UserID:    "user-1",
@@ -72,7 +72,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 	}
 	ff.shareFileErr = errors.New("share boom")
 	before := len(ff.patchedCards)
-	a.finishDownloadFileShare("download-fail", "msg-fail", payload, selectedPath, workspace, feishu.SharedFileRequest{
+	finishDownloadFileShare(a,"download-fail", "msg-fail", payload, selectedPath, workspace, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    "chat-1",
 		UserID:    "user-1",
@@ -86,7 +86,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 
 	ff.shareFileErr = nil
 	before = len(ff.patchedCards)
-	a.finishDownloadFileShare("download-ok", "", payload, selectedPath, workspace, feishu.SharedFileRequest{
+	finishDownloadFileShare(a,"download-ok", "", payload, selectedPath, workspace, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    "chat-1",
 		UserID:    "user-1",
@@ -107,12 +107,12 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		CurrentPath: workspace,
 	}
 
-	resp, err := a.completeDownloadFileConfirm(&feishu.CardAction{}, nil, payload, selectedPath)
+	resp, err := completeDownloadFileConfirm(a,&feishu.CardAction{}, nil, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "下载请求已过期" {
 		t.Fatalf("completeDownloadFileConfirm(nil pending) = %+v, %v", resp, err)
 	}
 
-	resp, err = a.completeDownloadFileConfirm(&feishu.CardAction{}, &state.PendingRequest{Status: "processing"}, payload, selectedPath)
+	resp, err = completeDownloadFileConfirm(a,&feishu.CardAction{}, &state.PendingRequest{Status: "processing"}, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "正在生成下载链接，请稍候" {
 		t.Fatalf("completeDownloadFileConfirm(processing) = %+v, %v", resp, err)
 	}
@@ -135,7 +135,7 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		t.Fatalf("UpsertPending(download-confirm) error = %v", err)
 	}
 	ff.sharedFileResult = feishu.SharedFileResult{FileName: "report.txt", URL: "https://example.test/download"}
-	resp, err = a.completeDownloadFileConfirm(&feishu.CardAction{
+	resp, err = completeDownloadFileConfirm(a,&feishu.CardAction{
 		ChatID:    "",
 		UserID:    "",
 		MessageID: "",

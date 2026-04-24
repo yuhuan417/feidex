@@ -110,7 +110,7 @@ func (s pendingInputService) handlePendingTextResponse(msg *feishu.InboundMessag
 	}
 }
 
-func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func completePendingFormCancel(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	appState := appState(a)
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)

@@ -161,7 +161,7 @@ func TestCompletePendingFormCancelKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.completePendingFormCancel(&feishu.CardAction{
+	resp, err := completePendingFormCancel(a,&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "form-1"},
 	})

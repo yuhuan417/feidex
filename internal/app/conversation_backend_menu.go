@@ -54,7 +54,7 @@ func buildConversationThreadsCard(sessionKey string, view conversationThreadsCar
 	return card
 }
 
-func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
+func renderCodexThreadsCard(a *App, sessionKey string, includeAll bool) (map[string]any, error) {
 	sess := appState(a).session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
@@ -160,7 +160,7 @@ func (a *App) renderCodexThreadsCard(sessionKey string, includeAll bool) (map[st
 	}), nil
 }
 
-func (a *App) renderClaudeThreadsCardForCurrentBackend(sessionKey string, includeAll bool) (map[string]any, error) {
+func renderClaudeThreadsCardForCurrentBackend(a *App, sessionKey string, includeAll bool) (map[string]any, error) {
 	sess := appState(a).session(sessionKey)
 	workspace := a.cfg.Workspaces[0]
 	if sess != nil {
@@ -168,10 +168,10 @@ func (a *App) renderClaudeThreadsCardForCurrentBackend(sessionKey string, includ
 			workspace = *ws
 		}
 	}
-	return a.renderClaudeThreadsCard(sessionKey, sess, &workspace, includeAll)
+	return renderClaudeThreadsCard(a, sessionKey, sess, &workspace, includeAll)
 }
 
-func (a *App) renderClaudeThreadsCard(sessionKey string, sess *state.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
+func renderClaudeThreadsCard(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
 	items, err := listClaudeSessions(sessionKey, ws, includeAll)
 	if err != nil {
 		return nil, err

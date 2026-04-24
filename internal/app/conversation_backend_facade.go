@@ -72,11 +72,11 @@ func (b codexConversationBackend) forkReplyMessage(string) string {
 }
 
 func (b codexConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
-	b.app.recoverCodexStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
+	recoverCodexStartupConversation(b.app,sessionKey, workspaceID, sess, ws, effectiveModel)
 }
 
 func (b codexConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return b.app.renderCodexThreadsCard(sessionKey, includeAll)
+	return renderCodexThreadsCard(b.app,sessionKey, includeAll)
 }
 
 func (b codexConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
@@ -143,11 +143,11 @@ func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
 }
 
 func (b claudeConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, _ *config.Workspace, _ string) {
-	b.app.recoverClaudeStartupConversation(sessionKey, workspaceID, sess)
+	recoverClaudeStartupConversation(b.app,sessionKey, workspaceID, sess)
 }
 
 func (b claudeConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return b.app.renderClaudeThreadsCardForCurrentBackend(sessionKey, includeAll)
+	return renderClaudeThreadsCardForCurrentBackend(b.app,sessionKey, includeAll)
 }
 
 func (b claudeConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {

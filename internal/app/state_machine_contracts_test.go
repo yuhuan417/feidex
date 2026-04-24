@@ -40,7 +40,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		return nil
 	}
 
-	if err := a.commandInterrupt(msg); err != nil {
+	if err := commandInterrupt(a,msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {

@@ -148,7 +148,7 @@ func (s workspaceActionService) completePathPickerAction(action *feishu.CardActi
 		if pending.Kind == downloadFilePendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-			return s.app.completeDownloadFileConfirm(action, pending, payload, selectedPath)
+			return completeDownloadFileConfirm(s.app,action, pending, payload, selectedPath)
 		}
 		if pending.Kind == upgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath

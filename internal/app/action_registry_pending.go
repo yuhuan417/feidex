@@ -44,7 +44,7 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 		return completeApprovalAction(s.app,action, "approval.permissions.accept_session")
 	},
 	"pending_form.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completePendingFormCancel(action)
+		return completePendingFormCancel(s.app,action)
 	},
 	"review.base.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newReviewFormService(s.app).completeReviewBaseSelect(action)
