@@ -101,10 +101,10 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if err := a.backendMaintenanceBlocksInboundMessage(); err != nil {
 		return err
 	}
-	replyLink := a.replyRootTurnLink(msg)
+	replyLink := newReplyContinuationService(a).replyRootTurnLink(msg)
 	targetSessionKey := a.makeSessionKey(msg)
 	if replyLink != nil {
-		targetSessionKey = a.sessionKeyForInboundMessage(msg, replyLink)
+		targetSessionKey = newReplyContinuationService(a).sessionKeyForInboundMessage(msg, replyLink)
 	}
 	if newPendingQueueService(a).shouldStageInboundImages(msg) {
 		if err := newPendingQueueService(a).stageInboundImagesForSession(msg, a.makeSessionKey(msg)); err != nil {
@@ -116,7 +116,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return nil
 	}
 	if replyLink != nil {
-		if steered, err := a.trySteerInboundReply(msg, replyLink); err == nil && steered {
+		if steered, err := newReplyContinuationService(a).trySteerInboundReply(msg, replyLink); err == nil && steered {
 			return nil
 		} else if err != nil {
 			slog.Warn("reply steer failed; falling back to queue",

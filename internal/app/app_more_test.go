@@ -3080,7 +3080,7 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:group:chat-1:root:root-msg"
-	bucketSessionKey := a.pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -3240,7 +3240,7 @@ func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
 
 func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	sessionKey := a.pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	sessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -3304,7 +3304,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	replySessionKey := "feishu:group:chat-1:root:reply-root"
-	bucketSessionKey := a.pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         replySessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,

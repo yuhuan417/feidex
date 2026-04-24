@@ -53,8 +53,8 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	if err != nil {
 		return err
 	}
-	bucketSessionKey := a.pendingInputSessionKey(msg)
-	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
+	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(msg)
+	stagedImages := newReplyContinuationService(a).collectPendingStagedImages(sessionKey, bucketSessionKey)
 	attachments := append(stagedImageAttachments(stagedImages), inboundAttachments...)
 	skillResolution := newSkillsService(a).resolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
@@ -114,7 +114,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 	}
 	sub.ID = id
 	if len(stagedImages) > 0 {
-		if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
+		if err := newReplyContinuationService(a).clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
 			return err
 		}
 	}
@@ -509,8 +509,8 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 	if err := appState.markSubmissionRunning(sub.ID, threadID, turnID); err != nil {
 		return err
 	}
-	a.recordSubmissionSourceLinks(sub)
-	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	newReplyContinuationService(a).recordSubmissionSourceLinks(sub)
+	newReplyContinuationService(a).recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	slog.Debug("startNextSubmission completed",
 		"session_key", sessionKey,

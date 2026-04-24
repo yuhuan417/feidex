@@ -279,12 +279,12 @@ func (w *lifecycleCoordinator) bindClaudeSubmissionStartState(sessionKey string,
 	if err := appState.markSubmissionRunning(sub.ID, claudeThreadID, turnID); err != nil {
 		return nil, err
 	}
-	a.recordSubmissionSourceLinks(sub)
+	newReplyContinuationService(a).recordSubmissionSourceLinks(sub)
 	rootMessageID := ""
 	if updatedSess != nil {
 		rootMessageID = strings.TrimSpace(updatedSess.RootMessageID)
 	}
-	a.recordRootTurnBinding(rootMessageID, sessionKey, claudeThreadID, turnID)
+	newReplyContinuationService(a).recordRootTurnBinding(rootMessageID, sessionKey, claudeThreadID, turnID)
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	if strings.TrimSpace(claudeThreadID) != "" {
 		a.markSessionThreadLive(sessionKey, claudeThreadID)

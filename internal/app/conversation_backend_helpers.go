@@ -202,12 +202,12 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = a.defaultWorkspaceID()
 	}
-	bucketSessionKey := a.pendingInputSessionKey(msg)
+	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(msg)
 	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return false, err
 	}
-	stagedImages := a.collectPendingStagedImages(sessionKey, bucketSessionKey)
+	stagedImages := newReplyContinuationService(a).collectPendingStagedImages(sessionKey, bucketSessionKey)
 	inputSub := &state.Submission{
 		InputText:            msg.Text,
 		Attachments:          append(stagedImageAttachments(stagedImages), inboundAttachments...),
@@ -237,7 +237,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 	if err := a.appState().saveSession(sess); err != nil {
 		return false, err
 	}
-	if err := a.clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
+	if err := newReplyContinuationService(a).clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {
 		return false, err
 	}
 	return true, nil

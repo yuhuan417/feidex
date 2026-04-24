@@ -425,7 +425,7 @@ func TestTrySteerInboundReplyIgnoresSkillSemantics(t *testing.T) {
 		}
 	}
 
-	got, err := a.trySteerInboundReply(&feishu.InboundMessage{
+	got, err := newReplyContinuationService(a).trySteerInboundReply(&feishu.InboundMessage{
 		MessageID: "m-steer",
 		ChatID:    "chat-1",
 		ChatType:  "p2p",

@@ -171,11 +171,11 @@ func (b claudeConversationBackend) interruptActiveTurn(ctx context.Context, sess
 }
 
 func (b claudeConversationBackend) continueActiveTurn(sessionKey, text string) error {
-	return b.app.continueClaudeSessionWithText(sessionKey, text)
+	return newReplyContinuationService(b.app).continueClaudeSessionWithText(sessionKey, text)
 }
 
 func (b claudeConversationBackend) tryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
-	return b.app.tryClaudeReplyContinuation(msg, link, sessionKey, sess)
+	return newReplyContinuationService(b.app).tryClaudeReplyContinuation(msg, link, sessionKey, sess)
 }
 
 func (b claudeConversationBackend) startQueuedSubmission(w *lifecycleCoordinator, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {

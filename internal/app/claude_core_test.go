@@ -1476,7 +1476,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	if sess == nil {
 		t.Fatal("session missing")
 	}
-	steered, err := a.tryClaudeReplyContinuation(&feishu.InboundMessage{
+	steered, err := newReplyContinuationService(a).tryClaudeReplyContinuation(&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",
