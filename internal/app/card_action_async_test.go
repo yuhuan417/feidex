@@ -176,12 +176,12 @@ func TestCompleteReviewBaseSelectReturnsPreparingCardAndPatchesAsync(t *testing.
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 
-	if err := a.beginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
 
-	resp, err := a.completeReviewBaseSelect(&feishu.CardAction{
+	resp, err := newReviewFormService(a).completeReviewBaseSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		MessageID:   pending.FeishuMsgID,
 		ActionValue: map[string]any{"request_id": pending.ID},
@@ -215,7 +215,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	a.markSessionThreadLive(sessionKey, "thread-1")
 
-	if err := a.beginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
@@ -238,7 +238,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 		return nil
 	}
 
-	resp, err := a.completeReviewFormSubmit(&feishu.CardAction{
+	resp, err := newReviewFormService(a).completeReviewFormSubmit(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   pending.FeishuMsgID,

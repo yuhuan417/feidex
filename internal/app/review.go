@@ -80,7 +80,7 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 	case "base":
 		switch len(args) {
 		case 1:
-			return s.app.beginReviewForm(msg, reviewFormModeBase)
+			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeBase)
 		case 2:
 			return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
 				Type:   reviewTargetBaseBranch,
@@ -92,7 +92,7 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 	case "commit":
 		switch len(args) {
 		case 1:
-			return s.app.beginReviewForm(msg, reviewFormModeCommit)
+			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCommit)
 		case 2:
 			return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
 				Type:      reviewTargetCommit,
@@ -103,7 +103,7 @@ func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, a
 		}
 	case "custom":
 		if len(args) == 1 {
-			return s.app.beginReviewForm(msg, reviewFormModeCustom)
+			return newReviewFormService(s.app).beginReviewForm(msg, reviewFormModeCustom)
 		}
 		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
 			Type:         reviewTargetCustom,

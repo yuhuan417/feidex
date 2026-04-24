@@ -15,7 +15,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return a.renderToolsMenuCard(sessionKey), true
 	},
 	"menu.review": func(a *App, sessionKey string) (map[string]any, bool) {
-		return a.renderReviewMenuCard(sessionKey), true
+		return newReviewFormService(a).renderReviewMenuCard(sessionKey), true
 	},
 	"menu.skills": func(a *App, sessionKey string) (map[string]any, bool) {
 		card, err := a.renderSkillsCard(sessionKey, false)

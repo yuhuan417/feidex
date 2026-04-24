@@ -12,7 +12,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) renderReviewMenuCard(sessionKey string) map[string]any {
+func (s reviewFormService) renderReviewMenuCard(sessionKey string) map[string]any {
 	bodyLines := []string{
 		"在当前线程启动 inline review。",
 		"",
@@ -48,11 +48,11 @@ func (a *App) renderReviewMenuCard(sessionKey string) map[string]any {
 			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		},
 	}
-	return a.feishu.SimpleStatusCard("代码审查", "blue", menuCardBody("menu.review", strings.Join(bodyLines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard("代码审查", "blue", menuCardBody("menu.review", strings.Join(bodyLines, "\n")), buttons)
 }
 
-func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
-	sessionKey, _, ws := a.currentWorkspaceForMessage(msg)
+func (s reviewFormService) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
+	sessionKey, _, ws := s.app.currentWorkspaceForMessage(msg)
 	if ws == nil {
 		return fmt.Errorf("current workspace not found")
 	}
@@ -62,7 +62,7 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 	payload := reviewPendingPayload{Mode: strings.TrimSpace(mode)}
 	switch payload.Mode {
 	case reviewFormModeBase:
-		options, err := newReviewGitService(a).listReviewBranches(ws.Cwd)
+		options, err := newReviewGitService(s.app).listReviewBranches(ws.Cwd)
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 		}
 		payload.Branch = options[0].Name
 	case reviewFormModeCommit:
-		options, err := newReviewGitService(a).listReviewCommits(ws.Cwd, 100)
+		options, err := newReviewGitService(s.app).listReviewCommits(ws.Cwd, 100)
 		if err != nil {
 			return err
 		}
@@ -84,16 +84,16 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 	default:
 		return fmt.Errorf("unsupported review form mode %q", payload.Mode)
 	}
-	appState := a.appState()
+	appState := s.app.appState()
 	requestID, err := appState.nextLocalID("review")
 	if err != nil {
 		return err
 	}
-	card, err := a.renderReviewFormCard(sessionKey, requestID, payload)
+	card, err := newReviewFormService(s.app).renderReviewFormCard(sessionKey, requestID, payload)
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -110,25 +110,25 @@ func (a *App) beginReviewForm(msg *feishu.InboundMessage, mode string) error {
 	})
 }
 
-func (a *App) renderReviewFormCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
+func (s reviewFormService) renderReviewFormCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
 	switch strings.TrimSpace(payload.Mode) {
 	case reviewFormModeBase:
-		return a.renderReviewBaseCard(sessionKey, requestID, payload)
+		return newReviewFormService(s.app).renderReviewBaseCard(sessionKey, requestID, payload)
 	case reviewFormModeCommit:
-		return a.renderReviewCommitCard(sessionKey, requestID, payload)
+		return newReviewFormService(s.app).renderReviewCommitCard(sessionKey, requestID, payload)
 	case reviewFormModeCustom:
-		return a.renderReviewCustomCard(sessionKey, requestID, payload), nil
+		return newReviewFormService(s.app).renderReviewCustomCard(sessionKey, requestID, payload), nil
 	default:
 		return nil, fmt.Errorf("unsupported review form mode %q", payload.Mode)
 	}
 }
 
-func (a *App) renderReviewBaseCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
-	ws := newReviewGitService(a).workspaceForSessionKey(sessionKey)
+func (s reviewFormService) renderReviewBaseCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
+	ws := newReviewGitService(s.app).workspaceForSessionKey(sessionKey)
 	if ws == nil {
 		return nil, fmt.Errorf("current workspace not found")
 	}
-	options, err := newReviewGitService(a).listReviewBranches(ws.Cwd)
+	options, err := newReviewGitService(s.app).listReviewBranches(ws.Cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +183,12 @@ func (a *App) renderReviewBaseCard(sessionKey, requestID string, payload reviewP
 	return card, nil
 }
 
-func (a *App) renderReviewCommitCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
-	ws := newReviewGitService(a).workspaceForSessionKey(sessionKey)
+func (s reviewFormService) renderReviewCommitCard(sessionKey, requestID string, payload reviewPendingPayload) (map[string]any, error) {
+	ws := newReviewGitService(s.app).workspaceForSessionKey(sessionKey)
 	if ws == nil {
 		return nil, fmt.Errorf("current workspace not found")
 	}
-	options, err := newReviewGitService(a).listReviewCommits(ws.Cwd, 100)
+	options, err := newReviewGitService(s.app).listReviewCommits(ws.Cwd, 100)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (a *App) renderReviewCommitCard(sessionKey, requestID string, payload revie
 	return card, nil
 }
 
-func (a *App) renderReviewCustomCard(sessionKey, requestID string, payload reviewPendingPayload) map[string]any {
+func (s reviewFormService) renderReviewCustomCard(sessionKey, requestID string, payload reviewPendingPayload) map[string]any {
 	card := newMarkdownBodyCard("自定义审查", "blue")
 	appendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
@@ -298,31 +298,31 @@ func (a *App) renderReviewCustomCard(sessionKey, requestID string, payload revie
 	return card
 }
 
-func (a *App) completeReviewBaseSelect(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, _, errResp := a.reviewPendingForAction(action, reviewFormModeBase)
+func (s reviewFormService) completeReviewBaseSelect(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	pending, _, errResp := newReviewFormService(s.app).reviewPendingForAction(action, reviewFormModeBase)
 	if errResp != nil {
 		return errResp, nil
 	}
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return a.completeReviewBaseSelectSync(action)
+		return newReviewFormService(s.app).completeReviewBaseSelectSync(action)
 	}
-	return a.completeAsyncRenderedCardAction(
+	return s.app.completeAsyncRenderedCardAction(
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
-		a.renderReviewPreparingCard(pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		s.app.renderReviewPreparingCard(pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeReviewBaseSelectSync(action)
+			return newReviewFormService(s.app).completeReviewBaseSelectSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return a.renderReviewFailureCard(sessionKey, errText, "")
+			return s.app.renderReviewFailureCard(sessionKey, errText, "")
 		},
 		"review base select patch failed",
 	)
 }
 
-func (a *App) completeReviewBaseSelectSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, payload, errResp := a.reviewPendingForAction(action, reviewFormModeBase)
+func (s reviewFormService) completeReviewBaseSelectSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	pending, payload, errResp := newReviewFormService(s.app).reviewPendingForAction(action, reviewFormModeBase)
 	if errResp != nil {
 		return errResp, nil
 	}
@@ -331,41 +331,41 @@ func (a *App) completeReviewBaseSelectSync(action *feishu.CardAction) (*callback
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 branch"}}, nil
 	}
 	payload.Branch = selected
-	_ = a.appState().updatePending(pending.ID, func(req *state.PendingRequest) {
+	_ = s.app.appState().updatePending(pending.ID, func(req *state.PendingRequest) {
 		req.PayloadJSON = mustJSON(payload)
 	})
-	card, err := a.renderReviewBaseCard(pending.SessionKey, pending.ID, payload)
+	card, err := newReviewFormService(s.app).renderReviewBaseCard(pending.SessionKey, pending.ID, payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{Card: rawCard(card)}, nil
 }
 
-func (a *App) completeReviewCommitSelect(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, _, errResp := a.reviewPendingForAction(action, reviewFormModeCommit)
+func (s reviewFormService) completeReviewCommitSelect(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	pending, _, errResp := newReviewFormService(s.app).reviewPendingForAction(action, reviewFormModeCommit)
 	if errResp != nil {
 		return errResp, nil
 	}
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return a.completeReviewCommitSelectSync(action)
+		return newReviewFormService(s.app).completeReviewCommitSelectSync(action)
 	}
-	return a.completeAsyncRenderedCardAction(
+	return s.app.completeAsyncRenderedCardAction(
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
-		a.renderReviewPreparingCard(pending.SessionKey, "正在刷新 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		s.app.renderReviewPreparingCard(pending.SessionKey, "正在刷新 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeReviewCommitSelectSync(action)
+			return newReviewFormService(s.app).completeReviewCommitSelectSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return a.renderReviewFailureCard(sessionKey, errText, "")
+			return s.app.renderReviewFailureCard(sessionKey, errText, "")
 		},
 		"review commit select patch failed",
 	)
 }
 
-func (a *App) completeReviewCommitSelectSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, payload, errResp := a.reviewPendingForAction(action, reviewFormModeCommit)
+func (s reviewFormService) completeReviewCommitSelectSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	pending, payload, errResp := newReviewFormService(s.app).reviewPendingForAction(action, reviewFormModeCommit)
 	if errResp != nil {
 		return errResp, nil
 	}
@@ -374,8 +374,8 @@ func (a *App) completeReviewCommitSelectSync(action *feishu.CardAction) (*callba
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 commit"}}, nil
 	}
 	payload.CommitSHA = selected
-	if ws := newReviewGitService(a).workspaceForSessionKey(pending.SessionKey); ws != nil {
-		options, err := newReviewGitService(a).listReviewCommits(ws.Cwd, 100)
+	if ws := newReviewGitService(s.app).workspaceForSessionKey(pending.SessionKey); ws != nil {
+		options, err := newReviewGitService(s.app).listReviewCommits(ws.Cwd, 100)
 		if err == nil {
 			for _, option := range options {
 				if option.SHA == selected {
@@ -385,18 +385,18 @@ func (a *App) completeReviewCommitSelectSync(action *feishu.CardAction) (*callba
 			}
 		}
 	}
-	_ = a.appState().updatePending(pending.ID, func(req *state.PendingRequest) {
+	_ = s.app.appState().updatePending(pending.ID, func(req *state.PendingRequest) {
 		req.PayloadJSON = mustJSON(payload)
 	})
-	card, err := a.renderReviewCommitCard(pending.SessionKey, pending.ID, payload)
+	card, err := newReviewFormService(s.app).renderReviewCommitCard(pending.SessionKey, pending.ID, payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{Card: rawCard(card)}, nil
 }
 
-func (a *App) completeReviewFormSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s reviewFormService) completeReviewFormSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	requestID := actionStringValue(action, "request_id")
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != pendingKindReview {
@@ -407,25 +407,25 @@ func (a *App) completeReviewFormSubmit(action *feishu.CardAction) (*callback.Car
 	}
 	payload := reviewPendingPayloadFromPending(pending)
 	if action == nil || strings.TrimSpace(action.MessageID) == "" || strings.TrimSpace(payload.Mode) == reviewFormModeCustom {
-		return a.completeReviewFormSubmitSync(action)
+		return newReviewFormService(s.app).completeReviewFormSubmitSync(action)
 	}
-	return a.completeAsyncRenderedCardAction(
+	return s.app.completeAsyncRenderedCardAction(
 		action,
 		pending.SessionKey,
 		"正在启动 review",
-		a.renderReviewPreparingCard(pending.SessionKey, "正在启动 review，请稍候。\n\n这张卡片会自动刷新。"),
+		s.app.renderReviewPreparingCard(pending.SessionKey, "正在启动 review，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeReviewFormSubmitSync(action)
+			return newReviewFormService(s.app).completeReviewFormSubmitSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return a.renderReviewFailureCard(sessionKey, errText, "")
+			return s.app.renderReviewFailureCard(sessionKey, errText, "")
 		},
 		"review submit patch failed",
 	)
 }
 
-func (a *App) completeReviewFormSubmitSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s reviewFormService) completeReviewFormSubmitSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	requestID := actionStringValue(action, "request_id")
 	pending := appState.pending(requestID)
 	if pending == nil || pending.Kind != pendingKindReview {
@@ -448,11 +448,11 @@ func (a *App) completeReviewFormSubmitSync(action *feishu.CardAction) (*callback
 	default:
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未知 review 表单"}}, nil
 	}
-	msg := a.commandMessageFromAction(action, pending.SessionKey, "/review")
-	confirmation, err := a.startInlineReview(msg, target)
+	msg := s.app.commandMessageFromAction(action, pending.SessionKey, "/review")
+	confirmation, err := s.app.startInlineReview(msg, target)
 	if err != nil {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-		card, renderErr := a.renderReviewFormCard(pending.SessionKey, requestID, payload)
+		card, renderErr := newReviewFormService(s.app).renderReviewFormCard(pending.SessionKey, requestID, payload)
 		if renderErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -467,13 +467,13 @@ func (a *App) completeReviewFormSubmitSync(action *feishu.CardAction) (*callback
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已启动 review"},
-		Card:  rawCard(a.feishu.SimpleStatusCard("Review 已启动", "blue", confirmation, nil)),
+		Card:  rawCard(s.app.feishu.SimpleStatusCard("Review 已启动", "blue", confirmation, nil)),
 	}, nil
 }
 
-func (a *App) reviewPendingForAction(action *feishu.CardAction, mode string) (*state.PendingRequest, reviewPendingPayload, *callback.CardActionTriggerResponse) {
+func (s reviewFormService) reviewPendingForAction(action *feishu.CardAction, mode string) (*state.PendingRequest, reviewPendingPayload, *callback.CardActionTriggerResponse) {
 	requestID := actionStringValue(action, "request_id")
-	pending := a.appState().pending(requestID)
+	pending := s.app.appState().pending(requestID)
 	if pending == nil || pending.Kind != pendingKindReview {
 		return nil, reviewPendingPayload{}, &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "review 请求已过期"}}
 	}

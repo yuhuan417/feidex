@@ -100,7 +100,7 @@ func (s menuActionService) completeMenuReview(action *feishu.CardAction, session
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
-		Card:  rawCard(s.app.renderReviewMenuCard(sessionKey)),
+		Card:  rawCard(newReviewFormService(s.app).renderReviewMenuCard(sessionKey)),
 	}, nil
 }
 

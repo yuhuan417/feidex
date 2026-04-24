@@ -47,13 +47,13 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completePendingFormCancel(action)
 	},
 	"review.base.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeReviewBaseSelect(action)
+		return newReviewFormService(s.app).completeReviewBaseSelect(action)
 	},
 	"review.commit.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeReviewCommitSelect(action)
+		return newReviewFormService(s.app).completeReviewCommitSelect(action)
 	},
 	"review.form.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeReviewFormSubmit(action)
+		return newReviewFormService(s.app).completeReviewFormSubmit(action)
 	},
 	"elicitation_url.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeElicitationURLAction(action, "elicitation_url.accept")
