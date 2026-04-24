@@ -6,7 +6,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) bindClaudeSessionThread(sessionKey, turnID, threadID string) {
+func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 	if a == nil {
 		return
 	}

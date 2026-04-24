@@ -65,7 +65,7 @@ func localCommandFastSpecs() []localCommandSpec {
 				return exactOrSingleArgCommand(fields, "config", "fast", "default", "off", "toggle")
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandFast(msg, args)
+				return commandFast(a, msg, args)
 			},
 			HelpGroup: "model",
 			HelpEntries: []helpCommandSpec{

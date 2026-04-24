@@ -48,7 +48,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = defaultWorkspaceID(s.app)
 	}
-	attachments, err := s.app.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	attachments, err := resolveInboundAttachments(s.app, msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return err
 	}

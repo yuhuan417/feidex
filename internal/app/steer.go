@@ -215,7 +215,7 @@ func (s replyContinuationService) buildClaudeContinuationSubmissionFromMessage(m
 	}
 	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(s.app))
 	bucketSessionKey := newReplyContinuationService(s.app).pendingInputSessionKey(msg)
-	inboundAttachments, err := s.app.resolveInboundAttachments(msg, workspaceID, sessionKey)
+	inboundAttachments, err := resolveInboundAttachments(s.app, msg, workspaceID, sessionKey)
 	if err != nil {
 		return nil, err
 	}

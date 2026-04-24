@@ -249,7 +249,7 @@ func (s backendSelectionService) backendRuntimeReady(target string) bool {
 }
 
 func (s backendSelectionService) backendSwitchBlockedReason() string {
-	return s.app.frontendIdleBlockedReason()
+	return frontendIdleBlockedReason(s.app)
 }
 
 func (s backendSelectionService) switchBackend(ctx context.Context, target string) error {

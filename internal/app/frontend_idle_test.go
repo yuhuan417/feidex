@@ -181,14 +181,14 @@ func TestFrontendIdleState(t *testing.T) {
 			if tt.seed != nil {
 				tt.seed(t, a, store)
 			}
-			got := a.frontendIdleBlockedReason()
+			got := frontendIdleBlockedReason(a)
 			if got != tt.want {
 				t.Fatalf("frontendIdleBlockedReason() = %q, want %q", got, tt.want)
 			}
 			if got := newBackendSelectionService(a).backendSwitchBlockedReason(); got != tt.want {
 				t.Fatalf("backendSwitchBlockedReason() = %q, want %q", got, tt.want)
 			}
-			if got := a.frontendIsIdle(); got != tt.wantIdle {
+			if got := frontendIsIdle(a); got != tt.wantIdle {
 				t.Fatalf("frontendIsIdle() = %v, want %v", got, tt.wantIdle)
 			}
 		})
@@ -197,10 +197,10 @@ func TestFrontendIdleState(t *testing.T) {
 
 func TestFrontendIdleStateNilApp(t *testing.T) {
 	var a *App
-	if got := a.frontendIdleBlockedReason(); got != "app not initialized" {
+	if got := frontendIdleBlockedReason(a); got != "app not initialized" {
 		t.Fatalf("frontendIdleBlockedReason(nil) = %q", got)
 	}
-	if a.frontendIsIdle() {
+	if frontendIsIdle(a) {
 		t.Fatal("frontendIsIdle(nil) = true, want false")
 	}
 }

@@ -52,7 +52,7 @@ type elicitationURLPayload struct {
 	URL           string `json:"url"`
 }
 
-func (a *App) pendingTextRequest(sessionKey, userID string) *state.PendingRequest {
+func pendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest {
 	pending := appState(a).pendingRequests()
 	sort.Slice(pending, func(i, j int) bool { return pending[i].CreatedAt > pending[j].CreatedAt })
 	for _, req := range pending {
@@ -70,8 +70,8 @@ func (a *App) pendingTextRequest(sessionKey, userID string) *state.PendingReques
 	return nil
 }
 
-func (a *App) shouldRedactInboundText(sessionKey, userID string) bool {
-	req := a.pendingTextRequest(sessionKey, userID)
+func shouldRedactInboundText(a *App, sessionKey, userID string) bool {
+	req := pendingTextRequest(a, sessionKey, userID)
 	if req == nil {
 		return false
 	}

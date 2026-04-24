@@ -203,7 +203,7 @@ func (a *App) tryCodexReplyContinuation(msg *feishu.InboundMessage, link *state.
 		sess.WorkspaceID = defaultWorkspaceID(a)
 	}
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(msg)
-	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	inboundAttachments, err := resolveInboundAttachments(a, msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return false, err
 	}

@@ -172,7 +172,7 @@ func (s modelConfigService) ensureClaudeRuntimeConfigChangeSafe() error {
 	if s.app == nil {
 		return fmt.Errorf("app not initialized")
 	}
-	if reason := strings.TrimSpace(s.app.frontendIdleBlockedReason()); reason != "" {
+	if reason := strings.TrimSpace(frontendIdleBlockedReason(s.app)); reason != "" {
 		return fmt.Errorf("Claude model / effort 只能在当前 frontend 空闲时切换: %s", reason)
 	}
 	return nil

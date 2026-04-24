@@ -2,11 +2,11 @@ package app
 
 import "strings"
 
-func (a *App) frontendIsIdle() bool {
-	return a.frontendIdleBlockedReason() == ""
+func frontendIsIdle(a *App) bool {
+	return frontendIdleBlockedReason(a) == ""
 }
 
-func (a *App) frontendIdleBlockedReason() string {
+func frontendIdleBlockedReason(a *App) string {
 	if a == nil {
 		return "app not initialized"
 	}

@@ -8,7 +8,7 @@ import (
 	"feidex/internal/state"
 )
 
-func (a *App) renderStatusCard(sessionKey string) map[string]any {
+func renderStatusCard(a *App, sessionKey string) map[string]any {
 	var sess *state.Session
 	if strings.TrimSpace(sessionKey) != "" {
 		sess = appState(a).session(sessionKey)
@@ -20,8 +20,8 @@ func (a *App) renderStatusCard(sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBodyForBackend(configuredBackend(a), "menu.status", newBackendConfigurationService(a).statusCardBody(sess)), buttons)
 }
 
-func (a *App) commandStatus(msg *feishu.InboundMessage) error {
-	card := a.renderStatusCard(makeSessionKey(a, msg))
+func commandStatus(a *App, msg *feishu.InboundMessage) error {
+	card := renderStatusCard(a, makeSessionKey(a, msg))
 	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
 }

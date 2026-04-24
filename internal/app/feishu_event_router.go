@@ -58,7 +58,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	}
 	sessionKey := makeSessionKey(a, msg)
 	logText := truncate(msg.Text, 160)
-	if a.shouldRedactInboundText(sessionKey, msg.UserID) {
+	if shouldRedactInboundText(a, sessionKey, msg.UserID) {
 		logText = "[redacted pending input]"
 	}
 	slog.Debug("feishu inbound",
@@ -83,7 +83,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
 	if !msg.ExpandedMergeForward {
-		if pending := a.pendingTextRequest(sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
+		if pending := pendingTextRequest(a, sessionKey, msg.UserID); pending != nil && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
 			if err := newPendingInputService(a).handlePendingTextResponse(msg, pending); err != nil {
 				return err
 			}
@@ -98,7 +98,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			return nil
 		}
 	}
-	if err := a.backendMaintenanceBlocksInboundMessage(); err != nil {
+	if err := backendMaintenanceBlocksInboundMessage(a); err != nil {
 		return err
 	}
 	replyLink := newReplyContinuationService(a).replyRootTurnLink(msg)

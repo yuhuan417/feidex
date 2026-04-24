@@ -76,7 +76,7 @@ func localCommandSystemRuntimeSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-				return a.commandStatus(msg)
+				return commandStatus(a, msg)
 			},
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{

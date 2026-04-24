@@ -22,7 +22,7 @@ func renderServiceTierReplyValue(value string) string {
 	return appruntime.RenderServiceTierReplyValue(value)
 }
 
-func (a *App) renderServiceTierMenuCard(sessionKey string) map[string]any {
+func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
 	sess := appState(a).session(sessionKey)
 	body := "配置当前 thread 的 service tier。"
 	buttons := []feishu.Button{}
@@ -73,7 +73,7 @@ func (a *App) renderServiceTierMenuCard(sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard("Service Tier", "blue", menuCardBody("menu.fast", body), buttons)
 }
 
-func (a *App) setThreadServiceTier(sessionKey, threadID, serviceTier string) (*state.Session, error) {
+func setThreadServiceTier(a *App, sessionKey, threadID, serviceTier string) (*state.Session, error) {
 	appState := appState(a)
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
@@ -89,7 +89,7 @@ func (a *App) setThreadServiceTier(sessionKey, threadID, serviceTier string) (*s
 	return sess, nil
 }
 
-func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
+func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) == 0 {
 		if msg == nil {
 			return nil
@@ -120,7 +120,7 @@ func (a *App) commandFast(msg *feishu.InboundMessage, args []string) error {
 	}
 	sessionKey := makeSessionKey(a, msg)
 	if strings.TrimSpace(args[0]) == "config" {
-		card := a.renderServiceTierMenuCard(sessionKey)
+		card := renderServiceTierMenuCard(a, sessionKey)
 		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 		return err
 	}

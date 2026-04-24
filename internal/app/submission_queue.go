@@ -49,7 +49,7 @@ func (w *lifecycleCoordinator) enqueueSubmissionWithSessionKey(msg *feishu.Inbou
 			Status:        "idle",
 		}
 	}
-	inboundAttachments, err := a.resolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	inboundAttachments, err := resolveInboundAttachments(a, msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
 		return err
 	}

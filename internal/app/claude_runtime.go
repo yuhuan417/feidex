@@ -565,7 +565,7 @@ func (r *claudeRuntime) runSession(state *claudeSessionState) {
 			sessionKey := strings.TrimSpace(state.sessionKey)
 			threadID := strings.TrimSpace(state.sessionID)
 			state.mu.Unlock()
-			r.app.bindClaudeSessionThread(sessionKey, "", threadID)
+			bindClaudeSessionThread(r.app, sessionKey, "", threadID)
 			state.readyOnce.Do(func() { close(state.readyCh) })
 		case claudecli.TurnStartedEvent:
 			state.mu.Lock()
@@ -579,7 +579,7 @@ func (r *claudeRuntime) runSession(state *claudeSessionState) {
 			}
 			state.mu.Unlock()
 			if threadID != "" && turnID != "" {
-				r.app.bindClaudeSessionThread(sessionKey, turnID, threadID)
+				bindClaudeSessionThread(r.app, sessionKey, turnID, threadID)
 			}
 		case claudecli.TextEvent:
 			r.handleTextEvent(state, e)

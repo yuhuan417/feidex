@@ -35,7 +35,7 @@ func (s conversationWorkflowService) commandCompact(msg *feishu.InboundMessage, 
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /compact")
 	}
-	return s.app.handleBackendCompactCommand(msg)
+	return handleBackendCompactCommand(s.app, msg)
 }
 
 func compactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {

@@ -22,7 +22,7 @@ func (s commandService) handleCommand(msg *feishu.InboundMessage, raw string) er
 		return newBackendSelectionService(s.app).replyBackendSelectionCard(msg, "")
 	}
 	backend := configuredBackend(s.app)
-	if err := s.app.handleBackendMaintenanceBlock(raw); err != nil {
+	if err := handleBackendMaintenanceBlock(s.app, raw); err != nil {
 		return err
 	}
 	if !commandHandlesLocallyForBackend(spec, backend, fields) {

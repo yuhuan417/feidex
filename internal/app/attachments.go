@@ -24,7 +24,7 @@ var (
 	lineSuffixRe       = regexp.MustCompile(`^(.*?)(?::\d+(?::\d+)?)?$`)
 )
 
-func (a *App) resolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
+func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
 	if msg == nil || len(msg.Attachments) == 0 {
 		return nil, nil
 	}

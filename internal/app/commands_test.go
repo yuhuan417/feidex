@@ -353,20 +353,20 @@ func TestCommandFastTogglesAndSupportsConfigCard(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := a.commandFast(msg, nil); err != nil {
+	if err := commandFast(a,msg, nil); err != nil {
 		t.Fatalf("commandFast(toggle to fast) error = %v", err)
 	}
 	sess := a.store.GetSession("feishu:p2p:chat:user")
 	if sess == nil || sess.ActiveThreadServiceTier != "fast" {
 		t.Fatalf("expected service tier fast, got %#v", sess)
 	}
-	if err := a.commandFast(msg, []string{"config"}); err != nil {
+	if err := commandFast(a,msg, []string{"config"}); err != nil {
 		t.Fatalf("commandFast(config) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
 	}
-	if err := a.commandFast(msg, []string{"default"}); err != nil {
+	if err := commandFast(a,msg, []string{"default"}); err != nil {
 		t.Fatalf("commandFast(set default) error = %v", err)
 	}
 	sess = a.store.GetSession("feishu:p2p:chat:user")

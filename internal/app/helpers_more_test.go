@@ -41,11 +41,11 @@ func TestPendingTextRequestPrefersLatestMatchingRequest(t *testing.T) {
 		}
 	}
 
-	got := a.pendingTextRequest("sess", "u-1")
+	got := pendingTextRequest(a, "sess", "u-1")
 	if got == nil || got.ID != "latest" {
 		t.Fatalf("pendingTextRequest() = %+v, want latest matching request", got)
 	}
-	if got := a.pendingTextRequest("sess", "missing"); got != nil {
+	if got := pendingTextRequest(a, "sess", "missing"); got != nil {
 		t.Fatalf("pendingTextRequest(non-owner) = %+v, want nil", got)
 	}
 }
@@ -57,7 +57,7 @@ func TestShouldRedactInboundTextForSensitiveRequests(t *testing.T) {
 	}
 	a := &App{store: store}
 
-	if a.shouldRedactInboundText("sess", "u-1") {
+	if shouldRedactInboundText(a, "sess", "u-1") {
 		t.Fatal("expected no redaction without pending request")
 	}
 
@@ -74,7 +74,7 @@ func TestShouldRedactInboundTextForSensitiveRequests(t *testing.T) {
 	if err := a.store.UpsertPending(req); err != nil {
 		t.Fatalf("UpsertPending(secret form): %v", err)
 	}
-	if !a.shouldRedactInboundText("sess", "u-1") {
+	if !shouldRedactInboundText(a, "sess", "u-1") {
 		t.Fatal("expected secret user-input request to be redacted")
 	}
 
@@ -88,7 +88,7 @@ func TestShouldRedactInboundTextForSensitiveRequests(t *testing.T) {
 	if err := a.store.UpsertPending(req); err != nil {
 		t.Fatalf("UpsertPending(elicitation): %v", err)
 	}
-	if !a.shouldRedactInboundText("sess2", "u-1") {
+	if !shouldRedactInboundText(a, "sess2", "u-1") {
 		t.Fatal("expected elicitation request to be redacted")
 	}
 }
@@ -578,7 +578,7 @@ func TestAttachmentHelpers(t *testing.T) {
 		downloadPath:     downloadPath,
 	}
 	a := &App{cfg: cfg, feishu: stub}
-	attachments, err := a.resolveInboundAttachments(&feishu.InboundMessage{
+	attachments, err := resolveInboundAttachments(a, &feishu.InboundMessage{
 		MessageID: "root-message",
 		Attachments: []feishu.Attachment{{
 			Kind:            "image",
