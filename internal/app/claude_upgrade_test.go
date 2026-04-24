@@ -53,7 +53,7 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 	defer func() { newClaudeInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandClaude(msg, nil); err != nil {
+	if err := newBackendUpgradeService(a).commandClaude(msg, nil); err != nil {
 		t.Fatalf("commandClaude() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -85,7 +85,7 @@ func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
 	defer func() { newClaudeInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandClaude(msg, nil); err != nil {
+	if err := newBackendUpgradeService(a).commandClaude(msg, nil); err != nil {
 		t.Fatalf("commandClaude() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -117,7 +117,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 	defer func() { newClaudeInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandClaude(msg, []string{"upgrade"}); err != nil {
+	if err := newBackendUpgradeService(a).commandClaude(msg, []string{"upgrade"}); err != nil {
 		t.Fatalf("commandClaude(upgrade) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -196,7 +196,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
-	a.runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
+	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 	})
@@ -260,7 +260,7 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
-	a.runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
+	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 	})
@@ -310,7 +310,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandClaude(msg, []string{"restart"}); err != nil {
+	if err := newBackendUpgradeService(a).commandClaude(msg, []string{"restart"}); err != nil {
 		t.Fatalf("commandClaude(restart) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -365,14 +365,14 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		runClaudeSmokeTest = origSmoke
 	}()
 
-	snapshot, err := a.beginClaudeRestartOperation()
+	snapshot, err := newBackendUpgradeService(a).beginClaudeRestartOperation()
 	if err != nil {
 		t.Fatalf("beginClaudeRestartOperation() error = %v", err)
 	}
 	if !snapshot.Running {
 		t.Fatalf("beginClaudeRestartOperation() = %+v", snapshot)
 	}
-	a.runClaudeRestartOperation("msg-1", "sess-1")
+	newBackendUpgradeService(a).runClaudeRestartOperation("msg-1", "sess-1")
 	if claude.closed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
 	}
@@ -399,7 +399,7 @@ func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing
 	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
 	defer func() { runClaudeSmokeTest = origSmoke }()
 
-	switched, err := a.refreshClaudeRuntimeAfterMaintenance(context.Background())
+	switched, err := newBackendUpgradeService(a).refreshClaudeRuntimeAfterMaintenance(context.Background())
 	if err != nil {
 		t.Fatalf("refreshClaudeRuntimeAfterMaintenance() error = %v", err)
 	}
@@ -428,7 +428,7 @@ done
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := a.claudeSmokeTest(ctx); err != nil {
+	if err := newBackendUpgradeService(a).claudeSmokeTest(ctx); err != nil {
 		t.Fatalf("claudeSmokeTest() error = %v", err)
 	}
 }
@@ -449,7 +449,7 @@ done
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := a.claudeSmokeTest(ctx)
+	err := newBackendUpgradeService(a).claudeSmokeTest(ctx)
 	if err == nil || !strings.Contains(err.Error(), "exited after initialize") {
 		t.Fatalf("claudeSmokeTest() error = %v, want exited after initialize", err)
 	}

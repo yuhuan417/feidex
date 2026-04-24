@@ -12,16 +12,16 @@ import (
 
 const claudeSmokeInitGracePeriod = time.Second
 
-func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload claudeUpgradePendingPayload) {
-	manager := newClaudeInstallManager(a.cfg.Claude.Command)
+func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey string, payload claudeUpgradePendingPayload) {
+	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	_, update, finalize := maintenanceSnapshotLifecycle(
-		a,
+		s.app,
 		messageID,
 		sessionKey,
 		"claude upgrade progress patch failed",
-		newUpgradeRenderService(a).renderClaudeUpgradeOperationCard,
-		newMaintenanceStateService(a).updateClaudeUpgrade,
-		newMaintenanceStateService(a).finishClaudeUpgrade,
+		newUpgradeRenderService(s.app).renderClaudeUpgradeOperationCard,
+		newMaintenanceStateService(s.app).updateClaudeUpgrade,
+		newMaintenanceStateService(s.app).finishClaudeUpgrade,
 		func(snapshot *claudeUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -37,11 +37,11 @@ func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload cl
 			return maintenanceUpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
 		},
 		InstallVersion:    manager.InstallVersion,
-		SmokeTest:         func(ctx context.Context) error { return runClaudeSmokeTest(a, ctx) },
-		RefreshRuntime:    a.refreshClaudeRuntimeAfterMaintenance,
-		RuntimeBusyReason: newMaintenanceStateService(a).claudeUpgradeRuntimeBusyReason,
+		SmokeTest:         func(ctx context.Context) error { return runClaudeSmokeTest(s.app, ctx) },
+		RefreshRuntime:    newBackendUpgradeService(s.app).refreshClaudeRuntimeAfterMaintenance,
+		RuntimeBusyReason: newMaintenanceStateService(s.app).claudeUpgradeRuntimeBusyReason,
 		RecordVersions: func(previousVersion, targetVersion string) {
-			newMaintenanceStateService(a).updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
+			newMaintenanceStateService(s.app).updateClaudeUpgrade(func(snapshot *claudeUpgradeSnapshot) {
 				snapshot.CurrentVersion = previousVersion
 				snapshot.PreviousVersion = previousVersion
 				snapshot.TargetVersion = targetVersion
@@ -53,42 +53,42 @@ func (a *App) runClaudeUpgradeOperation(messageID, sessionKey string, payload cl
 	})
 }
 
-func (a *App) claudeSmokeTest(ctx context.Context) error {
-	if a == nil || a.cfg == nil {
+func (s backendUpgradeService) claudeSmokeTest(ctx context.Context) error {
+	if s.app == nil || s.app.cfg == nil {
 		return fmt.Errorf("claude app not initialized")
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	workdir := "."
-	for _, ws := range a.cfg.Workspaces {
+	for _, ws := range s.app.cfg.Workspaces {
 		if cwd := strings.TrimSpace(ws.Cwd); cwd != "" {
 			workdir = cwd
 			break
 		}
 	}
 	opts := []claudecli.SessionOption{
-		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(a.cfg.Claude.Command), "claude")),
+		claudecli.WithCLIPath(firstNonEmpty(strings.TrimSpace(s.app.cfg.Claude.Command), "claude")),
 		claudecli.WithWorkDir(workdir),
-		claudecli.WithPermissionMode(claudePermissionModeValue(a.cfg.Claude.PermissionMode)),
+		claudecli.WithPermissionMode(claudePermissionModeValue(s.app.cfg.Claude.PermissionMode)),
 		claudecli.WithEventBufferSize(16),
 	}
-	if a.cfg.Claude.DangerouslySkipPermissions {
+	if s.app.cfg.Claude.DangerouslySkipPermissions {
 		opts = append(opts, claudecli.WithDangerouslySkipPermissions())
 	}
-	if model := strings.TrimSpace(a.cfg.Claude.Model); model != "" {
+	if model := strings.TrimSpace(s.app.cfg.Claude.Model); model != "" {
 		opts = append(opts, claudecli.WithModel(model))
 	}
-	if effort := strings.TrimSpace(a.cfg.Claude.Effort); effort != "" {
+	if effort := strings.TrimSpace(s.app.cfg.Claude.Effort); effort != "" {
 		opts = append(opts, claudecli.WithEffort(effort))
 	}
-	if a.cfg.Claude.DisablePlugins {
+	if s.app.cfg.Claude.DisablePlugins {
 		opts = append(opts, claudecli.WithDisablePlugins())
 	}
-	if strings.TrimSpace(a.cfg.Claude.SystemPrompt) != "" {
-		opts = append(opts, claudecli.WithSystemPrompt(strings.TrimSpace(a.cfg.Claude.SystemPrompt)))
+	if strings.TrimSpace(s.app.cfg.Claude.SystemPrompt) != "" {
+		opts = append(opts, claudecli.WithSystemPrompt(strings.TrimSpace(s.app.cfg.Claude.SystemPrompt)))
 	}
-	if a.cfg.Claude.PermissionPromptToolStdio {
+	if s.app.cfg.Claude.PermissionPromptToolStdio {
 		opts = append(opts, claudecli.WithPermissionPromptToolStdio())
 	}
 	session := claudecli.NewSession(opts...)
@@ -154,62 +154,62 @@ func claudeSmokeEventError(session *claudecli.Session, event claudecli.ErrorEven
 	return event.Error
 }
 
-func (a *App) refreshClaudeRuntimeAfterMaintenance(ctx context.Context) (bool, error) {
-	if a == nil {
+func (s backendUpgradeService) refreshClaudeRuntimeAfterMaintenance(ctx context.Context) (bool, error) {
+	if s.app == nil {
 		return false, fmt.Errorf("claude app not initialized")
 	}
-	if err := runClaudeSmokeTest(a, ctx); err != nil {
+	if err := runClaudeSmokeTest(s.app, ctx); err != nil {
 		return false, err
 	}
-	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(a) {
+	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(s.app) {
 		return false, nil
 	}
-	if a.claude == nil {
-		a.claude = newClaudeCore(a, a.cfg.Claude)
+	if s.app.claude == nil {
+		s.app.claude = newClaudeCore(s.app, s.app.cfg.Claude)
 		return true, nil
 	}
-	if err := a.claude.Close(); err != nil {
+	if err := s.app.claude.Close(); err != nil {
 		return false, fmt.Errorf("切换 runtime 失败: %w", err)
 	}
 	return true, nil
 }
 
-func (a *App) startClaudeRestartFromMessage(msg *feishu.InboundMessage) error {
+func (s backendUpgradeService) startClaudeRestartFromMessage(msg *feishu.InboundMessage) error {
 	return startMaintenanceRestartFromMessage(
-		a,
+		s.app,
 		msg,
-		a.beginClaudeRestartOperation,
-		a.runClaudeRestartOperation,
-		newUpgradeRenderService(a).renderClaudeRestartOperationCard,
-		func(message string) { newMaintenanceStateService(a).finishClaudeRestart("failed", message) },
+		newBackendUpgradeService(s.app).beginClaudeRestartOperation,
+		newBackendUpgradeService(s.app).runClaudeRestartOperation,
+		newUpgradeRenderService(s.app).renderClaudeRestartOperationCard,
+		func(message string) { newMaintenanceStateService(s.app).finishClaudeRestart("failed", message) },
 	)
 }
 
-func (a *App) beginClaudeRestartOperation() (claudeRestartSnapshot, error) {
-	if err := newMaintenanceStateService(a).ensureClaudeUpgradeReady(); err != nil {
+func (s backendUpgradeService) beginClaudeRestartOperation() (claudeRestartSnapshot, error) {
+	if err := newMaintenanceStateService(s.app).ensureClaudeUpgradeReady(); err != nil {
 		return claudeRestartSnapshot{}, err
 	}
 	snapshot := claudeRestartSnapshot{
 		Running:        true,
 		Phase:          "preflight",
 		Message:        "正在校验重启前置条件",
-		CurrentVersion: firstNonEmpty(newMaintenanceStateService(a).claudeUpgradeState().CurrentVersion, newMaintenanceStateService(a).claudeRestartState().CurrentVersion),
+		CurrentVersion: firstNonEmpty(newMaintenanceStateService(s.app).claudeUpgradeState().CurrentVersion, newMaintenanceStateService(s.app).claudeRestartState().CurrentVersion),
 	}
-	if !newMaintenanceStateService(a).beginClaudeRestart(snapshot) {
+	if !newMaintenanceStateService(s.app).beginClaudeRestart(snapshot) {
 		return claudeRestartSnapshot{}, errString("Claude 正在维护中，请稍后再试")
 	}
-	return newMaintenanceStateService(a).claudeRestartState(), nil
+	return newMaintenanceStateService(s.app).claudeRestartState(), nil
 }
 
-func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
+func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey string) {
 	_, update, finalize := maintenanceSnapshotLifecycle(
-		a,
+		s.app,
 		messageID,
 		sessionKey,
 		"claude restart progress patch failed",
-		newUpgradeRenderService(a).renderClaudeRestartOperationCard,
-		newMaintenanceStateService(a).updateClaudeRestart,
-		newMaintenanceStateService(a).finishClaudeRestart,
+		newUpgradeRenderService(s.app).renderClaudeRestartOperationCard,
+		newMaintenanceStateService(s.app).updateClaudeRestart,
+		newMaintenanceStateService(s.app).finishClaudeRestart,
 		func(snapshot *claudeRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -218,17 +218,17 @@ func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
 
 	update("restarting", "正在校验 Claude runtime 状态")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	manager := newClaudeInstallManager(a.cfg.Claude.Command)
+	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	probe, err := manager.Probe(ctx)
 	cancel()
 	if err != nil {
 		finalize("failed", "重启前检查失败: "+err.Error())
 		return
 	}
-	newMaintenanceStateService(a).updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
+	newMaintenanceStateService(s.app).updateClaudeRestart(func(snapshot *claudeRestartSnapshot) {
 		snapshot.CurrentVersion = firstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
 	})
-	if reason := newMaintenanceStateService(a).claudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+	if reason := newMaintenanceStateService(s.app).claudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		finalize("failed", "重启前检查失败: "+reason)
 		return
 	}
@@ -236,7 +236,7 @@ func (a *App) runClaudeRestartOperation(messageID, sessionKey string) {
 	update("restarting", "正在准备新的 Claude runtime")
 	update("smoke_testing", "正在验证重启后的 runtime")
 	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
-	switched, err := a.refreshClaudeRuntimeAfterMaintenance(ctx)
+	switched, err := newBackendUpgradeService(s.app).refreshClaudeRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
 		finalize("failed", "Claude runtime 重启失败: "+err.Error())

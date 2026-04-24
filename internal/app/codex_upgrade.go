@@ -33,7 +33,7 @@ type codexUpgradeView struct {
 	Restart       codexRestartSnapshot
 }
 
-func (a *App) commandCodex(msg *feishu.InboundMessage, args []string) error {
+func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
@@ -50,50 +50,50 @@ func (a *App) commandCodex(msg *feishu.InboundMessage, args []string) error {
 			includeLatest = true
 			prepareUpgrade = true
 		case "restart":
-			return a.startCodexRestartFromMessage(msg)
+			return newBackendUpgradeService(s.app).startCodexRestartFromMessage(msg)
 		default:
 			return fmt.Errorf(codexUpgradeCommandUsage)
 		}
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := s.app.makeSessionKey(msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	view, err := a.loadCodexUpgradeView(ctx, includeLatest)
+	view, err := newBackendUpgradeService(s.app).loadCodexUpgradeView(ctx, includeLatest)
 	if err != nil {
 		return err
 	}
 	if !prepareUpgrade {
-		card := newUpgradeRenderService(a).renderCodexUpgradeStatusCard(sessionKey, view, includeLatest)
-		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+		card := newUpgradeRenderService(s.app).renderCodexUpgradeStatusCard(sessionKey, view, includeLatest)
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
-	card, pendingID, err := newUpgradeRenderService(a).prepareCodexUpgradeCard(sessionKey, msg.UserID, view)
+	card, pendingID, err := newUpgradeRenderService(s.app).prepareCodexUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = a.appState().updatePending(pendingID, func(req *state.PendingRequest) {
+		_ = s.app.appState().updatePending(pendingID, func(req *state.PendingRequest) {
 			req.FeishuMsgID = msgID
 		})
 	}
 	return nil
 }
 
-func (a *App) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (codexUpgradeView, error) {
-	manager := newCodexInstallManager(a.cfg.Codex.Command)
+func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (codexUpgradeView, error) {
+	manager := newCodexInstallManager(s.app.cfg.Codex.Command)
 	probe, err := manager.Probe(ctx)
 	if err != nil {
 		return codexUpgradeView{}, err
 	}
 	view := codexUpgradeView{
 		Probe:      probe,
-		BusyReason: newMaintenanceStateService(a).codexUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(a).codexUpgradeState(),
-		Restart:    newMaintenanceStateService(a).codexRestartState(),
+		BusyReason: newMaintenanceStateService(s.app).codexUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(s.app).codexUpgradeState(),
+		Restart:    newMaintenanceStateService(s.app).codexRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

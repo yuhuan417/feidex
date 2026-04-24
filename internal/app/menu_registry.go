@@ -36,7 +36,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 	"menu.codex_upgrade": func(a *App, sessionKey string) (map[string]any, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		view, err := a.loadCodexUpgradeView(ctx, false)
+		view, err := newBackendUpgradeService(a).loadCodexUpgradeView(ctx, false)
 		if err != nil {
 			return nil, false
 		}
@@ -45,7 +45,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 	"menu.claude_upgrade": func(a *App, sessionKey string) (map[string]any, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		view, err := a.loadClaudeUpgradeView(ctx, false)
+		view, err := newBackendUpgradeService(a).loadClaudeUpgradeView(ctx, false)
 		if err != nil {
 			return nil, false
 		}

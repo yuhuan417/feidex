@@ -92,7 +92,7 @@ func localCommandSystemRuntimeSpecs() []localCommandSpec {
 				return matchCodexCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandCodex(msg, args)
+				return newBackendUpgradeService(a).commandCodex(msg, args)
 			},
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{
@@ -108,7 +108,7 @@ func localCommandSystemRuntimeSpecs() []localCommandSpec {
 				return matchClaudeCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandClaude(msg, args)
+				return newBackendUpgradeService(a).commandClaude(msg, args)
 			},
 			HelpGroup: "system",
 			HelpEntries: []helpCommandSpec{

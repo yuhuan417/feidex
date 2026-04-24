@@ -101,10 +101,10 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeMenuWorkspace(action, actionSessionKey(action))
 	},
 	"menu.codex_upgrade": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuCodexUpgrade(action)
+		return newBackendUpgradeService(s.app).completeMenuCodexUpgrade(action)
 	},
 	"menu.claude_upgrade": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuClaudeUpgrade(action)
+		return newBackendUpgradeService(s.app).completeMenuClaudeUpgrade(action)
 	},
 	"menu.upgrade": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuUpgrade(action)

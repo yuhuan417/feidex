@@ -132,7 +132,7 @@ func (a *App) recoverCodexRuntimeAfterTransportFailure(failed codexClient, skipF
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	next, err := a.startVerifiedCodexClient(ctx)
+	next, err := newBackendUpgradeService(a).startVerifiedCodexClient(ctx)
 	if err != nil {
 		_ = a.completeCodexTransportRecovery(nil)
 		slog.Error("codex runtime recovery failed",

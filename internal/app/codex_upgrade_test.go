@@ -54,7 +54,7 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 	defer func() { newCodexInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandCodex(msg, nil); err != nil {
+	if err := newBackendUpgradeService(a).commandCodex(msg, nil); err != nil {
 		t.Fatalf("commandCodex() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -86,7 +86,7 @@ func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
 	defer func() { newCodexInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandCodex(msg, nil); err != nil {
+	if err := newBackendUpgradeService(a).commandCodex(msg, nil); err != nil {
 		t.Fatalf("commandCodex() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -118,7 +118,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 	defer func() { newCodexInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandCodex(msg, []string{"upgrade"}); err != nil {
+	if err := newBackendUpgradeService(a).commandCodex(msg, []string{"upgrade"}); err != nil {
 		t.Fatalf("commandCodex(upgrade) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -204,7 +204,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
-	a.runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
+	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 	})
@@ -292,7 +292,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
-	a.runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
+	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 	})
@@ -369,7 +369,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := a.commandCodex(msg, []string{"restart"}); err != nil {
+	if err := newBackendUpgradeService(a).commandCodex(msg, []string{"restart"}); err != nil {
 		t.Fatalf("commandCodex(restart) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -443,14 +443,14 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	snapshot, err := a.beginCodexRestartOperation()
+	snapshot, err := newBackendUpgradeService(a).beginCodexRestartOperation()
 	if err != nil {
 		t.Fatalf("beginCodexRestartOperation() error = %v", err)
 	}
 	if !snapshot.Running {
 		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
 	}
-	a.runCodexRestartOperation("msg-1", "sess-1")
+	newBackendUpgradeService(a).runCodexRestartOperation("msg-1", "sess-1")
 	_, liveClosed := fc.statusSnapshot()
 	if liveClosed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
@@ -513,14 +513,14 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	snapshot, err := a.beginCodexRestartOperation()
+	snapshot, err := newBackendUpgradeService(a).beginCodexRestartOperation()
 	if err != nil {
 		t.Fatalf("beginCodexRestartOperation() error = %v", err)
 	}
 	if !snapshot.Running {
 		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
 	}
-	a.runCodexRestartOperation("msg-1", "sess-1")
+	newBackendUpgradeService(a).runCodexRestartOperation("msg-1", "sess-1")
 
 	_, liveClosed := fc.statusSnapshot()
 	if !liveClosed {
@@ -568,7 +568,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing
 	}
 	defer func() { newCodexClient = origClient }()
 
-	switched, err := a.refreshCodexRuntimeAfterMaintenance(context.Background())
+	switched, err := newBackendUpgradeService(a).refreshCodexRuntimeAfterMaintenance(context.Background())
 	if err != nil {
 		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
 	}
@@ -612,7 +612,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	}
 	defer func() { newCodexClient = origClient }()
 
-	switched, err := a.refreshCodexRuntimeAfterMaintenance(context.Background())
+	switched, err := newBackendUpgradeService(a).refreshCodexRuntimeAfterMaintenance(context.Background())
 	if err != nil {
 		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
 	}

@@ -95,7 +95,7 @@ var (
 	}
 	newCodexInstallManager  = func(command string) codexInstallManager { return codexinstall.New(command) }
 	newClaudeInstallManager = func(command string) claudeInstallManager { return claudeinstall.New(command) }
-	runClaudeSmokeTest      = func(a *App, ctx context.Context) error { return a.claudeSmokeTest(ctx) }
+	runClaudeSmokeTest      = func(a *App, ctx context.Context) error { return newBackendUpgradeService(a).claudeSmokeTest(ctx) }
 	startDaemonUpgrade      = daemon.StartBackgroundUpgrade
 	currentVersion          = buildinfo.CurrentVersion
 	currentGOARCH           = func() string { return runtime.GOARCH }

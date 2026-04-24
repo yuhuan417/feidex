@@ -33,7 +33,7 @@ type claudeUpgradeView struct {
 	Restart       claudeRestartSnapshot
 }
 
-func (a *App) commandClaude(msg *feishu.InboundMessage, args []string) error {
+func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
@@ -50,50 +50,50 @@ func (a *App) commandClaude(msg *feishu.InboundMessage, args []string) error {
 			includeLatest = true
 			prepareUpgrade = true
 		case "restart":
-			return a.startClaudeRestartFromMessage(msg)
+			return newBackendUpgradeService(s.app).startClaudeRestartFromMessage(msg)
 		default:
 			return fmt.Errorf(claudeUpgradeCommandUsage)
 		}
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := s.app.makeSessionKey(msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	view, err := a.loadClaudeUpgradeView(ctx, includeLatest)
+	view, err := newBackendUpgradeService(s.app).loadClaudeUpgradeView(ctx, includeLatest)
 	if err != nil {
 		return err
 	}
 	if !prepareUpgrade {
-		card := newUpgradeRenderService(a).renderClaudeUpgradeStatusCard(sessionKey, view, includeLatest)
-		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+		card := newUpgradeRenderService(s.app).renderClaudeUpgradeStatusCard(sessionKey, view, includeLatest)
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
-	card, pendingID, err := newUpgradeRenderService(a).prepareClaudeUpgradeCard(sessionKey, msg.UserID, view)
+	card, pendingID, err := newUpgradeRenderService(s.app).prepareClaudeUpgradeCard(sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = a.appState().updatePending(pendingID, func(req *state.PendingRequest) {
+		_ = s.app.appState().updatePending(pendingID, func(req *state.PendingRequest) {
 			req.FeishuMsgID = msgID
 		})
 	}
 	return nil
 }
 
-func (a *App) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (claudeUpgradeView, error) {
-	manager := newClaudeInstallManager(a.cfg.Claude.Command)
+func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (claudeUpgradeView, error) {
+	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	probe, err := manager.Probe(ctx)
 	if err != nil {
 		return claudeUpgradeView{}, err
 	}
 	view := claudeUpgradeView{
 		Probe:      probe,
-		BusyReason: newMaintenanceStateService(a).claudeUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(a).claudeUpgradeState(),
-		Restart:    newMaintenanceStateService(a).claudeRestartState(),
+		BusyReason: newMaintenanceStateService(s.app).claudeUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(s.app).claudeUpgradeState(),
+		Restart:    newMaintenanceStateService(s.app).claudeRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)
