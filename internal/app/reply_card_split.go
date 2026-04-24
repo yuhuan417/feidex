@@ -355,7 +355,7 @@ func joinReplyChunkBodies(current, next string) string {
 }
 
 func (a *App) replyCardChunkFits(ctx context.Context, sub *state.Submission, title, color string, chunk replyCardChunk, enablePreview bool) bool {
-	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
+	card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
 	payload, err := json.Marshal(card)
 	if err != nil {

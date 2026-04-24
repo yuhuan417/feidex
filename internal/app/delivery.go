@@ -57,7 +57,7 @@ func (a *App) sendReplyMessagesWithReuse(ctx context.Context, sub *state.Submiss
 		return ids
 	}
 
-	card := a.renderCompactMarkdownCard(sub, title, color, "", text, nil)
+	card := a.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", text, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
 			_ = appState.saveMessageLink(&state.MessageLink{

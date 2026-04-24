@@ -282,7 +282,7 @@ func (a *App) patchFinalCardSnapshot(ctx context.Context, messageID string, snap
 	if a == nil || a.feishu == nil || snapshot.Submission == nil || strings.TrimSpace(messageID) == "" {
 		return nil
 	}
-	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, snapshot.Submission, snapshot.Title, snapshot.Color, snapshot.ShowHeader, snapshot.Body, nil, true)
+	card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, snapshot.Submission, snapshot.Title, snapshot.Color, snapshot.ShowHeader, snapshot.Body, nil, true)
 	appendReplyCardFooter(card, snapshot.FooterLines)
 	return a.feishu.PatchCard(ctx, messageID, card)
 }

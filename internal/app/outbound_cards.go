@@ -112,24 +112,12 @@ func (r cardRenderer) prepareCardMarkdown(sub *state.Submission, text string) st
 	return r.app.prepareSubmissionCardMarkdown(sub, text)
 }
 
-func (a *App) renderReplyMarkdownCard(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-	return a.cardRenderer().renderReplyMarkdownCardWithOptions(context.Background(), sub, title, color, body, buttons, false)
-}
-
-func (a *App) prepareCardMarkdown(sub *state.Submission, text string) string {
-	return a.cardRenderer().prepareCardMarkdown(sub, text)
-}
-
-func (a *App) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
-	return a.cardRenderer().renderReplyMarkdownCardWithOptions(ctx, sub, title, color, body, buttons, enablePreview)
+func (r cardRenderer) renderReplyMarkdownCard(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+	return r.renderReplyMarkdownCardWithOptions(context.Background(), sub, title, color, body, buttons, false)
 }
 
 func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	return r.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, strings.TrimSpace(title) != "", body, buttons, enablePreview)
-}
-
-func (a *App) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
-	return a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, body, buttons, enablePreview)
 }
 
 func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
@@ -157,10 +145,6 @@ func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Conte
 		})
 	}
 	return card
-}
-
-func (a *App) renderCompactMarkdownCard(sub *state.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {
-	return a.cardRenderer().renderCompactMarkdownCard(sub, title, color, meta, body, buttons)
 }
 
 func (r cardRenderer) renderCompactMarkdownCard(sub *state.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {

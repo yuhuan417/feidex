@@ -149,7 +149,7 @@ func (a *App) prepareReplyCardMarkdown(ctx context.Context, sub *state.Submissio
 		}
 		return normalizeCardMarkdown(text)
 	}
-	return a.prepareCardMarkdown(sub, text)
+	return a.cardRenderer().prepareCardMarkdown(sub, text)
 }
 
 func (a *App) scheduleLocalFileLinkPatch(sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
@@ -172,7 +172,7 @@ func (a *App) scheduleLocalFileLinkPatch(sub *state.Submission, messageID, title
 		if managed && a.updateFinalCardPatchBody(messageID, rewritten) {
 			return
 		}
-		card := a.renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, rewritten, nil, true)
+		card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, rewritten, nil, true)
 		appendReplyCardFooter(card, footerLines)
 		patchCtx, patchCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer patchCancel()

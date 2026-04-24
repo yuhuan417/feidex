@@ -114,7 +114,7 @@ func (a *App) executeQuietWorkingCardOp(ctx context.Context, sub *state.Submissi
 	if strings.TrimSpace(op.Body) == "" {
 		return
 	}
-	card := a.renderCompactMarkdownCard(sub, quietWorkingCardTitle, quietWorkingCardColor, "", op.Body, nil)
+	card := a.cardRenderer().renderCompactMarkdownCard(sub, quietWorkingCardTitle, quietWorkingCardColor, "", op.Body, nil)
 	if strings.TrimSpace(op.MessageID) == "" {
 		if strings.TrimSpace(op.Body) == "" {
 			return

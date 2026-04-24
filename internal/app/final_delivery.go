@@ -23,7 +23,7 @@ func (a *App) sendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 		return ""
 	}
 	body := prependAttentionMentionMarkdown("", a.turnStopAttentionUserID(sub, sub.TurnID))
-	card := a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, body, nil, true)
+	card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, body, nil, true)
 	appendReplyCardFooter(card, footerLines)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {

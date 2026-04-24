@@ -144,7 +144,7 @@ func (a *App) replaceTurnEventCardWithReuse(ctx context.Context, sub *state.Subm
 		return ""
 	}
 	if strings.TrimSpace(reuseMessageID) != "" {
-		card := a.renderCompactMarkdownCard(sub, title, color, "", body, nil)
+		card := a.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", body, nil)
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
 			a.recordMessageLink(reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
@@ -164,7 +164,7 @@ func (a *App) sendTurnEventCardWithReuse(ctx context.Context, sub *state.Submiss
 	if body == "" {
 		return ""
 	}
-	card := a.renderCompactMarkdownCard(sub, title, color, "", body, nil)
+	card := a.cardRenderer().renderCompactMarkdownCard(sub, title, color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
 			a.recordMessageLink(reuseMessageID, kind, sub, itemID)
@@ -182,10 +182,10 @@ func (a *App) sendTurnEventCardWithReuse(ctx context.Context, sub *state.Submiss
 
 func (a *App) renderTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, enablePreview bool) map[string]any {
 	if isReplyTurnItem(payload.ItemType) {
-		return a.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
+		return a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, sub, replyTurnItemCardTitle(payload), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
 	}
 	meta, body := compactTurnItemCardContent(payload)
-	return a.renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
+	return a.cardRenderer().renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
 }
 
 func isReplyTurnItem(itemType string) bool {
