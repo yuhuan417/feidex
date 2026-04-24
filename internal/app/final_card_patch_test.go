@@ -9,17 +9,17 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.registerFinalCardPatchState("card-1", sub, "最终答复", "green", true, "original body", []string{"elapsed: 1s"})
-	if !a.markFinalCardPreviewPending("card-1") {
+	newFinalCardPatchService(a).registerFinalCardPatchState("card-1", sub, "最终答复", "green", true, "original body", []string{"elapsed: 1s"})
+	if !newFinalCardPatchService(a).markFinalCardPreviewPending("card-1") {
 		t.Fatal("expected preview patch state to exist")
 	}
-	if !a.updateFinalCardPatchFooterLines("card-1", []string{"context used: 13.0%", "elapsed: 1s"}) {
+	if !newFinalCardPatchService(a).updateFinalCardPatchFooterLines("card-1", []string{"context used: 13.0%", "elapsed: 1s"}) {
 		t.Fatal("expected footer update to be accepted")
 	}
-	if !a.updateFinalCardPatchBody("card-1", "rewritten body") {
+	if !newFinalCardPatchService(a).updateFinalCardPatchBody("card-1", "rewritten body") {
 		t.Fatal("expected body update to be accepted")
 	}
-	a.markFinalCardPreviewDone("card-1")
+	newFinalCardPatchService(a).markFinalCardPreviewDone("card-1")
 
 	waitForTestCondition(t, "final card patch", func() bool {
 		return len(ff.patchedCardsSnapshot()) > 0

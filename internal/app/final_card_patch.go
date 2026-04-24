@@ -21,14 +21,14 @@ func newFinalCardPatchTracker() *finalCardPatchTracker {
 	return &finalCardPatchTracker{patches: map[string]*finalCardPatchState{}}
 }
 
-func (a *App) finalCardPatchTracker() *finalCardPatchTracker {
-	if a == nil {
+func (s finalCardPatchService) finalCardPatchTracker() *finalCardPatchTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.finalCardPatches == nil {
-		a.finalCardPatches = newFinalCardPatchTracker()
+	if s.app.finalCardPatches == nil {
+		s.app.finalCardPatches = newFinalCardPatchTracker()
 	}
-	return a.finalCardPatches
+	return s.app.finalCardPatches
 }
 
 type finalCardPatchState struct {
@@ -67,8 +67,8 @@ func (s *finalCardPatchState) snapshot() finalCardPatchSnapshot {
 	}
 }
 
-func (a *App) registerFinalCardPatchState(messageID string, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) {
-	if a == nil || sub == nil {
+func (s finalCardPatchService) registerFinalCardPatchState(messageID string, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) {
+	if s.app == nil || sub == nil {
 		return
 	}
 	messageID = strings.TrimSpace(messageID)
@@ -77,12 +77,12 @@ func (a *App) registerFinalCardPatchState(messageID string, sub *state.Submissio
 		return
 	}
 
-	snapshotSub := a.appState().submission(sub.ID)
+	snapshotSub := s.app.appState().submission(sub.ID)
 	if snapshotSub == nil {
 		snapshotSub = sub
 	}
 
-	tracker := a.finalCardPatchTracker()
+	tracker := s.finalCardPatchTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	tracker.patches[messageID] = &finalCardPatchState{
@@ -95,23 +95,23 @@ func (a *App) registerFinalCardPatchState(messageID string, sub *state.Submissio
 	}
 }
 
-func (a *App) markFinalCardPreviewPending(messageID string) bool {
-	return a.setFinalCardPatchPending(messageID, "preview", true)
+func (s finalCardPatchService) markFinalCardPreviewPending(messageID string) bool {
+	return s.setFinalCardPatchPending(messageID, "preview", true)
 }
 
-func (a *App) markFinalCardPreviewDone(messageID string) {
-	_ = a.setFinalCardPatchPending(messageID, "preview", false)
+func (s finalCardPatchService) markFinalCardPreviewDone(messageID string) {
+	_ = s.setFinalCardPatchPending(messageID, "preview", false)
 }
 
-func (a *App) setFinalCardPatchPending(messageID, kind string, pending bool) bool {
-	if a == nil {
+func (s finalCardPatchService) setFinalCardPatchPending(messageID, kind string, pending bool) bool {
+	if s.app == nil {
 		return false
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return false
 	}
-	tracker := a.finalCardPatchTracker()
+	tracker := s.finalCardPatchTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	current := tracker.patches[messageID]
@@ -124,16 +124,16 @@ func (a *App) setFinalCardPatchPending(messageID, kind string, pending bool) boo
 	default:
 		return false
 	}
-	a.pruneFinalCardPatchLocked(tracker, messageID, current)
+	s.pruneFinalCardPatchLocked(tracker, messageID, current)
 	return true
 }
 
-func (a *App) updateFinalCardPatchBody(messageID, body string) bool {
+func (s finalCardPatchService) updateFinalCardPatchBody(messageID, body string) bool {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return false
 	}
-	return a.updateFinalCardPatchState(messageID, func(current *finalCardPatchState) bool {
+	return s.updateFinalCardPatchState(messageID, func(current *finalCardPatchState) bool {
 		if current == nil || strings.TrimSpace(current.Body) == body {
 			return false
 		}
@@ -142,9 +142,9 @@ func (a *App) updateFinalCardPatchBody(messageID, body string) bool {
 	})
 }
 
-func (a *App) updateFinalCardPatchFooterLines(messageID string, footerLines []string) bool {
+func (s finalCardPatchService) updateFinalCardPatchFooterLines(messageID string, footerLines []string) bool {
 	normalized := normalizeFooterLines(footerLines)
-	return a.updateFinalCardPatchState(messageID, func(current *finalCardPatchState) bool {
+	return s.updateFinalCardPatchState(messageID, func(current *finalCardPatchState) bool {
 		if current == nil || stringSlicesEqualTrimmed(current.FooterLines, normalized) {
 			return false
 		}
@@ -153,8 +153,8 @@ func (a *App) updateFinalCardPatchFooterLines(messageID string, footerLines []st
 	})
 }
 
-func (a *App) updateFinalCardPatchState(messageID string, mutate func(*finalCardPatchState) bool) bool {
-	if a == nil {
+func (s finalCardPatchService) updateFinalCardPatchState(messageID string, mutate func(*finalCardPatchState) bool) bool {
+	if s.app == nil {
 		return false
 	}
 	messageID = strings.TrimSpace(messageID)
@@ -163,7 +163,7 @@ func (a *App) updateFinalCardPatchState(messageID string, mutate func(*finalCard
 	}
 
 	shouldStart := false
-	tracker := a.finalCardPatchTracker()
+	tracker := s.finalCardPatchTracker()
 	tracker.mu.Lock()
 	current := tracker.patches[messageID]
 	if current == nil {
@@ -182,34 +182,34 @@ func (a *App) updateFinalCardPatchState(messageID string, mutate func(*finalCard
 	tracker.mu.Unlock()
 
 	if shouldStart {
-		go a.runFinalCardPatchLoop(messageID)
+		go s.runFinalCardPatchLoop(messageID)
 	}
 	return true
 }
 
-func (a *App) runFinalCardPatchLoop(messageID string) {
+func (s finalCardPatchService) runFinalCardPatchLoop(messageID string) {
 	messageID = strings.TrimSpace(messageID)
-	if a == nil || a.feishu == nil || messageID == "" {
+	if s.app == nil || s.app.feishu == nil || messageID == "" {
 		return
 	}
 
 	for {
-		snapshot, ok := a.nextFinalCardPatchSnapshot(messageID)
+		snapshot, ok := s.nextFinalCardPatchSnapshot(messageID)
 		if !ok {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), finalCardPatchTimeout)
-		err := a.patchFinalCardSnapshot(ctx, messageID, snapshot)
+		err := s.patchFinalCardSnapshot(ctx, messageID, snapshot)
 		cancel()
 		_ = err
-		if !a.finishFinalCardPatchIteration(messageID) {
+		if !s.finishFinalCardPatchIteration(messageID) {
 			return
 		}
 	}
 }
 
-func (a *App) nextFinalCardPatchSnapshot(messageID string) (finalCardPatchSnapshot, bool) {
-	tracker := a.finalCardPatchTracker()
+func (s finalCardPatchService) nextFinalCardPatchSnapshot(messageID string) (finalCardPatchSnapshot, bool) {
+	tracker := s.finalCardPatchTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	current := tracker.patches[messageID]
@@ -220,8 +220,8 @@ func (a *App) nextFinalCardPatchSnapshot(messageID string) (finalCardPatchSnapsh
 	return current.snapshot(), true
 }
 
-func (a *App) finishFinalCardPatchIteration(messageID string) bool {
-	tracker := a.finalCardPatchTracker()
+func (s finalCardPatchService) finishFinalCardPatchIteration(messageID string) bool {
+	tracker := s.finalCardPatchTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	current := tracker.patches[messageID]
@@ -232,11 +232,11 @@ func (a *App) finishFinalCardPatchIteration(messageID string) bool {
 		return true
 	}
 	current.Patching = false
-	a.pruneFinalCardPatchLocked(tracker, messageID, current)
+	s.pruneFinalCardPatchLocked(tracker, messageID, current)
 	return false
 }
 
-func (a *App) pruneFinalCardPatchLocked(tracker *finalCardPatchTracker, messageID string, current *finalCardPatchState) {
+func (s finalCardPatchService) pruneFinalCardPatchLocked(tracker *finalCardPatchTracker, messageID string, current *finalCardPatchState) {
 	if tracker == nil {
 		return
 	}
@@ -252,19 +252,19 @@ func (a *App) pruneFinalCardPatchLocked(tracker *finalCardPatchTracker, messageI
 	}
 	current.PruneScheduled = true
 	time.AfterFunc(finalCardPatchIdleRetention, func() {
-		a.tryPruneFinalCardPatch(messageID)
+		s.tryPruneFinalCardPatch(messageID)
 	})
 }
 
-func (a *App) tryPruneFinalCardPatch(messageID string) {
-	if a == nil {
+func (s finalCardPatchService) tryPruneFinalCardPatch(messageID string) {
+	if s.app == nil {
 		return
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return
 	}
-	tracker := a.finalCardPatchTracker()
+	tracker := s.finalCardPatchTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	current := tracker.patches[messageID]
@@ -275,16 +275,16 @@ func (a *App) tryPruneFinalCardPatch(messageID string) {
 	if current.Patching || current.Dirty || current.PreviewPending {
 		return
 	}
-	delete(a.finalCardPatchTracker().patches, messageID)
+	delete(s.finalCardPatchTracker().patches, messageID)
 }
 
-func (a *App) patchFinalCardSnapshot(ctx context.Context, messageID string, snapshot finalCardPatchSnapshot) error {
-	if a == nil || a.feishu == nil || snapshot.Submission == nil || strings.TrimSpace(messageID) == "" {
+func (s finalCardPatchService) patchFinalCardSnapshot(ctx context.Context, messageID string, snapshot finalCardPatchSnapshot) error {
+	if s.app == nil || s.app.feishu == nil || snapshot.Submission == nil || strings.TrimSpace(messageID) == "" {
 		return nil
 	}
-	card := a.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, snapshot.Submission, snapshot.Title, snapshot.Color, snapshot.ShowHeader, snapshot.Body, nil, true)
+	card := s.app.cardRenderer().renderReplyMarkdownCardWithHeaderOptions(ctx, snapshot.Submission, snapshot.Title, snapshot.Color, snapshot.ShowHeader, snapshot.Body, nil, true)
 	appendReplyCardFooter(card, snapshot.FooterLines)
-	return a.feishu.PatchCard(ctx, messageID, card)
+	return s.app.feishu.PatchCard(ctx, messageID, card)
 }
 
 func normalizeFooterLines(lines []string) []string {
