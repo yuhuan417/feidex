@@ -43,7 +43,7 @@ func (c codexBackendConfigurationFacade) workspaceCommandUsage() string {
 }
 
 func (c codexBackendConfigurationFacade) handleModelCommand(msg *feishu.InboundMessage, args []string) error {
-	return c.app.commandCodexModel(msg, args)
+	return newModelConfigService(c.app).commandCodexModel(msg, args)
 }
 
 func (codexBackendConfigurationFacade) supportsWorkspacePermissionMode() bool {
@@ -125,7 +125,7 @@ func (claudeBackendConfigurationFacade) workspaceCommandUsage() string {
 }
 
 func (c claudeBackendConfigurationFacade) handleModelCommand(msg *feishu.InboundMessage, args []string) error {
-	return c.app.commandClaudeModel(msg, args)
+	return newModelConfigService(c.app).commandClaudeModel(msg, args)
 }
 
 func (claudeBackendConfigurationFacade) supportsWorkspacePermissionMode() bool {
@@ -197,11 +197,11 @@ func (c claudeBackendConfigurationFacade) renderModelMenuCard(sessionKey string)
 }
 
 func (c claudeBackendConfigurationFacade) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	return c.app.completeClaudeModelSet(action, modelID)
+	return newModelConfigService(c.app).completeClaudeModelSet(action, modelID)
 }
 
 func (c claudeBackendConfigurationFacade) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	return c.app.completeClaudeEffortSet(action, reasoningEffort)
+	return newModelConfigService(c.app).completeClaudeEffortSet(action, reasoningEffort)
 }
 
 func (c claudeBackendConfigurationFacade) statusCardBody(sess *state.Session) string {

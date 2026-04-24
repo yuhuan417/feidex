@@ -103,18 +103,18 @@ func (s backendConfigurationService) completeCodexGlobalModelSet(action *feishu.
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := s.app.fetchModelList(ctx)
+	result, err := newModelConfigService(s.app).fetchModelList(ctx)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if err := s.app.updateGlobalModelConfig(func(c *config.CodexConfig) {
+	if err := newModelConfigService(s.app).updateGlobalModelConfig(func(c *config.CodexConfig) {
 		c.Model = strings.TrimSpace(modelID)
 	}, result); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局模型"},
-		Card:  rawCard(s.app.renderModelConfigCard(result, sessionKey, menuAction)),
+		Card:  rawCard(newModelConfigService(s.app).renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 
@@ -130,7 +130,7 @@ func (s backendConfigurationService) completeCodexGlobalReasoningEffortSet(actio
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := s.app.fetchModelList(ctx)
+	result, err := newModelConfigService(s.app).fetchModelList(ctx)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -138,14 +138,14 @@ func (s backendConfigurationService) completeCodexGlobalReasoningEffortSet(actio
 	if strings.TrimSpace(reasoningEffort) != "" && !modelSupportsEffort(selectedModel, reasoningEffort) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前模型不支持这个推理强度"}}, nil
 	}
-	if err := s.app.updateGlobalModelConfig(func(c *config.CodexConfig) {
+	if err := newModelConfigService(s.app).updateGlobalModelConfig(func(c *config.CodexConfig) {
 		c.ReasoningEffort = strings.TrimSpace(reasoningEffort)
 	}, result); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新全局推理强度"},
-		Card:  rawCard(s.app.renderModelConfigCard(result, sessionKey, menuAction)),
+		Card:  rawCard(newModelConfigService(s.app).renderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
 

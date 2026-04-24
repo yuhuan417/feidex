@@ -81,13 +81,13 @@ func claudeModelPickerOptions(cfg *config.Config) []claudeModelOption {
 	return options
 }
 
-func (a *App) renderClaudeModelConfigCard(sessionKey, menuAction string) map[string]any {
+func (s modelConfigService) renderClaudeModelConfigCard(sessionKey, menuAction string) map[string]any {
 	menuAction = strings.TrimSpace(menuAction)
 	if menuAction == "" {
 		menuAction = "menu.model"
 	}
-	currentModel := firstNonEmpty(configuredClaudeModel(a.cfg), claudeDefaultModelAlias)
-	currentEffort := firstNonEmpty(configuredClaudeEffort(a.cfg), "(default)")
+	currentModel := firstNonEmpty(configuredClaudeModel(s.app.cfg), claudeDefaultModelAlias)
+	currentEffort := firstNonEmpty(configuredClaudeEffort(s.app.cfg), "(default)")
 
 	elements := []map[string]any{
 		{
@@ -104,7 +104,7 @@ func (a *App) renderClaudeModelConfigCard(sessionKey, menuAction string) map[str
 	}
 
 	modelOptions := make([]selectStaticOption, 0, len(claudeBuiltinModelOptions)+1)
-	for _, item := range claudeModelPickerOptions(a.cfg) {
+	for _, item := range claudeModelPickerOptions(s.app.cfg) {
 		modelOptions = append(modelOptions, selectStaticOption{
 			Text:  item.Label,
 			Value: item.Value,
@@ -118,7 +118,7 @@ func (a *App) renderClaudeModelConfigCard(sessionKey, menuAction string) map[str
 		currentModel,
 	))
 
-	effortValue := configuredClaudeEffort(a.cfg)
+	effortValue := configuredClaudeEffort(s.app.cfg)
 	effortOptions := []selectStaticOption{{
 		Text: func() string {
 			if effortValue == "" {
@@ -168,82 +168,82 @@ func (a *App) renderClaudeModelConfigCard(sessionKey, menuAction string) map[str
 	return card
 }
 
-func (a *App) ensureClaudeRuntimeConfigChangeSafe() error {
-	if a == nil {
+func (s modelConfigService) ensureClaudeRuntimeConfigChangeSafe() error {
+	if s.app == nil {
 		return fmt.Errorf("app not initialized")
 	}
-	if reason := strings.TrimSpace(a.frontendIdleBlockedReason()); reason != "" {
+	if reason := strings.TrimSpace(s.app.frontendIdleBlockedReason()); reason != "" {
 		return fmt.Errorf("Claude model / effort 只能在当前 frontend 空闲时切换: %s", reason)
 	}
 	return nil
 }
 
-func (a *App) updateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
-	if a.cfg == nil {
+func (s modelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
+	if s.app.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
-	if strings.TrimSpace(a.cfgPath) == "" {
+	if strings.TrimSpace(s.app.cfgPath) == "" {
 		return fmt.Errorf("missing config path")
 	}
-	if err := a.ensureClaudeRuntimeConfigChangeSafe(); err != nil {
+	if err := newModelConfigService(s.app).ensureClaudeRuntimeConfigChangeSafe(); err != nil {
 		return err
 	}
-	a.configMu.Lock()
-	defer a.configMu.Unlock()
-	mutate(&a.cfg.Claude)
-	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
+	s.app.configMu.Lock()
+	defer s.app.configMu.Unlock()
+	mutate(&s.app.cfg.Claude)
+	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {
 		return err
 	}
-	if err := config.Save(a.cfgPath, a.cfg); err != nil {
+	if err := config.Save(s.app.cfgPath, s.app.cfg); err != nil {
 		return err
 	}
-	if a.claude != nil {
-		a.claude.UpdateConfig(a.cfg.Claude)
+	if s.app.claude != nil {
+		s.app.claude.UpdateConfig(s.app.cfg.Claude)
 	}
 	return nil
 }
 
-func (a *App) hotApplyClaudeModelToCurrentSession(sessionKey, model string) (bool, error) {
-	if a == nil || a.claude == nil {
+func (s modelConfigService) hotApplyClaudeModelToCurrentSession(sessionKey, model string) (bool, error) {
+	if s.app == nil || s.app.claude == nil {
 		return false, nil
 	}
-	sessionKey = a.normalizeSessionKey(sessionKey)
-	if sessionKey == "" || !a.sessionBelongsToFrontend(sessionKey) {
-		return false, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return a.claude.SetModel(ctx, sessionKey, strings.TrimSpace(model))
-}
-
-func (a *App) hotApplyClaudeEffortToCurrentSession(sessionKey, effort string) (bool, error) {
-	if a == nil || a.claude == nil {
-		return false, nil
-	}
-	sessionKey = a.normalizeSessionKey(sessionKey)
-	if sessionKey == "" || !a.sessionBelongsToFrontend(sessionKey) {
+	sessionKey = s.app.normalizeSessionKey(sessionKey)
+	if sessionKey == "" || !s.app.sessionBelongsToFrontend(sessionKey) {
 		return false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return a.claude.SetEffort(ctx, sessionKey, strings.TrimSpace(effort))
+	return s.app.claude.SetModel(ctx, sessionKey, strings.TrimSpace(model))
 }
 
-func (a *App) completeClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+func (s modelConfigService) hotApplyClaudeEffortToCurrentSession(sessionKey, effort string) (bool, error) {
+	if s.app == nil || s.app.claude == nil {
+		return false, nil
+	}
+	sessionKey = s.app.normalizeSessionKey(sessionKey)
+	if sessionKey == "" || !s.app.sessionBelongsToFrontend(sessionKey) {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.app.claude.SetEffort(ctx, sessionKey, strings.TrimSpace(effort))
+}
+
+func (s modelConfigService) completeClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
 	menuAction := actionStringValue(action, "menu_action")
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}
 	model := normalizeClaudeModelValue(modelID)
-	if err := a.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
+	if err := newModelConfigService(s.app).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Model = model
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	toastType := "success"
 	toastContent := "已更新 Claude 模型；后续对话会使用新配置"
-	if applied, err := a.hotApplyClaudeModelToCurrentSession(sessionKey, model); err != nil {
+	if applied, err := newModelConfigService(s.app).hotApplyClaudeModelToCurrentSession(sessionKey, model); err != nil {
 		toastType = "warning"
 		toastContent = "已更新 Claude 模型；当前会话热更新失败，仅后续对话会使用新配置"
 	} else if applied {
@@ -251,11 +251,11 @@ func (a *App) completeClaudeModelSet(action *feishu.CardAction, modelID string) 
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: toastType, Content: toastContent},
-		Card:  rawCard(a.renderClaudeModelConfigCard(sessionKey, menuAction)),
+		Card:  rawCard(newModelConfigService(s.app).renderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
 }
 
-func (a *App) completeClaudeEffortSet(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+func (s modelConfigService) completeClaudeEffortSet(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
 	menuAction := actionStringValue(action, "menu_action")
 	if strings.TrimSpace(menuAction) == "" {
@@ -265,14 +265,14 @@ func (a *App) completeClaudeEffortSet(action *feishu.CardAction, effort string) 
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	if err := a.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
+	if err := newModelConfigService(s.app).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Effort = normalized
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	toastType := "success"
 	toastContent := "已更新 Claude 推理强度；后续对话会使用新配置"
-	if applied, applyErr := a.hotApplyClaudeEffortToCurrentSession(sessionKey, normalized); applyErr != nil {
+	if applied, applyErr := newModelConfigService(s.app).hotApplyClaudeEffortToCurrentSession(sessionKey, normalized); applyErr != nil {
 		toastType = "warning"
 		switch {
 		case errors.Is(applyErr, claudecli.ErrEffortDefaultHotApplyUnsupported):
@@ -285,17 +285,17 @@ func (a *App) completeClaudeEffortSet(action *feishu.CardAction, effort string) 
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: toastType, Content: toastContent},
-		Card:  rawCard(a.renderClaudeModelConfigCard(sessionKey, menuAction)),
+		Card:  rawCard(newModelConfigService(s.app).renderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
 }
 
-func (a *App) commandClaudeModel(msg *feishu.InboundMessage, args []string) error {
+func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
-	sessionKey := a.makeSessionKey(msg)
+	sessionKey := s.app.makeSessionKey(msg)
 	if len(args) > 0 {
-		action := a.commandActionFromMessage(msg, map[string]any{
+		action := s.app.commandActionFromMessage(msg, map[string]any{
 			"menu_action": "menu.model",
 			"session_key": sessionKey,
 		})
@@ -304,11 +304,11 @@ func (a *App) commandClaudeModel(msg *feishu.InboundMessage, args []string) erro
 			if len(args) != 2 {
 				return fmt.Errorf("usage: %s", modelCommandUsage)
 			}
-			resp, err := a.completeClaudeModelSet(action, strings.TrimSpace(args[1]))
+			resp, err := newModelConfigService(s.app).completeClaudeModelSet(action, strings.TrimSpace(args[1]))
 			if err != nil {
 				return err
 			}
-			return a.replyCommandActionResponse(msg, resp)
+			return s.app.replyCommandActionResponse(msg, resp)
 		case "effort":
 			if len(args) != 2 {
 				return fmt.Errorf("usage: %s", modelCommandUsage)
@@ -317,26 +317,26 @@ func (a *App) commandClaudeModel(msg *feishu.InboundMessage, args []string) erro
 			if effort == "default" || effort == modelConfigDefaultOptionValue {
 				effort = ""
 			}
-			resp, err := a.completeClaudeEffortSet(action, effort)
+			resp, err := newModelConfigService(s.app).completeClaudeEffortSet(action, effort)
 			if err != nil {
 				return err
 			}
-			return a.replyCommandActionResponse(msg, resp)
+			return s.app.replyCommandActionResponse(msg, resp)
 		default:
 			return fmt.Errorf("usage: %s", modelCommandUsage)
 		}
 	}
-	card := a.renderClaudeModelConfigCard(sessionKey, "menu.model")
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := newModelConfigService(s.app).renderClaudeModelConfigCard(sessionKey, "menu.model")
+	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) commandEffort(msg *feishu.InboundMessage, args []string) error {
+func (s modelConfigService) commandEffort(msg *feishu.InboundMessage, args []string) error {
 	switch len(args) {
 	case 0:
-		return a.commandModel(msg, nil)
+		return newModelConfigService(s.app).commandModel(msg, nil)
 	case 1:
-		return a.commandModel(msg, []string{"effort", strings.TrimSpace(args[0])})
+		return newModelConfigService(s.app).commandModel(msg, []string{"effort", strings.TrimSpace(args[0])})
 	default:
 		return fmt.Errorf("usage: %s", effortCommandUsage)
 	}

@@ -63,7 +63,7 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 		},
 	}
 	a.cfg.Codex.ReasoningEffort = "medium"
-	if err := a.updateGlobalModelConfig(func(c *config.CodexConfig) {
+	if err := newModelConfigService(a).updateGlobalModelConfig(func(c *config.CodexConfig) {
 		c.Model = "model-b"
 	}, result); err != nil {
 		t.Fatalf("updateGlobalModelConfig: %v", err)
@@ -110,7 +110,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg := config.Default()
 	a := &App{cfg: cfg}
-	card := a.renderModelConfigCard(codexrpc.ModelListResult{
+	card := newModelConfigService(a).renderModelConfigCard(codexrpc.ModelListResult{
 		Data: []codexrpc.ModelListEntry{
 			{
 				ID:                     "gpt-5",
@@ -136,7 +136,7 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg.Claude.Effort = "high"
 	a := &App{cfg: cfg, backend: backendClaude}
 
-	card := a.renderClaudeModelConfigCard("sess-1", "menu.model")
+	card := newModelConfigService(a).renderClaudeModelConfigCard("sess-1", "menu.model")
 	selects := cardSelectStaticForTest(card)
 	if len(selects) != 2 {
 		t.Fatalf("claude model config selects = %+v, want 2 select_static elements", selects)
@@ -237,7 +237,7 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := a.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
+	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Model = "opus"
 		c.Effort = "max"
 	}); err != nil {
@@ -264,7 +264,7 @@ func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
 	claude := &fakeClaudeCore{setModelApplied: true}
 	a.claude = claude
 
-	resp, err := a.completeClaudeModelSet(&feishu.CardAction{
+	resp, err := newModelConfigService(a).completeClaudeModelSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -298,7 +298,7 @@ func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
 	claude := &fakeClaudeCore{setEffortApplied: true}
 	a.claude = claude
 
-	resp, err := a.completeClaudeEffortSet(&feishu.CardAction{
+	resp, err := newModelConfigService(a).completeClaudeEffortSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -332,7 +332,7 @@ func TestCompleteClaudeEffortSetDefaultWarnsWhenLiveSessionCannotClear(t *testin
 	claude := &fakeClaudeCore{setEffortErr: claudecli.ErrEffortDefaultHotApplyUnsupported}
 	a.claude = claude
 
-	resp, err := a.completeClaudeEffortSet(&feishu.CardAction{
+	resp, err := newModelConfigService(a).completeClaudeEffortSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -375,7 +375,7 @@ func TestUpdateClaudeModelConfigRejectsActiveFrontend(t *testing.T) {
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
 
-	if err := a.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
+	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Model = "haiku"
 	}); err == nil || !strings.Contains(err.Error(), "frontend 空闲") {
 		t.Fatalf("updateClaudeModelConfig() error = %v, want frontend idle rejection", err)

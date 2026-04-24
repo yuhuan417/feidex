@@ -86,9 +86,9 @@ func effectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.Model
 	return model, effort
 }
 
-func (a *App) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
+func (s modelConfigService) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
 	var result codexrpc.ModelListResult
-	client, err := a.requireCodexClient()
+	client, err := s.app.requireCodexClient()
 	if err != nil {
 		return result, err
 	}
@@ -121,20 +121,20 @@ func chunkButtons(buttons []feishu.Button, size int) [][]feishu.Button {
 	return rows
 }
 
-func (a *App) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
+func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
 	menuAction = strings.TrimSpace(menuAction)
 	if menuAction == "" {
 		menuAction = "menu.model"
 	}
-	selectedModel, selectedEffort := effectiveConfiguredModelAndEffort(a.cfg, result)
+	selectedModel, selectedEffort := effectiveConfiguredModelAndEffort(s.app.cfg, result)
 	modelName := "(default)"
 	modelDescription := ""
 	if selectedModel != nil {
 		modelName = firstNonEmpty(selectedModel.DisplayName, selectedModel.ID, selectedModel.Model)
 		modelDescription = strings.TrimSpace(selectedModel.Description)
 	}
-	modelValue := configuredGlobalModel(a.cfg)
-	effortValue := configuredGlobalReasoningEffort(a.cfg)
+	modelValue := configuredGlobalModel(s.app.cfg)
+	effortValue := configuredGlobalReasoningEffort(s.app.cfg)
 	modelSource := "跟随 app-server 默认"
 	if modelValue != "" {
 		modelSource = "全局显式配置"
@@ -240,33 +240,33 @@ func (a *App) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey,
 	return card
 }
 
-func (a *App) updateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
-	if a.cfg == nil {
+func (s modelConfigService) updateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
+	if s.app.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
-	a.configMu.Lock()
-	defer a.configMu.Unlock()
-	mutate(&a.cfg.Codex)
-	a.cfg.Codex.Model = strings.TrimSpace(a.cfg.Codex.Model)
-	a.cfg.Codex.ReasoningEffort = strings.TrimSpace(a.cfg.Codex.ReasoningEffort)
-	selectedModel := findModelEntry(result, a.cfg.Codex.Model)
-	if !modelSupportsEffort(selectedModel, a.cfg.Codex.ReasoningEffort) {
-		a.cfg.Codex.ReasoningEffort = ""
+	s.app.configMu.Lock()
+	defer s.app.configMu.Unlock()
+	mutate(&s.app.cfg.Codex)
+	s.app.cfg.Codex.Model = strings.TrimSpace(s.app.cfg.Codex.Model)
+	s.app.cfg.Codex.ReasoningEffort = strings.TrimSpace(s.app.cfg.Codex.ReasoningEffort)
+	selectedModel := findModelEntry(result, s.app.cfg.Codex.Model)
+	if !modelSupportsEffort(selectedModel, s.app.cfg.Codex.ReasoningEffort) {
+		s.app.cfg.Codex.ReasoningEffort = ""
 	}
-	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
+	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {
 		return err
 	}
-	return config.Save(a.cfgPath, a.cfg)
+	return config.Save(s.app.cfgPath, s.app.cfg)
 }
 
-func (a *App) commandModel(msg *feishu.InboundMessage, args []string) error {
-	return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
+func (s modelConfigService) commandModel(msg *feishu.InboundMessage, args []string) error {
+	return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, args)
 }
 
-func (a *App) commandCodexModel(msg *feishu.InboundMessage, args []string) error {
-	sessionKey := a.makeSessionKey(msg)
+func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args []string) error {
+	sessionKey := s.app.makeSessionKey(msg)
 	if len(args) > 0 {
-		action := a.commandActionFromMessage(msg, map[string]any{
+		action := s.app.commandActionFromMessage(msg, map[string]any{
 			"menu_action": "menu.model",
 			"session_key": sessionKey,
 		})
@@ -282,19 +282,19 @@ func (a *App) commandCodexModel(msg *feishu.InboundMessage, args []string) error
 			if modelID != "" {
 				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancel()
-				result, err := a.fetchModelList(ctx)
+				result, err := newModelConfigService(s.app).fetchModelList(ctx)
 				if err != nil {
 					return err
 				}
 				if lookupModelEntry(result, modelID) == nil {
-					return a.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, a.replyInThreadEnabled(msg.ChatType))
+					return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, s.app.replyInThreadEnabled(msg.ChatType))
 				}
 			}
-			resp, err := newBackendConfigurationService(a).completeGlobalModelSet(action, modelID)
+			resp, err := newBackendConfigurationService(s.app).completeGlobalModelSet(action, modelID)
 			if err != nil {
 				return err
 			}
-			return a.replyCommandActionResponse(msg, resp)
+			return s.app.replyCommandActionResponse(msg, resp)
 		case "effort":
 			if len(args) != 2 {
 				return fmt.Errorf("usage: %s", modelCommandUsage)
@@ -303,22 +303,22 @@ func (a *App) commandCodexModel(msg *feishu.InboundMessage, args []string) error
 			if effort == "default" || effort == modelConfigDefaultOptionValue {
 				effort = ""
 			}
-			resp, err := newBackendConfigurationService(a).completeGlobalReasoningEffortSet(action, effort)
+			resp, err := newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, effort)
 			if err != nil {
 				return err
 			}
-			return a.replyCommandActionResponse(msg, resp)
+			return s.app.replyCommandActionResponse(msg, resp)
 		default:
 			return fmt.Errorf("usage: %s", modelCommandUsage)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := a.fetchModelList(ctx)
+	result, err := newModelConfigService(s.app).fetchModelList(ctx)
 	if err != nil {
 		return err
 	}
-	card := a.renderModelConfigCard(result, sessionKey, "menu.model")
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	card := newModelConfigService(s.app).renderModelConfigCard(result, sessionKey, "menu.model")
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
