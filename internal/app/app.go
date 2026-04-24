@@ -60,8 +60,7 @@ type App struct {
 	pendingTurns      map[string][]turnBinding
 	threadUsage       map[string]codexrpc.ThreadTokenUsage
 	claudeUsage       map[string]claudeThreadUsageSnapshot
-	finalCardPatchMu  sync.Mutex
-	finalCardPatches  map[string]*finalCardPatchState
+	finalCardPatches  *finalCardPatchTracker
 	skillsMu          sync.Mutex
 	pendingSkills     map[string]state.SubmissionSkill
 	codexUpgradeMu    sync.Mutex
@@ -136,7 +135,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		pendingTurns:        map[string][]turnBinding{},
 		threadUsage:         map[string]codexrpc.ThreadTokenUsage{},
 		claudeUsage:         map[string]claudeThreadUsageSnapshot{},
-		finalCardPatches:    map[string]*finalCardPatchState{},
+		finalCardPatches:    newFinalCardPatchTracker(),
 		autoRetries:         map[string]*autoRetryState{},
 		pendingSkills:       map[string]state.SubmissionSkill{},
 	}

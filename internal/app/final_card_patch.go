@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/state"
@@ -10,6 +11,25 @@ import (
 
 const finalCardPatchTimeout = 15 * time.Second
 const finalCardPatchIdleRetention = 30 * time.Second
+
+type finalCardPatchTracker struct {
+	mu      sync.Mutex
+	patches map[string]*finalCardPatchState
+}
+
+func newFinalCardPatchTracker() *finalCardPatchTracker {
+	return &finalCardPatchTracker{patches: map[string]*finalCardPatchState{}}
+}
+
+func (a *App) finalCardPatchTracker() *finalCardPatchTracker {
+	if a == nil {
+		return nil
+	}
+	if a.finalCardPatches == nil {
+		a.finalCardPatches = newFinalCardPatchTracker()
+	}
+	return a.finalCardPatches
+}
 
 type finalCardPatchState struct {
 	Submission     *state.Submission
@@ -62,12 +82,10 @@ func (a *App) registerFinalCardPatchState(messageID string, sub *state.Submissio
 		snapshotSub = sub
 	}
 
-	a.finalCardPatchMu.Lock()
-	defer a.finalCardPatchMu.Unlock()
-	if a.finalCardPatches == nil {
-		a.finalCardPatches = map[string]*finalCardPatchState{}
-	}
-	a.finalCardPatches[messageID] = &finalCardPatchState{
+	tracker := a.finalCardPatchTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	tracker.patches[messageID] = &finalCardPatchState{
 		Submission:  snapshotSub,
 		Title:       strings.TrimSpace(title),
 		Color:       strings.TrimSpace(color),
@@ -93,9 +111,10 @@ func (a *App) setFinalCardPatchPending(messageID, kind string, pending bool) boo
 	if messageID == "" {
 		return false
 	}
-	a.finalCardPatchMu.Lock()
-	defer a.finalCardPatchMu.Unlock()
-	current := a.finalCardPatches[messageID]
+	tracker := a.finalCardPatchTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	current := tracker.patches[messageID]
 	if current == nil {
 		return false
 	}
@@ -105,7 +124,7 @@ func (a *App) setFinalCardPatchPending(messageID, kind string, pending bool) boo
 	default:
 		return false
 	}
-	a.pruneFinalCardPatchLocked(messageID, current)
+	a.pruneFinalCardPatchLocked(tracker, messageID, current)
 	return true
 }
 
@@ -144,14 +163,15 @@ func (a *App) updateFinalCardPatchState(messageID string, mutate func(*finalCard
 	}
 
 	shouldStart := false
-	a.finalCardPatchMu.Lock()
-	current := a.finalCardPatches[messageID]
+	tracker := a.finalCardPatchTracker()
+	tracker.mu.Lock()
+	current := tracker.patches[messageID]
 	if current == nil {
-		a.finalCardPatchMu.Unlock()
+		tracker.mu.Unlock()
 		return false
 	}
 	if mutate != nil && !mutate(current) {
-		a.finalCardPatchMu.Unlock()
+		tracker.mu.Unlock()
 		return true
 	}
 	current.Dirty = true
@@ -159,7 +179,7 @@ func (a *App) updateFinalCardPatchState(messageID string, mutate func(*finalCard
 		current.Patching = true
 		shouldStart = true
 	}
-	a.finalCardPatchMu.Unlock()
+	tracker.mu.Unlock()
 
 	if shouldStart {
 		go a.runFinalCardPatchLoop(messageID)
@@ -189,9 +209,10 @@ func (a *App) runFinalCardPatchLoop(messageID string) {
 }
 
 func (a *App) nextFinalCardPatchSnapshot(messageID string) (finalCardPatchSnapshot, bool) {
-	a.finalCardPatchMu.Lock()
-	defer a.finalCardPatchMu.Unlock()
-	current := a.finalCardPatches[messageID]
+	tracker := a.finalCardPatchTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	current := tracker.patches[messageID]
 	if current == nil {
 		return finalCardPatchSnapshot{}, false
 	}
@@ -200,9 +221,10 @@ func (a *App) nextFinalCardPatchSnapshot(messageID string) (finalCardPatchSnapsh
 }
 
 func (a *App) finishFinalCardPatchIteration(messageID string) bool {
-	a.finalCardPatchMu.Lock()
-	defer a.finalCardPatchMu.Unlock()
-	current := a.finalCardPatches[messageID]
+	tracker := a.finalCardPatchTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	current := tracker.patches[messageID]
 	if current == nil {
 		return false
 	}
@@ -210,13 +232,16 @@ func (a *App) finishFinalCardPatchIteration(messageID string) bool {
 		return true
 	}
 	current.Patching = false
-	a.pruneFinalCardPatchLocked(messageID, current)
+	a.pruneFinalCardPatchLocked(tracker, messageID, current)
 	return false
 }
 
-func (a *App) pruneFinalCardPatchLocked(messageID string, current *finalCardPatchState) {
+func (a *App) pruneFinalCardPatchLocked(tracker *finalCardPatchTracker, messageID string, current *finalCardPatchState) {
+	if tracker == nil {
+		return
+	}
 	if current == nil {
-		delete(a.finalCardPatches, messageID)
+		delete(tracker.patches, messageID)
 		return
 	}
 	if current.Patching || current.Dirty || current.PreviewPending {
@@ -239,9 +264,10 @@ func (a *App) tryPruneFinalCardPatch(messageID string) {
 	if messageID == "" {
 		return
 	}
-	a.finalCardPatchMu.Lock()
-	defer a.finalCardPatchMu.Unlock()
-	current := a.finalCardPatches[messageID]
+	tracker := a.finalCardPatchTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	current := tracker.patches[messageID]
 	if current == nil {
 		return
 	}
@@ -249,7 +275,7 @@ func (a *App) tryPruneFinalCardPatch(messageID string) {
 	if current.Patching || current.Dirty || current.PreviewPending {
 		return
 	}
-	delete(a.finalCardPatches, messageID)
+	delete(a.finalCardPatchTracker().patches, messageID)
 }
 
 func (a *App) patchFinalCardSnapshot(ctx context.Context, messageID string, snapshot finalCardPatchSnapshot) error {
