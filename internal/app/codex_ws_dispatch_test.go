@@ -71,7 +71,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 		return nil
 	}
 
-	appHandleFeishuMessage(a,msg1)
+	a.HandleFeishuMessage(msg1)
 
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveTurnID != "turn-1" || sess.Status != "turn_in_progress" {
@@ -82,7 +82,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 		t.Fatalf("session missing active submission after first message: %+v", sess)
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{
+	a.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID: "msg-ws-2",
 		ChatID:    msg1.ChatID,
 		ChatType:  msg1.ChatType,

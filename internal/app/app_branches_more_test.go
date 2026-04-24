@@ -50,13 +50,13 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		liveThreads: newLiveThreadTracker(),
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
 	if a.store.GetSession("feishu:p2p::") != nil {
 		t.Fatal("stale message should be ignored")
 	}
 
 	_ = a.deduper.Claim("dup")
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "dup"})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "dup"})
 
 	sessionKey := "feishu:p2p:chat:user"
 	if err := a.store.UpsertSession(&state.Session{
@@ -83,13 +83,13 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "pending", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "append"})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "pending", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "append"})
 	if len(fc.replies) == 0 {
 		t.Fatal("pending text response should reply to the pending input request")
 	}
 
 	ff.replyCards = nil
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "cmd", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "/menu"})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "cmd", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "/menu"})
 	if len(ff.replyCards) == 0 {
 		t.Fatal("local command should render reply card")
 	}
@@ -98,7 +98,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	ff.replyTexts = nil
 	ff.replyTextWithIDs = nil
 	slashLikeText := "/new 和 /fork 之后能不能跑 /review 你不用管"
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "slash-like", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: slashLikeText})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "slash-like", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: slashLikeText})
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || len(sess.Queue) != 1 {
 		t.Fatalf("slash-like text should be queued for codex, session=%+v", sess)
@@ -111,13 +111,13 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		t.Fatalf("slash-like text should not trigger local command error replies: %+v", ff.replyTexts)
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "img", ChatID: "chat", ChatType: "p2p", UserID: "user", Attachments: []feishu.Attachment{{Kind: "image", ResourceKey: "img"}}})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "img", ChatID: "chat", ChatType: "p2p", UserID: "user", Attachments: []feishu.Attachment{{Kind: "image", ResourceKey: "img"}}})
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || len(sess.StagedImages) == 0 {
 		t.Fatalf("image-only message should be staged: %+v", sess)
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
+	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
 	bad := &App{
 		cfg:         &config.Config{Feishu: config.FeishuConfig{Backend: backendCodex}},
@@ -128,7 +128,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		turnStreams: newTurnStreamTracker(),
 		liveThreads: newLiveThreadTracker(),
 	}
-	appHandleFeishuMessage(bad,&feishu.InboundMessage{
+	bad.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID:   "bad-attach",
 		ChatID:      "chat",
 		ChatType:    "p2p",
@@ -153,7 +153,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if got := nonZero(0, 0); got != 0 {
 		t.Fatalf("nonZero(all zero) = %d, want 0", got)
 	}
-	appHandleBotMenu(a,nil)
+	a.HandleBotMenu(nil)
 
 	sessionKey := "sess-err"
 	if err := a.store.UpsertSession(&state.Session{
@@ -566,7 +566,7 @@ func TestHandleFeishuMessageMergeForwardPrefetchesInBackgroundAndSubmitsImageOnl
 
 	done := make(chan struct{})
 	go func() {
-		appHandleFeishuMessage(a,msg)
+		a.HandleFeishuMessage(msg)
 		close(done)
 	}()
 

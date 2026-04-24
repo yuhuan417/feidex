@@ -464,7 +464,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{
+	a.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID: "msg-queued",
 		ChatID:    "chat",
 		ChatType:  "p2p",
@@ -1405,7 +1405,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{
+	a.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",

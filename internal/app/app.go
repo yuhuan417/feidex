@@ -130,20 +130,12 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		}
 		handle.install(app)
 	}
-	app.feishu.SetHandlers(
-		func(msg *feishu.InboundMessage) { appHandleFeishuMessage(app, msg) },
-		func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appHandleCardAction(app, action)
-		},
-		func(click *feishu.BotMenuClick) { appHandleBotMenu(app, click) },
-		func(recall *feishu.MessageRecall) { appHandleFeishuRecall(app, recall) },
-		func(reaction *feishu.MessageReaction) { appHandleFeishuReaction(app, reaction) },
-	)
+	app.feishu.SetHandlers(app.HandleFeishuMessage, app.HandleCardAction, app.HandleBotMenu, app.HandleFeishuRecall, app.HandleFeishuReaction)
 	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }
 
-func appStart(a *App, ctx context.Context) error {
+func (a *App) Start(ctx context.Context) error {
 	if err := startBackend(a, ctx); err != nil {
 		return err
 	}
@@ -158,7 +150,7 @@ func appStart(a *App, ctx context.Context) error {
 	return nil
 }
 
-func appStop(a *App, ctx context.Context) error {
+func (a *App) Stop(ctx context.Context) error {
 	a.feishu.Stop()
 	if a == nil {
 		return nil
@@ -195,15 +187,15 @@ func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, e
 	return params
 }
 
-func appHandleFeishuMessage(a *App, msg *feishu.InboundMessage) {
+func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {
 	newFeishuEventRouter(a).handleMessage(msg)
 }
 
-func appHandleFeishuRecall(a *App, recall *feishu.MessageRecall) {
+func (a *App) HandleFeishuRecall(recall *feishu.MessageRecall) {
 	newFeishuEventRouter(a).handleRecall(recall)
 }
 
-func appHandleFeishuReaction(a *App, reaction *feishu.MessageReaction) {
+func (a *App) HandleFeishuReaction(reaction *feishu.MessageReaction) {
 	newFeishuEventRouter(a).handleReaction(reaction)
 }
 
@@ -223,11 +215,11 @@ func nonZero(values ...int64) int64 {
 	return 0
 }
 
-func appHandleBotMenu(a *App, click *feishu.BotMenuClick) {
+func (a *App) HandleBotMenu(click *feishu.BotMenuClick) {
 	newFeishuEventRouter(a).handleBotMenu(click)
 }
 
-func appHandleCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return dispatchCardAction(a, action)
 }
 

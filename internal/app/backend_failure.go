@@ -25,12 +25,12 @@ func configureCodexClientRuntime(a *App, client codexClient) {
 	)
 	if aware, ok := client.(codexErrorAware); ok {
 		aware.SetErrorHandler(func(err error) {
-			handleCodexTransportError(a, client, err)
+			a.handleCodexTransportError(client, err)
 		})
 	}
 }
 
-func handleCodexTransportError(a *App, client codexClient, err error) {
+func (a *App) handleCodexTransportError(client codexClient, err error) {
 	if a == nil || !beginCodexTransportRecovery(a, client) {
 		return
 	}

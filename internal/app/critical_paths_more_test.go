@@ -96,7 +96,7 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 		return nil
 	}
 
-	appHandleFeishuMessage(a,msg1)
+	a.HandleFeishuMessage(msg1)
 
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "" || sess.ActiveSubmissionID == "" || sess.Status != "turn_starting" {
@@ -115,7 +115,7 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 		UserID:    msg1.UserID,
 		Text:      "queued follow-up",
 	}
-	appHandleFeishuMessage(a,msg2)
+	a.HandleFeishuMessage(msg2)
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || len(sess.Queue) != 1 || sess.ActiveSubmissionID != firstSubID {
@@ -224,7 +224,7 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 		return nil
 	}
 
-	appHandleFeishuMessage(a,msg1)
+	a.HandleFeishuMessage(msg1)
 
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "" || sess.ActiveSubmissionID == "" || sess.Status != "turn_starting" {
@@ -239,7 +239,7 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 		UserID:    msg1.UserID,
 		Text:      "queued follow-up",
 	}
-	appHandleFeishuMessage(a,msg2)
+	a.HandleFeishuMessage(msg2)
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || len(sess.Queue) != 1 || sess.ActiveSubmissionID != firstSubID {
@@ -319,7 +319,7 @@ func TestToolUserInputFormFlowRepliesByTextAndResumesAfterServerResolution(t *te
 		t.Fatalf("user input form cards = %d, want 1", len(ff.sendCards))
 	}
 
-	appHandleFeishuMessage(a,&feishu.InboundMessage{
+	a.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID: "msg-user-input-answer",
 		ChatID:    msg.ChatID,
 		ChatType:  msg.ChatType,

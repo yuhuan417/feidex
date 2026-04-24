@@ -38,7 +38,7 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "hello"}
-	appHandleFeishuMessage(a,msg)
+	a.HandleFeishuMessage(msg)
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("replyCards = %d, want 1 backend selection card", len(ff.replyCards))
@@ -88,7 +88,7 @@ func TestCommandBackendShowsOnlyAvailableBackends(t *testing.T) {
 func TestHandleCardActionMenuGroupBackendOpensBackendMenuCard(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	resp, err := appHandleCardAction(a,&feishu.CardAction{
+	resp, err := a.HandleCardAction(&feishu.CardAction{
 		ActionValue: map[string]any{"action": "menu.group.backend", "session_key": "sess-1"},
 		UserID:      "user-1",
 		ChatID:      "chat-1",
