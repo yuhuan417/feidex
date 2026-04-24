@@ -1551,7 +1551,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("UpsertSession(download) error = %v", err)
 			}
-			return a.completeMenuDownload(&feishu.CardAction{
+			return newConversationWorkflowService(a).completeMenuDownload(&feishu.CardAction{
 				UserID:      "user-1",
 				ChatID:      "chat-1",
 				MessageID:   "msg-download",
@@ -1568,7 +1568,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("UpsertSession(fork) error = %v", err)
 			}
-			return a.completeMenuFork(&feishu.CardAction{ActionValue: map[string]any{
+			return newConversationWorkflowService(a).completeMenuFork(&feishu.CardAction{ActionValue: map[string]any{
 				"session_key":   forkSessionKey,
 				"parent_action": "menu.thread",
 			}}, forkSessionKey)
@@ -3544,7 +3544,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-9" || got.Status != "idle" {
 		t.Fatalf("session after completeThreadResume = %+v", got)
 	}
-	resp, err = a.completeMenuFork(&feishu.CardAction{
+	resp, err = newConversationWorkflowService(a).completeMenuFork(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"parent_action": "menu.thread"},

@@ -114,7 +114,7 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 		return nil
 	}
 
-	if err := a.commandCompact(msg, nil); err != nil {
+	if err := newConversationWorkflowService(a).commandCompact(msg, nil); err != nil {
 		t.Fatalf("commandCompact() error = %v", err)
 	}
 	sess := a.store.GetSession(sessionKey)

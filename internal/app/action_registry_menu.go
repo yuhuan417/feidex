@@ -32,7 +32,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newThreadActionService(s.app).completeMenuNew(action, actionSessionKey(action))
 	},
 	"menu.download": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuDownload(action, actionSessionKey(action))
+		return newConversationWorkflowService(s.app).completeMenuDownload(action, actionSessionKey(action))
 	},
 	"menu.quiet": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuQuiet(action, actionSessionKey(action))
@@ -44,19 +44,19 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuReview(action, actionSessionKey(action))
 	},
 	"menu.review.uncommitted": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuReviewUncommitted(action, actionSessionKey(action))
+		return newConversationWorkflowService(s.app).completeMenuReviewUncommitted(action, actionSessionKey(action))
 	},
 	"menu.review.base": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuReviewBase(action, actionSessionKey(action))
+		return newConversationWorkflowService(s.app).completeMenuReviewBase(action, actionSessionKey(action))
 	},
 	"menu.review.commit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuReviewCommit(action, actionSessionKey(action))
+		return newConversationWorkflowService(s.app).completeMenuReviewCommit(action, actionSessionKey(action))
 	},
 	"menu.review.custom": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuCommand(action, actionSessionKey(action), "/review custom", "menu.review")
 	},
 	"menu.fork": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuFork(action, actionSessionKey(action))
+		return newConversationWorkflowService(s.app).completeMenuFork(action, actionSessionKey(action))
 	},
 	"menu.usage": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuUsage(action, actionSessionKey(action))

@@ -401,7 +401,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := a.commandCompact(msg, nil); err != nil {
+	if err := newConversationWorkflowService(a).commandCompact(msg, nil); err != nil {
 		t.Fatalf("commandCompact() error = %v", err)
 	}
 	if gotMethod != "thread/compact/start" || gotThreadID != "thread-1" {
@@ -433,7 +433,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := a.commandCompact(msg, nil); err == nil {
+	if err := newConversationWorkflowService(a).commandCompact(msg, nil); err == nil {
 		t.Fatal("expected commandCompact() to fail")
 	}
 	sess := a.store.GetSession("feishu:p2p:chat:user")
@@ -510,7 +510,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := a.commandFork(msg, nil); err != nil {
+	if err := newConversationWorkflowService(a).commandFork(msg, nil); err != nil {
 		t.Fatalf("commandFork() error = %v", err)
 	}
 	if gotMethod != "thread/fork" {

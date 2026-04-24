@@ -11,22 +11,22 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) commandFork(msg *feishu.InboundMessage, args []string) error {
+func (s conversationWorkflowService) commandFork(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /fork")
 	}
 	if msg == nil {
 		return nil
 	}
-	discarded, forkedID, err := a.startThreadFork(a.makeSessionKey(msg))
+	discarded, forkedID, err := s.app.startThreadFork(s.app.makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
-	reply := a.conversationBackend().forkReplyMessage(forkedID)
+	reply := s.app.conversationBackend().forkReplyMessage(forkedID)
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, a.replyInThreadEnabled(msg.ChatType))
+	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, reply, s.app.replyInThreadEnabled(msg.ChatType))
 }
 
 func (a *App) startThreadFork(sessionKey string) (int, string, error) {
@@ -58,6 +58,6 @@ func (a *App) startThreadFork(sessionKey string) (int, string, error) {
 	return discarded, forkedID, nil
 }
 
-func (a *App) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, primaryConversationSlash(a.configuredBackend())+" fork", "menu.thread")
+func (s conversationWorkflowService) completeMenuFork(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(s.app.configuredBackend())+" fork", "menu.thread")
 }

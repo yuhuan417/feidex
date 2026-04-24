@@ -129,7 +129,7 @@ func (s threadCommandService) commandThread(msg *feishu.InboundMessage, args []s
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /thread fork")
 		}
-		return s.app.commandFork(msg, nil)
+		return newConversationWorkflowService(s.app).commandFork(msg, nil)
 	case "resume":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread resume THREAD_ID")
@@ -203,7 +203,7 @@ func (s threadCommandService) commandSession(msg *feishu.InboundMessage, args []
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /session fork")
 		}
-		return s.app.commandFork(msg, nil)
+		return newConversationWorkflowService(s.app).commandFork(msg, nil)
 	case "resume":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session resume SESSION_ID")

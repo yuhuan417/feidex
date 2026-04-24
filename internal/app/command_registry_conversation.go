@@ -28,7 +28,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandCompact(msg, args)
+				return newConversationWorkflowService(a).commandCompact(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
@@ -44,7 +44,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandFork(msg, args)
+				return newConversationWorkflowService(a).commandFork(msg, args)
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{

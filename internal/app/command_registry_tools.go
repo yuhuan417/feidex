@@ -65,7 +65,7 @@ func localCommandWorkspaceToolSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandDownload(msg, args)
+				return newConversationWorkflowService(a).commandDownload(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
@@ -78,7 +78,7 @@ func localCommandWorkspaceToolSpecs() []localCommandSpec {
 				return matchReviewCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandReview(msg, args)
+				return newConversationWorkflowService(a).commandReview(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{

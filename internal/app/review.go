@@ -64,25 +64,25 @@ func mergeReviewCustomFormValues(payload reviewPendingPayload, values map[string
 	return payload
 }
 
-func (a *App) commandReview(msg *feishu.InboundMessage, args []string) error {
+func (s conversationWorkflowService) commandReview(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
 	if len(args) == 0 {
-		return a.startInlineReviewFromMessage(msg, reviewTargetSpec{Type: reviewTargetUncommitted})
+		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{Type: reviewTargetUncommitted})
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "uncommitted", "uncommittedChanges":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: /review | /review uncommitted | /review base [branch] | /review commit [rev] | /review custom [instructions]")
 		}
-		return a.startInlineReviewFromMessage(msg, reviewTargetSpec{Type: reviewTargetUncommitted})
+		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{Type: reviewTargetUncommitted})
 	case "base":
 		switch len(args) {
 		case 1:
-			return a.beginReviewForm(msg, reviewFormModeBase)
+			return s.app.beginReviewForm(msg, reviewFormModeBase)
 		case 2:
-			return a.startInlineReviewFromMessage(msg, reviewTargetSpec{
+			return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
 				Type:   reviewTargetBaseBranch,
 				Branch: strings.TrimSpace(args[1]),
 			})
@@ -92,9 +92,9 @@ func (a *App) commandReview(msg *feishu.InboundMessage, args []string) error {
 	case "commit":
 		switch len(args) {
 		case 1:
-			return a.beginReviewForm(msg, reviewFormModeCommit)
+			return s.app.beginReviewForm(msg, reviewFormModeCommit)
 		case 2:
-			return a.startInlineReviewFromMessage(msg, reviewTargetSpec{
+			return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
 				Type:      reviewTargetCommit,
 				CommitSHA: strings.TrimSpace(args[1]),
 			})
@@ -103,9 +103,9 @@ func (a *App) commandReview(msg *feishu.InboundMessage, args []string) error {
 		}
 	case "custom":
 		if len(args) == 1 {
-			return a.beginReviewForm(msg, reviewFormModeCustom)
+			return s.app.beginReviewForm(msg, reviewFormModeCustom)
 		}
-		return a.startInlineReviewFromMessage(msg, reviewTargetSpec{
+		return s.app.startInlineReviewFromMessage(msg, reviewTargetSpec{
 			Type:         reviewTargetCustom,
 			Instructions: strings.TrimSpace(strings.Join(args[1:], " ")),
 		})

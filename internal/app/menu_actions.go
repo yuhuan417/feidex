@@ -79,7 +79,7 @@ func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	}
 	s.app.runAsync(func() {
 		card := s.app.renderCompactAcceptedCard(sessionKey)
-		if err := s.app.runMenuCompactAction(action, sessionKey); err != nil {
+		if err := newConversationWorkflowService(s.app).runMenuCompactAction(action, sessionKey); err != nil {
 			card = s.app.renderCompactFailedCard(sessionKey, err.Error())
 		}
 		s.app.patchMaintenanceCard(messageID, card, "compact menu patch failed",
