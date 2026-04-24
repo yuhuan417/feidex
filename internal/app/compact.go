@@ -206,7 +206,7 @@ func (a *App) completeStandaloneCompactTurn(threadID, turnID string) bool {
 		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
-		a.sendStandaloneCompactResult(sess, "completed")
+		sendStandaloneCompactResult(a, sess, "completed")
 		return true
 	}
 	return false
@@ -255,7 +255,7 @@ func (a *App) finishStandaloneCompactTurn(threadID, turnID, status string) bool 
 		if err := appState.saveSession(sess); err != nil {
 			return false
 		}
-		a.sendStandaloneCompactResult(sess, status)
+		sendStandaloneCompactResult(a, sess, status)
 		return true
 	}
 	return false
@@ -304,7 +304,7 @@ func (a *App) failStandaloneCompactTurn(threadID, turnID, message string) bool {
 		if message != "" {
 			text = "当前线程上下文压缩失败：" + message
 		}
-		a.sendSessionTextNotice(sess, text)
+		sendSessionTextNotice(a, sess, text)
 		return true
 	}
 	return false
@@ -335,12 +335,12 @@ func (a *App) restoreStandaloneCompactSession(sessionKey, threadID, previousStat
 	_ = appState.saveSession(sess)
 }
 
-func (a *App) sendStandaloneCompactResult(sess *state.Session, status string) {
+func sendStandaloneCompactResult(a *App, sess *state.Session, status string) {
 	text := standaloneCompactResultText(status)
 	if text == "" {
 		return
 	}
-	a.sendSessionTextNotice(sess, text)
+	sendSessionTextNotice(a, sess, text)
 }
 
 func standaloneCompactResultText(status string) string {
@@ -356,7 +356,7 @@ func standaloneCompactResultText(status string) string {
 	}
 }
 
-func (a *App) sendSessionTextNotice(sess *state.Session, text string) {
+func sendSessionTextNotice(a *App, sess *state.Session, text string) {
 	if a == nil || a.feishu == nil || sess == nil {
 		return
 	}
