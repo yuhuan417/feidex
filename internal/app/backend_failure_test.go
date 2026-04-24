@@ -72,7 +72,7 @@ func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *
 func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	a.autoRetryAfter = func(time.Duration, func()) delayedTask {
+	a.autoRetryTracker().after = func(time.Duration, func()) delayedTask {
 		return &fakeDelayedTask{}
 	}
 	if err := a.updateAutoRetryEnabled(true); err != nil {

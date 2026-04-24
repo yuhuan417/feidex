@@ -163,13 +163,13 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "pending auto retry blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				a.autoRetries = map[string]*autoRetryState{
+				a.autoRetries = &autoRetryTracker{states: map[string]*autoRetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",
 						Timer:      &fakeDelayedTask{},
 					},
-				}
+				}}
 			},
 			want: "当前仍有等待自动重试的任务",
 		},

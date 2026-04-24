@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/config"
@@ -23,6 +24,26 @@ type delayedTask interface {
 	Stop() bool
 }
 
+type autoRetryTracker struct {
+	mu     sync.Mutex
+	states map[string]*autoRetryState
+	after  func(time.Duration, func()) delayedTask
+}
+
+func newAutoRetryTracker() *autoRetryTracker {
+	return &autoRetryTracker{states: map[string]*autoRetryState{}}
+}
+
+func (a *App) autoRetryTracker() *autoRetryTracker {
+	if a == nil {
+		return nil
+	}
+	if a.autoRetries == nil {
+		a.autoRetries = newAutoRetryTracker()
+	}
+	return a.autoRetries
+}
+
 type autoRetryState struct {
 	SessionKey           string
 	ThreadID             string
@@ -36,12 +57,6 @@ type autoRetryState struct {
 	Timer                delayedTask
 	TimerSeq             uint64
 	Canceled             bool
-}
-
-func (a *App) ensureAutoRetryMapLocked() {
-	if a != nil && a.autoRetries == nil {
-		a.autoRetries = map[string]*autoRetryState{}
-	}
 }
 
 func (a *App) autoRetryEnabled() bool {
@@ -114,8 +129,8 @@ func cloneAutoRetryState(src *autoRetryState) autoRetryState {
 }
 
 func (a *App) scheduleDelayedTask(delay time.Duration, fn func()) delayedTask {
-	if a != nil && a.autoRetryAfter != nil {
-		return a.autoRetryAfter(delay, fn)
+	if tracker := a.autoRetryTracker(); tracker != nil && tracker.after != nil {
+		return tracker.after(delay, fn)
 	}
 	return time.AfterFunc(delay, fn)
 }
@@ -129,12 +144,13 @@ func (a *App) hasPendingAutoRetry(sessionKey string) bool {
 		return false
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
-	a.autoRetryMu.Lock()
-	defer a.autoRetryMu.Unlock()
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
 	if sessionKey != "" {
-		return autoRetryStateWaiting(a.autoRetries[sessionKey])
+		return autoRetryStateWaiting(tracker.states[sessionKey])
 	}
-	for _, state := range a.autoRetries {
+	for _, state := range tracker.states {
 		if autoRetryStateWaiting(state) {
 			return true
 		}
@@ -146,9 +162,10 @@ func (a *App) currentAutoRetryState(sessionKey string) (autoRetryState, bool) {
 	if a == nil {
 		return autoRetryState{}, false
 	}
-	a.autoRetryMu.Lock()
-	defer a.autoRetryMu.Unlock()
-	state := a.autoRetries[strings.TrimSpace(sessionKey)]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+	state := tracker.states[strings.TrimSpace(sessionKey)]
 	if state == nil {
 		return autoRetryState{}, false
 	}
@@ -184,17 +201,18 @@ func (a *App) finishAutoRetryOnTerminal(sessionKey, threadID, status string) {
 	}
 	var snapshot autoRetryState
 	found := false
-	a.autoRetryMu.Lock()
-	if state := a.autoRetries[sessionKey]; state != nil && strings.TrimSpace(state.ThreadID) == threadID {
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	if state := tracker.states[sessionKey]; state != nil && strings.TrimSpace(state.ThreadID) == threadID {
 		if state.Timer != nil {
 			state.Timer.Stop()
 			state.Timer = nil
 		}
 		snapshot = cloneAutoRetryState(state)
-		delete(a.autoRetries, sessionKey)
+		delete(tracker.states, sessionKey)
 		found = true
 	}
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 	if !found {
 		return
 	}
@@ -233,15 +251,15 @@ func (a *App) scheduleAutoRetryAfterFailure(sessionKey, threadID string, updated
 		snapshot autoRetryState
 		waiting  bool
 	)
-	a.autoRetryMu.Lock()
-	a.ensureAutoRetryMapLocked()
-	state := a.autoRetries[sessionKey]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	state := tracker.states[sessionKey]
 	if state == nil {
 		state = &autoRetryState{
 			SessionKey: sessionKey,
 			ThreadID:   threadID,
 		}
-		a.autoRetries[sessionKey] = state
+		tracker.states[sessionKey] = state
 	}
 	state.Canceled = false
 	refreshAutoRetryState(state, updatedSess, sub, threadID)
@@ -260,7 +278,7 @@ func (a *App) scheduleAutoRetryAfterFailure(sessionKey, threadID string, updated
 	}
 	waiting = autoRetryStateWaiting(state)
 	snapshot = cloneAutoRetryState(state)
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 	a.deliverAutoRetryCard(snapshot, a.renderAutoRetryLoopCard(snapshot, "waiting", "当前任务 failed，准备自动发送“继续”。"))
 	return waiting
 }
@@ -302,15 +320,16 @@ func (a *App) runAutoRetryTimer(sessionKey string, expectedSeq uint64) {
 	}
 
 	var snapshot autoRetryState
-	a.autoRetryMu.Lock()
-	state := a.autoRetries[sessionKey]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	state := tracker.states[sessionKey]
 	if state == nil || state.TimerSeq != expectedSeq {
-		a.autoRetryMu.Unlock()
+		tracker.mu.Unlock()
 		return
 	}
 	state.Timer = nil
 	snapshot = cloneAutoRetryState(state)
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 
 	if snapshot.Canceled {
 		a.finishAutoRetryWithMessage(sessionKey, "stopped", "已停止自动重试。")
@@ -367,10 +386,11 @@ func (a *App) bumpAutoRetryBackoffAndReschedule(sessionKey, notice string) {
 		return
 	}
 	var snapshot autoRetryState
-	a.autoRetryMu.Lock()
-	state := a.autoRetries[sessionKey]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	state := tracker.states[sessionKey]
 	if state == nil || state.Canceled {
-		a.autoRetryMu.Unlock()
+		tracker.mu.Unlock()
 		return
 	}
 	state.BackoffStep++
@@ -383,7 +403,7 @@ func (a *App) bumpAutoRetryBackoffAndReschedule(sessionKey, notice string) {
 		})
 	})
 	snapshot = cloneAutoRetryState(state)
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 	a.deliverAutoRetryCard(snapshot, a.renderAutoRetryLoopCard(snapshot, "waiting", notice))
 }
 
@@ -440,17 +460,18 @@ func (a *App) markAutoRetryAttemptStarted(sessionKey string, sub *state.Submissi
 		return
 	}
 	var snapshot autoRetryState
-	a.autoRetryMu.Lock()
-	state := a.autoRetries[sessionKey]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	state := tracker.states[sessionKey]
 	if state == nil || state.Canceled {
-		a.autoRetryMu.Unlock()
+		tracker.mu.Unlock()
 		return
 	}
 	state.RetryCount++
 	state.BackoffStep++
 	refreshAutoRetryState(state, a.appState().session(sessionKey), sub, firstNonEmpty(strings.TrimSpace(sub.ThreadID), state.ThreadID))
 	snapshot = cloneAutoRetryState(state)
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 	a.deliverAutoRetryCard(snapshot, a.renderAutoRetryLoopCard(snapshot, "running", "已自动发送“继续”，等待新的任务结果。"))
 }
 
@@ -464,9 +485,9 @@ func (a *App) cancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice 
 	}
 	var snapshot autoRetryState
 	canceled := false
-	a.autoRetryMu.Lock()
-	a.ensureAutoRetryMapLocked()
-	state := a.autoRetries[sessionKey]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	state := tracker.states[sessionKey]
 	if state != nil {
 		if state.Timer != nil {
 			state.Timer.Stop()
@@ -475,11 +496,11 @@ func (a *App) cancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice 
 		state.Canceled = true
 		snapshot = cloneAutoRetryState(state)
 		if !keepUntilTerminal {
-			delete(a.autoRetries, sessionKey)
+			delete(tracker.states, sessionKey)
 		}
 		canceled = true
 	}
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 	if canceled {
 		a.deliverAutoRetryCard(snapshot, a.renderAutoRetryLoopCard(snapshot, "stopped", firstNonEmpty(strings.TrimSpace(notice), "已停止自动重试。")))
 	}
@@ -495,11 +516,11 @@ func (a *App) cancelAllAutoRetry(notice string) int {
 		snapshot autoRetryState
 	}
 	pending := []pendingCard{}
-	a.autoRetryMu.Lock()
-	a.ensureAutoRetryMapLocked()
-	for sessionKey, state := range a.autoRetries {
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	for sessionKey, state := range tracker.states {
 		if state == nil {
-			delete(a.autoRetries, sessionKey)
+			delete(tracker.states, sessionKey)
 			continue
 		}
 		if state.Timer != nil {
@@ -507,9 +528,9 @@ func (a *App) cancelAllAutoRetry(notice string) int {
 			state.Timer = nil
 		}
 		pending = append(pending, pendingCard{snapshot: cloneAutoRetryState(state)})
-		delete(a.autoRetries, sessionKey)
+		delete(tracker.states, sessionKey)
 	}
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 	for _, item := range pending {
 		a.deliverAutoRetryCard(item.snapshot, a.renderAutoRetryLoopCard(item.snapshot, "stopped", notice))
 	}
@@ -525,10 +546,11 @@ func (a *App) finishAutoRetryWithMessage(sessionKey, phase, notice string) {
 		return
 	}
 	var snapshot autoRetryState
-	a.autoRetryMu.Lock()
-	state := a.autoRetries[sessionKey]
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	state := tracker.states[sessionKey]
 	if state == nil {
-		a.autoRetryMu.Unlock()
+		tracker.mu.Unlock()
 		return
 	}
 	if state.Timer != nil {
@@ -536,8 +558,8 @@ func (a *App) finishAutoRetryWithMessage(sessionKey, phase, notice string) {
 		state.Timer = nil
 	}
 	snapshot = cloneAutoRetryState(state)
-	delete(a.autoRetries, sessionKey)
-	a.autoRetryMu.Unlock()
+	delete(tracker.states, sessionKey)
+	tracker.mu.Unlock()
 	a.deliverAutoRetryCard(snapshot, a.renderAutoRetryLoopCard(snapshot, phase, notice))
 }
 
@@ -570,14 +592,15 @@ func (a *App) deliverAutoRetryCard(snapshot autoRetryState, card map[string]any)
 	if err != nil || strings.TrimSpace(sentID) == "" {
 		return
 	}
-	a.autoRetryMu.Lock()
-	if state := a.autoRetries[snapshot.SessionKey]; state != nil {
+	tracker := a.autoRetryTracker()
+	tracker.mu.Lock()
+	if state := tracker.states[snapshot.SessionKey]; state != nil {
 		current := strings.TrimSpace(state.StatusMessageID)
 		if current == "" || current == messageID {
 			state.StatusMessageID = strings.TrimSpace(sentID)
 		}
 	}
-	a.autoRetryMu.Unlock()
+	tracker.mu.Unlock()
 }
 
 func (a *App) renderAutoRetryLoopCard(snapshot autoRetryState, phase, notice string) map[string]any {

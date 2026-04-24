@@ -59,7 +59,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	a.autoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
+	a.autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
@@ -145,7 +145,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	a.autoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
+	a.autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
@@ -202,7 +202,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	}
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	a.autoRetryAfter = func(delay time.Duration, fn func()) delayedTask {
+	a.autoRetryTracker().after = func(delay time.Duration, fn func()) delayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task

@@ -38,9 +38,7 @@ type App struct {
 	codexRecoverySource    codexClient
 	codexAutoThreadMu      sync.Mutex
 	codexAutoThreading     bool
-	autoRetryMu            sync.Mutex
-	autoRetries            map[string]*autoRetryState
-	autoRetryAfter         func(time.Duration, func()) delayedTask
+	autoRetries            *autoRetryTracker
 	frontendRecoveryMu     sync.Mutex
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
@@ -124,7 +122,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		liveThreads:         newLiveThreadTracker(),
 		turnBindings:        newTurnBindingTracker(),
 		finalCardPatches:    newFinalCardPatchTracker(),
-		autoRetries:         map[string]*autoRetryState{},
+		autoRetries:         newAutoRetryTracker(),
 		pendingSkills:       newPendingSkillTracker(),
 	}
 	if backend != "" {
