@@ -27,7 +27,7 @@ type historyTurnSummary struct {
 	InputPreview string
 }
 
-func (a *App) commandHistory(msg *feishu.InboundMessage, args []string) error {
+func (s historyService) commandHistory(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		if len(args) != 2 || strings.TrimSpace(args[0]) != "detail" {
 			return fmt.Errorf("usage: %s", historyCommandUsage)
@@ -36,31 +36,31 @@ func (a *App) commandHistory(msg *feishu.InboundMessage, args []string) error {
 		if err != nil || ordinal <= 0 {
 			return fmt.Errorf("usage: %s", historyCommandUsage)
 		}
-		index, err := a.historyIndexForOrdinal(a.makeSessionKey(msg), ordinal)
+		index, err := newHistoryService(s.app).historyIndexForOrdinal(s.app.makeSessionKey(msg), ordinal)
 		if err != nil {
 			return err
 		}
-		card, err := a.renderHistoryDetailCard(a.makeSessionKey(msg), index)
+		card, err := newHistoryService(s.app).renderHistoryDetailCard(s.app.makeSessionKey(msg), index)
 		if err != nil {
 			return err
 		}
-		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 		return err
 	}
-	card, err := a.renderHistoryCard(a.makeSessionKey(msg), 0)
+	card, err := newHistoryService(s.app).renderHistoryCard(s.app.makeSessionKey(msg), 0)
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, a.replyInThreadEnabled(msg.ChatType))
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, s.app.replyInThreadEnabled(msg.ChatType))
 	return err
 }
 
-func (a *App) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return a.conversationBackend().historyIndexForOrdinal(sessionKey, ordinal)
+func (s historyService) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
+	return s.app.conversationBackend().historyIndexForOrdinal(sessionKey, ordinal)
 }
 
-func (a *App) codexHistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	_, _, turns, err := a.fetchCurrentThreadHistory(sessionKey)
+func (s historyService) codexHistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
+	_, _, turns, err := newHistoryService(s.app).fetchCurrentThreadHistory(sessionKey)
 	if err != nil {
 		return 0, err
 	}
@@ -72,12 +72,12 @@ func (a *App) codexHistoryIndexForOrdinal(sessionKey string, ordinal int) (int, 
 	return 0, fmt.Errorf("Turn #%d 不存在", ordinal)
 }
 
-func (a *App) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return a.conversationBackend().renderHistoryCard(sessionKey, page)
+func (s historyService) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
+	return s.app.conversationBackend().renderHistoryCard(sessionKey, page)
 }
 
-func (a *App) renderCodexHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	sess, thread, turns, err := a.fetchCurrentThreadHistory(sessionKey)
+func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map[string]any, error) {
+	sess, thread, turns, err := newHistoryService(s.app).fetchCurrentThreadHistory(sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -178,12 +178,12 @@ func (a *App) renderCodexHistoryCard(sessionKey string, page int) (map[string]an
 	return card, nil
 }
 
-func (a *App) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return a.conversationBackend().renderHistoryDetailCard(sessionKey, index)
+func (s historyService) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
+	return s.app.conversationBackend().renderHistoryDetailCard(sessionKey, index)
 }
 
-func (a *App) renderCodexHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	sess, thread, turns, err := a.fetchCurrentThreadHistory(sessionKey)
+func (s historyService) renderCodexHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
+	sess, thread, turns, err := newHistoryService(s.app).fetchCurrentThreadHistory(sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -254,21 +254,21 @@ func (a *App) renderCodexHistoryDetailCard(sessionKey string, index int) (map[st
 			"page":        index / historyPageSize,
 		},
 	})
-	return a.feishu.SimpleStatusCard("Turn 详情", "blue", menuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
+	return s.app.feishu.SimpleStatusCard("Turn 详情", "blue", menuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
-func (a *App) fetchCurrentThreadHistory(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []historyTurnSummary, error) {
-	if a == nil || a.store == nil {
+func (s historyService) fetchCurrentThreadHistory(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []historyTurnSummary, error) {
+	if s.app == nil || s.app.store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}
-	sess := a.appState().session(sessionKey)
+	sess := s.app.appState().session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var result codexrpc.ThreadReadResult
-	client, err := a.requireCodexClient()
+	client, err := s.app.requireCodexClient()
 	if err != nil {
 		return nil, nil, nil, err
 	}

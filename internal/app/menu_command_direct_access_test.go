@@ -357,7 +357,7 @@ func TestCommandHistoryDirectDetail(t *testing.T) {
 		return nil
 	}
 
-	if err := a.commandHistory(msg, []string{"detail", "1"}); err != nil {
+	if err := newHistoryService(a).commandHistory(msg, []string{"detail", "1"}); err != nil {
 		t.Fatalf("commandHistory(detail) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {

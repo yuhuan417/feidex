@@ -80,15 +80,15 @@ func (b codexConversationBackend) renderThreadsCard(sessionKey string, includeAl
 }
 
 func (b codexConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return b.app.codexHistoryIndexForOrdinal(sessionKey, ordinal)
+	return newHistoryService(b.app).codexHistoryIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (b codexConversationBackend) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return b.app.renderCodexHistoryCard(sessionKey, page)
+	return newHistoryService(b.app).renderCodexHistoryCard(sessionKey, page)
 }
 
 func (b codexConversationBackend) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return b.app.renderCodexHistoryDetailCard(sessionKey, index)
+	return newHistoryService(b.app).renderCodexHistoryDetailCard(sessionKey, index)
 }
 
 func (b codexConversationBackend) renderUsageBody(sess *state.Session) string {

@@ -10,7 +10,7 @@ func localCommandCommonToolSpecs() []localCommandSpec {
 				return matchHistoryCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return a.commandHistory(msg, args)
+				return newHistoryService(a).commandHistory(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{

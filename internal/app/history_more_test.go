@@ -94,7 +94,7 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 		return nil
 	}
 
-	card, err := a.renderHistoryCard(sessionKey, 0)
+	card, err := newHistoryService(a).renderHistoryCard(sessionKey, 0)
 	if err != nil {
 		t.Fatalf("renderHistoryCard() error = %v", err)
 	}
@@ -116,7 +116,7 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 		t.Fatalf("history select label = %q, want status and input preview", label)
 	}
 
-	detail, err := a.renderHistoryDetailCard(sessionKey, 0)
+	detail, err := newHistoryService(a).renderHistoryDetailCard(sessionKey, 0)
 	if err != nil {
 		t.Fatalf("renderHistoryDetailCard() error = %v", err)
 	}
@@ -124,10 +124,10 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 		t.Fatalf("history detail body = %q, want outputs", detailBody)
 	}
 
-	if _, _, _, err := (&App{}).fetchCurrentThreadHistory(sessionKey); err == nil {
+	if _, _, _, err := newHistoryService(&App{}).fetchCurrentThreadHistory(sessionKey); err == nil {
 		t.Fatal("expected fetchCurrentThreadHistory() without store to fail")
 	}
-	if _, err := a.renderHistoryDetailCard(sessionKey, 1); err == nil {
+	if _, err := newHistoryService(a).renderHistoryDetailCard(sessionKey, 1); err == nil {
 		t.Fatal("expected out-of-range detail index to fail")
 	}
 	if len(ff.replyCards) != 0 {
@@ -169,7 +169,7 @@ func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 		return nil
 	}
 
-	card, err := a.renderHistoryCard(sessionKey, 1)
+	card, err := newHistoryService(a).renderHistoryCard(sessionKey, 1)
 	if err != nil {
 		t.Fatalf("renderHistoryCard(page=1) error = %v", err)
 	}
@@ -191,7 +191,7 @@ func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 		t.Fatalf("history page option label = %q, want current turn on second page", label)
 	}
 
-	detail, err := a.renderHistoryDetailCard(sessionKey, historyPageSize)
+	detail, err := newHistoryService(a).renderHistoryDetailCard(sessionKey, historyPageSize)
 	if err != nil {
 		t.Fatalf("renderHistoryDetailCard(last) error = %v", err)
 	}
@@ -253,7 +253,7 @@ func TestHistoryCardWithConfiguredPageSizeFitsFeishuCardLimits(t *testing.T) {
 		return nil
 	}
 
-	card, err := a.renderHistoryCard(sessionKey, 0)
+	card, err := newHistoryService(a).renderHistoryCard(sessionKey, 0)
 	if err != nil {
 		t.Fatalf("renderHistoryCard() error = %v", err)
 	}

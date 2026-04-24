@@ -3758,7 +3758,7 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 		return nil
 	}
 
-	if err := a.commandHistory(msg, nil); err != nil {
+	if err := newHistoryService(a).commandHistory(msg, nil); err != nil {
 		t.Fatalf("commandHistory() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
