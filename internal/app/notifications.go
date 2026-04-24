@@ -11,7 +11,7 @@ func (a *App) handleNotification(method string, params json.RawMessage) {
 }
 
 func (a *App) onThreadTokenUsageUpdated(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
-	a.recordTurnTokenUsage(threadID, turnID, usage)
+	newRuntimeStateService(a).recordTurnTokenUsage(threadID, turnID, usage)
 }
 
 func (a *App) onTurnStartedNotification(threadID, turnID string) {

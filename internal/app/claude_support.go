@@ -342,7 +342,7 @@ func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessa
 	if err := s.app.claude.ResolvePlanFeedback(pending.ID, feedback); err != nil {
 		return err
 	}
-	_ = s.app.finalizePendingReply(pending)
+	_ = newRuntimeStateService(s.app).finalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
 		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("计划反馈已提交", "green", claudePlanSubmittedBody(pending, feedback), nil))
 	}

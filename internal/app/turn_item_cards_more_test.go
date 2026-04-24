@@ -278,10 +278,10 @@ func TestTurnItemFinalAnswerFooterStaysOnLastSplitCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1", "card-2", "card-3"}
-	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	modelContextWindow := int64(1000)
-	a.markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
-	a.recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
+	newRuntimeStateService(a).recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 150,
 		},

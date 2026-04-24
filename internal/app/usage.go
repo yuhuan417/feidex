@@ -171,7 +171,7 @@ func (a *App) recordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage
 		snapshot.HasContextUsagePercent = true
 	}
 
-	tracker := a.turnBindingTracker()
+	tracker := newRuntimeStateService(a).turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.claudeUsage == nil {
@@ -188,7 +188,7 @@ func (a *App) currentClaudeThreadUsage(threadID string) (claudeThreadUsageSnapsh
 	if threadID == "" {
 		return claudeThreadUsageSnapshot{}, false
 	}
-	tracker := a.turnBindingTracker()
+	tracker := newRuntimeStateService(a).turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	usage, ok := tracker.claudeUsage[threadID]
@@ -231,7 +231,7 @@ func (a *App) renderCodexUsageBody(sess *state.Session) string {
 		return primaryConversationMissingLabel(backendCodex) + "。"
 	}
 	body := "当前线程暂无 token usage 数据。"
-	if usage, ok := a.currentThreadUsage(sess.ActiveThreadID); ok {
+	if usage, ok := newRuntimeStateService(a).currentThreadUsage(sess.ActiveThreadID); ok {
 		contextLine := ""
 		if usage.ModelContextWindow != nil {
 			contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)

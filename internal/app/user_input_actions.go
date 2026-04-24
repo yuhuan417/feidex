@@ -55,7 +55,7 @@ func (a *App) completeUserInputQuickAnswer(action *feishu.CardAction, pending *s
 			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
 		}, nil
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", selectionSummary, nil)),
@@ -86,7 +86,7 @@ func (a *App) completeUserInputFormSubmit(action *feishu.CardAction, pending *st
 			Card:  rawCard(renderToolUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)),
 		}, nil
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已提交", "green", summary, nil)),

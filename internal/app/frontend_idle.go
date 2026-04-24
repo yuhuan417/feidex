@@ -10,7 +10,7 @@ func (a *App) frontendIdleBlockedReason() string {
 	if a == nil {
 		return "app not initialized"
 	}
-	if reason := a.backendSwitchBlockedReasonForTraffic(); reason != "" {
+	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
 		return reason
 	}
 	for _, runtime := range backendRuntimeFacades() {
@@ -18,7 +18,7 @@ func (a *App) frontendIdleBlockedReason() string {
 			return runtime.idleMaintenanceBlockedReason()
 		}
 	}
-	if a.frontendMessageTrafficCount() > 0 {
+	if newRuntimeStateService(a).frontendMessageTrafficCount() > 0 {
 		return "当前仍有消息处理中"
 	}
 	for _, sess := range a.appState().sessions() {

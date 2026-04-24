@@ -133,7 +133,7 @@ func (a *App) completePendingFormCancel(action *feishu.CardAction) (*callback.Ca
 			Toast: &callback.Toast{Type: "warning", Content: "取消提交失败，请重试"},
 		}, nil
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
 	if pending.Kind == "workspace_new" || pending.Kind == "workspace_clone" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},

@@ -2,37 +2,37 @@ package app
 
 import "strings"
 
-func (a *App) beginBackendSwitchState(target string) {
-	if a == nil {
+func (s runtimeStateService) beginBackendSwitchState(target string) {
+	if s.app == nil {
 		return
 	}
-	a.backendStateMu.Lock()
-	defer a.backendStateMu.Unlock()
-	a.backendSwitching = true
-	a.backendSwitchTarget = normalizeRuntimeBackend(target)
+	s.app.backendStateMu.Lock()
+	defer s.app.backendStateMu.Unlock()
+	s.app.backendSwitching = true
+	s.app.backendSwitchTarget = normalizeRuntimeBackend(target)
 }
 
-func (a *App) finishBackendSwitchState() {
-	if a == nil {
+func (s runtimeStateService) finishBackendSwitchState() {
+	if s.app == nil {
 		return
 	}
-	a.backendStateMu.Lock()
-	defer a.backendStateMu.Unlock()
-	a.backendSwitching = false
-	a.backendSwitchTarget = ""
+	s.app.backendStateMu.Lock()
+	defer s.app.backendStateMu.Unlock()
+	s.app.backendSwitching = false
+	s.app.backendSwitchTarget = ""
 }
 
-func (a *App) backendSwitchState() (bool, string) {
-	if a == nil {
+func (s runtimeStateService) backendSwitchState() (bool, string) {
+	if s.app == nil {
 		return false, ""
 	}
-	a.backendStateMu.Lock()
-	defer a.backendStateMu.Unlock()
-	return a.backendSwitching, a.backendSwitchTarget
+	s.app.backendStateMu.Lock()
+	defer s.app.backendStateMu.Unlock()
+	return s.app.backendSwitching, s.app.backendSwitchTarget
 }
 
-func (a *App) backendSwitchBlockedReasonForTraffic() string {
-	switching, target := a.backendSwitchState()
+func (s runtimeStateService) backendSwitchBlockedReasonForTraffic() string {
+	switching, target := s.backendSwitchState()
 	if !switching {
 		return ""
 	}
@@ -42,9 +42,9 @@ func (a *App) backendSwitchBlockedReasonForTraffic() string {
 	return "当前正在切换 backend，请稍后再试"
 }
 
-func (a *App) backendSwitchBlocksCardAction(actionName string) string {
+func (s runtimeStateService) backendSwitchBlocksCardAction(actionName string) string {
 	if strings.TrimSpace(actionName) == "menu.backend.switch" {
 		return ""
 	}
-	return a.backendSwitchBlockedReasonForTraffic()
+	return s.backendSwitchBlockedReasonForTraffic()
 }

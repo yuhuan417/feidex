@@ -33,8 +33,8 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 	}
 }
 
-func (a *App) markPendingRequestReplied(requestID string) *state.PendingRequest {
-	appState := a.appState()
+func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.PendingRequest {
+	appState := s.app.appState()
 	pending := appState.pending(requestID)
 	if pending == nil {
 		return nil
@@ -49,8 +49,8 @@ func (a *App) markPendingRequestReplied(requestID string) *state.PendingRequest 
 	return appState.pending(requestID)
 }
 
-func (a *App) markPendingRequestResolved(requestID string) *state.PendingRequest {
-	appState := a.appState()
+func (s runtimeStateService) markPendingRequestResolved(requestID string) *state.PendingRequest {
+	appState := s.app.appState()
 	pending := appState.pending(requestID)
 	if pending == nil {
 		return nil
@@ -64,34 +64,34 @@ func (a *App) markPendingRequestResolved(requestID string) *state.PendingRequest
 	return appState.pending(requestID)
 }
 
-func (a *App) resolveServerPendingRequest(requestID string) *state.PendingRequest {
-	return a.markPendingRequestResolved(requestID)
+func (s runtimeStateService) resolveServerPendingRequest(requestID string) *state.PendingRequest {
+	return s.markPendingRequestResolved(requestID)
 }
 
-func (a *App) backendResolvesPendingLocally(pending *state.PendingRequest) bool {
+func (s runtimeStateService) backendResolvesPendingLocally(pending *state.PendingRequest) bool {
 	if pending == nil {
 		return false
 	}
-	if runtime := backendRuntimeForKind(pendingBackend(a, pending)); runtime != nil {
+	if runtime := backendRuntimeForKind(pendingBackend(s.app, pending)); runtime != nil {
 		return runtime.resolvesPendingLocally(pending.Kind)
 	}
 	return !isServerResolvedPendingKind(pending.Kind)
 }
 
-func (a *App) finalizePendingReply(pending *state.PendingRequest) *state.PendingRequest {
+func (s runtimeStateService) finalizePendingReply(pending *state.PendingRequest) *state.PendingRequest {
 	if pending == nil {
 		return nil
 	}
-	if a.backendResolvesPendingLocally(pending) {
-		resolved := a.markPendingRequestResolved(pending.ID)
-		a.resumeSubmissionAfterRequest(pending)
+	if s.backendResolvesPendingLocally(pending) {
+		resolved := s.markPendingRequestResolved(pending.ID)
+		s.app.resumeSubmissionAfterRequest(pending)
 		return resolved
 	}
-	return a.markPendingRequestReplied(pending.ID)
+	return s.markPendingRequestReplied(pending.ID)
 }
 
-func (a *App) hasOpenPendingRequestForTurn(threadID, turnID, excludeID string) bool {
-	appState := a.appState()
+func (s runtimeStateService) hasOpenPendingRequestForTurn(threadID, turnID, excludeID string) bool {
+	appState := s.app.appState()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	excludeID = strings.TrimSpace(excludeID)

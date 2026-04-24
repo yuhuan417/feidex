@@ -36,7 +36,7 @@ func (a *App) deliverClaudeOutputSegment(ctx context.Context, threadID, turnID, 
 	}
 
 	if final {
-		results := a.sendFinalMessagesWithFooterAndReuse(ctx, sub, body, a.turnFinalFooterLines(turnID, time.Now()), a.replyInThreadForSubmission(sub), nil)
+		results := a.sendFinalMessagesWithFooterAndReuse(ctx, sub, body, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), a.replyInThreadForSubmission(sub), nil)
 		if len(results) == 0 {
 			return nil, false
 		}

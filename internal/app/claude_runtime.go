@@ -790,9 +790,9 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 		return
 	}
 	r.app.recordClaudeThreadUsage(threadID, event.Usage)
-	r.app.recordTurnTokenUsage(threadID, turn.TurnID, claudeTurnUsageAsThreadUsage(event.Usage))
+	newRuntimeStateService(r.app).recordTurnTokenUsage(threadID, turn.TurnID, claudeTurnUsageAsThreadUsage(event.Usage))
 	if percentage, ok := claudeTurnContextUsagePercent(event.Usage); ok {
-		r.app.recordTurnContextUsagePercent(turn.TurnID, percentage)
+		newRuntimeStateService(r.app).recordTurnContextUsagePercent(turn.TurnID, percentage)
 	}
 	if event.Error != nil {
 		r.app.recordTurnError(threadID, turn.TurnID, event.Error.Error())
@@ -814,7 +814,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 						}
 					}
 				}
-				footerLines := r.app.turnFinalFooterLines(turn.TurnID, completedAt)
+				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
 					r.app.markTurnStreamFinal(turn.TurnID)
@@ -839,7 +839,7 @@ func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event clau
 				if id := strings.TrimSpace(boundary.ReuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
-				footerLines := r.app.turnFinalFooterLines(turn.TurnID, completedAt)
+				footerLines := newRuntimeStateService(r.app).turnFinalFooterLines(turn.TurnID, completedAt)
 				results := r.app.sendFinalMessagesWithFooterAndReuse(context.Background(), sub, finalText, footerLines, r.app.replyInThreadForSubmission(sub), reuseMessageIDs)
 				if len(results) > 0 {
 					r.app.markTurnStreamFinal(turn.TurnID)

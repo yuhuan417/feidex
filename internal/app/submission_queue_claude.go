@@ -165,7 +165,7 @@ func (w *lifecycleCoordinator) startClaudeSubmissionAttempt(sessionKey string, s
 	if err != nil {
 		return nil, turnID, err
 	}
-	a.markTurnStartedAt(turnID, time.Now())
+	newRuntimeStateService(a).markTurnStartedAt(turnID, time.Now())
 	a.markSubmissionRunningReactions(sub)
 
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -236,8 +236,8 @@ func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey str
 		appState.deleteMessageLinks(func(link *state.MessageLink) bool {
 			return link != nil && strings.TrimSpace(link.TurnID) == strings.TrimSpace(turnID)
 		})
-		a.clearTurnBinding(turnID)
-		a.clearTurnItemStates(turnID)
+		newRuntimeStateService(a).clearTurnBinding(turnID)
+		newRuntimeStateService(a).clearTurnItemStates(turnID)
 		a.deleteTurnStream(turnID)
 	}
 
@@ -275,7 +275,7 @@ func (w *lifecycleCoordinator) bindClaudeSubmissionStartState(sessionKey string,
 	sub.ThreadID = claudeThreadID
 	sub.TurnID = turnID
 	sub.Status = "running"
-	a.bindTurnSubmission(claudeThreadID, turnID, sessionKey, sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission(claudeThreadID, turnID, sessionKey, sub.ID)
 	if err := appState.markSubmissionRunning(sub.ID, claudeThreadID, turnID); err != nil {
 		return nil, err
 	}

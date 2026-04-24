@@ -275,8 +275,8 @@ func (a *App) switchBackend(ctx context.Context, target string) error {
 	if current == target && a.backendRuntimeReady(target) {
 		return nil
 	}
-	a.beginBackendSwitchState(target)
-	defer a.finishBackendSwitchState()
+	newRuntimeStateService(a).beginBackendSwitchState(target)
+	defer newRuntimeStateService(a).finishBackendSwitchState()
 	slog.Info("backend switch begin",
 		"frontend_id", a.frontendID,
 		"current_backend", current,

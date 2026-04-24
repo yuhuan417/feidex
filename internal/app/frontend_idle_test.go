@@ -58,7 +58,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "backend switching blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				a.beginBackendSwitchState(backendCodex)
+				newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
 			},
 			want: "当前正在切换到 Codex backend，请稍后再试",
 		},
@@ -74,8 +74,8 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "in flight message traffic blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				a.beginFrontendMessageTraffic()
-				t.Cleanup(a.finishFrontendMessageTraffic)
+				newRuntimeStateService(a).beginFrontendMessageTraffic()
+				t.Cleanup(func() { newRuntimeStateService(a).finishFrontendMessageTraffic() })
 			},
 			want: "当前仍有消息处理中",
 		},

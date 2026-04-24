@@ -103,7 +103,7 @@ func (a *App) completeElicitationURLAction(action *feishu.CardAction, actionName
 			Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"},
 		}, nil
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
 		Card:  rawCard(a.feishu.SimpleStatusCard("已处理", "green", "已提交 "+decision+"。", nil)),
@@ -120,7 +120,7 @@ func (s pendingInputService) completeElicitationFormText(msg *feishu.InboundMess
 	if err != nil {
 		return err
 	}
-	_ = s.app.finalizePendingReply(pending)
+	_ = newRuntimeStateService(s.app).finalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
 		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 	}

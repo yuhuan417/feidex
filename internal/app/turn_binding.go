@@ -26,18 +26,18 @@ func newTurnBindingTracker() *turnBindingTracker {
 	}
 }
 
-func (a *App) turnBindingTracker() *turnBindingTracker {
-	if a == nil {
+func (s runtimeStateService) turnBindingTracker() *turnBindingTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.turnBindings == nil {
-		a.turnBindings = newTurnBindingTracker()
+	if s.app.turnBindings == nil {
+		s.app.turnBindings = newTurnBindingTracker()
 	}
-	return a.turnBindings
+	return s.app.turnBindings
 }
 
-func (a *App) notePendingTurnBinding(threadID, sessionKey, submissionID string) {
-	if a == nil {
+func (s runtimeStateService) notePendingTurnBinding(threadID, sessionKey, submissionID string) {
+	if s.app == nil {
 		return
 	}
 	threadID = strings.TrimSpace(threadID)
@@ -45,7 +45,7 @@ func (a *App) notePendingTurnBinding(threadID, sessionKey, submissionID string) 
 	if threadID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.pending == nil {
@@ -63,16 +63,16 @@ func (a *App) notePendingTurnBinding(threadID, sessionKey, submissionID string) 
 	})
 }
 
-func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submission) {
-	if a == nil {
+func (s runtimeStateService) pendingSubmissionForThread(threadID string) (string, *state.Submission) {
+	if s.app == nil {
 		return "", nil
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
 		return "", nil
 	}
-	appState := a.appState()
-	tracker := a.turnBindingTracker()
+	appState := s.app.appState()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	bindings := append([]turnBinding(nil), tracker.pending[threadID]...)
 	next := make([]turnBinding, 0, len(bindings))
@@ -105,8 +105,8 @@ func (a *App) pendingSubmissionForThread(threadID string) (string, *state.Submis
 	return matched.SessionKey, sub
 }
 
-func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string) {
-	if a == nil {
+func (s runtimeStateService) clearPendingTurnBindingForSubmission(threadID, submissionID string) {
+	if s.app == nil {
 		return
 	}
 	threadID = strings.TrimSpace(threadID)
@@ -114,7 +114,7 @@ func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string
 	if threadID == "" || submissionID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	bindings := tracker.pending[threadID]
@@ -135,15 +135,15 @@ func (a *App) clearPendingTurnBindingForSubmission(threadID, submissionID string
 	tracker.pending[threadID] = next
 }
 
-func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID string) {
-	if a == nil {
+func (s runtimeStateService) bindTurnSubmission(threadID, turnID, sessionKey, submissionID string) {
+	if s.app == nil {
 		return
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.bindings == nil {
@@ -156,8 +156,8 @@ func (a *App) bindTurnSubmission(threadID, turnID, sessionKey, submissionID stri
 	}
 }
 
-func (a *App) rebindTurnThreadID(turnID, threadID string) {
-	if a == nil {
+func (s runtimeStateService) rebindTurnThreadID(turnID, threadID string) {
+	if s.app == nil {
 		return
 	}
 	turnID = strings.TrimSpace(turnID)
@@ -165,7 +165,7 @@ func (a *App) rebindTurnThreadID(turnID, threadID string) {
 	if turnID == "" || threadID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	binding, ok := tracker.bindings[turnID]
@@ -176,51 +176,51 @@ func (a *App) rebindTurnThreadID(turnID, threadID string) {
 	tracker.bindings[turnID] = binding
 }
 
-func (a *App) boundSubmissionForTurn(turnID string) (string, *state.Submission) {
-	if a == nil {
+func (s runtimeStateService) boundSubmissionForTurn(turnID string) (string, *state.Submission) {
+	if s.app == nil {
 		return "", nil
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
 		return "", nil
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	binding, ok := tracker.bindings[turnID]
 	tracker.mu.Unlock()
 	if !ok {
 		return "", nil
 	}
-	sub := a.appState().submission(binding.SubmissionID)
+	sub := s.app.appState().submission(binding.SubmissionID)
 	if sub == nil {
 		return "", nil
 	}
 	return binding.SessionKey, sub
 }
 
-func (a *App) clearTurnBinding(turnID string) {
-	if a == nil {
+func (s runtimeStateService) clearTurnBinding(turnID string) {
+	if s.app == nil {
 		return
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	delete(tracker.bindings, turnID)
 }
 
-func (a *App) markTurnStartedAt(turnID string, startedAt time.Time) {
-	if a == nil {
+func (s runtimeStateService) markTurnStartedAt(turnID string, startedAt time.Time) {
+	if s.app == nil {
 		return
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	binding, ok := tracker.bindings[turnID]
@@ -233,13 +233,13 @@ func (a *App) markTurnStartedAt(turnID string, startedAt time.Time) {
 	}
 }
 
-func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
-	if a == nil {
+func (s runtimeStateService) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
+	if s.app == nil {
 		return
 	}
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.threadUsage == nil {
@@ -260,15 +260,15 @@ func (a *App) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.Threa
 	tracker.bindings[turnID] = binding
 }
 
-func (a *App) recordTurnContextUsagePercent(turnID string, percentage float64) {
-	if a == nil {
+func (s runtimeStateService) recordTurnContextUsagePercent(turnID string, percentage float64) {
+	if s.app == nil {
 		return
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
 		return
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	binding, ok := tracker.bindings[turnID]
@@ -280,15 +280,15 @@ func (a *App) recordTurnContextUsagePercent(turnID string, percentage float64) {
 	tracker.bindings[turnID] = binding
 }
 
-func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, contextLine, elapsedLine string) {
-	if a == nil {
+func (s runtimeStateService) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine, contextLine, elapsedLine string) {
+	if s.app == nil {
 		return "", "", ""
 	}
 	turnID = strings.TrimSpace(turnID)
 	if turnID == "" {
 		return "", "", ""
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	binding, ok := tracker.bindings[turnID]
 	tracker.mu.Unlock()
@@ -298,7 +298,7 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 	if ok {
 		if binding.HasContextUsagePercent {
 			contextLine = formatContextUsedLine(binding.ContextUsagePercent)
-		} else if usage, found := a.currentThreadUsage(binding.ThreadID); found {
+		} else if usage, found := s.currentThreadUsage(binding.ThreadID); found {
 			if usage.ModelContextWindow != nil {
 				contextLine = formatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
 			}
@@ -310,8 +310,8 @@ func (a *App) turnFinalMetadata(turnID string, completedAt time.Time) (usageLine
 	return usageLine, contextLine, elapsedLine
 }
 
-func (a *App) turnFinalFooterLines(turnID string, completedAt time.Time) []string {
-	_, contextLine, elapsedLine := a.turnFinalMetadata(turnID, completedAt)
+func (s runtimeStateService) turnFinalFooterLines(turnID string, completedAt time.Time) []string {
+	_, contextLine, elapsedLine := s.turnFinalMetadata(turnID, completedAt)
 	lines := make([]string, 0, 2)
 	for _, line := range []string{contextLine, elapsedLine} {
 		line = strings.TrimSpace(line)
@@ -322,15 +322,15 @@ func (a *App) turnFinalFooterLines(turnID string, completedAt time.Time) []strin
 	return lines
 }
 
-func (a *App) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
-	if a == nil {
+func (s runtimeStateService) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
+	if s.app == nil {
 		return codexrpc.ThreadTokenUsage{}, false
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
 		return codexrpc.ThreadTokenUsage{}, false
 	}
-	tracker := a.turnBindingTracker()
+	tracker := s.turnBindingTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	usage, ok := tracker.threadUsage[threadID]

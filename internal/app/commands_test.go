@@ -98,7 +98,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 
 func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.beginBackendSwitchState(backendCodex)
+	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
 
 	msg := &feishu.InboundMessage{
 		MessageID: "msg-1",

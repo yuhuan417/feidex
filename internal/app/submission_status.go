@@ -45,7 +45,7 @@ func turnCompletionTerminalText(status, lastError string) string {
 func (a *App) findSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
 	appState := a.appState()
 	if strings.TrimSpace(turnID) != "" {
-		if sessionKey, sub := a.boundSubmissionForTurn(turnID); sub != nil {
+		if sessionKey, sub := newRuntimeStateService(a).boundSubmissionForTurn(turnID); sub != nil {
 			return sessionKey, sub
 		}
 		for _, sess := range appState.sessions() {

@@ -17,16 +17,16 @@ func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string
 	if threadID == "" || turnID == "" {
 		return false
 	}
-	sessionKey, sub := a.pendingSubmissionForThread(threadID)
+	sessionKey, sub := newRuntimeStateService(a).pendingSubmissionForThread(threadID)
 	if sub == nil {
 		return false
 	}
 	if isReviewSubmission(sub) && !allowReview {
 		return false
 	}
-	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
-	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt(turnID, time.Now())
+	newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 
 	sess := appState.session(sessionKey)
 	if sess == nil {
@@ -134,9 +134,9 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"
-	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
-	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt(turnID, time.Now())
+	newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	a.recordSubmissionSourceLinks(sub)
 	a.recordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	a.noteTurnStarted(sessionKey, sub)
@@ -159,7 +159,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 		return "", nil
 	}
 
-	sessionKey, sub := a.pendingSubmissionForThread(threadID)
+	sessionKey, sub := newRuntimeStateService(a).pendingSubmissionForThread(threadID)
 	if sub == nil || strings.TrimSpace(sub.TurnID) != "" || sub.Finalized {
 		return "", nil
 	}
@@ -178,9 +178,9 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 		return "", nil
 	}
 
-	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
-	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt(turnID, time.Now())
+	newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 
 	sessionUpsertActiveOperation(sess, state.SessionActiveOperation{
 		Kind:         sessionOpKindSubmission,
@@ -280,7 +280,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 		terminalText = turnCompletionTerminalText(sub.Status, flush.LastError)
 		attentionUserID = a.turnStopAttentionUserID(sub, turnID)
 		if sub.Status == "completed" && !flush.SawFinal {
-			a.sendEmptyFinalCardWithReuse(context.Background(), sub, a.turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
+			a.sendEmptyFinalCardWithReuse(context.Background(), sub, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), reuseMessageID)
 			reuseMessageID = ""
 		}
 	}

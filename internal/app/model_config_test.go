@@ -367,7 +367,7 @@ func TestUpdateClaudeModelConfigRejectsActiveFrontend(t *testing.T) {
 
 	sessionKey := "sess-1"
 	sub := seedActiveSubmission(t, a, sessionKey, "claude-thread-1", "claude-turn-1")
-	a.bindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, sub.ID)
 
 	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID

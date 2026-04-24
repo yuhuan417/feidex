@@ -32,7 +32,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 			Item     map[string]any `json:"item"`
 		}
 		if json.Unmarshal(params, &p) == nil {
-			a.noteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
+			newRuntimeStateService(a).noteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
 			a.noteStandaloneCompactItemStarted(p.ThreadID, p.TurnID, p.Item)
 		}
 	case "item/completed":
@@ -128,7 +128,7 @@ func (r *codexEventRouter) handleNotification(method string, params json.RawMess
 		}
 		if json.Unmarshal(params, &p) == nil {
 			reqID := requestIDKey(p.RequestID)
-			pending := a.resolveServerPendingRequest(reqID)
+			pending := newRuntimeStateService(a).resolveServerPendingRequest(reqID)
 			a.resumeSubmissionAfterRequest(pending)
 		}
 	}
@@ -163,7 +163,7 @@ func (r *codexEventRouter) onCommandApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	raw = a.mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	a.sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, renderCommandApprovalBody(raw), raw)
 }
 
@@ -177,7 +177,7 @@ func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	raw = a.mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	workspaceCwd := ""
 	if _, sub := a.findSubmissionByTurn(threadID, turnID); sub != nil {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
@@ -197,7 +197,7 @@ func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	raw = a.mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
 	permissions, _ := raw["permissions"].(map[string]any)
 	a.sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, renderPermissionsApprovalBody(raw), permissions, raw)
 }

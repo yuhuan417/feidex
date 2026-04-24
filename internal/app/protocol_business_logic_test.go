@@ -22,10 +22,10 @@ func TestItemStartedBindsPendingSubmissionBeforeTurnStarted(t *testing.T) {
 	if updated == nil || updated.ThreadID != "thread-1" || updated.TurnID != "turn-early" || updated.Status != "running" {
 		t.Fatalf("submission after early item/started = %+v, want running bound submission", updated)
 	}
-	if _, pending := a.pendingSubmissionForThread("thread-1"); pending != nil {
+	if _, pending := newRuntimeStateService(a).pendingSubmissionForThread("thread-1"); pending != nil {
 		t.Fatalf("pending turn binding should be cleared after early bind, got %+v", pending)
 	}
-	if boundSessionKey, boundSub := a.boundSubmissionForTurn("turn-early"); boundSessionKey != "sess-1" || boundSub == nil || boundSub.ID != sub.ID {
+	if boundSessionKey, boundSub := newRuntimeStateService(a).boundSubmissionForTurn("turn-early"); boundSessionKey != "sess-1" || boundSub == nil || boundSub.ID != sub.ID {
 		t.Fatalf("turn binding after early item/started = %q / %+v, want sess-1 / %s", boundSessionKey, boundSub, sub.ID)
 	}
 	if !a.sessionHasLiveThread("sess-1", "thread-1") {
@@ -74,7 +74,7 @@ func TestReviewLifecycleBindsAndDeliversWithoutTurnStarted(t *testing.T) {
 func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	a.noteTurnItemStarted("thread-1", "turn-1", map[string]any{
+	newRuntimeStateService(a).noteTurnItemStarted("thread-1", "turn-1", map[string]any{
 		"id":     "item-1",
 		"type":   "fileChange",
 		"status": "inProgress",
@@ -89,7 +89,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 		},
 	})
 
-	mergedRequest := a.mergeRequestPayloadWithTurnItem("thread-1", "turn-1", "item-1", map[string]any{
+	mergedRequest := newRuntimeStateService(a).mergeRequestPayloadWithTurnItem("thread-1", "turn-1", "item-1", map[string]any{
 		"reason": "need review",
 		"context": map[string]any{
 			"decision": "pending",
@@ -116,12 +116,12 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 		t.Fatalf("merged request nested context = %+v, want both started and request keys", nested)
 	}
 
-	mismatchedThread := a.mergeRequestPayloadWithTurnItem("thread-2", "turn-1", "item-1", map[string]any{"reason": "other"})
+	mismatchedThread := newRuntimeStateService(a).mergeRequestPayloadWithTurnItem("thread-2", "turn-1", "item-1", map[string]any{"reason": "other"})
 	if _, ok := mismatchedThread["changes"]; ok {
 		t.Fatalf("mismatched thread merge should not hydrate started state, got %+v", mismatchedThread)
 	}
 
-	completed := a.completeTurnItemState("thread-1", "turn-1", "item-1", map[string]any{
+	completed := newRuntimeStateService(a).completeTurnItemState("thread-1", "turn-1", "item-1", map[string]any{
 		"id":      "item-1",
 		"type":    "fileChange",
 		"status":  "completed",
@@ -147,7 +147,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 	if stringValue(completedNested["a"]) != "1" || stringValue(completedNested["c"]) != "3" {
 		t.Fatalf("completed nested context = %+v, want merged nested state", completedNested)
 	}
-	if snapshot := a.turnItemSnapshot("thread-1", "turn-1", "item-1"); snapshot != nil {
+	if snapshot := newRuntimeStateService(a).turnItemSnapshot("thread-1", "turn-1", "item-1"); snapshot != nil {
 		t.Fatalf("turn item snapshot after completion = %+v, want cleared state", snapshot)
 	}
 }
@@ -181,6 +181,6 @@ func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, thre
 	}); err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	a.notePendingTurnBinding(threadID, sessionKey, submissionID)
+	newRuntimeStateService(a).notePendingTurnBinding(threadID, sessionKey, submissionID)
 	return a.store.GetSubmission(submissionID)
 }

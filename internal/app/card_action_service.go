@@ -23,7 +23,7 @@ func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardAc
 		return &callback.CardActionTriggerResponse{}, nil
 	}
 	name := resolvedCardActionName(action)
-	if reason := s.app.backendSwitchBlocksCardAction(name); reason != "" {
+	if reason := newRuntimeStateService(s.app).backendSwitchBlocksCardAction(name); reason != "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: reason},
 		}, nil

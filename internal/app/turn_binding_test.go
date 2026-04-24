@@ -27,7 +27,7 @@ func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
 	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-new", SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", Status: "running"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-new) error = %v", err)
 	}
-	a.bindTurnSubmission("thread-1", "turn-old", "sess-1", "sub-old")
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-old", "sess-1", "sub-old")
 
 	sessionKey, sub := a.findSubmissionByTurn("thread-1", "turn-old")
 	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-old" {
@@ -63,8 +63,8 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	a.markTurnStartedAt("turn-1", time.Now())
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now())
 	a.noteTurnStarted("sess-1", sub)
 
 	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
@@ -119,17 +119,17 @@ func TestBindTurnSubmissionRebindClearsMetadataState(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	startedAt := time.Now().Add(-2 * time.Second)
 
-	a.bindTurnSubmission("thread-old", "turn-1", "sess-old", "sub-old")
-	a.markTurnStartedAt("turn-1", startedAt)
-	a.recordTurnTokenUsage("thread-old", "turn-1", codexrpc.ThreadTokenUsage{
+	newRuntimeStateService(a).bindTurnSubmission("thread-old", "turn-1", "sess-old", "sub-old")
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", startedAt)
+	newRuntimeStateService(a).recordTurnTokenUsage("thread-old", "turn-1", codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 42,
 		},
 	})
 
-	a.bindTurnSubmission("thread-new", "turn-1", "sess-new", "sub-new")
+	newRuntimeStateService(a).bindTurnSubmission("thread-new", "turn-1", "sess-new", "sub-new")
 
-	if usageLine, contextLine, elapsedLine := a.turnFinalMetadata("turn-1", time.Now()); usageLine != "" || contextLine != "" || elapsedLine != "" {
+	if usageLine, contextLine, elapsedLine := newRuntimeStateService(a).turnFinalMetadata("turn-1", time.Now()); usageLine != "" || contextLine != "" || elapsedLine != "" {
 		t.Fatalf("turnFinalMetadata() after rebind = %q, %q, %q, want all empty", usageLine, contextLine, elapsedLine)
 	}
 }

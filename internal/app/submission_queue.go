@@ -188,7 +188,7 @@ func (w *lifecycleCoordinator) handleSubmissionStartFailure(sessionKey, threadID
 		}
 	}
 	if sub != nil {
-		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+		newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	}
 	a.clearSubmissionProcessingReactions(sub)
 	if sub != nil {
@@ -441,13 +441,13 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 	sess.Status = "turn_starting"
 	sub.ThreadID = threadID
 	sub.Status = "running"
-	a.notePendingTurnBinding(threadID, sessionKey, sub.ID)
+	newRuntimeStateService(a).notePendingTurnBinding(threadID, sessionKey, sub.ID)
 	if err := appState.saveSession(sess); err != nil {
-		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+		newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 		return err
 	}
 	if err := appState.markSubmissionRunning(sub.ID, threadID, ""); err != nil {
-		a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+		newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 		return err
 	}
 	a.markSubmissionRunningReactions(sub)
@@ -496,9 +496,9 @@ func (w *lifecycleCoordinator) startNextCodexSubmissionWithFailureNotice(session
 		TurnID:       turnID,
 	})
 	sess.Status = "turn_in_progress"
-	a.bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
-	a.markTurnStartedAt(turnID, time.Now())
-	a.clearPendingTurnBindingForSubmission(threadID, sub.ID)
+	newRuntimeStateService(a).bindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt(turnID, time.Now())
+	newRuntimeStateService(a).clearPendingTurnBindingForSubmission(threadID, sub.ID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
 	sub.Status = "running"

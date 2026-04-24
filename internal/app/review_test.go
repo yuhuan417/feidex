@@ -264,10 +264,10 @@ func TestReviewResultSuppressesTrailingAgentMessageAndKeepsFooterOnLastSplitCard
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1", "card-2", "card-3", "card-4"}
-	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	a.markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
 	modelContextWindow := int64(1000)
-	a.recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
+	newRuntimeStateService(a).recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 150,
 		},

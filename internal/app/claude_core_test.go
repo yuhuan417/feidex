@@ -654,7 +654,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	}); err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	a.bindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
+	newRuntimeStateService(a).bindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
 
 	state := &claudeSessionState{
 		sessionKey: sessionKey,
@@ -678,7 +678,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	if sub == nil || sub.Finalized || sub.Status != "running" {
 		t.Fatalf("submission after suppressed completion = %+v", sub)
 	}
-	if _, bound := a.boundSubmissionForTurn("claude-turn-1"); bound == nil {
+	if _, bound := newRuntimeStateService(a).boundSubmissionForTurn("claude-turn-1"); bound == nil {
 		t.Fatalf("turn binding should remain until retry cleanup")
 	}
 	if state.turns[1] != nil {
@@ -755,7 +755,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("submission after Claude ready = %+v", sub)
 	}
 
-	binding := a.turnBindingTracker().bindings[sub.TurnID]
+	binding := newRuntimeStateService(a).turnBindingTracker().bindings[sub.TurnID]
 	if binding.ThreadID != "claude-session-ready" {
 		t.Fatalf("turn binding after Claude ready = %+v", binding)
 	}

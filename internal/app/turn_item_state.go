@@ -15,14 +15,14 @@ func newTurnItemTracker() *turnItemTracker {
 	return &turnItemTracker{items: map[string]*turnItemState{}}
 }
 
-func (a *App) turnItemTracker() *turnItemTracker {
-	if a == nil {
+func (s runtimeStateService) turnItemTracker() *turnItemTracker {
+	if s.app == nil {
 		return nil
 	}
-	if a.turnItems == nil {
-		a.turnItems = newTurnItemTracker()
+	if s.app.turnItems == nil {
+		s.app.turnItems = newTurnItemTracker()
 	}
-	return a.turnItems
+	return s.app.turnItems
 }
 
 type turnItemState struct {
@@ -43,18 +43,18 @@ func turnItemStateKey(turnID, itemID string) string {
 	return turnID + "\x00" + itemID
 }
 
-func (a *App) noteTurnItemStarted(threadID, turnID string, item map[string]any) {
-	if a == nil || item == nil {
+func (s runtimeStateService) noteTurnItemStarted(threadID, turnID string, item map[string]any) {
+	if s.app == nil || item == nil {
 		return
 	}
-	newLifecycleCoordinator(a).bindPendingSubmissionTurn(threadID, turnID, true)
+	newLifecycleCoordinator(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
 	itemID := strings.TrimSpace(stringValue(item["id"]))
 	key := turnItemStateKey(turnID, itemID)
 	if key == "" {
 		return
 	}
 	started := cloneJSONMap(item)
-	tracker := a.turnItemTracker()
+	tracker := s.turnItemTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.items == nil {
@@ -76,15 +76,15 @@ func (a *App) noteTurnItemStarted(threadID, turnID string, item map[string]any) 
 	state.Started = started
 }
 
-func (a *App) turnItemSnapshot(threadID, turnID, itemID string) map[string]any {
-	if a == nil {
+func (s runtimeStateService) turnItemSnapshot(threadID, turnID, itemID string) map[string]any {
+	if s.app == nil {
 		return nil
 	}
 	key := turnItemStateKey(turnID, itemID)
 	if key == "" {
 		return nil
 	}
-	tracker := a.turnItemTracker()
+	tracker := s.turnItemTracker()
 	tracker.mu.Lock()
 	state := tracker.items[key]
 	tracker.mu.Unlock()
@@ -97,7 +97,7 @@ func (a *App) turnItemSnapshot(threadID, turnID, itemID string) map[string]any {
 	return mergeJSONMaps(state.Started, state.Completed)
 }
 
-func (a *App) completeTurnItemState(threadID, turnID, itemID string, item map[string]any) map[string]any {
+func (s runtimeStateService) completeTurnItemState(threadID, turnID, itemID string, item map[string]any) map[string]any {
 	if item == nil {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (a *App) completeTurnItemState(threadID, turnID, itemID string, item map[st
 		return cloneJSONMap(item)
 	}
 	completed := cloneJSONMap(item)
-	tracker := a.turnItemTracker()
+	tracker := s.turnItemTracker()
 	tracker.mu.Lock()
 	state := tracker.items[key]
 	if state != nil {
@@ -125,8 +125,8 @@ func (a *App) completeTurnItemState(threadID, turnID, itemID string, item map[st
 	return mergeJSONMaps(state.Started, completed)
 }
 
-func (a *App) clearTurnItemStates(turnID string) {
-	if a == nil {
+func (s runtimeStateService) clearTurnItemStates(turnID string) {
+	if s.app == nil {
 		return
 	}
 	turnID = strings.TrimSpace(turnID)
@@ -134,7 +134,7 @@ func (a *App) clearTurnItemStates(turnID string) {
 		return
 	}
 	prefix := turnID + "\x00"
-	tracker := a.turnItemTracker()
+	tracker := s.turnItemTracker()
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	for key := range tracker.items {
@@ -144,8 +144,8 @@ func (a *App) clearTurnItemStates(turnID string) {
 	}
 }
 
-func (a *App) mergeRequestPayloadWithTurnItem(threadID, turnID, itemID string, payload map[string]any) map[string]any {
-	snapshot := a.turnItemSnapshot(threadID, turnID, itemID)
+func (s runtimeStateService) mergeRequestPayloadWithTurnItem(threadID, turnID, itemID string, payload map[string]any) map[string]any {
+	snapshot := s.turnItemSnapshot(threadID, turnID, itemID)
 	if snapshot == nil {
 		return cloneJSONMap(payload)
 	}

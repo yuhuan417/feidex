@@ -3,7 +3,7 @@ package app
 import "feidex/internal/feishu"
 
 func (a *App) handleBackendMaintenanceBlock(raw string) error {
-	if reason := a.backendSwitchBlockedReasonForTraffic(); reason != "" {
+	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
 		return newUIWarningError(reason)
 	}
 	if runtime := a.backendRuntime(); runtime != nil {
@@ -13,7 +13,7 @@ func (a *App) handleBackendMaintenanceBlock(raw string) error {
 }
 
 func (a *App) backendMaintenanceBlocksInboundMessage() error {
-	if reason := a.backendSwitchBlockedReasonForTraffic(); reason != "" {
+	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
 		return newUIWarningError(reason)
 	}
 	if runtime := a.backendRuntime(); runtime != nil {

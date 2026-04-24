@@ -54,7 +54,7 @@ func (s pendingInputService) completeToolUserInputText(msg *feishu.InboundMessag
 	if err != nil {
 		return err
 	}
-	_ = s.app.finalizePendingReply(pending)
+	_ = newRuntimeStateService(s.app).finalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
 		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("已提交", "green", summary, nil))
 	}

@@ -110,7 +110,7 @@ func (a *App) completeTurnItem(ctx context.Context, threadID, turnID, itemID str
 		return
 	}
 	newLifecycleCoordinator(a).bindPendingSubmissionTurn(threadID, turnID, true)
-	item = a.completeTurnItemState(threadID, turnID, itemID, item)
+	item = newRuntimeStateService(a).completeTurnItemState(threadID, turnID, itemID, item)
 	itemID = strings.TrimSpace(firstNonEmpty(strings.TrimSpace(itemID), stringValue(item["id"])))
 	if a.completeStandaloneCompactItem(threadID, turnID, item) {
 		return
@@ -193,7 +193,7 @@ func (a *App) flushTurnStream(ctx context.Context, threadID, turnID string) turn
 	sessionKey, sub := a.findSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		a.deleteTurnStream(turnID)
-		a.clearTurnItemStates(turnID)
+		newRuntimeStateService(a).clearTurnItemStates(turnID)
 		return turnStreamFlushResult{}
 	}
 

@@ -29,7 +29,7 @@ func (a *App) bindClaudeSessionThread(sessionKey, turnID, threadID string) {
 					value.TurnID = turnID
 				}
 			})
-			a.rebindTurnThreadID(turnID, threadID)
+			newRuntimeStateService(a).rebindTurnThreadID(turnID, threadID)
 			if updated := appState.submission(sub.ID); updated != nil {
 				a.recordSubmissionSourceLinks(updated)
 			}
@@ -64,7 +64,7 @@ func (a *App) bindClaudeSessionThread(sessionKey, turnID, threadID string) {
 				value.TurnID = strings.TrimSpace(op.TurnID)
 			}
 		})
-		a.rebindTurnThreadID(op.TurnID, threadID)
+		newRuntimeStateService(a).rebindTurnThreadID(op.TurnID, threadID)
 		if updated := appState.submission(op.SubmissionID); updated != nil {
 			if workspaceID == "" {
 				workspaceID = strings.TrimSpace(updated.WorkspaceID)

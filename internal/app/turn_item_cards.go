@@ -70,7 +70,7 @@ func (a *App) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submissi
 	kind := turnItemEventKind(payload.ItemType)
 	footerLines := []string(nil)
 	if payload.IsFinalAnswer {
-		footerLines = a.turnFinalFooterLines(sub.TurnID, time.Now())
+		footerLines = newRuntimeStateService(a).turnFinalFooterLines(sub.TurnID, time.Now())
 	}
 	if isReplyTurnItem(payload.ItemType) {
 		body := replyTurnItemCardBody(payload)

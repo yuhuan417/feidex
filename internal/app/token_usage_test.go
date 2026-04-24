@@ -157,8 +157,8 @@ func TestCommandUsageAndMenuAction(t *testing.T) {
 func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
@@ -205,8 +205,8 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	a.handleNotification("thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
@@ -217,7 +217,7 @@ func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 			"modelContextWindow":1000
 		}
 	}`))
-	a.recordTurnContextUsagePercent("turn-1", 73.25)
+	newRuntimeStateService(a).recordTurnContextUsagePercent("turn-1", 73.25)
 	a.completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "final text",

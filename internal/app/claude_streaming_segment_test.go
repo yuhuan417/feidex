@@ -288,8 +288,8 @@ func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	a.noteTurnStarted("sess-1", sub)
-	a.bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	a.markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
 	session := &claudeSessionState{

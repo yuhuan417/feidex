@@ -1525,13 +1525,13 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	if resp, err := a.dispatchCardAction(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
 	}
-	a.beginBackendSwitchState(backendCodex)
+	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
 	if resp, err := a.dispatchCardAction(&feishu.CardAction{
 		ActionValue: map[string]any{"action": "menu.root"},
 	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
 		t.Fatalf("dispatchCardAction(blocked) = %#v, %v", resp, err)
 	}
-	a.finishBackendSwitchState()
+	newRuntimeStateService(a).finishBackendSwitchState()
 
 	for name, fn := range map[string]func() (*callback.CardActionTriggerResponse, error){
 		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
@@ -1674,7 +1674,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 
 func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.beginBackendSwitchState(backendCodex)
+	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
 
 	msg := &feishu.InboundMessage{
 		MessageID: "msg-1",

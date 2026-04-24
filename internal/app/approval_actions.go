@@ -77,7 +77,7 @@ func (a *App) completeApprovalAction(action *feishu.CardAction, actionName strin
 			Toast: &callback.Toast{Type: "warning", Content: "审批结果提交失败，请重试"},
 		}, nil
 	}
-	_ = a.finalizePendingReply(pending)
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
 	card := a.renderResolvedApprovalCard(pending, action, actionName)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "审批已提交"},
@@ -224,7 +224,7 @@ func (a *App) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
 	if pending == nil {
 		return
 	}
-	if a.hasOpenPendingRequestForTurn(pending.ThreadID, pending.TurnID, pending.ID) {
+	if newRuntimeStateService(a).hasOpenPendingRequestForTurn(pending.ThreadID, pending.TurnID, pending.ID) {
 		return
 	}
 	_, sub := a.findSubmissionByTurn(pending.ThreadID, pending.TurnID)

@@ -1,30 +1,30 @@
 package app
 
-func (a *App) beginFrontendMessageTraffic() {
-	if a == nil {
+func (s runtimeStateService) beginFrontendMessageTraffic() {
+	if s.app == nil {
 		return
 	}
-	a.frontendTrafficMu.Lock()
-	defer a.frontendTrafficMu.Unlock()
-	a.frontendMessageTraffic++
+	s.app.frontendTrafficMu.Lock()
+	defer s.app.frontendTrafficMu.Unlock()
+	s.app.frontendMessageTraffic++
 }
 
-func (a *App) finishFrontendMessageTraffic() {
-	if a == nil {
+func (s runtimeStateService) finishFrontendMessageTraffic() {
+	if s.app == nil {
 		return
 	}
-	a.frontendTrafficMu.Lock()
-	defer a.frontendTrafficMu.Unlock()
-	if a.frontendMessageTraffic > 0 {
-		a.frontendMessageTraffic--
+	s.app.frontendTrafficMu.Lock()
+	defer s.app.frontendTrafficMu.Unlock()
+	if s.app.frontendMessageTraffic > 0 {
+		s.app.frontendMessageTraffic--
 	}
 }
 
-func (a *App) frontendMessageTrafficCount() int {
-	if a == nil {
+func (s runtimeStateService) frontendMessageTrafficCount() int {
+	if s.app == nil {
 		return 0
 	}
-	a.frontendTrafficMu.Lock()
-	defer a.frontendTrafficMu.Unlock()
-	return a.frontendMessageTraffic
+	s.app.frontendTrafficMu.Lock()
+	defer s.app.frontendTrafficMu.Unlock()
+	return s.app.frontendMessageTraffic
 }
