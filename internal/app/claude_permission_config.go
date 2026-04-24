@@ -167,8 +167,8 @@ func (a *App) showClaudeSessionPermissionMenu(msg *feishu.InboundMessage) error 
 	return err
 }
 
-func (a *App) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s threadActionService) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前会话已失效"}}, nil
@@ -179,7 +179,7 @@ func (a *App) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, 
 		mode = override
 	} else {
 		var err error
-		mode, warning, err = a.normalizeRequestedClaudePermissionMode(context.Background(), rawMode)
+		mode, warning, err = s.app.normalizeRequestedClaudePermissionMode(context.Background(), rawMode)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -188,11 +188,11 @@ func (a *App) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, 
 	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(a.cfg, sess.WorkspaceID), a.cfg.Claude)
-	if err := a.applyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
+	effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, sess.WorkspaceID), s.app.cfg.Claude)
+	if err := s.app.applyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, err := a.renderClaudeSessionPermissionMenuCard(sessionKey)
+	card, err := s.app.renderClaudeSessionPermissionMenuCard(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -287,32 +287,32 @@ func (a *App) showClaudeWorkspacePermissionMenu(msg *feishu.InboundMessage) erro
 	return err
 }
 
-func (a *App) completeClaudeWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceActionService) completeClaudeWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
 	mode := ""
 	warning := ""
 	if override, ok := normalizeClaudePermissionOverrideValue(rawMode); ok {
 		mode = override
 	} else {
 		var err error
-		mode, warning, err = a.normalizeRequestedClaudePermissionMode(context.Background(), rawMode)
+		mode, warning, err = s.app.normalizeRequestedClaudePermissionMode(context.Background(), rawMode)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
 	}
-	_, err := a.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
+	_, err := s.app.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
 		w.ClaudePermissionMode = mode
 	})
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	sess := a.appState().session(sessionKey)
+	sess := s.app.appState().session(sessionKey)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) == strings.TrimSpace(workspaceID) && strings.TrimSpace(sess.ActiveClaudePermissionMode) == "" {
-		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(a.cfg, workspaceID), a.cfg.Claude)
-		if err := a.applyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
+		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, workspaceID), s.app.cfg.Claude)
+		if err := s.app.applyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 		}
 	}
-	card, renderErr := a.renderClaudeWorkspacePermissionMenuCard(sessionKey)
+	card, renderErr := s.app.renderClaudeWorkspacePermissionMenuCard(sessionKey)
 	if renderErr != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
 	}

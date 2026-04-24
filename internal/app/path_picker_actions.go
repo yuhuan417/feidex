@@ -12,8 +12,8 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) completePathPickerAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s workspaceActionService) completePathPickerAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.pending(requestID)
 	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != downloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
@@ -48,7 +48,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回工作区创建"},
-				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
+				Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
 			}, nil
 		}
 		if pending.Kind == "workspace_clone" {
@@ -56,13 +56,13 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回从仓库创建"},
-				Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
+				Card:  rawCard(s.app.renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消路径选择"},
-			Card:  rawCard(a.feishu.SimpleStatusCard("路径选择已取消", "grey", "本次路径选择已取消。", nil)),
+			Card:  rawCard(s.app.feishu.SimpleStatusCard("路径选择已取消", "grey", "本次路径选择已取消。", nil)),
 		}, nil
 	case "path_picker.up":
 		if filepath.Clean(payload.CurrentPath) != filepath.Clean(payload.RootPath) {
@@ -133,7 +133,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择目录"},
-				Card:  rawCard(a.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
+				Card:  rawCard(s.app.renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
 			}, nil
 		}
 		if pending.Kind == "workspace_clone" {
@@ -142,18 +142,18 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择父目录"},
-				Card:  rawCard(a.renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
+				Card:  rawCard(s.app.renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
 		if pending.Kind == downloadFilePendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-			return a.completeDownloadFileConfirm(action, pending, payload, selectedPath)
+			return s.app.completeDownloadFileConfirm(action, pending, payload, selectedPath)
 		}
 		if pending.Kind == upgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-			return a.completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
+			return s.app.completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
 		}
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "resolved"
@@ -162,7 +162,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 		body := "已选择路径：\n`" + selectedPath + "`"
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已确认路径"},
-			Card:  rawCard(a.feishu.SimpleStatusCard("路径已确认", "green", body, nil)),
+			Card:  rawCard(s.app.feishu.SimpleStatusCard("路径已确认", "green", body, nil)),
 		}, nil
 	default:
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未知路径选择操作"}}, nil
@@ -177,7 +177,7 @@ func (a *App) completePathPickerAction(action *feishu.CardAction, actionName str
 	} else {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	}
-	card, err := a.renderPathPickerCard(requestID, payload)
+	card, err := s.app.renderPathPickerCard(requestID, payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}

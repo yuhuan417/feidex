@@ -1541,7 +1541,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeMenuThread(action, action.ActionValue["session_key"].(string))
+			return newThreadActionService(a).completeMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:group:chat-1:root:download-root"
@@ -1625,25 +1625,25 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return a.completeMenuWorkspace(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeWorkspaceNew(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceActionService(a).completeWorkspaceNew(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.delete.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeWorkspaceDeleteMenu(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceActionService(a).completeWorkspaceDeleteMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeWorkspaceClone(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceActionService(a).completeWorkspaceClone(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceActionService(a).completeWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceActionService(a).completeWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return newThreadActionService(a).completeThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return a.completeThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
+			return newThreadActionService(a).completeThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 	} {
 		resp, err := fn()
@@ -3533,7 +3533,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(thread resume) error = %v", err)
 	}
-	resp, err = a.completeThreadResume(&feishu.CardAction{
+	resp, err = newThreadActionService(a).completeThreadResume(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"thread_name": "Selected", "thread_preview": "chosen"},
@@ -3576,7 +3576,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset for menu new) error = %v", err)
 	}
-	resp, err = a.completeMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
+	resp, err = newThreadActionService(a).completeMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuNew() = %#v, %v", resp, err)
 	}
@@ -4056,7 +4056,7 @@ func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
 		return nil
 	}
 
-	resp, err := a.completeThreadResume(&feishu.CardAction{
+	resp, err := newThreadActionService(a).completeThreadResume(&feishu.CardAction{
 		UserID: "user-1",
 		ChatID: "chat-1",
 		ActionValue: map[string]any{

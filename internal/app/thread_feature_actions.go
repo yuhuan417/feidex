@@ -10,42 +10,42 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, primaryConversationSlash(a.configuredBackend()), "menu.root")
+func (s threadActionService) completeMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(s.app.configuredBackend()), "menu.root")
 }
 
-func (a *App) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, primaryConversationSlash(a.configuredBackend())+" new", "menu.thread")
+func (s threadActionService) completeMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, primaryConversationSlash(s.app.configuredBackend())+" new", "menu.thread")
 }
 
-func (a *App) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
+func (s threadActionService) completeMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	if strings.TrimSpace(targetTurnID) != "" {
-		if sess := a.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveTurnID) != strings.TrimSpace(targetTurnID) {
+		if sess := s.app.appState().session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveTurnID) != strings.TrimSpace(targetTurnID) {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "warning", Content: "这个任务已经结束或已切换到其他任务"},
 			}, nil
 		}
 	}
-	if actions := a.backendActions(); actions != nil {
-		return actions.completeMenuInterrupt(a, action, sessionKey, targetTurnID)
+	if actions := s.app.backendActions(); actions != nil {
+		return actions.completeMenuInterrupt(s.app, action, sessionKey, targetTurnID)
 	}
-	return a.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
+	return s.app.completeMenuCommand(action, sessionKey, "/stop", actionStringValue(action, "parent_action"))
 }
 
-func (a *App) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/thread sandbox", "menu.thread")
+func (s threadActionService) completeThreadSandboxMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, "/thread sandbox", "menu.thread")
 }
 
-func (a *App) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/thread policy", "menu.thread")
+func (s threadActionService) completeThreadPolicyMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, "/thread policy", "menu.thread")
 }
 
-func (a *App) completeClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return a.completeMenuCommand(action, sessionKey, "/session permissions", "menu.thread")
+func (s threadActionService) completeClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.completeMenuCommand(action, sessionKey, "/session permissions", "menu.thread")
 }
 
-func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s threadActionService) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	valid := false
 	for _, opt := range workspaceSandboxOptions() {
 		if opt.Value == sandboxMode {
@@ -64,7 +64,7 @@ func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, th
 	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, err := a.renderThreadSandboxMenuCard(sessionKey)
+	card, err := s.app.renderThreadSandboxMenuCard(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -74,8 +74,8 @@ func (a *App) completeThreadSandboxSet(action *feishu.CardAction, sessionKey, th
 	}, nil
 }
 
-func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s threadActionService) completeThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	valid := false
 	for _, opt := range workspaceApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
@@ -94,7 +94,7 @@ func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, thr
 	if err := appState.saveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card, err := a.renderThreadPolicyMenuCard(sessionKey)
+	card, err := s.app.renderThreadPolicyMenuCard(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -104,8 +104,8 @@ func (a *App) completeThreadPolicySet(action *feishu.CardAction, sessionKey, thr
 	}, nil
 }
 
-func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
-	appState := a.appState()
+func (s threadActionService) completeThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
+	appState := s.app.appState()
 	sess := appState.session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
@@ -122,9 +122,9 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 		sess.ChatID = action.ChatID
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = a.defaultWorkspaceID()
+		sess.WorkspaceID = s.app.defaultWorkspaceID()
 	}
-	ws := config.FindWorkspace(a.cfg, sess.WorkspaceID)
+	ws := config.FindWorkspace(s.app.cfg, sess.WorkspaceID)
 	if ws == nil {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "error", Content: "workspace not found"},
@@ -133,7 +133,7 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 	selectedName, _ := action.ActionValue["thread_name"].(string)
 	selectedPreview, _ := action.ActionValue["thread_preview"].(string)
 	selectedCWD, _ := action.ActionValue["thread_cwd"].(string)
-	if _, err := a.conversationBackend().resumeSelectedThread(sessionKey, sess, ws, threadResumeSelection{
+	if _, err := s.app.conversationBackend().resumeSelectedThread(sessionKey, sess, ws, threadResumeSelection{
 		ThreadID: threadID,
 		Name:     selectedName,
 		Preview:  selectedPreview,
@@ -146,12 +146,12 @@ func (a *App) completeThreadResume(action *feishu.CardAction, sessionKey, thread
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: toastType, Content: err.Error()}}, nil
 	}
 	includeAll, _ := action.ActionValue["include_all"].(bool)
-	card, err := a.renderThreadsCard(sessionKey, includeAll)
+	card, err := s.app.renderThreadsCard(sessionKey, includeAll)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(a.configuredBackend())}}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(s.app.configuredBackend())}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(a.configuredBackend())},
+		Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(s.app.configuredBackend())},
 		Card:  rawCard(card),
 	}, nil
 }

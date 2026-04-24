@@ -26,7 +26,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := a.completeMenuInterrupt(nil, "sess-1", "turn-old")
+	resp, err := newThreadActionService(a).completeMenuInterrupt(nil, "sess-1", "turn-old")
 	if err != nil {
 		t.Fatalf("completeMenuInterrupt: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := a.completeMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
+	resp, err := newThreadActionService(a).completeMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuNew: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := a.completeThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
+	resp, err := newThreadActionService(a).completeThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
 	if err != nil {
 		t.Fatalf("completeThreadResume: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceActionService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 		return nil
 	}
 
-	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceActionService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
 		return nil
 	}
 
-	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceActionService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 		}
 	}
 
-	resp, err := a.completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceActionService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
 
-	resp, err := a.completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
+	resp, err := newWorkspaceActionService(a).completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
 	if err != nil {
 		t.Fatalf("completeWorkspaceSandboxSet: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
 
-	resp, err := a.completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
+	resp, err := newWorkspaceActionService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
 	if err != nil {
 		t.Fatalf("completeWorkspacePolicySet: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestCompleteWorkspacePolicySetAcceptsUntrusted(t *testing.T) {
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
 
-	resp, err := a.completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
+	resp, err := newWorkspaceActionService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
 	if err != nil {
 		t.Fatalf("completeWorkspacePolicySet: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := a.completeThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
+	resp, err := newThreadActionService(a).completeThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
 	if err != nil {
 		t.Fatalf("completeThreadSandboxSet: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := a.completeThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
+	resp, err := newThreadActionService(a).completeThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
 	if err != nil {
 		t.Fatalf("completeThreadPolicySet: %v", err)
 	}

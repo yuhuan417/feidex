@@ -117,8 +117,8 @@ func (a *App) renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID string) (
 	return a.feishu.SimpleStatusCard("确认删除工作区", "red", menuCardBody("workspace.delete.confirm", strings.Join(body, "\n")), buttons), nil
 }
 
-func (a *App) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	card, err := a.renderWorkspaceDeleteMenuCard(sessionKey)
+func (s workspaceActionService) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	card, err := s.app.renderWorkspaceDeleteMenuCard(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -128,10 +128,10 @@ func (a *App) completeWorkspaceDeleteMenu(action *feishu.CardAction, sessionKey 
 	}, nil
 }
 
-func (a *App) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+func (s workspaceActionService) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	workspaceID = firstNonEmpty(strings.TrimSpace(workspaceID), strings.TrimSpace(action.Option))
-	if err := a.validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
-		card, renderErr := a.renderWorkspaceDeleteMenuCard(sessionKey)
+	if err := s.app.validateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
+		card, renderErr := s.app.renderWorkspaceDeleteMenuCard(sessionKey)
 		if renderErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -140,7 +140,7 @@ func (a *App) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKe
 			Card:  rawCard(card),
 		}, nil
 	}
-	card, err := a.renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+	card, err := s.app.renderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -150,9 +150,9 @@ func (a *App) completeWorkspaceDeletePrompt(action *feishu.CardAction, sessionKe
 	}, nil
 }
 
-func (a *App) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
-	if err := a.deleteWorkspace(sessionKey, workspaceID); err != nil {
-		card, renderErr := a.renderWorkspaceDeleteMenuCard(sessionKey)
+func (s workspaceActionService) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	if err := s.app.deleteWorkspace(sessionKey, workspaceID); err != nil {
+		card, renderErr := s.app.renderWorkspaceDeleteMenuCard(sessionKey)
 		if renderErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -163,7 +163,7 @@ func (a *App) completeWorkspaceDeleteConfirm(action *feishu.CardAction, sessionK
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已删除工作区 " + strings.TrimSpace(workspaceID)},
-		Card:  rawCard(a.renderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(s.app.renderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 

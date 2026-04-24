@@ -134,7 +134,7 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /thread resume THREAD_ID")
 		}
-		resp, err := a.completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(a).completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 		if err != nil {
 			return err
 		}
-		resp, err := a.completeThreadSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(a).completeThreadSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (a *App) commandThread(msg *feishu.InboundMessage, args []string) error {
 		if err != nil {
 			return err
 		}
-		resp, err := a.completeThreadPolicySet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(a).completeThreadPolicySet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -208,7 +208,7 @@ func (a *App) commandSession(msg *feishu.InboundMessage, args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /session resume SESSION_ID")
 		}
-		resp, err := a.completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(a).completeThreadResume(a.commandActionFromMessage(msg, nil), sessionKey, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func (a *App) commandSession(msg *feishu.InboundMessage, args []string) error {
 		if err != nil {
 			return err
 		}
-		resp, err := a.completeClaudeSessionPermissionModeSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
+		resp, err := newThreadActionService(a).completeClaudeSessionPermissionModeSet(a.commandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}

@@ -114,7 +114,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
-		resp, err := a.completeWorkspaceSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		resp, err := newWorkspaceActionService(a).completeWorkspaceSandboxSet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func (a *App) commandWorkspace(msg *feishu.InboundMessage, args []string) error 
 		if ws == nil {
 			return fmt.Errorf("workspace not found")
 		}
-		resp, err := a.completeWorkspacePolicySet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
+		resp, err := newWorkspaceActionService(a).completeWorkspacePolicySet(a.commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
 		if err != nil {
 			return err
 		}

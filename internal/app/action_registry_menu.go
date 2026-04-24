@@ -26,10 +26,10 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return s.app.completeMenuBackend(action, actionSessionKey(action))
 	},
 	"menu.thread": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuThread(action, actionSessionKey(action))
+		return newThreadActionService(s.app).completeMenuThread(action, actionSessionKey(action))
 	},
 	"menu.new": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuNew(action, actionSessionKey(action))
+		return newThreadActionService(s.app).completeMenuNew(action, actionSessionKey(action))
 	},
 	"menu.download": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuDownload(action, actionSessionKey(action))
@@ -95,7 +95,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuHistory(action, actionSessionKey(action))
 	},
 	"menu.interrupt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return s.app.completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
+		return newThreadActionService(s.app).completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
 	},
 	"menu.workspace": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.completeMenuWorkspace(action, actionSessionKey(action))
