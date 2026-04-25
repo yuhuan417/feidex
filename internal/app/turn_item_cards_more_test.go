@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -48,7 +49,7 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 		t.Fatalf("buildTurnItemCardPayloadWithWorkspace(file empty) = %#v / %v", got, ok)
 	}
 
-	if summary, detail := summarizeGenericTurnItem("dynamic_tool_call", map[string]any{
+	if summary, detail := turnitem.SummarizeGenericTurnItem("dynamic_tool_call", map[string]any{
 		"tool":   "TodoWrite",
 		"status": "completed",
 		"input": map[string]any{
@@ -62,10 +63,10 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 		!strings.Contains(summary, "[in_progress] 核对日志") ||
 		!strings.Contains(summary, "status=completed") ||
 		!strings.Contains(detail, `"todos"`) {
-		t.Fatalf("summarizeGenericTurnItem(dynamic) = %q / %q", summary, detail)
+		t.Fatalf("turnitem.SummarizeGenericTurnItem(dynamic) = %q / %q", summary, detail)
 	}
 
-	if summary, _ := summarizeGenericTurnItem("dynamic_tool_call", map[string]any{
+	if summary, _ := turnitem.SummarizeGenericTurnItem("dynamic_tool_call", map[string]any{
 		"tool": "TodoWrite",
 		"input": map[string]any{
 			"todos": []any{
@@ -77,10 +78,10 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 			},
 		},
 	}, ""); !strings.Contains(summary, "[pending] 待办5") || strings.Contains(summary, "还有 1 项待办") {
-		t.Fatalf("summarizeGenericTurnItem(todo expanded) = %q", summary)
+		t.Fatalf("turnitem.SummarizeGenericTurnItem(todo expanded) = %q", summary)
 	}
 
-	if summary, detail := summarizeGenericTurnItem("collab_agent_tool_call", map[string]any{
+	if summary, detail := turnitem.SummarizeGenericTurnItem("collab_agent_tool_call", map[string]any{
 		"tool":   "delegate",
 		"status": "queued",
 		"input": map[string]any{
@@ -92,13 +93,13 @@ func TestTurnItemPayloadAdditionalBranches(t *testing.T) {
 		!strings.Contains(summary, "排查卡片渲染") ||
 		!strings.Contains(summary, "status=queued") ||
 		!strings.Contains(detail, "delegate") {
-		t.Fatalf("summarizeGenericTurnItem(collab) = %q / %q", summary, detail)
+		t.Fatalf("turnitem.SummarizeGenericTurnItem(collab) = %q / %q", summary, detail)
 	}
 
-	if summary, detail := summarizeGenericTurnItem("command_execution", map[string]any{
+	if summary, detail := turnitem.SummarizeGenericTurnItem("command_execution", map[string]any{
 		"output": "ls -la",
 	}, ""); !strings.Contains(summary, "命令执行:") || !strings.Contains(normalizeCardMarkdown(detail), "````\nls -la\n````") {
-		t.Fatalf("summarizeGenericTurnItem(code styled default) = %q / %q", summary, detail)
+		t.Fatalf("turnitem.SummarizeGenericTurnItem(code styled default) = %q / %q", summary, detail)
 	}
 
 	if got := turnItemEventKind("dynamicToolCall"); got != "turn_item" {

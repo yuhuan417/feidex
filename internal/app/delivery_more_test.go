@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
 )
 
@@ -21,11 +22,11 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 		t.Fatalf("workspaceCwd(missing) = %q", got)
 	}
 
-	if got := buildLabeledTurnEventText("", " body "); got != "body" {
-		t.Fatalf("buildLabeledTurnEventText(empty label) = %q", got)
+	if got := turnitem.BuildLabeledTurnEventText("", " body "); got != "body" {
+		t.Fatalf("turnitem.BuildLabeledTurnEventText(empty label) = %q", got)
 	}
-	if got := buildLabeledTurnEventText("计划", ""); got != "计划" {
-		t.Fatalf("buildLabeledTurnEventText(empty body) = %q", got)
+	if got := turnitem.BuildLabeledTurnEventText("计划", ""); got != "计划" {
+		t.Fatalf("turnitem.BuildLabeledTurnEventText(empty body) = %q", got)
 	}
 
 	meta, body := compactTurnItemCardContent(turnItemCardPayload{
