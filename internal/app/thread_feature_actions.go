@@ -146,7 +146,7 @@ func (s threadService) completeThreadResume(action *feishu.CardAction, sessionKe
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: toastType, Content: err.Error()}}, nil
 	}
 	includeAll, _ := action.ActionValue["include_all"].(bool)
-	card, err := renderThreadsCard(s.app, sessionKey, includeAll)
+	card, err := conversationBackend(s.app).renderThreadsCard(sessionKey, includeAll)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(configuredBackend(s.app))}}, nil
 	}

@@ -63,10 +63,6 @@ func (s menuActionService) renderMenuNodeCard(actionName, sessionKey string) (ma
 	return renderer(s.app, sessionKey)
 }
 
-func renderMenuNodeCard(a *App, actionName, sessionKey string) (map[string]any, bool) {
-	return newMenuActionService(a).renderMenuNodeCard(actionName, sessionKey)
-}
-
 func (s menuActionService) completeMenuCompact(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	messageID := ""
 	userID := ""

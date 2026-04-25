@@ -334,9 +334,9 @@ func (s modelConfigService) commandClaudeModel(msg *feishu.InboundMessage, args 
 func (s modelConfigService) commandEffort(msg *feishu.InboundMessage, args []string) error {
 	switch len(args) {
 	case 0:
-		return newModelConfigService(s.app).commandModel(msg, nil)
+		return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, nil)
 	case 1:
-		return newModelConfigService(s.app).commandModel(msg, []string{"effort", strings.TrimSpace(args[0])})
+		return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, []string{"effort", strings.TrimSpace(args[0])})
 	default:
 		return fmt.Errorf("usage: %s", effortCommandUsage)
 	}

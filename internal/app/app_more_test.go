@@ -1519,14 +1519,14 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 	}
 
-	if resp, err := dispatchCardAction(a, nil); err != nil || resp == nil {
+	if resp, err := newCardActionService(a).dispatch(nil); err != nil || resp == nil {
 		t.Fatalf("dispatchCardAction(nil) = %#v, %v", resp, err)
 	}
-	if resp, err := dispatchCardAction(a, &feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
 	}
 	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
-	if resp, err := dispatchCardAction(a, &feishu.CardAction{
+	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{
 		ActionValue: map[string]any{"action": "menu.root"},
 	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
 		t.Fatalf("dispatchCardAction(blocked) = %#v, %v", resp, err)
@@ -3917,7 +3917,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 		return nil
 	}
 
-	card, err := renderThreadsCard(a, sessionKey, false)
+	card, err := conversationBackend(a).renderThreadsCard(sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
@@ -3963,7 +3963,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		return nil
 	}
 
-	card, err := renderThreadsCard(a, sessionKey, false)
+	card, err := conversationBackend(a).renderThreadsCard(sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}

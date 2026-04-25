@@ -89,11 +89,11 @@ func TestActionHelperBranches(t *testing.T) {
 	}
 
 	for _, actionName := range []string{"menu.root", "menu.tools", "menu.thread", "menu.group.model", "menu.group.system"} {
-		if _, ok := renderMenuNodeCard(a, actionName, "sess-1"); !ok {
+		if _, ok := newMenuActionService(a).renderMenuNodeCard(actionName, "sess-1"); !ok {
 			t.Fatalf("renderMenuNodeCard(%q) should succeed", actionName)
 		}
 	}
-	if _, ok := renderMenuNodeCard(a, "missing", "sess-1"); ok {
+	if _, ok := newMenuActionService(a).renderMenuNodeCard("missing", "sess-1"); ok {
 		t.Fatal("renderMenuNodeCard(missing) should fail")
 	}
 

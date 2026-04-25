@@ -60,10 +60,6 @@ func (s appUpgradeService) renderUpgradeFailedCard(sessionKey, errText string) m
 	return s.app.feishu.SimpleStatusCard("升级服务", "orange", menuCardBody("menu.upgrade", body), upgradePanelButtons(sessionKey, nil, true))
 }
 
-func (s appUpgradeService) renderUpgradeCard(sessionKey, ownerUserID string) (map[string]any, error) {
-	return newAppUpgradeService(s.app).renderUpgradeCardForTarget(sessionKey, ownerUserID, "", false)
-}
-
 func (s appUpgradeService) renderUpgradeCardForVersion(sessionKey, ownerUserID, requestedVersion string) (map[string]any, error) {
 	return newAppUpgradeService(s.app).renderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion, false)
 }

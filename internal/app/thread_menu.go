@@ -15,10 +15,6 @@ import (
 
 const threadCommandUsage = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY]"
 
-func commandNew(a *App, msg *feishu.InboundMessage) error {
-	return newThreadService(a).commandThreadsNew(msg)
-}
-
 func startFreshThread(a *App, sessionKey, userID, chatID, chatType string) (int, *workspaceThreadBinding, error) {
 	if a == nil || a.store == nil {
 		return 0, nil, fmt.Errorf("store not initialized")
@@ -94,7 +90,7 @@ func (s threadService) commandThreadsNew(msg *feishu.InboundMessage) error {
 }
 
 func (s threadService) commandThreads(msg *feishu.InboundMessage, includeAll bool) error {
-	card, err := renderThreadsCard(s.app, makeSessionKey(s.app, msg), includeAll)
+	card, err := conversationBackend(s.app).renderThreadsCard(makeSessionKey(s.app, msg), includeAll)
 	if err != nil {
 		return err
 	}
@@ -232,10 +228,6 @@ func (s threadService) commandSession(msg *feishu.InboundMessage, args []string)
 	default:
 		return fmt.Errorf("usage: %s", claudeSessionCommandUsage)
 	}
-}
-
-func renderThreadsCard(a *App, sessionKey string, includeAll bool) (map[string]any, error) {
-	return conversationBackend(a).renderThreadsCard(sessionKey, includeAll)
 }
 
 func renderThreadSettingValue(override, fallback string) string {

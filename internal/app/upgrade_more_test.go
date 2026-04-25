@@ -36,7 +36,7 @@ func TestUpgradeBranches(t *testing.T) {
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v9.9.9", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}
-	card, err := newAppUpgradeService(a).renderUpgradeCard("sess-1", "user-1")
+	card, err := newAppUpgradeService(a).renderUpgradeCardForTarget("sess-1", "user-1", "", false)
 	if err != nil || card == nil {
 		t.Fatalf("renderUpgradeCard(latest) = %#v, %v", card, err)
 	}
@@ -57,7 +57,7 @@ func TestUpgradeBranches(t *testing.T) {
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: false}}, nil
 	}
-	if _, err := newAppUpgradeService(a).renderUpgradeCard("sess-1", "user-1"); err == nil {
+	if _, err := newAppUpgradeService(a).renderUpgradeCardForTarget("sess-1", "user-1", "", false); err == nil {
 		t.Fatal("expected renderUpgradeCard() to reject uninstalled daemon")
 	}
 

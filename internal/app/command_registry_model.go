@@ -10,7 +10,7 @@ func localCommandModelSpecs() []localCommandSpec {
 				return matchModelCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newModelConfigService(a).commandModel(msg, args)
+				return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
 			},
 			HelpGroup: "model",
 			HelpEntries: []helpCommandSpec{

@@ -289,14 +289,14 @@ func TestTurnItemFinalAnswerFooterStaysOnLastSplitCard(t *testing.T) {
 	})
 
 	longParagraph := strings.Repeat("payload-limit-text ", 1400)
-	got := newOutboundCardService(a).sendTurnItemCard(context.Background(), sub, turnItemCardPayload{
+	got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
 		ItemID:        "item-final",
 		ItemType:      "agent_message",
 		Title:         "最终答复",
 		Color:         "green",
 		SummaryText:   "intro\n\n" + longParagraph + "\n\n" + longParagraph,
 		IsFinalAnswer: true,
-	})
+	}, "")
 	if got != "card-1" {
 		t.Fatalf("sendTurnItemCard(final split) = %q, want card-1", got)
 	}

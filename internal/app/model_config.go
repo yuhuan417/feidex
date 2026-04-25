@@ -266,10 +266,6 @@ func (s modelConfigService) updateGlobalModelConfig(mutate func(*config.CodexCon
 	return config.Save(s.app.cfgPath, s.app.cfg)
 }
 
-func (s modelConfigService) commandModel(msg *feishu.InboundMessage, args []string) error {
-	return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, args)
-}
-
 func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args []string) error {
 	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) > 0 {

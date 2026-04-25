@@ -31,10 +31,6 @@ func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *state.Submiss
 	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(a, sub), "turn_started")
 }
 
-func (s outboundCardService) sendPlanCard(ctx context.Context, sub *state.Submission, planText string) string {
-	return newOutboundCardService(s.app).sendPlanCardWithReuse(ctx, sub, planText, "")
-}
-
 func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *state.Submission, planText, reuseMessageID string) string {
 	return newOutboundCardService(s.app).sendTurnEventCardWithReuse(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "", reuseMessageID)
 }
@@ -49,10 +45,6 @@ type turnItemCardPayload struct {
 	SummaryText      string `json:"summary_text"`
 	DetailText       string `json:"detail_text"`
 	IsFinalAnswer    bool   `json:"is_final_answer"`
-}
-
-func (s outboundCardService) sendTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload) string {
-	return newOutboundCardService(s.app).sendTurnItemCardWithReuse(ctx, sub, payload, "")
 }
 
 func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, reuseMessageID string) string {
@@ -130,10 +122,6 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	}
 	recordMessageLink(s.app, id, kind, sub, payload.ItemID)
 	return id
-}
-
-func (s outboundCardService) sendTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID string) string {
-	return newOutboundCardService(s.app).sendTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, "")
 }
 
 func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {

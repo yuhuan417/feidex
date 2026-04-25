@@ -217,7 +217,7 @@ func (a *App) HandleBotMenu(click *feishu.BotMenuClick) {
 }
 
 func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return dispatchCardAction(a, action)
+	return newCardActionService(a).dispatch(action)
 }
 
 func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
