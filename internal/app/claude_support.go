@@ -365,11 +365,10 @@ func completePlanApprove(a *App, action *feishu.CardAction) (*callback.CardActio
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"}}, nil
 	}
 	_ = newRuntimeStateService(a).finalizePendingReply(pending)
-	if pending.FeishuMsgID != "" {
-		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID,
-			a.feishu.SimpleStatusCard("计划已批准", "green", claudePlanSubmittedBody(pending, "Approve"), nil))
-	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已批准"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已批准"},
+		Card:  rawCard(a.feishu.SimpleStatusCard("计划已批准", "green", claudePlanSubmittedBody(pending, "Approve"), nil)),
+	}, nil
 }
 
 func completePlanReject(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -386,11 +385,10 @@ func completePlanReject(a *App, action *feishu.CardAction) (*callback.CardAction
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"}}, nil
 	}
 	_ = newRuntimeStateService(a).finalizePendingReply(pending)
-	if pending.FeishuMsgID != "" {
-		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID,
-			a.feishu.SimpleStatusCard("计划已拒绝", "grey", claudePlanCancelledBody(pending), nil))
-	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已拒绝"}}, nil
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已拒绝"},
+		Card:  rawCard(a.feishu.SimpleStatusCard("计划已拒绝", "grey", claudePlanCancelledBody(pending), nil)),
+	}, nil
 }
 
 func claudePlanSubmittedBody(pending *state.PendingRequest, feedback string) string {
