@@ -1263,12 +1263,11 @@ func claudeQuestionsAsToolUserInput(questions []claudecli.Question) []toolUserIn
 
 func claudePlanModeBody(plan claudecli.PlanInfo) string {
 	lines := []string{
-		"Claude 已完成计划阶段，请直接回复下一条消息作为反馈。",
+		"Claude 已完成计划阶段，请点击按钮或直接回复下一条消息作为反馈。",
 		"",
 		"可回复示例：",
-		"- `Proceed`",
-		"- `继续`",
 		"- `请先改成 ...`",
+		"- `方案里漏了 ...`",
 	}
 	if strings.TrimSpace(plan.Plan) != "" {
 		lines = append(lines, "", "计划：", strings.TrimSpace(plan.Plan))

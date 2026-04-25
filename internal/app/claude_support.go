@@ -8,6 +8,8 @@ import (
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func claudeRequestIDStored(requestID string) string {
@@ -249,7 +251,8 @@ func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *state.Sub
 		return fmt.Errorf("missing request id")
 	}
 	card := a.feishu.SimpleStatusCard("Claude 计划确认", "orange", prependAttentionMentionMarkdown(strings.TrimSpace(body), sub.UserID), []feishu.Button{
-		{Text: "取消", Type: "default", Value: map[string]any{"action": "pending_form.cancel", "request_id": requestKey}},
+		{Text: "批准", Type: "primary", Value: map[string]any{"action": "pending_form.plan_approve", "request_id": requestKey}},
+		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "pending_form.plan_reject", "request_id": requestKey}},
 	})
 	return deliverPendingCard(a, sub, card, pendingCardDelivery{
 		requestKey:      requestKey,
@@ -347,6 +350,47 @@ func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessa
 		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("计划反馈已提交", "green", claudePlanSubmittedBody(pending, feedback), nil))
 	}
 	return nil
+}
+
+func completePlanApprove(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := appState(a).pending(requestID)
+	if pending == nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
+	}
+	if err := a.claude.ResolvePlanFeedback(pending.ID, "Approve"); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"}}, nil
+	}
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
+	if pending.FeishuMsgID != "" {
+		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID,
+			a.feishu.SimpleStatusCard("计划已批准", "green", claudePlanSubmittedBody(pending, "Approve"), nil))
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已批准"}}, nil
+}
+
+func completePlanReject(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := appState(a).pending(requestID)
+	if pending == nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"}}, nil
+	}
+	adapter := serverRequestAdapterForPending(a, pending)
+	if err := adapter.cancelPending(pending); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "提交失败，请重试"}}, nil
+	}
+	_ = newRuntimeStateService(a).finalizePendingReply(pending)
+	if pending.FeishuMsgID != "" {
+		_ = a.feishu.PatchCard(context.Background(), pending.FeishuMsgID,
+			a.feishu.SimpleStatusCard("计划已拒绝", "grey", claudePlanCancelledBody(pending), nil))
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已拒绝"}}, nil
 }
 
 func claudePlanSubmittedBody(pending *state.PendingRequest, feedback string) string {
