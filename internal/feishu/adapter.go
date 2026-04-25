@@ -1551,11 +1551,22 @@ func resolveDownloadedFileName(resp *larkim.GetMessageResourceResp, attachment A
 	if resp != nil && resp.ApiResp != nil {
 		if contentType := strings.TrimSpace(resp.Header.Get("Content-Type")); contentType != "" {
 			if exts, err := mime.ExtensionsByType(contentType); err == nil && len(exts) > 0 {
-				ext = exts[0]
+				ext = preferredExtension(contentType, exts)
 			}
 		}
 	}
 	return fmt.Sprintf("%s-%s%s", attachment.Kind, sanitizeAttachmentKey(attachment.ResourceKey), ext)
+}
+
+func preferredExtension(contentType string, exts []string) string {
+	if strings.EqualFold(contentType, "image/jpeg") {
+		for _, ext := range exts {
+			if ext == ".jpg" || ext == ".jpeg" {
+				return ext
+			}
+		}
+	}
+	return exts[0]
 }
 
 func truncateForLog(text string, limit int) string {
