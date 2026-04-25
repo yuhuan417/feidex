@@ -38,7 +38,6 @@ func StartBackgroundUpgrade(spec UpgradeSpec) (string, error) {
 	args := []string{
 		"--user",
 		"--unit", unitName,
-		"--collect",
 		"--property=Type=exec",
 		"--property=Restart=no",
 		"--",
@@ -238,4 +237,46 @@ func validateUpgradeSpec(spec UpgradeSpec) error {
 		return fmt.Errorf("missing expected sha256")
 	}
 	return nil
+}
+
+// UpgradeUnitStatus represents the result of a systemd upgrade unit.
+type UpgradeUnitStatus struct {
+	ActiveState string // active, inactive, failed, deactivating, etc.
+	Result      string // success, failed, skipped, etc.
+	SubState    string // running, dead, exited, etc.
+	JournalTail string // last lines of journal output
+}
+
+// QueryUpgradeUnitStatus checks the status of a systemd user unit.
+// Returns nil if the unit does not exist.
+func QueryUpgradeUnitStatus(unitName string) (*UpgradeUnitStatus, error) {
+	unitName = strings.TrimSpace(unitName)
+	if unitName == "" {
+		return nil, fmt.Errorf("empty unit name")
+	}
+	out, err := runSystemctl("show", unitName, "--no-page", "--property", "ActiveState,Result,SubState")
+	if err != nil {
+		return nil, fmt.Errorf("systemctl show %s: %w", unitName, err)
+	}
+	props := parseKeyValue(out)
+	st := &UpgradeUnitStatus{
+		ActiveState: strings.TrimSpace(props["ActiveState"]),
+		Result:      strings.TrimSpace(props["Result"]),
+		SubState:    strings.TrimSpace(props["SubState"]),
+	}
+	if st.ActiveState == "" {
+		return nil, nil // unit not found
+	}
+	journalOut, _ := runSystemctl("status", unitName, "--no-pager", "--lines=20")
+	st.JournalTail = strings.TrimSpace(journalOut)
+	return st, nil
+}
+
+// CleanupUpgradeUnit removes a finished systemd user unit.
+func CleanupUpgradeUnit(unitName string) {
+	unitName = strings.TrimSpace(unitName)
+	if unitName == "" {
+		return
+	}
+	_, _ = runSystemctl("reset-failed", unitName)
 }

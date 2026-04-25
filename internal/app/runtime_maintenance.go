@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -132,6 +134,129 @@ func (s runtimeMaintenanceService) startDriveArtifactGCLoop(ctx context.Context)
 			}
 		}
 	}()
+}
+
+func (s runtimeMaintenanceService) startUpgradeCheckLoop(ctx context.Context) {
+	if s.app == nil || s.app.feishu == nil {
+		return
+	}
+	go newRuntimeMaintenanceService(s.app).checkPendingUpgrades("startup")
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				newRuntimeMaintenanceService(s.app).checkPendingUpgrades("ticker")
+			}
+		}
+	}()
+}
+
+func (s runtimeMaintenanceService) checkPendingUpgrades(source string) {
+	if s.app == nil || s.app.store == nil {
+		return
+	}
+	pendings := appState(s.app).pendingRequests()
+	for _, pending := range pendings {
+		if pending != nil && pending.Status == "upgrading" {
+			s.checkOneUpgrade(source, pending)
+		}
+	}
+}
+
+func (s runtimeMaintenanceService) checkOneUpgrade(source string, pending *state.PendingRequest) {
+	if pending == nil {
+		return
+	}
+	var payload upgradePendingPayload
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		slog.Warn("upgrade check: bad payload", "request_id", pending.ID, "error", err)
+		appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		return
+	}
+	unitName := strings.TrimSpace(payload.UnitName)
+	if unitName == "" {
+		slog.Warn("upgrade check: missing unit name", "request_id", pending.ID)
+		appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		return
+	}
+
+	st, err := daemon.QueryUpgradeUnitStatus(unitName)
+	if err != nil {
+		slog.Debug("upgrade check: query failed", "unit", unitName, "error", err)
+		return // transient, retry next tick
+	}
+	if st == nil {
+		// unit not found (collected or never existed)
+		slog.Warn("upgrade check: unit not found, marking resolved", "unit", unitName, "source", source)
+		appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		return
+	}
+	if st.ActiveState == "active" || st.ActiveState == "activating" {
+		return // still running
+	}
+
+	// Unit has exited — patch card and clean up
+	appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	daemon.CleanupUpgradeUnit(unitName)
+
+	sessionKey := strings.TrimSpace(pending.SessionKey)
+	if sessionKey == "" {
+		sessionKey = payload.ChatID
+	}
+	feishuMsgID := strings.TrimSpace(pending.FeishuMsgID)
+	if feishuMsgID == "" {
+		feishuMsgID = payload.FeishuMsgID
+	}
+	if feishuMsgID == "" {
+		slog.Warn("upgrade check: no feishu msg id to patch", "unit", unitName, "request_id", pending.ID)
+		return
+	}
+
+	var card map[string]any
+	if st.Result == "success" {
+		slog.Info("upgrade unit succeeded", "unit", unitName, "source", source)
+		body := "升级已完成，服务已重启。"
+		card = s.app.feishu.SimpleStatusCard("升级成功", "green", menuCardBody("menu.upgrade", body), []feishu.Button{
+			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+		})
+	} else {
+		errMsg := extractUpgradeErrorFromJournal(st.JournalTail)
+		slog.Warn("upgrade unit failed", "unit", unitName, "result", st.Result, "error", errMsg, "source", source)
+		body := "升级失败。"
+		if errMsg != "" {
+			body += "\n\n错误: " + errMsg
+		}
+		card = s.app.feishu.SimpleStatusCard("升级失败", "red", menuCardBody("menu.upgrade", body), []feishu.Button{
+			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := s.app.feishu.PatchCard(ctx, feishuMsgID, card); err != nil {
+		slog.Error("upgrade check: patch card failed", "unit", unitName, "msg_id", feishuMsgID, "error", err)
+	}
+}
+
+func extractUpgradeErrorFromJournal(journal string) string {
+	lines := strings.Split(journal, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if strings.Contains(line, "error") || strings.Contains(line, "Error") || strings.Contains(line, "failed") || strings.Contains(line, "mismatch") {
+			return line
+		}
+	}
+	// fallback: last non-empty line
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			return strings.TrimSpace(lines[i])
+		}
+	}
+	return ""
 }
 
 func (s runtimeMaintenanceService) runDriveArtifactGC(source string) {

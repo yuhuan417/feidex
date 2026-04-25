@@ -160,8 +160,8 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeUpgradeAction() = %#v, want success", resp)
 	}
-	if pending := a.store.PendingByID("upgrade-isolated"); pending == nil || pending.Status != "resolved" {
-		t.Fatalf("upgrade pending = %+v, want resolved", pending)
+	if pending := a.store.PendingByID("upgrade-isolated"); pending == nil || pending.Status != "upgrading" {
+		t.Fatalf("upgrade pending = %+v, want upgrading", pending)
 	}
 
 	if err := a.store.UpsertPending(&state.PendingRequest{

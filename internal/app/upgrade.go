@@ -45,6 +45,9 @@ type upgradePendingPayload struct {
 	SourceCommit   string `json:"source_commit"`
 	ExpectedSHA256 string `json:"expected_sha256"`
 	ReleaseURL     string `json:"release_url"`
+	UnitName       string `json:"unit_name,omitempty"`
+	ChatID         string `json:"chat_id,omitempty"`
+	FeishuMsgID    string `json:"feishu_msg_id,omitempty"`
 }
 
 func (s appUpgradeService) renderUpgradePreparingCard(sessionKey string) map[string]any {
@@ -272,7 +275,18 @@ func (s appUpgradeService) completeUpgradeAction(action *feishu.CardAction, acti
 			Toast: &callback.Toast{Type: "warning", Content: "启动升级失败，请重试"},
 		}, nil
 	}
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = "upgrading"
+		var p upgradePendingPayload
+		if jsonErr := json.Unmarshal([]byte(req.PayloadJSON), &p); jsonErr == nil {
+			p.UnitName = unitName
+			p.ChatID = pending.SessionKey // fallback
+			p.FeishuMsgID = pending.FeishuMsgID
+			if updated, marshalErr := json.Marshal(p); marshalErr == nil {
+				req.PayloadJSON = string(updated)
+			}
+		}
+	})
 	body := strings.Join([]string{
 		upgradeStartedSummaryLine(payload),
 		"后台任务: `" + unitName + "`",

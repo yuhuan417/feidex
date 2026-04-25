@@ -40,7 +40,6 @@ printf '%s\n' "$*" >> "$SYSTEMDRUN_LOG"
 	text := string(content)
 	for _, want := range []string{
 		"--user",
-		"--collect",
 		"--property=Type=exec",
 		"daemon upgrade-runner",
 		"--version v0.2.0",

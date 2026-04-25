@@ -151,6 +151,7 @@ func (a *App) Start(ctx context.Context) error {
 		return err
 	}
 	newRuntimeMaintenanceService(a).startDriveArtifactGCLoop(ctx)
+	newRuntimeMaintenanceService(a).startUpgradeCheckLoop(ctx)
 	go sendStartupReadyNotifications(a)
 	return nil
 }
