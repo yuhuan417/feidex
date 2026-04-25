@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"feidex/internal/app/apputil"
 )
 
 type PermissionSummarySection struct {
@@ -33,7 +35,7 @@ func RenderPermissionsApprovalBody(params map[string]any) string {
 		}
 	}
 	if len(sections) == 0 {
-		if rendered := strings.TrimSpace(truncate(prettyJSON(permissions), 800)); rendered != "" {
+		if rendered := strings.TrimSpace(apputil.Truncate(prettyJSON(permissions), 800)); rendered != "" {
 			if len(lines) > 1 {
 				lines = append(lines, "")
 			}
@@ -107,7 +109,7 @@ func SummarizePermissionRequest(params map[string]any) []string {
 			return
 		}
 		seen[label] = struct{}{}
-		lines = append(lines, label+": `"+strings.ReplaceAll(truncate(value, 180), "`", "'")+"`")
+		lines = append(lines, label+": `"+strings.ReplaceAll(apputil.Truncate(value, 180), "`", "'")+"`")
 	}
 
 	tool := strings.TrimSpace(firstNonEmpty(

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/app/apputil"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -473,10 +474,5 @@ func activeOperationMatches(op state.SessionActiveOperation, submissionID, turnI
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
+	return apputil.FirstNonEmpty(values...)
 }

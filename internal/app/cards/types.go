@@ -3,6 +3,7 @@ package cards
 import (
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 )
 
@@ -130,10 +131,5 @@ func buildSelectStaticBase(name, placeholder string, options []SelectStaticOptio
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+	return apputil.FirstNonEmpty(values...)
 }

@@ -20,21 +20,15 @@ const (
 	sessionInflightParallel   sessionInflightMode = appruntime.SessionInflightParallel
 )
 
-type claudeApprovalResolution struct {
-	Behavior           string
-	Scope              string
-	Message            string
-	Interrupt          bool
-	UpdatedPermissions []map[string]any
-}
+type claudeApprovalResolution = appruntime.ClaudeApprovalResolution
 
-type claudePermissionMode string
+type claudePermissionMode = appruntime.ClaudePermissionMode
 
 const (
-	claudePermissionModeDefault     claudePermissionMode = "default"
-	claudePermissionModeAcceptEdits claudePermissionMode = "acceptEdits"
-	claudePermissionModePlan        claudePermissionMode = "plan"
-	claudePermissionModeBypass      claudePermissionMode = "bypassPermissions"
+	claudePermissionModeDefault     = appruntime.ClaudePermissionModeDefault
+	claudePermissionModeAcceptEdits = appruntime.ClaudePermissionModeAcceptEdits
+	claudePermissionModePlan        = appruntime.ClaudePermissionModePlan
+	claudePermissionModeBypass      = appruntime.ClaudePermissionModeBypass
 )
 
 func normalizeRuntimeBackend(value string) string {

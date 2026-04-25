@@ -7,6 +7,7 @@ import (
 
 	"feidex/internal/feishu"
 	"feidex/internal/logcontrol"
+	appcards "feidex/internal/app/cards"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -155,7 +156,7 @@ func actionUserID(action *feishu.CardAction) string {
 
 func (s debugService) renderDebugLogsCard(sessionKey string) map[string]any {
 	lines := logcontrol.RecentLines(debugLogRecentLimit)
-	card := newMarkdownBodyCard("调试日志", "blue")
+	card := appcards.NewMarkdownBodyCard("调试日志", "blue")
 	var logBlock map[string]any
 	summaryLines := []string{
 		"当前位置：" + strings.Join(menuBreadcrumbLabels(debugLogPreviewAction), " / "),
@@ -176,9 +177,9 @@ func (s debugService) renderDebugLogsCard(sessionKey string) map[string]any {
 		}
 		logBlock = debugLogPlainTextBlock(logText, false)
 	}
-	appendMarkdownBodyCardElement(card, debugLogPlainTextBlock(strings.Join(summaryLines, "\n"), true))
+	appcards.AppendMarkdownBodyCardElement(card, debugLogPlainTextBlock(strings.Join(summaryLines, "\n"), true))
 	if logBlock != nil {
-		appendMarkdownBodyCardElement(card, logBlock)
+		appcards.AppendMarkdownBodyCardElement(card, logBlock)
 	}
 
 	buttons := []feishu.Button{
@@ -186,7 +187,7 @@ func (s debugService) renderDebugLogsCard(sessionKey string) map[string]any {
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
 	for _, btn := range buttons {
-		appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement([]feishu.Button{btn}))
+		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement([]feishu.Button{btn}))
 	}
 	return card
 }

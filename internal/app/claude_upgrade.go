@@ -16,13 +16,6 @@ const (
 	claudeUpgradeCommandUsage = "usage: /claude | /claude check | /claude upgrade | /claude restart"
 )
 
-type claudeUpgradePendingPayload struct {
-	CurrentVersion string `json:"current_version"`
-	TargetVersion  string `json:"target_version"`
-	Command        string `json:"command"`
-	CommandPath    string `json:"command_path"`
-	NPMPath        string `json:"npm_path"`
-}
 
 type claudeUpgradeView struct {
 	Probe         claudeinstall.Probe

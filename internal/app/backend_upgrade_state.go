@@ -4,14 +4,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	appruntime "feidex/internal/app/runtime"
 )
 
-type backendKey string
+type backendKey = appruntime.BackendKey
 
 const (
-	backendKeyCodex  backendKey = "codex"
-	backendKeyClaude backendKey = "claude"
+	backendKeyCodex  = appruntime.BackendKeyCodex
+	backendKeyClaude = appruntime.BackendKeyClaude
 )
+
+type backendUpgradeSnapshot = appruntime.BackendUpgradeSnapshot
+type backendRestartSnapshot = appruntime.BackendRestartSnapshot
 
 type maintenanceStateService struct {
 	app *App
@@ -23,35 +28,12 @@ func newMaintenanceStateService(app *App) maintenanceStateService {
 
 type backendMaintenanceTracker struct {
 	mu      sync.Mutex
-	upgrade backendUpgradeSnapshot
-	restart backendRestartSnapshot
+	upgrade appruntime.BackendUpgradeSnapshot
+	restart appruntime.BackendRestartSnapshot
 }
 
 func newBackendMaintenanceTracker() *backendMaintenanceTracker {
 	return &backendMaintenanceTracker{}
-}
-
-type backendUpgradeSnapshot struct {
-	Running         bool
-	Phase           string
-	Result          string
-	Message         string
-	CurrentVersion  string
-	PreviousVersion string
-	TargetVersion   string
-	LatestVersion   string
-	StartedAt       time.Time
-	UpdatedAt       time.Time
-}
-
-type backendRestartSnapshot struct {
-	Running        bool
-	Phase          string
-	Result         string
-	Message        string
-	CurrentVersion string
-	StartedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 func (s maintenanceStateService) maintenanceTracker(key backendKey) *backendMaintenanceTracker {

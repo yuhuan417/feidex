@@ -23,13 +23,6 @@ const (
 	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade | /codex restart"
 )
 
-type codexUpgradePendingPayload struct {
-	CurrentVersion string `json:"current_version"`
-	TargetVersion  string `json:"target_version"`
-	Command        string `json:"command"`
-	CommandPath    string `json:"command_path"`
-	NPMPath        string `json:"npm_path"`
-}
 
 type codexUpgradeView struct {
 	Probe         codexinstall.Probe

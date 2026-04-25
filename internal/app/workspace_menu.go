@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"strings"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -82,7 +84,7 @@ func (s workspaceService) commandWorkspace(msg *feishu.InboundMessage, args []st
 		}
 		var existingDirErr *workspaceCloneExistingDirError
 		if errors.As(err, &existingDirErr) {
-			return newWorkspaceManagementService(s.app).beginWorkspaceNewWithPayload(msg, sessionKey, workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir)))
+			return newWorkspaceManagementService(s.app).beginWorkspaceNewWithPayload(msg, sessionKey, appworkspace.NewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, appworkspace.NewTakeoverNotice(existingDirErr.TargetDir)))
 		}
 		var existingWorkspaceErr *workspaceCloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {
@@ -199,13 +201,13 @@ func (s workspaceConfigService) renderWorkspaceMenuCard(sessionKey string) map[s
 	bodyLines := []string{"当前工作区: `" + currentID + "`"}
 	bodyLines = newBackendConfigurationService(s.app).appendBackendWorkspaceSummaryLines(bodyLines, currentWS)
 	buttons := make([]feishu.Button, 0, 6)
-	selectOptions := make([]selectStaticOption, 0, len(s.app.cfg.Workspaces))
+	selectOptions := make([]appcards.SelectStaticOption, 0, len(s.app.cfg.Workspaces))
 	for _, ws := range s.app.cfg.Workspaces {
 		label := ws.ID
 		if ws.ID == currentID {
 			label = "当前 · " + ws.ID
 		}
-		selectOptions = append(selectOptions, selectStaticOption{
+		selectOptions = append(selectOptions, appcards.SelectStaticOption{
 			Text:  label,
 			Value: ws.ID,
 		})
@@ -247,17 +249,17 @@ func (s workspaceConfigService) renderWorkspaceMenuCard(sessionKey string) map[s
 			},
 		},
 	)
-	card := newMarkdownBodyCard("工作区管理", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.workspace", strings.Join(bodyLines, "\n"))})
-	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+	card := appcards.NewMarkdownBodyCard("工作区管理", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.workspace", strings.Join(bodyLines, "\n"))})
+	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 		"workspace_select",
 		"list",
 		map[string]any{"action": "workspace.use.select", "session_key": sessionKey},
 		selectOptions,
 		currentID,
 	))
-	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
-		appendMarkdownBodyCardElement(card, row)
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements(buttons) {
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	return card
 }

@@ -11,6 +11,7 @@ import (
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appcards "feidex/internal/app/cards"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -20,10 +21,6 @@ const (
 	effortCommandUsage      = "/effort | /effort <effort|default>"
 )
 
-type claudeModelOption struct {
-	Value string
-	Label string
-}
 
 var claudeBuiltinModelOptions = []claudeModelOption{
 	{Value: "sonnet", Label: "Sonnet (`sonnet`)"},
@@ -103,14 +100,14 @@ func (s modelConfigService) renderClaudeModelConfigCard(sessionKey, menuAction s
 		{"tag": "markdown", "content": "选择 Claude 默认模型"},
 	}
 
-	modelOptions := make([]selectStaticOption, 0, len(claudeBuiltinModelOptions)+1)
+	modelOptions := make([]appcards.SelectStaticOption, 0, len(claudeBuiltinModelOptions)+1)
 	for _, item := range claudeModelPickerOptions(s.app.cfg) {
-		modelOptions = append(modelOptions, selectStaticOption{
+		modelOptions = append(modelOptions, appcards.SelectStaticOption{
 			Text:  item.Label,
 			Value: item.Value,
 		})
 	}
-	elements = append(elements, buildSelectStaticElement(
+	elements = append(elements, appcards.BuildSelectStaticElement(
 		"claude_model_config_select_model",
 		"选择 Claude 默认模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
@@ -119,7 +116,7 @@ func (s modelConfigService) renderClaudeModelConfigCard(sessionKey, menuAction s
 	))
 
 	effortValue := configuredClaudeEffort(s.app.cfg)
-	effortOptions := []selectStaticOption{{
+	effortOptions := []appcards.SelectStaticOption{{
 		Text: func() string {
 			if effortValue == "" {
 				return "当前 · 跟随默认"
@@ -137,14 +134,14 @@ func (s modelConfigService) renderClaudeModelConfigCard(sessionKey, menuAction s
 		if effort == effortValue && effortValue != "" {
 			label = "当前 · " + label
 		}
-		effortOptions = append(effortOptions, selectStaticOption{
+		effortOptions = append(effortOptions, appcards.SelectStaticOption{
 			Text:  label,
 			Value: effort,
 		})
 	}
 	elements = append(elements,
 		map[string]any{"tag": "markdown", "content": "选择 Claude 推理强度"},
-		buildSelectStaticElement(
+		appcards.BuildSelectStaticElement(
 			"claude_model_config_select_effort",
 			"选择 Claude 推理强度",
 			map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
@@ -160,10 +157,10 @@ func (s modelConfigService) renderClaudeModelConfigCard(sessionKey, menuAction s
 		}}))
 	}
 
-	card := newMarkdownBodyCard("模型配置", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody(menuAction, "")})
+	card := appcards.NewMarkdownBodyCard("模型配置", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody(menuAction, "")})
 	for _, elem := range elements {
-		appendMarkdownBodyCardElement(card, elem)
+		appcards.AppendMarkdownBodyCardElement(card, elem)
 	}
 	return card
 }

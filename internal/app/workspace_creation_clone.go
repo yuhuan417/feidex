@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -408,13 +409,13 @@ func (s workspaceManagementService) finishWorkspaceCloneSubmit(ctx context.Conte
 }
 
 func (s workspaceManagementService) prepareWorkspaceClone(repoURL, explicitID, parentDir string) (*workspaceClonePlan, error) {
-	repoName, err := workspaceCloneRepoName(repoURL)
+	repoName, err := appworkspace.CloneRepoName(repoURL)
 	if err != nil {
 		return nil, err
 	}
 	workspaceID := strings.TrimSpace(explicitID)
 	if workspaceID == "" {
-		workspaceID = workspaceCloneDefaultID(repoName)
+		workspaceID = appworkspace.CloneDefaultID(repoName)
 		if workspaceID == "" {
 			return nil, fmt.Errorf("无法从 git 地址推导 workspace_id，请手动指定")
 		}

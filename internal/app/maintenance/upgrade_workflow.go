@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"time"
+
+	"feidex/internal/app/apputil"
 )
 
 type UpgradeProbe struct {
@@ -95,10 +97,5 @@ func RunUpgradeWorkflow(w UpgradeWorkflow) {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return apputil.FirstNonEmpty(values...)
 }

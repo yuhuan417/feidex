@@ -7,6 +7,7 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 type workspaceRenderService struct {
@@ -28,7 +29,7 @@ func (s workspaceRenderService) renderWorkspaceNewCard(sessionKey, requestID str
 	if selectedCWD == "" {
 		selectedCWD = payload.RootPath
 	}
-	card := newMarkdownBodyCard("新建工作区", "orange")
+	card := appcards.NewMarkdownBodyCard("新建工作区", "orange")
 	body := "当前位置：主菜单 / workspace / new\n\n" +
 		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
@@ -36,8 +37,8 @@ func (s workspaceRenderService) renderWorkspaceNewCard(sessionKey, requestID str
 	if notice := strings.TrimSpace(payload.Notice); notice != "" {
 		body = notice + "\n\n" + body
 	}
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
-	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
+	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "选目录",
 			Type:  "default",
@@ -93,7 +94,7 @@ func (s workspaceRenderService) renderWorkspaceNewCard(sessionKey, requestID str
 		"vertical_spacing":   "8px",
 		"elements":           append(append([]map[string]any{}, buttonRows...), workspaceIDInput, workspaceNameInput),
 	}
-	appendMarkdownBodyCardElement(card, form)
+	appcards.AppendMarkdownBodyCardElement(card, form)
 	return card
 }
 
@@ -120,7 +121,7 @@ func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID s
 		parentDir = firstNonEmpty(strings.TrimSpace(newWorkspaceManagementService(s.app).defaultWorkspaceCloneParent(ws)), rootPath)
 	}
 
-	card := newMarkdownBodyCard("从仓库创建工作区", "orange")
+	card := appcards.NewMarkdownBodyCard("从仓库创建工作区", "orange")
 	body := menuCardBody("workspace.clone",
 		"当前工作区: `"+workspaceID+"`\n"+
 			"已选父目录: `"+firstNonEmpty(parentDir, "-")+"`\n"+
@@ -130,7 +131,7 @@ func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID s
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
 		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
 	}
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 
 	repoURLInput := map[string]any{
 		"tag":         "input",
@@ -150,7 +151,7 @@ func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID s
 	if value := strings.TrimSpace(payload.DraftID); value != "" {
 		workspaceIDInput["default_value"] = value
 	}
-	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
+	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "选父目录",
 			Type:  "default",
@@ -188,7 +189,7 @@ func (s workspaceRenderService) renderWorkspaceCloneCard(sessionKey, requestID s
 		"vertical_spacing":   "8px",
 		"elements":           append(append([]map[string]any{repoURLInput}, buttonRows...), workspaceIDInput),
 	}
-	appendMarkdownBodyCardElement(card, form)
+	appcards.AppendMarkdownBodyCardElement(card, form)
 	return card
 }
 

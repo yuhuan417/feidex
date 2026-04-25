@@ -9,26 +9,6 @@ import (
 	"feidex/internal/state"
 )
 
-func newMarkdownBodyCard(title, color string) map[string]any {
-	return appcards.NewMarkdownBodyCard(title, color)
-}
-
-func newMarkdownBodyCardWithHeader(title, color string, showHeader bool) map[string]any {
-	return appcards.NewMarkdownBodyCardWithHeader(title, color, showHeader)
-}
-
-func appendMarkdownBodyCardElement(card map[string]any, elem map[string]any) {
-	appcards.AppendMarkdownBodyCardElement(card, elem)
-}
-
-func buildMarkdownBodyCardActionElement(buttons []feishu.Button) map[string]any {
-	return appcards.BuildMarkdownBodyCardActionElement(buttons)
-}
-
-func buildMarkdownBodyCardActionElements(buttons []feishu.Button) []map[string]any {
-	return appcards.BuildMarkdownBodyCardActionElements(buttons)
-}
-
 type cardRenderer struct {
 	app *App
 }
@@ -57,25 +37,25 @@ func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, su
 }
 
 func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
-	card := newMarkdownBodyCardWithHeader(title, color, showHeader)
+	card := appcards.NewMarkdownBodyCardWithHeader(title, color, showHeader)
 	if r.app == nil {
 		if content := normalizeCardMarkdown(body); content != "" {
-			appendMarkdownBodyCardElement(card, map[string]any{
+			appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 				"tag":     "markdown",
 				"content": content,
 			})
 		}
 	} else if content := prepareReplyCardMarkdown(r.app, ctx, sub, body, enablePreview); content != "" {
-		appendMarkdownBodyCardElement(card, map[string]any{
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,
 		})
 	}
-	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
-		appendMarkdownBodyCardElement(card, row)
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements(buttons) {
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	if bodyElements, _ := card["body"].(map[string]any)["elements"].([]map[string]any); len(bodyElements) == 0 {
-		appendMarkdownBodyCardElement(card, map[string]any{
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": " ",
 		})
@@ -84,10 +64,10 @@ func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Conte
 }
 
 func (r cardRenderer) renderCompactMarkdownCard(sub *state.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {
-	card := newMarkdownBodyCard(title, color)
+	card := appcards.NewMarkdownBodyCard(title, color)
 	meta = strings.Join(strings.Fields(strings.TrimSpace(meta)), " ")
 	if meta != "" {
-		appendMarkdownBodyCardElement(card, map[string]any{
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag": "div",
 			"text": map[string]any{
 				"tag":        "plain_text",
@@ -98,16 +78,16 @@ func (r cardRenderer) renderCompactMarkdownCard(sub *state.Submission, title, co
 		})
 	}
 	if content := r.prepareCardMarkdown(sub, body); content != "" {
-		appendMarkdownBodyCardElement(card, map[string]any{
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,
 		})
 	}
-	for _, row := range buildMarkdownBodyCardActionElements(buttons) {
-		appendMarkdownBodyCardElement(card, row)
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements(buttons) {
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	if bodyElements, _ := card["body"].(map[string]any)["elements"].([]map[string]any); len(bodyElements) == 0 {
-		appendMarkdownBodyCardElement(card, map[string]any{
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": " ",
 		})

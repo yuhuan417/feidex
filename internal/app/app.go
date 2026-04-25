@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -327,12 +328,7 @@ func makeSessionKey(a *App, msg *feishu.InboundMessage) string {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
+	return apputil.FirstNonEmpty(values...)
 }
 
 func defaultWorkspaceID(a *App) string {

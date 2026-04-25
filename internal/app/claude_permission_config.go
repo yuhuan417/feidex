@@ -18,10 +18,6 @@ const (
 	claudeWorkspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace permissions [MODE|inherit]"
 )
 
-type claudePermissionModeOption struct {
-	Value string
-	Label string
-}
 
 func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 	if cfg == nil {

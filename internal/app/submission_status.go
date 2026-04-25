@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -92,10 +93,4 @@ func prepareSubmissionCardMarkdown(a *App, sub *state.Submission, text string) s
 	return normalizeCardMarkdown(text)
 }
 
-func truncate(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
-}
+func truncate(s string, n int) string { return apputil.Truncate(s, n) }

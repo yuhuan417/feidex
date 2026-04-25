@@ -32,18 +32,3 @@ func countLeadingBackticks(s string) int {
 	return n
 }
 
-func maxConsecutiveBackticks(s string) int {
-	maxRun := 0
-	run := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '`' {
-			run++
-			if run > maxRun {
-				maxRun = run
-			}
-			continue
-		}
-		run = 0
-	}
-	return maxRun
-}

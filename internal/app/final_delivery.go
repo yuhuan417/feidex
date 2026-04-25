@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 func sendFinalMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
@@ -86,7 +87,7 @@ func appendReplyCardFooter(card map[string]any, footerLines []string) {
 	if len(lines) == 0 {
 		return
 	}
-	appendMarkdownBodyCardElement(card, map[string]any{
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag": "div",
 		"text": map[string]any{
 			"tag":        "plain_text",

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 func markdownTestTable(name string) string {
@@ -78,14 +79,14 @@ func TestSplitMarkdownByTableLimitKeepsFourBacktickFences(t *testing.T) {
 }
 
 func TestCountCardComponentNodesCountsTaggedNodes(t *testing.T) {
-	card := newMarkdownBodyCard("Title", "blue")
+	card := appcards.NewMarkdownBodyCard("Title", "blue")
 	for i := 0; i < 198; i++ {
-		appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "item"})
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "item"})
 	}
 	if got := countCardComponentNodes(card); got != 199 {
 		t.Fatalf("countCardComponentNodes() = %d, want 199", got)
 	}
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "overflow"})
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "overflow"})
 	if got := countCardComponentNodes(card); got != 200 {
 		t.Fatalf("countCardComponentNodes() after append = %d, want 200", got)
 	}

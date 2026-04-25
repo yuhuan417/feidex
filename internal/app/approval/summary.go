@@ -1,11 +1,11 @@
 package approval
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 	"feidex/internal/pathdisplay"
 )
@@ -174,7 +174,7 @@ func FileGrantRootSummary(value any, workspaceCwd string) string {
 			path = pathdisplay.RenderWorkspaceDisplayPath(path, workspaceCwd)
 			return "`" + strings.ReplaceAll(path, "`", "'") + "`"
 		}
-		if rendered := strings.TrimSpace(truncate(prettyJSON(x), 300)); rendered != "" {
+		if rendered := strings.TrimSpace(apputil.Truncate(prettyJSON(x), 300)); rendered != "" {
 			return markdownCodeBlock(rendered)
 		}
 	case bool:
@@ -294,19 +294,14 @@ func TruncatedRequestJSON(params map[string]any) string {
 	if len(trimmed) == 0 {
 		return ""
 	}
-	return truncate(prettyJSON(trimmed), 800)
+	return apputil.Truncate(prettyJSON(trimmed), 800)
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+	return apputil.FirstNonEmpty(values...)
 }
 
-func stringValue(v any) string { s, _ := v.(string); return s }
+func stringValue(v any) string { return apputil.StringValue(v) }
 
 func boolValue(v any) (bool, bool) {
 	switch x := v.(type) {
@@ -326,31 +321,6 @@ func boolValue(v any) (bool, bool) {
 	}
 }
 
-func prettyJSON(v any) string {
-	if v == nil {
-		return ""
-	}
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
+func prettyJSON(v any) string { return apputil.PrettyJSON(v) }
 
-func truncate(s string, n int) string {
-	if n <= 0 || len(s) <= n {
-		return s
-	}
-	if n <= 1 {
-		return "…"
-	}
-	return s[:n-1] + "…"
-}
-
-func markdownCodeBlock(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return ""
-	}
-	return "```\n" + s + "\n```"
-}
+func markdownCodeBlock(s string) string { return apputil.MarkdownCodeBlock(s) }

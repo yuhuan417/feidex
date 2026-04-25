@@ -2,6 +2,8 @@ package review
 
 import (
 	"strings"
+
+	"feidex/internal/app/apputil"
 )
 
 func SubmissionInputText(target TargetSpec) string {
@@ -17,7 +19,7 @@ func SubmissionInputText(target TargetSpec) string {
 		}
 		return "Review: commit " + strings.TrimSpace(label)
 	case TargetCustom:
-		return "Review: " + truncate(strings.TrimSpace(target.Instructions), 80)
+		return "Review: " + apputil.Truncate(strings.TrimSpace(target.Instructions), 80)
 	default:
 		return "Review"
 	}
@@ -53,16 +55,4 @@ func ShortCommitSHA(value string) string {
 	return value[:12]
 }
 
-func inlineCodeText(s string) string {
-	return strings.ReplaceAll(strings.TrimSpace(s), "`", "'")
-}
-
-func truncate(s string, n int) string {
-	if n <= 0 || len(s) <= n {
-		return s
-	}
-	if n <= 1 {
-		return "…"
-	}
-	return s[:n-1] + "…"
-}
+func inlineCodeText(s string) string { return apputil.InlineCodeText(s) }

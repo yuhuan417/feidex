@@ -11,6 +11,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 type historyService struct {
@@ -23,16 +24,6 @@ func newHistoryService(app *App) historyService {
 const historyPageSize = 50
 const historyCommandUsage = "/history | /history detail TURN_NUMBER"
 
-type historyTurnSummary struct {
-	Ordinal      int
-	TurnID       string
-	Status       string
-	Inputs       []string
-	Outputs      []string
-	ErrorText    string
-	IsCurrent    bool
-	InputPreview string
-}
 
 func (s historyService) commandHistory(msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
@@ -126,7 +117,7 @@ func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map
 	}
 
 	buttons := make([]feishu.Button, 0, 3)
-	selectOptions := make([]selectStaticOption, 0, end-start)
+	selectOptions := make([]appcards.SelectStaticOption, 0, end-start)
 	initialOption := ""
 	for idx := start; idx < end; idx++ {
 		turn := turns[idx]
@@ -135,7 +126,7 @@ func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map
 			label = "当前 · " + label
 			initialOption = strconv.Itoa(idx)
 		}
-		selectOptions = append(selectOptions, selectStaticOption{
+		selectOptions = append(selectOptions, appcards.SelectStaticOption{
 			Text:  label,
 			Value: strconv.Itoa(idx),
 		})
@@ -170,10 +161,10 @@ func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map
 			"session_key": sessionKey,
 		},
 	})
-	card := newMarkdownBodyCard("历史记录", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
+	card := appcards.NewMarkdownBodyCard("历史记录", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
 	if len(selectOptions) > 0 {
-		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 			"history_detail_select",
 			"选择要查看的 turn",
 			map[string]any{"action": "history.detail.select", "session_key": sessionKey},
@@ -181,7 +172,7 @@ func (s historyService) renderCodexHistoryCard(sessionKey string, page int) (map
 			initialOption,
 		))
 	}
-	appendMarkdownBodyCardElement(card, buildMarkdownBodyCardActionElement(buttons))
+	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement(buttons))
 	return card, nil
 }
 

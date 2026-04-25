@@ -10,6 +10,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appcards "feidex/internal/app/cards"
 )
 
 type modelConfigService struct {
@@ -106,7 +107,7 @@ func (s modelConfigService) fetchModelList(ctx context.Context) (codexrpc.ModelL
 }
 
 func modelCardActionRow(buttons []feishu.Button) map[string]any {
-	return buildMarkdownBodyCardActionElement(buttons)
+	return appcards.BuildMarkdownBodyCardActionElement(buttons)
 }
 
 func chunkButtons(buttons []feishu.Button, size int) [][]feishu.Button {
@@ -167,7 +168,7 @@ func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResul
 		},
 		{"tag": "markdown", "content": "选择全局模型"},
 	}
-	modelOptions := []selectStaticOption{{
+	modelOptions := []appcards.SelectStaticOption{{
 		Text: func() string {
 			if modelValue == "" {
 				return "当前 · 跟随默认"
@@ -185,12 +186,12 @@ func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResul
 		if selectedModel != nil && item.ID == selectedModel.ID && modelValue != "" {
 			label = "当前 · " + label
 		}
-		modelOptions = append(modelOptions, selectStaticOption{
+		modelOptions = append(modelOptions, appcards.SelectStaticOption{
 			Text:  label,
 			Value: item.ID,
 		})
 	}
-	elements = append(elements, buildSelectStaticElement(
+	elements = append(elements, appcards.BuildSelectStaticElement(
 		"model_config_select_model",
 		"选择全局模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
@@ -199,7 +200,7 @@ func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResul
 	))
 
 	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择全局推理强度"})
-	effortOptions := []selectStaticOption{{
+	effortOptions := []appcards.SelectStaticOption{{
 		Text: func() string {
 			if effortValue == "" {
 				return "当前 · 跟随默认"
@@ -218,13 +219,13 @@ func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResul
 			if item.ReasoningEffort == selectedEffort && effortValue != "" {
 				label = "当前 · " + label
 			}
-			effortOptions = append(effortOptions, selectStaticOption{
+			effortOptions = append(effortOptions, appcards.SelectStaticOption{
 				Text:  label,
 				Value: item.ReasoningEffort,
 			})
 		}
 	}
-	elements = append(elements, buildSelectStaticElement(
+	elements = append(elements, appcards.BuildSelectStaticElement(
 		"model_config_select_effort",
 		"选择全局推理强度",
 		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
@@ -239,10 +240,10 @@ func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResul
 		}}))
 	}
 
-	card := newMarkdownBodyCard("模型配置", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody(menuAction, "")})
+	card := appcards.NewMarkdownBodyCard("模型配置", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody(menuAction, "")})
 	for _, elem := range elements {
-		appendMarkdownBodyCardElement(card, elem)
+		appcards.AppendMarkdownBodyCardElement(card, elem)
 	}
 	return card
 }

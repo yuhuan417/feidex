@@ -10,6 +10,7 @@ import (
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appcards "feidex/internal/app/cards"
 )
 
 const (
@@ -127,7 +128,7 @@ func (s workspaceRenderService) renderPathPickerCard(requestID string, payload p
 	} else {
 		title += " · 文件"
 	}
-	card := newMarkdownBodyCard(title, "blue")
+	card := appcards.NewMarkdownBodyCard(title, "blue")
 	lines := []string{
 		"浏览根目录: `" + payload.RootPath + "`",
 		"当前目录: `" + payload.CurrentPath + "`",
@@ -139,19 +140,19 @@ func (s workspaceRenderService) renderPathPickerCard(requestID string, payload p
 	if payload.Mode == pathPickerModeDirectory && hiddenFiles > 0 {
 		lines = append(lines, fmt.Sprintf("已隐藏文件: `%d`", hiddenFiles))
 	}
-	appendMarkdownBodyCardElement(card, map[string]any{
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
 		"content": strings.Join(lines, "\n"),
 	})
 
-	appendMarkdownBodyCardElement(card, buildPathPickerDropdownElement(requestID, payload, entries))
+	appcards.AppendMarkdownBodyCardElement(card, buildPathPickerDropdownElement(requestID, payload, entries))
 	if len(entries) == 0 {
-		appendMarkdownBodyCardElement(card, map[string]any{
+		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": "当前目录下没有可显示的条目。",
 		})
 	}
-	appendMarkdownBodyCardElement(card, buildPathPickerFooterElement(requestID, payload))
+	appcards.AppendMarkdownBodyCardElement(card, buildPathPickerFooterElement(requestID, payload))
 	return card, nil
 }
 
@@ -231,7 +232,7 @@ func buildPathPickerFooterElement(requestID string, payload pathPickerPayload) m
 			},
 		},
 	)
-	return buildMarkdownBodyCardActionElement(buttons)
+	return appcards.BuildMarkdownBodyCardActionElement(buttons)
 }
 
 func listPathPickerEntries(payload pathPickerPayload) ([]pathPickerEntry, int, int, int, error) {

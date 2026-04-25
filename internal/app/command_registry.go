@@ -326,7 +326,7 @@ func renderHelpBodyFromRegistry(backend string) string {
 		if len(specs) == 0 {
 			continue
 		}
-		header := backendCapabilityForKind(backend).helpGroupLabel(group)
+		header := backendCapabilityForKind(backend).HelpGroupLabel(group)
 		lines = append(lines, "", header+"：")
 		lines = appendHelpCommands(lines, specs)
 	}

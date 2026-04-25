@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
@@ -21,13 +21,6 @@ const (
 	claudeSessionPreviewLimit            = 72
 )
 
-type claudeSessionListMeta struct {
-	ID        string
-	Cwd       string
-	Title     string
-	Preview   string
-	UpdatedAt time.Time
-}
 
 func listClaudeSessions(_ string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
 	if ws == nil {
@@ -41,7 +34,7 @@ func listClaudeSessions(_ string, ws *config.Workspace, includeAll bool) ([]code
 	if err != nil {
 		return nil, err
 	}
-	sortThreadsByUpdated(items)
+	appworkspace.SortThreadsByUpdated(items)
 	if len(items) > claudeSessionListLimit {
 		items = items[:claudeSessionListLimit]
 	}

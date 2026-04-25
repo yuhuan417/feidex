@@ -9,6 +9,7 @@ import (
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 type pendingInputService struct {
@@ -100,8 +101,8 @@ func renderToolUserInputBody(payload toolUserInputPayload) string {
 }
 
 func renderToolUserInputFormCard(requestID string, payload toolUserInputPayload, drafts toolUserInputFormDrafts, attentionUserID string) map[string]any {
-	card := newMarkdownBodyCard("需要补充输入", "orange")
-	appendMarkdownBodyCardElement(card, map[string]any{
+	card := appcards.NewMarkdownBodyCard("需要补充输入", "orange")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
 		"content": prependAttentionMentionMarkdown(renderToolUserInputBody(payload), attentionUserID),
 	})
@@ -111,7 +112,7 @@ func renderToolUserInputFormCard(requestID string, payload toolUserInputPayload,
 			formElements = append(formElements, elem)
 		}
 	}
-	buttonRows := buildMarkdownBodyCardActionElements([]feishu.Button{
+	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text: "提交",
 			Type: "primary",
@@ -143,7 +144,7 @@ func renderToolUserInputFormCard(requestID string, payload toolUserInputPayload,
 		}
 	}
 	formElements = append(formElements, buttonRows...)
-	appendMarkdownBodyCardElement(card, map[string]any{
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":                "form",
 		"name":               "tool_user_input_form",
 		"direction":          "vertical",
@@ -247,15 +248,15 @@ func buildToolUserInputTextInputElement(q toolUserInputQuestion, drafts toolUser
 }
 
 func buildToolUserInputSingleSelectElement(q toolUserInputQuestion, drafts toolUserInputFormDrafts) map[string]any {
-	options := make([]selectStaticOption, 0, len(q.Options))
+	options := make([]appcards.SelectStaticOption, 0, len(q.Options))
 	for _, opt := range q.Options {
-		options = append(options, selectStaticOption{
+		options = append(options, appcards.SelectStaticOption{
 			Text:  toolUserInputOptionText(opt),
 			Value: strings.TrimSpace(opt.Label),
 		})
 	}
 	initialOption := toolUserInputInitialOption(q, toolUserInputDraftValue(drafts, q.ID))
-	return buildFormSelectStaticElement(q.ID, toolUserInputQuestionPlaceholder(q), options, initialOption)
+	return appcards.BuildFormSelectStaticElement(q.ID, toolUserInputQuestionPlaceholder(q), options, initialOption)
 }
 
 func buildToolUserInputOtherInputElement(q toolUserInputQuestion, drafts toolUserInputFormDrafts) map[string]any {
@@ -308,7 +309,7 @@ func buildToolUserInputMultiSelectRows(q toolUserInputQuestion, drafts toolUserI
 		if end > len(buttons) {
 			end = len(buttons)
 		}
-		rows = append(rows, buildMarkdownBodyCardActionElement(buttons[start:end]))
+		rows = append(rows, appcards.BuildMarkdownBodyCardActionElement(buttons[start:end]))
 	}
 	return rows
 }

@@ -7,17 +7,18 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 func TestMarkdownBodyCardHelpers(t *testing.T) {
-	card := newMarkdownBodyCard("Title", "")
+	card := appcards.NewMarkdownBodyCard("Title", "")
 	header := card["header"].(map[string]any)
 	if header["template"] != "blue" {
 		t.Fatalf("header template = %#v, want blue", header["template"])
 	}
 
-	appendMarkdownBodyCardElement(map[string]any{}, map[string]any{"tag": "markdown", "content": "body"})
-	action := buildMarkdownBodyCardActionElement([]feishu.Button{{Text: "Open", Type: "primary", Name: "open", Value: map[string]any{"id": "1"}}})
+	appcards.AppendMarkdownBodyCardElement(map[string]any{}, map[string]any{"tag": "markdown", "content": "body"})
+	action := appcards.BuildMarkdownBodyCardActionElement([]feishu.Button{{Text: "Open", Type: "primary", Name: "open", Value: map[string]any{"id": "1"}}})
 	columns := action["columns"].([]map[string]any)
 	button := columns[0]["elements"].([]map[string]any)[0]
 	if button["name"] != "open" {

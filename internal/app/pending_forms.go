@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"feidex/internal/app/pendingforms"
 	appreview "feidex/internal/app/review"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -13,43 +14,14 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type toolUserInputOption struct {
-	Label       string `json:"label"`
-	Description string `json:"description"`
-}
+type toolUserInputOption = pendingforms.ToolUserInputOption
+type toolUserInputQuestion = pendingforms.ToolUserInputQuestion
+type toolUserInputPayload = pendingforms.ToolUserInputPayload
+type elicitationFormPayload = pendingforms.ElicitationFormPayload
+type elicitationURLPayload = pendingforms.ElicitationURLPayload
 
-type toolUserInputQuestion struct {
-	Header      string                `json:"header"`
-	ID          string                `json:"id"`
-	Question    string                `json:"question"`
-	IsOther     bool                  `json:"isOther"`
-	IsSecret    bool                  `json:"isSecret"`
-	MultiSelect bool                  `json:"multiSelect,omitempty"`
-	Options     []toolUserInputOption `json:"options"`
-}
-
-type toolUserInputPayload struct {
-	ThreadID  string                  `json:"threadId"`
-	TurnID    string                  `json:"turnId"`
-	ItemID    string                  `json:"itemId"`
-	Questions []toolUserInputQuestion `json:"questions"`
-}
-
-type elicitationFormPayload struct {
-	ServerName string         `json:"serverName"`
-	ThreadID   string         `json:"threadId"`
-	TurnID     string         `json:"turnId,omitempty"`
-	Message    string         `json:"message"`
-	Schema     map[string]any `json:"requestedSchema"`
-}
-
-type elicitationURLPayload struct {
-	ServerName    string `json:"serverName"`
-	ThreadID      string `json:"threadId"`
-	TurnID        string `json:"turnId,omitempty"`
-	ElicitationID string `json:"elicitationId"`
-	Message       string `json:"message"`
-	URL           string `json:"url"`
+func parseStructuredLines(text string) map[string]string {
+	return pendingforms.ParseStructuredLines(text)
 }
 
 func pendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest {
@@ -229,21 +201,4 @@ func cancelledPendingBody(pending *state.PendingRequest) string {
 	default:
 		return ""
 	}
-}
-
-func parseStructuredLines(text string) map[string]string {
-	lines := strings.Split(text, "\n")
-	out := map[string]string{}
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		out[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-	}
-	return out
 }

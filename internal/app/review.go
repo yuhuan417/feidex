@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	appreview "feidex/internal/app/review"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -20,9 +21,6 @@ const (
 	reviewFormModeBase   = "base"
 	reviewFormModeCommit = "commit"
 	reviewFormModeCustom = "custom"
-
-	gitRecordSep = "\x1e"
-	gitFieldSep  = "\x1f"
 )
 
 type reviewPendingPayload struct {
@@ -46,7 +44,7 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) reviewPendin
 }
 
 func mergeReviewCustomFormValues(payload reviewPendingPayload, values map[string]any) reviewPendingPayload {
-	if value, ok := formValueString(values, "instructions"); ok {
+	if value, ok := apputil.FormValueString(values, "instructions"); ok {
 		payload.Instructions = value
 	}
 	return payload

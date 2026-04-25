@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"strings"
 
 	"feidex/internal/state"
@@ -214,20 +213,6 @@ func buildQuietCommandExecutionLines(item map[string]any, workspaceCwd string) [
 	return trimmedNonEmptyStrings(lines)
 }
 
-func buildQuietSearchLine(query, path string) string {
-	query = strings.TrimSpace(query)
-	path = strings.TrimSpace(path)
-	switch {
-	case query != "" && path != "":
-		return "Search " + markdownInlineCode(query) + " in " + markdownInlineCode(path)
-	case query != "":
-		return "Search " + markdownInlineCode(query)
-	case path != "":
-		return "Search in " + markdownInlineCode(path)
-	default:
-		return ""
-	}
-}
 
 func buildQuietFileChangeLines(item map[string]any) []string {
 	if normalizeWorkingStatus(item["status"]) != "completed" {
@@ -483,22 +468,7 @@ func quietPatchMovePath(v any) string {
 	return firstNonEmpty(stringValue(change["move_path"]), stringValue(change["movePath"]))
 }
 
-func quietDisplayFileName(path string) string {
-	base, _ := splitPathLineReference(path)
-	base = strings.TrimSpace(base)
-	if base == "" {
-		return strings.TrimSpace(path)
-	}
-	return filepath.Base(base)
-}
 
-func markdownInlineCode(s string) string {
-	s = inlineCodeText(s)
-	if s == "" {
-		return ""
-	}
-	return "`" + s + "`"
-}
 
 func markdownInlineCodeSlice(values []string) []string {
 	values = quietDedupeStrings(values)
@@ -528,16 +498,6 @@ func quietDedupeStrings(values []string) []string {
 	return result
 }
 
-func trimmedNonEmptyStrings(values []string) []string {
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			result = append(result, value)
-		}
-	}
-	return result
-}
 
 func equalStringSlices(a, b []string) bool {
 	if len(a) != len(b) {

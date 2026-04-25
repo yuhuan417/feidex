@@ -13,6 +13,7 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -220,8 +221,8 @@ func (s skillsService) renderSkillsCard(sessionKey string, forceReload bool) (ma
 		}
 	}
 
-	card := newMarkdownBodyCard("技能列表", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{
+	card := appcards.NewMarkdownBodyCard("技能列表", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
 		"content": menuCardBody("menu.skills", strings.Join(lines, "\n")),
 	})
@@ -231,14 +232,14 @@ func (s skillsService) renderSkillsCard(sessionKey string, forceReload bool) (ma
 		initialOption = firstNonEmpty(strings.TrimSpace(pending.Path), strings.TrimSpace(pending.Name))
 	}
 	if len(skills) > 0 {
-		options := make([]selectStaticOption, 0, len(skills))
+		options := make([]appcards.SelectStaticOption, 0, len(skills))
 		for _, skill := range skills {
-			options = append(options, selectStaticOption{
+			options = append(options, appcards.SelectStaticOption{
 				Text:  skillOptionText(skill),
 				Value: firstNonEmpty(strings.TrimSpace(skill.Path), strings.TrimSpace(skill.Name)),
 			})
 		}
-		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 			"skills_select",
 			"选择 skill",
 			map[string]any{"action": "skills.select", "session_key": sessionKey},
@@ -247,7 +248,7 @@ func (s skillsService) renderSkillsCard(sessionKey string, forceReload bool) (ma
 		))
 	}
 
-	for _, row := range buildMarkdownBodyCardActionElements([]feishu.Button{
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text: commandLabel("刷新", "/skills reload"),
 			Type: "default",
@@ -265,7 +266,7 @@ func (s skillsService) renderSkillsCard(sessionKey string, forceReload bool) (ma
 			},
 		},
 	}) {
-		appendMarkdownBodyCardElement(card, row)
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	return card, nil
 }

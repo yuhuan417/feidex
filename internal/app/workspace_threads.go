@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"time"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -87,10 +87,6 @@ func (s workspaceThreadService) listCodexWorkspaceThreads(sessionKey string, ws 
 	return filterThreadsByWorkspaceCWD(result.Data, ws.Cwd), nil
 }
 
-func sortThreadsByUpdated(items []codexrpc.ThreadListEntry) {
-	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt > items[j].UpdatedAt })
-}
-
 func (s workspaceThreadService) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
 	return conversationBackend(s.app).ensureWorkspaceThreadBinding(sessionKey, sess, ws)
 }
@@ -156,7 +152,7 @@ func (s workspaceThreadService) ensureCodexWorkspaceThreadBinding(sessionKey str
 		)
 	}
 	if len(items) > 0 {
-		sortThreadsByUpdated(items)
+		appworkspace.SortThreadsByUpdated(items)
 		if binding, resumeErr := newWorkspaceThreadService(s.app).resumeCodexWorkspaceThread(sessionKey, sess, ws, items[0]); resumeErr == nil {
 			return binding, nil
 		} else {

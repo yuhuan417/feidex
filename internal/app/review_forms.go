@@ -9,6 +9,7 @@ import (
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -154,27 +155,27 @@ func (s reviewFormService) renderReviewBaseCard(sessionKey, requestID string, pa
 			break
 		}
 	}
-	card := newMarkdownBodyCard("选择 Base Branch", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{
+	card := appcards.NewMarkdownBodyCard("选择 Base Branch", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag": "markdown",
 		"content": menuCardBody("menu.review",
 			"选择一个 base branch，然后开始 review。\n\n当前选择: `"+inlineCodeText(selected)+"`\n"+selectedLabel),
 	})
-	selectOptions := make([]selectStaticOption, 0, len(options))
+	selectOptions := make([]appcards.SelectStaticOption, 0, len(options))
 	for _, option := range options {
-		selectOptions = append(selectOptions, selectStaticOption{
+		selectOptions = append(selectOptions, appcards.SelectStaticOption{
 			Text:  appreview.BranchOptionLabel(option),
 			Value: option.Name,
 		})
 	}
-	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 		"review_branch",
 		"选择 base branch",
 		map[string]any{"action": "review.base.select", "request_id": requestID},
 		selectOptions,
 		selected,
 	))
-	for _, row := range buildMarkdownBodyCardActionElements([]feishu.Button{
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "开始 review",
 			Type:  "primary",
@@ -186,7 +187,7 @@ func (s reviewFormService) renderReviewBaseCard(sessionKey, requestID string, pa
 			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
 		},
 	}) {
-		appendMarkdownBodyCardElement(card, row)
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	return card, nil
 }
@@ -214,27 +215,27 @@ func (s reviewFormService) renderReviewCommitCard(sessionKey, requestID string, 
 			break
 		}
 	}
-	card := newMarkdownBodyCard("选择 Commit", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{
+	card := appcards.NewMarkdownBodyCard("选择 Commit", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag": "markdown",
 		"content": menuCardBody("menu.review",
 			"从最近 100 个 commit 中选择一个 target。\n\n当前选择: `"+inlineCodeText(appreview.ShortCommitSHA(selected))+"`\n"+selectedLabel),
 	})
-	selectOptions := make([]selectStaticOption, 0, len(options))
+	selectOptions := make([]appcards.SelectStaticOption, 0, len(options))
 	for _, option := range options {
-		selectOptions = append(selectOptions, selectStaticOption{
+		selectOptions = append(selectOptions, appcards.SelectStaticOption{
 			Text:  appreview.CommitOptionLabel(option),
 			Value: option.SHA,
 		})
 	}
-	appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 		"review_commit",
 		"选择 commit",
 		map[string]any{"action": "review.commit.select", "request_id": requestID},
 		selectOptions,
 		selected,
 	))
-	for _, row := range buildMarkdownBodyCardActionElements([]feishu.Button{
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "开始 review",
 			Type:  "primary",
@@ -246,14 +247,14 @@ func (s reviewFormService) renderReviewCommitCard(sessionKey, requestID string, 
 			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
 		},
 	}) {
-		appendMarkdownBodyCardElement(card, row)
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	return card, nil
 }
 
 func (s reviewFormService) renderReviewCustomCard(sessionKey, requestID string, payload reviewPendingPayload) map[string]any {
-	card := newMarkdownBodyCard("自定义审查", "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{
+	card := appcards.NewMarkdownBodyCard("自定义审查", "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
 		"content": menuCardBody("menu.review", "填写 review instructions，然后开始 review。"),
 	})
@@ -266,7 +267,7 @@ func (s reviewFormService) renderReviewCustomCard(sessionKey, requestID string, 
 	if value := strings.TrimSpace(payload.Instructions); value != "" {
 		instructionsInput["default_value"] = value
 	}
-	formRows := buildMarkdownBodyCardActionElements([]feishu.Button{
+	formRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "开始 review",
 			Type:  "primary",
@@ -293,7 +294,7 @@ func (s reviewFormService) renderReviewCustomCard(sessionKey, requestID string, 
 			elements[0]["form_action_type"] = "submit"
 		}
 	}
-	appendMarkdownBodyCardElement(card, map[string]any{
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":                "form",
 		"name":               "review_custom_form",
 		"direction":          "vertical",

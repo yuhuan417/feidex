@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	appcards "feidex/internal/app/cards"
 )
 
 type conversationThreadsCardView struct {
@@ -21,7 +23,7 @@ type conversationThreadsCardView struct {
 }
 
 func buildConversationThreadsCard(sessionKey string, view conversationThreadsCardView) map[string]any {
-	selectOptions := make([]selectStaticOption, 0, len(view.Items))
+	selectOptions := make([]appcards.SelectStaticOption, 0, len(view.Items))
 	initialOption := ""
 	for idx, item := range view.Items {
 		entry := fmt.Sprintf("%d. %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
@@ -29,18 +31,18 @@ func buildConversationThreadsCard(sessionKey string, view conversationThreadsCar
 			entry = fmt.Sprintf("%d. [当前] %s", idx+1, renderThreadListEntry(item.Name, item.Preview, item.ID))
 			initialOption = item.ID
 		}
-		selectOptions = append(selectOptions, selectStaticOption{
+		selectOptions = append(selectOptions, appcards.SelectStaticOption{
 			Text:  entry,
 			Value: item.ID,
 		})
 	}
-	card := newMarkdownBodyCard(strings.TrimSpace(view.Title), "blue")
-	appendMarkdownBodyCardElement(card, map[string]any{
+	card := appcards.NewMarkdownBodyCard(strings.TrimSpace(view.Title), "blue")
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
 		"content": menuCardBodyForBackend(view.Backend, "menu.thread", strings.Join(view.BodyLines, "\n")),
 	})
 	if len(selectOptions) > 0 {
-		appendMarkdownBodyCardElement(card, buildSelectStaticElement(
+		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 			"thread_resume_select",
 			"list",
 			map[string]any{"action": "thread.resume.select", "session_key": sessionKey, "include_all": view.IncludeAll},
@@ -48,8 +50,8 @@ func buildConversationThreadsCard(sessionKey string, view conversationThreadsCar
 			initialOption,
 		))
 	}
-	for _, row := range buildMarkdownBodyCardActionElements(view.Buttons) {
-		appendMarkdownBodyCardElement(card, row)
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements(view.Buttons) {
+		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	return card
 }
@@ -66,7 +68,7 @@ func renderCodexThreadsCard(a *App, sessionKey string, includeAll bool) (map[str
 	if err != nil {
 		return nil, err
 	}
-	sortThreadsByUpdated(items)
+	appworkspace.SortThreadsByUpdated(items)
 	currentLabel := "-"
 	currentThreadID := "-"
 	currentThreadSandbox := "-"
@@ -176,7 +178,7 @@ func renderClaudeThreadsCard(a *App, sessionKey string, sess *state.Session, ws 
 	if err != nil {
 		return nil, err
 	}
-	sortThreadsByUpdated(items)
+	appworkspace.SortThreadsByUpdated(items)
 	workspaceID := "-"
 	if ws != nil {
 		workspaceID = firstNonEmpty(strings.TrimSpace(ws.ID), workspaceID)

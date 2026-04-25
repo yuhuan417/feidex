@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -92,24 +93,8 @@ func (s workspaceService) completeWorkspaceClone(action *feishu.CardAction, sess
 	}, nil
 }
 
-func workspaceNewTakeoverPayload(workspaceID, targetDir string) workspaceNewPayload {
-	return workspaceNewTakeoverPayloadWithNotice(workspaceID, targetDir, workspaceNewTakeoverNotice(targetDir))
-}
-
-func workspaceNewTakeoverPayloadWithNotice(workspaceID, targetDir, notice string) workspaceNewPayload {
-	targetDir = strings.TrimSpace(targetDir)
-	suggestedID := firstNonEmpty(strings.TrimSpace(workspaceID), workspaceSuggestedIDFromDir(targetDir))
-	return workspaceNewPayload{
-		RootPath:    "/",
-		SelectedCWD: targetDir,
-		DraftID:     suggestedID,
-		AutoDraftID: suggestedID,
-		Notice:      strings.TrimSpace(notice),
-	}
-}
-
 func (s workspaceService) completeWorkspaceNewTakeover(action *feishu.CardAction, sessionKey, workspaceID, targetDir string) (*callback.CardActionTriggerResponse, error) {
-	payload := workspaceNewTakeoverPayload(workspaceID, targetDir)
+	payload := appworkspace.NewTakeoverPayload(workspaceID, targetDir)
 	if strings.TrimSpace(payload.SelectedCWD) == "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "缺少可接管的目录"}}, nil
 	}
@@ -137,7 +122,7 @@ func (s workspaceService) completeWorkspaceClonePickDir(action *feishu.CardActio
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
 	}
-	payload := mergeWorkspaceCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
+	payload := appworkspace.MergeCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
 	currentPath := strings.TrimSpace(payload.SelectedParentDir)
 	if currentPath == "" {
 		msg := commandMessageFromAction(s.app, action, pending.SessionKey, "")
@@ -197,7 +182,7 @@ func (s workspaceService) completeWorkspaceNewPickDir(action *feishu.CardAction)
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
 	}
-	payload := mergeWorkspaceNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
+	payload := appworkspace.MergeNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
 	currentPath := firstNonEmpty(strings.TrimSpace(payload.SelectedCWD), "/")
 	payload.Picker = &pathPickerPayload{
 		Mode:        pathPickerModeDirectory,
@@ -222,7 +207,7 @@ func (s workspaceService) completeWorkspaceNewSubmit(action *feishu.CardAction) 
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
 	}
-	payload := mergeWorkspaceNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
+	payload := appworkspace.MergeNewFormValues(workspaceNewPayloadFromPending(pending), action.FormValue)
 	id := strings.TrimSpace(payload.DraftID)
 	if id == "" {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
@@ -251,7 +236,7 @@ func (s workspaceService) completeWorkspaceNewSubmit(action *feishu.CardAction) 
 		})
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "工作区已存在且目录一致，可直接切换"},
-			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceSwitchExistingCard(pending.SessionKey, existingWS.ID, existingWS.Cwd, workspaceNewExistingWorkspaceNotice())),
+			Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceSwitchExistingCard(pending.SessionKey, existingWS.ID, existingWS.Cwd, appworkspace.NewExistingWorkspaceNotice())),
 		}, nil
 	}
 	sess := appState.session(pending.SessionKey)
@@ -289,7 +274,7 @@ func (s workspaceService) completeWorkspaceCloneSubmit(action *feishu.CardAction
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
 	}
-	payload := mergeWorkspaceCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
+	payload := appworkspace.MergeCloneFormValues(workspaceClonePayloadFromPending(pending), action.FormValue)
 	payload.ErrorMessage = ""
 	if strings.TrimSpace(payload.RepoURL) == "" {
 		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
@@ -336,7 +321,7 @@ func (s workspaceService) completeWorkspaceCloneSubmit(action *feishu.CardAction
 				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
-			takeoverPayload := workspaceNewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, workspaceNewTakeoverNotice(existingDirErr.TargetDir))
+			takeoverPayload := appworkspace.NewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, appworkspace.NewTakeoverNotice(existingDirErr.TargetDir))
 			newRequestID, createErr := newWorkspaceManagementService(s.app).createWorkspaceNewPending(pending.SessionKey, action.UserID, "", takeoverPayload)
 			if createErr != nil {
 				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: createErr.Error()}}, nil

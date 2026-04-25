@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -128,7 +129,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 		}
 		if pending.Kind == "workspace_new" {
 			workspacePayload.SelectedCWD = selectedPath
-			workspacePayload = updateWorkspaceNewSuggestedID(workspacePayload, selectedPath)
+			workspacePayload = appworkspace.UpdateNewSuggestedID(workspacePayload, selectedPath)
 			workspacePayload.Picker = nil
 			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{

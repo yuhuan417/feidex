@@ -3010,8 +3010,8 @@ func TestNotificationHelpers(t *testing.T) {
 	}
 
 	startNextSubmissionAsync(a, "", "test")
-	if got := truncate("  abcdef  ", 3); got != "abc..." {
-		t.Fatalf("truncate() = %q, want abc...", got)
+	if got := truncate("  abcdef  ", 3); got != "  …" {
+		t.Fatalf("truncate() = %q, want \"  …\"", got)
 	}
 	if _, err := a.HandleCardAction(&feishu.CardAction{Name: "unknown"}); err != nil {
 		t.Fatalf("handleCardAction() error = %v", err)
