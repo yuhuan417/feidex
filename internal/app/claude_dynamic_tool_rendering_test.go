@@ -106,9 +106,8 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 			"cwd":     filepath.Join(workspace, "internal", "app"),
 		},
 	}, workspace)
-	joinedBash := strings.Join(bashLines, "\n")
-	if !strings.Contains(joinedBash, "Run `go test ./internal/app`") || !strings.Contains(joinedBash, "In `internal/app`") {
-		t.Fatalf("bash progress lines = %q", joinedBash)
+	if bashLines != nil {
+		t.Fatalf("bash progress lines = %#v, want nil", bashLines)
 	}
 
 	_, todoLines := buildQuietWorkingCardLines("item-todo", map[string]any{

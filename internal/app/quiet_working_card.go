@@ -370,25 +370,7 @@ func (c *quietWorkingCard) body() string {
 		}
 	}
 	lines = compactQuietWorkingLines(lines)
-	text := strings.TrimSpace(strings.Join(lines, "\n"))
-	return fenceQuietWorkingBodyIfNeeded(text)
-}
-
-// fenceQuietWorkingBodyIfNeeded wraps text in a backtick code fence when it
-// contains bare backticks that could break the outer markdown element boundary
-// in Feishu cards. The fence length is one more than the longest consecutive
-// backtick run in the content, mirroring the approach used by
-// markdownCodeBlockWithLang for turn item cards.
-func fenceQuietWorkingBodyIfNeeded(text string) string {
-	if !strings.Contains(text, "`") {
-		return text
-	}
-	n := maxConsecutiveBackticks(text) + 1
-	if n < markdownFencePreferredLen {
-		n = markdownFencePreferredLen
-	}
-	fence := strings.Repeat("`", n)
-	return fence + "\n" + text + "\n" + fence
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func compactQuietWorkingLines(lines []string) []string {

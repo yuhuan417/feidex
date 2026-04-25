@@ -256,18 +256,9 @@ func buildClaudeCodeToolProgressLines(toolName string, input any, workspaceCwd s
 }
 
 func buildClaudeShellToolProgressLines(toolName string, input any, workspaceCwd string) []string {
-	m := toolInputMap(input)
 	switch strings.TrimSpace(toolName) {
 	case "Bash":
-		command := claudeInputString(m, "command", "cmd")
-		if command == "" {
-			return nil
-		}
-		lines := []string{"Run " + markdownInlineCode(truncate(command, 80))}
-		if cwd := claudeInputStringRenderedPath(m, workspaceCwd, "cwd", "workdir"); cwd != "" {
-			lines = append(lines, "In "+markdownInlineCode(cwd))
-		}
-		return trimmedNonEmptyStrings(lines)
+		return nil
 	case "KillShell":
 		return []string{"Stop shell session"}
 	default:
