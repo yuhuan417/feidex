@@ -283,6 +283,10 @@ func (f *fakeClaudeCore) CancelPending(requestID, message string) error {
 	return f.cancelErr
 }
 
+func (f *fakeClaudeCore) SessionStopped(_ string) bool {
+	return false
+}
+
 func (f *fakeClaudeCore) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

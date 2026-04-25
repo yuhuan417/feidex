@@ -33,8 +33,28 @@ func (claudeRuntimeFacade) beginStartupRecoveryScope(*App) func() {
 	return func() {}
 }
 
-func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(_ *App, _ string, sess *state.Session) *state.Session {
-	return sess
+func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
+	if a == nil || sess == nil {
+		return sess
+	}
+	if !sessionHasInFlightSubmission(sess) {
+		return sess
+	}
+	turnID := strings.TrimSpace(sess.ActiveTurnID)
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
+	if turnID == "" || threadID == "" {
+		return sess
+	}
+	if a.claude == nil || !a.claude.SessionStopped(sessionKey) {
+		return sess
+	}
+	slog.Warn("reconciling missed Claude turn completion",
+		"session_key", sessionKey,
+		"thread_id", threadID,
+		"turn_id", turnID,
+	)
+	finishTurn(a, threadID, turnID, "completed")
+	return appState(a).session(sessionKey)
 }
 
 func (claudeRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {

@@ -516,6 +516,19 @@ func (r *claudeRuntime) CancelPending(requestID, message string) error {
 	return nil
 }
 
+func (r *claudeRuntime) SessionStopped(sessionKey string) bool {
+	if r == nil {
+		return true
+	}
+	r.mu.Lock()
+	state := r.sessions[strings.TrimSpace(sessionKey)]
+	r.mu.Unlock()
+	if state == nil || state.session == nil {
+		return true
+	}
+	return state.session.Stopped()
+}
+
 func (r *claudeRuntime) Close() error {
 	r.mu.Lock()
 	keys := make([]string, 0, len(r.sessions))
@@ -594,6 +607,38 @@ func (r *claudeRuntime) runSession(state *claudeSessionState) {
 		}
 	}
 	state.readyOnce.Do(func() { close(state.readyCh) })
+	r.cleanupStaleSessionOps(state)
+}
+
+func (r *claudeRuntime) cleanupStaleSessionOps(state *claudeSessionState) {
+	if r == nil || r.app == nil || state == nil {
+		return
+	}
+	state.mu.Lock()
+	sessionKey := strings.TrimSpace(state.sessionKey)
+	threadID := strings.TrimSpace(state.sessionID)
+	state.mu.Unlock()
+	if sessionKey == "" {
+		return
+	}
+	sess := appState(r.app).session(sessionKey)
+	if sess == nil || !sessionHasActiveOperations(sess) {
+		return
+	}
+	slog.Warn("Claude event loop exited with stale active operations, forcing cleanup",
+		"session_key", sessionKey,
+		"thread_id", threadID,
+	)
+	for _, op := range sess.ActiveOperations {
+		tID := strings.TrimSpace(op.TurnID)
+		if tID != "" {
+			finishTurn(r.app, threadID, tID, "failed")
+		}
+	}
+	sess = appState(r.app).session(sessionKey)
+	if sess != nil && sessionHasActiveOperations(sess) {
+		failBackendActiveWork(r.app, backendClaude, sessionKey, threadID, "Claude 会话事件循环异常退出")
+	}
 }
 
 func (r *claudeRuntime) waitForTurnReady(ctx context.Context, state *claudeSessionState, threadID string) error {

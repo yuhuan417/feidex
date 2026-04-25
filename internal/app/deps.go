@@ -41,6 +41,7 @@ type claudeCore interface {
 	ResolveUserInput(string, map[string]string) error
 	ResolvePlanFeedback(string, string) error
 	CancelPending(string, string) error
+	SessionStopped(string) bool
 	Close() error
 }
 
