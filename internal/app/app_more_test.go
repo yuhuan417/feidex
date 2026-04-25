@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/app/turnbinding"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -2509,12 +2510,14 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	origVersion := currentVersion
 	origGOARCH := currentGOARCH
 	origUpgradeDisplayLocation := upgradeDisplayLocation
+	origUpgradecmdDisplayLocation := appupgradecmd.DisplayLocation
 	defer func() {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
 		currentGOARCH = origGOARCH
 		upgradeDisplayLocation = origUpgradeDisplayLocation
+		appupgradecmd.DisplayLocation = origUpgradecmdDisplayLocation
 	}()
 
 	a, ff, _ := newTestApp(t)
@@ -2539,6 +2542,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	currentVersion = func() string { return "v0.3.0" }
 	currentGOARCH = func() string { return "amd64" }
 	upgradeDisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
+	appupgradecmd.DisplayLocation = upgradeDisplayLocation
 
 	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"dev"}); err != nil {
