@@ -44,7 +44,7 @@ func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionK
 }
 
 func (codexRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
-	return codexConversationBackend{app: a}
+	return codexConversationBackend{deps: a}
 }
 
 func (codexRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {

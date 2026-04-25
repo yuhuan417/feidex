@@ -58,7 +58,7 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 }
 
 func (claudeRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
-	return claudeConversationBackend{app: a}
+	return claudeConversationBackend{deps: a}
 }
 
 func (claudeRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {

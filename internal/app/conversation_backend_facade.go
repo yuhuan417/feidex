@@ -40,31 +40,31 @@ func conversationBackend(a *App) conversationBackendFacade {
 	if runtime := backendRuntime(a); runtime != nil {
 		return runtime.conversationBackend(a)
 	}
-	return codexConversationBackend{app: a}
+	return codexConversationBackend{deps: a}
 }
 
 type codexConversationBackend struct {
-	app *App
+	deps BackendDeps
 }
 
 func (b codexConversationBackend) listWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return newWorkspaceThreadService(b.app).listCodexWorkspaceThreads(sessionKey, ws, includeAll)
+	return newWorkspaceThreadService(b.deps.App()).listCodexWorkspaceThreads(sessionKey, ws, includeAll)
 }
 
 func (b codexConversationBackend) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return newWorkspaceThreadService(b.app).ensureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.deps.App()).ensureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return newWorkspaceThreadService(b.app).startCodexWorkspaceThread(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.deps.App()).startCodexWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	return resumeCodexSelectedThread(b.app, sessionKey, sess, ws, selection)
+	return resumeCodexSelectedThread(b.deps.App(), sessionKey, sess, ws, selection)
 }
 
 func (b codexConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	return forkCodexActiveConversation(b.app, sessionKey, sess, ws)
+	return forkCodexActiveConversation(b.deps.App(), sessionKey, sess, ws)
 }
 
 func (b codexConversationBackend) forkReplyMessage(string) string {
@@ -72,47 +72,47 @@ func (b codexConversationBackend) forkReplyMessage(string) string {
 }
 
 func (b codexConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
-	recoverCodexStartupConversation(b.app, sessionKey, workspaceID, sess, ws, effectiveModel)
+	recoverCodexStartupConversation(b.deps.App(), sessionKey, workspaceID, sess, ws, effectiveModel)
 }
 
 func (b codexConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return renderCodexThreadsCard(b.app, sessionKey, includeAll)
+	return renderCodexThreadsCard(b.deps.App(), sessionKey, includeAll)
 }
 
 func (b codexConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return newHistoryService(b.app).codexHistoryIndexForOrdinal(sessionKey, ordinal)
+	return newHistoryService(b.deps.App()).codexHistoryIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (b codexConversationBackend) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return newHistoryService(b.app).renderCodexHistoryCard(sessionKey, page)
+	return newHistoryService(b.deps.App()).renderCodexHistoryCard(sessionKey, page)
 }
 
 func (b codexConversationBackend) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return newHistoryService(b.app).renderCodexHistoryDetailCard(sessionKey, index)
+	return newHistoryService(b.deps.App()).renderCodexHistoryDetailCard(sessionKey, index)
 }
 
 func (b codexConversationBackend) renderUsageBody(sess *state.Session) string {
-	return newUsageService(b.app).renderCodexUsageBody(sess)
+	return newUsageService(b.deps.App()).renderCodexUsageBody(sess)
 }
 
 func (b codexConversationBackend) interruptActiveTurn(ctx context.Context, _ string, sess *state.Session) error {
-	return interruptCodexActiveTurn(b.app, ctx, sess)
+	return interruptCodexActiveTurn(b.deps.App(), ctx, sess)
 }
 
 func (b codexConversationBackend) continueActiveTurn(sessionKey, text string) error {
-	return continueCodexActiveTurn(b.app, sessionKey, text)
+	return continueCodexActiveTurn(b.deps.App(), sessionKey, text)
 }
 
 func (b codexConversationBackend) tryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
-	return tryCodexReplyContinuation(b.app, msg, link, sessionKey, sess)
+	return tryCodexReplyContinuation(b.deps.App(), msg, link, sessionKey, sess)
 }
 
 func (b codexConversationBackend) startQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
-	return newSubmissionCoordinator(b.app).startNextCodexSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	return newSubmissionCoordinator(b.deps.App()).startNextCodexSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 type claudeConversationBackend struct {
-	app *App
+	deps BackendDeps
 }
 
 func (b claudeConversationBackend) listWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
@@ -120,19 +120,19 @@ func (b claudeConversationBackend) listWorkspaceThreads(sessionKey string, ws *c
 }
 
 func (b claudeConversationBackend) ensureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return newWorkspaceThreadService(b.app).ensureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.deps.App()).ensureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) startWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*workspaceThreadBinding, error) {
-	return newWorkspaceThreadService(b.app).startClaudeWorkspaceThread(sessionKey, sess, ws)
+	return newWorkspaceThreadService(b.deps.App()).startClaudeWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) resumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
-	return resumeClaudeSelectedThread(b.app, sessionKey, sess, ws, selection)
+	return resumeClaudeSelectedThread(b.deps.App(), sessionKey, sess, ws, selection)
 }
 
 func (b claudeConversationBackend) forkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
-	return forkClaudeActiveConversation(b.app, sessionKey, sess, ws)
+	return forkClaudeActiveConversation(b.deps.App(), sessionKey, sess, ws)
 }
 
 func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
@@ -143,41 +143,41 @@ func (b claudeConversationBackend) forkReplyMessage(forkedID string) string {
 }
 
 func (b claudeConversationBackend) recoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, _ *config.Workspace, _ string) {
-	recoverClaudeStartupConversation(b.app, sessionKey, workspaceID, sess)
+	recoverClaudeStartupConversation(b.deps.App(), sessionKey, workspaceID, sess)
 }
 
 func (b claudeConversationBackend) renderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return renderClaudeThreadsCardForCurrentBackend(b.app, sessionKey, includeAll)
+	return renderClaudeThreadsCardForCurrentBackend(b.deps.App(), sessionKey, includeAll)
 }
 
 func (b claudeConversationBackend) historyIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return historyTurnIndexForOrdinal(b.app, sessionKey, ordinal)
+	return historyTurnIndexForOrdinal(b.deps.App(), sessionKey, ordinal)
 }
 
 func (b claudeConversationBackend) renderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return renderClaudeHistoryCard(b.app, sessionKey, page)
+	return renderClaudeHistoryCard(b.deps.App(), sessionKey, page)
 }
 
 func (b claudeConversationBackend) renderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return renderClaudeHistoryDetailCard(b.app, sessionKey, index)
+	return renderClaudeHistoryDetailCard(b.deps.App(), sessionKey, index)
 }
 
 func (b claudeConversationBackend) renderUsageBody(sess *state.Session) string {
-	return newUsageService(b.app).renderClaudeUsageBody(sess)
+	return newUsageService(b.deps.App()).renderClaudeUsageBody(sess)
 }
 
 func (b claudeConversationBackend) interruptActiveTurn(ctx context.Context, sessionKey string, _ *state.Session) error {
-	return interruptClaudeActiveTurn(b.app, ctx, sessionKey)
+	return interruptClaudeActiveTurn(b.deps.App(), ctx, sessionKey)
 }
 
 func (b claudeConversationBackend) continueActiveTurn(sessionKey, text string) error {
-	return newReplyContinuationService(b.app).continueClaudeSessionWithText(sessionKey, text)
+	return newReplyContinuationService(b.deps.App()).continueClaudeSessionWithText(sessionKey, text)
 }
 
 func (b claudeConversationBackend) tryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
-	return newReplyContinuationService(b.app).tryClaudeReplyContinuation(msg, link, sessionKey, sess)
+	return newReplyContinuationService(b.deps.App()).tryClaudeReplyContinuation(msg, link, sessionKey, sess)
 }
 
 func (b claudeConversationBackend) startQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
-	return newClaudeSubmissionService(b.app).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	return newClaudeSubmissionService(b.deps.App()).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 }
