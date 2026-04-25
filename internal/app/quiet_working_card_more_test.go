@@ -185,7 +185,8 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 		},
 	}
 	boundary = prepareQuietWorkingCardBoundaryLocked(mixed)
-	if boundary.ReuseMessageID != "" || boundary.Op.MessageID != "patch-1" || boundary.Op.Body != "Read `quiet_mode.go`" || mixed.QuietWorking != nil {
+	expectedFencedBody := "````\nRead `quiet_mode.go`\n````"
+	if boundary.ReuseMessageID != "" || boundary.Op.MessageID != "patch-1" || boundary.Op.Body != expectedFencedBody || mixed.QuietWorking != nil {
 		t.Fatalf("prepareQuietWorkingCardBoundaryLocked(mixed) = %+v, stream=%+v", boundary, mixed)
 	}
 
