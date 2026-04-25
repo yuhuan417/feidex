@@ -18,6 +18,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type appUpgradeService struct {
+	app *App
+}
+func newAppUpgradeService(app *App) appUpgradeService {
+	return appUpgradeService{app: app}
+}
+
 const (
 	upgradeLocalBinaryPendingKind = "upgrade_local_binary"
 	upgradeCommandUsage           = "usage: /upgrade | /upgrade dev | /upgrade [VERSION] | /upgrade local | /upgrade path <PATH>"

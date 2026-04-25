@@ -14,6 +14,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type workspaceConfigService struct {
+	app *App
+}
+func newWorkspaceConfigService(app *App) workspaceConfigService {
+	return workspaceConfigService{app: app}
+}
+
 type workspaceSettingOption struct {
 	Value string
 	Label string

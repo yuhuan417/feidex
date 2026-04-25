@@ -9,6 +9,13 @@ import (
 	"feidex/internal/state"
 )
 
+type finalCardPatchService struct {
+	app *App
+}
+func newFinalCardPatchService(app *App) finalCardPatchService {
+	return finalCardPatchService{app: app}
+}
+
 const finalCardPatchTimeout = 15 * time.Second
 const finalCardPatchIdleRetention = 30 * time.Second
 

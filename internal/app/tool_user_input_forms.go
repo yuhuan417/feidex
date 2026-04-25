@@ -11,6 +11,13 @@ import (
 	"feidex/internal/state"
 )
 
+type pendingInputService struct {
+	app *App
+}
+func newPendingInputService(app *App) pendingInputService {
+	return pendingInputService{app: app}
+}
+
 type toolUserInputFormDrafts struct {
 	Values map[string]string
 	Multi  map[string][]string

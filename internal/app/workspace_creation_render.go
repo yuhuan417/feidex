@@ -9,6 +9,13 @@ import (
 	"feidex/internal/state"
 )
 
+type workspaceRenderService struct {
+	app *App
+}
+func newWorkspaceRenderService(app *App) workspaceRenderService {
+	return workspaceRenderService{app: app}
+}
+
 func (s workspaceRenderService) renderWorkspaceNewCard(sessionKey, requestID string, payload workspaceNewPayload) map[string]any {
 	if payload.Picker != nil {
 		card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, *payload.Picker)

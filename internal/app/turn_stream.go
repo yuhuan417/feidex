@@ -8,6 +8,13 @@ import (
 	"feidex/internal/state"
 )
 
+type turnStreamService struct {
+	app *App
+}
+func newTurnStreamService(app *App) turnStreamService {
+	return turnStreamService{app: app}
+}
+
 type turnStreamTracker struct {
 	mu      sync.Mutex
 	streams map[string]*turnStream

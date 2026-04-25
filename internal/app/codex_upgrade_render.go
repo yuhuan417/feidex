@@ -9,6 +9,13 @@ import (
 	"feidex/internal/state"
 )
 
+type upgradeRenderService struct {
+	app *App
+}
+func newUpgradeRenderService(app *App) upgradeRenderService {
+	return upgradeRenderService{app: app}
+}
+
 func (s upgradeRenderService) renderCodexUpgradeStatusCard(sessionKey string, view codexUpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
 	restart := view.Restart
@@ -193,7 +200,7 @@ func (s upgradeRenderService) renderCodexUpgradeFailedCard(sessionKey, errText s
 	return s.app.feishu.SimpleStatusCard("Codex 管理", "orange", menuCardBody("menu.codex_upgrade", body), codexUpgradeStatusButtons(sessionKey, false))
 }
 
-func (s upgradeRenderService) renderCodexUpgradeOperationCard(sessionKey string, snapshot codexUpgradeSnapshot) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradeOperationCard(sessionKey string, snapshot backendUpgradeSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"目标版本: `" + firstNonEmpty(snapshot.TargetVersion, "-") + "`",
@@ -229,7 +236,7 @@ func (s upgradeRenderService) renderCodexUpgradeOperationCard(sessionKey string,
 	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.codex_upgrade", strings.Join(lines, "\n")), buttons)
 }
 
-func (s upgradeRenderService) renderCodexRestartOperationCard(sessionKey string, snapshot codexRestartSnapshot) map[string]any {
+func (s upgradeRenderService) renderCodexRestartOperationCard(sessionKey string, snapshot backendRestartSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"阶段: `" + codexRestartPhaseText(snapshot.Phase) + "`",

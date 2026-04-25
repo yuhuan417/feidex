@@ -17,6 +17,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type skillsService struct {
+	app *App
+}
+func newSkillsService(app *App) skillsService {
+	return skillsService{app: app}
+}
+
 const (
 	skillConfigReloadArg = "reload"
 )

@@ -10,6 +10,13 @@ import (
 	"feidex/internal/state"
 )
 
+type pendingQueueService struct {
+	app *App
+}
+func newPendingQueueService(app *App) pendingQueueService {
+	return pendingQueueService{app: app}
+}
+
 const (
 	queueReactionEmoji   = "OneSecond"
 	typingReactionEmoji  = "THINKING"

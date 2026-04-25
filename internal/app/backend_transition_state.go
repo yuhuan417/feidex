@@ -2,6 +2,14 @@ package app
 
 import "strings"
 
+type runtimeStateService struct {
+	app *App
+}
+
+func newRuntimeStateService(app *App) runtimeStateService {
+	return runtimeStateService{app: app}
+}
+
 func (s runtimeStateService) beginBackendSwitchState(target string) {
 	if s.app == nil {
 		return

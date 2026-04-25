@@ -15,6 +15,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type autoRetryService struct {
+	app *App
+}
+func newAutoRetryService(app *App) autoRetryService {
+	return autoRetryService{app: app}
+}
+
 const (
 	autoRetryInitialDelay = 1 * time.Second
 	autoRetryMaxDelay     = 15 * time.Second

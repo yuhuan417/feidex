@@ -13,6 +13,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type reviewFormService struct {
+	app *App
+}
+func newReviewFormService(app *App) reviewFormService {
+	return reviewFormService{app: app}
+}
+
 func (s reviewFormService) renderReviewMenuCard(sessionKey string) map[string]any {
 	bodyLines := []string{
 		"在当前线程启动 inline review。",

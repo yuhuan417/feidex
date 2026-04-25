@@ -11,6 +11,13 @@ import (
 	"feidex/internal/state"
 )
 
+type backendUpgradeService struct {
+	app *App
+}
+func newBackendUpgradeService(app *App) backendUpgradeService {
+	return backendUpgradeService{app: app}
+}
+
 const (
 	codexUpgradePendingKind  = "codex_npm_upgrade"
 	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade | /codex restart"
@@ -29,8 +36,8 @@ type codexUpgradeView struct {
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
-	Snapshot      codexUpgradeSnapshot
-	Restart       codexRestartSnapshot
+	Snapshot      backendUpgradeSnapshot
+	Restart       backendRestartSnapshot
 }
 
 func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []string) error {

@@ -10,6 +10,13 @@ import (
 	"feidex/internal/state"
 )
 
+type replyContinuationService struct {
+	app *App
+}
+func newReplyContinuationService(app *App) replyContinuationService {
+	return replyContinuationService{app: app}
+}
+
 func (s replyContinuationService) replyRootTurnLink(msg *feishu.InboundMessage) *state.MessageLink {
 	if s.app == nil || s.app.store == nil || msg == nil {
 		return nil

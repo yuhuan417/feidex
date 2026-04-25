@@ -66,7 +66,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newMaintenanceStateService(a).codexMaintenanceTracker().upgrade = codexUpgradeSnapshot{Running: true}
+				newMaintenanceStateService(a).codexMaintenanceTracker().upgrade = backendUpgradeSnapshot{Running: true}
 			},
 			want: "当前正在执行 Codex 维护，请稍后再切换 backend",
 		},
@@ -83,7 +83,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "claude maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newMaintenanceStateService(a).claudeMaintenanceTracker().upgrade = claudeUpgradeSnapshot{Running: true}
+				newMaintenanceStateService(a).claudeMaintenanceTracker().upgrade = backendUpgradeSnapshot{Running: true}
 			},
 			want: "当前正在执行 Claude 维护，请稍后再切换 backend",
 		},

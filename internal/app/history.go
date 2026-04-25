@@ -13,6 +13,13 @@ import (
 	"feidex/internal/state"
 )
 
+type historyService struct {
+	app *App
+}
+func newHistoryService(app *App) historyService {
+	return historyService{app: app}
+}
+
 const historyPageSize = 50
 const historyCommandUsage = "/history | /history detail TURN_NUMBER"
 

@@ -15,6 +15,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type backendSelectionService struct {
+	app *App
+}
+func newBackendSelectionService(app *App) backendSelectionService {
+	return backendSelectionService{app: app}
+}
+
 var backendLookPath = exec.LookPath
 
 type availableBackend struct {

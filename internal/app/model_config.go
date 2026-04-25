@@ -12,6 +12,13 @@ import (
 	"feidex/internal/feishu"
 )
 
+type modelConfigService struct {
+	app *App
+}
+func newModelConfigService(app *App) modelConfigService {
+	return modelConfigService{app: app}
+}
+
 const modelConfigDefaultOptionValue = "__default__"
 const modelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default>"
 

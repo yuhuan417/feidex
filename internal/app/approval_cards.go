@@ -8,6 +8,13 @@ import (
 	"feidex/internal/feishu"
 )
 
+type outboundCardService struct {
+	app *App
+}
+func newOutboundCardService(app *App) outboundCardService {
+	return outboundCardService{app: app}
+}
+
 func (s outboundCardService) sendApprovalCard(kind string, requestID json.RawMessage, threadID, turnID, itemID, body string) {
 	newOutboundCardService(s.app).sendApprovalCardWithPayload(kind, requestID, threadID, turnID, itemID, body, nil)
 }

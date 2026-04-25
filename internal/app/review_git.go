@@ -7,6 +7,13 @@ import (
 	"feidex/internal/config"
 )
 
+type reviewGitService struct {
+	app *App
+}
+func newReviewGitService(app *App) reviewGitService {
+	return reviewGitService{app: app}
+}
+
 func (s reviewGitService) resolveReviewTarget(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
 	return appreview.NewGitService().ResolveTarget(cwd, target)
 }

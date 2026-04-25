@@ -92,7 +92,7 @@ func (s backendUpgradeService) completeClaudeUpgradeAction(action *feishu.CardAc
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级参数损坏"}}, nil
 	}
-	snapshot := claudeUpgradeSnapshot{
+	snapshot := backendUpgradeSnapshot{
 		Running:         true,
 		Phase:           "preflight",
 		Message:         "正在校验升级前置条件",

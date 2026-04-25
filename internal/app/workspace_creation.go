@@ -17,6 +17,13 @@ import (
 	"feidex/internal/state"
 )
 
+type workspaceManagementService struct {
+	app *App
+}
+func newWorkspaceManagementService(app *App) workspaceManagementService {
+	return workspaceManagementService{app: app}
+}
+
 type workspaceNewPayload = appworkspace.NewPayload
 type workspaceClonePayload = appworkspace.ClonePayload
 type workspaceCloneTakeoverError = appworkspace.CloneTakeoverError

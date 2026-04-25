@@ -29,8 +29,8 @@ type claudeUpgradeView struct {
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
-	Snapshot      claudeUpgradeSnapshot
-	Restart       claudeRestartSnapshot
+	Snapshot      backendUpgradeSnapshot
+	Restart       backendRestartSnapshot
 }
 
 func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []string) error {

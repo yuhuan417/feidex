@@ -13,6 +13,13 @@ import (
 	"feidex/internal/state"
 )
 
+type workspaceThreadService struct {
+	app *App
+}
+func newWorkspaceThreadService(app *App) workspaceThreadService {
+	return workspaceThreadService{app: app}
+}
+
 type workspaceThreadBinding struct {
 	ThreadID string
 	Name     string

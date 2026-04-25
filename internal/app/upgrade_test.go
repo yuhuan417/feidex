@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"feidex/internal/claudeinstall"
 	"feidex/internal/codexinstall"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -142,7 +144,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	newMaintenanceStateService(a).beginCodexUpgrade(codexUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	newMaintenanceStateService(a).beginCodexUpgrade(backendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := handleCommand(a, msg, "/status"); err != nil {
@@ -196,7 +198,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !newMaintenanceStateService(a).beginCodexUpgrade(codexUpgradeSnapshot{
+	if !newMaintenanceStateService(a).beginCodexUpgrade(backendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -284,7 +286,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !newMaintenanceStateService(a).beginCodexUpgrade(codexUpgradeSnapshot{
+	if !newMaintenanceStateService(a).beginCodexUpgrade(backendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -634,4 +636,456 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
+}
+
+type fakeClaudeInstallManager struct {
+	probe       claudeinstall.Probe
+	probeErr    error
+	latest      string
+	latestErr   error
+	installErrs map[string]error
+	installs    []string
+}
+
+func (f *fakeClaudeInstallManager) Probe(context.Context) (claudeinstall.Probe, error) {
+	return f.probe, f.probeErr
+}
+
+func (f *fakeClaudeInstallManager) LatestVersion(context.Context) (string, error) {
+	return f.latest, f.latestErr
+}
+
+func (f *fakeClaudeInstallManager) InstallVersion(_ context.Context, version string) error {
+	f.installs = append(f.installs, version)
+	if f.installErrs != nil {
+		return f.installErrs[version]
+	}
+	return nil
+}
+
+func TestCommandClaudeRendersStatusCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newClaudeInstallManager
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	defer func() { newClaudeInstallManager = origManager }()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newBackendUpgradeService(a).commandClaude(msg, nil); err != nil {
+		t.Fatalf("commandClaude() error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
+	}
+	body := cardMarkdownContent(t, replyCards[0])
+	for _, want := range []string{"当前版本: `1.0.0`", "最新稳定版: `未检查`", "状态: `等待检查`", "smoke test: `start + init`"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("status card body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      false,
+			Reason:         "当前 claude 所属安装目录与 npm global prefix 不一致",
+		},
+	}
+	origManager := newClaudeInstallManager
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	defer func() { newClaudeInstallManager = origManager }()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newBackendUpgradeService(a).commandClaude(msg, nil); err != nil {
+		t.Fatalf("commandClaude() error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
+	}
+	body := cardMarkdownContent(t, replyCards[0])
+	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 claude 所属安装目录与 npm global prefix 不一致"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("status card body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+		latest: "1.1.0",
+	}
+	origManager := newClaudeInstallManager
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	defer func() { newClaudeInstallManager = origManager }()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newBackendUpgradeService(a).commandClaude(msg, []string{"upgrade"}); err != nil {
+		t.Fatalf("commandClaude(upgrade) error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
+	}
+	body := cardMarkdownContent(t, replyCards[0])
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `1.1.0`", "失败处理: 自动回滚到 `1.0.0`"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("confirm card body = %q, want %q", body, want)
+		}
+	}
+	pending := appState(a).pendingRequests()
+	if len(pending) != 1 || pending[0] == nil || pending[0].Kind != claudeUpgradePendingKind {
+		t.Fatalf("pending requests = %+v", pending)
+	}
+	if pending[0].FeishuMsgID != "reply-card-id" {
+		t.Fatalf("pending.FeishuMsgID = %q, want reply-card-id", pending[0].FeishuMsgID)
+	}
+}
+
+func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.claude = &fakeClaudeCore{}
+	newMaintenanceStateService(a).beginClaudeUpgrade(backendUpgradeSnapshot{Phase: "preflight", Message: "running"})
+
+	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := handleCommand(a, msg, "/status"); err != nil {
+		t.Fatalf("handleCommand(/status) error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
+	}
+	if err := handleCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
+		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
+	}
+
+	router := newFeishuEventRouter(a)
+	err := router.processMessage(&feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "hello"})
+	if err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
+		t.Fatalf("processMessage(non-local) error = %v, want maintenance block", err)
+	}
+}
+
+func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newClaudeInstallManager
+	origSmoke := runClaudeSmokeTest
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
+	defer func() {
+		newClaudeInstallManager = origManager
+		runClaudeSmokeTest = origSmoke
+	}()
+
+	if !newMaintenanceStateService(a).beginClaudeUpgrade(backendUpgradeSnapshot{
+		Phase:           "preflight",
+		CurrentVersion:  "1.0.0",
+		PreviousVersion: "1.0.0",
+		TargetVersion:   "1.1.0",
+	}) {
+		t.Fatal("beginClaudeUpgrade() should succeed")
+	}
+	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
+		CurrentVersion: "1.0.0",
+		TargetVersion:  "1.1.0",
+	})
+
+	if got := manager.installs; len(got) != 1 || got[0] != "1.1.0" {
+		t.Fatalf("install versions = %#v", got)
+	}
+	if !claude.closed {
+		t.Fatal("expected live Claude runtime to be closed after successful promotion")
+	}
+	snapshot := newMaintenanceStateService(a).claudeUpgradeState()
+	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
+		t.Fatalf("final snapshot = %+v", snapshot)
+	}
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
+		t.Fatal("expected progress cards to be patched")
+	}
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
+	if !strings.Contains(body, "结果: `success`") {
+		t.Fatalf("final patched card body = %q", body)
+	}
+}
+
+func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newClaudeInstallManager
+	origSmoke := runClaudeSmokeTest
+	smokeRuns := 0
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	runClaudeSmokeTest = func(_ *App, _ context.Context) error {
+		smokeRuns++
+		if smokeRuns == 1 {
+			return errString("boom")
+		}
+		return nil
+	}
+	defer func() {
+		newClaudeInstallManager = origManager
+		runClaudeSmokeTest = origSmoke
+	}()
+
+	if !newMaintenanceStateService(a).beginClaudeUpgrade(backendUpgradeSnapshot{
+		Phase:           "preflight",
+		CurrentVersion:  "1.0.0",
+		PreviousVersion: "1.0.0",
+		TargetVersion:   "1.1.0",
+	}) {
+		t.Fatal("beginClaudeUpgrade() should succeed")
+	}
+	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
+		CurrentVersion: "1.0.0",
+		TargetVersion:  "1.1.0",
+	})
+
+	if got := manager.installs; len(got) != 2 || got[0] != "1.1.0" || got[1] != "1.0.0" {
+		t.Fatalf("install versions = %#v", got)
+	}
+	if claude.closed {
+		t.Fatal("live Claude runtime should not be closed when upgrade rolls back before promotion")
+	}
+	snapshot := newMaintenanceStateService(a).claudeUpgradeState()
+	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
+		t.Fatalf("final snapshot = %+v", snapshot)
+	}
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
+		t.Fatal("expected rollback progress cards to be patched")
+	}
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
+	if !strings.Contains(body, "结果: `rolled_back`") {
+		t.Fatalf("rollback patched card body = %q", body)
+	}
+}
+
+func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newClaudeInstallManager
+	origSmoke := runClaudeSmokeTest
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
+	defer func() {
+		newClaudeInstallManager = origManager
+		runClaudeSmokeTest = origSmoke
+	}()
+
+	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newBackendUpgradeService(a).commandClaude(msg, []string{"restart"}); err != nil {
+		t.Fatalf("commandClaude(restart) error = %v", err)
+	}
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 1 {
+		t.Fatalf("replyCards = %d, want 1", len(replyCards))
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !newMaintenanceStateService(a).claudeRestartState().Running {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !claude.closed {
+		t.Fatal("expected live runtime to be closed during restart")
+	}
+	snapshot := newMaintenanceStateService(a).claudeRestartState()
+	if snapshot.Running || snapshot.Result != "success" {
+		t.Fatalf("restart snapshot = %+v", snapshot)
+	}
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
+		t.Fatal("expected restart progress card patches")
+	}
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
+	if !strings.Contains(body, "结果: `success`") {
+		t.Fatalf("restart final card body = %q", body)
+	}
+}
+
+func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	manager := &fakeClaudeInstallManager{
+		probe: claudeinstall.Probe{
+			Command:        "claude",
+			CommandPath:    "/usr/local/bin/claude",
+			NPMPath:        "/usr/bin/npm",
+			CurrentVersion: "1.0.0",
+			Supported:      true,
+		},
+	}
+	origManager := newClaudeInstallManager
+	origSmoke := runClaudeSmokeTest
+	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
+	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return errString("restart-boom") }
+	defer func() {
+		newClaudeInstallManager = origManager
+		runClaudeSmokeTest = origSmoke
+	}()
+
+	snapshot, err := newBackendUpgradeService(a).beginClaudeRestartOperation()
+	if err != nil {
+		t.Fatalf("beginClaudeRestartOperation() error = %v", err)
+	}
+	if !snapshot.Running {
+		t.Fatalf("beginClaudeRestartOperation() = %+v", snapshot)
+	}
+	newBackendUpgradeService(a).runClaudeRestartOperation("msg-1", "sess-1")
+	if claude.closed {
+		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
+	}
+	state := newMaintenanceStateService(a).claudeRestartState()
+	if state.Running || state.Result != "failed" {
+		t.Fatalf("restart state = %+v", state)
+	}
+	patchedCards := ff.patchedCardsSnapshot()
+	if len(patchedCards) == 0 {
+		t.Fatal("expected restart failure patches")
+	}
+	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
+	if !strings.Contains(body, "结果: `failed`") {
+		t.Fatalf("restart failure card body = %q", body)
+	}
+}
+
+func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	origSmoke := runClaudeSmokeTest
+	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
+	defer func() { runClaudeSmokeTest = origSmoke }()
+
+	switched, err := newBackendUpgradeService(a).refreshClaudeRuntimeAfterMaintenance(context.Background())
+	if err != nil {
+		t.Fatalf("refreshClaudeRuntimeAfterMaintenance() error = %v", err)
+	}
+	if switched {
+		t.Fatal("refreshClaudeRuntimeAfterMaintenance() switched runtime on non-Claude backend")
+	}
+	if claude.closed {
+		t.Fatal("existing Claude runtime should not be closed on non-Claude backend")
+	}
+}
+
+func TestClaudeSmokeTestUsesInitializeForIdleStartup(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Claude.Command = writeFakeClaudeSmokeScript(t, `#!/bin/sh
+while IFS= read -r line; do
+  rid=$(printf '%s\n' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"subtype":"initialize"'*)
+      printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$rid"
+      while IFS= read -r _; do :; done
+      exit 0
+      ;;
+  esac
+done
+`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := newBackendUpgradeService(a).claudeSmokeTest(ctx); err != nil {
+		t.Fatalf("claudeSmokeTest() error = %v", err)
+	}
+}
+
+func TestClaudeSmokeTestFailsWhenSessionExitsAfterInitialize(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Claude.Command = writeFakeClaudeSmokeScript(t, `#!/bin/sh
+while IFS= read -r line; do
+  rid=$(printf '%s\n' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+  case "$line" in
+    *'"subtype":"initialize"'*)
+      printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$rid"
+      exit 0
+      ;;
+  esac
+done
+`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := newBackendUpgradeService(a).claudeSmokeTest(ctx)
+	if err == nil || !strings.Contains(err.Error(), "exited after initialize") {
+		t.Fatalf("claudeSmokeTest() error = %v, want exited after initialize", err)
+	}
+}
+
+func writeFakeClaudeSmokeScript(t *testing.T, script string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-claude-smoke.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake smoke script) error = %v", err)
+	}
+	return path
 }

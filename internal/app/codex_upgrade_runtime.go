@@ -23,7 +23,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 		newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard,
 		newMaintenanceStateService(s.app).updateCodexUpgrade,
 		newMaintenanceStateService(s.app).finishCodexUpgrade,
-		func(snapshot *codexUpgradeSnapshot, phase, message string) {
+		func(snapshot *backendUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
 		},
@@ -42,7 +42,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 		RefreshRuntime:    newBackendUpgradeService(s.app).refreshCodexRuntimeAfterMaintenance,
 		RuntimeBusyReason: newMaintenanceStateService(s.app).codexUpgradeRuntimeBusyReason,
 		RecordVersions: func(previousVersion, targetVersion string) {
-			newMaintenanceStateService(s.app).updateCodexUpgrade(func(snapshot *codexUpgradeSnapshot) {
+			newMaintenanceStateService(s.app).updateCodexUpgrade(func(snapshot *backendUpgradeSnapshot) {
 				snapshot.CurrentVersion = previousVersion
 				snapshot.PreviousVersion = previousVersion
 				snapshot.TargetVersion = targetVersion
@@ -116,18 +116,18 @@ func (s backendUpgradeService) startCodexRestartFromMessage(msg *feishu.InboundM
 	)
 }
 
-func (s backendUpgradeService) beginCodexRestartOperation() (codexRestartSnapshot, error) {
+func (s backendUpgradeService) beginCodexRestartOperation() (backendRestartSnapshot, error) {
 	if err := newMaintenanceStateService(s.app).ensureCodexUpgradeReady(); err != nil {
-		return codexRestartSnapshot{}, err
+		return backendRestartSnapshot{}, err
 	}
-	snapshot := codexRestartSnapshot{
+	snapshot := backendRestartSnapshot{
 		Running:        true,
 		Phase:          "preflight",
 		Message:        "正在校验重启前置条件",
 		CurrentVersion: firstNonEmpty(newMaintenanceStateService(s.app).codexUpgradeState().CurrentVersion, newMaintenanceStateService(s.app).codexRestartState().CurrentVersion),
 	}
 	if !newMaintenanceStateService(s.app).beginCodexRestart(snapshot) {
-		return codexRestartSnapshot{}, errString("Codex 正在维护中，请稍后再试")
+		return backendRestartSnapshot{}, errString("Codex 正在维护中，请稍后再试")
 	}
 	return newMaintenanceStateService(s.app).codexRestartState(), nil
 }
@@ -141,7 +141,7 @@ func (s backendUpgradeService) runCodexRestartOperation(messageID, sessionKey st
 		newUpgradeRenderService(s.app).renderCodexRestartOperationCard,
 		newMaintenanceStateService(s.app).updateCodexRestart,
 		newMaintenanceStateService(s.app).finishCodexRestart,
-		func(snapshot *codexRestartSnapshot, phase, message string) {
+		func(snapshot *backendRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
 		},
@@ -155,7 +155,7 @@ func (s backendUpgradeService) runCodexRestartOperation(messageID, sessionKey st
 		finalize("failed", "重启前检查失败: "+err.Error())
 		return
 	}
-	newMaintenanceStateService(s.app).updateCodexRestart(func(snapshot *codexRestartSnapshot) {
+	newMaintenanceStateService(s.app).updateCodexRestart(func(snapshot *backendRestartSnapshot) {
 		snapshot.CurrentVersion = firstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
 	})
 	if reason := newMaintenanceStateService(s.app).codexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {

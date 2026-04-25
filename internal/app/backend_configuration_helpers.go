@@ -13,6 +13,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type backendConfigurationService struct {
+	app *App
+}
+func newBackendConfigurationService(app *App) backendConfigurationService {
+	return backendConfigurationService{app: app}
+}
+
 func (s backendConfigurationService) backendWorkspaceCommandUsage() string {
 	return backendConfiguration(s.app).workspaceCommandUsage()
 }

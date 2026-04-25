@@ -192,7 +192,7 @@ func (s upgradeRenderService) renderClaudeUpgradeFailedCard(sessionKey, errText 
 	return s.app.feishu.SimpleStatusCard("Claude 管理", "orange", menuCardBody("menu.claude_upgrade", body), claudeUpgradeStatusButtons(sessionKey, false))
 }
 
-func (s upgradeRenderService) renderClaudeUpgradeOperationCard(sessionKey string, snapshot claudeUpgradeSnapshot) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradeOperationCard(sessionKey string, snapshot backendUpgradeSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"目标版本: `" + firstNonEmpty(snapshot.TargetVersion, "-") + "`",
@@ -228,7 +228,7 @@ func (s upgradeRenderService) renderClaudeUpgradeOperationCard(sessionKey string
 	return s.app.feishu.SimpleStatusCard(title, color, menuCardBody("menu.claude_upgrade", strings.Join(lines, "\n")), buttons)
 }
 
-func (s upgradeRenderService) renderClaudeRestartOperationCard(sessionKey string, snapshot claudeRestartSnapshot) map[string]any {
+func (s upgradeRenderService) renderClaudeRestartOperationCard(sessionKey string, snapshot backendRestartSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + firstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"阶段: `" + claudeRestartPhaseText(snapshot.Phase) + "`",

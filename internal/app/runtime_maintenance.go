@@ -12,6 +12,13 @@ import (
 	"feidex/internal/state"
 )
 
+type runtimeMaintenanceService struct {
+	app *App
+}
+func newRuntimeMaintenanceService(app *App) runtimeMaintenanceService {
+	return runtimeMaintenanceService{app: app}
+}
+
 const attachmentRetention = 7 * 24 * time.Hour
 const artifactRetention = 3 * 24 * time.Hour
 

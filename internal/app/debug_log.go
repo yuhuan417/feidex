@@ -11,6 +11,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type debugService struct {
+	app *App
+}
+func newDebugService(app *App) debugService {
+	return debugService{app: app}
+}
+
 const (
 	debugLogRecentLimit   = 200
 	debugLogCardMaxChars  = 12000

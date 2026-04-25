@@ -52,8 +52,7 @@ type App struct {
 	turnBindings      *turnBindingTracker
 	finalCardPatches  *finalCardPatchTracker
 	pendingSkills     *pendingSkillTracker
-	codexMaintenance  *codexMaintenanceTracker
-	claudeMaintenance *claudeMaintenanceTracker
+	maintenanceTrackers map[backendKey]*backendMaintenanceTracker
 }
 
 type turnBinding struct {
@@ -120,8 +119,6 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		finalCardPatches:    newFinalCardPatchTracker(),
 		autoRetries:         newAutoRetryTracker(),
 		pendingSkills:       newPendingSkillTracker(),
-		codexMaintenance:    newCodexMaintenanceTracker(),
-		claudeMaintenance:   newClaudeMaintenanceTracker(),
 	}
 	if backend != "" {
 		handle, err := buildBackendRuntimeHandle(app, backend)
