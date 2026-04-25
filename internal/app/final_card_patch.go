@@ -32,10 +32,10 @@ func (s finalCardPatchService) finalCardPatchTracker() *finalCardPatchTracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.finalCardPatches == nil {
-		s.app.finalCardPatches = newFinalCardPatchTracker()
+	if s.app.trackers.finalCardPatches == nil {
+		s.app.trackers.finalCardPatches = newFinalCardPatchTracker()
 	}
-	return s.app.finalCardPatches
+	return s.app.trackers.finalCardPatches
 }
 
 type finalCardPatchState struct {

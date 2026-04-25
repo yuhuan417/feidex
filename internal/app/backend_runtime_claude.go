@@ -61,10 +61,6 @@ func (claudeRuntimeFacade) conversationBackend(a *App) conversationBackendFacade
 	return claudeConversationBackend{app: a}
 }
 
-func (claudeRuntimeFacade) configuration(a *App) backendConfigurationFacade {
-	return claudeBackendConfigurationFacade{app: a}
-}
-
 func (claudeRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
 	return claudeServerRequestAdapter{app: a}
 }

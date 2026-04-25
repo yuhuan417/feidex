@@ -58,13 +58,13 @@ func (s maintenanceStateService) maintenanceTracker(key backendKey) *backendMain
 	if s.app == nil {
 		return nil
 	}
-	if s.app.maintenanceTrackers == nil {
-		s.app.maintenanceTrackers = make(map[backendKey]*backendMaintenanceTracker)
+	if s.app.trackers.maintenanceTrackers == nil {
+		s.app.trackers.maintenanceTrackers = make(map[backendKey]*backendMaintenanceTracker)
 	}
-	tracker := s.app.maintenanceTrackers[key]
+	tracker := s.app.trackers.maintenanceTrackers[key]
 	if tracker == nil {
 		tracker = newBackendMaintenanceTracker()
-		s.app.maintenanceTrackers[key] = tracker
+		s.app.trackers.maintenanceTrackers[key] = tracker
 	}
 	return tracker
 }

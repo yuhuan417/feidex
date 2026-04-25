@@ -9,7 +9,16 @@ import (
 	"feidex/internal/state"
 )
 
-func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
+// turnLifecycleService handles turn binding, completion, and notification dispatch.
+type turnLifecycleService struct {
+	app *App
+}
+
+func newTurnLifecycleService(app *App) *turnLifecycleService {
+	return &turnLifecycleService{app: app}
+}
+
+func (w *turnLifecycleService) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
 	a := w.app
 	appState := appState(a)
 	threadID = strings.TrimSpace(threadID)
@@ -54,7 +63,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionTurn(threadID, turnID string
 	return true
 }
 
-func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string) {
+func (w *turnLifecycleService) onTurnStartedNotification(threadID, turnID string) {
 	a := w.app
 	appState := appState(a)
 	threadID = strings.TrimSpace(threadID)
@@ -150,7 +159,7 @@ func (w *lifecycleCoordinator) onTurnStartedNotification(threadID, turnID string
 	logSessionState("turn started notification session snapshot", sessionKey, appState.session(sessionKey))
 }
 
-func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
+func (w *turnLifecycleService) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
 	a := w.app
 	appState := appState(a)
 	threadID = strings.TrimSpace(threadID)
@@ -227,7 +236,7 @@ func (w *lifecycleCoordinator) bindPendingSubmissionForTurnCompletion(threadID, 
 	return sessionKey, sub
 }
 
-func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
+func (w *turnLifecycleService) finishTurn(threadID, turnID, status string) {
 	a := w.app
 	appState := appState(a)
 	sessionKey, sub := findSubmissionByTurn(a, threadID, turnID)
@@ -330,7 +339,7 @@ func (w *lifecycleCoordinator) finishTurn(threadID, turnID, status string) {
 			"thread_id", updatedSess.ActiveThreadID,
 		)
 		runAsync(a, func() {
-			w.startNextSubmissionAsync(sessionKey, "finishTurn")
+			newSubmissionCoordinator(w.app).startNextSubmissionAsync(sessionKey, "finishTurn")
 		})
 	}
 	newRuntimeMaintenanceService(a).cleanupSubmissionRuntimeState(sub)

@@ -45,13 +45,19 @@ type App struct {
 	backendSwitching       bool
 	backendSwitchTarget    string
 
-	turnStreams       *turnStreamTracker
-	turnItems         *turnItemTracker
-	workspaceCloneOps *workspaceCloneTracker
-	liveThreads       *liveThreadTracker
-	turnBindings      *turnBindingTracker
-	finalCardPatches  *finalCardPatchTracker
-	pendingSkills     *pendingSkillTracker
+	liveThreads *liveThreadTracker
+	trackers    appTrackers
+}
+
+// appTrackers bundles per-service runtime trackers that are lazily initialized
+// on first access. Each tracker is consumed by exactly one service type.
+type appTrackers struct {
+	turnStreams         *turnStreamTracker
+	turnItems           *turnItemTracker
+	turnBindings        *turnBindingTracker
+	workspaceCloneOps   *workspaceCloneTracker
+	finalCardPatches    *finalCardPatchTracker
+	pendingSkills       *pendingSkillTracker
 	maintenanceTrackers map[backendKey]*backendMaintenanceTracker
 }
 
@@ -110,15 +116,17 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		backend:             backend,
 		feishu:              feishuClient,
 		started:             time.Now(),
-		deduper:             newInboundDeduper(),
-		turnStreams:         newTurnStreamTracker(),
-		turnItems:           newTurnItemTracker(),
-		workspaceCloneOps:   newWorkspaceCloneTracker(),
-		liveThreads:         newLiveThreadTracker(),
-		turnBindings:        newTurnBindingTracker(),
-		finalCardPatches:    newFinalCardPatchTracker(),
-		autoRetries:         newAutoRetryTracker(),
-		pendingSkills:       newPendingSkillTracker(),
+		deduper:      newInboundDeduper(),
+		liveThreads:  newLiveThreadTracker(),
+		autoRetries:  newAutoRetryTracker(),
+		trackers: appTrackers{
+			turnStreams:      newTurnStreamTracker(),
+			turnItems:        newTurnItemTracker(),
+			workspaceCloneOps: newWorkspaceCloneTracker(),
+			turnBindings:     newTurnBindingTracker(),
+			finalCardPatches: newFinalCardPatchTracker(),
+			pendingSkills:    newPendingSkillTracker(),
+		},
 	}
 	if backend != "" {
 		handle, err := buildBackendRuntimeHandle(app, backend)
@@ -225,11 +233,11 @@ func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
 }
 
 func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
-	return newLifecycleCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot)
+	return newSubmissionCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot)
 }
 
 func startNextSubmission(a *App, sessionKey string) error {
-	return newLifecycleCoordinator(a).startNextSubmission(sessionKey)
+	return newSubmissionCoordinator(a).startNextSubmission(sessionKey)
 }
 
 func buildTurnSandboxPolicy(mode string) map[string]any {

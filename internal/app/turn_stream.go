@@ -28,10 +28,10 @@ func (s turnStreamService) turnStreamTracker() *turnStreamTracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.turnStreams == nil {
-		s.app.turnStreams = newTurnStreamTracker()
+	if s.app.trackers.turnStreams == nil {
+		s.app.trackers.turnStreams = newTurnStreamTracker()
 	}
-	return s.app.turnStreams
+	return s.app.trackers.turnStreams
 }
 
 type turnStream struct {
@@ -116,7 +116,7 @@ func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnI
 	if s.app == nil {
 		return
 	}
-	newLifecycleCoordinator(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
+	newTurnLifecycleService(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
 	item = newRuntimeStateService(s.app).completeTurnItemState(threadID, turnID, itemID, item)
 	itemID = strings.TrimSpace(firstNonEmpty(strings.TrimSpace(itemID), stringValue(item["id"])))
 	if completeStandaloneCompactItem(s.app, threadID, turnID, item) {

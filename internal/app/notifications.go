@@ -15,7 +15,7 @@ func onThreadTokenUsageUpdated(a *App, threadID, turnID string, usage codexrpc.T
 }
 
 func onTurnStartedNotification(a *App, threadID, turnID string) {
-	newLifecycleCoordinator(a).onTurnStartedNotification(threadID, turnID)
+	newTurnLifecycleService(a).onTurnStartedNotification(threadID, turnID)
 }
 
 func handleServerRequest(a *App, req codexrpc.RequestEnvelope) {
@@ -43,9 +43,9 @@ func onMcpElicitationRequest(a *App, req codexrpc.RequestEnvelope) {
 }
 
 func finishTurn(a *App, threadID, turnID, status string) {
-	newLifecycleCoordinator(a).finishTurn(threadID, turnID, status)
+	newTurnLifecycleService(a).finishTurn(threadID, turnID, status)
 }
 
 func startNextSubmissionAsync(a *App, sessionKey, source string) {
-	newLifecycleCoordinator(a).startNextSubmissionAsync(sessionKey, source)
+	newSubmissionCoordinator(a).startNextSubmissionAsync(sessionKey, source)
 }

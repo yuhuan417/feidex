@@ -51,7 +51,6 @@ type backendRuntimeFacade interface {
 	beginStartupRecoveryScope(a *App) func()
 	reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session
 	conversationBackend(a *App) conversationBackendFacade
-	configuration(a *App) backendConfigurationFacade
 	serverRequestAdapter(a *App) serverRequestBackendAdapter
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error

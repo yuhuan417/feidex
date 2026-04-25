@@ -82,7 +82,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := &App{store: store, turnStreams: newTurnStreamTracker()}
+	a := &App{store: store, trackers: appTrackers{turnStreams: newTurnStreamTracker()}}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",

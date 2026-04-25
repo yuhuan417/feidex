@@ -11,7 +11,16 @@ import (
 	"feidex/internal/state"
 )
 
-func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+// claudeSubmissionService handles Claude-specific submission startup, retry, and rollback.
+type claudeSubmissionService struct {
+	app *App
+}
+
+func newClaudeSubmissionService(app *App) *claudeSubmissionService {
+	return &claudeSubmissionService{app: app}
+}
+
+func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := w.app
 	appState := appState(a)
 	if a == nil || a.claude == nil {
@@ -20,7 +29,7 @@ func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessio
 		if sess != nil {
 			threadID = strings.TrimSpace(sess.ActiveThreadID)
 		}
-		w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
+		newSubmissionCoordinator(w.app).handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
 		slog.Warn("Claude submission start skipped because runtime is unavailable",
 			"session_key", sessionKey,
 			"submission_id", func() string {
@@ -58,7 +67,7 @@ func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessio
 	prompt := buildClaudePrompt(sub)
 	if strings.TrimSpace(prompt) == "" {
 		err := fmt.Errorf("submission %q has no input", sub.ID)
-		w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
+		newSubmissionCoordinator(w.app).handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
 		return err
 	}
 
@@ -84,7 +93,7 @@ func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessio
 		ensureCancel()
 	}
 	if err != nil {
-		w.handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
+		newSubmissionCoordinator(w.app).handleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
 		slog.Error("Claude session ensure failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -125,7 +134,7 @@ func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessio
 		}
 	}
 	if err != nil {
-		w.handleSubmissionStartFailure(sessionKey, claudeThreadID, sub, err, notifyFailure)
+		newSubmissionCoordinator(w.app).handleSubmissionStartFailure(sessionKey, claudeThreadID, sub, err, notifyFailure)
 		slog.Error("Claude turn start failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -146,7 +155,7 @@ func (w *lifecycleCoordinator) startNextClaudeSubmissionWithFailureNotice(sessio
 	return nil
 }
 
-func (w *lifecycleCoordinator) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
+func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
 	a := w.app
 	appState := appState(a)
 	if a == nil || a.claude == nil {
@@ -177,7 +186,7 @@ func (w *lifecycleCoordinator) startClaudeSubmissionAttempt(sessionKey string, s
 	return updatedSess, turnID, nil
 }
 
-func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string) (*state.Session, *state.Submission, error) {
+func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string) (*state.Session, *state.Submission, error) {
 	a := w.app
 	appState := appState(a)
 	submissionID := ""
@@ -247,7 +256,7 @@ func (w *lifecycleCoordinator) rollbackClaudeSubmissionStartState(sessionKey str
 	return updatedSess, refreshedSub, nil
 }
 
-func (w *lifecycleCoordinator) bindClaudeSubmissionStartState(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, turnID string) (*state.Session, error) {
+func (w *claudeSubmissionService) bindClaudeSubmissionStartState(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, turnID string) (*state.Session, error) {
 	a := w.app
 	appState := appState(a)
 	setSessionThreadContext(sess, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), truncate(sub.InputText, 48)))

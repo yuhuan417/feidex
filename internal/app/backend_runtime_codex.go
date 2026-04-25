@@ -47,10 +47,6 @@ func (codexRuntimeFacade) conversationBackend(a *App) conversationBackendFacade 
 	return codexConversationBackend{app: a}
 }
 
-func (codexRuntimeFacade) configuration(a *App) backendConfigurationFacade {
-	return codexBackendConfigurationFacade{app: a}
-}
-
 func (codexRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
 	return codexServerRequestAdapter{app: a}
 }

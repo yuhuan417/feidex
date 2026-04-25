@@ -1,10 +1,10 @@
 package app
 
-// lifecycleCoordinator owns submission queueing, turn startup, and turn completion.
-type lifecycleCoordinator struct {
+// submissionCoordinator owns submission queueing and dispatching to backends.
+type submissionCoordinator struct {
 	app *App
 }
 
-func newLifecycleCoordinator(app *App) *lifecycleCoordinator {
-	return &lifecycleCoordinator{app: app}
+func newSubmissionCoordinator(app *App) *submissionCoordinator {
+	return &submissionCoordinator{app: app}
 }

@@ -360,10 +360,10 @@ func (s skillsService) pendingSkillTracker() *pendingSkillTracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.pendingSkills == nil {
-		s.app.pendingSkills = newPendingSkillTracker()
+	if s.app.trackers.pendingSkills == nil {
+		s.app.trackers.pendingSkills = newPendingSkillTracker()
 	}
-	return s.app.pendingSkills
+	return s.app.trackers.pendingSkills
 }
 
 func (s skillsService) sessionPendingSkill(sessionKey string) (state.SubmissionSkill, bool) {

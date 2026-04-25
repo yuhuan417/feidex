@@ -449,7 +449,7 @@ func (s autoRetryService) startAutoRetrySubmission(sessionKey string, sess *stat
 		return nil, err
 	}
 	sub.ID = id
-	if err := conversationBackend(s.app).startQueuedSubmission(newLifecycleCoordinator(s.app), sessionKey, sess, sub, ws, false); err != nil {
+	if err := conversationBackend(s.app).startQueuedSubmission(sessionKey, sess, sub, ws, false); err != nil {
 		if current := appState(s.app).submission(sub.ID); current != nil {
 			sub = current
 		}

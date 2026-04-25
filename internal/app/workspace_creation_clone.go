@@ -111,10 +111,10 @@ func (s workspaceManagementService) workspaceCloneTracker() *workspaceCloneTrack
 	if s.app == nil {
 		return nil
 	}
-	if s.app.workspaceCloneOps == nil {
-		s.app.workspaceCloneOps = newWorkspaceCloneTracker()
+	if s.app.trackers.workspaceCloneOps == nil {
+		s.app.trackers.workspaceCloneOps = newWorkspaceCloneTracker()
 	}
-	return s.app.workspaceCloneOps
+	return s.app.trackers.workspaceCloneOps
 }
 
 type workspaceCloneOperation struct {

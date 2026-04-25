@@ -19,10 +19,10 @@ func (s runtimeStateService) turnItemTracker() *turnItemTracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.turnItems == nil {
-		s.app.turnItems = newTurnItemTracker()
+	if s.app.trackers.turnItems == nil {
+		s.app.trackers.turnItems = newTurnItemTracker()
 	}
-	return s.app.turnItems
+	return s.app.trackers.turnItems
 }
 
 type turnItemState struct {
@@ -47,7 +47,7 @@ func (s runtimeStateService) noteTurnItemStarted(threadID, turnID string, item m
 	if s.app == nil || item == nil {
 		return
 	}
-	newLifecycleCoordinator(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
+	newTurnLifecycleService(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
 	itemID := strings.TrimSpace(stringValue(item["id"]))
 	key := turnItemStateKey(turnID, itemID)
 	if key == "" {

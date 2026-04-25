@@ -36,8 +36,9 @@ func (r *feishuEventRouter) handleMessage(msg *feishu.InboundMessage) {
 			a.deduper.Release(msg.MessageID)
 		}
 	}()
-	newRuntimeStateService(a).beginFrontendMessageTraffic()
-	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
+	rss := newRuntimeStateService(a)
+	rss.beginFrontendMessageTraffic()
+	defer rss.finishFrontendMessageTraffic()
 	markHandled := func() {
 		if a.deduper != nil {
 			a.deduper.MarkDone(msg.MessageID)
@@ -101,13 +102,15 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if err := backendMaintenanceBlocksInboundMessage(a); err != nil {
 		return err
 	}
-	replyLink := newReplyContinuationService(a).replyRootTurnLink(msg)
+	rcs := newReplyContinuationService(a)
+	replyLink := rcs.replyRootTurnLink(msg)
 	targetSessionKey := makeSessionKey(a, msg)
 	if replyLink != nil {
-		targetSessionKey = newReplyContinuationService(a).sessionKeyForInboundMessage(msg, replyLink)
+		targetSessionKey = rcs.sessionKeyForInboundMessage(msg, replyLink)
 	}
-	if newPendingQueueService(a).shouldStageInboundImages(msg) {
-		if err := newPendingQueueService(a).stageInboundImagesForSession(msg, makeSessionKey(a, msg)); err != nil {
+	pqs := newPendingQueueService(a)
+	if pqs.shouldStageInboundImages(msg) {
+		if err := pqs.stageInboundImagesForSession(msg, makeSessionKey(a, msg)); err != nil {
 			return err
 		}
 		return nil
@@ -116,7 +119,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return nil
 	}
 	if replyLink != nil {
-		if steered, err := newReplyContinuationService(a).trySteerInboundReply(msg, replyLink); err == nil && steered {
+		if steered, err := rcs.trySteerInboundReply(msg, replyLink); err == nil && steered {
 			return nil
 		} else if err != nil {
 			slog.Warn("reply steer failed; falling back to queue",
