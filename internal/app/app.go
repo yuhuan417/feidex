@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"feidex/internal/app/apputil"
+	"feidex/internal/app/backend"
+	appskillscmd "feidex/internal/app/skillscmd"
+	"feidex/internal/app/turnbinding"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -26,9 +29,9 @@ type App struct {
 	frontendConfigIndex    int
 	configMu               sync.RWMutex
 	backend                string
-	codex                  codexClient
-	claude                 claudeCore
-	feishu                 feishuClient
+	codex                  CodexClient
+	claude                 ClaudeCore
+	feishu                 FeishuClient
 	started                time.Time
 	deduper                *inboundDeduper
 	backendSwitchMu        sync.Mutex
@@ -36,7 +39,7 @@ type App struct {
 	asyncRunner            func(func())
 	codexRuntimeMu         sync.Mutex
 	codexRecovering        bool
-	codexRecoverySource    codexClient
+	codexRecoverySource    CodexClient
 	codexAutoThreadMu      sync.Mutex
 	codexAutoThreading     bool
 	autoRetries            *autoRetryTracker
@@ -55,33 +58,11 @@ type App struct {
 type appTrackers struct {
 	turnStreams         *turnStreamTracker
 	turnItems           *turnItemTracker
-	turnBindings        *turnBindingTracker
+	turnBindings        *turnbinding.Tracker
 	workspaceCloneOps   *workspaceCloneTracker
 	finalCardPatches    *finalCardPatchTracker
-	pendingSkills       *pendingSkillTracker
-	maintenanceTrackers map[backendKey]*backendMaintenanceTracker
-}
-
-type turnBinding struct {
-	SessionKey             string
-	SubmissionID           string
-	ThreadID               string
-	StartedAt              time.Time
-	LastUsage              codexrpc.TokenUsageBreakdown
-	HasLastUsage           bool
-	ContextUsagePercent    float64
-	HasContextUsagePercent bool
-}
-
-type claudeThreadUsageSnapshot struct {
-	TotalInputTokens         int64
-	TotalOutputTokens        int64
-	TotalCacheReadTokens     int64
-	TotalCacheCreationTokens int64
-	TotalCostUSD             float64
-	ContextWindow            int64
-	ContextUsagePercent      float64
-	HasContextUsagePercent   bool
+	pendingSkills       *appskillscmd.PendingSkillTracker
+	maintenanceTrackers backend.TrackerMap
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {
@@ -107,7 +88,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		return nil, fmt.Errorf("nil store")
 	}
 	backend := normalizeRuntimeBackend(frontend.Backend)
-	feishuClient := wrapFeishuClient(newFeishuClient(frontend.Feishu))
+	FeishuClient := wrapFeishuClient(newFeishuClient(frontend.Feishu))
 	app := &App{
 		cfg:                 cfg,
 		cfgPath:             cfgPath,
@@ -115,7 +96,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		frontendID:          strings.TrimSpace(frontend.ID),
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
-		feishu:              feishuClient,
+		feishu:              FeishuClient,
 		started:             time.Now(),
 		deduper:      newInboundDeduper(),
 		liveThreads:  newLiveThreadTracker(),
@@ -124,9 +105,9 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 			turnStreams:      newTurnStreamTracker(),
 			turnItems:        newTurnItemTracker(),
 			workspaceCloneOps: newWorkspaceCloneTracker(),
-			turnBindings:     newTurnBindingTracker(),
+			turnBindings:     turnbinding.NewTracker(store),
 			finalCardPatches: newFinalCardPatchTracker(),
-			pendingSkills:    newPendingSkillTracker(),
+			pendingSkills:    appskillscmd.NewPendingSkillTracker(),
 		},
 	}
 	if backend != "" {
@@ -151,8 +132,8 @@ func (a *App) Start(ctx context.Context) error {
 	if err := startFrontend(a, ctx); err != nil {
 		return err
 	}
-	newRuntimeMaintenanceService(a).startDriveArtifactGCLoop(ctx)
-	newRuntimeMaintenanceService(a).startUpgradeCheckLoop(ctx)
+	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
+	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
 	go sendStartupReadyNotifications(a)
 	return nil
 }
@@ -306,42 +287,7 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 	return turnResp.Turn.ID, nil
 }
 
-func makeSessionKey(a *App, msg *feishu.InboundMessage) string {
-	if msg != nil && strings.TrimSpace(msg.SessionKey) != "" {
-		return normalizeSessionKey(a, msg.SessionKey)
-	}
-	frontendID := strings.TrimSpace(a.frontendID)
-	if msg.ChatType == "group" {
-		root := msg.RootMessageID
-		if root == "" {
-			root = msg.MessageID
-		}
-		if frontendID != "" {
-			return fmt.Sprintf("feishu:frontend:%s:group:%s:root:%s", frontendID, msg.ChatID, root)
-		}
-		return fmt.Sprintf("feishu:group:%s:root:%s", msg.ChatID, root)
-	}
-	if frontendID != "" {
-		return fmt.Sprintf("feishu:frontend:%s:p2p:%s:%s", frontendID, msg.ChatID, msg.UserID)
-	}
-	return fmt.Sprintf("feishu:p2p:%s:%s", msg.ChatID, msg.UserID)
-}
-
-func firstNonEmpty(values ...string) string {
-	return apputil.FirstNonEmpty(values...)
-}
-
-func defaultWorkspaceID(a *App) string {
-	if a == nil || a.cfg == nil {
-		return "default"
-	}
-	a.configMu.RLock()
-	defer a.configMu.RUnlock()
-	if len(a.cfg.Workspaces) == 0 {
-		return "default"
-	}
-	return a.cfg.Workspaces[0].ID
-}
+var firstNonEmpty = apputil.FirstNonEmpty
 
 func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {

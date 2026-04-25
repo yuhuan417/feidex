@@ -80,30 +80,30 @@ func TestQuietWorkingCardHelperBranches(t *testing.T) {
 	}
 
 	card := &quietWorkingCard{}
-	if !card.replaceEntries(quietWorkingReasoningKey, []string{"思考中..."}) {
-		t.Fatal("replaceEntries(reasoning) should report change")
+	if !card.ReplaceEntries(quietWorkingReasoningKey, []string{"思考中..."}) {
+		t.Fatal("ReplaceEntries(reasoning) should report change")
 	}
-	if !card.isReasoningOnly() {
+	if !card.IsReasoningOnly() {
 		t.Fatal("card should be reasoning-only")
 	}
-	if got := card.linesForPrefix(quietWorkingReasoningKey); len(got) != 1 || got[0] != "思考中..." {
-		t.Fatalf("linesForPrefix(reasoning) = %#v", got)
+	if got := card.LinesForPrefix(quietWorkingReasoningKey); len(got) != 1 || got[0] != "思考中..." {
+		t.Fatalf("LinesForPrefix(reasoning) = %#v", got)
 	}
-	if !card.replaceEntries("item:1", []string{"Read `a.go`", "Read `b.go`", "List `internal/app`"}) {
-		t.Fatal("replaceEntries(item) should report change")
+	if !card.ReplaceEntries("item:1", []string{"Read `a.go`", "Read `b.go`", "List `internal/app`"}) {
+		t.Fatal("ReplaceEntries(item) should report change")
 	}
-	body := card.body()
+	body := card.Body()
 	if !strings.Contains(body, "Read `a.go` `b.go`") || !strings.Contains(body, "List `internal/app`") {
-		t.Fatalf("body() = %q", body)
+		t.Fatalf("Body() = %q", body)
 	}
-	if !card.removeEntries(quietWorkingReasoningKey) {
-		t.Fatal("removeEntries(reasoning) should report change")
+	if !card.RemoveEntries(quietWorkingReasoningKey) {
+		t.Fatal("RemoveEntries(reasoning) should report change")
 	}
-	if card.isReasoningOnly() {
+	if card.IsReasoningOnly() {
 		t.Fatal("card should no longer be reasoning-only")
 	}
-	if card.removeEntries("missing") {
-		t.Fatal("removeEntries(missing) should not report change")
+	if card.RemoveEntries("missing") {
+		t.Fatal("RemoveEntries(missing) should not report change")
 	}
 	if prefix := quietWorkingEntryPrefix(quietWorkingEntryKey("item:2", 3)); prefix != "item:2" {
 		t.Fatalf("quietWorkingEntryPrefix() = %q", prefix)
@@ -189,7 +189,7 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 		t.Fatalf("prepareQuietWorkingCardBoundaryLocked(mixed) = %+v, stream=%+v", boundary, mixed)
 	}
 
-	newTurnStreamService(a).turnStreamTracker().streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &quietWorkingCard{}}
+	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &quietWorkingCard{}}
 	executeQuietWorkingCardOp(a, context.Background(), sub, quietWorkingCardOp{
 		TurnID: "turn-1",
 		Body:   "Read `quiet_mode.go`",
@@ -197,11 +197,11 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
 	}
-	if got := newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking; got == nil || got.MessageID == "" || got.RenderedBody != "Read `quiet_mode.go`" {
+	if got := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking; got == nil || got.MessageID == "" || got.RenderedBody != "Read `quiet_mode.go`" {
 		t.Fatalf("commitQuietWorkingCardRender(reply) = %+v", got)
 	}
 
-	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
+	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
 	executeQuietWorkingCardOp(a, context.Background(), sub, quietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
@@ -210,18 +210,18 @@ func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patchedCards = %d, want 1", len(ff.patchedCards))
 	}
-	if got := newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking.RenderedBody; got != "Update `quiet_mode.go`" {
+	if got := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking.RenderedBody; got != "Update `quiet_mode.go`" {
 		t.Fatalf("commitQuietWorkingCardRender(patch) = %q", got)
 	}
 
 	ff.patchCardErr = errors.New("boom")
-	newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
+	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
 	executeQuietWorkingCardOp(a, context.Background(), sub, quietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "after error",
 	})
-	if got := newTurnStreamService(a).turnStreamTracker().streams["turn-1"].QuietWorking.RenderedBody; got != "stable" {
+	if got := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking.RenderedBody; got != "stable" {
 		t.Fatalf("patch error should not commit render, got %q", got)
 	}
 }

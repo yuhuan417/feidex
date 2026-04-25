@@ -183,3 +183,103 @@ func parseBacktickFenceLine(trimmed string) (run int, info string, ok bool) {
 	}
 	return run, strings.TrimSpace(trimmed[run:]), true
 }
+
+func SplitReplyTextBlockToFit(text string, fits func(string) bool) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	if fits(text) {
+		return []string{text}
+	}
+	for _, sep := range []string{"\n\n", "\n", " "} {
+		idx := SplitIndexNearMiddle(text, sep)
+		if idx <= 0 {
+			continue
+		}
+		left, right := SplitReplyTextAt(text, idx, len(sep))
+		if left == "" || right == "" {
+			continue
+		}
+		return append(SplitReplyTextBlockToFit(left, fits), SplitReplyTextBlockToFit(right, fits)...)
+	}
+	return SplitReplyTextByRunes(text, fits)
+}
+
+func SplitReplyTextByRunes(text string, fits func(string) bool) []string {
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) <= 1 {
+		return []string{strings.TrimSpace(text)}
+	}
+	mid := len(runes) / 2
+	left := strings.TrimSpace(string(runes[:mid]))
+	right := strings.TrimSpace(string(runes[mid:]))
+	if left == "" || right == "" {
+		return []string{strings.TrimSpace(text)}
+	}
+	return append(SplitReplyTextBlockToFit(left, fits), SplitReplyTextBlockToFit(right, fits)...)
+}
+
+func SplitIndexNearMiddle(text, sep string) int {
+	if sep == "" {
+		return -1
+	}
+	mid := len(text) / 2
+	if idx := strings.LastIndex(text[:mid], sep); idx >= 0 {
+		return idx
+	}
+	if idx := strings.Index(text[mid:], sep); idx >= 0 {
+		return mid + idx
+	}
+	return -1
+}
+
+func SplitReplyTextAt(text string, index, sepLen int) (string, string) {
+	if index < 0 || index > len(text) {
+		return "", ""
+	}
+	left := strings.TrimSpace(text[:index])
+	right := strings.TrimSpace(text[index+sepLen:])
+	return left, right
+}
+
+func JoinReplyChunkBodies(current, next string) string {
+	current = strings.TrimSpace(current)
+	next = strings.TrimSpace(next)
+	switch {
+	case current == "":
+		return next
+	case next == "":
+		return current
+	default:
+		return current + "\n" + next
+	}
+}
+
+func CountCardComponentNodes(value any) int {
+	switch node := value.(type) {
+	case map[string]any:
+		count := 0
+		if _, ok := node["tag"]; ok {
+			count++
+		}
+		for _, child := range node {
+			count += CountCardComponentNodes(child)
+		}
+		return count
+	case []map[string]any:
+		count := 0
+		for _, child := range node {
+			count += CountCardComponentNodes(child)
+		}
+		return count
+	case []any:
+		count := 0
+		for _, child := range node {
+			count += CountCardComponentNodes(child)
+		}
+		return count
+	default:
+		return 0
+	}
+}

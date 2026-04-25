@@ -83,7 +83,7 @@ func TestTurnStreamLifecycleDeliversItemCardsWithoutStoringAccumulation(t *testi
 	if result.SawFinal || updated == nil {
 		t.Fatalf("flushTurnStream() = %+v, submission=%+v", result, updated)
 	}
-	if newTurnStreamService(a).turnStreamTracker().streams["turn-1"] != nil {
+	if newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] != nil {
 		t.Fatal("expected turn stream to be cleared after flush")
 	}
 	if len(ff.replyCards) < 2 {

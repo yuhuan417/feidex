@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appcodexruntime "feidex/internal/app/codexruntime"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -186,13 +187,13 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 	}
 
 	createdCodex := []*fakeCodexClient{}
-	newCodexClient = func(config.CodexConfig) codexClient {
+	newCodexClient = func(config.CodexConfig) CodexClient {
 		client := &fakeCodexClient{}
 		createdCodex = append(createdCodex, client)
 		return client
 	}
 	createdClaude := []*fakeClaudeCore{}
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) claudeCore {
+	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
 		client := &fakeClaudeCore{}
 		createdClaude = append(createdClaude, client)
 		return client
@@ -303,7 +304,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 
 	var app *App
 	var codexCalls []string
-	newCodexClient = func(config.CodexConfig) codexClient {
+	newCodexClient = func(config.CodexConfig) CodexClient {
 		client := &fakeCodexClient{}
 		client.callHook = func(_ context.Context, method string, _ any, _ any) error {
 			codexCalls = append(codexCalls, method)
@@ -322,7 +323,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		}
 		return client
 	}
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) claudeCore {
+	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
 		return &fakeClaudeCore{}
 	}
 
@@ -335,6 +336,9 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		feishu:      &fakeFeishuClient{},
 		liveThreads: newLiveThreadTracker(),
 	}
+	defer func() {
+		codexRecoveryState = appcodexruntime.NewRecoveryState()
+	}()
 
 	sessionKey := "feishu:p2p:chat-1:user-1"
 	if err := store.UpsertSession(&state.Session{

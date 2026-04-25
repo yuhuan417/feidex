@@ -2,27 +2,17 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"net/url"
-	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"feidex/internal/app/attachments"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
-const attachmentsDirName = ".feidex-attachments"
-
-var (
-	markdownLinkFullRe = regexp.MustCompile(`\[([^\]]+)\]\(([^)\n]+)\)`)
-	lineSuffixRe       = regexp.MustCompile(`^(.*?)(?::\d+(?::\d+)?)?$`)
-)
+const attachmentsDirName = attachments.AttachmentsDirName
 
 func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
 	if msg == nil || len(msg.Attachments) == 0 {
@@ -40,7 +30,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	attachments := make([]state.SubmissionAttachment, 0, len(msg.Attachments))
+	att := make([]state.SubmissionAttachment, 0, len(msg.Attachments))
 	for _, attachment := range msg.Attachments {
 		sourceMessageID := strings.TrimSpace(attachment.SourceMessageID)
 		if sourceMessageID == "" {
@@ -50,317 +40,53 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 		if err != nil {
 			return nil, err
 		}
-		attachments = append(attachments, state.SubmissionAttachment{
+		att = append(att, state.SubmissionAttachment{
 			Kind:      attachment.Kind,
 			Name:      name,
 			LocalPath: path,
 		})
 	}
-	return attachments, nil
+	return att, nil
 }
 
-func sessionAttachmentDir(workspaceCwd, sessionKey, messageID string) string {
-	return filepath.Join(workspaceCwd, attachmentsDirName, shortHash(sessionKey), shortHash(messageID))
-}
+// Thin wrappers delegating to attachments sub-package.
 
-func shortHash(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:12])
-}
+var sessionAttachmentDir = attachments.SessionAttachmentDir
 
-func buildTurnInputs(sub *state.Submission) []map[string]any {
-	inputs := make([]map[string]any, 0, len(sub.Skills)+1+len(sub.Attachments))
-	for _, skill := range sub.Skills {
-		if strings.TrimSpace(skill.Name) == "" || strings.TrimSpace(skill.Path) == "" {
-			continue
-		}
-		inputs = append(inputs, map[string]any{
-			"type": "skill",
-			"name": skill.Name,
-			"path": skill.Path,
-		})
-	}
-	if text := strings.TrimSpace(sub.InputText); text != "" {
-		inputs = append(inputs, textInput(text))
-	}
-	for _, attachment := range sub.Attachments {
-		switch attachment.Kind {
-		case "image":
-			if strings.TrimSpace(attachment.LocalPath) != "" {
-				inputs = append(inputs, map[string]any{
-					"type": "localImage",
-					"path": attachment.LocalPath,
-				})
-			}
-		case "file":
-			if prompt := attachmentPrompt(attachment); prompt != "" {
-				inputs = append(inputs, textInput(prompt))
-			}
-		default:
-			if prompt := attachmentPrompt(attachment); prompt != "" {
-				inputs = append(inputs, textInput(prompt))
-			}
-		}
-	}
-	return inputs
-}
+var shortHash = attachments.ShortHash
 
-func textInput(text string) map[string]any {
-	return map[string]any{
-		"type":          "text",
-		"text":          text,
-		"text_elements": []any{},
-	}
-}
+var buildTurnInputs = attachments.BuildTurnInputs
 
-func attachmentPrompt(attachment state.SubmissionAttachment) string {
-	path := strings.TrimSpace(attachment.LocalPath)
-	if path == "" {
-		return ""
-	}
-	switch attachment.Kind {
-	case "file":
-		return fmt.Sprintf("User attached file: %s", path)
-	case "image":
-		return fmt.Sprintf("User attached image: %s", path)
-	case "audio":
-		return fmt.Sprintf("User attached audio file (not transcribed): %s", path)
-	default:
-		return fmt.Sprintf("User attached %s: %s", strings.TrimSpace(attachment.Kind), path)
-	}
-}
+var textInput = attachments.TextInput
 
-func submissionInputPreview(sub *state.Submission) string {
-	parts := make([]string, 0, len(sub.Skills)+1+len(sub.Attachments))
-	for _, skill := range sub.Skills {
-		if strings.TrimSpace(skill.Name) == "" {
-			continue
-		}
-		parts = append(parts, "[skill] "+skill.Name)
-	}
-	if text := strings.TrimSpace(sub.InputText); text != "" {
-		parts = append(parts, text)
-	}
-	for _, attachment := range sub.Attachments {
-		parts = append(parts, attachmentPreview(attachment))
-	}
-	if len(parts) == 0 {
-		return "-"
-	}
-	return strings.Join(parts, "\n")
-}
+var attachmentPrompt = attachments.AttachmentPrompt
 
-func attachmentPreview(attachment state.SubmissionAttachment) string {
-	name := strings.TrimSpace(attachment.Name)
-	if name == "" {
-		name = filepath.Base(attachment.LocalPath)
-	}
-	if name == "" {
-		name = "attachment"
-	}
-	switch attachment.Kind {
-	case "image":
-		return "[图片] " + name
-	case "file":
-		return "[文件] " + name
-	case "audio":
-		return "[音频] " + name
-	default:
-		return "[" + strings.TrimSpace(attachment.Kind) + "] " + name
-	}
-}
+var submissionInputPreview = attachments.SubmissionInputPreview
 
-func normalizeReferencedPath(raw, workspaceCwd string) (string, bool) {
-	raw = strings.TrimSpace(raw)
-	raw = strings.Trim(raw, "\"'")
-	raw = strings.TrimSuffix(raw, ")")
-	if raw == "" {
-		return "", false
-	}
-	if idx := strings.IndexByte(raw, '#'); idx >= 0 {
-		raw = raw[:idx]
-	}
-	raw = trimLineReferenceSuffix(raw)
-	if raw == "" {
-		return "", false
-	}
-	var path string
-	switch {
-	case filepath.IsAbs(raw):
-		path = filepath.Clean(raw)
-		if repaired, ok := repairMalformedWorkspacePath(path, workspaceCwd); ok {
-			path = repaired
-		}
-	case strings.HasPrefix(raw, "./"), strings.HasPrefix(raw, "../"), strings.Contains(raw, "/"):
-		path = filepath.Clean(filepath.Join(workspaceCwd, raw))
-	default:
-		return "", false
-	}
-	if !pathWithinWorkspace(path, workspaceCwd) {
-		return "", false
-	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", false
-	}
-	return path, true
-}
+var attachmentPreview = attachments.AttachmentPreview
 
-func repairMalformedWorkspacePath(path, workspaceCwd string) (string, bool) {
-	workspaceCwd = filepath.Clean(workspaceCwd)
-	path = filepath.Clean(path)
-	prefix := workspaceCwd + "."
-	if !strings.HasPrefix(path, prefix) {
-		return "", false
-	}
-	rest := strings.TrimPrefix(path, prefix)
-	parts := strings.SplitN(rest, string(filepath.Separator), 2)
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return "", false
-	}
-	candidate := filepath.Join(workspaceCwd, parts[1]+"."+parts[0])
-	info, err := os.Stat(candidate)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", false
-	}
-	return candidate, true
-}
+var normalizeReferencedPath = attachments.NormalizeReferencedPath
 
-func sanitizeLocalMarkdownLinks(text, workspaceCwd string) string {
-	return rewriteMarkdownLinksForCard(text, workspaceCwd, false)
-}
+var repairMalformedWorkspacePath = attachments.RepairMalformedWorkspacePath
 
-func neutralizeLocalMarkdownLinks(text, workspaceCwd string) string {
-	if strings.TrimSpace(text) == "" {
-		return text
-	}
-	return rewriteMarkdownLinksForCard(text, workspaceCwd, true)
-}
+var sanitizeLocalMarkdownLinks = attachments.SanitizeLocalMarkdownLinks
 
-func rewriteMarkdownLinksForCard(text, workspaceCwd string, keepNonLocalLink bool) string {
-	if strings.TrimSpace(text) == "" {
-		return text
-	}
-	return markdownLinkFullRe.ReplaceAllStringFunc(text, func(match string) string {
-		parts := markdownLinkFullRe.FindStringSubmatch(match)
-		if len(parts) != 3 {
-			return match
-		}
-		label := strings.TrimSpace(parts[1])
-		href := strings.TrimSpace(parts[2])
-		if pathText, ok := localLinkDisplayTarget(href, workspaceCwd); ok {
-			return "`" + pathText + "`"
-		}
-		if fixed := recoverFilenameFromMalformedLabel(label); fixed != "" {
-			return "`" + fixed + "`"
-		}
-		if keepNonLocalLink {
-			return match
-		}
-		return "`" + label + "`"
-	})
-}
+var neutralizeLocalMarkdownLinks = attachments.NeutralizeLocalMarkdownLinks
 
-func localLinkDisplayTarget(rawHref, workspaceCwd string) (string, bool) {
-	target := cleanMarkdownLinkTarget(rawHref)
-	if target == "" {
-		return "", false
-	}
-	display := renderWorkspaceDisplayPath(target, workspaceCwd)
-	if _, ok := normalizeReferencedPath(target, workspaceCwd); ok {
-		return display, true
-	}
-	if !looksLikeLocalPathTarget(target) {
-		return "", false
-	}
-	return display, true
-}
+var rewriteMarkdownLinksForCard = attachments.RewriteMarkdownLinksForCard
 
-func cleanMarkdownLinkTarget(raw string) string {
-	raw = strings.TrimSpace(raw)
-	raw = strings.Trim(raw, "\"'")
-	raw = strings.TrimSuffix(raw, ")")
-	if raw == "" {
-		return ""
-	}
-	if strings.HasPrefix(raw, "<") && strings.HasSuffix(raw, ">") {
-		raw = strings.TrimPrefix(strings.TrimSuffix(raw, ">"), "<")
-	}
-	return strings.TrimSpace(raw)
-}
+var localLinkDisplayTarget = attachments.LocalLinkDisplayTarget
 
-func looksLikeLocalPathTarget(target string) bool {
-	target = strings.TrimSpace(target)
-	if target == "" || strings.HasPrefix(target, "#") {
-		return false
-	}
-	parsed, err := url.Parse(target)
-	if err == nil && strings.TrimSpace(parsed.Scheme) != "" {
-		return strings.EqualFold(parsed.Scheme, "file")
-	}
-	if filepath.IsAbs(target) || strings.HasPrefix(target, "./") || strings.HasPrefix(target, "../") || strings.HasPrefix(target, "~/") {
-		return true
-	}
-	return strings.Contains(target, "/") || strings.Contains(target, `\`)
-}
+var cleanMarkdownLinkTarget = attachments.CleanMarkdownLinkTarget
 
-func recoverFilenameFromMalformedLabel(label string) string {
-	label = strings.TrimSpace(label)
-	if !strings.HasPrefix(label, ".") {
-		return ""
-	}
-	trimmed := strings.TrimPrefix(label, ".")
-	for i := 1; i < len(trimmed); i++ {
-		ext := trimmed[:i]
-		name := trimmed[i:]
-		if ext == "" || name == "" {
-			continue
-		}
-		if !isAlphaNum(ext) || !isFileNameLike(name) {
-			continue
-		}
-		return name + "." + ext
-	}
-	return ""
-}
+var looksLikeLocalPathTarget = attachments.LooksLikeLocalPathTarget
 
-func isAlphaNum(s string) bool {
-	for _, r := range s {
-		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
-			return false
-		}
-	}
-	return s != ""
-}
+var recoverFilenameFromMalformedLabel = attachments.RecoverFilenameFromMalformedLabel
 
-func isFileNameLike(s string) bool {
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-		case r >= 'A' && r <= 'Z':
-		case r >= '0' && r <= '9':
-		case r == '_' || r == '-' || r == '.':
-		default:
-			return false
-		}
-	}
-	return s != ""
-}
+var isAlphaNum = attachments.IsAlphaNum
 
-func trimLineReferenceSuffix(path string) string {
-	match := lineSuffixRe.FindStringSubmatch(path)
-	if len(match) == 2 {
-		return match[1]
-	}
-	return path
-}
+var isFileNameLike = attachments.IsFileNameLike
 
-func pathWithinWorkspace(path, workspaceCwd string) bool {
-	workspaceCwd = filepath.Clean(workspaceCwd)
-	path = filepath.Clean(path)
-	rel, err := filepath.Rel(workspaceCwd, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
-}
+var trimLineReferenceSuffix = attachments.TrimLineReferenceSuffix
+
+var pathWithinWorkspace = attachments.PathWithinWorkspace

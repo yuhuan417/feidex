@@ -84,9 +84,9 @@ func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includ
 	}
 	view := claudeUpgradeView{
 		Probe:      probe,
-		BusyReason: newMaintenanceStateService(s.app).claudeUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(s.app).claudeUpgradeState(),
-		Restart:    newMaintenanceStateService(s.app).claudeRestartState(),
+		BusyReason: newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(s.app).ClaudeUpgradeState(),
+		Restart:    newMaintenanceStateService(s.app).ClaudeRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

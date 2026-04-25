@@ -101,7 +101,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 		TargetVersion:   payload.TargetVersion,
 		LatestVersion:   payload.TargetVersion,
 	}
-	if !newMaintenanceStateService(s.app).beginCodexUpgrade(snapshot) {
+	if !newMaintenanceStateService(s.app).BeginCodexUpgrade(snapshot) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		view, err := newBackendUpgradeService(s.app).loadCodexUpgradeView(ctx, false)
@@ -113,7 +113,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "Codex 正在维护中"},
-			Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).codexUpgradeState())),
+			Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).CodexUpgradeState())),
 		}, nil
 	}
 	_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
@@ -121,6 +121,6 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 	go newBackendUpgradeService(s.app).runCodexUpgradeOperation(messageID, sessionKey, payload)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "Codex 升级已开始"},
-		Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).codexUpgradeState())),
+		Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).CodexUpgradeState())),
 	}, nil
 }

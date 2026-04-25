@@ -26,7 +26,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).completeMenuInterrupt(nil, "sess-1", "turn-old")
+	resp, err := newThreadService(a).CompleteMenuInterrupt(nil, "sess-1", "turn-old")
 	if err != nil {
 		t.Fatalf("completeMenuInterrupt: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).completeMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
+	resp, err := newThreadService(a).CompleteMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuNew: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).completeThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
+	resp, err := newThreadService(a).CompleteThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
 	if err != nil {
 		t.Fatalf("completeThreadResume: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).completeThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
+	resp, err := newThreadService(a).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
 	if err != nil {
 		t.Fatalf("completeThreadSandboxSet: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).completeThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
+	resp, err := newThreadService(a).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
 	if err != nil {
 		t.Fatalf("completeThreadPolicySet: %v", err)
 	}

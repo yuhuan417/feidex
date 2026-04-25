@@ -2,34 +2,42 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
+	appconvbackend "feidex/internal/app/convbackend"
+	appmodelconfig "feidex/internal/app/modelconfig"
+	appsessionctx "feidex/internal/app/sessionctx"
+	appthreadview "feidex/internal/app/threadview"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
-type uiWarningError struct {
-	message string
-}
+// Type aliases — convbackend sub-package
+type uiWarningError = appconvbackend.UIWarningError
 
-func (e uiWarningError) Error() string {
-	return e.message
-}
+// Function aliases — convbackend sub-package
+var (
+	newUIWarningError = appconvbackend.NewUIWarningError
+	isUIWarningError  = appconvbackend.IsUIWarningError
+)
 
-func newUIWarningError(message string) error {
-	return uiWarningError{message: strings.TrimSpace(message)}
-}
+// Function aliases — other sub-packages used by helpers
+var (
+	_configuredGlobalModel    = appmodelconfig.ConfiguredGlobalModel
+	_clearSessionThreadContext = appsessionctx.ClearThreadContext
+	_setSessionThreadContext   = appsessionctx.SetThreadContext
+	_sessionResetActiveOps    = appsessionctx.ResetActiveOperations
+	_sameWorkspaceCWD         = appthreadview.SameWorkspaceCWD
+)
 
-func isUIWarningError(err error) bool {
-	var target uiWarningError
-	return errors.As(err, &target)
-}
+// ---------------------------------------------------------------------------
+// Resume helpers — these call app-level services and stay in app/
+// ---------------------------------------------------------------------------
 
 func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
 	if a == nil || a.claude == nil {
@@ -51,7 +59,7 @@ func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, 
 		selectedPreview = firstNonEmpty(selectedPreview, strings.TrimSpace(entry.Preview))
 		selectedCWD = firstNonEmpty(selectedCWD, strings.TrimSpace(entry.Cwd))
 	}
-	if selectedCWD != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
+	if selectedCWD != "" && !_sameWorkspaceCWD(selectedCWD, ws.Cwd) {
 		return nil, newUIWarningError("该会话不属于当前工作区，请先切换 workspace")
 	}
 	model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
@@ -61,15 +69,15 @@ func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, 
 	if err != nil {
 		return nil, err
 	}
-	clearSessionThreadContext(sess)
-	setSessionThreadContext(
+	_clearSessionThreadContext(sess)
+	_setSessionThreadContext(
 		sess,
 		firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)),
 		resumedID,
 		firstNonEmpty(selectedName, "Claude"),
 		firstNonEmpty(selectedPreview, ws.Name),
 	)
-	sessionResetActiveOperations(sess)
+	_sessionResetActiveOps(sess)
 	sess.Status = "idle"
 	if err := appState(a).saveSession(sess); err != nil {
 		return nil, err
@@ -95,10 +103,10 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 	selectedName := strings.TrimSpace(selection.Name)
 	selectedPreview := strings.TrimSpace(selection.Preview)
 	selectedCWD := strings.TrimSpace(selection.Cwd)
-	if selectedCWD != "" && !sameWorkspaceCWD(selectedCWD, ws.Cwd) {
+	if selectedCWD != "" && !_sameWorkspaceCWD(selectedCWD, ws.Cwd) {
 		return nil, newUIWarningError("该线程不属于当前工作区，请先切换 workspace")
 	}
-	effectiveModel := configuredGlobalModel(a.cfg)
+	effectiveModel := _configuredGlobalModel(a.cfg)
 	params := map[string]any{
 		"threadId":               threadID,
 		"persistExtendedHistory": true,
@@ -119,9 +127,9 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
-	setSessionThreadContext(sess, firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)), boundThreadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
+	_setSessionThreadContext(sess, firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)), boundThreadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	markSessionThreadLive(a, sessionKey, boundThreadID)
-	sessionResetActiveOperations(sess)
+	_sessionResetActiveOps(sess)
 	sess.Status = "idle"
 	if err := appState(a).saveSession(sess); err != nil {
 		return nil, err
@@ -133,6 +141,10 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 		Resumed:  true,
 	}, nil
 }
+
+// ---------------------------------------------------------------------------
+// Interrupt and continue helpers
+// ---------------------------------------------------------------------------
 
 func interruptClaudeActiveTurn(a *App, ctx context.Context, sessionKey string) error {
 	if a == nil || a.claude == nil {

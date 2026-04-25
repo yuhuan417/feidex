@@ -71,10 +71,6 @@ func clearSessionThreadContext(sess *state.Session) {
 	sessionctx.ClearThreadContext(sess)
 }
 
-func sessionBackendThreadSnapshot(sess *state.Session) state.SessionBackendThread {
-	return sessionctx.BackendThreadSnapshot(sess)
-}
-
 func sessionStoreBackendThread(sess *state.Session, backend string) {
 	sessionctx.StoreBackendThread(sess, backend)
 }
@@ -83,20 +79,8 @@ func sessionClearBackendThread(sess *state.Session, backend string) {
 	sessionctx.ClearBackendThread(sess, backend)
 }
 
-func sessionRestoreBackendThread(sess *state.Session, backend string) bool {
-	return sessionctx.RestoreBackendThread(sess, backend)
-}
-
-func clearSessionBackendThreads(sess *state.Session) {
-	sessionctx.ClearBackendThreads(sess)
-}
-
 func setSessionThreadContext(sess *state.Session, workspaceID, threadID, name, preview string) {
 	sessionctx.SetThreadContext(sess, workspaceID, threadID, name, preview)
-}
-
-func setSessionThreadDefaults(sess *state.Session, approvalPolicy, sandboxMode string) {
-	sessionctx.SetThreadDefaults(sess, approvalPolicy, sandboxMode)
 }
 
 func effectiveThreadApprovalPolicy(sess *state.Session, ws *config.Workspace) string {

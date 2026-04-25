@@ -112,6 +112,11 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	return id
 }
 
+// Exported wrapper for sub-package interface satisfaction.
+func (s outboundCardService) ReplaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+	return s.replaceTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, reuseMessageID)
+}
+
 func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""

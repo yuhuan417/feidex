@@ -57,8 +57,8 @@ func recoverSharedRuntimeState(a *App) {
 	if cleared > 0 {
 		slog.Debug("runtime session state recovery complete", "cleared_sessions", cleared)
 	}
-	newRuntimeMaintenanceService(a).expirePendingRequestsOnStartup()
-	newRuntimeMaintenanceService(a).cleanupExpiredAttachments()
+	newRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup()
+	newRuntimeMaintenanceService(a).CleanupExpiredAttachments()
 }
 
 func recoverFrontendRuntimeState(a *App) {

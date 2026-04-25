@@ -12,15 +12,13 @@ import (
 
 const serviceTierFast = appruntime.ServiceTierFast
 
-func normalizeServiceTier(value string) string { return appruntime.NormalizeServiceTier(value) }
+var normalizeServiceTier = appruntime.NormalizeServiceTier
 
-func toggleServiceTier(value string) string { return appruntime.ToggleServiceTier(value) }
+var toggleServiceTier = appruntime.ToggleServiceTier
 
-func renderServiceTierValue(value string) string { return appruntime.RenderServiceTierValue(value) }
+var renderServiceTierValue = appruntime.RenderServiceTierValue
 
-func renderServiceTierReplyValue(value string) string {
-	return appruntime.RenderServiceTierReplyValue(value)
-}
+var renderServiceTierReplyValue = appruntime.RenderServiceTierReplyValue
 
 func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
 	sess := appState(a).session(sessionKey)

@@ -26,10 +26,10 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newBackendSelectionService(s.app).completeMenuBackend(action, actionSessionKey(action))
 	},
 	"menu.thread": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeMenuThread(action, actionSessionKey(action))
+		return newThreadService(s.app).CompleteMenuThread(action, actionSessionKey(action))
 	},
 	"menu.new": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeMenuNew(action, actionSessionKey(action))
+		return newThreadService(s.app).CompleteMenuNew(action, actionSessionKey(action))
 	},
 	"menu.download": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return completeMenuDownload(s.app, action, actionSessionKey(action))
@@ -74,10 +74,10 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuStatus(action, actionSessionKey(action))
 	},
 	"menu.debug": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newDebugService(s.app).completeMenuDebug(action, actionSessionKey(action))
+		return newDebugService(s.app).CompleteMenuDebug(action, actionSessionKey(action))
 	},
 	"menu.debug.logs": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newDebugService(s.app).completeMenuDebugLogs(action, actionSessionKey(action))
+		return newDebugService(s.app).CompleteMenuDebugLogs(action, actionSessionKey(action))
 	},
 	"menu.backend": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newMenuActionService(s.app).completeMenuBackendSwitch(action, actionSessionKey(action))
@@ -95,7 +95,7 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeMenuHistory(action, actionSessionKey(action))
 	},
 	"menu.interrupt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
+		return newThreadService(s.app).CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
 	},
 	"menu.workspace": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return completeMenuWorkspace(s.app, action, actionSessionKey(action))
@@ -149,15 +149,15 @@ var menuCardActionHandlers = map[string]cardActionHandler{
 		return newMenuActionService(s.app).completeHistoryDetail(action, actionSessionKey(action), index)
 	},
 	"skills.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newSkillsService(s.app).completeSkillsSelect(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+		return newSkillsService(s.app).CompleteSkillsSelect(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 	},
 	"skills.reload": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newSkillsService(s.app).completeSkillsReload(action, actionSessionKey(action))
+		return newSkillsService(s.app).CompleteSkillsReload(action, actionSessionKey(action))
 	},
 	"backend.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newBackendSelectionService(s.app).completeBackendSelect(action, actionSessionKey(action), actionStringValue(action, "backend"))
 	},
 	"auto_retry.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newAutoRetryService(s.app).completeAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
+		return newAutoRetryService(s.app).CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
 	},
 }

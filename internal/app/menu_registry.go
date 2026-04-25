@@ -18,7 +18,7 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return newReviewFormService(a).renderReviewMenuCard(sessionKey), true
 	},
 	"menu.skills": func(a *App, sessionKey string) (map[string]any, bool) {
-		card, err := newSkillsService(a).renderSkillsCard(sessionKey, false)
+		card, err := newSkillsService(a).RenderSkillsCard(sessionKey, false)
 		if err != nil {
 			return nil, false
 		}
@@ -62,6 +62,6 @@ var menuNodeRenderers = map[string]menuNodeRenderer{
 		return newWorkspaceConfigService(a).renderWorkspaceMenuCard(sessionKey), true
 	},
 	"menu.debug.logs": func(a *App, sessionKey string) (map[string]any, bool) {
-		return newDebugService(a).renderDebugLogsCard(sessionKey), true
+		return newDebugService(a).RenderDebugLogsCard(sessionKey), true
 	},
 }

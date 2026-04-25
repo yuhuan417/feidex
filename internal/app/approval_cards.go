@@ -138,8 +138,3 @@ func (s outboundCardService) sendUserInputCard(requestID json.RawMessage, payloa
 	}
 	replyCodexError(s.app, requestID, -32603, err.Error())
 }
-
-func mustJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}

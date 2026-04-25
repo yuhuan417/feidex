@@ -72,7 +72,7 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	}
 	card := ff.replyCards[len(ff.replyCards)-1]
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "当前 backend: `claude`") || !strings.Contains(body, "通过下拉 list 选择要切换的 Claude 会话。") || !strings.Contains(body, "开始对话后") {
+	if !strings.Contains(body, "current backend: `claude`") || !strings.Contains(body, "select a Claude session from the dropdown to switch.") || !strings.Contains(body, "tip:") {
 		t.Fatalf("Claude session list body = %q", body)
 	}
 	if selects := cardSelectStaticForTest(card); len(selects) != 1 {
@@ -109,7 +109,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "开始对话后") {
+	if !strings.Contains(body, "tip:") {
 		t.Fatalf("Claude thread card body = %q, want warmup hint", body)
 	}
 	labels := cardButtonLabelsByAction(card)
@@ -206,7 +206,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadService(a).completeThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
+	resp, err := newThreadService(a).CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
 	if err != nil {
 		t.Fatalf("completeThreadResume() error = %v", err)
 	}

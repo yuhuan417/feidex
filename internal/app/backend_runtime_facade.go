@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/state"
 )
 
 type backendRuntimeHandle struct {
 	backend string
-	codex   codexClient
-	claude  claudeCore
+	codex   CodexClient
+	claude  ClaudeCore
 }
 
 func (h *backendRuntimeHandle) close() error {
@@ -50,7 +51,7 @@ type backendRuntimeFacade interface {
 	runtimeReady(a *App) bool
 	beginStartupRecoveryScope(a *App) func()
 	reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session
-	conversationBackend(a *App) conversationBackendFacade
+	conversationBackend(a *App) appconvbackend.ConversationBackendFacade
 	serverRequestAdapter(a *App) serverRequestBackendAdapter
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error

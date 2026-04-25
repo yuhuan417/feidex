@@ -3,115 +3,12 @@ package app
 import (
 	"context"
 	"strings"
-	"time"
 
+	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
-
-type commandCaptureClient struct {
-	base           feishuClient
-	replyMessageID string
-	text           string
-	card           map[string]any
-}
-
-type commandCaptureFeishuClient interface {
-	captureCommandOutput(replyMessageID string, fn func() error) (string, map[string]any, error)
-}
-
-func (c *commandCaptureClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*feishu.BotMenuClick), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
-	c.base.SetHandlers(onMessage, onCardAction, onBotMenu, onRecall, onReaction)
-}
-
-func (c *commandCaptureClient) Start(ctx context.Context) error {
-	return c.base.Start(ctx)
-}
-
-func (c *commandCaptureClient) Stop() {
-	c.base.Stop()
-}
-
-func (c *commandCaptureClient) ConfigureLocalFileLinks(statePath, processCWD string) {
-	c.base.ConfigureLocalFileLinks(statePath, processCWD)
-}
-
-func (c *commandCaptureClient) RewriteLocalFileLinks(ctx context.Context, req feishu.LocalFileLinkRewriteRequest) (string, error) {
-	return c.base.RewriteLocalFileLinks(ctx, req)
-}
-
-func (c *commandCaptureClient) CleanupArtifactsBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {
-	return c.base.CleanupArtifactsBefore(ctx, cutoff)
-}
-
-func (c *commandCaptureClient) AddReaction(ctx context.Context, messageID, emojiType string) error {
-	return c.base.AddReaction(ctx, messageID, emojiType)
-}
-
-func (c *commandCaptureClient) RemoveReaction(ctx context.Context, messageID, emojiType string) error {
-	return c.base.RemoveReaction(ctx, messageID, emojiType)
-}
-
-func (c *commandCaptureClient) ReplyText(_ context.Context, _ string, text string, _ bool) error {
-	c.text = strings.TrimSpace(text)
-	c.card = nil
-	return nil
-}
-
-func (c *commandCaptureClient) ReplyTextWithID(_ context.Context, _ string, text string, _ bool) (string, error) {
-	c.text = strings.TrimSpace(text)
-	c.card = nil
-	return c.replyMessageID, nil
-}
-
-func (c *commandCaptureClient) SendText(_ context.Context, _ string, text string) error {
-	c.text = strings.TrimSpace(text)
-	c.card = nil
-	return nil
-}
-
-func (c *commandCaptureClient) ReplyCard(_ context.Context, _ string, card map[string]any, _ bool) (string, error) {
-	c.card = card
-	c.text = ""
-	return c.replyMessageID, nil
-}
-
-func (c *commandCaptureClient) SendCard(_ context.Context, _ string, card map[string]any) (string, error) {
-	c.card = card
-	c.text = ""
-	return c.replyMessageID, nil
-}
-
-func (c *commandCaptureClient) PatchCard(_ context.Context, _ string, card map[string]any) error {
-	c.card = card
-	c.text = ""
-	return nil
-}
-
-func (c *commandCaptureClient) DownloadMessageResource(ctx context.Context, messageID string, attachment feishu.Attachment, targetDir string) (string, string, error) {
-	return c.base.DownloadMessageResource(ctx, messageID, attachment, targetDir)
-}
-
-func (c *commandCaptureClient) ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
-	return c.base.ShareLocalFile(ctx, req)
-}
-
-func (c *commandCaptureClient) ResolveMergeForward(ctx context.Context, messageID string, messageIDs []string) (string, []feishu.Attachment, error) {
-	return c.base.ResolveMergeForward(ctx, messageID, messageIDs)
-}
-
-func (c *commandCaptureClient) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	return c.base.SimpleStatusCard(title, color, body, buttons)
-}
-
-func (c *commandCaptureClient) UrgentApp(ctx context.Context, messageID, userID string) error {
-	return c.base.UrgentApp(ctx, messageID, userID)
-}
-
-func (c *commandCaptureClient) LookupMessageSenderOpenID(ctx context.Context, messageID string) (string, error) {
-	return c.base.LookupMessageSenderOpenID(ctx, messageID)
-}
 
 func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, userID string) {
 	_, chatType, chatID, rootMessageID, userID = parseSessionKey(sessionKey)
@@ -187,8 +84,8 @@ func runCommandFromCardAction(a *App, action *feishu.CardAction, sessionKey, raw
 		return "", nil, nil
 	}
 	msg := commandMessageFromAction(a, action, sessionKey, rawCommand)
-	if capture, ok := a.feishu.(commandCaptureFeishuClient); ok {
-		return capture.captureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
+	if capture, ok := a.feishu.(appfeishuwrap.CommandCaptureFeishuClient); ok {
+		return capture.CaptureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
 			return handleCommand(a, msg, rawCommand)
 		})
 	}

@@ -91,9 +91,9 @@ func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, include
 	}
 	view := codexUpgradeView{
 		Probe:      probe,
-		BusyReason: newMaintenanceStateService(s.app).codexUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(s.app).codexUpgradeState(),
-		Restart:    newMaintenanceStateService(s.app).codexRestartState(),
+		BusyReason: newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(s.app).CodexUpgradeState(),
+		Restart:    newMaintenanceStateService(s.app).CodexRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

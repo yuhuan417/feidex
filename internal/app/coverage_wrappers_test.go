@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/sessionctx"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -216,8 +217,8 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 	if card := client.SimpleStatusCard("title", "blue", "body", nil); card == nil {
 		t.Fatal("SimpleStatusCard() should delegate")
 	}
-	if key := client.permissionIssueKey(feishuNotifyTarget{ChatID: "chat-1", MessageID: "msg-1"}, &feishu.PermissionIssue{API: "im.message.create", Code: 1, Message: "denied", LogID: "log-1"}); !strings.Contains(key, "chat-1|msg-1|im.message.create|1|denied|log-1") {
-		t.Fatalf("permissionIssueKey() = %q", key)
+	if key := client.PermissionIssueKey(feishuNotifyTarget{ChatID: "chat-1", MessageID: "msg-1"}, &feishu.PermissionIssue{API: "im.message.create", Code: 1, Message: "denied", LogID: "log-1"}); !strings.Contains(key, "chat-1|msg-1|im.message.create|1|denied|log-1") {
+		t.Fatalf("PermissionIssueKey() = %q", key)
 	}
 }
 
@@ -231,7 +232,7 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 		sharedFileResult:         feishu.SharedFileResult{FileName: "name.txt", URL: "https://example.test/file"},
 		mergeForwardText:         "merged",
 	}
-	capture := &commandCaptureClient{base: base, replyMessageID: "reply-1"}
+	capture := &commandCaptureClient{Base: base, ReplyMessageID: "reply-1"}
 
 	handled := false
 	capture.SetHandlers(func(*feishu.InboundMessage) { handled = true }, nil, nil, nil, nil)
@@ -262,23 +263,23 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	if err := capture.RemoveReaction(context.Background(), "msg-1", "SMILE"); err != nil {
 		t.Fatalf("RemoveReaction() error = %v", err)
 	}
-	if err := capture.ReplyText(context.Background(), "msg-1", " hello ", false); err != nil || capture.text != "hello" || capture.card != nil {
-		t.Fatalf("ReplyText() = text:%q card:%v err:%v", capture.text, capture.card, err)
+	if err := capture.ReplyText(context.Background(), "msg-1", " hello ", false); err != nil || capture.Text != "hello" || capture.Card != nil {
+		t.Fatalf("ReplyText() = text:%q card:%v err:%v", capture.Text, capture.Card, err)
 	}
-	if id, err := capture.ReplyTextWithID(context.Background(), "msg-1", " hi ", false); err != nil || id != "reply-1" || capture.text != "hi" {
-		t.Fatalf("ReplyTextWithID() = %q %q %v", id, capture.text, err)
+	if id, err := capture.ReplyTextWithID(context.Background(), "msg-1", " hi ", false); err != nil || id != "reply-1" || capture.Text != "hi" {
+		t.Fatalf("ReplyTextWithID() = %q %q %v", id, capture.Text, err)
 	}
-	if err := capture.SendText(context.Background(), "chat-1", " send "); err != nil || capture.text != "send" {
-		t.Fatalf("SendText() = %q %v", capture.text, err)
+	if err := capture.SendText(context.Background(), "chat-1", " send "); err != nil || capture.Text != "send" {
+		t.Fatalf("SendText() = %q %v", capture.Text, err)
 	}
-	if id, err := capture.ReplyCard(context.Background(), "msg-1", map[string]any{"k": "v"}, false); err != nil || id != "reply-1" || capture.card == nil || capture.text != "" {
-		t.Fatalf("ReplyCard() = %q card:%v text:%q err:%v", id, capture.card, capture.text, err)
+	if id, err := capture.ReplyCard(context.Background(), "msg-1", map[string]any{"k": "v"}, false); err != nil || id != "reply-1" || capture.Card == nil || capture.Text != "" {
+		t.Fatalf("ReplyCard() = %q card:%v text:%q err:%v", id, capture.Card, capture.Text, err)
 	}
-	if id, err := capture.SendCard(context.Background(), "chat-1", map[string]any{"k2": "v2"}); err != nil || id != "reply-1" || capture.card == nil {
-		t.Fatalf("SendCard() = %q card:%v err:%v", id, capture.card, err)
+	if id, err := capture.SendCard(context.Background(), "chat-1", map[string]any{"k2": "v2"}); err != nil || id != "reply-1" || capture.Card == nil {
+		t.Fatalf("SendCard() = %q card:%v err:%v", id, capture.Card, err)
 	}
-	if err := capture.PatchCard(context.Background(), "msg-1", map[string]any{"k3": "v3"}); err != nil || capture.card == nil {
-		t.Fatalf("PatchCard() = card:%v err:%v", capture.card, err)
+	if err := capture.PatchCard(context.Background(), "msg-1", map[string]any{"k3": "v3"}); err != nil || capture.Card == nil {
+		t.Fatalf("PatchCard() = card:%v err:%v", capture.Card, err)
 	}
 	if path, name, err := capture.DownloadMessageResource(context.Background(), "msg-1", feishu.Attachment{Kind: "file"}, "/tmp"); err != nil || path != "/tmp/file" || name != "name.txt" {
 		t.Fatalf("DownloadMessageResource() = %q %q %v", path, name, err)
@@ -396,9 +397,9 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("renderUpgradeFailedCard() body = %q", body)
 	}
 
-	setSessionThreadDefaults(nil, "never", "read-only")
+	sessionctx.SetThreadDefaults(nil, "never", "read-only")
 	sess := &state.Session{}
-	setSessionThreadDefaults(sess, " never ", " read-only ")
+	sessionctx.SetThreadDefaults(sess, " never ", " read-only ")
 	if sess.ActiveThreadApprovalPolicy != "never" || sess.ActiveThreadSandboxMode != "read-only" {
 		t.Fatalf("setSessionThreadDefaults() = %+v", sess)
 	}

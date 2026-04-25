@@ -31,7 +31,7 @@ type codexServerRequestAdapter struct {
 
 func (codexServerRequestAdapter) kind() string { return backendCodex }
 
-func (c codexServerRequestAdapter) client() (codexClient, error) {
+func (c codexServerRequestAdapter) client() (CodexClient, error) {
 	if c.app == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}

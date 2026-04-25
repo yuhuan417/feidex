@@ -18,18 +18,18 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 	}()
 
 	codexClients := []*fakeCodexClient{}
-	newCodexClient = func(config.CodexConfig) codexClient {
+	newCodexClient = func(config.CodexConfig) CodexClient {
 		client := &fakeCodexClient{}
 		codexClients = append(codexClients, client)
 		return client
 	}
 	feishuAppIDs := []string{}
-	newFeishuClient = func(cfg config.FeishuConfig) feishuClient {
+	newFeishuClient = func(cfg config.FeishuConfig) FeishuClient {
 		feishuAppIDs = append(feishuAppIDs, cfg.AppID)
 		return &fakeFeishuClient{}
 	}
 	claudeClients := []*fakeClaudeCore{}
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) claudeCore {
+	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
 		client := &fakeClaudeCore{}
 		claudeClients = append(claudeClients, client)
 		return client
@@ -102,16 +102,16 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 	}()
 
 	codexCalls := 0
-	newCodexClient = func(config.CodexConfig) codexClient {
+	newCodexClient = func(config.CodexConfig) CodexClient {
 		codexCalls++
 		return &fakeCodexClient{}
 	}
 	claudeCalls := 0
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) claudeCore {
+	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
 		claudeCalls++
 		return &fakeClaudeCore{}
 	}
-	newFeishuClient = func(cfg config.FeishuConfig) feishuClient {
+	newFeishuClient = func(cfg config.FeishuConfig) FeishuClient {
 		return &fakeFeishuClient{}
 	}
 

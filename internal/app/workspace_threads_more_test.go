@@ -53,6 +53,7 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenFrontendBackendIsClaude(t 
 func TestStartWorkspaceThreadReturnsErrorWhenCodexClientMissing(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.codex = nil
+	replaceCodexClient(a, nil)
 
 	sess := &state.Session{
 		Key:         "sess-1",

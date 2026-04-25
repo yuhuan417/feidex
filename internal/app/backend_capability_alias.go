@@ -3,7 +3,6 @@ package app
 import "feidex/internal/app/backendcaps"
 
 type backendFeature = backendcaps.Feature
-type backendCapabilitySpec = backendcaps.CapabilitySpec
 
 const backendFeatureReview = backendcaps.FeatureReview
 const backendFeatureSkills = backendcaps.FeatureSkills

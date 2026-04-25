@@ -3,250 +3,129 @@ package app
 import (
 	"context"
 	"encoding/json"
-	appapproval "feidex/internal/app/approval"
-	"fmt"
-	"log/slog"
-	"strings"
 
+	appbackend "feidex/internal/app/backend"
+	apppendingforms "feidex/internal/app/pendingforms"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
-// codexEventRouter groups Codex notifications and server requests.
+// codexEventRouter wraps backend.CodexEventRouter with *App callbacks.
 type codexEventRouter struct {
-	app *App
+	app   *App
+	inner *appbackend.CodexEventRouter
 }
 
 func newCodexEventRouter(app *App) *codexEventRouter {
-	return &codexEventRouter{app: app}
+	r := &codexEventRouter{app: app}
+	r.inner = r.buildInner()
+	return r
+}
+
+func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
+	a := r.app
+	router := appbackend.NewCodexEventRouter()
+	router.NoteTurnItemStarted = func(threadID, turnID string, item map[string]any) {
+		newRuntimeStateService(a).noteTurnItemStarted(threadID, turnID, item)
+		noteStandaloneCompactItemStarted(a, threadID, turnID, item)
+	}
+	router.CompleteTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
+		newTurnStreamService(a).completeTurnItem(ctx, threadID, turnID, itemID, item)
+	}
+	router.UpdatePendingPlan = func(turnID, plan string) {
+		newTurnStreamService(a).updatePendingPlan(turnID, plan)
+	}
+	router.OnTurnStarted = func(threadID, turnID string) {
+		onTurnStartedNotification(a, threadID, turnID)
+	}
+	router.OnTurnCompleted = func(threadID, turnID, status string) {
+		finishTurn(a, threadID, turnID, status)
+	}
+	router.OnThreadTokenUsageUpdated = func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
+		onThreadTokenUsageUpdated(a, threadID, turnID, usage)
+	}
+	router.FailStandaloneCompactTurn = func(threadID, turnID, message string) bool {
+		return failStandaloneCompactTurn(a, threadID, turnID, message)
+	}
+	router.RecordTurnError = func(threadID, turnID, message string) {
+		newTurnStreamService(a).recordTurnError(threadID, turnID, message)
+	}
+	router.UpdateSubmissionByTurn = func(threadID, turnID string, mutate func(*state.Submission)) {
+		updateSubmissionByTurn(a, threadID, turnID, mutate)
+	}
+	router.ResolveServerPendingRequest = func(requestID string) *state.PendingRequest {
+		return newRuntimeStateService(a).resolveServerPendingRequest(requestID)
+	}
+	router.ResumeSubmissionAfterRequest = func(pending *state.PendingRequest) {
+		resumeSubmissionAfterRequest(a, pending)
+	}
+	router.MergeRequestPayloadWithTurnItem = func(threadID, turnID, itemID string, raw map[string]any) map[string]any {
+		return newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	}
+	router.SendApprovalCardWithPayload = func(approvalType string, requestID json.RawMessage, threadID, turnID, itemID string, body string, payload map[string]any) {
+		newOutboundCardService(a).sendApprovalCardWithPayload(approvalType, requestID, threadID, turnID, itemID, body, payload)
+	}
+	router.SendPermissionsCardWithPayload = func(requestID json.RawMessage, threadID, turnID, itemID string, body string, permissions map[string]any, payload map[string]any) {
+		newOutboundCardService(a).sendPermissionsCardWithPayload(requestID, threadID, turnID, itemID, body, permissions, payload)
+	}
+	router.SendUserInputCard = func(requestID json.RawMessage, payload apppendingforms.ToolUserInputPayload) {
+		newOutboundCardService(a).sendUserInputCard(requestID, payload)
+	}
+	router.SendUserInputFormCard = func(requestID json.RawMessage, payload apppendingforms.ToolUserInputPayload) {
+		sendUserInputFormCard(a, requestID, payload)
+	}
+	router.SendElicitationURLCard = func(requestID json.RawMessage, payload apppendingforms.ElicitationURLPayload) {
+		sendElicitationURLCard(a, requestID, payload)
+	}
+	router.SendElicitationFormCard = func(requestID json.RawMessage, payload apppendingforms.ElicitationFormPayload) {
+		sendElicitationFormCard(a, requestID, payload)
+	}
+	router.ReplyCodexError = func(requestID json.RawMessage, code int, message string) {
+		replyCodexError(a, requestID, code, message)
+	}
+	router.FindSubmissionByTurn = func(threadID, turnID string) (string, *state.Submission) {
+		return findSubmissionByTurn(a, threadID, turnID)
+	}
+	router.FindWorkspaceCwdForSubmission = func(sub *state.Submission) string {
+		if sub == nil {
+			return ""
+		}
+		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+			return ws.Cwd
+		}
+		return ""
+	}
+	return router
 }
 
 func (r *codexEventRouter) handleNotification(method string, params json.RawMessage) {
-	a := r.app
-	slog.Debug("codex notification", "method", method)
-	switch method {
-	case "item/started":
-		var p struct {
-			ThreadID string         `json:"threadId"`
-			TurnID   string         `json:"turnId"`
-			Item     map[string]any `json:"item"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			newRuntimeStateService(a).noteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
-			noteStandaloneCompactItemStarted(a, p.ThreadID, p.TurnID, p.Item)
-		}
-	case "item/completed":
-		var p struct {
-			ThreadID string         `json:"threadId"`
-			TurnID   string         `json:"turnId"`
-			ItemID   string         `json:"itemId"`
-			Item     map[string]any `json:"item"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			if p.ItemID == "" {
-				p.ItemID = strings.TrimSpace(stringValue(p.Item["id"]))
-			}
-			newTurnStreamService(a).completeTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, p.Item)
-		}
-	case "turn/plan/updated":
-		var p struct {
-			TurnID string `json:"turnId"`
-			Plan   []struct {
-				Step   string `json:"step"`
-				Status string `json:"status"`
-			} `json:"plan"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			plan := make([]string, 0, len(p.Plan))
-			for _, item := range p.Plan {
-				plan = append(plan, fmt.Sprintf("- [%s] %s", item.Status, item.Step))
-			}
-			newTurnStreamService(a).updatePendingPlan(p.TurnID, strings.Join(plan, "\n"))
-		}
-	case "turn/started":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Turn     struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
-			} `json:"turn"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			turnID := strings.TrimSpace(firstNonEmpty(p.Turn.ID, p.TurnID))
-			if turnID != "" {
-				onTurnStartedNotification(a, p.ThreadID, turnID)
-			}
-		}
-	case "turn/completed":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			Turn     struct {
-				ID     string `json:"id"`
-				Status string `json:"status"`
-			} `json:"turn"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			slog.Debug("turn completed",
-				"thread_id", p.ThreadID,
-				"turn_id", p.Turn.ID,
-				"status", p.Turn.Status,
-			)
-			finishTurn(a, p.ThreadID, p.Turn.ID, p.Turn.Status)
-		}
-	case "thread/tokenUsage/updated":
-		var p codexrpc.ThreadTokenUsageUpdatedNotification
-		if json.Unmarshal(params, &p) == nil {
-			onThreadTokenUsageUpdated(a, p.ThreadID, p.TurnID, p.TokenUsage)
-		}
-	case "error":
-		var p struct {
-			ThreadID string `json:"threadId"`
-			TurnID   string `json:"turnId"`
-			Error    struct {
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			slog.Error("codex turn error",
-				"thread_id", p.ThreadID,
-				"turn_id", p.TurnID,
-				"message", p.Error.Message,
-			)
-			if failStandaloneCompactTurn(a, p.ThreadID, p.TurnID, p.Error.Message) {
-				return
-			}
-			newTurnStreamService(a).recordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
-			updateSubmissionByTurn(a, p.ThreadID, p.TurnID, func(sub *state.Submission) {
-				sub.Status = "failed"
-			})
-		}
-	case "serverRequest/resolved":
-		var p struct {
-			ThreadID  string          `json:"threadId"`
-			RequestID json.RawMessage `json:"requestId"`
-		}
-		if json.Unmarshal(params, &p) == nil {
-			reqID := requestIDKey(p.RequestID)
-			pending := newRuntimeStateService(a).resolveServerPendingRequest(reqID)
-			resumeSubmissionAfterRequest(a, pending)
-		}
-	}
+	r.inner.HandleNotification(method, params)
 }
 
 func (r *codexEventRouter) handleServerRequest(req codexrpc.RequestEnvelope) {
-	a := r.app
-	slog.Debug("codex server request", "method", req.Method)
-	switch req.Method {
-	case "item/commandExecution/requestApproval":
-		onCommandApproval(a, req)
-	case "item/fileChange/requestApproval":
-		onFileApproval(a, req)
-	case "item/permissions/requestApproval":
-		onPermissionsApproval(a, req)
-	case "item/tool/requestUserInput":
-		onToolUserInput(a, req)
-	case "mcpServer/elicitation/request":
-		onMcpElicitationRequest(a, req)
-	default:
-		replyCodexError(a, req.ID, -32601, "unsupported server request")
-	}
+	r.inner.HandleServerRequest(req)
 }
 
+// Server request handler methods — these delegate to the backend router
+// and are called from the standalone functions in notifications.go.
+
 func (r *codexEventRouter) onCommandApproval(req codexrpc.RequestEnvelope) {
-	a := r.app
-	var raw map[string]any
-	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		replyCodexError(a, req.ID, -32602, "invalid params")
-		return
-	}
-	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
-	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
-	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
-	newOutboundCardService(a).sendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, appapproval.RenderCommandBody(raw), raw)
+	r.inner.OnCommandApproval(req)
 }
 
 func (r *codexEventRouter) onFileApproval(req codexrpc.RequestEnvelope) {
-	a := r.app
-	var raw map[string]any
-	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		replyCodexError(a, req.ID, -32602, "invalid params")
-		return
-	}
-	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
-	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
-	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
-	workspaceCwd := ""
-	if _, sub := findSubmissionByTurn(a, threadID, turnID); sub != nil {
-		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-			workspaceCwd = ws.Cwd
-		}
-	}
-	newOutboundCardService(a).sendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, appapproval.RenderFileBodyWithWorkspace(raw, workspaceCwd), raw)
+	r.inner.OnFileApproval(req)
 }
 
 func (r *codexEventRouter) onPermissionsApproval(req codexrpc.RequestEnvelope) {
-	a := r.app
-	var raw map[string]any
-	if err := json.Unmarshal(req.Params, &raw); err != nil {
-		replyCodexError(a, req.ID, -32602, "invalid params")
-		return
-	}
-	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
-	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
-	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	raw = newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
-	permissions, _ := raw["permissions"].(map[string]any)
-	newOutboundCardService(a).sendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, appapproval.RenderPermissionsApprovalBody(raw), permissions, raw)
+	r.inner.OnPermissionsApproval(req)
 }
 
 func (r *codexEventRouter) onToolUserInput(req codexrpc.RequestEnvelope) {
-	a := r.app
-	var p toolUserInputPayload
-	if err := json.Unmarshal(req.Params, &p); err != nil {
-		replyCodexError(a, req.ID, -32602, "invalid params")
-		return
-	}
-	if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 && !p.Questions[0].MultiSelect && !p.Questions[0].IsOther {
-		newOutboundCardService(a).sendUserInputCard(req.ID, p)
-		return
-	}
-	sendUserInputFormCard(a, req.ID, p)
+	r.inner.OnToolUserInput(req)
 }
 
 func (r *codexEventRouter) onMcpElicitationRequest(req codexrpc.RequestEnvelope) {
-	a := r.app
-	var header struct {
-		ServerName string `json:"serverName"`
-		ThreadID   string `json:"threadId"`
-		TurnID     string `json:"turnId"`
-		Mode       string `json:"mode"`
-		Message    string `json:"message"`
-		URL        string `json:"url"`
-	}
-	if err := json.Unmarshal(req.Params, &header); err != nil {
-		replyCodexError(a, req.ID, -32602, "invalid params")
-		return
-	}
-	switch header.Mode {
-	case "url":
-		var payload elicitationURLPayload
-		if err := json.Unmarshal(req.Params, &payload); err != nil {
-			replyCodexError(a, req.ID, -32602, "invalid params")
-			return
-		}
-		sendElicitationURLCard(a, req.ID, payload)
-	case "form":
-		var payload elicitationFormPayload
-		if err := json.Unmarshal(req.Params, &payload); err != nil {
-			replyCodexError(a, req.ID, -32602, "invalid params")
-			return
-		}
-		sendElicitationFormCard(a, req.ID, payload)
-	default:
-		replyCodexError(a, req.ID, -32601, "unsupported elicitation mode")
-	}
+	r.inner.OnMcpElicitationRequest(req)
 }

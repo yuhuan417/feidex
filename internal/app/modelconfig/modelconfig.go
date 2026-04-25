@@ -1,0 +1,810 @@
+package modelconfig
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"feidex/internal/app/cards"
+	"feidex/internal/app/runtime"
+	"feidex/internal/claudecli"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
+	"feidex/internal/feishu"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
+)
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// DefaultOptionValue is the sentinel value used for "follow default" selections.
+const DefaultOptionValue = "__default__"
+
+// ClaudeDefaultModelAlias is the fallback Claude model alias when none is configured.
+const ClaudeDefaultModelAlias = "sonnet"
+
+// ModelCommandUsage is the usage string for the /model command.
+const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default>"
+
+// EffortCommandUsage is the usage string for the /effort command.
+const EffortCommandUsage = "/effort | /effort <effort|default>"
+
+// ---------------------------------------------------------------------------
+// Variables
+// ---------------------------------------------------------------------------
+
+// ClaudeBuiltinModelOptions lists the built-in Claude model picker choices.
+var ClaudeBuiltinModelOptions = []runtime.ClaudeModelOption{
+	{Value: "sonnet", Label: "Sonnet (`sonnet`)"},
+	{Value: "opus", Label: "Opus (`opus`)"},
+	{Value: "haiku", Label: "Haiku (`haiku`)"},
+}
+
+// ---------------------------------------------------------------------------
+// Interfaces
+// ---------------------------------------------------------------------------
+
+// CodexClient is the minimal interface for calling codex RPC methods.
+type CodexClient interface {
+	Call(ctx context.Context, method string, params any, result any) error
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func rawCard(card map[string]any) *callback.Card {
+	return &callback.Card{Type: "raw", Data: card}
+}
+
+func actionSessionKey(action *feishu.CardAction) string {
+	return actionStringValue(action, "session_key")
+}
+
+func actionStringValue(action *feishu.CardAction, key string) string {
+	if action == nil {
+		return ""
+	}
+	value, _ := action.ActionValue[key].(string)
+	return strings.TrimSpace(value)
+}
+
+// CommandActionFromMessage builds a CardAction from an InboundMessage.
+func CommandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
+	if actionValue == nil {
+		actionValue = map[string]any{}
+	}
+	if msg == nil {
+		return &feishu.CardAction{ActionValue: actionValue}
+	}
+	return &feishu.CardAction{
+		ActionValue: actionValue,
+		UserID:      strings.TrimSpace(msg.UserID),
+		ChatID:      strings.TrimSpace(msg.ChatID),
+		MessageID:   strings.TrimSpace(msg.MessageID),
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ModelConfigService
+// ---------------------------------------------------------------------------
+
+// ModelConfigService handles model configuration display, selection, and
+// persistence for both Codex and Claude backends. Callback function fields
+// are injected by the app-layer constructor to avoid importing app/.
+type ModelConfigService struct {
+	// Config access callbacks.
+	GetConfig   func() *config.Config
+	GetCfgPath  func() string
+	GetConfigMu func() *sync.RWMutex
+
+	// Feishu client callbacks.
+	ReplyText func(ctx context.Context, msgID string, text string, replyInThread bool) error
+	ReplyCard func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error)
+
+	// Claude runtime callbacks.
+	UpdateClaudeConfig func(cfg config.ClaudeConfig)
+	ClaudeSetModel     func(ctx context.Context, sessionKey, model string) (bool, error)
+	ClaudeSetEffort    func(ctx context.Context, sessionKey, effort string) (bool, error)
+	IsClaudeAvailable  func() bool
+
+	// Codex client callback.
+	RequireCodexClient func() (CodexClient, error)
+
+	// Session helper callbacks.
+	MakeSessionKey           func(msg *feishu.InboundMessage) string
+	NormalizeSessionKey      func(sessionKey string) string
+	SessionBelongsToFrontend func(sessionKey string) bool
+	ReplyInThreadEnabled     func(chatType string) bool
+
+	// Backend configuration delegate callbacks.
+	CompleteGlobalModelSet           func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error)
+	CompleteGlobalReasoningEffortSet func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error)
+	HandleBackendModelCommand        func(msg *feishu.InboundMessage, args []string) error
+
+	// Menu helper callbacks.
+	FormatMenuBody            func(action, body string) string
+	FrontendIdleBlockedReason func() string
+
+	// Card action response callback.
+	ReplyCommandActionResponse func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
+}
+
+// ---------------------------------------------------------------------------
+// Codex standalone helpers
+// ---------------------------------------------------------------------------
+
+// ConfiguredGlobalModel returns the globally configured codex model ID, or empty string.
+func ConfiguredGlobalModel(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Codex.Model)
+}
+
+// ConfiguredGlobalReasoningEffort returns the globally configured reasoning effort, or empty string.
+func ConfiguredGlobalReasoningEffort(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Codex.ReasoningEffort)
+}
+
+// DefaultModelEntry returns the default model from the result, or the first entry if none is marked default.
+func DefaultModelEntry(result codexrpc.ModelListResult) *codexrpc.ModelListEntry {
+	for i := range result.Data {
+		if result.Data[i].IsDefault {
+			return &result.Data[i]
+		}
+	}
+	if len(result.Data) == 0 {
+		return nil
+	}
+	return &result.Data[0]
+}
+
+// LookupModelEntry finds a model by ID or Model field; returns nil if not found.
+func LookupModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return DefaultModelEntry(result)
+	}
+	for i := range result.Data {
+		if result.Data[i].ID == modelID || result.Data[i].Model == modelID {
+			return &result.Data[i]
+		}
+	}
+	return nil
+}
+
+// FindModelEntry finds a model by ID, falling back to the default entry.
+func FindModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
+	if found := LookupModelEntry(result, modelID); found != nil {
+		return found
+	}
+	return DefaultModelEntry(result)
+}
+
+// ModelSupportsEffort reports whether the model supports the given reasoning effort.
+func ModelSupportsEffort(model *codexrpc.ModelListEntry, effort string) bool {
+	effort = strings.TrimSpace(effort)
+	if model == nil || effort == "" {
+		return true
+	}
+	for _, item := range model.SupportedReasoningEfforts {
+		if strings.TrimSpace(item.ReasoningEffort) == effort {
+			return true
+		}
+	}
+	return false
+}
+
+// EffectiveConfiguredModelAndEffort resolves the effective model and effort from config and model catalog.
+func EffectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.ModelListResult) (model *codexrpc.ModelListEntry, effort string) {
+	model = FindModelEntry(result, ConfiguredGlobalModel(cfg))
+	effort = ConfiguredGlobalReasoningEffort(cfg)
+	if effort == "" && model != nil {
+		effort = strings.TrimSpace(model.DefaultReasoningEffort)
+	}
+	if !ModelSupportsEffort(model, effort) && model != nil {
+		effort = strings.TrimSpace(model.DefaultReasoningEffort)
+	}
+	return model, effort
+}
+
+// ModelCardActionRow builds a card action row element from buttons.
+func ModelCardActionRow(buttons []feishu.Button) map[string]any {
+	return cards.BuildMarkdownBodyCardActionElement(buttons)
+}
+
+// ChunkButtons splits a button slice into rows of the given size.
+func ChunkButtons(buttons []feishu.Button, size int) [][]feishu.Button {
+	if len(buttons) == 0 {
+		return nil
+	}
+	if size <= 0 {
+		size = len(buttons)
+	}
+	rows := make([][]feishu.Button, 0, (len(buttons)+size-1)/size)
+	for len(buttons) > 0 {
+		n := size
+		if len(buttons) < n {
+			n = len(buttons)
+		}
+		rows = append(rows, append([]feishu.Button(nil), buttons[:n]...))
+		buttons = buttons[n:]
+	}
+	return rows
+}
+
+// ---------------------------------------------------------------------------
+// Claude standalone helpers
+// ---------------------------------------------------------------------------
+
+// ConfiguredClaudeModel returns the configured Claude model, or empty string.
+func ConfiguredClaudeModel(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Claude.Model)
+}
+
+// ConfiguredClaudeEffort returns the configured Claude effort, or empty string.
+func ConfiguredClaudeEffort(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Claude.Effort)
+}
+
+// NormalizeClaudeModelValue normalizes a Claude model value, mapping empty/default to the built-in alias.
+func NormalizeClaudeModelValue(value string) string {
+	value = strings.TrimSpace(value)
+	switch value {
+	case "", "default", DefaultOptionValue:
+		return ClaudeDefaultModelAlias
+	default:
+		return value
+	}
+}
+
+// ClaudeModelPickerOptions builds the list of Claude model picker options with the current selection marked.
+func ClaudeModelPickerOptions(cfg *config.Config) []runtime.ClaudeModelOption {
+	options := make([]runtime.ClaudeModelOption, 0, len(ClaudeBuiltinModelOptions)+1)
+	seen := map[string]struct{}{}
+	current := ConfiguredClaudeModel(cfg)
+	for _, item := range ClaudeBuiltinModelOptions {
+		label := item.Label
+		if item.Value == current {
+			label = "当前 · " + label
+		}
+		options = append(options, runtime.ClaudeModelOption{
+			Value: item.Value,
+			Label: label,
+		})
+		seen[item.Value] = struct{}{}
+	}
+	if current != "" {
+		if _, ok := seen[current]; !ok {
+			options = append(options, runtime.ClaudeModelOption{
+				Value: current,
+				Label: "当前 · 自定义 (`" + current + "`)",
+			})
+		}
+	}
+	return options
+}
+
+// ---------------------------------------------------------------------------
+// ModelConfigService — Codex model methods
+// ---------------------------------------------------------------------------
+
+// FetchModelList fetches the Codex model catalog.
+func (s ModelConfigService) FetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
+	var result codexrpc.ModelListResult
+	client, err := s.RequireCodexClient()
+	if err != nil {
+		return result, err
+	}
+	if err := client.Call(ctx, "model/list", map[string]any{"limit": 100, "includeHidden": false}, &result); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+// RenderModelConfigCard renders the Codex model configuration card.
+func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
+	menuAction = strings.TrimSpace(menuAction)
+	if menuAction == "" {
+		menuAction = "menu.model"
+	}
+	cfg := s.GetConfig()
+	selectedModel, selectedEffort := EffectiveConfiguredModelAndEffort(cfg, result)
+	modelName := "(default)"
+	modelDescription := ""
+	if selectedModel != nil {
+		modelName = firstNonEmpty(selectedModel.DisplayName, selectedModel.ID, selectedModel.Model)
+		modelDescription = strings.TrimSpace(selectedModel.Description)
+	}
+	modelValue := ConfiguredGlobalModel(cfg)
+	effortValue := ConfiguredGlobalReasoningEffort(cfg)
+	modelSource := "跟随 app-server 默认"
+	if modelValue != "" {
+		modelSource = "全局显式配置"
+	}
+	effortSource := "跟随模型默认"
+	if effortValue != "" {
+		effortSource = "全局显式配置"
+	}
+
+	elements := []map[string]any{
+		{
+			"tag": "markdown",
+			"content": "当前模型: `" + modelName + "`\n" +
+				"模型来源: " + modelSource + "\n" +
+				"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
+				"推理来源: " + effortSource +
+				func() string {
+					if modelDescription == "" {
+						return ""
+					}
+					return "\n\n" + modelDescription
+				}(),
+		},
+		{"tag": "markdown", "content": "选择全局模型"},
+	}
+	modelOptions := []cards.SelectStaticOption{{
+		Text: func() string {
+			if modelValue == "" {
+				return "当前 · 跟随默认"
+			}
+			return "跟随默认"
+		}(),
+		Value: DefaultOptionValue,
+	}}
+	modelInitialOption := DefaultOptionValue
+	if modelValue != "" && selectedModel != nil {
+		modelInitialOption = selectedModel.ID
+	}
+	for _, item := range result.Data {
+		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
+		if selectedModel != nil && item.ID == selectedModel.ID && modelValue != "" {
+			label = "当前 · " + label
+		}
+		modelOptions = append(modelOptions, cards.SelectStaticOption{
+			Text:  label,
+			Value: item.ID,
+		})
+	}
+	elements = append(elements, cards.BuildSelectStaticElement(
+		"model_config_select_model",
+		"选择全局模型",
+		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
+		modelOptions,
+		modelInitialOption,
+	))
+
+	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择全局推理强度"})
+	effortOptions := []cards.SelectStaticOption{{
+		Text: func() string {
+			if effortValue == "" {
+				return "当前 · 跟随默认"
+			}
+			return "跟随默认"
+		}(),
+		Value: DefaultOptionValue,
+	}}
+	effortInitialOption := DefaultOptionValue
+	if effortValue != "" {
+		effortInitialOption = selectedEffort
+	}
+	if selectedModel != nil {
+		for _, item := range selectedModel.SupportedReasoningEfforts {
+			label := item.ReasoningEffort
+			if item.ReasoningEffort == selectedEffort && effortValue != "" {
+				label = "当前 · " + label
+			}
+			effortOptions = append(effortOptions, cards.SelectStaticOption{
+				Text:  label,
+				Value: item.ReasoningEffort,
+			})
+		}
+	}
+	elements = append(elements, cards.BuildSelectStaticElement(
+		"model_config_select_effort",
+		"选择全局推理强度",
+		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
+		effortOptions,
+		effortInitialOption,
+	))
+	if strings.TrimSpace(sessionKey) != "" {
+		elements = append(elements, ModelCardActionRow([]feishu.Button{{
+			Text:  "返回上一级",
+			Type:  "default",
+			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		}}))
+	}
+
+	card := cards.NewMarkdownBodyCard("模型配置", "blue")
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "")})
+	for _, elem := range elements {
+		cards.AppendMarkdownBodyCardElement(card, elem)
+	}
+	return card
+}
+
+// UpdateGlobalModelConfig persists a Codex config mutation.
+func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
+	cfg := s.GetConfig()
+	if cfg == nil {
+		return fmt.Errorf("nil config")
+	}
+	mu := s.GetConfigMu()
+	mu.Lock()
+	defer mu.Unlock()
+	mutate(&cfg.Codex)
+	cfg.Codex.Model = strings.TrimSpace(cfg.Codex.Model)
+	cfg.Codex.ReasoningEffort = strings.TrimSpace(cfg.Codex.ReasoningEffort)
+	selectedModel := FindModelEntry(result, cfg.Codex.Model)
+	if !ModelSupportsEffort(selectedModel, cfg.Codex.ReasoningEffort) {
+		cfg.Codex.ReasoningEffort = ""
+	}
+	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
+		return err
+	}
+	return config.Save(s.GetCfgPath(), cfg)
+}
+
+// CommandCodexModel handles the /model command for the Codex backend.
+func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args []string) error {
+	sessionKey := s.MakeSessionKey(msg)
+	if len(args) > 0 {
+		action := CommandActionFromMessage(msg, map[string]any{
+			"menu_action": "menu.model",
+			"session_key": sessionKey,
+		})
+		switch strings.TrimSpace(args[0]) {
+		case "set":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
+			modelID := strings.TrimSpace(args[1])
+			if modelID == "default" || modelID == DefaultOptionValue {
+				modelID = ""
+			}
+			if modelID != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				result, err := s.FetchModelList(ctx)
+				if err != nil {
+					return err
+				}
+				if LookupModelEntry(result, modelID) == nil {
+					return s.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, s.ReplyInThreadEnabled(msg.ChatType))
+				}
+			}
+			resp, err := s.CompleteGlobalModelSet(action, modelID)
+			if err != nil {
+				return err
+			}
+			return s.ReplyCommandActionResponse(msg, resp)
+		case "effort":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
+			effort := strings.TrimSpace(args[1])
+			if effort == "default" || effort == DefaultOptionValue {
+				effort = ""
+			}
+			resp, err := s.CompleteGlobalReasoningEffortSet(action, effort)
+			if err != nil {
+				return err
+			}
+			return s.ReplyCommandActionResponse(msg, resp)
+		default:
+			return fmt.Errorf("usage: %s", ModelCommandUsage)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := s.FetchModelList(ctx)
+	if err != nil {
+		return err
+	}
+	card := s.RenderModelConfigCard(result, sessionKey, "menu.model")
+	_, err = s.ReplyCard(context.Background(), msg.MessageID, card, s.ReplyInThreadEnabled(msg.ChatType))
+	return err
+}
+
+// ---------------------------------------------------------------------------
+// ModelConfigService — Claude model methods
+// ---------------------------------------------------------------------------
+
+// RenderClaudeModelConfigCard renders the Claude model configuration card.
+func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction string) map[string]any {
+	menuAction = strings.TrimSpace(menuAction)
+	if menuAction == "" {
+		menuAction = "menu.model"
+	}
+	cfg := s.GetConfig()
+	currentModel := firstNonEmpty(ConfiguredClaudeModel(cfg), ClaudeDefaultModelAlias)
+	currentEffort := firstNonEmpty(ConfiguredClaudeEffort(cfg), "(default)")
+
+	elements := []map[string]any{
+		{
+			"tag": "markdown",
+			"content": "当前 backend: `claude`\n" +
+				"当前模型: `" + currentModel + "`\n" +
+				"当前推理强度: `" + currentEffort + "`\n\n" +
+				"这里提供 Claude 常用别名与当前自定义 model。\n" +
+				"需要任意 raw model 时，请直接使用 `/model set <model-id>`。\n" +
+				"`/model set default` 会恢复为 `sonnet`。\n" +
+				"切换 Claude model / effort 只允许在当前 frontend 空闲时进行；成功后会尝试立即应用到当前会话，并用于后续对话。",
+		},
+		{"tag": "markdown", "content": "选择 Claude 默认模型"},
+	}
+
+	modelOptions := make([]cards.SelectStaticOption, 0, len(ClaudeBuiltinModelOptions)+1)
+	for _, item := range ClaudeModelPickerOptions(cfg) {
+		modelOptions = append(modelOptions, cards.SelectStaticOption{
+			Text:  item.Label,
+			Value: item.Value,
+		})
+	}
+	elements = append(elements, cards.BuildSelectStaticElement(
+		"claude_model_config_select_model",
+		"选择 Claude 默认模型",
+		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
+		modelOptions,
+		currentModel,
+	))
+
+	effortValue := ConfiguredClaudeEffort(cfg)
+	effortOptions := []cards.SelectStaticOption{{
+		Text: func() string {
+			if effortValue == "" {
+				return "当前 · 跟随默认"
+			}
+			return "跟随默认"
+		}(),
+		Value: DefaultOptionValue,
+	}}
+	effortInitialOption := DefaultOptionValue
+	if effortValue != "" {
+		effortInitialOption = effortValue
+	}
+	for _, effort := range config.SupportedClaudeEfforts() {
+		label := effort
+		if effort == effortValue && effortValue != "" {
+			label = "当前 · " + label
+		}
+		effortOptions = append(effortOptions, cards.SelectStaticOption{
+			Text:  label,
+			Value: effort,
+		})
+	}
+	elements = append(elements,
+		map[string]any{"tag": "markdown", "content": "选择 Claude 推理强度"},
+		cards.BuildSelectStaticElement(
+			"claude_model_config_select_effort",
+			"选择 Claude 推理强度",
+			map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
+			effortOptions,
+			effortInitialOption,
+		),
+	)
+	if strings.TrimSpace(sessionKey) != "" {
+		elements = append(elements, ModelCardActionRow([]feishu.Button{{
+			Text:  "返回上一级",
+			Type:  "default",
+			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		}}))
+	}
+
+	card := cards.NewMarkdownBodyCard("模型配置", "blue")
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "")})
+	for _, elem := range elements {
+		cards.AppendMarkdownBodyCardElement(card, elem)
+	}
+	return card
+}
+
+// EnsureClaudeRuntimeConfigChangeSafe checks that the frontend is idle before
+// allowing a Claude model/effort configuration change.
+func (s ModelConfigService) EnsureClaudeRuntimeConfigChangeSafe() error {
+	if reason := strings.TrimSpace(s.FrontendIdleBlockedReason()); reason != "" {
+		return fmt.Errorf("Claude model / effort 只能在当前 frontend 空闲时切换: %s", reason)
+	}
+	return nil
+}
+
+// UpdateClaudeModelConfig persists a Claude config mutation and hot-reloads.
+func (s ModelConfigService) UpdateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
+	cfg := s.GetConfig()
+	if cfg == nil {
+		return fmt.Errorf("nil config")
+	}
+	cfgPath := s.GetCfgPath()
+	if strings.TrimSpace(cfgPath) == "" {
+		return fmt.Errorf("missing config path")
+	}
+	if err := s.EnsureClaudeRuntimeConfigChangeSafe(); err != nil {
+		return err
+	}
+	mu := s.GetConfigMu()
+	mu.Lock()
+	defer mu.Unlock()
+	mutate(&cfg.Claude)
+	if err := cfg.Normalize(filepath.Dir(cfgPath)); err != nil {
+		return err
+	}
+	if err := config.Save(cfgPath, cfg); err != nil {
+		return err
+	}
+	if s.IsClaudeAvailable() {
+		s.UpdateClaudeConfig(cfg.Claude)
+	}
+	return nil
+}
+
+// HotApplyClaudeModelToCurrentSession attempts to hot-apply a model change to
+// the active Claude session.
+func (s ModelConfigService) HotApplyClaudeModelToCurrentSession(sessionKey, model string) (bool, error) {
+	if !s.IsClaudeAvailable() {
+		return false, nil
+	}
+	sessionKey = s.NormalizeSessionKey(sessionKey)
+	if sessionKey == "" || !s.SessionBelongsToFrontend(sessionKey) {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.ClaudeSetModel(ctx, sessionKey, strings.TrimSpace(model))
+}
+
+// HotApplyClaudeEffortToCurrentSession attempts to hot-apply an effort change
+// to the active Claude session.
+func (s ModelConfigService) HotApplyClaudeEffortToCurrentSession(sessionKey, effort string) (bool, error) {
+	if !s.IsClaudeAvailable() {
+		return false, nil
+	}
+	sessionKey = s.NormalizeSessionKey(sessionKey)
+	if sessionKey == "" || !s.SessionBelongsToFrontend(sessionKey) {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.ClaudeSetEffort(ctx, sessionKey, strings.TrimSpace(effort))
+}
+
+// CompleteClaudeModelSet handles the Claude model selection card action.
+func (s ModelConfigService) CompleteClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	model := NormalizeClaudeModelValue(modelID)
+	if err := s.UpdateClaudeModelConfig(func(c *config.ClaudeConfig) {
+		c.Model = model
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	toastType := "success"
+	toastContent := "已更新 Claude 模型；后续对话会使用新配置"
+	if applied, err := s.HotApplyClaudeModelToCurrentSession(sessionKey, model); err != nil {
+		toastType = "warning"
+		toastContent = "已更新 Claude 模型；当前会话热更新失败，仅后续对话会使用新配置"
+	} else if applied {
+		toastContent = "已更新 Claude 模型；当前会话与后续对话会使用新配置"
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: toastType, Content: toastContent},
+		Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
+	}, nil
+}
+
+// CompleteClaudeEffortSet handles the Claude effort selection card action.
+func (s ModelConfigService) CompleteClaudeEffortSet(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	normalized, err := config.NormalizeClaudeEffort(effort)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	if err := s.UpdateClaudeModelConfig(func(c *config.ClaudeConfig) {
+		c.Effort = normalized
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	toastType := "success"
+	toastContent := "已更新 Claude 推理强度；后续对话会使用新配置"
+	if applied, applyErr := s.HotApplyClaudeEffortToCurrentSession(sessionKey, normalized); applyErr != nil {
+		toastType = "warning"
+		switch {
+		case errors.Is(applyErr, claudecli.ErrEffortDefaultHotApplyUnsupported):
+			toastContent = "已更新 Claude 推理强度；当前会话暂不支持热切回默认，仅后续对话会使用新配置"
+		default:
+			toastContent = "已更新 Claude 推理强度；当前会话热更新失败，仅后续对话会使用新配置"
+		}
+	} else if applied {
+		toastContent = "已更新 Claude 推理强度；当前会话与后续对话会使用新配置"
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: toastType, Content: toastContent},
+		Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
+	}, nil
+}
+
+// CommandClaudeModel handles the /model command for the Claude backend.
+func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args []string) error {
+	if msg == nil {
+		return nil
+	}
+	sessionKey := s.MakeSessionKey(msg)
+	if len(args) > 0 {
+		action := CommandActionFromMessage(msg, map[string]any{
+			"menu_action": "menu.model",
+			"session_key": sessionKey,
+		})
+		switch strings.TrimSpace(args[0]) {
+		case "set":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
+			resp, err := s.CompleteClaudeModelSet(action, strings.TrimSpace(args[1]))
+			if err != nil {
+				return err
+			}
+			return s.ReplyCommandActionResponse(msg, resp)
+		case "effort":
+			if len(args) != 2 {
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
+			effort := strings.TrimSpace(args[1])
+			if effort == "default" || effort == DefaultOptionValue {
+				effort = ""
+			}
+			resp, err := s.CompleteClaudeEffortSet(action, effort)
+			if err != nil {
+				return err
+			}
+			return s.ReplyCommandActionResponse(msg, resp)
+		default:
+			return fmt.Errorf("usage: %s", ModelCommandUsage)
+		}
+	}
+	card := s.RenderClaudeModelConfigCard(sessionKey, "menu.model")
+	_, err := s.ReplyCard(context.Background(), msg.MessageID, card, s.ReplyInThreadEnabled(msg.ChatType))
+	return err
+}
+
+// CommandEffort handles the /effort command.
+func (s ModelConfigService) CommandEffort(msg *feishu.InboundMessage, args []string) error {
+	switch len(args) {
+	case 0:
+		return s.HandleBackendModelCommand(msg, nil)
+	case 1:
+		return s.HandleBackendModelCommand(msg, []string{"effort", strings.TrimSpace(args[0])})
+	default:
+		return fmt.Errorf("usage: %s", EffortCommandUsage)
+	}
+}

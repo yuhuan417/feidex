@@ -4,48 +4,74 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
-	"time"
+
+	appcodexruntime "feidex/internal/app/codexruntime"
 )
 
-func beginCodexTransportRecovery(a *App, client codexClient) bool {
-	if a == nil || client == nil {
-		return false
+// codexRecoveryState is the app-level recovery state, lazily initialized.
+var codexRecoveryState = appcodexruntime.NewRecoveryState()
+
+// buildCodexRecoveryService builds a codexruntime.RecoveryService with
+// all callbacks wired to *App dependencies. The StartVerifiedCodexClient
+// callback is set separately to avoid circular initialization.
+func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
+	return appcodexruntime.RecoveryService{
+		State: codexRecoveryState,
+		FrontendID: func() string {
+			return a.frontendID
+		},
+		IsBackendActive: func() bool {
+			if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
+				return runtime.isActive(a)
+			}
+			return false
+		},
+		RecoverFrontendRuntimeState: func() {
+			recoverFrontendRuntimeState(a)
+		},
+		SessionKeysForRecovery: func() []string {
+			var keys []string
+			for _, sess := range appState(a).sessions() {
+				if sess != nil && sessionBelongsToFrontend(a, sess.Key) {
+					keys = append(keys, strings.TrimSpace(sess.Key))
+				}
+			}
+			return keys
+		},
+		SessionShouldStartNextSubmissionAsync: func(sessionKey string) bool {
+			sess := appState(a).session(sessionKey)
+			return sessionShouldStartNextSubmissionAsync(sess)
+		},
+		StartNextSubmissionAsync: func(sessionKey, reason string) {
+			newSubmissionCoordinator(a).startNextSubmissionAsync(sessionKey, reason)
+		},
 	}
-	a.codexRuntimeMu.Lock()
-	defer a.codexRuntimeMu.Unlock()
-	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
-		return false
-	}
-	if a.codexRecovering || a.codex != client {
-		return false
-	}
-	a.codexRecovering = true
-	a.codexRecoverySource = client
-	a.codex = nil
-	return true
+}
+
+func beginCodexTransportRecovery(a *App, client CodexClient) bool {
+	return buildCodexRecoveryService(a).BeginRecovery(client)
 }
 
 func codexRuntimeRecovering(a *App) bool {
-	if a == nil {
-		return false
-	}
-	a.codexRuntimeMu.Lock()
-	defer a.codexRuntimeMu.Unlock()
-	return a.codexRecovering
+	return buildCodexRecoveryService(a).IsRecovering()
 }
 
-func currentCodexClient(a *App) codexClient {
+func currentCodexClient(a *App) CodexClient {
 	if a == nil {
 		return nil
 	}
-	a.codexRuntimeMu.Lock()
-	defer a.codexRuntimeMu.Unlock()
-	return a.codex
+	svc := buildCodexRecoveryService(a)
+	if svc.IsRecovering() {
+		return svc.CurrentClient()
+	}
+	if a.codex != nil {
+		return a.codex
+	}
+	return svc.CurrentClient()
 }
 
-func requireCodexClient(a *App) (codexClient, error) {
+func requireCodexClient(a *App) (CodexClient, error) {
 	client := currentCodexClient(a)
 	if client == nil {
 		return nil, fmt.Errorf("codex client not initialized")
@@ -53,123 +79,52 @@ func requireCodexClient(a *App) (codexClient, error) {
 	return client, nil
 }
 
-func replaceCodexClient(a *App, next codexClient) codexClient {
-	if a == nil {
-		return nil
+func replaceCodexClient(a *App, next CodexClient) CodexClient {
+	prev := buildCodexRecoveryService(a).ReplaceClient(next)
+	if a != nil {
+		a.codex = next
 	}
-	a.codexRuntimeMu.Lock()
-	defer a.codexRuntimeMu.Unlock()
-	prev := a.codex
-	a.codex = next
 	return prev
 }
 
 func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
-	client := currentCodexClient(a)
-	if client == nil {
-		return
-	}
-	_ = client.ReplyError(requestID, code, message)
+	buildCodexRecoveryService(a).ReplyError(requestID, code, message)
 }
 
-func completeCodexTransportRecovery(a *App, next codexClient) bool {
-	if a == nil {
-		return false
+func completeCodexTransportRecovery(a *App, next CodexClient) bool {
+	if ok := buildCodexRecoveryService(a).CompleteRecovery(next); ok {
+		if a != nil {
+			a.codex = next
+		}
+		return true
 	}
-	a.codexRuntimeMu.Lock()
-	defer a.codexRuntimeMu.Unlock()
-	source := a.codexRecoverySource
-	a.codexRecovering = false
-	a.codexRecoverySource = nil
-	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
-		return false
-	}
-	if a.codex != nil && a.codex != source {
-		return false
-	}
-	a.codex = next
-	return next != nil
+	return false
 }
 
 func beginCodexAutoThreadRecoveryScope(a *App) func() {
-	if a == nil {
-		return func() {}
-	}
-	a.codexAutoThreadMu.Lock()
-	a.codexAutoThreading = true
-	a.codexAutoThreadMu.Unlock()
-	return func() {
-		a.codexAutoThreadMu.Lock()
-		a.codexAutoThreading = false
-		a.codexAutoThreadMu.Unlock()
-	}
+	return buildCodexRecoveryService(a).BeginAutoThreadRecoveryScope()
 }
 
 func codexAutoThreadRecoveryActive(a *App) bool {
-	if a == nil {
-		return false
-	}
-	a.codexAutoThreadMu.Lock()
-	defer a.codexAutoThreadMu.Unlock()
-	return a.codexAutoThreading
+	return buildCodexRecoveryService(a).AutoThreadRecoveryActive()
 }
 
-func recoverCodexRuntimeAfterTransportFailure(a *App, failed codexClient, skipFrontendRecovery bool) {
-	if a == nil {
-		return
+func recoverCodexRuntimeAfterTransportFailure(a *App, failed CodexClient, skipFrontendRecovery bool) {
+	svc := buildCodexRecoveryService(a)
+	svc.StartVerifiedCodexClient = func(ctx context.Context) (appcodexruntime.CodexClient, error) {
+		return newBackendUpgradeService(a).startVerifiedCodexClient(ctx)
 	}
-	if failed != nil {
-		defer func() {
-			if err := failed.Close(); err != nil {
-				slog.Debug("codex transport failure close skipped",
-					"frontend_id", a.frontendID,
-					"error", err,
-				)
-			}
-		}()
+	svc.RecoverAfterTransportFailure(failed, skipFrontendRecovery)
+	if a != nil && !svc.IsRecovering() {
+		if next := svc.CurrentClient(); next != nil {
+			a.codex = next
+		}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	next, err := newBackendUpgradeService(a).startVerifiedCodexClient(ctx)
-	if err != nil {
-		_ = completeCodexTransportRecovery(a, nil)
-		slog.Error("codex runtime recovery failed",
-			"frontend_id", a.frontendID,
-			"error", err,
-		)
-		return
-	}
-	if !completeCodexTransportRecovery(a, next) {
-		_ = next.Close()
-		return
-	}
-	slog.Info("codex runtime recovered",
-		"frontend_id", a.frontendID,
-		"frontend_thread_recovery_skipped", skipFrontendRecovery,
-	)
-	if !skipFrontendRecovery {
-		recoverFrontendRuntimeState(a)
-	}
-	resumeQueuedFrontendSessionsAfterCodexRecovery(a)
 }
 
 func resumeQueuedFrontendSessionsAfterCodexRecovery(a *App) {
 	if a == nil || a.store == nil {
 		return
 	}
-	for _, sess := range appState(a).sessions() {
-		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
-			continue
-		}
-		if !sessionShouldStartNextSubmissionAsync(sess) {
-			continue
-		}
-		sessionKey := strings.TrimSpace(sess.Key)
-		if sessionKey == "" {
-			continue
-		}
-		go newSubmissionCoordinator(a).startNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
-	}
+	buildCodexRecoveryService(a).ResumeQueuedSessions()
 }

@@ -90,10 +90,10 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	newAutoRetryService(a).autoRetryTracker().after = func(time.Duration, func()) delayedTask {
+	newAutoRetryService(a).AutoRetryTracker().After = func(time.Duration, func()) delayedTask {
 		return &fakeDelayedTask{}
 	}
-	if err := newAutoRetryService(a).updateAutoRetryEnabled(true); err != nil {
+	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")

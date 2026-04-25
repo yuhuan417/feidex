@@ -3,21 +3,17 @@ package app
 import (
 	"strings"
 
+	appmenuutil "feidex/internal/app/menuutil"
+	"feidex/internal/app/menutypes"
 	"feidex/internal/feishu"
 )
 
 func menuGroupSpec(action string) (commandMenuGroupSpec, bool) {
-	return menuGroupSpecForBackend(action, "")
+	return appmenuutil.MenuGroupSpec(action)
 }
 
 func menuGroupSpecForBackend(action, backend string) (commandMenuGroupSpec, bool) {
-	action = strings.TrimSpace(action)
-	for _, spec := range commandMenuGroupSpecs {
-		if spec.Action == action {
-			return backendCapabilityForKind(backend).MenuGroupSpec(action, spec), true
-		}
-	}
-	return commandMenuGroupSpec{}, false
+	return appmenuutil.MenuGroupSpecForBackend(action, backend)
 }
 
 func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
@@ -32,13 +28,7 @@ func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
 }
 
 func menuItemSpecForAction(action string) (commandMenuItemSpec, bool) {
-	action = strings.TrimSpace(action)
-	for _, spec := range commandMenuItemSpecs {
-		if spec.Action == action {
-			return spec, true
-		}
-	}
-	return commandMenuItemSpec{}, false
+	return appmenuutil.MenuItemSpecForAction(action)
 }
 
 func menuActionVisibleForBackend(action, backend string) bool {
@@ -107,63 +97,26 @@ func groupHasVisibleMenuItems(action, backend string) bool {
 }
 
 func renderRootMenuButtons(backend, sessionKey string) []feishu.Button {
-	buttons := make([]feishu.Button, 0, len(commandMenuGroupSpecs))
-	for _, spec := range commandMenuGroupSpecs {
-		if !spec.ShowInRoot {
-			continue
-		}
-		if !groupHasVisibleMenuItems(spec.Action, backend) {
-			continue
-		}
-		spec, _ = menuGroupSpecForBackend(spec.Action, backend)
-		buttons = append(buttons, feishu.Button{
-			Text:  submenuLabel(spec.Label),
-			Type:  "default",
-			Value: map[string]any{"action": spec.Action, "session_key": sessionKey},
-		})
-	}
-	return buttons
+	return appmenuutil.RenderRootMenuButtons(backend, sessionKey,
+		func(spec menutypes.MenuItemSpec, backend string) bool {
+			return menuItemVisibleForBackend(spec, backend)
+		},
+		func(action, backend string) bool {
+			return groupHasVisibleMenuItems(action, backend)
+		},
+	)
 }
 
 func renderGroupMenuButtons(backend, groupAction, sessionKey string) []feishu.Button {
-	items := menuItemsForGroup(groupAction, backend)
-	buttons := make([]feishu.Button, 0, len(items))
-	for _, spec := range items {
-		buttons = append(buttons, renderMenuButtonSpec(spec, sessionKey))
-	}
-	return buttons
+	return appmenuutil.RenderGroupMenuButtons(groupAction, sessionKey, func(action string) []commandMenuItemSpec {
+		return menuItemsForGroup(action, backend)
+	})
 }
 
 func renderMenuButtonSpec(spec commandMenuItemSpec, sessionKey string) feishu.Button {
-	text := spec.Label
-	switch spec.Kind {
-	case menuItemSubmenu:
-		if strings.TrimSpace(spec.Slash) != "" {
-			text = submenuCommandLabel(spec.Label, spec.Slash)
-		} else {
-			text = submenuLabel(spec.Label)
-		}
-	case menuItemDirect:
-		text = commandLabel(spec.Label, spec.Slash)
-	}
-	value := map[string]any{"action": spec.Action, "session_key": sessionKey}
-	if spec.IncludeParentAction {
-		value["parent_action"] = spec.GroupAction
-	}
-	return feishu.Button{
-		Text:  text,
-		Type:  "default",
-		Value: value,
-	}
+	return appmenuutil.RenderMenuButtonSpec(spec, sessionKey)
 }
 
 func appendHelpCommands(lines []string, specs []helpCommandSpec) []string {
-	for _, spec := range specs {
-		command := spec.Command
-		if !strings.Contains(command, "`") {
-			command = "`" + command + "`"
-		}
-		lines = append(lines, command, spec.Summary)
-	}
-	return lines
+	return appmenuutil.AppendHelpCommands(lines, specs)
 }

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/state"
 )
 
@@ -43,8 +44,8 @@ func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionK
 	return reconcileCompletedCodexTurnFromFinalOutput(a, sessionKey, sess)
 }
 
-func (codexRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
-	return codexConversationBackend{deps: a}
+func (codexRuntimeFacade) conversationBackend(a *App) appconvbackend.ConversationBackendFacade {
+	return appconvbackend.NewCodexConversationBackend(a)
 }
 
 func (codexRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
@@ -71,14 +72,14 @@ func (codexRuntimeFacade) startRuntime(ctx context.Context, a *App, handle *back
 }
 
 func (codexRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && newMaintenanceStateService(a).codexMaintenanceActive()
+	return a != nil && newMaintenanceStateService(a).CodexMaintenanceActive()
 }
 
 func (codexRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 	if a == nil {
 		return nil
 	}
-	return newMaintenanceStateService(a).codexMaintenanceBlocksCommand(raw)
+	return newMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
 }
 
 func (codexRuntimeFacade) idleMaintenanceBlockedReason() string {

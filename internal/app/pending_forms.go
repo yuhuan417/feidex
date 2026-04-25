@@ -17,6 +17,7 @@ import (
 type toolUserInputOption = pendingforms.ToolUserInputOption
 type toolUserInputQuestion = pendingforms.ToolUserInputQuestion
 type toolUserInputPayload = pendingforms.ToolUserInputPayload
+type toolUserInputFormDrafts = pendingforms.FormDrafts
 type elicitationFormPayload = pendingforms.ElicitationFormPayload
 type elicitationURLPayload = pendingforms.ElicitationURLPayload
 

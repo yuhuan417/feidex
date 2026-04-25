@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/modelconfig"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -27,7 +28,7 @@ func TestEffectiveConfiguredModelAndEffortUsesCatalogDefaultsWhenUnset(t *testin
 			},
 		},
 	}
-	model, effort := effectiveConfiguredModelAndEffort(cfg, result)
+	model, effort := modelconfig.EffectiveConfiguredModelAndEffort(cfg, result)
 	if model == nil || model.ID != "gpt-5.3-codex" {
 		t.Fatalf("unexpected default model: %#v", model)
 	}

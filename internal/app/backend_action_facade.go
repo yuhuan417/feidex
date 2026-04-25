@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	appcompact "feidex/internal/app/compact"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -11,6 +12,7 @@ import (
 
 type backendActionFacade interface {
 	runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error
+	runMenuCompactActionWithService(a *App, action *feishu.CardAction, sessionKey string, svc *appcompact.Service) error
 	handleCompactCommand(a *App, msg *feishu.InboundMessage) error
 	completeMenuInterrupt(a *App, action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error)
 }
@@ -45,6 +47,14 @@ func (codexBackendActions) runMenuCompactAction(a *App, action *feishu.CardActio
 	return err
 }
 
+func (codexBackendActions) runMenuCompactActionWithService(a *App, action *feishu.CardAction, sessionKey string, svc *appcompact.Service) error {
+	if a == nil || svc == nil {
+		return nil
+	}
+	_, err := svc.StartThreadCompaction(sessionKey)
+	return err
+}
+
 func (codexBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {
 	if a == nil || msg == nil {
 		return nil
@@ -68,6 +78,14 @@ func (claudeBackendActions) runMenuCompactAction(a *App, action *feishu.CardActi
 	}
 	msg := commandMessageFromAction(a, action, sessionKey, "/compact")
 	return enqueueSubmission(a, msg)
+}
+
+func (claudeBackendActions) runMenuCompactActionWithService(a *App, action *feishu.CardAction, sessionKey string, svc *appcompact.Service) error {
+	if a == nil {
+		return nil
+	}
+	// Claude backend uses the submission pipeline, not direct compaction.
+	return claudeBackendActions{}.runMenuCompactAction(a, action, sessionKey)
 }
 
 func (claudeBackendActions) handleCompactCommand(a *App, msg *feishu.InboundMessage) error {

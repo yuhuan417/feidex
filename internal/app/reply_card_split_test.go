@@ -83,12 +83,12 @@ func TestCountCardComponentNodesCountsTaggedNodes(t *testing.T) {
 	for i := 0; i < 198; i++ {
 		appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "item"})
 	}
-	if got := countCardComponentNodes(card); got != 199 {
-		t.Fatalf("countCardComponentNodes() = %d, want 199", got)
+	if got := appdelivery.CountCardComponentNodes(card); got != 199 {
+		t.Fatalf("appdelivery.CountCardComponentNodes() = %d, want 199", got)
 	}
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "overflow"})
-	if got := countCardComponentNodes(card); got != 200 {
-		t.Fatalf("countCardComponentNodes() after append = %d, want 200", got)
+	if got := appdelivery.CountCardComponentNodes(card); got != 200 {
+		t.Fatalf("appdelivery.CountCardComponentNodes() after append = %d, want 200", got)
 	}
 }
 

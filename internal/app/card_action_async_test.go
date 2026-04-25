@@ -292,7 +292,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadService(a).completeMenuInterrupt(&feishu.CardAction{
+	resp, err := newThreadService(a).CompleteMenuInterrupt(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-stop",

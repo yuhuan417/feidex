@@ -119,7 +119,7 @@ func TestRenderHistoryCardClaudeMarksLatestTurnRunningWhenSessionBusy(t *testing
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := newHistoryService(a).renderHistoryCard(sessionKey, 0)
+	card, err := newHistoryService(a).RenderHistoryCard(sessionKey, 0)
 	if err != nil {
 		t.Fatalf("renderHistoryCard() error = %v", err)
 	}

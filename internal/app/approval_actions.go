@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	appapproval "feidex/internal/app/approval"
+	appapprovalview "feidex/internal/app/approvalview"
 	"log/slog"
 	"strings"
 
@@ -89,136 +89,31 @@ func completeApprovalAction(a *App, action *feishu.CardAction, actionName string
 	}, nil
 }
 
-func commandApprovalReplyPayload(pending *state.PendingRequest, action *feishu.CardAction, actionName string) (any, string) {
-	resp := map[string]any{"decision": "decline"}
-	switch actionName {
-	case "approval.command.accept":
-		resp["decision"] = "accept"
-	case "approval.command.accept_session":
-		resp["decision"] = "acceptForSession"
-	case "approval.command.cancel":
-		resp["decision"] = "cancel"
-	case "approval.command.decline":
-		resp["decision"] = "decline"
-	default:
-		return nil, "不支持的审批动作"
-	}
-	return resp, ""
-}
+var commandApprovalReplyPayload = appapprovalview.CommandApprovalReplyPayload
 
-func approvalRequestPayload(pending *state.PendingRequest) map[string]any {
-	if pending == nil || strings.TrimSpace(pending.PayloadJSON) == "" {
-		return nil
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
-		return nil
-	}
-	if request, ok := payload["request"].(map[string]any); ok {
-		return request
-	}
-	return payload
-}
+var approvalRequestPayload = appapprovalview.ApprovalRequestPayload
 
 func renderResolvedApprovalCard(a *App, pending *state.PendingRequest, action *feishu.CardAction, actionName string) map[string]any {
-	decision := approvalDecisionText(actionName)
-	body := strings.TrimSpace(approvalBodyText(pending))
+	decision := appapprovalview.ApprovalDecisionText(actionName)
+	body := strings.TrimSpace(appapprovalview.ApprovalBodyText(pending))
 	lines := []string{"处理结果: " + decision}
-	if detail := strings.TrimSpace(approvalDecisionDetail(pending, action, actionName)); detail != "" {
+	if detail := strings.TrimSpace(appapprovalview.ApprovalDecisionDetail(pending, action, actionName)); detail != "" {
 		lines = append(lines, detail)
 	}
 	if body != "" {
 		lines = append(lines, "", body)
 	}
-	color := approvalDecisionColor(actionName)
+	color := appapprovalview.ApprovalDecisionColor(actionName)
 	return a.feishu.SimpleStatusCard("审批已处理", color, strings.Join(lines, "\n"), nil)
 }
 
-func approvalBodyText(pending *state.PendingRequest) string {
-	if pending == nil {
-		return ""
-	}
-	var payload map[string]any
-	if strings.TrimSpace(pending.PayloadJSON) != "" {
-		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err == nil {
-			if body := strings.TrimSpace(stringValue(payload["body"])); body != "" {
-				return body
-			}
-			if pending.Kind == "command" {
-				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(appapproval.RenderCommandBody(request)); body != "" {
-						return body
-					}
-				}
-			}
-			if pending.Kind == "file" {
-				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(appapproval.RenderFileBody(request)); body != "" {
-						return body
-					}
-				}
-			}
-			if pending.Kind == "permissions" {
-				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(appapproval.RenderPermissionsApprovalBody(request)); body != "" {
-						return body
-					}
-				}
-				if permissions, ok := payload["permissions"]; ok {
-					if rendered := strings.TrimSpace(prettyJSON(permissions)); rendered != "" {
-						return "权限审批\n" + rendered
-					}
-				}
-			}
-		}
-	}
-	switch pending.Kind {
-	case "command":
-		return "命令审批"
-	case "file":
-		return "文件变更审批"
-	case "permissions":
-		return "权限审批"
-	default:
-		return ""
-	}
-}
+var approvalBodyText = appapprovalview.ApprovalBodyText
 
-func approvalDecisionText(action string) string {
-	switch action {
-	case "approval.command.accept", "approval.file.accept":
-		return "已允许本次执行"
-	case "approval.command.accept_session", "approval.file.accept_session":
-		return "已允许本会话执行"
-	case "approval.permissions.accept_turn":
-		return "已授权本次权限请求"
-	case "approval.permissions.accept_session":
-		return "已授权本会话权限请求"
-	case "approval.command.cancel", "approval.file.cancel":
-		return "已拒绝并中断任务"
-	default:
-		return "已拒绝"
-	}
-}
+var approvalDecisionText = appapprovalview.ApprovalDecisionText
 
-func approvalDecisionDetail(pending *state.PendingRequest, action *feishu.CardAction, actionName string) string {
-	switch actionName {
-	case "approval.command.cancel", "approval.file.cancel":
-		return "该 turn 会立即中断。"
-	}
-	return ""
-}
+var approvalDecisionDetail = appapprovalview.ApprovalDecisionDetail
 
-func approvalDecisionColor(action string) string {
-	switch action {
-	case "approval.command.cancel", "approval.file.cancel":
-		return "red"
-	case "approval.command.decline", "approval.file.decline":
-		return "grey"
-	default:
-		return "green"
-	}
-}
+var approvalDecisionColor = appapprovalview.ApprovalDecisionColor
 
 func resumeSubmissionAfterRequest(a *App, pending *state.PendingRequest) {
 	appState := appState(a)

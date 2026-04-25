@@ -102,77 +102,15 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submissio
 	return result
 }
 
-func splitReplyTextBlockToFit(text string, fits func(string) bool) []string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
-	}
-	if fits(text) {
-		return []string{text}
-	}
-	for _, sep := range []string{"\n\n", "\n", " "} {
-		idx := splitIndexNearMiddle(text, sep)
-		if idx <= 0 {
-			continue
-		}
-		left, right := splitReplyTextAt(text, idx, len(sep))
-		if left == "" || right == "" {
-			continue
-		}
-		return append(splitReplyTextBlockToFit(left, fits), splitReplyTextBlockToFit(right, fits)...)
-	}
-	return splitReplyTextByRunes(text, fits)
-}
+var splitReplyTextBlockToFit = appdelivery.SplitReplyTextBlockToFit
 
-func splitReplyTextByRunes(text string, fits func(string) bool) []string {
-	runes := []rune(strings.TrimSpace(text))
-	if len(runes) <= 1 {
-		return []string{strings.TrimSpace(text)}
-	}
-	mid := len(runes) / 2
-	left := strings.TrimSpace(string(runes[:mid]))
-	right := strings.TrimSpace(string(runes[mid:]))
-	if left == "" || right == "" {
-		return []string{strings.TrimSpace(text)}
-	}
-	return append(splitReplyTextBlockToFit(left, fits), splitReplyTextBlockToFit(right, fits)...)
-}
+var splitReplyTextByRunes = appdelivery.SplitReplyTextByRunes
 
-func splitIndexNearMiddle(text, sep string) int {
-	if sep == "" {
-		return -1
-	}
-	mid := len(text) / 2
-	if idx := strings.LastIndex(text[:mid], sep); idx >= 0 {
-		return idx
-	}
-	if idx := strings.Index(text[mid:], sep); idx >= 0 {
-		return mid + idx
-	}
-	return -1
-}
+var splitIndexNearMiddle = appdelivery.SplitIndexNearMiddle
 
-func splitReplyTextAt(text string, index, sepLen int) (string, string) {
-	if index < 0 || index > len(text) {
-		return "", ""
-	}
-	left := strings.TrimSpace(text[:index])
-	right := strings.TrimSpace(text[index+sepLen:])
-	return left, right
-}
+var splitReplyTextAt = appdelivery.SplitReplyTextAt
 
-func joinReplyChunkBodies(current, next string) string {
-	current = strings.TrimSpace(current)
-	next = strings.TrimSpace(next)
-	switch {
-	case current == "":
-		return next
-	case next == "":
-		return current
-	default:
-		return current + "\n" + next
-	}
-}
+var joinReplyChunkBodies = appdelivery.JoinReplyChunkBodies
 
 func replyCardChunkFits(a *App, ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
@@ -184,33 +122,5 @@ func replyCardChunkFits(a *App, ctx context.Context, sub *state.Submission, titl
 	if len(payload) > feishuReplyCardMaxPayloadBytes {
 		return false
 	}
-	return countCardComponentNodes(card) < feishuReplyCardMaxComponentCount
-}
-
-func countCardComponentNodes(value any) int {
-	switch node := value.(type) {
-	case map[string]any:
-		count := 0
-		if _, ok := node["tag"]; ok {
-			count++
-		}
-		for _, child := range node {
-			count += countCardComponentNodes(child)
-		}
-		return count
-	case []map[string]any:
-		count := 0
-		for _, child := range node {
-			count += countCardComponentNodes(child)
-		}
-		return count
-	case []any:
-		count := 0
-		for _, child := range node {
-			count += countCardComponentNodes(child)
-		}
-		return count
-	default:
-		return 0
-	}
+	return appdelivery.CountCardComponentNodes(card) < feishuReplyCardMaxComponentCount
 }

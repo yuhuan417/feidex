@@ -39,12 +39,12 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 	if err != nil {
 		t.Fatalf("sessionState() error = %v", err)
 	}
-	state.mu.Lock()
-	if got := strings.TrimSpace(state.sessionID); got != "" {
-		state.mu.Unlock()
+	state.Mu.Lock()
+	if got := strings.TrimSpace(state.SessionID); got != "" {
+		state.Mu.Unlock()
 		t.Fatalf("sessionID before first turn = %q, want empty", got)
 	}
-	state.mu.Unlock()
+	state.Mu.Unlock()
 
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer turnCancel()
@@ -54,18 +54,18 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		state.mu.Lock()
-		got := strings.TrimSpace(state.sessionID)
-		state.mu.Unlock()
+		state.Mu.Lock()
+		got := strings.TrimSpace(state.SessionID)
+		state.Mu.Unlock()
 		if got == "claude-session-ready" {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	state.mu.Lock()
-	got := strings.TrimSpace(state.sessionID)
-	state.mu.Unlock()
+	state.Mu.Lock()
+	got := strings.TrimSpace(state.SessionID)
+	state.Mu.Unlock()
 	t.Fatalf("sessionID after first turn = %q, want claude-session-ready", got)
 }
 
@@ -99,12 +99,12 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 	if err != nil {
 		t.Fatalf("sessionState() error = %v", err)
 	}
-	state.mu.Lock()
-	if got := strings.TrimSpace(state.sessionID); got != "" {
-		state.mu.Unlock()
+	state.Mu.Lock()
+	if got := strings.TrimSpace(state.SessionID); got != "" {
+		state.Mu.Unlock()
 		t.Fatalf("sessionID before first turn = %q, want empty for pending fork", got)
 	}
-	state.mu.Unlock()
+	state.Mu.Unlock()
 
 	ensureCtx, ensureCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer ensureCancel()
@@ -124,18 +124,18 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		state.mu.Lock()
-		got := strings.TrimSpace(state.sessionID)
-		state.mu.Unlock()
+		state.Mu.Lock()
+		got := strings.TrimSpace(state.SessionID)
+		state.Mu.Unlock()
 		if got == "claude-session-ready" {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	state.mu.Lock()
-	got := strings.TrimSpace(state.sessionID)
-	state.mu.Unlock()
+	state.Mu.Lock()
+	got := strings.TrimSpace(state.SessionID)
+	state.Mu.Unlock()
 	t.Fatalf("sessionID after first turn = %q, want claude-session-ready", got)
 }
 

@@ -36,7 +36,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err = newThreadService(a).commandThreadsNew(&feishu.InboundMessage{
+	err = newThreadService(a).CommandThreadsNew(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -535,7 +535,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	if sess == nil || sess.ActiveThreadID != "thread-forked" || sess.ActiveThreadName != "Forked Thread" || sess.Status != "idle" {
 		t.Fatalf("session after /fork = %+v", sess)
 	}
-	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前线程") {
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "forked current thread") {
 		t.Fatalf("fork reply = %#v, want success text", ff.replyTexts)
 	}
 }
@@ -551,20 +551,20 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	})
 
 	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	newDebugService(a).setRuntimeDebug(false)
-	if err := newDebugService(a).commandDebug(msg, nil); err != nil {
-		t.Fatalf("commandDebug(toggle on) error = %v", err)
+	newDebugService(a).SetRuntimeDebug(false)
+	if err := newDebugService(a).CommandDebug(msg, nil); err != nil {
+		t.Fatalf("CommandDebug(toggle on) error = %v", err)
 	}
 	if got := runtimeLogLevelText(); got != "debug" {
 		t.Fatalf("runtimeLogLevelText() = %q, want debug", got)
 	}
-	if err := newDebugService(a).commandDebug(msg, []string{"off"}); err != nil {
+	if err := newDebugService(a).CommandDebug(msg, []string{"off"}); err != nil {
 		t.Fatalf("commandDebug(off) error = %v", err)
 	}
 	if got := runtimeLogLevelText(); got != "info" {
 		t.Fatalf("runtimeLogLevelText() = %q, want info", got)
 	}
-	if err := newDebugService(a).commandDebug(msg, []string{"bad"}); err == nil {
+	if err := newDebugService(a).CommandDebug(msg, []string{"bad"}); err == nil {
 		t.Fatal("expected invalid /debug arg to fail")
 	}
 	if len(ff.replyTexts) < 2 || !strings.Contains(ff.replyTexts[0], "`debug`") || !strings.Contains(ff.replyTexts[1], "`info`") {
@@ -615,7 +615,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			if sess == nil || sess.ActiveThreadID != "claude-forked" || sess.ActiveThreadName != "Claude Parent" || sess.Status != "idle" {
 				t.Fatalf("session after %s = %+v", raw, sess)
 			}
-			if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "fork 当前会话") {
+			if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "forked current session") {
 				t.Fatalf("fork reply = %#v, want success text", ff.replyTexts)
 			}
 		})
@@ -661,7 +661,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	if sessionHasLiveThread(a, sessionKey, "claude-parent") {
 		t.Fatalf("expected old live thread binding to be cleared after pending /fork")
 	}
-	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "下一条消息") {
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "next message") {
 		t.Fatalf("fork reply = %#v, want pending fork text", ff.replyTexts)
 	}
 }
@@ -683,7 +683,7 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	slog.Debug("debug-log-test", "key", "value")
 
 	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := newDebugService(a).commandDebug(msg, []string{"logs"}); err != nil {
+	if err := newDebugService(a).CommandDebug(msg, []string{"logs"}); err != nil {
 		t.Fatalf("commandDebug(logs) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -712,7 +712,7 @@ func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
-	if err := newDebugService(a).commandDebug(msg, []string{"logs"}); err != nil {
+	if err := newDebugService(a).CommandDebug(msg, []string{"logs"}); err != nil {
 		t.Fatalf("commandDebug(logs blocked) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -731,7 +731,7 @@ func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	a := &App{cfg: testCodexConfig(), feishu: wrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
-	resp, err := newDebugService(a).completeMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
+	resp, err := newDebugService(a).CompleteMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuDebugLogs(blocked) error = %v", err)
 	}
@@ -756,7 +756,7 @@ func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
-	if err := newDebugService(a).commandDebug(msg, nil); err != nil {
+	if err := newDebugService(a).CommandDebug(msg, nil); err != nil {
 		t.Fatalf("commandDebug(blocked) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -773,7 +773,7 @@ func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	a := &App{cfg: testCodexConfig(), feishu: wrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
-	resp, err := newDebugService(a).completeMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
+	resp, err := newDebugService(a).CompleteMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuDebug(blocked) error = %v", err)
 	}

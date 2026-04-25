@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/app/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -79,49 +80,8 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	return nil
 }
 
-func stagedImageAttachments(images []state.SessionStagedImage) []state.SubmissionAttachment {
-	if len(images) == 0 {
-		return nil
-	}
-	attachments := make([]state.SubmissionAttachment, 0, len(images))
-	for _, image := range images {
-		if strings.TrimSpace(image.LocalPath) == "" {
-			continue
-		}
-		attachments = append(attachments, state.SubmissionAttachment{
-			Kind:      "image",
-			Name:      image.Name,
-			LocalPath: image.LocalPath,
-		})
-	}
-	return attachments
-}
-
-func stagedImageSourceMessageIDs(images []state.SessionStagedImage) []string {
-	if len(images) == 0 {
-		return nil
-	}
-	ids := make([]string, 0, len(images))
-	for _, image := range images {
-		ids = append(ids, image.SourceMessageID)
-	}
-	return uniqueStrings(ids)
-}
-
-func stagedImageRootMessageIDs(images []state.SessionStagedImage) []string {
-	if len(images) == 0 {
-		return nil
-	}
-	ids := make([]string, 0, len(images))
-	for _, image := range images {
-		rootID := firstNonEmpty(strings.TrimSpace(image.RootMessageID), strings.TrimSpace(image.SourceMessageID))
-		if rootID == "" {
-			continue
-		}
-		ids = append(ids, rootID)
-	}
-	return uniqueStrings(ids)
-}
+// stagedImageAttachments, stagedImageSourceMessageIDs, stagedImageRootMessageIDs
+// are re-exported from the submission package via replycontinuation_adapters.go.
 
 func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bool {
 	messageID = strings.TrimSpace(messageID)
@@ -204,8 +164,13 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 		return false
 	}
 	newPendingQueueService(s.app).markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
-	newRuntimeMaintenanceService(s.app).cleanupSubmissionRuntimeState(sub)
+	newRuntimeMaintenanceService(s.app).CleanupSubmissionRuntimeState(sub)
 	return true
+}
+
+// Exported wrapper for sub-package interface satisfaction.
+func (s pendingQueueService) DiscardSessionPendingInputs(sessionKey string) int {
+	return s.discardSessionPendingInputs(sessionKey)
 }
 
 func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int {
@@ -231,7 +196,7 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 			continue
 		}
 		discarded++
-		newRuntimeMaintenanceService(s.app).cleanupSubmissionRuntimeState(sub)
+		newRuntimeMaintenanceService(s.app).CleanupSubmissionRuntimeState(sub)
 	}
 	sess.Queue = nil
 	sess.StagedImages = nil
@@ -266,27 +231,11 @@ func discardStagedImageByMessageID(sess *state.Session, messageID string) bool {
 }
 
 func submissionHasSourceMessage(sub *state.Submission, messageID string) bool {
-	if sub == nil {
-		return false
-	}
-	for _, candidate := range sourceMessageIDsForSubmission(sub) {
-		if candidate == messageID {
-			return true
-		}
-	}
-	return false
+	return submission.HasSourceMessage(sub, messageID)
 }
 
-func sourceMessageIDsForSubmission(sub *state.Submission) []string {
-	if sub == nil {
-		return nil
-	}
-	ids := append([]string{}, sub.SourceMessageIDs...)
-	if strings.TrimSpace(sub.TriggerMessageID) != "" {
-		ids = append(ids, sub.TriggerMessageID)
-	}
-	return uniqueStrings(ids)
-}
+// sourceMessageIDsForSubmission is re-exported from the submission package
+// via replycontinuation_adapters.go.
 
 func (s pendingQueueService) markSubmissionQueuedReactions(sub *state.Submission) {
 	newPendingQueueService(s.app).markMessagesQueuedReactions(sourceMessageIDsForSubmission(sub))
@@ -296,6 +245,11 @@ func (s pendingQueueService) markSubmissionRunningReactions(sub *state.Submissio
 	ids := sourceMessageIDsForSubmission(sub)
 	newPendingQueueService(s.app).clearMessageProcessingReactions(ids)
 	newPendingQueueService(s.app).markMessagesTypingReactions(ids)
+}
+
+// Exported wrapper for sub-package interface satisfaction.
+func (s pendingQueueService) ClearSubmissionProcessingReactions(sub *state.Submission) {
+	s.clearSubmissionProcessingReactions(sub)
 }
 
 func (s pendingQueueService) clearSubmissionProcessingReactions(sub *state.Submission) {
@@ -345,36 +299,6 @@ func (s pendingQueueService) forEachMessageID(messageIDs []string, fn func(conte
 	}
 }
 
-func uniqueStrings(values []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
+var uniqueStrings = submission.UniqueStrings
 
-func removeString(values []string, target string) []string {
-	target = strings.TrimSpace(target)
-	if target == "" {
-		return append([]string(nil), values...)
-	}
-	out := make([]string, 0, len(values))
-	removed := false
-	for _, value := range values {
-		if !removed && strings.TrimSpace(value) == target {
-			removed = true
-			continue
-		}
-		out = append(out, value)
-	}
-	return out
-}
+var removeString = submission.RemoveString

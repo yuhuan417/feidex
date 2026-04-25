@@ -18,15 +18,15 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "hello"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "hello"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after first assistant message = %d, want 1", len(ff.replyCards))
 	}
@@ -37,7 +37,7 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 		t.Fatalf("first assistant card body = %q, want hello", body)
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "world"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "world"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after second assistant message = %d, want 2", len(ff.replyCards))
 	}
@@ -55,10 +55,10 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -66,14 +66,14 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	first := "I need to split the changes. Let me first commit just the blur fix, then the tooltip."
 	second := "I'll temporarily revert the tooltip changes, commit the blur fix, then re-apply and commit the tooltip."
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: first})
-	runtime.handleToolComplete(session, claudecli.ToolCompleteEvent{
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: first})
+	runtime.service.HandleToolComplete(session, claudecli.ToolCompleteEvent{
 		TurnNumber: 1,
 		ID:         "tool-1",
 		Name:       "Read",
 		Input:      map[string]any{"file_path": "/tmp/demo.txt"},
 	})
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: second})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: second})
 
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count before completion = %d, want 3", len(ff.replyCards))
@@ -88,7 +88,7 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 		t.Fatalf("second assistant card lost leading chars: %q", body)
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: second})
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: second})
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
 	}
@@ -110,15 +110,15 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleToolComplete(session, claudecli.ToolCompleteEvent{
+	runtime.service.HandleToolComplete(session, claudecli.ToolCompleteEvent{
 		TurnNumber: 1,
 		ID:         "tool-1",
 		Name:       "Read",
@@ -133,7 +133,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		t.Fatalf("first working card title = %q, want %q", got, quietWorkingCardTitle)
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "first reply"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "first reply"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after assistant text = %d, want 2", len(ff.replyCards))
 	}
@@ -144,7 +144,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		t.Fatalf("assistant reply body = %q, want first reply", body)
 	}
 
-	runtime.handleToolComplete(session, claudecli.ToolCompleteEvent{
+	runtime.service.HandleToolComplete(session, claudecli.ToolCompleteEvent{
 		TurnNumber: 1,
 		ID:         "tool-2",
 		Name:       "TaskUpdate",
@@ -173,15 +173,15 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+	runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 		TurnNumber:   1,
 		Thinking:     "private chain of thought",
 		FullThinking: "private chain of thought",
@@ -200,7 +200,7 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 		t.Fatalf("thinking working card should not expose raw reasoning: %q", thinkingBody)
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "visible answer"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "visible answer"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after assistant text = %d, want 1 because the thinking card should be reused", len(ff.replyCards))
 	}
@@ -229,15 +229,15 @@ func TestClaudeRuntimeThinkingRemainsHiddenOutsideProgress(t *testing.T) {
 			sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 			newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-			runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+			runtime := newTestClaudeRuntime(t, a)
 			session := &claudeSessionState{
-				sessionID: "thread-1",
-				turns: map[int]*claudeTurnState{
+				SessionID: "thread-1",
+				Turns: map[int]*claudeTurnState{
 					1: {TurnNumber: 1, TurnID: "turn-1"},
 				},
 			}
 
-			runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+			runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 				TurnNumber:   1,
 				Thinking:     "private chain of thought",
 				FullThinking: "private chain of thought",
@@ -255,15 +255,15 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "final answer",
@@ -291,15 +291,15 @@ func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "final answer",
@@ -332,15 +332,15 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+	runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 		TurnNumber:   1,
 		Thinking:     "private chain of thought",
 		FullThinking: "private chain of thought",
@@ -349,7 +349,7 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 		t.Fatalf("reply card count after thinking = %d, want 1", len(ff.replyCards))
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "final answer",
@@ -378,16 +378,16 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "draft answer"})
-	runtime.handleThinkingEvent(session, claudecli.ThinkingEvent{
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "draft answer"})
+	runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 		TurnNumber:   1,
 		Thinking:     "private chain of thought",
 		FullThinking: "private chain of thought",
@@ -399,7 +399,7 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 		t.Fatalf("thinking card title = %q, want %q", got, quietWorkingCardTitle)
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "draft answer",
@@ -428,18 +428,18 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID:         "thread-1",
-		workspaceID:       a.cfg.Workspaces[0].ID,
-		currentTurnNumber: 1,
-		startedAt:         time.Now(),
-		turns: map[int]*claudeTurnState{
+		SessionID:         "thread-1",
+		WorkspaceID:       a.cfg.Workspaces[0].ID,
+		CurrentTurnNumber: 1,
+		StartedAt:         time.Now(),
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "before plan"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "before plan"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count before plan = %d, want 1", len(ff.replyCards))
 	}
@@ -447,7 +447,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		_, err := runtime.handleExitPlanMode(ctx, session, claudecli.PlanInfo{Plan: "1. inspect\n2. implement"})
+		_, err := runtime.service.HandleExitPlanMode(ctx, session, claudecli.PlanInfo{Plan: "1. inspect\n2. implement"})
 		errCh <- err
 	}()
 
@@ -467,7 +467,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 		t.Fatalf("handleExitPlanMode() error = %v, want context canceled", err)
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "after plan"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "after plan"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after second assistant message = %d, want 2", len(ff.replyCards))
 	}
@@ -475,7 +475,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 		t.Fatalf("post-plan assistant card body = %q, want after plan", body)
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "after plan"})
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "after plan"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
 	}
@@ -496,20 +496,20 @@ func TestClaudeRuntimeQuietFinalSuppressesIntermediateTextButStillDeliversFinalA
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
-	runtime := &claudeRuntime{app: a, pending: map[string]*claudePendingInteraction{}}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionID: "thread-1",
-		turns: map[int]*claudeTurnState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
 
-	runtime.handleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "intermediate answer"})
+	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "intermediate answer"})
 	if len(ff.replyCards) != 0 || len(ff.patchedCards) != 0 {
 		t.Fatalf("quiet final should suppress intermediate text, replies=%d patches=%d", len(ff.replyCards), len(ff.patchedCards))
 	}
 
-	runtime.handleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "final answer"})
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "final answer"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after final completion = %d, want 1", len(ff.replyCards))
 	}

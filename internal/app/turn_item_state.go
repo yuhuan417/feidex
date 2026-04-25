@@ -120,3 +120,10 @@ func (s runtimeStateService) mergeRequestPayloadWithTurnItem(threadID, turnID, i
 	}
 	return mergeJSONMaps(snapshot, payload)
 }
+
+// Exported wrappers for sub-package interface satisfaction.
+
+func (s runtimeStateService) CompleteTurnItemState(threadID, turnID, itemID string, item map[string]any) map[string]any {
+	return s.completeTurnItemState(threadID, turnID, itemID, item)
+}
+func (s runtimeStateService) ClearTurnItemStates(turnID string) { s.clearTurnItemStates(turnID) }

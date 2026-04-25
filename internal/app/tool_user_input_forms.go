@@ -3,13 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"sort"
-	"strings"
 
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
-	appcards "feidex/internal/app/cards"
 )
 
 type pendingInputService struct {
@@ -17,11 +14,6 @@ type pendingInputService struct {
 }
 func newPendingInputService(app *App) pendingInputService {
 	return pendingInputService{app: app}
-}
-
-type toolUserInputFormDrafts struct {
-	Values map[string]string
-	Multi  map[string][]string
 }
 
 func sendUserInputFormCard(a *App, requestID json.RawMessage, payload toolUserInputPayload) {
@@ -69,575 +61,62 @@ func (s pendingInputService) completeToolUserInputText(msg *feishu.InboundMessag
 	return nil
 }
 
-func renderToolUserInputBody(payload toolUserInputPayload) string {
-	lines := []string{"请补充以下输入。"}
-	for _, q := range payload.Questions {
-		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("%s (`%s`)", firstNonEmpty(strings.TrimSpace(q.Question), strings.TrimSpace(q.Header), strings.TrimSpace(q.ID)), q.ID))
-		if len(q.Options) > 0 {
-			opts := make([]string, 0, len(q.Options))
-			for _, opt := range q.Options {
-				opts = append(opts, opt.Label)
-			}
-			lines = append(lines, "可选值: "+strings.Join(opts, ", "))
-			if q.MultiSelect {
-				lines = append(lines, "这是多选题。")
-			} else {
-				lines = append(lines, "这是单选题。")
-			}
-			if q.IsOther {
-				lines = append(lines, "也可填写其它值。")
-			}
-		}
-		if q.IsSecret {
-			lines = append(lines, "注意: 此答案会按敏感输入处理，不写普通日志。")
-		}
-	}
-	if len(payload.Questions) > 0 {
-		lines = append(lines, "", "单选题会显示下拉选择，多选题会显示可切换按钮。")
-		lines = append(lines, "只有自由文本或其它值输入时，才需要手填文本。")
-	}
-	return strings.Join(lines, "\n")
-}
+// Wrappers delegating to pendingforms.
 
-func renderToolUserInputFormCard(requestID string, payload toolUserInputPayload, drafts toolUserInputFormDrafts, attentionUserID string) map[string]any {
-	card := appcards.NewMarkdownBodyCard("需要补充输入", "orange")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":     "markdown",
-		"content": prependAttentionMentionMarkdown(renderToolUserInputBody(payload), attentionUserID),
-	})
-	formElements := make([]map[string]any, 0, len(payload.Questions)+4)
-	for _, q := range payload.Questions {
-		for _, elem := range renderToolUserInputQuestionElements(q, drafts, requestID) {
-			formElements = append(formElements, elem)
-		}
-	}
-	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
-		{
-			Text: "提交",
-			Type: "primary",
-			Name: "user_input_submit",
-			Value: map[string]any{
-				"action":       "user_input.answer",
-				"request_id":   strings.TrimSpace(requestID),
-				"multi_drafts": toolUserInputMultiDraftActionValue(drafts.Multi),
-			},
-		},
-		{
-			Text:  "取消",
-			Type:  "default",
-			Name:  "user_input_cancel",
-			Value: map[string]any{"action": "pending_form.cancel", "request_id": strings.TrimSpace(requestID)},
-		},
-	})
-	for idx, row := range buttonRows {
-		columns, _ := row["columns"].([]map[string]any)
-		if len(columns) == 0 {
-			continue
-		}
-		elements, _ := columns[0]["elements"].([]map[string]any)
-		if len(elements) == 0 {
-			continue
-		}
-		if idx == 0 {
-			elements[0]["form_action_type"] = "submit"
-		}
-	}
-	formElements = append(formElements, buttonRows...)
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":                "form",
-		"name":               "tool_user_input_form",
-		"direction":          "vertical",
-		"horizontal_spacing": "8px",
-		"vertical_spacing":   "8px",
-		"elements":           formElements,
-	})
-	return card
-}
+var renderToolUserInputBody = pendingforms.RenderToolUserInputBody
 
-func renderToolUserInputQuestionElements(q toolUserInputQuestion, drafts toolUserInputFormDrafts, requestID string) []map[string]any {
-	elements := []map[string]any{
-		{
-			"tag": "markdown",
-			"content": toolUserInputQuestionMarkdown(
-				q,
-				toolUserInputDraftValue(drafts, q.ID),
-				toolUserInputMultiDraftValues(drafts, q.ID),
-			),
-		},
-	}
-	switch {
-	case len(q.Options) == 0:
-		elements = append(elements, buildToolUserInputTextInputElement(q, drafts))
-	case q.MultiSelect:
-		elements = append(elements, buildToolUserInputMultiSelectRows(q, drafts, requestID)...)
-	default:
-		elements = append(elements, buildToolUserInputSingleSelectElement(q, drafts))
-	}
-	if q.IsOther {
-		elements = append(elements, buildToolUserInputOtherInputElement(q, drafts))
-	}
-	return elements
-}
+var renderToolUserInputFormCard = pendingforms.RenderToolUserInputFormCard
 
-func toolUserInputQuestionMarkdown(q toolUserInputQuestion, draftValue string, selected []string) string {
-	lines := []string{
-		"**" + firstNonEmpty(strings.TrimSpace(q.Question), strings.TrimSpace(q.Header), strings.TrimSpace(q.ID)) + "**",
-		"`" + strings.TrimSpace(q.ID) + "`",
-	}
-	if len(q.Options) > 0 {
-		mode := "单选"
-		if q.MultiSelect {
-			mode = "多选"
-		}
-		lines = append(lines, mode+"题")
-		if len(selected) > 0 {
-			lines = append(lines, "当前已选: `"+inlineCodeText(strings.Join(selected, ", "))+"`")
-		} else if q.MultiSelect {
-			lines = append(lines, "当前已选: `-`")
-		} else if strings.TrimSpace(draftValue) != "" {
-			lines = append(lines, "当前选择: `"+inlineCodeText(strings.TrimSpace(draftValue))+"`")
-		}
-	}
-	if q.IsOther {
-		lines = append(lines, "可补充其它值。")
-	}
-	if q.IsSecret {
-		lines = append(lines, "敏感输入会在展示中打码。")
-	}
-	return strings.Join(lines, "\n")
-}
+var renderToolUserInputQuestionElements = pendingforms.RenderToolUserInputQuestionElements
 
-func toolUserInputQuestionPlaceholder(q toolUserInputQuestion) string {
-	title := firstNonEmpty(strings.TrimSpace(q.Question), strings.TrimSpace(q.Header), strings.TrimSpace(q.ID), "请输入答案")
-	if len(q.Options) == 0 {
-		return title
-	}
-	opts := make([]string, 0, len(q.Options))
-	for _, opt := range q.Options {
-		label := strings.TrimSpace(opt.Label)
-		if label == "" {
-			continue
-		}
-		opts = append(opts, label)
-		if len(opts) >= 3 {
-			break
-		}
-	}
-	if len(opts) == 0 {
-		return title
-	}
-	suffix := "例如: " + strings.Join(opts, ", ")
-	if q.IsOther {
-		suffix += "，也可填写其它值"
-	}
-	return title + " | " + suffix
-}
+var toolUserInputQuestionMarkdown = pendingforms.ToolUserInputQuestionMarkdown
 
-func buildToolUserInputTextInputElement(q toolUserInputQuestion, drafts toolUserInputFormDrafts) map[string]any {
-	input := map[string]any{
-		"tag":         "input",
-		"name":        q.ID,
-		"required":    true,
-		"placeholder": map[string]any{"tag": "plain_text", "content": toolUserInputQuestionPlaceholder(q)},
-	}
-	if value := toolUserInputDraftValue(drafts, q.ID); value != "" {
-		input["default_value"] = value
-	}
-	return input
-}
+var toolUserInputQuestionPlaceholder = pendingforms.ToolUserInputQuestionPlaceholder
 
-func buildToolUserInputSingleSelectElement(q toolUserInputQuestion, drafts toolUserInputFormDrafts) map[string]any {
-	options := make([]appcards.SelectStaticOption, 0, len(q.Options))
-	for _, opt := range q.Options {
-		options = append(options, appcards.SelectStaticOption{
-			Text:  toolUserInputOptionText(opt),
-			Value: strings.TrimSpace(opt.Label),
-		})
-	}
-	initialOption := toolUserInputInitialOption(q, toolUserInputDraftValue(drafts, q.ID))
-	return appcards.BuildFormSelectStaticElement(q.ID, toolUserInputQuestionPlaceholder(q), options, initialOption)
-}
+var buildToolUserInputTextInputElement = pendingforms.BuildToolUserInputTextInputElement
 
-func buildToolUserInputOtherInputElement(q toolUserInputQuestion, drafts toolUserInputFormDrafts) map[string]any {
-	input := map[string]any{
-		"tag":         "input",
-		"name":        toolUserInputOtherFieldName(q),
-		"required":    false,
-		"placeholder": map[string]any{"tag": "plain_text", "content": "其它值（可选）"},
-	}
-	if value := toolUserInputDraftValue(drafts, toolUserInputOtherFieldName(q)); value != "" {
-		input["default_value"] = value
-	}
-	return input
-}
+var buildToolUserInputSingleSelectElement = pendingforms.BuildToolUserInputSingleSelectElement
 
-func buildToolUserInputMultiSelectRows(q toolUserInputQuestion, drafts toolUserInputFormDrafts, requestID string) []map[string]any {
-	selected := toolUserInputMultiDraftValues(drafts, q.ID)
-	selectedSet := map[string]struct{}{}
-	for _, value := range selected {
-		selectedSet[strings.TrimSpace(value)] = struct{}{}
-	}
-	buttons := make([]feishu.Button, 0, len(q.Options))
-	for _, opt := range q.Options {
-		label := strings.TrimSpace(opt.Label)
-		if label == "" {
-			continue
-		}
-		text := "[ ] " + label
-		buttonType := "default"
-		if _, ok := selectedSet[label]; ok {
-			text = "[x] " + label
-			buttonType = "primary"
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: text,
-			Type: buttonType,
-			Name: "toggle_" + strings.TrimSpace(q.ID) + "_" + strings.ToLower(strings.ReplaceAll(label, " ", "_")),
-			Value: map[string]any{
-				"action":       "user_input.toggle_multi",
-				"request_id":   strings.TrimSpace(requestID),
-				"question_id":  q.ID,
-				"option_label": label,
-				"multi_drafts": toolUserInputMultiDraftActionValue(drafts.Multi),
-			},
-		})
-	}
-	rows := make([]map[string]any, 0, (len(buttons)+2)/3)
-	for start := 0; start < len(buttons); start += 3 {
-		end := start + 3
-		if end > len(buttons) {
-			end = len(buttons)
-		}
-		rows = append(rows, appcards.BuildMarkdownBodyCardActionElement(buttons[start:end]))
-	}
-	return rows
-}
+var buildToolUserInputOtherInputElement = pendingforms.BuildToolUserInputOtherInputElement
 
-func toolUserInputOptionText(opt toolUserInputOption) string {
-	label := strings.TrimSpace(opt.Label)
-	desc := strings.TrimSpace(opt.Description)
-	if label == "" || desc == "" {
-		return firstNonEmpty(label, desc)
-	}
-	return label + " - " + desc
-}
+var buildToolUserInputMultiSelectRows = pendingforms.BuildToolUserInputMultiSelectRows
 
-func toolUserInputInitialOption(q toolUserInputQuestion, raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	for _, opt := range q.Options {
-		if strings.EqualFold(strings.TrimSpace(opt.Label), raw) {
-			return strings.TrimSpace(opt.Label)
-		}
-	}
-	return ""
-}
+var toolUserInputOptionText = pendingforms.ToolUserInputOptionText
 
-func toolUserInputOtherFieldName(q toolUserInputQuestion) string {
-	return strings.TrimSpace(q.ID) + "__other"
-}
+var toolUserInputInitialOption = pendingforms.ToolUserInputInitialOption
 
-func parseToolUserInputResponse(text string, payload toolUserInputPayload) (map[string]any, string, error) {
-	answerMap := parseStructuredLines(text)
-	selections := make(map[string]string, len(payload.Questions))
-	for _, q := range payload.Questions {
-		raw := strings.TrimSpace(answerMap[q.ID])
-		if raw == "" && len(payload.Questions) == 1 {
-			raw = text
-		}
-		selections[q.ID] = raw
-	}
-	return buildToolUserInputResponseFromSelections(payload, selections)
-}
+var toolUserInputOtherFieldName = pendingforms.ToolUserInputOtherFieldName
 
-func parseQuestionAnswers(raw string, q toolUserInputQuestion) ([]string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, fmt.Errorf("answer is required")
-	}
-	if len(q.Options) == 0 {
-		return []string{raw}, nil
-	}
-	parts := splitAnswerParts(raw)
-	allowed := map[string]string{}
-	for _, opt := range q.Options {
-		allowed[strings.ToLower(strings.TrimSpace(opt.Label))] = opt.Label
-	}
-	var answers []string
-	for _, part := range parts {
-		if matched, ok := allowed[strings.ToLower(part)]; ok {
-			answers = append(answers, matched)
-			continue
-		}
-		if q.IsOther {
-			answers = append(answers, part)
-			continue
-		}
-		return nil, fmt.Errorf("unsupported option %q", part)
-	}
-	if len(answers) == 0 {
-		return nil, fmt.Errorf("answer is required")
-	}
-	if !q.MultiSelect && len(answers) > 1 {
-		return nil, fmt.Errorf("only one answer is allowed")
-	}
-	return answers, nil
-}
+var parseToolUserInputResponse = pendingforms.ParseToolUserInputResponse
 
-func splitAnswerParts(raw string) []string {
-	raw = strings.ReplaceAll(raw, "\n", ",")
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
+var parseQuestionAnswers = pendingforms.ParseQuestionAnswers
 
-func summarizeAnswers(answers []string, secret bool) string {
-	if secret {
-		return "[redacted]"
-	}
-	return strings.Join(answers, ", ")
-}
+var splitAnswerParts = pendingforms.SplitAnswerParts
 
-func buildToolUserInputResponseFromSelections(payload toolUserInputPayload, selections map[string]string) (map[string]any, string, error) {
-	result := map[string]any{"answers": map[string]any{}}
-	summaryLines := make([]string, 0, len(payload.Questions))
-	for _, q := range payload.Questions {
-		raw := strings.TrimSpace(selections[q.ID])
-		answers, err := parseQuestionAnswers(raw, q)
-		if err != nil {
-			return nil, "", fmt.Errorf("%s: %w", q.ID, err)
-		}
-		result["answers"].(map[string]any)[q.ID] = map[string]any{"answers": answers}
-		summaryLines = append(summaryLines, fmt.Sprintf("`%s`: %s", q.ID, summarizeAnswers(answers, q.IsSecret)))
-	}
-	return result, strings.Join(summaryLines, "\n"), nil
-}
+var summarizeAnswers = pendingforms.SummarizeAnswers
 
-func toolUserInputDraftsFromCardAction(payload toolUserInputPayload, action *feishu.CardAction) toolUserInputFormDrafts {
-	drafts := toolUserInputFormDrafts{
-		Values: map[string]string{},
-		Multi:  toolUserInputMultiDraftsFromActionValue(actionValueMap(action)),
-	}
-	for _, q := range payload.Questions {
-		if value, ok := toolUserInputSelectionValue(action.FormValue, q.ID); ok {
-			drafts.Values[q.ID] = value
-		}
-		if q.IsOther {
-			if value, ok := toolUserInputSelectionValue(action.FormValue, toolUserInputOtherFieldName(q)); ok {
-				drafts.Values[toolUserInputOtherFieldName(q)] = value
-			}
-		}
-	}
-	return drafts
-}
+var buildToolUserInputResponseFromSelections = pendingforms.BuildToolUserInputResponseFromSelections
 
-func toolUserInputSelectionsFromDrafts(payload toolUserInputPayload, drafts toolUserInputFormDrafts) map[string]string {
-	selections := make(map[string]string, len(payload.Questions))
-	for _, q := range payload.Questions {
-		switch {
-		case q.MultiSelect:
-			parts := append([]string(nil), toolUserInputMultiDraftValues(drafts, q.ID)...)
-			if q.IsOther {
-				parts = append(parts, splitAnswerParts(toolUserInputDraftValue(drafts, toolUserInputOtherFieldName(q)))...)
-			}
-			selections[q.ID] = strings.Join(parts, ", ")
-		case len(q.Options) > 0:
-			parts := splitAnswerParts(toolUserInputDraftValue(drafts, q.ID))
-			if q.IsOther {
-				parts = append(parts, splitAnswerParts(toolUserInputDraftValue(drafts, toolUserInputOtherFieldName(q)))...)
-			}
-			selections[q.ID] = strings.Join(parts, ", ")
-		default:
-			selections[q.ID] = toolUserInputDraftValue(drafts, q.ID)
-		}
-	}
-	return selections
-}
+var toolUserInputDraftsFromCardAction = pendingforms.ToolUserInputDraftsFromCardAction
 
-func toolUserInputDraftValue(drafts toolUserInputFormDrafts, key string) string {
-	if drafts.Values == nil {
-		return ""
-	}
-	return strings.TrimSpace(drafts.Values[strings.TrimSpace(key)])
-}
+var toolUserInputSelectionsFromDrafts = pendingforms.ToolUserInputSelectionsFromDrafts
 
-func toolUserInputMultiDraftValues(drafts toolUserInputFormDrafts, key string) []string {
-	if drafts.Multi == nil {
-		return nil
-	}
-	values := drafts.Multi[strings.TrimSpace(key)]
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			out = append(out, value)
-		}
-	}
-	return out
-}
+var toolUserInputDraftValue = pendingforms.ToolUserInputDraftValue
 
-func toolUserInputMultiDraftActionValue(drafts map[string][]string) map[string]any {
-	if len(drafts) == 0 {
-		return map[string]any{}
-	}
-	keys := make([]string, 0, len(drafts))
-	for key := range drafts {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make(map[string]any, len(keys))
-	for _, key := range keys {
-		values := drafts[key]
-		if len(values) == 0 {
-			continue
-		}
-		copied := make([]any, 0, len(values))
-		for _, value := range values {
-			value = strings.TrimSpace(value)
-			if value != "" {
-				copied = append(copied, value)
-			}
-		}
-		if len(copied) > 0 {
-			out[key] = copied
-		}
-	}
-	return out
-}
+var toolUserInputMultiDraftValues = pendingforms.ToolUserInputMultiDraftValues
 
-func toolUserInputMultiDraftsFromActionValue(values map[string]any) map[string][]string {
-	raw, ok := values["multi_drafts"]
-	if !ok {
-		return map[string][]string{}
-	}
-	result := map[string][]string{}
-	switch typed := raw.(type) {
-	case map[string]any:
-		for key, value := range typed {
-			if values := toolUserInputMultiDraftList(value); len(values) > 0 {
-				result[strings.TrimSpace(key)] = values
-			}
-		}
-	case map[string]string:
-		for key, value := range typed {
-			if values := splitAnswerParts(value); len(values) > 0 {
-				result[strings.TrimSpace(key)] = values
-			}
-		}
-	}
-	return result
-}
+var toolUserInputMultiDraftActionValue = pendingforms.ToolUserInputMultiDraftActionValue
 
-func toolUserInputMultiDraftList(raw any) []string {
-	switch typed := raw.(type) {
-	case []string:
-		return uniqueToolUserInputParts(typed)
-	case []any:
-		parts := make([]string, 0, len(typed))
-		for _, item := range typed {
-			if value, ok := normalizeToolUserInputSelection(item); ok && strings.TrimSpace(value) != "" {
-				parts = append(parts, strings.TrimSpace(value))
-			}
-		}
-		return uniqueToolUserInputParts(parts)
-	case string:
-		return uniqueToolUserInputParts(splitAnswerParts(typed))
-	}
-	return nil
-}
+var toolUserInputMultiDraftsFromActionValue = pendingforms.ToolUserInputMultiDraftsFromActionValue
 
-func uniqueToolUserInputParts(parts []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		if _, ok := seen[strings.ToLower(part)]; ok {
-			continue
-		}
-		seen[strings.ToLower(part)] = struct{}{}
-		out = append(out, part)
-	}
-	return out
-}
+var toolUserInputMultiDraftList = pendingforms.ToolUserInputMultiDraftList
 
-func toggleToolUserInputMultiDraft(drafts toolUserInputFormDrafts, questionID, optionLabel string) toolUserInputFormDrafts {
-	if drafts.Multi == nil {
-		drafts.Multi = map[string][]string{}
-	}
-	questionID = strings.TrimSpace(questionID)
-	optionLabel = strings.TrimSpace(optionLabel)
-	current := toolUserInputMultiDraftValues(drafts, questionID)
-	next := make([]string, 0, len(current))
-	found := false
-	for _, value := range current {
-		if strings.EqualFold(value, optionLabel) {
-			found = true
-			continue
-		}
-		next = append(next, value)
-	}
-	if !found && optionLabel != "" {
-		next = append(next, optionLabel)
-	}
-	if len(next) == 0 {
-		delete(drafts.Multi, questionID)
-		return drafts
-	}
-	drafts.Multi[questionID] = next
-	return drafts
-}
+var uniqueToolUserInputParts = pendingforms.UniqueToolUserInputParts
 
-func actionValueMap(action *feishu.CardAction) map[string]any {
-	if action == nil || action.ActionValue == nil {
-		return map[string]any{}
-	}
-	return action.ActionValue
-}
+var toggleToolUserInputMultiDraft = pendingforms.ToggleToolUserInputMultiDraft
 
-func toolUserInputSelectionValue(values map[string]any, key string) (string, bool) {
-	if len(values) == 0 {
-		return "", false
-	}
-	raw, ok := values[key]
-	if !ok {
-		return "", false
-	}
-	return normalizeToolUserInputSelection(raw)
-}
+var actionValueMap = pendingforms.ActionValueMap
 
-func normalizeToolUserInputSelection(raw any) (string, bool) {
-	switch v := raw.(type) {
-	case nil:
-		return "", false
-	case string:
-		return strings.TrimSpace(v), true
-	case []string:
-		return strings.TrimSpace(strings.Join(v, ", ")), true
-	case []any:
-		parts := make([]string, 0, len(v))
-		for _, item := range v {
-			part, ok := normalizeToolUserInputSelection(item)
-			if ok && part != "" {
-				parts = append(parts, part)
-			}
-		}
-		return strings.TrimSpace(strings.Join(parts, ", ")), true
-	case map[string]any:
-		if value, ok := v["value"]; ok {
-			return normalizeToolUserInputSelection(value)
-		}
-	}
-	return strings.TrimSpace(fmt.Sprint(raw)), true
-}
+var toolUserInputSelectionValue = pendingforms.ToolUserInputSelectionValue
+
+var normalizeToolUserInputSelection = pendingforms.NormalizeToolUserInputSelection

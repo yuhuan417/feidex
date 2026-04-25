@@ -70,25 +70,25 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 		return newWorkspaceService(s.app).completeClaudeWorkspacePermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "mode"))
 	},
 	"thread.sandbox.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeThreadSandboxMenu(action, actionSessionKey(action))
+		return newThreadService(s.app).CompleteThreadSandboxMenu(action, actionSessionKey(action))
 	},
 	"thread.policy.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeThreadPolicyMenu(action, actionSessionKey(action))
+		return newThreadService(s.app).CompleteThreadPolicyMenu(action, actionSessionKey(action))
 	},
 	"thread.permission_mode.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeClaudeSessionPermissionMenu(action, actionSessionKey(action))
+		return newThreadService(s.app).CompleteClaudeSessionPermissionMenu(action, actionSessionKey(action))
 	},
 	"thread.sandbox.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeThreadSandboxSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "sandbox_mode"))
+		return newThreadService(s.app).CompleteThreadSandboxSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "sandbox_mode"))
 	},
 	"thread.policy.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
+		return newThreadService(s.app).CompleteThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
 	},
 	"thread.permission_mode.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))
+		return newThreadService(s.app).CompleteClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))
 	},
 	"thread.resume.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newThreadService(s.app).completeThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+		return newThreadService(s.app).CompleteThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 	},
 	"path_picker.dropdown": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newWorkspaceService(s.app).completePathPickerAction(action, "path_picker.dropdown")

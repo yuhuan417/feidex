@@ -38,7 +38,7 @@ func frontendIdleBlockedReason(a *App) string {
 			return "当前会话还没有完全回到空闲态"
 		}
 	}
-	if newAutoRetryService(a).hasPendingAutoRetry("") {
+	if newAutoRetryService(a).HasPendingAutoRetry("") {
 		return "当前仍有等待自动重试的任务"
 	}
 	for _, req := range appState(a).pendingRequests() {

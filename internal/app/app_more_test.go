@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/turnbinding"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -698,9 +699,10 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		liveThreads: newLiveThreadTracker(),
 		trackers: appTrackers{
 			turnStreams:  newTurnStreamTracker(),
-			turnBindings: newTurnBindingTracker(),
+			turnBindings: turnbinding.NewTracker(store),
 		},
 	}
+	replaceCodexClient(a, fc)
 	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc
 }
@@ -738,6 +740,16 @@ func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID str
 	return a.store.GetSubmission(subID)
 }
 
+func newTestClaudeRuntime(t *testing.T, a *App) *claudeRuntime {
+	t.Helper()
+	rc := newClaudeRuntime(a, a.cfg.Claude)
+	rt, ok := rc.(*claudeRuntime)
+	if !ok {
+		t.Fatalf("newTestClaudeRuntime: expected *claudeRuntime, got %T", rc)
+	}
+	return rt
+}
+
 func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	origCodex := newCodexClient
 	origFeishu := newFeishuClient
@@ -748,8 +760,8 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
-	newCodexClient = func(config.CodexConfig) codexClient { return fc }
-	newFeishuClient = func(config.FeishuConfig) feishuClient { return ff }
+	newCodexClient = func(config.CodexConfig) CodexClient { return fc }
+	newFeishuClient = func(config.FeishuConfig) FeishuClient { return ff }
 
 	cfg := config.Default()
 	cfg.Feishu.Backend = backendCodex
@@ -759,7 +771,7 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	notifier, ok := app.feishu.(*notifyingFeishuClient)
-	if app.codex != fc || !ok || notifier.base != ff {
+	if app.codex != fc || !ok || notifier.Base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
 	if fc.onNotification == nil || fc.onRequest == nil {
@@ -1110,13 +1122,13 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 	ff.replyTexts = nil
 	ff.replyCards = nil
-	if err := newThreadService(a).commandThreads(msg, false); err != nil {
+	if err := newThreadService(a).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(empty) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
 		t.Fatalf("commandThreads(empty) card = %+v", ff.replyCards)
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "当前没有可切换的线程。") {
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "no switchable threads available.") {
 		t.Fatalf("commandThreads(empty) body = %q", body)
 	}
 }
@@ -1543,7 +1555,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
-			return newThreadService(a).completeMenuThread(action, action.ActionValue["session_key"].(string))
+			return newThreadService(a).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:group:chat-1:root:download-root"
@@ -1609,10 +1621,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugService(a).completeMenuDebug(action, action.ActionValue["session_key"].(string))
+			return newDebugService(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugService(a).completeMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+			return newDebugService(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
@@ -1642,10 +1654,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newWorkspaceService(a).completeWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newThreadService(a).completeThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return newThreadService(a).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newThreadService(a).completeThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
+			return newThreadService(a).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 	} {
 		resp, err := fn()
@@ -2992,7 +3004,7 @@ func TestNotificationHelpers(t *testing.T) {
 	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
 	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
 
-	stream := newTurnStreamService(a).turnStreamTracker().streams["turn-1"]
+	stream := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"]
 	if stream == nil || !strings.Contains(stream.PendingPlan, "a") {
 		t.Fatalf("turn stream after notifications = %+v", stream)
 	}
@@ -3456,7 +3468,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)
 	}
-	if err := newThreadService(a).commandThreadsNew(msg); err != nil {
+	if err := newThreadService(a).CommandThreadsNew(msg); err != nil {
 		t.Fatalf("commandThreadsNew() error = %v", err)
 	}
 }
@@ -3535,7 +3547,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(thread resume) error = %v", err)
 	}
-	resp, err = newThreadService(a).completeThreadResume(&feishu.CardAction{
+	resp, err = newThreadService(a).CompleteThreadResume(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"thread_name": "Selected", "thread_preview": "chosen"},
@@ -3578,7 +3590,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset for menu new) error = %v", err)
 	}
-	resp, err = newThreadService(a).completeMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
+	resp, err = newThreadService(a).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuNew() = %#v, %v", resp, err)
 	}
@@ -3760,7 +3772,7 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 		return nil
 	}
 
-	if err := newHistoryService(a).commandHistory(msg, nil); err != nil {
+	if err := newHistoryService(a).CommandHistory(msg, nil); err != nil {
 		t.Fatalf("commandHistory() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -3877,13 +3889,13 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		return nil
 	}
 
-	if err := newThreadService(a).commandThreads(msg, false); err != nil {
+	if err := newThreadService(a).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(display) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected thread list card to be sent")
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "通过下拉 list 选择要切换的线程。") || strings.Contains(body, "Older Preview") {
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "select a thread from the dropdown to switch.") || strings.Contains(body, "Older Preview") {
 		t.Fatalf("thread list body = %q, want summary without duplicated list", body)
 	}
 	if got := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1]); len(got) != 1 {
@@ -3976,7 +3988,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		}
 	}
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "当前没有活动 thread，因此暂不显示") {
+	if !strings.Contains(body, "no active thread, so /thread fork, /thread sandbox, /thread policy are not shown.") {
 		t.Fatalf("thread card body = %q, want missing-active-thread hint", body)
 	}
 }
@@ -4011,7 +4023,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 		return nil
 	}
 
-	if err := newThreadService(a).commandThreads(msg, false); err != nil {
+	if err := newThreadService(a).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(filter) error = %v", err)
 	}
 	if attempts != 3 {
@@ -4022,7 +4034,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	}
 	elements := cardElementsForTest(ff.replyCards[0])
 	body := elements[0]["content"].(string)
-	if !strings.Contains(body, "list 数量: `1`") || !strings.Contains(body, "通过下拉 list 选择要切换的线程。") {
+	if !strings.Contains(body, "list count: `1`") || !strings.Contains(body, "select a thread from the dropdown to switch.") {
 		t.Fatalf("thread list body = %q, want summary only", body)
 	}
 	selects := cardSelectStaticForTest(ff.replyCards[0])
@@ -4058,7 +4070,7 @@ func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newThreadService(a).completeThreadResume(&feishu.CardAction{
+	resp, err := newThreadService(a).CompleteThreadResume(&feishu.CardAction{
 		UserID: "user-1",
 		ChatID: "chat-1",
 		ActionValue: map[string]any{

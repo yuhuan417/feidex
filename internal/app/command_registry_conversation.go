@@ -60,7 +60,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-				return newThreadService(a).commandThreadsNew(msg)
+				return newThreadService(a).CommandThreadsNew(msg)
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
@@ -76,7 +76,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return matchThreadCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newThreadService(a).commandThread(msg, args)
+				return newThreadService(a).CommandThread(msg, args)
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{
@@ -99,7 +99,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				return matchSessionCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newThreadService(a).commandSession(msg, args)
+				return newThreadService(a).CommandSession(msg, args)
 			},
 			HelpGroup:   "thread",
 			HelpEntries: claudeSessionHelpEntries(),
@@ -114,7 +114,7 @@ func localCommandConversationSpecs() []localCommandSpec {
 				if len(args) > 0 {
 					return fmt.Errorf("usage: /threads")
 				}
-				return newThreadService(a).commandThread(msg, []string{"list"})
+				return newThreadService(a).CommandThread(msg, []string{"list"})
 			},
 			HelpGroup: "thread",
 			HelpEntries: []helpCommandSpec{

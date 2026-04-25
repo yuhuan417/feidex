@@ -144,7 +144,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	newMaintenanceStateService(a).beginCodexUpgrade(backendUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	newMaintenanceStateService(a).BeginCodexUpgrade(backendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := handleCommand(a, msg, "/status"); err != nil {
@@ -180,7 +180,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	origClient := newCodexClient
 	var promoted *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		promoted = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
@@ -198,7 +198,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !newMaintenanceStateService(a).beginCodexUpgrade(backendUpgradeSnapshot{
+	if !newMaintenanceStateService(a).BeginCodexUpgrade(backendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -229,7 +229,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
-	snapshot := newMaintenanceStateService(a).codexUpgradeState()
+	snapshot := newMaintenanceStateService(a).CodexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -260,7 +260,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	var rollbackSmoke *fakeCodexClient
 	runCount := 0
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		runCount++
 		client := &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
@@ -286,7 +286,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !newMaintenanceStateService(a).beginCodexUpgrade(backendUpgradeSnapshot{
+	if !newMaintenanceStateService(a).BeginCodexUpgrade(backendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -324,7 +324,7 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
-	snapshot := newMaintenanceStateService(a).codexUpgradeState()
+	snapshot := newMaintenanceStateService(a).CodexUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -353,7 +353,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	origClient := newCodexClient
 	var promoted *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		promoted = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
@@ -380,7 +380,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if !newMaintenanceStateService(a).codexRestartState().Running {
+		if !newMaintenanceStateService(a).CodexRestartState().Running {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -400,7 +400,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
-	snapshot := newMaintenanceStateService(a).codexRestartState()
+	snapshot := newMaintenanceStateService(a).CodexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
@@ -429,7 +429,7 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	origClient := newCodexClient
 	var smoke *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		smoke = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
@@ -468,7 +468,7 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
-	state := newMaintenanceStateService(a).codexRestartState()
+	state := newMaintenanceStateService(a).CodexRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}
@@ -498,7 +498,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	origClient := newCodexClient
 	var promoted *fakeCodexClient
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		promoted = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
@@ -539,7 +539,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
-	state := newMaintenanceStateService(a).codexRestartState()
+	state := newMaintenanceStateService(a).CodexRestartState()
 	if state.Running || state.Result != "success" {
 		t.Fatalf("restart state = %+v", state)
 	}
@@ -556,7 +556,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing
 
 	origClient := newCodexClient
 	var smoke *fakeCodexClient
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		smoke = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
@@ -600,7 +600,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 
 	origClient := newCodexClient
 	var promoted *fakeCodexClient
-	newCodexClient = func(config config.CodexConfig) codexClient {
+	newCodexClient = func(config config.CodexConfig) CodexClient {
 		promoted = &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
@@ -769,7 +769,7 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.claude = &fakeClaudeCore{}
-	newMaintenanceStateService(a).beginClaudeUpgrade(backendUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	newMaintenanceStateService(a).BeginClaudeUpgrade(backendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := handleCommand(a, msg, "/status"); err != nil {
@@ -814,7 +814,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 		runClaudeSmokeTest = origSmoke
 	}()
 
-	if !newMaintenanceStateService(a).beginClaudeUpgrade(backendUpgradeSnapshot{
+	if !newMaintenanceStateService(a).BeginClaudeUpgrade(backendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -833,7 +833,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	if !claude.closed {
 		t.Fatal("expected live Claude runtime to be closed after successful promotion")
 	}
-	snapshot := newMaintenanceStateService(a).claudeUpgradeState()
+	snapshot := newMaintenanceStateService(a).ClaudeUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -878,7 +878,7 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		runClaudeSmokeTest = origSmoke
 	}()
 
-	if !newMaintenanceStateService(a).beginClaudeUpgrade(backendUpgradeSnapshot{
+	if !newMaintenanceStateService(a).BeginClaudeUpgrade(backendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -897,7 +897,7 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if claude.closed {
 		t.Fatal("live Claude runtime should not be closed when upgrade rolls back before promotion")
 	}
-	snapshot := newMaintenanceStateService(a).claudeUpgradeState()
+	snapshot := newMaintenanceStateService(a).ClaudeUpgradeState()
 	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -945,7 +945,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if !newMaintenanceStateService(a).claudeRestartState().Running {
+		if !newMaintenanceStateService(a).ClaudeRestartState().Running {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -953,7 +953,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	if !claude.closed {
 		t.Fatal("expected live runtime to be closed during restart")
 	}
-	snapshot := newMaintenanceStateService(a).claudeRestartState()
+	snapshot := newMaintenanceStateService(a).ClaudeRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
@@ -1002,7 +1002,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if claude.closed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
 	}
-	state := newMaintenanceStateService(a).claudeRestartState()
+	state := newMaintenanceStateService(a).ClaudeRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}

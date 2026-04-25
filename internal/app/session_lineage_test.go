@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	"feidex/internal/app/sessionctx"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -136,7 +137,7 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 	clearSessionThreadContext(sess)
 	sess.WorkspaceID = "ws-claude"
 
-	if !sessionRestoreBackendThread(sess, backendCodex) {
+	if !sessionctx.RestoreBackendThread(sess, backendCodex) {
 		t.Fatal("expected codex backend thread snapshot to restore")
 	}
 	if sess.WorkspaceID != "ws-codex" || sess.ActiveThreadID != "codex-thread-1" {

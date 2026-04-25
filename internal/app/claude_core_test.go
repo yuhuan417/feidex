@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -54,7 +55,7 @@ type fakeClaudePermissionModeCall struct {
 
 type fakeClaudeApprovalCall struct {
 	requestID  string
-	resolution claudeApprovalResolution
+	resolution appruntime.ClaudeApprovalResolution
 }
 
 type fakeClaudeUserInputCall struct {
@@ -239,7 +240,7 @@ func (f *fakeClaudeCore) SetPermissionMode(_ context.Context, sessionKey, mode s
 	return nil
 }
 
-func (f *fakeClaudeCore) ResolveApproval(requestID string, resolution claudeApprovalResolution) error {
+func (f *fakeClaudeCore) ResolveApproval(requestID string, resolution appruntime.ClaudeApprovalResolution) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.approvalCalls = append(f.approvalCalls, fakeClaudeApprovalCall{
@@ -390,6 +391,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	if err := a.store.QueueSubmission(sessionKey, subID); err != nil {
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
+	markSessionThreadLive(a, sessionKey, "claude-prev")
 
 	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
@@ -574,6 +576,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 	if err := a.store.QueueSubmission(sessionKey, subID); err != nil {
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
+	markSessionThreadLive(a, sessionKey, "claude-stale")
 
 	if err := startNextSubmission(a, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
@@ -661,9 +664,9 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	newRuntimeStateService(a).bindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
 
 	state := &claudeSessionState{
-		sessionKey: sessionKey,
-		sessionID:  "claude-stale",
-		turns: map[int]*claudeTurnState{
+		SessionKey: sessionKey,
+		SessionID:  "claude-stale",
+		Turns: map[int]*claudeTurnState{
 			1: {
 				TurnNumber:               1,
 				TurnID:                   "claude-turn-1",
@@ -685,8 +688,8 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	if _, bound := newRuntimeStateService(a).boundSubmissionForTurn("claude-turn-1"); bound == nil {
 		t.Fatalf("turn binding should remain until retry cleanup")
 	}
-	if state.turns[1] != nil {
-		t.Fatalf("turn state should be cleared after suppressed completion: %+v", state.turns[1])
+	if state.Turns[1] != nil {
+		t.Fatalf("turn state should be cleared after suppressed completion: %+v", state.Turns[1])
 	}
 }
 
@@ -759,7 +762,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("submission after Claude ready = %+v", sub)
 	}
 
-	binding := newRuntimeStateService(a).turnBindingTracker().bindings[sub.TurnID]
+	binding := newRuntimeStateService(a).turnBindingTracker().Bindings[sub.TurnID]
 	if binding.ThreadID != "claude-session-ready" {
 		t.Fatalf("turn binding after Claude ready = %+v", binding)
 	}

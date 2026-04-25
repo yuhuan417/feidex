@@ -27,7 +27,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := newThreadService(a).commandThread(msg, []string{"sandbox", "read-only"}); err != nil {
+	if err := newThreadService(a).CommandThread(msg, []string{"sandbox", "read-only"}); err != nil {
 		t.Fatalf("commandThread(sandbox set) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadSandboxMode != "read-only" {
@@ -40,7 +40,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("sandbox card body = %q", body)
 	}
 
-	if err := newThreadService(a).commandThread(msg, []string{"policy", "never"}); err != nil {
+	if err := newThreadService(a).CommandThread(msg, []string{"policy", "never"}); err != nil {
 		t.Fatalf("commandThread(policy set) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadApprovalPolicy != "never" {
@@ -97,7 +97,7 @@ func TestCommandThreadDirectResume(t *testing.T) {
 		return nil
 	}
 
-	if err := newThreadService(a).commandThread(msg, []string{"resume", "thread-2"}); err != nil {
+	if err := newThreadService(a).CommandThread(msg, []string{"resume", "thread-2"}); err != nil {
 		t.Fatalf("commandThread(resume) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-2" || got.ActiveThreadName != "Resumed Thread" {
@@ -357,7 +357,7 @@ func TestCommandHistoryDirectDetail(t *testing.T) {
 		return nil
 	}
 
-	if err := newHistoryService(a).commandHistory(msg, []string{"detail", "1"}); err != nil {
+	if err := newHistoryService(a).CommandHistory(msg, []string{"detail", "1"}); err != nil {
 		t.Fatalf("commandHistory(detail) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {

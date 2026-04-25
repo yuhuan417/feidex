@@ -11,61 +11,19 @@ import (
 	"feidex/internal/feishu"
 )
 
-type quietModeOption struct {
-	Mode        config.QuietMode
-	Title       string
-	Description string
-}
+type quietModeOption = quietmode.Option
 
-var quietModeOptions = []quietModeOption{
-	{
-		Mode:        config.QuietModeVerbose,
-		Title:       "verbose",
-		Description: "完整展开所有过程消息。",
-	},
-	{
-		Mode:        config.QuietModeProgress,
-		Title:       "progress",
-		Description: "把两次 plan / agent message 之间的过程折叠成一张持续更新的 `工作中` 卡。",
-	},
-	{
-		Mode:        config.QuietModeNormal,
-		Title:       "normal",
-		Description: "只发送 plan 和 agent / final message，不显示 `工作中` 卡。",
-	},
-	{
-		Mode:        config.QuietModeFinal,
-		Title:       "final",
-		Description: "只保留最终答复。",
-	},
-}
+var quietModeOptions = quietmode.Options
 
-func quietMode(cfg *config.FeishuConfig) config.QuietMode {
-	if cfg == nil {
-		return config.QuietModeProgress
-	}
-	mode, err := config.ParseQuietMode(cfg.Quiet)
-	if err != nil {
-		return config.QuietModeProgress
-	}
-	return mode
-}
+var quietMode = quietmode.Mode
 
-func quietModeEnabled(cfg *config.FeishuConfig) bool {
-	return quietMode(cfg) != config.QuietModeVerbose
-}
+var quietModeEnabled = quietmode.Enabled
 
-func quietWorkingCardEnabled(cfg *config.FeishuConfig) bool {
-	return quietMode(cfg) == config.QuietModeProgress
-}
+var quietWorkingCardEnabled = quietmode.WorkingCardEnabled
 
-func quietModeStatusText(mode config.QuietMode) string {
-	return quietmode.StatusText(mode)
-}
+var quietModeStatusText = quietmode.StatusText
 
-func shouldDeliverTurnKindInQuiet(mode config.QuietMode, kind string) bool {
-	return quietmode.ShouldDeliverTurnKind(mode, kind)
-}
+var shouldDeliverTurnKindInQuiet = quietmode.ShouldDeliverTurnKind
 
 func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFinalAnswer bool) bool {
 	return quietmode.ShouldDeliverTurnItem(mode, itemType, isFinalAnswer)

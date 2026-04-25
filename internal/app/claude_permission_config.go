@@ -163,45 +163,6 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 	return err
 }
 
-func (s threadService) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(s.app)
-	sess := appState.session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前会话已失效"}}, nil
-	}
-	mode := ""
-	warning := ""
-	if override, ok := normalizeClaudePermissionOverrideValue(rawMode); ok {
-		mode = override
-	} else {
-		var err error
-		mode, warning, err = normalizeRequestedClaudePermissionMode(s.app, context.Background(), rawMode)
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
-	sess.ActiveClaudePermissionMode = mode
-	if err := appState.saveSession(sess); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, sess.WorkspaceID), s.app.cfg.Claude)
-	if err := applyClaudePermissionModeToRuntime(s.app, sessionKey, effective); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	card, err := renderClaudeSessionPermissionMenuCard(s.app, sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	content := "已更新 Claude 会话权限模式"
-	if warning != "" {
-		content = warning
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: content},
-		Card:  rawCard(card),
-	}, nil
-}
-
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if a.store != nil {

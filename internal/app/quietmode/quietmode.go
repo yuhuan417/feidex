@@ -7,6 +7,60 @@ import (
 	"feidex/internal/config"
 )
 
+// Option describes a single quiet mode choice for menu rendering.
+type Option struct {
+	Mode        config.QuietMode
+	Title       string
+	Description string
+}
+
+// Options is the ordered list of quiet mode choices for menu cards.
+var Options = []Option{
+	{
+		Mode:        config.QuietModeVerbose,
+		Title:       "verbose",
+		Description: "完整展开所有过程消息。",
+	},
+	{
+		Mode:        config.QuietModeProgress,
+		Title:       "progress",
+		Description: "把两次 plan / agent message 之间的过程折叠成一张持续更新的 `工作中` 卡。",
+	},
+	{
+		Mode:        config.QuietModeNormal,
+		Title:       "normal",
+		Description: "只发送 plan 和 agent / final message，不显示 `工作中` 卡。",
+	},
+	{
+		Mode:        config.QuietModeFinal,
+		Title:       "final",
+		Description: "只保留最终答复。",
+	},
+}
+
+// Mode returns the parsed quiet mode from the Feishu config, defaulting to
+// progress on nil or invalid config.
+func Mode(cfg *config.FeishuConfig) config.QuietMode {
+	if cfg == nil {
+		return config.QuietModeProgress
+	}
+	mode, err := config.ParseQuietMode(cfg.Quiet)
+	if err != nil {
+		return config.QuietModeProgress
+	}
+	return mode
+}
+
+// Enabled returns true when quiet mode is anything other than verbose.
+func Enabled(cfg *config.FeishuConfig) bool {
+	return Mode(cfg) != config.QuietModeVerbose
+}
+
+// WorkingCardEnabled returns true when quiet mode is set to progress.
+func WorkingCardEnabled(cfg *config.FeishuConfig) bool {
+	return Mode(cfg) == config.QuietModeProgress
+}
+
 func StatusText(mode config.QuietMode) string {
 	return mode.String()
 }

@@ -3,31 +3,13 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/state"
 )
 
-func attentionMentionMarkdown(userID string) string {
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		return ""
-	}
-	return "<at id=" + userID + "></at>"
-}
+var attentionMentionMarkdown = apputil.AttentionMentionMarkdown
 
-func prependAttentionMentionMarkdown(body, userID string) string {
-	body = strings.TrimSpace(body)
-	mention := attentionMentionMarkdown(userID)
-	if mention == "" {
-		return body
-	}
-	if body == "" {
-		return mention
-	}
-	if strings.HasPrefix(body, mention) {
-		return body
-	}
-	return mention + "\n\n" + body
-}
+var prependAttentionMentionMarkdown = apputil.PrependAttentionMentionMarkdown
 
 func turnStopAttentionUserID(a *App, sub *state.Submission, turnID string) string {
 	if !shouldMentionOnTurnStop(a, sub, turnID) {

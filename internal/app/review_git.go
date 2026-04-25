@@ -34,3 +34,14 @@ func (s reviewGitService) listReviewBranches(cwd string) ([]appreview.BranchOpti
 func (s reviewGitService) listReviewCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
 	return appreview.NewGitService().ListCommits(cwd, limit)
 }
+
+// Exported wrappers for sub-package interface satisfaction.
+func (s reviewGitService) ReviewResolveTarget(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
+	return s.resolveReviewTarget(cwd, target)
+}
+func (s reviewGitService) ReviewListBranches(cwd string) ([]appreview.BranchOption, error) {
+	return s.listReviewBranches(cwd)
+}
+func (s reviewGitService) ReviewListCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
+	return s.listReviewCommits(cwd, limit)
+}

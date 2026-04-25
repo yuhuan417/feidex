@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"feidex/internal/app/apputil"
+	appturnlifecycle "feidex/internal/app/turnlifecycle"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -17,31 +18,7 @@ func updateSubmissionByTurn(a *App, threadID, turnID string, mutate func(*state.
 	_ = appState.updateSubmission(sub.ID, mutate)
 }
 
-func turnCompletionTerminalText(status, lastError string) string {
-	lastError = strings.TrimSpace(lastError)
-	if status == "completed" {
-		return ""
-	}
-
-	fallback := lastError
-	if fallback == "" {
-		switch status {
-		case "interrupted":
-			fallback = "任务已中断。"
-		case "failed":
-			fallback = "任务失败。"
-		default:
-			fallback = "任务已结束。"
-		}
-	}
-
-	switch status {
-	case "interrupted":
-		return "任务已中断。"
-	default:
-		return fallback
-	}
-}
+var turnCompletionTerminalText = appturnlifecycle.TurnCompletionTerminalText
 
 func findSubmissionByTurn(a *App, threadID, turnID string) (string, *state.Submission) {
 	appState := appState(a)
@@ -93,4 +70,4 @@ func prepareSubmissionCardMarkdown(a *App, sub *state.Submission, text string) s
 	return normalizeCardMarkdown(text)
 }
 
-func truncate(s string, n int) string { return apputil.Truncate(s, n) }
+var truncate = apputil.Truncate

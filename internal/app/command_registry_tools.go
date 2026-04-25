@@ -10,7 +10,7 @@ func localCommandCommonToolSpecs() []localCommandSpec {
 				return matchHistoryCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newHistoryService(a).commandHistory(msg, args)
+				return newHistoryService(a).CommandHistory(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
@@ -28,7 +28,7 @@ func localCommandCommonToolSpecs() []localCommandSpec {
 				return matchSkillsCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newSkillsService(a).commandSkills(msg, args)
+				return newSkillsService(a).CommandSkills(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{
@@ -44,7 +44,7 @@ func localCommandCommonToolSpecs() []localCommandSpec {
 				return exactCommand(fields)
 			},
 			Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-				return newUsageService(a).commandUsage(msg, args)
+				return newUsageService(a).CommandUsage(msg, args)
 			},
 			HelpGroup: "常用工具",
 			HelpEntries: []helpCommandSpec{

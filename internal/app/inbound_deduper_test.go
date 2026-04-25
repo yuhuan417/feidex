@@ -8,11 +8,11 @@ import (
 
 func TestInboundDeduperClaimReleaseAndDone(t *testing.T) {
 	d := &inboundDeduper{
-		inflight:     map[string]time.Time{},
-		recentlyDone: map[string]time.Time{},
-		retention:    50 * time.Millisecond,
-		inflightTTL:  50 * time.Millisecond,
-		maxEntries:   8,
+		Inflight:     map[string]time.Time{},
+		RecentlyDone: map[string]time.Time{},
+		Retention:    50 * time.Millisecond,
+		InflightTTL:  50 * time.Millisecond,
+		MaxEntries:   8,
 	}
 
 	if !d.Claim("msg-1") {
@@ -40,30 +40,30 @@ func TestInboundDeduperClaimReleaseAndDone(t *testing.T) {
 
 func TestInboundDeduperGCAndCap(t *testing.T) {
 	d := &inboundDeduper{
-		inflight:     map[string]time.Time{},
-		recentlyDone: map[string]time.Time{},
-		retention:    time.Second,
-		inflightTTL:  time.Second,
-		maxEntries:   2,
+		Inflight:     map[string]time.Time{},
+		RecentlyDone: map[string]time.Time{},
+		Retention:    time.Second,
+		InflightTTL:  time.Second,
+		MaxEntries:   2,
 	}
 
 	if !d.Claim("msg-1") || !d.Claim("msg-2") || !d.Claim("msg-3") {
 		t.Fatal("Claim() should allow unique ids")
 	}
-	if got := len(d.inflight) + len(d.recentlyDone); got != 2 {
+	if got := len(d.Inflight) + len(d.RecentlyDone); got != 2 {
 		t.Fatalf("enforceCapLocked() total = %d, want 2", got)
 	}
 
-	d.mu.Lock()
-	d.inflight["expired"] = time.Now().Add(-time.Second)
-	d.mu.Unlock()
-	d.gc()
-	d.mu.Lock()
-	if _, ok := d.inflight["expired"]; ok {
-		d.mu.Unlock()
-		t.Fatal("gc() should remove expired inflight entry")
+	d.Mu.Lock()
+	d.Inflight["expired"] = time.Now().Add(-time.Second)
+	d.Mu.Unlock()
+	d.GC()
+	d.Mu.Lock()
+	if _, ok := d.Inflight["expired"]; ok {
+		d.Mu.Unlock()
+		t.Fatal("gc() should remove expired Inflight entry")
 	}
-	d.mu.Unlock()
+	d.Mu.Unlock()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	d.Start(ctx)

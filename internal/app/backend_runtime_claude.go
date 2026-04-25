@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/state"
 )
 
@@ -57,8 +58,8 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 	return appState(a).session(sessionKey)
 }
 
-func (claudeRuntimeFacade) conversationBackend(a *App) conversationBackendFacade {
-	return claudeConversationBackend{deps: a}
+func (claudeRuntimeFacade) conversationBackend(a *App) appconvbackend.ConversationBackendFacade {
+	return appconvbackend.NewClaudeConversationBackend(a)
 }
 
 func (claudeRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
@@ -80,14 +81,14 @@ func (claudeRuntimeFacade) startRuntime(context.Context, *App, *backendRuntimeHa
 }
 
 func (claudeRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && newMaintenanceStateService(a).claudeMaintenanceActive()
+	return a != nil && newMaintenanceStateService(a).ClaudeMaintenanceActive()
 }
 
 func (claudeRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 	if a == nil {
 		return nil
 	}
-	return newMaintenanceStateService(a).claudeMaintenanceBlocksCommand(raw)
+	return newMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
 }
 
 func (claudeRuntimeFacade) idleMaintenanceBlockedReason() string {

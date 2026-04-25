@@ -3,16 +3,16 @@ package app
 import (
 	"context"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
+	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
-var inlineCodeLocalPreviewTargetRe = regexp.MustCompile("`([^`\n]+)`")
+var inlineCodeLocalPreviewTargetRe = applinkutil.InlineCodeLocalPreviewTargetRe
 
 func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
@@ -43,98 +43,13 @@ func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submissio
 	return rewritten
 }
 
-func normalizeLocalFilePreviewTargets(text, workspaceCwd string) string {
-	text = strings.TrimSpace(text)
-	workspaceCwd = strings.TrimSpace(workspaceCwd)
-	if text == "" || workspaceCwd == "" {
-		return text
-	}
-	lines := strings.Split(text, "\n")
-	inFence := false
-	openFenceLen := 0
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if run, info, ok := parseBacktickFenceLine(trimmed); ok {
-			if !inFence {
-				inFence = true
-				openFenceLen = run
-			} else if info == "" && run >= openFenceLen {
-				inFence = false
-				openFenceLen = 0
-			}
-			continue
-		}
-		if inFence {
-			continue
-		}
-		lines[i] = linkifyInlineCodeLocalFileRefsLine(line, workspaceCwd)
-	}
-	return strings.Join(lines, "\n")
-}
+var normalizeLocalFilePreviewTargets = applinkutil.NormalizeLocalFilePreviewTargets
 
-func linkifyInlineCodeLocalFileRefsLine(line, workspaceCwd string) string {
-	matches := inlineCodeLocalPreviewTargetRe.FindAllStringSubmatchIndex(line, -1)
-	if len(matches) == 0 {
-		return line
-	}
-	linkRanges := markdownLinkFullRe.FindAllStringIndex(line, -1)
-	var builder strings.Builder
-	last := 0
-	changed := false
-	for _, match := range matches {
-		if len(match) < 4 {
-			continue
-		}
-		start := match[0]
-		end := match[1]
-		targetStart := match[2]
-		targetEnd := match[3]
-		builder.WriteString(line[last:start])
-		original := line[start:end]
-		if rangeWithinAny(start, end, linkRanges) {
-			builder.WriteString(original)
-			last = end
-			continue
-		}
-		rawTarget := strings.TrimSpace(line[targetStart:targetEnd])
-		displayPath, ok := localLinkDisplayTarget(rawTarget, workspaceCwd)
-		if !ok {
-			builder.WriteString(original)
-			last = end
-			continue
-		}
-		replacement := "[" + escapeMarkdownLinkLabel(displayPath) + "](" + rawTarget + ")"
-		if replacement != original {
-			changed = true
-		}
-		builder.WriteString(replacement)
-		last = end
-	}
-	builder.WriteString(line[last:])
-	if !changed {
-		return line
-	}
-	return builder.String()
-}
+var linkifyInlineCodeLocalFileRefsLine = applinkutil.LinkifyInlineCodeLocalFileRefsLine
 
-func rangeWithinAny(start, end int, ranges [][]int) bool {
-	for _, r := range ranges {
-		if len(r) < 2 {
-			continue
-		}
-		if start >= r[0] && end <= r[1] {
-			return true
-		}
-	}
-	return false
-}
+var rangeWithinAny = applinkutil.RangeWithinAny
 
-func escapeMarkdownLinkLabel(value string) string {
-	value = strings.TrimSpace(value)
-	value = strings.ReplaceAll(value, `[`, `\[`)
-	value = strings.ReplaceAll(value, `]`, `\]`)
-	return value
-}
+var escapeMarkdownLinkLabel = applinkutil.EscapeMarkdownLinkLabel
 
 func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)

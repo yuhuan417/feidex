@@ -11,7 +11,9 @@ import (
 	"feidex/internal/state"
 )
 
-// claudeSubmissionService handles Claude-specific submission startup, retry, and rollback.
+// claudeSubmissionService handles Claude-specific submission startup, retry,
+// and rollback. The core queue management is delegated to the submission
+// sub-package; this file retains the Claude-specific turn lifecycle.
 type claudeSubmissionService struct {
 	app *App
 }

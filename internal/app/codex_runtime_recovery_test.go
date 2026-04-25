@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	appcodexruntime "feidex/internal/app/codexruntime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -85,7 +86,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	}
 
 	origNewCodex := newCodexClient
-	newCodexClient = func(config.CodexConfig) codexClient { return promoted }
+	newCodexClient = func(config.CodexConfig) CodexClient { return promoted }
 	defer func() { newCodexClient = origNewCodex }()
 
 	_, _, onError := fc.handlersSnapshot()
@@ -141,9 +142,8 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.codexRuntimeMu.Lock()
-	a.codexRecovering = true
-	a.codexRuntimeMu.Unlock()
+	codexRecoveryState.SetRecoveringForTest()
+	defer func() { codexRecoveryState = appcodexruntime.NewRecoveryState() }()
 
 	sessionKey := "sess-recovering"
 	if err := a.store.UpsertSession(&state.Session{
@@ -240,7 +240,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	}
 
 	origNewCodex := newCodexClient
-	newCodexClient = func(config.CodexConfig) codexClient { return promoted }
+	newCodexClient = func(config.CodexConfig) CodexClient { return promoted }
 	defer func() { newCodexClient = origNewCodex }()
 
 	recoverFrontendRuntimeState(a)

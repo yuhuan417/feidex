@@ -72,10 +72,10 @@ func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *
 func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	newAutoRetryService(a).autoRetryTracker().after = func(time.Duration, func()) delayedTask {
+	newAutoRetryService(a).AutoRetryTracker().After = func(time.Duration, func()) delayedTask {
 		return &fakeDelayedTask{}
 	}
-	if err := newAutoRetryService(a).updateAutoRetryEnabled(true); err != nil {
+	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
@@ -100,20 +100,16 @@ func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAu
 func TestClaudeHandleSessionErrorFailsRunningSubmissionOnFatalProcessExit(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
-	runtime := &claudeRuntime{
-		app:      a,
-		sessions: map[string]*claudeSessionState{},
-		pending:  map[string]*claudePendingInteraction{},
-	}
+	runtime := newTestClaudeRuntime(t, a)
 	session := &claudeSessionState{
-		sessionKey: "sess-1",
-		turns: map[int]*claudeTurnState{
+		SessionKey: "sess-1",
+		Turns: map[int]*claudeTurnState{
 			1: {TurnNumber: 1, TurnID: "claude-turn-1"},
 		},
 	}
-	session.sessionID = "claude-thread-1"
+	session.SessionID = "claude-thread-1"
 
-	runtime.handleSessionError(session, claudecli.ErrorEvent{
+	runtime.service.HandleSessionError(session, claudecli.ErrorEvent{
 		TurnNumber: 1,
 		Error:      &claudecli.ProcessError{Message: "Claude CLI process exited", Cause: errors.New("exit status 1")},
 		Context:    "stdout_eof",

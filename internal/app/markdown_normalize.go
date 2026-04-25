@@ -1,34 +1,14 @@
 package app
 
-import "strings"
+import applinkutil "feidex/internal/app/linkutil"
 
 const (
-	markdownFenceMinLen       = 3
-	markdownFencePreferredLen = 4
+	markdownFenceMinLen       = applinkutil.FenceMinLen
+	markdownFencePreferredLen = applinkutil.FencePreferredLen
 )
 
-func normalizeCardMarkdown(text string) string {
-	return strings.TrimSpace(text)
-}
+var normalizeCardMarkdown = applinkutil.NormalizeCardMarkdown
 
-func parseBacktickFenceLine(trimmed string) (run int, info string, ok bool) {
-	trimmed = strings.TrimSpace(trimmed)
-	if trimmed == "" || trimmed[0] != '`' {
-		return 0, "", false
-	}
-	run = countLeadingBackticks(trimmed)
-	if run < markdownFenceMinLen {
-		return 0, "", false
-	}
-	info = strings.TrimSpace(trimmed[run:])
-	return run, info, true
-}
+var parseBacktickFenceLine = applinkutil.ParseBacktickFenceLine
 
-func countLeadingBackticks(s string) int {
-	n := 0
-	for n < len(s) && s[n] == '`' {
-		n++
-	}
-	return n
-}
-
+var countLeadingBackticks = applinkutil.CountLeadingBackticks
