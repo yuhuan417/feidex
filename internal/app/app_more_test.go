@@ -697,6 +697,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 				fn()
 			}()
 		},
+		waitAsync: asyncWG.Wait,
 		liveThreads: newLiveThreadTracker(),
 		trackers: appTrackers{
 			turnStreams:  newTurnStreamTracker(),
@@ -1160,6 +1161,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if err := newPendingInputService(a).completeWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
+	a.waitAsync()
 	if config.FindWorkspace(a.cfg, "repo") == nil {
 		t.Fatal("expected workspace to be appended to config")
 	}
@@ -1344,6 +1346,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
 		t.Fatalf("commandWorkspace(clone) error = %v", err)
 	}
+	a.waitAsync()
 
 	wantTargetDir := filepath.Join(baseDir, "repo")
 	if gotRepoURL != repoURL {

@@ -208,6 +208,9 @@ func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementServi
 		// Formatting
 		FormatMenuBody: menuCardBody,
 
+		// Async callbacks
+		RunAsync: func(fn func()) { runAsync(a, fn) },
+
 		// Render callbacks
 		RenderNewCard: func(sessionKey, requestID string, payload appworkspacecmd.NewPayload) map[string]any {
 			return newWorkspaceRenderServiceInner(a).RenderWorkspaceNewCard(sessionKey, requestID, payload)

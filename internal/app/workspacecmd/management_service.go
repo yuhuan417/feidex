@@ -155,19 +155,8 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if err := s.SaveSession(sess); err != nil {
 		return err
 	}
-	if s.SessionHasInFlight(sess) {
-		return nil
-	}
-	if ws == nil {
-		return nil
-	}
-	if _, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws); err != nil {
-		slog.Warn("workspace create thread binding failed",
-			"session_key", sessionKey,
-			"workspace_id", id,
-			"cwd", cwd,
-			"error", err,
-		)
+	if !s.SessionHasInFlight(sess) && ws != nil {
+		s.runAsyncThreadBinding(sessionKey, id, ws)
 	}
 	return nil
 }
@@ -459,6 +448,8 @@ func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction
 }
 
 // CompleteWorkspaceUse handles workspace use action.
+// Thread binding runs asynchronously so the Feishu card callback returns
+// immediately instead of blocking on backend RPCs.
 func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
 	ws := config.FindWorkspace(s.App.Config(), workspaceID)
 	if ws == nil {
@@ -470,8 +461,26 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 	}
 	s.SwitchSessionWorkspace(sess, workspaceID)
 	_ = s.SaveSession(sess)
-	toast := "已切换工作区"
 	if !s.SessionHasInFlight(sess) {
+		s.runAsyncThreadBinding(sessionKey, workspaceID, ws)
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已切换工作区"},
+		Card:  rawCard(s.RenderMenuCard(sessionKey)),
+	}, nil
+}
+
+// runAsyncThreadBinding runs EnsureWorkspaceThreadBinding asynchronously.
+func (s *ManagementService) runAsyncThreadBinding(sessionKey, workspaceID string, ws *config.Workspace) {
+	runner := s.RunAsync
+	if runner == nil {
+		runner = func(fn func()) { go fn() }
+	}
+	runner(func() {
+		sess := s.GetSession(sessionKey)
+		if sess == nil {
+			return
+		}
 		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
 			slog.Warn("workspace action thread binding failed",
@@ -480,15 +489,17 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 				"cwd", ws.Cwd,
 				"error", err,
 			)
-			toast = "已切换工作区" + strings.TrimPrefix(s.BackendWorkspaceSwitchBindingFailureNotice(), "。")
-		} else {
-			toast = "已切换工作区" + strings.TrimPrefix(s.BackendWorkspaceSwitchBindingNotice(binding), "。")
+		} else if binding != nil {
+			slog.Debug("workspace thread binding completed",
+				"session_key", sessionKey,
+				"workspace_id", workspaceID,
+				"thread_id", binding.ThreadID,
+			)
 		}
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: toast},
-		Card:  rawCard(s.RenderMenuCard(sessionKey)),
-	}, nil
+		if s.OnAsyncDone != nil {
+			s.OnAsyncDone()
+		}
+	})
 }
 
 // CompleteWorkspaceUseExisting handles workspace use existing action.

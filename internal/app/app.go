@@ -37,6 +37,7 @@ type App struct {
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
 	asyncRunner            func(func())
+	waitAsync              func()
 	codexRuntimeMu         sync.Mutex
 	codexRecovering        bool
 	codexRecoverySource    CodexClient

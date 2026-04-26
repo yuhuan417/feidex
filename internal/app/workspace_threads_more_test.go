@@ -32,6 +32,7 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenFrontendBackendIsClaude(t 
 	if err := newWorkspaceManagementService(a).createWorkspaceAndSwitch(sessionKey, "user-1", "chat-1", "p2p", "claude-created", "Claude Created", targetDir); err != nil {
 		t.Fatalf("createWorkspaceAndSwitch() error = %v", err)
 	}
+	a.waitAsync()
 
 	ws := config.FindWorkspace(a.cfg, "claude-created")
 	if ws == nil {

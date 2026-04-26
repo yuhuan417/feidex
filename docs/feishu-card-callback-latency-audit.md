@@ -1,6 +1,6 @@
 # 飞书卡片回调延迟审计
 
-> 更新时间: 2026-04-23
+> 更新时间: 2026-04-26
 >
 > 目的:
 > - 收口当前 Feidex 的飞书卡片回调延迟风险集合。
@@ -140,12 +140,12 @@
 | `menu.skills` / `skills.reload` / `skills.select` | 已确认是 Codex 本地快路径 |
 | `menu.history` / `history.page` / `history.detail` / `history.detail.select` | 已确认是 Codex 本地快路径 |
 | `menu.new` / `menu.fork` / `thread.resume.select` | 已确认是 Codex 本地快路径 |
-| `workspace.use.select` / `workspace.use.existing` / `workspace.clone.use_existing` / `workspace.new.submit` | 已确认是 Codex 本地快路径 |
+| `workspace.use.select` / `workspace.use.existing` / `workspace.clone.use_existing` / `workspace.new.submit` | thread binding 已异步化，回调先返回 |
 
 补充说明:
 
-- 这条“已确认快路径”只适用于 `Codex` 本地路径。
-- `Claude` 会话管理类动作是否要异步化，仍按它自己的 runtime / CLI 边界单独判断。
+- 这条”已确认快路径”只适用于 `Codex` 本地路径。
+- `workspace.*` 系列动作的 thread binding 已异步化（2026-04-26），适用于所有 backend。
 
 ## Claude
 
@@ -179,6 +179,10 @@
 | `menu.claude_upgrade` | Claude 本机状态读取 | 先返回 preparing card，后台执行 |
 | `claude_upgrade.check` | `npm view @anthropic-ai/claude-code version --json` | 先返回 preparing card，后台执行 |
 | `claude_upgrade.prepare` | 同上 | 先返回 preparing card，后台执行 |
+| `workspace.use.select` | Claude 新工作区需启动 CLI 子进程 | `CompleteWorkspaceUse` 回调先返回，thread binding 异步执行 |
+| `workspace.use.existing` | 同上 | 同上 |
+| `workspace.clone.use_existing` | 同上 | 同上 |
+| `workspace.new.submit` | `CreateWorkspaceAndSwitch` 中 thread binding | 回调先返回，thread binding 异步执行 |
 
 补充说明:
 
@@ -192,10 +196,6 @@
 | Action | 原因 |
 | --- | --- |
 | `menu.new` | 当前先不纳入 timeout 重点集合 |
-| `workspace.use.select` | 当前先不纳入 timeout 重点集合 |
-| `workspace.use.existing` | 当前先不纳入 timeout 重点集合 |
-| `workspace.clone.use_existing` | 当前先不纳入 timeout 重点集合 |
-| `workspace.new.submit` | 当前先不纳入 timeout 重点集合 |
 | `thread.resume.select` | 当前先不纳入 timeout 重点集合 |
 | `menu.fork` | 当前先不纳入 timeout 重点集合 |
 | `model.config.set_model` / `model.config.select_model` | 当前先不纳入 timeout 重点集合 |
@@ -248,7 +248,7 @@
 
 ## 最终收口
 
-截至 2026-04-23，当前最需要持续盯住的飞书卡片回调 timeout 集合是:
+截至 2026-04-26，当前最需要持续盯住的飞书卡片回调 timeout 集合是:
 
 - Codex:
   - `menu.review.uncommitted`
@@ -275,6 +275,5 @@
   - `menu.skills` / `skills.*`
   - `menu.history` / `history.*`
   - `menu.new` / `menu.fork` / `thread.resume.select`
-  - `workspace.use.select` / `workspace.use.existing` / `workspace.clone.use_existing` / `workspace.new.submit`
 
 如果后续需要自动化 guard，建议先从这份集合里挑最容易回归的动作做 callback-path 级测试。

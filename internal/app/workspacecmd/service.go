@@ -156,6 +156,15 @@ type (
 // Formatting callbacks.
 type FormatMenuBodyFn func(action, body string) string
 
+// Async callbacks.
+type (
+	// RunAsyncFn runs a function asynchronously (e.g. in a goroutine).
+	RunAsyncFn func(fn func())
+	// OnAsyncDoneFn is called when async work completes. Tests use this
+	// to synchronize with async goroutines.
+	OnAsyncDoneFn func()
+)
+
 // Render callbacks.
 type (
 	RenderWorkspaceMenuCardFn               func(sessionKey string) map[string]any
@@ -274,6 +283,10 @@ type ManagementService struct {
 
 	// Formatting
 	FormatMenuBody FormatMenuBodyFn
+
+	// Async callbacks
+	RunAsync    RunAsyncFn
+	OnAsyncDone OnAsyncDoneFn
 
 	// Render callbacks
 	RenderNewCard                func(sessionKey, requestID string, payload NewPayload) map[string]any

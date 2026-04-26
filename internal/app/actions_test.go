@@ -168,6 +168,7 @@ func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("expected success toast, got %#v", resp)
 	}
+	a.waitAsync()
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
 		t.Fatalf("session after workspace resume = %+v", sess)
@@ -208,6 +209,7 @@ func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
 	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("expected success toast, got %#v", resp)
 	}
+	a.waitAsync()
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
 		t.Fatalf("session after workspace start = %+v", sess)
@@ -254,6 +256,7 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("expected success toast, got %#v", resp)
 	}
+	a.waitAsync()
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-fresh" || sess.ActiveThreadWorkspaceID != "alt" {
 		t.Fatalf("session after workspace fallback = %+v", sess)
