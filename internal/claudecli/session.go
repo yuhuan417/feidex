@@ -810,7 +810,7 @@ func (s *Session) buildExitPlanModeResponse(ctx context.Context, requestID strin
 	}
 	feedback, err := s.cfg.InteractiveToolHandler.HandleExitPlanMode(ctx, info)
 	if err != nil {
-		return denyControlResponse(requestID, err.Error(), false)
+		return denyControlResponse(requestID, err.Error(), true)
 	}
 	updatedInput := copyMap(toolReq.Input)
 	updatedInput["feedback"] = feedback
