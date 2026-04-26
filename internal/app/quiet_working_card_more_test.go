@@ -113,6 +113,92 @@ func TestQuietWorkingCardHelperBranches(t *testing.T) {
 	}
 }
 
+func TestCompactQuietWorkingLinesDeduplicates(t *testing.T) {
+	lines := compactQuietWorkingLines([]string{
+		"Read `a.go`",
+		"Read `a.go`",
+		"Read `b.go`",
+	})
+	if len(lines) != 1 || lines[0] != "Read `a.go` `b.go`" {
+		t.Fatalf("dedup same file: lines = %#v", lines)
+	}
+
+	lines = compactQuietWorkingLines([]string{
+		"Update `x.go`",
+		"Update `x.go`",
+		"Update `y.go`",
+	})
+	if len(lines) != 1 || lines[0] != "Update `x.go` `y.go`" {
+		t.Fatalf("dedup update: lines = %#v", lines)
+	}
+}
+
+func TestCompactQuietWorkingLinesDedupWithKeys(t *testing.T) {
+	// Same dedup key → deduplicated.
+	lines := compactQuietWorkingLinesWithDedup(
+		[]string{"Read `a.go`", "Read `a.go`"},
+		[]string{"src/a.go", "src/a.go"},
+	)
+	if len(lines) != 1 || lines[0] != "Read `a.go`" {
+		t.Fatalf("same dedup key: lines = %#v", lines)
+	}
+
+	// Different dedup keys → not deduplicated even if display names are same.
+	lines = compactQuietWorkingLinesWithDedup(
+		[]string{"Read `a.go`", "Read `a.go`"},
+		[]string{"src/a.go", "test/a.go"},
+	)
+	if len(lines) != 1 || lines[0] != "Read `a.go` `a.go`" {
+		t.Fatalf("diff dedup key same name: lines = %#v", lines)
+	}
+
+	// Mixed: some same, some different.
+	lines = compactQuietWorkingLinesWithDedup(
+		[]string{"Read `a.go`", "Read `a.go`", "Read `b.go`", "Read `a.go`"},
+		[]string{"src/a.go", "src/a.go", "src/b.go", "test/a.go"},
+	)
+	if len(lines) != 1 || lines[0] != "Read `a.go` `b.go` `a.go`" {
+		t.Fatalf("mixed dedup: lines = %#v", lines)
+	}
+}
+
+func TestQuietWorkingCardBodyDedupKeys(t *testing.T) {
+	card := &quietWorkingCard{
+		Entries: map[string]string{
+			"item:t1\x000": "Read `a.go`",
+			"item:t1\x001": "Read `a.go`",
+			"item:t1\x002": "Read `b.go`",
+		},
+		EntryOrder: []string{"item:t1\x000", "item:t1\x001", "item:t1\x002"},
+		DedupKeys: map[string]string{
+			"item:t1\x000": "src/a.go",
+			"item:t1\x001": "src/a.go",
+			"item:t1\x002": "src/b.go",
+		},
+	}
+	body := card.Body()
+	if body != "Read `a.go` `b.go`" {
+		t.Fatalf("body with dedup keys = %q", body)
+	}
+
+	// Same display name, different dedup keys → both shown.
+	card2 := &quietWorkingCard{
+		Entries: map[string]string{
+			"item:t2\x000": "Read `a.go`",
+			"item:t2\x001": "Read `a.go`",
+		},
+		EntryOrder: []string{"item:t2\x000", "item:t2\x001"},
+		DedupKeys: map[string]string{
+			"item:t2\x000": "src/a.go",
+			"item:t2\x001": "test/a.go",
+		},
+	}
+	body2 := card2.Body()
+	if body2 != "Read `a.go` `a.go`" {
+		t.Fatalf("body same name diff key = %q", body2)
+	}
+}
+
 func TestQuietWorkingCardLifecycleBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")

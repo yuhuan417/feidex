@@ -25,6 +25,7 @@ type QuietWorkingCard struct {
 	MessageID    string
 	EntryOrder   []string
 	Entries      map[string]string
+	DedupKeys    map[string]string // entry key → dedup key (full path) for deduplication
 	RenderedBody string
 }
 
@@ -78,6 +79,19 @@ func PrepareUpdateLocked(stream *StreamState, itemID string, item map[string]any
 		stream.QuietWorking = card
 	}
 	changed := card.ReplaceEntries(prefix, lines)
+	// Store dedup keys (full path) for dynamic tool calls so that
+	// CompactQuietWorkingLines can deduplicate by actual file identity.
+	if changed && turnitem.NormalizeTurnItemType(turnitem.StringValue(item["type"])) == "dynamic_tool_call" {
+		dedupPath := turnitem.DynamicToolPath(item["input"], workspaceCwd)
+		if dedupPath != "" {
+			if card.DedupKeys == nil {
+				card.DedupKeys = map[string]string{}
+			}
+			for i := range turnitem.TrimmedNonEmptyStrings(lines) {
+				card.DedupKeys[EntryKey(prefix, i)] = dedupPath
+			}
+		}
+	}
 	if prefix != QuietWorkingReasoningKey && changed {
 		if card.RemoveEntries(QuietWorkingReasoningKey) {
 			changed = true
@@ -188,6 +202,9 @@ func (c *QuietWorkingCard) RemoveEntries(prefix string) bool {
 	for _, key := range c.EntryOrder {
 		if EntryPrefix(key) == prefix {
 			delete(c.Entries, key)
+			if c.DedupKeys != nil {
+				delete(c.DedupKeys, key)
+			}
 			changed = true
 			continue
 		}
@@ -221,13 +238,23 @@ func (c *QuietWorkingCard) Body() string {
 		return ""
 	}
 	lines := make([]string, 0, len(c.EntryOrder))
+	var dedupKeys []string
 	for _, key := range c.EntryOrder {
 		line := strings.TrimSpace(c.Entries[key])
 		if line != "" {
 			lines = append(lines, line)
+			if c.DedupKeys != nil {
+				dedupKeys = append(dedupKeys, c.DedupKeys[key])
+			} else {
+				dedupKeys = append(dedupKeys, "")
+			}
 		}
 	}
-	lines = CompactQuietWorkingLines(lines)
+	if c.DedupKeys != nil {
+		lines = CompactQuietWorkingLinesWithDedup(lines, dedupKeys)
+	} else {
+		lines = CompactQuietWorkingLines(lines)
+	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
@@ -383,28 +410,75 @@ func BuildQuietWebSearchLines(item map[string]any) []string {
 
 // CompactQuietWorkingLines merges consecutive lines with the same verb prefix.
 func CompactQuietWorkingLines(lines []string) []string {
+	return CompactQuietWorkingLinesWithDedup(lines, nil)
+}
+
+// CompactQuietWorkingLinesWithDedup merges adjacent lines with the same verb,
+// deduplicating by dedup key (full path) when available. Without dedup keys,
+// falls back to display-name deduplication.
+func CompactQuietWorkingLinesWithDedup(lines []string, dedupKeys []string) []string {
 	lines = turnitem.TrimmedNonEmptyStrings(lines)
 	if len(lines) <= 1 {
 		return lines
 	}
+	if len(dedupKeys) > len(lines) {
+		dedupKeys = dedupKeys[:len(lines)]
+	}
+
 	compacted := make([]string, 0, len(lines))
-	for _, line := range lines {
+	compactedDedup := make([][]string, 0, len(lines))
+
+	for i, line := range lines {
 		verb, tail, ok := ParseQuietMergeableLine(line)
 		if !ok {
 			compacted = append(compacted, line)
+			compactedDedup = append(compactedDedup, nil)
 			continue
+		}
+		var myKey string
+		if i < len(dedupKeys) {
+			myKey = strings.TrimSpace(dedupKeys[i])
 		}
 		if len(compacted) == 0 {
 			compacted = append(compacted, line)
+			if myKey != "" {
+				compactedDedup = append(compactedDedup, []string{myKey})
+			} else {
+				compactedDedup = append(compactedDedup, nil)
+			}
 			continue
 		}
 		lastVerb, lastTail, lastOK := ParseQuietMergeableLine(compacted[len(compacted)-1])
 		if !lastOK || lastVerb != verb {
 			compacted = append(compacted, line)
+			if myKey != "" {
+				compactedDedup = append(compactedDedup, []string{myKey})
+			} else {
+				compactedDedup = append(compactedDedup, nil)
+			}
 			continue
 		}
-		mergedTail := strings.TrimSpace(strings.TrimSpace(lastTail) + " " + strings.TrimSpace(tail))
-		compacted[len(compacted)-1] = strings.TrimSpace(verb + " " + mergedTail)
+		// Same verb — merge with dedup key awareness.
+		if myKey != "" {
+			seen := compactedDedup[len(compactedDedup)-1]
+			dup := false
+			for _, k := range seen {
+				if k == myKey {
+					dup = true
+					break
+				}
+			}
+			if dup {
+				continue // same underlying file, skip
+			}
+			compactedDedup[len(compactedDedup)-1] = append(seen, myKey)
+			// Different file — just concatenate tails.
+			mergedTail := strings.TrimSpace(strings.TrimSpace(lastTail) + " " + strings.TrimSpace(tail))
+			compacted[len(compacted)-1] = strings.TrimSpace(verb + " " + mergedTail)
+		} else {
+			mergedTail := DeduplicateInlineCodeTail(lastTail, tail)
+			compacted[len(compacted)-1] = strings.TrimSpace(verb + " " + mergedTail)
+		}
 	}
 	return compacted
 }
@@ -425,6 +499,56 @@ func ParseQuietMergeableLine(line string) (verb, tail string, ok bool) {
 	default:
 		return "", "", false
 	}
+}
+
+// DeduplicateInlineCodeTail merges two space-separated lists of backtick-quoted
+// items, removing duplicates while preserving order.
+func DeduplicateInlineCodeTail(existing, incoming string) string {
+	existing = strings.TrimSpace(existing)
+	incoming = strings.TrimSpace(incoming)
+	if existing == "" {
+		return incoming
+	}
+	if incoming == "" {
+		return existing
+	}
+	seen := make(map[string]bool)
+	var result []string
+	for _, item := range ParseInlineCodeItems(existing) {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	for _, item := range ParseInlineCodeItems(incoming) {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return strings.Join(result, " ")
+}
+
+// ParseInlineCodeItems extracts backtick-quoted items from a string.
+func ParseInlineCodeItems(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var items []string
+	for {
+		start := strings.Index(s, "`")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(s[start+1:], "`")
+		if end < 0 {
+			break
+		}
+		items = append(items, s[start:start+end+2])
+		s = s[start+end+2:]
+	}
+	return items
 }
 
 // NormalizeWorkingStatus normalizes a working status value.

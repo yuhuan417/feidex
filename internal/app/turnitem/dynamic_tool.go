@@ -189,6 +189,11 @@ func dynamicToolPath(m map[string]any, workspaceCwd string) string {
 	), workspaceCwd)
 }
 
+// DynamicToolPath returns the display path for a dynamic tool call's file target.
+func DynamicToolPath(input any, workspaceCwd string) string {
+	return dynamicToolPath(ToolInputMap(input), workspaceCwd)
+}
+
 func summaryInlineLine(label, value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {

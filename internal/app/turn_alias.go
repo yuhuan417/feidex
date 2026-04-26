@@ -31,3 +31,4 @@ var quietWorkingEntryKey = turn.EntryKey
 var quietWorkingEntryPrefix = turn.EntryPrefix
 var buildQuietWebSearchLines = turn.BuildQuietWebSearchLines
 var buildQuietCommandExecutionLines = turn.BuildQuietCommandExecutionLines
+var compactQuietWorkingLinesWithDedup = turn.CompactQuietWorkingLinesWithDedup
