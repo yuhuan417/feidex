@@ -992,9 +992,15 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		s.RecordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 
-	// Handle delivered text completion
-	if deliveredAnyText && event.Success {
-		finalText := strings.TrimSpace(apputil.FirstNonEmpty(lastAssistantText, strings.TrimSpace(event.Result)))
+	// Handle delivered text completion (both success and error with prior streamed text)
+	if deliveredAnyText {
+		resultText := strings.TrimSpace(event.Result)
+		var finalText string
+		if event.Success {
+			finalText = strings.TrimSpace(apputil.FirstNonEmpty(lastAssistantText, resultText))
+		} else {
+			finalText = strings.TrimSpace(apputil.FirstNonEmpty(resultText, lastAssistantText))
+		}
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
