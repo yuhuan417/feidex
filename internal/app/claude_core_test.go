@@ -103,6 +103,7 @@ type fakeClaudeCore struct {
 	ensureCalls         []fakeClaudeEnsureCall
 	forkCalls           []fakeClaudeForkCall
 	startTurnCalls      []fakeClaudeStartTurnCall
+	startSteerTurnCalls []fakeClaudeStartTurnCall
 	interruptCalls      []string
 	setModelCalls       []fakeClaudeSetModelCall
 	setEffortCalls      []fakeClaudeSetEffortCall
@@ -201,6 +202,18 @@ func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turn
 		return result
 	}
 	return f.startTurnErr
+}
+
+func (f *fakeClaudeCore) StartSteerTurn(_ context.Context, sessionKey, threadID, turnID, prompt, steerSubmissionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.startSteerTurnCalls = append(f.startSteerTurnCalls, fakeClaudeStartTurnCall{
+		sessionKey: sessionKey,
+		threadID:   threadID,
+		turnID:     turnID,
+		prompt:     prompt,
+	})
+	return nil
 }
 
 func (f *fakeClaudeCore) Interrupt(_ context.Context, sessionKey string) error {
@@ -1425,8 +1438,8 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	if len(claude.interruptCalls) != 0 {
 		t.Fatalf("interrupt calls = %#v, want none", claude.interruptCalls)
 	}
-	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "300字就行了") {
-		t.Fatalf("startTurn calls = %#v", claude.startTurnCalls)
+	if len(claude.startSteerTurnCalls) != 1 || !strings.Contains(claude.startSteerTurnCalls[0].prompt, "300字就行了") {
+		t.Fatalf("startSteerTurn calls = %#v", claude.startSteerTurnCalls)
 	}
 	sess := a.store.GetSession(targetSessionKey)
 	if sess == nil || len(sess.Queue) != 0 || len(sess.ActiveOperations) != 2 || sess.ActiveTurnID != "claude-turn-1" || sess.ActiveSubmissionID != "sub-running" || sess.Status != "turn_in_progress" {
@@ -1436,6 +1449,343 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	sub := a.store.GetSubmission(nextSubmissionID)
 	if sub == nil || sub.InputText != "300字就行了" || sub.SessionKey != targetSessionKey || sub.TurnID == "" || sub.Status != "running" {
 		t.Fatalf("follow-up submission = %+v", sub)
+	}
+}
+
+func dumpSessionState(t *testing.T, label string, sess *state.Session) {
+	t.Helper()
+	if sess == nil {
+		t.Logf("[%s] session = nil", label)
+		return
+	}
+	t.Logf("[%s] status=%q activeTurnID=%q activeSubmissionID=%q activeThreadID=%q queueLen=%d activeOps=%d",
+		label, sess.Status, sess.ActiveTurnID, sess.ActiveSubmissionID, sess.ActiveThreadID,
+		len(sess.Queue), len(sess.ActiveOperations))
+	for i, op := range sess.ActiveOperations {
+		t.Logf("[%s]   op[%d] kind=%q sub=%q thread=%q turn=%q", label, i, op.Kind, op.SubmissionID, op.ThreadID, op.TurnID)
+	}
+}
+
+func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
+	a.claude = claude
+
+	sessionKey := "feishu:group:chat-1:root:root-msg"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		OwnerUserID:             "user-1",
+		RootMessageID:           "root-msg",
+		ActiveThreadID:          "claude-thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "claude-turn-1",
+		ActiveSubmissionID:      "sub-1",
+		Status:                  "turn_in_progress",
+		ActiveOperations: []state.SessionActiveOperation{{
+			Kind:         sessionOpKindSubmission,
+			SubmissionID: "sub-1",
+			ThreadID:     "claude-thread-1",
+			TurnID:       "claude-turn-1",
+		}},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:                   "sub-1",
+		SessionKey:           sessionKey,
+		WorkspaceID:          a.cfg.Workspaces[0].ID,
+		UserID:               "user-1",
+		ChatID:               "chat-1",
+		TriggerMessageID:     "msg-1",
+		SourceMessageIDs:     []string{"msg-1"},
+		SourceRootMessageIDs: []string{"root-msg"},
+		InputText:            "original prompt",
+		ThreadID:             "claude-thread-1",
+		TurnID:               "claude-turn-1",
+		Status:               "running",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "root-msg",
+		SessionKey: sessionKey,
+		ThreadID:   "claude-thread-1",
+		TurnID:     "claude-turn-1",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink() error = %v", err)
+	}
+	markSessionThreadLive(a, sessionKey, "claude-thread-1")
+
+	// Step 1: Verify initial state
+	sess := a.store.GetSession(sessionKey)
+	dumpSessionState(t, "initial", sess)
+	if len(sess.ActiveOperations) != 1 {
+		t.Fatalf("initial activeOps = %d, want 1", len(sess.ActiveOperations))
+	}
+
+	// Step 2: Send steer message (reply to root message)
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:       "reply-steer",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "steer instruction",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "some-parent",
+	})
+
+	sess = a.store.GetSession(sessionKey)
+	dumpSessionState(t, "after-steer", sess)
+	if len(sess.ActiveOperations) != 2 {
+		t.Fatalf("after steer: activeOps = %d, want 2", len(sess.ActiveOperations))
+	}
+	if len(claude.startSteerTurnCalls) != 1 {
+		t.Fatalf("after steer: startSteerTurnCalls = %d, want 1", len(claude.startSteerTurnCalls))
+	}
+
+	// Step 3: Complete the original turn (turn-1). With the steer fix,
+	// the steer submission is finalized together with the turn via
+	// FinishSteerSubmission, so both ActiveOperations are cleaned up.
+	t.Log("=== completing original turn (claude-turn-1) ===")
+	finishTurn(a, "claude-thread-1", "claude-turn-1", "completed")
+
+	sess = a.store.GetSession(sessionKey)
+	dumpSessionState(t, "after-original-complete", sess)
+	if len(sess.ActiveOperations) != 0 {
+		t.Fatalf("after original complete: activeOps = %d, want 0", len(sess.ActiveOperations))
+	}
+	if sess.Status != "idle" {
+		t.Fatalf("after original complete: status = %q, want idle", sess.Status)
+	}
+
+	// Step 5: Verify we can submit a new message
+	t.Log("=== verifying new submission can start ===")
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID: "msg-new",
+		ChatID:    "chat-1",
+		ChatType:  "group",
+		UserID:    "user-1",
+		Text:      "new task after steer",
+	})
+
+	sess = a.store.GetSession(sessionKey)
+	dumpSessionState(t, "after-new-submission", sess)
+	// The new message should either start immediately or be queued
+	// but the session should NOT be stuck
+	if sess.Status == "turn_in_progress" && len(sess.ActiveOperations) == 0 {
+		t.Fatal("session is turn_in_progress but has no active operations — stuck!")
+	}
+}
+
+func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	runtime := newTestClaudeRuntime(t, a)
+
+	sessionKey := "feishu:p2p:chat:user"
+	steerSubID := "sub-steer"
+	steerTurnID := "claude-turn-steer"
+
+	// Set up session with two active operations: original + steer
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "claude-thread-1",
+		ActiveTurnID:       "claude-turn-1",
+		ActiveSubmissionID: "sub-1",
+		OwnerUserID:        "user",
+		ChatID:             "chat",
+		ChatType:           "p2p",
+		Status:             "turn_in_progress",
+		ActiveOperations: []state.SessionActiveOperation{
+			{
+				Kind:         sessionOpKindSubmission,
+				SubmissionID: steerSubID,
+				ThreadID:     "claude-thread-1",
+				TurnID:       steerTurnID,
+			},
+			{
+				Kind:         sessionOpKindSubmission,
+				SubmissionID: "sub-1",
+				ThreadID:     "claude-thread-1",
+				TurnID:       "claude-turn-1",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	// Create original submission
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-1",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "claude-thread-1",
+		TurnID:           "claude-turn-1",
+		UserID:           "user",
+		ChatID:           "chat",
+		TriggerMessageID: "msg-1",
+		InputText:        "original prompt",
+		Status:           "running",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
+	}
+
+	// Create steer submission
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               steerSubID,
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "claude-thread-1",
+		TurnID:           steerTurnID,
+		UserID:           "user",
+		ChatID:           "chat",
+		TriggerMessageID: "msg-steer",
+		InputText:        "steer instruction",
+		Status:           "running",
+	}); err != nil {
+		t.Fatalf("CreateSubmission(%s) error = %v", steerSubID, err)
+	}
+
+	// Bind both turns
+	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, "sub-1")
+	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", steerTurnID, sessionKey, steerSubID)
+	markSessionThreadLive(a, sessionKey, "claude-thread-1")
+
+	// Create SessionState with ONE turn (new architecture: steer is not a
+	// separate CLI turn). The steer submission ID is recorded on the turn's
+	// TurnState so that handleTurnComplete can finalize it together.
+	claudeState := &claudeSessionState{
+		SessionKey: sessionKey,
+		SessionID:  "claude-thread-1",
+		Turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "claude-turn-1", SteerSubmissionID: steerSubID},
+		},
+	}
+
+	// Verify initial state
+	sess := a.store.GetSession(sessionKey)
+	dumpSessionState(t, "initial", sess)
+	if len(sess.ActiveOperations) != 2 {
+		t.Fatalf("initial activeOps = %d, want 2", len(sess.ActiveOperations))
+	}
+
+	// Complete the turn (turn number 1). With the steer fix, the steer
+	// submission is finalized together with the turn via FinishSteerSubmission.
+	t.Log("=== handleTurnComplete for turn (turnNumber=1) ===")
+	runtime.handleTurnComplete(claudeState, claudecli.TurnCompleteEvent{
+		TurnNumber: 1,
+		Success:    true,
+	})
+
+	sess = a.store.GetSession(sessionKey)
+	dumpSessionState(t, "after-turn-complete", sess)
+	if len(sess.ActiveOperations) != 0 {
+		t.Fatalf("after turn complete: activeOps = %d, want 0", len(sess.ActiveOperations))
+	}
+	if sess.Status != "idle" {
+		t.Fatalf("after turn complete: status = %q, want idle", sess.Status)
+	}
+}
+
+// TestStopAfterSteerShouldClearActiveOperations verifies that the Claude
+// ClearActiveOperationsAfterInterrupt properly clears ActiveOperations so the
+// session can accept new messages after /stop.
+func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = backendClaude
+	a.codex = nil
+	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
+	a.claude = claude
+
+	sessionKey := "feishu:group:chat-1:root:root-msg"
+
+	// Set up session with 2 active operations (original + steer)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		OwnerUserID:             "user-1",
+		RootMessageID:           "root-msg",
+		ActiveThreadID:          "claude-thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "claude-turn-steer",
+		ActiveSubmissionID:      "sub-steer",
+		Status:                  "turn_in_progress",
+		ActiveOperations: []state.SessionActiveOperation{
+			{
+				Kind:         sessionOpKindSubmission,
+				SubmissionID: "sub-steer",
+				ThreadID:     "claude-thread-1",
+				TurnID:       "claude-turn-steer",
+			},
+			{
+				Kind:         sessionOpKindSubmission,
+				SubmissionID: "sub-1",
+				ThreadID:     "claude-thread-1",
+				TurnID:       "claude-turn-1",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	// Create submissions
+	for _, sub := range []*state.Submission{
+		{ID: "sub-1", SessionKey: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ThreadID: "claude-thread-1", TurnID: "claude-turn-1", UserID: "user-1", ChatID: "chat-1", TriggerMessageID: "msg-1", InputText: "original", Status: "running"},
+		{ID: "sub-steer", SessionKey: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ThreadID: "claude-thread-1", TurnID: "claude-turn-steer", UserID: "user-1", ChatID: "chat-1", TriggerMessageID: "msg-steer", InputText: "steer", Status: "running"},
+	} {
+		if _, err := a.store.CreateSubmission(sub); err != nil {
+			t.Fatalf("CreateSubmission(%s) error = %v", sub.ID, err)
+		}
+	}
+
+	// Verify initial state
+	sess := a.store.GetSession(sessionKey)
+	dumpSessionState(t, "initial", sess)
+	if len(sess.ActiveOperations) != 2 {
+		t.Fatalf("initial activeOps = %d, want 2", len(sess.ActiveOperations))
+	}
+
+	// Call ClearActiveOperationsAfterInterrupt (the Claude-specific fix)
+	t.Log("=== calling ClearActiveOperationsAfterInterrupt ===")
+	runtime := claudeRuntimeFacade{}
+	sess = runtime.clearActiveOperationsAfterInterrupt(a, sessionKey, sess)
+
+	dumpSessionState(t, "after-clear", sess)
+
+	// After clearing, ActiveOperations should be empty
+	if len(sess.ActiveOperations) != 0 {
+		t.Errorf("after clear: activeOps = %d, want 0", len(sess.ActiveOperations))
+	}
+
+	// Verify that new messages can be submitted (should not be stuck in "queuing")
+	hasInFlight := sessionHasInFlightSubmission(sess)
+	t.Logf("after clear: hasInFlight = %v, status = %q", hasInFlight, sess.Status)
+
+	if hasInFlight {
+		t.Errorf("after clear: hasInFlight = true, want false (session stuck in queuing state)")
+	}
+	if sess.Status != "idle" {
+		t.Errorf("after clear: status = %q, want idle", sess.Status)
+	}
+
+	// Verify active submissions were finalized
+	for _, subID := range []string{"sub-1", "sub-steer"} {
+		sub := a.store.GetSubmission(subID)
+		if sub == nil {
+			t.Errorf("submission %s should still exist after clear", subID)
+		} else if !sub.Finalized {
+			t.Errorf("submission %s should be finalized after clear, got finalized=%v", subID, sub.Finalized)
+		} else if sub.Status != "interrupted" {
+			t.Errorf("submission %s status = %q, want interrupted", subID, sub.Status)
+		}
 	}
 }
 
@@ -1499,8 +1849,8 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	if err != nil || !steered {
 		t.Fatalf("tryClaudeReplyContinuation() = %v, %v", steered, err)
 	}
-	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "follow up from stale link") {
-		t.Fatalf("startTurn calls = %#v", claude.startTurnCalls)
+	if len(claude.startSteerTurnCalls) != 1 || !strings.Contains(claude.startSteerTurnCalls[0].prompt, "follow up from stale link") {
+		t.Fatalf("startSteerTurn calls = %#v", claude.startSteerTurnCalls)
 	}
 	updated := a.store.GetSession(sessionKey)
 	if updated == nil || len(updated.ActiveOperations) != 2 || updated.ActiveTurnID != "claude-turn-current" || updated.ActiveSubmissionID != "sub-running" {
@@ -1558,8 +1908,8 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 	if err := commandAppend(a, msg, "  append from command  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
-	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "append from command") {
-		t.Fatalf("startTurn calls = %#v", claude.startTurnCalls)
+	if len(claude.startSteerTurnCalls) != 1 || !strings.Contains(claude.startSteerTurnCalls[0].prompt, "append from command") {
+		t.Fatalf("startSteerTurn calls = %#v", claude.startSteerTurnCalls)
 	}
 	updated := a.store.GetSession(sessionKey)
 	if updated == nil || len(updated.ActiveOperations) != 2 || updated.ActiveTurnID != "claude-turn-current" || updated.ActiveSubmissionID != "sub-running" {

@@ -423,6 +423,13 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 func (w Service) FinishTurn(threadID, turnID, status string) {
 	st := w.appState()
 	sessionKey, sub := w.app.FindSubmissionByTurn(threadID, turnID)
+	slog.Debug("finishTurn entry",
+		"thread_id", threadID,
+		"turn_id", turnID,
+		"status", status,
+		"session_key", sessionKey,
+		"found_submission", sub != nil,
+	)
 	if sub == nil {
 		sessionKey, sub = w.BindPendingSubmissionForTurnCompletion(threadID, turnID)
 	}
@@ -505,6 +512,14 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	})
 	suppressTerminalCard := false
 	if updatedSess != nil {
+		slog.Debug("finishTurn session state after cleanup",
+			"session_key", sessionKey,
+			"submission_id", sub.ID,
+			"status", updatedSess.Status,
+			"active_operations_count", len(updatedSess.ActiveOperations),
+			"queue_len", len(updatedSess.Queue),
+			"has_in_flight", sessionHasActiveWork(updatedSess),
+		)
 		w.app.LogSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
 		suppressTerminalCard = w.autoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
 	}

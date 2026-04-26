@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -220,6 +221,38 @@ func (s *Session) SendMessage(ctx context.Context, content string) (int, error) 
 		return 0, err
 	}
 	return turn.Number, nil
+}
+
+// SendSteerInput writes a user message to the CLI's stdin without creating
+// a separate turn state. The message becomes part of the current conversation
+// round. Use this for steer messages that should be processed together with
+// the active turn rather than as independent turns.
+func (s *Session) SendSteerInput(ctx context.Context, content string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return ErrNotStarted
+	}
+	if s.stopped {
+		return ErrStopping
+	}
+	if s.current == nil {
+		return fmt.Errorf("no active turn to steer into")
+	}
+
+	msg := wireUserMessageToSend{
+		Type: "user",
+		Message: wireUserMessageInner{
+			Role:    "user",
+			Content: content,
+		},
+	}
+	return s.writer.Write(msg)
 }
 
 func (s *Session) Interrupt(ctx context.Context) error {
@@ -667,6 +700,7 @@ func (s *Session) handleResultMessage(msg wireResultMessage) {
 	turnNumber := turn.Number
 	delete(s.turns, turnNumber)
 	s.current = nil
+
 	if len(s.pending) > 0 {
 		nextNumber := s.pending[0]
 		s.pending = append([]int(nil), s.pending[1:]...)
@@ -873,6 +907,9 @@ func (s *Session) emit(event Event) {
 	case s.events <- event:
 	case <-s.done:
 	default:
+		slog.Warn("Claude session event dropped (channel full)",
+			"event_type", fmt.Sprintf("%T", event),
+		)
 	}
 }
 

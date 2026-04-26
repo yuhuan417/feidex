@@ -30,6 +30,7 @@ type ClaudeCore interface {
 	UpdateConfig(config.ClaudeConfig)
 	ResetSession(string) error
 	StartTurn(context.Context, string, string, string, string) error
+	StartSteerTurn(context.Context, string, string, string, string, string) error
 	Interrupt(context.Context, string) error
 	SetModel(context.Context, string, string) (bool, error)
 	SetEffort(context.Context, string, string) (bool, error)

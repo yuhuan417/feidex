@@ -257,6 +257,10 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		"active_thread_id", sess.ActiveThreadID,
 		"active_turn_id", sess.ActiveTurnID,
 		"queue_len", len(sess.Queue),
+		"has_in_flight", hasInFlight,
+		"active_operations_count", len(sess.ActiveOperations),
+		"should_attempt_start", shouldAttemptStart,
+		"will_wait_in_queue", willWaitInQueue,
 	)
 	if err := appState.SaveSession(sess); err != nil {
 		return err

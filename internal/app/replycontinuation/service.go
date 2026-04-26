@@ -45,6 +45,10 @@ type Service struct {
 	// StartSubmission starts a Claude submission for a session.
 	StartSubmission StartSubmissionFunc
 
+	// StartSteerSubmission starts a steer submission that sends a message
+	// into the current conversation without creating a separate CLI turn.
+	StartSteerSubmission StartSubmissionFunc
+
 	// ResolveInboundAttachments resolves attachments from inbound messages.
 	ResolveInboundAttachments ResolveInboundAttachmentsFunc
 
@@ -366,6 +370,9 @@ func (s *Service) StartClaudeContinuationSubmission(sessionKey string, sub *stat
 	ws := config.FindWorkspace(s.App.Config(), sub.WorkspaceID)
 	if ws == nil {
 		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
+	}
+	if s.StartSteerSubmission != nil {
+		return s.StartSteerSubmission(sessionKey, sess, sub, ws, notifyFailure)
 	}
 	return s.StartSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }

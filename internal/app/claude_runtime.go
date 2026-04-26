@@ -54,6 +54,10 @@ func (r *claudeRuntime) StartTurn(ctx context.Context, sessionKey, threadID, tur
 	return r.service.StartTurn(ctx, sessionKey, threadID, turnID, prompt)
 }
 
+func (r *claudeRuntime) StartSteerTurn(ctx context.Context, sessionKey, threadID, turnID, prompt, steerSubmissionID string) error {
+	return r.service.StartSteerTurn(ctx, sessionKey, threadID, turnID, prompt, steerSubmissionID)
+}
+
 func (r *claudeRuntime) Interrupt(ctx context.Context, sessionKey string) error {
 	return r.service.Interrupt(ctx, sessionKey)
 }

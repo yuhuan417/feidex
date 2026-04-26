@@ -58,6 +58,47 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 	return appState(a).session(sessionKey)
 }
 
+func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *state.Session) *state.Session {
+	if a == nil || sess == nil {
+		return sess
+	}
+	if !sessionHasActiveOperations(sess) {
+		return sess
+	}
+	slog.Debug("clearing Claude active operations after interrupt",
+		"session_key", sessionKey,
+		"active_operations_count", len(sess.ActiveOperations),
+	)
+	// Finalize active submissions BEFORE updating the session to avoid
+	// deadlock (updateSession holds the store lock).
+	for _, op := range sess.ActiveOperations {
+		subID := strings.TrimSpace(op.SubmissionID)
+		if subID == "" {
+			continue
+		}
+		if sub := appState(a).submission(subID); sub != nil && !sub.Finalized {
+			if err := appState(a).updateSubmission(subID, func(value *state.Submission) {
+				value.Status = "interrupted"
+				value.Finalized = true
+			}); err != nil {
+				slog.Error("clear active submission after interrupt failed", "submission_id", subID, "error", err)
+			}
+		}
+	}
+	updatedSess, err := appState(a).updateSession(sessionKey, func(current *state.Session) {
+		if current == nil {
+			return
+		}
+		sessionResetActiveOperations(current)
+		current.Status = "idle"
+	})
+	if err != nil {
+		slog.Error("clear active operations after interrupt failed", "session_key", sessionKey, "error", err)
+		return sess
+	}
+	return updatedSess
+}
+
 func (claudeRuntimeFacade) conversationBackend(a *App) appconvbackend.ConversationBackendFacade {
 	return appconvbackend.NewClaudeConversationBackend(a)
 }

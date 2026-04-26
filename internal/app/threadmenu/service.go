@@ -112,6 +112,11 @@ type ConversationBackendProvider interface {
 // the service.
 type BackendRuntimeProvider interface {
 	ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session
+	// ClearActiveOperationsAfterInterrupt clears stale active operations after
+	// an interrupt request. For backends where the interrupt response is
+	// asynchronous (e.g. Claude), this prevents the session from getting stuck
+	// in "queuing" state if the interrupt doesn't trigger a turn completion.
+	ClearActiveOperationsAfterInterrupt(sessionKey string, sess *state.Session) *state.Session
 }
 
 // PendingQueueProvider narrows pending queue access to the methods used by the
@@ -564,6 +569,11 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	defer cancel()
 	if err := s.app.ThreadMenuConversationBackend().InterruptActiveTurn(ctx, sessionKey, sess); err != nil {
 		return err
+	}
+	// For backends with asynchronous interrupt responses (e.g. Claude), clear
+	// stale active operations so the session doesn't get stuck in "queuing".
+	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil {
+		sess = runtime.ClearActiveOperationsAfterInterrupt(sessionKey, sess)
 	}
 	reply := "已请求中断当前任务。"
 	if discarded > 0 {

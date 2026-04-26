@@ -50,6 +50,13 @@ func (a threadMenuBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(s
 	return a.runtime.reconcileCompletedTurnFromFinalOutput(a.app, sessionKey, sess)
 }
 
+func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(sessionKey string, sess *state.Session) *state.Session {
+	if a.runtime == nil {
+		return sess
+	}
+	return a.runtime.clearActiveOperationsAfterInterrupt(a.app, sessionKey, sess)
+}
+
 type threadMenuBackendActionAdapter struct {
 	app     *App
 	facade  backendActionFacade

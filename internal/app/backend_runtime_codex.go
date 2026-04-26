@@ -44,6 +44,12 @@ func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionK
 	return reconcileCompletedCodexTurnFromFinalOutput(a, sessionKey, sess)
 }
 
+func (codexRuntimeFacade) clearActiveOperationsAfterInterrupt(_ *App, _ string, sess *state.Session) *state.Session {
+	// Codex handles interrupt lifecycle asynchronously via turn/completed
+	// notifications, so we don't clear active operations here.
+	return sess
+}
+
 func (codexRuntimeFacade) conversationBackend(a *App) appconvbackend.ConversationBackendFacade {
 	return appconvbackend.NewCodexConversationBackend(a)
 }

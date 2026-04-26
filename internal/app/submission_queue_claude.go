@@ -23,6 +23,10 @@ func newClaudeSubmissionService(app *App) *claudeSubmissionService {
 }
 
 func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+	return w.startNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, false)
+}
+
+func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNoticeEx(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure, steer bool) error {
 	a := w.app
 	appState := appState(a)
 	if a == nil || a.claude == nil {
@@ -106,7 +110,7 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNotice(ses
 		return err
 	}
 
-	updatedSess, turnID, err := w.startClaudeSubmissionAttempt(sessionKey, sess, sub, claudeThreadID, prompt)
+	updatedSess, turnID, err := w.startClaudeSubmissionAttempt(sessionKey, sess, sub, claudeThreadID, prompt, steer)
 	if err != nil && strings.TrimSpace(resumeThreadID) != "" {
 		slog.Warn("Claude resumed session turn start failed; retrying fresh session",
 			"session_key", sessionKey,
@@ -131,7 +135,7 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNotice(ses
 			if sub == nil {
 				err = fmt.Errorf("submission disappeared during Claude retry")
 			} else {
-				updatedSess, turnID, err = w.startClaudeSubmissionAttempt(sessionKey, sess, sub, claudeThreadID, prompt)
+				updatedSess, turnID, err = w.startClaudeSubmissionAttempt(sessionKey, sess, sub, claudeThreadID, prompt, steer)
 			}
 		}
 	}
@@ -157,11 +161,15 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNotice(ses
 	return nil
 }
 
-func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
+func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string, steer bool) (*state.Session, string, error) {
 	a := w.app
 	appState := appState(a)
 	if a == nil || a.claude == nil {
 		return nil, "", fmt.Errorf("claude backend not initialized")
+	}
+
+	if steer {
+		return w.startSteerSubmissionAttempt(sessionKey, sess, sub, claudeThreadID, prompt)
 	}
 
 	turnID, err := appState.nextLocalID("claude-turn")
@@ -181,6 +189,39 @@ func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string
 
 	turnCtx, turnCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	err = a.claude.StartTurn(turnCtx, sessionKey, claudeThreadID, turnID, prompt)
+	turnCancel()
+	if err != nil {
+		return updatedSess, turnID, err
+	}
+	return updatedSess, turnID, nil
+}
+
+// startSteerSubmissionAttempt sends a steer message into the current
+// conversation without creating a separate CLI turn. The steer submission
+// gets its own turnID for tracking but the message is sent via SendSteerInput
+// (not SendMessage), so no separate turn is created in the CLI session.
+// The steer submission is finalized together with the current turn via
+// the SteerSubmissionID recorded on the current TurnState.
+func (w *claudeSubmissionService) startSteerSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
+	a := w.app
+	appState := appState(a)
+
+	turnID, err := appState.nextLocalID("claude-turn")
+	if err != nil || strings.TrimSpace(turnID) == "" {
+		if err == nil {
+			err = fmt.Errorf("failed to allocate Claude steer turn id")
+		}
+		return nil, "", err
+	}
+
+	updatedSess, err := w.bindClaudeSubmissionStartState(sessionKey, sess, sub, claudeThreadID, turnID)
+	if err != nil {
+		return nil, turnID, err
+	}
+	newPendingQueueService(a).markSubmissionRunningReactions(sub)
+
+	turnCtx, turnCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	err = a.claude.StartSteerTurn(turnCtx, sessionKey, claudeThreadID, turnID, prompt, sub.ID)
 	turnCancel()
 	if err != nil {
 		return updatedSess, turnID, err

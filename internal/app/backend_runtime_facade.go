@@ -51,6 +51,11 @@ type backendRuntimeFacade interface {
 	runtimeReady(a *App) bool
 	beginStartupRecoveryScope(a *App) func()
 	reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session
+	// clearActiveOperationsAfterInterrupt clears stale active operations after
+	// an interrupt request. For backends where the interrupt response is
+	// asynchronous (e.g. Claude), this prevents the session from getting stuck
+	// in "queuing" state if the interrupt doesn't trigger a turn completion.
+	clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *state.Session) *state.Session
 	conversationBackend(a *App) appconvbackend.ConversationBackendFacade
 	serverRequestAdapter(a *App) serverRequestBackendAdapter
 	buildRuntime(a *App) *backendRuntimeHandle

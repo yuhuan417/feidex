@@ -30,6 +30,9 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 	svc.FinishTurn = func(threadID, turnID, status string) {
 		finishTurn(app, threadID, turnID, status)
 	}
+	svc.FinishSteerSubmission = func(submissionID, status string) {
+		finishSteerSubmission(app, submissionID, status)
+	}
 	svc.FailClaudeSessionWork = func(sessionKey, threadID string, err error) {
 		failClaudeSessionActiveWork(app, sessionKey, threadID, err)
 	}

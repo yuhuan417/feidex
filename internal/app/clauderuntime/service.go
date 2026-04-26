@@ -68,6 +68,11 @@ type TurnState struct {
 	LastTextChunks           []appdelivery.SentReplyChunk
 	DeliveredAnyText         bool
 	SuppressFailedCompletion bool
+
+	// SteerSubmissionID is set when this turn was created to send a steer
+	// message. The steer submission shares this turn's conversation round
+	// and is finalized together with the turn.
+	SteerSubmissionID string
 }
 
 // PendingInteraction represents a pending interactive request (approval,
@@ -105,6 +110,7 @@ type Service struct {
 	// Lifecycle callbacks
 	BindClaudeSessionThread  func(sessionKey, turnID, threadID string)
 	FinishTurn               func(threadID, turnID, status string)
+	FinishSteerSubmission    func(submissionID, status string)
 	FailClaudeSessionWork    func(sessionKey, threadID string, err error)
 	FailBackendActiveWork    func(backend, sessionKey, threadID, message string)
 
@@ -293,6 +299,33 @@ func (s *Service) StartTurn(ctx context.Context, sessionKey, threadID, turnID, p
 	state.Mu.Lock()
 	if turn := state.Turns[turnNumber]; turn != nil {
 		turn.SuppressFailedCompletion = false
+	}
+	state.Mu.Unlock()
+	return nil
+}
+
+// StartSteerTurn sends a steer message into the current conversation without
+// creating a separate CLI turn. The message is written to the CLI's stdin and
+// processed as part of the current conversation round. steerSubmissionID is
+// recorded so that handleTurnComplete can finalize the steer submission when
+// the turn finishes.
+func (s *Service) StartSteerTurn(ctx context.Context, sessionKey, threadID, turnID, prompt, steerSubmissionID string) error {
+	state, err := s.sessionState(sessionKey)
+	if err != nil {
+		return err
+	}
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return fmt.Errorf("empty Claude steer prompt")
+	}
+	if err := state.Session.SendSteerInput(ctx, prompt); err != nil {
+		return err
+	}
+	// Record the steer submission ID on the current turn so that
+	// handleTurnComplete can finalize it together with the turn.
+	state.Mu.Lock()
+	if turn := state.Turns[state.CurrentTurnNumber]; turn != nil {
+		turn.SteerSubmissionID = strings.TrimSpace(steerSubmissionID)
 	}
 	state.Mu.Unlock()
 	return nil
@@ -933,6 +966,14 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 	}
 	state.InterruptPending = false
 	state.Mu.Unlock()
+	slog.Debug("handleTurnComplete lookup",
+		"session_key", state.SessionKey,
+		"thread_id", threadID,
+		"turn_number", event.TurnNumber,
+		"turn_id", turnID,
+		"turn_found", turn != nil,
+		"success", event.Success,
+	)
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
@@ -1052,6 +1093,13 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 	}
 	if s.FinishTurn != nil {
 		s.FinishTurn(threadID, turn.TurnID, status)
+	}
+
+	// Finalize the steer submission if one was attached to this turn.
+	// The steer message was processed as part of this conversation round,
+	// so its submission completes together with the turn.
+	if steerID := strings.TrimSpace(turn.SteerSubmissionID); steerID != "" && s.FinishSteerSubmission != nil {
+		s.FinishSteerSubmission(steerID, status)
 	}
 }
 
