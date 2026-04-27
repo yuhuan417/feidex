@@ -149,6 +149,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/interrupt":                true,
 		"/stop":                     true,
 		"/workspace":                true,
+		"/workspace choose":         true,
 		"/workspace delete":         true,
 		"/workspace delete default": true,
 		"/workspace clone https://github.com/example/repo.git":                         true,
@@ -157,6 +158,8 @@ func TestIsLocalCommand(t *testing.T) {
 		"/workspace clone https://github.com/example/repo.git repo-copy --parent /tmp": true,
 		"/workspace sandbox workspace-write":                                           true,
 		"/workspace policy never":                                                      true,
+		"/workspace permissions":                                                       true,
+		"/workspace permissions inherit":                                               true,
 		"/status":                                                                      true,
 		"/upgrade":                                                                     true,
 		"/upgrade dev":                                                                 true,
@@ -204,6 +207,7 @@ func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 		"/session permissions default":       true,
 		"/workspace permissions":             true,
 		"/workspace permissions inherit":     true,
+		"/workspace choose":                  true,
 		"/review":                            false,
 		"/review custom 请重点看":                false,
 		"/skills":                            false,
@@ -216,10 +220,10 @@ func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 		"/thread sandbox read-only":          false,
 		"/thread policy":                     false,
 		"/thread policy never":               false,
-		"/workspace sandbox":                 true,
-		"/workspace sandbox workspace-write": true,
-		"/workspace policy":                  true,
-		"/workspace policy never":            true,
+		"/workspace sandbox":                 false,
+		"/workspace sandbox workspace-write": false,
+		"/workspace policy":                  false,
+		"/workspace policy never":            false,
 		"/workspace use default extra":       false,
 	}
 	for input, want := range cases {
@@ -237,6 +241,8 @@ func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
 		"/fast",
 		"/thread",
 		"/threads",
+		"/workspace sandbox",
+		"/workspace policy",
 	} {
 		if strings.Contains(body, banned) {
 			t.Fatalf("Claude help body should hide %q, got %q", banned, body)
@@ -252,6 +258,26 @@ func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Claude help body = %q, want %q", body, want)
+		}
+	}
+}
+
+func TestRenderHelpBodyFromRegistryForCodexBackend(t *testing.T) {
+	body := renderHelpBodyFromRegistry(backendCodex)
+	for _, banned := range []string{
+		"/workspace permissions",
+	} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("Codex help body should hide %q, got %q", banned, body)
+		}
+	}
+	for _, want := range []string{
+		"/workspace sandbox",
+		"/workspace policy",
+		"/workspace choose",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("Codex help body = %q, want %q", body, want)
 		}
 	}
 }
@@ -297,6 +323,24 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 				t.Fatalf("Claude passthrough submission = %+v, want input %q", sub, raw)
 			}
 		})
+	}
+}
+
+func TestHandleCommandWorkspacePermissionsIsLocalOnCodex(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	msg := &feishu.InboundMessage{
+		MessageID: "m-1",
+		ChatID:    "chat",
+		ChatType:  "p2p",
+		UserID:    "user",
+		Text:      "/workspace permissions inherit",
+	}
+	err := handleCommand(a, msg, msg.Text)
+	if err == nil {
+		t.Fatal("expected /workspace permissions to be handled locally on Codex")
+	}
+	if !strings.Contains(err.Error(), "usage: /workspace") {
+		t.Fatalf("unexpected /workspace permissions error: %v", err)
 	}
 }
 
