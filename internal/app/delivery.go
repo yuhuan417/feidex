@@ -35,7 +35,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	if text == "" {
 		text = "任务已结束。"
 	}
-	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
+	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, sub.WorkspaceID)
 	if replyClass {
 		results := sendReplyCardChunksWithReuse(a, ctx, sub, title, color, appdelivery.BuildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
 		if len(results) == 0 {
@@ -125,27 +125,38 @@ func sendReplyCardChunksWithReuseIDs(a *App, ctx context.Context, sub *state.Sub
 	return results
 }
 
-func outboundMessageCardMeta(kind string) (title, color string, replyClass bool, showHeader bool) {
+func outboundMessageCardMeta(kind string, workspaceID ...string) (title, color string, replyClass bool, showHeader bool) {
+	var base string
 	switch strings.TrimSpace(kind) {
 	case "final_message":
-		return "最终答复", "green", true, true
+		base, color, replyClass, showHeader = "最终答复", "green", true, true
 	case "turn_output":
-		return "", "green", true, false
+		base, color, replyClass, showHeader = "反馈中", "green", true, true
 	case "turn_reasoning":
-		return "思考", "grey", false, true
+		base, color, replyClass, showHeader = "思考", "grey", false, true
 	case "turn_command_execution":
-		return "命令执行", "blue", false, true
+		base, color, replyClass, showHeader = "命令执行", "blue", false, true
 	case "turn_file_change":
-		return "文件改动", "orange", false, true
+		base, color, replyClass, showHeader = "文件改动", "orange", false, true
 	case "turn_plan":
-		return "计划更新", "blue", false, true
+		base, color, replyClass, showHeader = "计划更新", "blue", false, true
 	case "turn_queued":
-		return "排队中", "grey", false, true
+		base, color, replyClass, showHeader = "排队中", "grey", false, true
 	case "turn_started":
-		return "开始处理", "blue", false, true
+		base, color, replyClass, showHeader = "开始处理", "blue", false, true
 	case "turn_terminal":
-		return "任务状态", "grey", false, true
+		base, color, replyClass, showHeader = "任务状态", "grey", false, true
 	default:
-		return "状态更新", "blue", false, true
+		base, color, replyClass, showHeader = "状态更新", "blue", false, true
 	}
+	ws := ""
+	if len(workspaceID) > 0 {
+		ws = strings.TrimSpace(workspaceID[0])
+	}
+	if ws != "" {
+		title = "[" + ws + "] " + base
+	} else {
+		title = base
+	}
+	return
 }

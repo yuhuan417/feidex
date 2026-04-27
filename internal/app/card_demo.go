@@ -47,7 +47,7 @@ func BuildOutboundCardDemo(cfg *config.Config, opts OutboundCardDemoOptions) (ma
 		UserID:      strings.TrimSpace(opts.UserID),
 	}
 
-	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
+	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, workspaceID)
 	if replyClass {
 		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, body, nil, kind == "final_message")
 		return card, kind, nil

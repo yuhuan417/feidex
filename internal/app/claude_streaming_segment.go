@@ -45,7 +45,7 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 		return results, true
 	}
 
-	title, color, replyClass, showHeader := outboundMessageCardMeta(kind)
+	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, sub.WorkspaceID)
 	if !replyClass {
 		ids := sendReplyMessagesWithReuse(a, ctx, sub, body, replyInThreadForSubmission(a, sub), kind, reuseMessageID)
 		if len(ids) == 0 {
