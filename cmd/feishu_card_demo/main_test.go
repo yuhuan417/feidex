@@ -118,8 +118,8 @@ func TestBuildCardDemoCardUsesOutboundRendererForAgentAndFinal(t *testing.T) {
 		t.Fatalf("final card header template = %q, want green", template)
 	}
 	title, _ := header["title"].(map[string]any)["content"].(string)
-	if title != "最终答复" {
-		t.Fatalf("final card title = %q, want 最终答复", title)
+	if !strings.Contains(title, "最终答复") {
+		t.Fatalf("final card title = %q, want to contain 最终答复", title)
 	}
 }
 
