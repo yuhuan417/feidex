@@ -58,12 +58,16 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		if body == "" {
 			body = payload.DetailText
 		}
+		title := prefixWorkspaceTitle(replyTurnItemCardTitle(payload), sub.WorkspaceID)
+		if !payload.IsFinalAnswer {
+			title, _, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
+		}
 		results := sendReplyCardChunksWithReuse(s.app,
 			ctx,
 			sub,
-			prefixWorkspaceTitle(replyTurnItemCardTitle(payload), sub.WorkspaceID),
+			title,
 			payload.Color,
-			appdelivery.BuildReplyCardChunks(body, payload.IsFinalAnswer, footerLines),
+			appdelivery.BuildReplyCardChunks(body, true, footerLines),
 			replyInThreadForSubmission(s.app, sub),
 			payload.IsFinalAnswer,
 			reuseMessageID,
@@ -169,4 +173,3 @@ func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *state.
 	meta, body := compactTurnItemCardContent(payload)
 	return cardRendererForApp(s.app).renderCompactMarkdownCard(sub, payload.Title, payload.Color, meta, body, nil)
 }
-

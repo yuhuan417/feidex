@@ -28,6 +28,10 @@ func TestBuildOutboundCardDemoValidatesAndBuildsKinds(t *testing.T) {
 	if _, ok := card["header"]; !ok {
 		t.Fatalf("turn_output card should have header: %#v", card)
 	}
+	header := card["header"].(map[string]any)
+	if header["template"] != "blue" {
+		t.Fatalf("turn_output header = %#v, want blue", header)
+	}
 	body := card["body"].(map[string]any)["elements"].([]map[string]any)[0]["content"].(string)
 	if !strings.Contains(body, "普通 agent message") {
 		t.Fatalf("turn_output body = %q, want default body", body)
@@ -40,7 +44,7 @@ func TestBuildOutboundCardDemoValidatesAndBuildsKinds(t *testing.T) {
 	if kind != "final_message" {
 		t.Fatalf("resolved kind = %q, want final_message", kind)
 	}
-	header := card["header"].(map[string]any)
+	header = card["header"].(map[string]any)
 	if header["template"] != "green" {
 		t.Fatalf("final card header = %#v, want green", header)
 	}

@@ -131,7 +131,7 @@ func outboundMessageCardMeta(kind string, workspaceID ...string) (title, color s
 	case "final_message":
 		base, color, replyClass, showHeader = "最终答复", "green", true, true
 	case "turn_output":
-		base, color, replyClass, showHeader = "反馈中", "green", true, true
+		base, color, replyClass, showHeader = "反馈中", "blue", true, true
 	case "turn_reasoning":
 		base, color, replyClass, showHeader = "思考", "grey", false, true
 	case "turn_command_execution":

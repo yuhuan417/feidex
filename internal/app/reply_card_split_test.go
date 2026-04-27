@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"feidex/internal/state"
 	appcards "feidex/internal/app/cards"
+	"feidex/internal/state"
 )
 
 func markdownTestTable(name string) string {
@@ -205,6 +205,9 @@ func TestSendTurnItemCardSplitsReplyTables(t *testing.T) {
 	}
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count = %d, want 2", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, "反馈中") {
+		t.Fatalf("first reply card title = %q, want to contain 反馈中", got)
 	}
 	if len(ff.replyTextWithIDs) != 0 {
 		t.Fatalf("unexpected text fallback sends: %+v", ff.replyTextWithIDs)

@@ -718,6 +718,9 @@ func TestDeliveryHelpers(t *testing.T) {
 	if title, color, replyClass, showHeader := outboundMessageCardMeta("turn_command_execution"); title != "命令执行" || color != "blue" || replyClass || !showHeader {
 		t.Fatalf("outboundMessageCardMeta(turn_command_execution) = %q, %q, %v, %v", title, color, replyClass, showHeader)
 	}
+	if title, color, replyClass, showHeader := outboundMessageCardMeta("turn_output"); title != "反馈中" || color != "blue" || !replyClass || !showHeader {
+		t.Fatalf("outboundMessageCardMeta(turn_output) = %q, %q, %v, %v", title, color, replyClass, showHeader)
+	}
 	if title, color, replyClass, showHeader := outboundMessageCardMeta("final_message"); title != "最终答复" || color != "green" || !replyClass || !showHeader {
 		t.Fatalf("outboundMessageCardMeta(final_message) = %q, %q, %v, %v", title, color, replyClass, showHeader)
 	}
