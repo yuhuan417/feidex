@@ -216,10 +216,10 @@ func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 		"/thread sandbox read-only":          false,
 		"/thread policy":                     false,
 		"/thread policy never":               false,
-		"/workspace sandbox":                 false,
-		"/workspace sandbox workspace-write": false,
-		"/workspace policy":                  false,
-		"/workspace policy never":            false,
+		"/workspace sandbox":                 true,
+		"/workspace sandbox workspace-write": true,
+		"/workspace policy":                  true,
+		"/workspace policy never":            true,
 		"/workspace use default extra":       false,
 	}
 	for input, want := range cases {
@@ -237,8 +237,6 @@ func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
 		"/fast",
 		"/thread",
 		"/threads",
-		"/workspace sandbox",
-		"/workspace policy",
 	} {
 		if strings.Contains(body, banned) {
 			t.Fatalf("Claude help body should hide %q, got %q", banned, body)
@@ -266,8 +264,6 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 		"/thread",
 		"/thread sandbox read-only",
 		"/thread policy never",
-		"/workspace sandbox workspace-write",
-		"/workspace policy never",
 	} {
 		t.Run(raw, func(t *testing.T) {
 			a, _, _ := newTestApp(t)

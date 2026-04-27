@@ -181,7 +181,7 @@ func MatchWorkspaceCommand(fields []string) bool {
 		return len(fields) == 2
 	case "delete":
 		return len(fields) == 2 || len(fields) == 3
-	case "sandbox", "policy":
+	case "sandbox", "policy", "permissions":
 		return len(fields) == 2 || len(fields) == 3
 	case "clone":
 		_, _, _, err := appworkspace.ParseCloneArgs(fields[1:])
