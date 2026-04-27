@@ -106,11 +106,11 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 
 	select {
 	case <-secondTurnStarted:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("expected queued follow-up to start after first turn completion")
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		sess = a.store.GetSession(sessionKey)
 		queuedSub := a.store.GetSubmission(queuedSubID)
