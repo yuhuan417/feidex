@@ -209,6 +209,9 @@ func TestSendTurnItemCardSplitsReplyTables(t *testing.T) {
 	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, "反馈中") {
 		t.Fatalf("first reply card title = %q, want to contain 反馈中", got)
 	}
+	if got := cardHeaderTemplate(t, ff.replyCards[0]); got != "blue" {
+		t.Fatalf("first reply card template = %q, want blue", got)
+	}
 	if len(ff.replyTextWithIDs) != 0 {
 		t.Fatalf("unexpected text fallback sends: %+v", ff.replyTextWithIDs)
 	}
@@ -271,6 +274,16 @@ func cardHeaderTitle(t *testing.T, card map[string]any) string {
 	}
 	content, _ := title["content"].(string)
 	return content
+}
+
+func cardHeaderTemplate(t *testing.T, card map[string]any) string {
+	t.Helper()
+	header, _ := card["header"].(map[string]any)
+	if header == nil {
+		return ""
+	}
+	template, _ := header["template"].(string)
+	return template
 }
 
 func cardFooterTextForTest(card map[string]any) string {

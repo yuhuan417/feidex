@@ -147,6 +147,9 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	if got := cardHeaderTitle(t, ff.patchedCards[1]); !strings.Contains(got, "反馈中") {
 		t.Fatalf("patched reply card title = %q, want to contain 反馈中", got)
 	}
+	if got := cardHeaderTemplate(t, ff.patchedCards[1]); got != "blue" {
+		t.Fatalf("patched reply card template = %q, want blue", got)
+	}
 
 	ff.replyCardErr = errors.New("boom")
 	ff.replyTextWithIDs = nil

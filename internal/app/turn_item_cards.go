@@ -59,14 +59,15 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			body = payload.DetailText
 		}
 		title := prefixWorkspaceTitle(replyTurnItemCardTitle(payload), sub.WorkspaceID)
+		color := payload.Color
 		if !payload.IsFinalAnswer {
-			title, _, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
+			title, color, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
 		}
 		results := sendReplyCardChunksWithReuse(s.app,
 			ctx,
 			sub,
 			title,
-			payload.Color,
+			color,
 			appdelivery.BuildReplyCardChunks(body, true, footerLines),
 			replyInThreadForSubmission(s.app, sub),
 			payload.IsFinalAnswer,
@@ -87,7 +88,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		for _, result := range results {
 			recordMessageLink(s.app, result.MessageID, kind, sub, payload.ItemID)
 			if payload.IsFinalAnswer && result.CardID != "" {
-				scheduleLocalFileLinkPatch(s.app, sub, result.CardID, result.Title, payload.Color, result.ShowHeader, result.Body, result.FooterLines)
+				scheduleLocalFileLinkPatch(s.app, sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
 			}
 		}
 		return results[0].MessageID
