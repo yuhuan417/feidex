@@ -90,6 +90,7 @@ func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 
 		// Render callbacks
 		RenderMenuCard:                func(sessionKey string) map[string]any { return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey) },
+		RenderChooseMenuCard:          func(sessionKey string) map[string]any { return newWorkspaceRenderServiceInner(a).RenderWorkspaceChooseCard(sessionKey) },
 		RenderSandboxMenuCard:         func(sessionKey string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspaceSandboxMenuCard(sessionKey) },
 		RenderPolicyMenuCard:          func(sessionKey string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey) },
 		RenderDeleteMenuCard:          func(sessionKey string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey) },

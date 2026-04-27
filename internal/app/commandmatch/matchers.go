@@ -177,7 +177,7 @@ func MatchWorkspaceCommand(fields []string) bool {
 		return true
 	}
 	switch strings.TrimSpace(fields[1]) {
-	case "list", "new":
+	case "list", "new", "choose":
 		return len(fields) == 2
 	case "delete":
 		return len(fields) == 2 || len(fields) == 3

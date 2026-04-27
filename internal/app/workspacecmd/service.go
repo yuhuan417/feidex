@@ -220,6 +220,7 @@ type ConfigService struct {
 
 	// Render callbacks
 	RenderMenuCard                  RenderWorkspaceMenuCardFn
+	RenderChooseMenuCard            RenderWorkspaceMenuCardFn
 	RenderSandboxMenuCard           RenderWorkspaceSandboxMenuCardFn
 	RenderPolicyMenuCard            RenderWorkspacePolicyMenuCardFn
 	RenderDeleteMenuCard            RenderWorkspaceDeleteMenuCardFn

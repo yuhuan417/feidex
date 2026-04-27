@@ -221,8 +221,8 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after initial read = %d, want 1", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[0]); got != quietWorkingCardTitle {
-		t.Fatalf("initial card title = %q, want %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, quietWorkingCardTitle) {
+		t.Fatalf("initial card title = %q, want to contain %q", got, quietWorkingCardTitle)
 	}
 
 	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
@@ -258,8 +258,8 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after TodoWrite-following task update = %d, want 3", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[2]); got != quietWorkingCardTitle {
-		t.Fatalf("expected a fresh working card after TodoWrite, got title %q", got)
+	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, quietWorkingCardTitle) {
+		t.Fatalf("expected a fresh working card after TodoWrite, got title %q, want to contain %q", got, quietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
 		t.Fatalf("fresh working card body = %q", body)

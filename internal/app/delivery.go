@@ -160,3 +160,11 @@ func outboundMessageCardMeta(kind string, workspaceID ...string) (title, color s
 	}
 	return
 }
+
+func prefixWorkspaceTitle(title, workspaceID string) string {
+	ws := strings.TrimSpace(workspaceID)
+	if ws == "" {
+		return title
+	}
+	return "[" + ws + "] " + title
+}

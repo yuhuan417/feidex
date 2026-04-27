@@ -16,7 +16,7 @@ func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *state.Submissio
 	if strings.TrimSpace(op.Body) == "" {
 		return
 	}
-	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, quietWorkingCardTitle, quietWorkingCardColor, "", op.Body, nil)
+	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, prefixWorkspaceTitle(quietWorkingCardTitle, sub.WorkspaceID), quietWorkingCardColor, "", op.Body, nil)
 	if strings.TrimSpace(op.MessageID) == "" {
 		if strings.TrimSpace(op.Body) == "" {
 			return

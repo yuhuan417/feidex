@@ -114,8 +114,8 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[0]); got != quietWorkingCardTitle {
-		t.Fatalf("working card title = %q, want %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, quietWorkingCardTitle) {
+		t.Fatalf("working card title = %q, want to contain %q", got, quietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "思考中...") {
 		t.Fatalf("working card body after reasoning = %q", body)
@@ -173,8 +173,8 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after web search = %d, want 3", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[2]); got != quietWorkingCardTitle {
-		t.Fatalf("second working card title = %q, want %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, quietWorkingCardTitle) {
+		t.Fatalf("second working card title = %q, want to contain %q", got, quietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Searching the web: `latest golang release`") {
 		t.Fatalf("second working card body = %q", body)
@@ -290,8 +290,8 @@ func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched card count after finishTurn = %d, want 1", len(ff.patchedCards))
 	}
-	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "最终答复" {
-		t.Fatalf("patched card title = %q, want 最终答复", got)
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); !strings.Contains(got, "最终答复") {
+		t.Fatalf("patched card title = %q, want to contain 最终答复", got)
 	}
 	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, `<at id=user-1></at>`) {
 		t.Fatalf("patched final card body = %q, want attention mention", body)
@@ -330,8 +330,8 @@ func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched card count after failed finishTurn = %d, want 1", len(ff.patchedCards))
 	}
-	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "任务状态" {
-		t.Fatalf("patched card title = %q, want 任务状态", got)
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); !strings.Contains(got, "任务状态") {
+		t.Fatalf("patched card title = %q, want to contain 任务状态", got)
 	}
 	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, `<at id=user-1></at>`) || !strings.Contains(body, "任务失败。") {
 		t.Fatalf("patched terminal card body = %q", body)

@@ -104,6 +104,9 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		}
 		return s.ReplyCommandActionResponse(msg, resp)
 	}
+	if args[0] == "choose" {
+		return s.ShowWorkspaceChooseMenu(msg)
+	}
 	if len(args) >= 2 && args[0] == "use" {
 		ws := config.FindWorkspace(s.App.Config(), args[1])
 		if ws == nil {
@@ -137,6 +140,16 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 // ShowWorkspaceMenu shows the workspace management menu.
 func (s *ConfigService) ShowWorkspaceMenu(msg *feishu.InboundMessage) error {
 	card := s.RenderMenuCard(appcore.MakeSessionKey(s.App, msg))
+	_, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	return err
+}
+
+// ShowWorkspaceChooseMenu shows the workspace choose card with buttons.
+func (s *ConfigService) ShowWorkspaceChooseMenu(msg *feishu.InboundMessage) error {
+	if s.RenderChooseMenuCard == nil {
+		return s.ShowWorkspaceMenu(msg)
+	}
+	card := s.RenderChooseMenuCard(appcore.MakeSessionKey(s.App, msg))
 	_, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }

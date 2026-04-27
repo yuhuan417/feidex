@@ -55,6 +55,7 @@ type storedSession struct {
 	BackendThreads             map[string]SessionBackendThread `json:"backend_threads,omitempty"`
 	OwnerUserID                string                          `json:"owner_user_id"`
 	ModelOverride              string                          `json:"model_override"`
+	RecentWorkspaceIDs         []string                        `json:"recent_workspace_ids,omitempty"`
 	UpdatedAt                  int64                           `json:"updated_at"`
 }
 
@@ -101,6 +102,7 @@ type Session struct {
 	Queue                      []string                        `json:"queue"`
 	ActiveOperations           []SessionActiveOperation        `json:"active_operations,omitempty"`
 	StagedImages               []SessionStagedImage            `json:"staged_images,omitempty"`
+	RecentWorkspaceIDs         []string                        `json:"recent_workspace_ids,omitempty"`
 	UpdatedAt                  int64                           `json:"updated_at"`
 }
 
@@ -600,6 +602,7 @@ func storedSessionFromSession(sess *Session) *storedSession {
 		BackendThreads:             cloneSessionBackendThreads(cp.BackendThreads),
 		OwnerUserID:                cp.OwnerUserID,
 		ModelOverride:              cp.ModelOverride,
+		RecentWorkspaceIDs:         cloneStringSlice(cp.RecentWorkspaceIDs),
 		UpdatedAt:                  cp.UpdatedAt,
 	}
 }
@@ -622,6 +625,7 @@ func sessionFromStored(sess *storedSession) *Session {
 		BackendThreads:             cloneSessionBackendThreads(sess.BackendThreads),
 		OwnerUserID:                sess.OwnerUserID,
 		ModelOverride:              sess.ModelOverride,
+		RecentWorkspaceIDs:         cloneStringSlice(sess.RecentWorkspaceIDs),
 		Status:                     "idle",
 		UpdatedAt:                  sess.UpdatedAt,
 	}
@@ -653,6 +657,15 @@ func cloneSessionBackendThreads(src map[string]SessionBackendThread) map[string]
 	for key, value := range src {
 		dst[key] = normalizeSessionBackendThread(value)
 	}
+	return dst
+}
+
+func cloneStringSlice(src []string) []string {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]string, len(src))
+	copy(dst, src)
 	return dst
 }
 

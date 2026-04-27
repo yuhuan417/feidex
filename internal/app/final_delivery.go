@@ -25,7 +25,8 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submiss
 		return ""
 	}
 	body := prependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
-	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, "最终答复", "green", true, body, nil, true)
+	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
+	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, body, nil, true)
 	appendReplyCardFooter(card, footerLines)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
@@ -60,8 +61,9 @@ func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *state
 	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
 		return nil
 	}
+	title, color, _, _ := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
-	results := sendReplyCardChunksWithReuseIDs(a, ctx, sub, "最终答复", "green", chunks, inThread, true, reuseMessageIDs)
+	results := sendReplyCardChunksWithReuseIDs(a, ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil
 	}

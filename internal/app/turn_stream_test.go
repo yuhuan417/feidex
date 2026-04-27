@@ -316,8 +316,8 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 		t.Fatalf("expected final answer header, got: %#v", card["header"])
 	}
 	title, _ := header["title"].(map[string]any)
-	if got, _ := title["content"].(string); got != "最终答复" {
-		t.Fatalf("unexpected final answer title: %q", got)
+	if got, _ := title["content"].(string); !strings.Contains(got, "最终答复") {
+		t.Fatalf("unexpected final answer title: %q, want to contain 最终答复", got)
 	}
 	elements := cardBodyElements(t, card)
 	if len(elements) != 1 {

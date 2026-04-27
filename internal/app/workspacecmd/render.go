@@ -2,6 +2,7 @@ package workspacecmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -432,6 +433,80 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 		appcards.AppendMarkdownBodyCardElement(card, row)
 	}
 	return card
+}
+
+// RenderWorkspaceChooseCard renders the workspace choose card with buttons sorted by recently used.
+func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]any {
+	var sess *state.Session
+	if s.GetSession != nil {
+		sess = s.GetSession(sessionKey)
+	}
+	currentID := appcore.DefaultWorkspaceID(s.App)
+	var recentIDs []string
+	if sess != nil {
+		if strings.TrimSpace(sess.WorkspaceID) != "" {
+			currentID = sess.WorkspaceID
+		}
+		recentIDs = sess.RecentWorkspaceIDs
+	}
+
+	workspaces := s.App.Config().Workspaces
+	sorted := sortWorkspacesByRecent(workspaces, recentIDs, currentID)
+
+	card := appcards.NewMarkdownBodyCard("选择工作区", "blue")
+	buttons := make([]feishu.Button, 0, len(sorted))
+	for _, ws := range sorted {
+		label := ws.ID
+		if ws.ID == currentID {
+			label = ws.ID + " (当前)"
+		}
+		btnType := "default"
+		if ws.ID == currentID {
+			btnType = "primary"
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: map[string]any{
+				"action":      "workspace.use.existing",
+				"session_key": sessionKey,
+				"workspace_id": ws.ID,
+			},
+		})
+	}
+	for _, row := range appcards.BuildMarkdownBodyCardActionElements(buttons) {
+		appcards.AppendMarkdownBodyCardElement(card, row)
+	}
+	return card
+}
+
+func sortWorkspacesByRecent(workspaces []config.Workspace, recentIDs []string, currentID string) []config.Workspace {
+	if len(workspaces) == 0 {
+		return nil
+	}
+	rank := make(map[string]int, len(recentIDs))
+	for i, id := range recentIDs {
+		if _, exists := rank[id]; !exists {
+			rank[id] = i
+		}
+	}
+	sorted := make([]config.Workspace, len(workspaces))
+	copy(sorted, workspaces)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		ri, iok := rank[sorted[i].ID]
+		rj, jok := rank[sorted[j].ID]
+		if iok && jok {
+			return ri < rj
+		}
+		if iok {
+			return true
+		}
+		if jok {
+			return false
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
+	return sorted
 }
 
 // RenderWorkspaceSandboxMenuCard renders the sandbox configuration menu card.

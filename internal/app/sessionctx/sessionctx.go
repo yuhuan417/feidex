@@ -167,6 +167,7 @@ func SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
 	}
 	previousWorkspaceID := strings.TrimSpace(sess.WorkspaceID)
 	sess.WorkspaceID = strings.TrimSpace(workspaceID)
+	trackRecentWorkspace(sess, sess.WorkspaceID)
 	if !HasInFlightSubmission(sess) {
 		ClearBackendThreads(sess)
 		ClearThreadContext(sess)
@@ -175,6 +176,20 @@ func SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
 	if sess.ActiveThreadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 		sess.ActiveThreadWorkspaceID = previousWorkspaceID
 	}
+}
+
+func trackRecentWorkspace(sess *state.Session, workspaceID string) {
+	ws := strings.TrimSpace(workspaceID)
+	if ws == "" {
+		return
+	}
+	filtered := sess.RecentWorkspaceIDs[:0]
+	for _, id := range sess.RecentWorkspaceIDs {
+		if id != ws {
+			filtered = append(filtered, id)
+		}
+	}
+	sess.RecentWorkspaceIDs = append([]string{ws}, filtered...)
 }
 
 func CanResumeThreadForSubmission(sess *state.Session, sub *state.Submission) bool {

@@ -22,7 +22,7 @@ func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *state.Submis
 	if a == nil {
 		return nil
 	}
-	if strings.TrimSpace(title) == "最终答复" && len(chunks) > 0 {
+	if strings.Contains(strings.TrimSpace(title), "最终答复") && len(chunks) > 0 {
 		copied := append([]appdelivery.ReplyCardChunk(nil), chunks...)
 		copied[0].Body = prependAttentionMentionMarkdown(copied[0].Body, turnStopAttentionUserID(a, sub, sub.TurnID))
 		chunks = copied
@@ -35,7 +35,7 @@ func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *state.Submis
 	for i, chunk := range chunks {
 		effectiveTitle := title
 		showHeader := chunk.ShowHeader
-		if strings.TrimSpace(title) == "最终答复" && len(chunks) > 1 {
+		if strings.Contains(strings.TrimSpace(title), "最终答复") && len(chunks) > 1 {
 			effectiveTitle = fmt.Sprintf("%s %d/%d", strings.TrimSpace(title), i+1, len(chunks))
 			showHeader = true
 		}
