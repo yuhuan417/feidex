@@ -212,14 +212,16 @@ Release flow:
 
 GitHub Actions behavior:
 
-- Push to `main`: runs CI and publishes `dev-latest` Linux assets.
-- Push tag `v*`: runs tests and publishes stable Linux release assets.
+- Push to `main`: runs CI and publishes `dev-latest` release assets for Linux and macOS.
+- Push tag `v*`: runs tests and publishes stable release assets for Linux and macOS.
 - CI uses `dist/` for release assets. Keep local conventions aligned with that.
 
 Current release asset names are:
 
 - `feidex-linux-amd64`
 - `feidex-linux-aarch64`
+- `feidex-darwin-amd64`
+- `feidex-darwin-arm64`
 - matching `.tar.gz` archives
 - `sha256sums.txt`
 

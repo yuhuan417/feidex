@@ -1022,10 +1022,12 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -1034,6 +1036,7 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.1.0" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 	sessionKey := "sess-upgrade"
 	if err := a.store.UpsertSession(&state.Session{

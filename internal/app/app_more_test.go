@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/app/turnbinding"
+	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -697,7 +697,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 				fn()
 			}()
 		},
-		waitAsync: asyncWG.Wait,
+		waitAsync:   asyncWG.Wait,
 		liveThreads: newLiveThreadTracker(),
 		trackers: appTrackers{
 			turnStreams:  newTurnStreamTracker(),
@@ -2399,11 +2399,13 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	origRelease := newReleaseClient
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -2421,6 +2423,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "0.1.0" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -2431,7 +2434,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
 	}
 	body := cardMarkdownContent(t, ff.replyCards[0])
-	if !strings.Contains(body, "当前版本: `0.1.0`") || !strings.Contains(body, "最新版本: `v0.2.0`") || !strings.Contains(body, "目标架构: `arm64`") || !strings.Contains(body, "目标包: `feidex-linux-aarch64`") {
+	if !strings.Contains(body, "当前版本: `0.1.0`") || !strings.Contains(body, "最新版本: `v0.2.0`") || !strings.Contains(body, "目标平台: `linux/arm64`") || !strings.Contains(body, "目标包: `feidex-linux-aarch64`") {
 		t.Fatalf("upgrade card body = %q", body)
 	}
 	var pending *state.PendingRequest
@@ -2450,11 +2453,13 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	origRelease := newReleaseClient
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -2476,6 +2481,7 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v9.9.9" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -2511,6 +2517,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	origRelease := newReleaseClient
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	origUpgradeDisplayLocation := upgradeDisplayLocation
 	origUpgradecmdDisplayLocation := appupgradecmd.DisplayLocation
@@ -2518,6 +2525,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 		upgradeDisplayLocation = origUpgradeDisplayLocation
 		appupgradecmd.DisplayLocation = origUpgradecmdDisplayLocation
@@ -2543,6 +2551,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 	upgradeDisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 	appupgradecmd.DisplayLocation = upgradeDisplayLocation
@@ -2580,9 +2589,11 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 
 func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	origManager := newDaemonManager
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newDaemonManager = origManager
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -2591,6 +2602,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -2628,10 +2640,12 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -2641,6 +2655,7 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 
 	localArtifact := filepath.Join(a.cfg.Workspaces[0].Cwd, "dist", "feidex linux amd64")

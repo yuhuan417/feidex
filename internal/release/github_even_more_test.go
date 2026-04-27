@@ -8,6 +8,10 @@ import (
 )
 
 func TestReleaseAdditionalBranches(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	if got, err := CurrentLinuxAssetName(""); err != nil || got == "" {
 		t.Fatalf("CurrentLinuxAssetName(empty) = %q, %v", got, err)
 	}

@@ -18,6 +18,10 @@ func (t errTransport) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func TestReleaseClientBranchCoverage(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	var nilClient *GitHubClient
 	if _, err := nilClient.LatestLinuxBinary(context.Background(), "amd64"); err == nil || !strings.Contains(err.Error(), "nil release client") {
 		t.Fatalf("nil LatestLinuxBinary() error = %v", err)
@@ -39,6 +43,10 @@ func TestReleaseClientBranchCoverage(t *testing.T) {
 }
 
 func TestReleaseVersionBranches(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", nil)
 	if _, err := client.LinuxBinaryByVersion(context.Background(), "", "amd64"); err == nil || !strings.Contains(err.Error(), "missing release version") {
 		t.Fatalf("LinuxBinaryByVersion(empty) error = %v", err)
@@ -81,6 +89,10 @@ func TestReleaseVersionBranches(t *testing.T) {
 }
 
 func TestReleaseInfoFromGitHubReleaseBranches(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
 		responses: map[string]string{
 			"https://download.test/sums":     "abc123  feidex-linux-amd64\n",

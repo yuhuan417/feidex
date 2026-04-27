@@ -82,14 +82,22 @@ type DefaultApp struct {
 	LocalPathFunc      func(msg *feishu.InboundMessage, rawPath string) error
 }
 
-func (a *DefaultApp) UpgradeFeishu() FeishuClient                                            { return a.FeishuClientFunc() }
-func (a *DefaultApp) UpgradeState() UpgradeState                                             { return a.StateFunc() }
-func (a *DefaultApp) DaemonServiceName() string                                              { return a.DaemonNameFunc() }
-func (a *DefaultApp) MakeSessionKey(msg *feishu.InboundMessage) string                        { return a.MakeSessionKeyFunc(msg) }
-func (a *DefaultApp) ReplyInThreadEnabled(chatType string) bool                               { return a.ReplyInThreadFunc(chatType) }
-func (a *DefaultApp) MenuCardBody(action, body string) string                                 { return a.MenuCardBodyFunc(action, body) }
-func (a *DefaultApp) CommandUpgradeLocalPick(msg *feishu.InboundMessage) error                 { return a.LocalPickFunc(msg) }
-func (a *DefaultApp) CommandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string) error { return a.LocalPathFunc(msg, rawPath) }
+func (a *DefaultApp) UpgradeFeishu() FeishuClient { return a.FeishuClientFunc() }
+func (a *DefaultApp) UpgradeState() UpgradeState  { return a.StateFunc() }
+func (a *DefaultApp) DaemonServiceName() string   { return a.DaemonNameFunc() }
+func (a *DefaultApp) MakeSessionKey(msg *feishu.InboundMessage) string {
+	return a.MakeSessionKeyFunc(msg)
+}
+func (a *DefaultApp) ReplyInThreadEnabled(chatType string) bool { return a.ReplyInThreadFunc(chatType) }
+func (a *DefaultApp) MenuCardBody(action, body string) string {
+	return a.MenuCardBodyFunc(action, body)
+}
+func (a *DefaultApp) CommandUpgradeLocalPick(msg *feishu.InboundMessage) error {
+	return a.LocalPickFunc(msg)
+}
+func (a *DefaultApp) CommandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string) error {
+	return a.LocalPathFunc(msg, rawPath)
+}
 
 // ---------------------------------------------------------------------------
 // Exported types
@@ -134,6 +142,8 @@ var DisplayLocation = time.Local
 var (
 	// CurrentVersion returns the current binary version.
 	CurrentVersion func() string
+	// CurrentGOOS returns the target operating system.
+	CurrentGOOS func() string
 	// CurrentGOARCH returns the target architecture.
 	CurrentGOARCH func() string
 	// NewReleaseClient creates a new release query client.
@@ -195,7 +205,14 @@ func (s UpgradeService) RenderUpgradeDevCard(sessionKey, ownerUserID string) (ma
 // (specific version, latest, or dev release).
 func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion string, useDevRelease bool) (map[string]any, error) {
 	st := s.app.UpgradeState()
-	exePath, assetName, err := s.ValidateUpgradeRuntime()
+	goos := strings.TrimSpace(CurrentGOOS())
+	var exePath, assetName string
+	var err error
+	if goos == "linux" {
+		exePath, assetName, err = s.ValidateUpgradeRuntime()
+	} else {
+		exePath, assetName, err = s.probeUpgradeRuntime()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -204,9 +221,10 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 	defer cancel()
 
 	current := CurrentVersion()
+	goarch := strings.TrimSpace(CurrentGOARCH())
 	bodyLines := []string{
 		"当前版本: `" + current + "`",
-		"目标架构: `" + CurrentGOARCH() + "`",
+		"目标平台: `" + firstNonEmpty(goos, "unknown") + "/" + firstNonEmpty(goarch, "unknown") + "`",
 		"目标包: `" + assetName + "`",
 		"二进制: `" + exePath + "`",
 	}
@@ -215,8 +233,12 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 	forceVersion := strings.TrimSpace(requestedVersion) != ""
 	switch {
 	case useDevRelease:
-		target, err = NewReleaseClient().LatestDevLinuxBinary(ctx, CurrentGOARCH())
+		target, err = NewReleaseClient().LatestDevLinuxBinary(ctx, goarch)
 		if err != nil {
+			if goos != "linux" {
+				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
+				return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+			}
 			return nil, fmt.Errorf("查询开发版 %s 失败: %w", release.DevReleaseTag, err)
 		}
 		bodyLines = append(bodyLines, "开发版本: `"+target.Version+"`")
@@ -227,14 +249,22 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 			bodyLines = append(bodyLines, "提交: `"+commit+"`")
 		}
 	case forceVersion:
-		target, err = NewReleaseClient().LinuxBinaryByVersion(ctx, requestedVersion, CurrentGOARCH())
+		target, err = NewReleaseClient().LinuxBinaryByVersion(ctx, requestedVersion, goarch)
 		if err != nil {
+			if goos != "linux" {
+				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
+				return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+			}
 			return nil, fmt.Errorf("查询指定版本 %s 失败: %w", requestedVersion, err)
 		}
 		bodyLines = append(bodyLines, "指定版本: `"+target.Version+"`")
 	default:
-		target, err = NewReleaseClient().LatestLinuxBinary(ctx, CurrentGOARCH())
+		target, err = NewReleaseClient().LatestLinuxBinary(ctx, goarch)
 		if err != nil {
+			if goos != "linux" {
+				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
+				return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+			}
 			bodyLines = append(bodyLines, "", "远端版本检查失败。你仍然可以选择本地 Binary 升级。", "错误: "+err.Error())
 			return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
 		}
@@ -245,6 +275,20 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 	}
 	if strings.TrimSpace(target.HTMLURL) != "" {
 		bodyLines = append(bodyLines, "Release: <"+target.HTMLURL+">")
+	}
+
+	if goos != "linux" {
+		bodyLines = append(bodyLines, "", "当前平台仅支持 release 检查，不支持自动升级。")
+		title := "升级服务"
+		color := "blue"
+		if !forceVersion && !useDevRelease {
+			if cmp, cmpErr := release.CompareVersions(current, target.Version); cmpErr == nil && cmp >= 0 {
+				title = "已是最新版本"
+				color = "green"
+				bodyLines = append(bodyLines, "", "当前版本已不落后于远端最新版本。")
+			}
+		}
+		return s.app.UpgradeFeishu().SimpleStatusCard(title, color, s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
 	}
 
 	if !forceVersion && !useDevRelease {
@@ -435,6 +479,13 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 // ValidateUpgradeRuntime checks that the current process is the daemon
 // service process and returns the executable path and asset name.
 func (s UpgradeService) ValidateUpgradeRuntime() (string, string, error) {
+	exePath, assetName, err := s.probeUpgradeRuntime()
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(CurrentGOOS()) != "linux" {
+		return "", "", fmt.Errorf("当前平台不支持 daemon 自动升级")
+	}
 	serviceName := s.app.DaemonServiceName()
 	manager, err := NewDaemonManager(serviceName)
 	if err != nil {
@@ -450,6 +501,12 @@ func (s UpgradeService) ValidateUpgradeRuntime() (string, string, error) {
 	if status.PID > 0 && status.PID != os.Getpid() {
 		return "", "", fmt.Errorf("当前进程不是 daemon 服务进程，无法执行远程升级")
 	}
+	return exePath, assetName, nil
+}
+
+// probeUpgradeRuntime returns the current executable path and target release
+// asset for the active platform without checking daemon availability.
+func (s UpgradeService) probeUpgradeRuntime() (string, string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
 		return "", "", fmt.Errorf("获取当前二进制路径失败: %w", err)
@@ -457,9 +514,9 @@ func (s UpgradeService) ValidateUpgradeRuntime() (string, string, error) {
 	if realPath, err := filepath.EvalSymlinks(exePath); err == nil {
 		exePath = realPath
 	}
-	assetName, err := release.CurrentLinuxAssetName(CurrentGOARCH())
+	assetName, err := release.CurrentAssetName(CurrentGOOS(), CurrentGOARCH())
 	if err != nil {
-		return "", "", fmt.Errorf("当前架构不支持自动升级: %w", err)
+		return "", "", fmt.Errorf("当前平台不支持自动升级: %w", err)
 	}
 	return exePath, assetName, nil
 }
@@ -554,6 +611,19 @@ func UpgradePanelButtons(sessionKey string, confirm map[string]any, includeBack 
 		})
 	}
 	return buttons
+}
+
+func upgradeBackButtons(sessionKey string) []feishu.Button {
+	return []feishu.Button{
+		{
+			Text: "返回上一级",
+			Type: "default",
+			Value: map[string]any{
+				"action":      "menu.group.system",
+				"session_key": sessionKey,
+			},
+		},
+	}
 }
 
 // UpgradeStartedSummaryLine returns a summary line for the "upgrade started"

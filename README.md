@@ -518,6 +518,7 @@ feidex daemon uninstall
 - 当前运行在 Linux daemon 模式
 - 服务进程正在运行
 - 如果走 GitHub release 流程，需要可访问 GitHub Release
+- release 也会发布 macOS 产物，但自动升级仍只支持 Linux daemon
 
 升级逻辑会：
 
@@ -534,6 +535,9 @@ feidex daemon uninstall
 - 根据本机架构选择正确二进制
   - `amd64 -> feidex-linux-amd64`
   - `arm64 -> feidex-linux-aarch64`
+- macOS release 对应为
+  - `amd64 -> feidex-darwin-amd64`
+  - `arm64 -> feidex-darwin-arm64`
 - 对 release 流程校验 `sha256sums.txt`
 - 对本地 Binary 流程先把制品复制到 `data_dir/upgrades/<request-id>/` 并计算 `sha256`
 - 替换、重启
@@ -580,6 +584,10 @@ GitHub Actions 会在 tag push 后自动发布 release。
 - `feidex-linux-amd64.tar.gz`
 - `feidex-linux-aarch64`
 - `feidex-linux-aarch64.tar.gz`
+- `feidex-darwin-amd64`
+- `feidex-darwin-amd64.tar.gz`
+- `feidex-darwin-arm64`
+- `feidex-darwin-arm64.tar.gz`
 - `sha256sums.txt`
 
 ## 开发与测试
@@ -635,7 +643,7 @@ feidex version
 
 ### 2. `/upgrade` 提示当前环境不支持
 
-说明当前不是 Linux daemon 场景，或者当前进程不是 daemon 服务进程。
+说明当前平台不支持自动升级，或者当前进程不是 daemon 服务进程。
 
 ### 3. 回复消息没有 steer
 

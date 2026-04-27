@@ -16,11 +16,13 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 	origRelease := newReleaseClient
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newReleaseClient = origRelease
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -41,6 +43,7 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-only", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -69,10 +72,12 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) {
 	origManager := newDaemonManager
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	defer func() {
 		newDaemonManager = origManager
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 	}()
 
@@ -84,6 +89,7 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
 	}
 	currentVersion = func() string { return "v0.3.0" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 
 	localArtifact := filepath.Join(a.cfg.Workspaces[0].Cwd, "dist", "feidex linux amd64")

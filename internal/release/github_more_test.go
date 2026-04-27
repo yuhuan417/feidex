@@ -14,6 +14,10 @@ func TestNewGitHubClientAppliesDefaults(t *testing.T) {
 }
 
 func TestLatestLinuxBinaryReportsMissingAssets(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", nil)
 	client.http.Transport = stubTransport{
 		responses: map[string]string{

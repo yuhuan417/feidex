@@ -51,5 +51,6 @@ var (
 	runClaudeSmokeTest      = func(a *App, ctx context.Context) error { return newBackendUpgradeService(a).claudeSmokeTest(ctx) }
 	startDaemonUpgrade      = daemon.StartBackgroundUpgrade
 	currentVersion          = buildinfo.CurrentVersion
+	currentGOOS             = func() string { return runtime.GOOS }
 	currentGOARCH           = func() string { return runtime.GOARCH }
 )

@@ -28,8 +28,12 @@ const (
 
 	linuxAMD64AssetName   = "feidex-linux-amd64"
 	linuxAARCH64AssetName = "feidex-linux-aarch64"
+	darwinAMD64AssetName  = "feidex-darwin-amd64"
+	darwinARM64AssetName  = "feidex-darwin-arm64"
 	sha256AssetName       = "sha256sums.txt"
 )
+
+var currentGOOS = func() string { return runtime.GOOS }
 
 type ReleaseInfo struct {
 	Version        string
@@ -56,13 +60,13 @@ type GitHubClient struct {
 }
 
 type githubRelease struct {
-	TagName        string `json:"tag_name"`
-	Name           string `json:"name"`
-	HTMLURL        string `json:"html_url"`
-	PublishedAt    string `json:"published_at"`
+	TagName         string `json:"tag_name"`
+	Name            string `json:"name"`
+	HTMLURL         string `json:"html_url"`
+	PublishedAt     string `json:"published_at"`
 	TargetCommitish string `json:"target_commitish"`
-	Prerelease     bool   `json:"prerelease"`
-	Assets         []struct {
+	Prerelease      bool   `json:"prerelease"`
+	Assets          []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
@@ -85,24 +89,48 @@ func NewGitHubClient(owner, repo string, httpClient *http.Client) *GitHubClient 
 	}
 }
 
-func CurrentLinuxAssetName(goarch string) (string, error) {
-	switch strings.TrimSpace(goarch) {
-	case "":
-		return CurrentLinuxAssetName(runtime.GOARCH)
-	case "amd64":
-		return linuxAMD64AssetName, nil
-	case "arm64":
-		return linuxAARCH64AssetName, nil
-	default:
-		return "", fmt.Errorf("unsupported linux architecture %q", goarch)
+func CurrentAssetName(goos, goarch string) (string, error) {
+	goos = strings.TrimSpace(goos)
+	goarch = strings.TrimSpace(goarch)
+	if goos == "" {
+		goos = runtime.GOOS
 	}
+	if goarch == "" {
+		goarch = runtime.GOARCH
+	}
+	switch goos {
+	case "linux":
+		switch goarch {
+		case "amd64":
+			return linuxAMD64AssetName, nil
+		case "arm64":
+			return linuxAARCH64AssetName, nil
+		default:
+			return "", fmt.Errorf("unsupported linux architecture %q", goarch)
+		}
+	case "darwin":
+		switch goarch {
+		case "amd64":
+			return darwinAMD64AssetName, nil
+		case "arm64":
+			return darwinARM64AssetName, nil
+		default:
+			return "", fmt.Errorf("unsupported darwin architecture %q", goarch)
+		}
+	default:
+		return "", fmt.Errorf("unsupported platform %q", goos)
+	}
+}
+
+func CurrentLinuxAssetName(goarch string) (string, error) {
+	return CurrentAssetName("linux", goarch)
 }
 
 func (c *GitHubClient) LatestLinuxBinary(ctx context.Context, goarch string) (*ReleaseInfo, error) {
 	if c == nil {
 		return nil, fmt.Errorf("nil release client")
 	}
-	assetName, err := CurrentLinuxAssetName(goarch)
+	assetName, err := CurrentAssetName(currentGOOS(), goarch)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +145,7 @@ func (c *GitHubClient) LatestDevLinuxBinary(ctx context.Context, goarch string) 
 	if c == nil {
 		return nil, fmt.Errorf("nil release client")
 	}
-	assetName, err := CurrentLinuxAssetName(goarch)
+	assetName, err := CurrentAssetName(currentGOOS(), goarch)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +164,7 @@ func (c *GitHubClient) LinuxBinaryByVersion(ctx context.Context, version, goarch
 	if version == "" {
 		return nil, fmt.Errorf("missing release version")
 	}
-	assetName, err := CurrentLinuxAssetName(goarch)
+	assetName, err := CurrentAssetName(currentGOOS(), goarch)
 	if err != nil {
 		return nil, err
 	}

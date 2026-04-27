@@ -58,13 +58,17 @@ jobs:
           echo "build_ts_display=${BUILD_TS_DISPLAY}" >> "${GITHUB_OUTPUT}"
           echo "version=dev-${BUILD_TS}-${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
 
-      - name: Build Linux dev binaries
+      - name: Build dev binaries
         run: |
           mkdir -p dist
           VERSION="${{ steps.dev_meta.outputs.version }}"
-          for target in "amd64:feidex-linux-amd64" "arm64:feidex-linux-aarch64"; do
-            IFS=':' read -r GOARCH ASSET <<<"${target}"
-            CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" \
+          for target in \
+            "linux:amd64:feidex-linux-amd64" \
+            "linux:arm64:feidex-linux-aarch64" \
+            "darwin:amd64:feidex-darwin-amd64" \
+            "darwin:arm64:feidex-darwin-arm64"; do
+            IFS=':' read -r GOOS GOARCH ASSET <<<"${target}"
+            CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
               go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
               -o "dist/${ASSET}" \
               ./cmd/feidex
@@ -74,11 +78,17 @@ jobs:
         run: |
           tar -C dist -czf dist/feidex-linux-amd64.tar.gz feidex-linux-amd64
           tar -C dist -czf dist/feidex-linux-aarch64.tar.gz feidex-linux-aarch64
+          tar -C dist -czf dist/feidex-darwin-amd64.tar.gz feidex-darwin-amd64
+          tar -C dist -czf dist/feidex-darwin-arm64.tar.gz feidex-darwin-arm64
           sha256sum \
             dist/feidex-linux-amd64 \
             dist/feidex-linux-amd64.tar.gz \
             dist/feidex-linux-aarch64 \
             dist/feidex-linux-aarch64.tar.gz \
+            dist/feidex-darwin-amd64 \
+            dist/feidex-darwin-amd64.tar.gz \
+            dist/feidex-darwin-arm64 \
+            dist/feidex-darwin-arm64.tar.gz \
             > dist/sha256sums.txt
 
       - name: Move dev-latest tag
@@ -107,6 +117,10 @@ jobs:
             dist/feidex-linux-amd64.tar.gz
             dist/feidex-linux-aarch64
             dist/feidex-linux-aarch64.tar.gz
+            dist/feidex-darwin-amd64
+            dist/feidex-darwin-amd64.tar.gz
+            dist/feidex-darwin-arm64
+            dist/feidex-darwin-arm64.tar.gz
             dist/sha256sums.txt
 
   release-linux:
@@ -124,13 +138,17 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
-      - name: Build Linux release binaries
+      - name: Build release binaries
         run: |
           mkdir -p dist
           VERSION="${GITHUB_REF_NAME}"
-          for target in "amd64:feidex-linux-amd64" "arm64:feidex-linux-aarch64"; do
-            IFS=':' read -r GOARCH ASSET <<<"${target}"
-            CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" \
+          for target in \
+            "linux:amd64:feidex-linux-amd64" \
+            "linux:arm64:feidex-linux-aarch64" \
+            "darwin:amd64:feidex-darwin-amd64" \
+            "darwin:arm64:feidex-darwin-arm64"; do
+            IFS=':' read -r GOOS GOARCH ASSET <<<"${target}"
+            CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
               go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
               -o "dist/${ASSET}" \
               ./cmd/feidex
@@ -140,11 +158,17 @@ jobs:
         run: |
           tar -C dist -czf dist/feidex-linux-amd64.tar.gz feidex-linux-amd64
           tar -C dist -czf dist/feidex-linux-aarch64.tar.gz feidex-linux-aarch64
+          tar -C dist -czf dist/feidex-darwin-amd64.tar.gz feidex-darwin-amd64
+          tar -C dist -czf dist/feidex-darwin-arm64.tar.gz feidex-darwin-arm64
           sha256sum \
             dist/feidex-linux-amd64 \
             dist/feidex-linux-amd64.tar.gz \
             dist/feidex-linux-aarch64 \
             dist/feidex-linux-aarch64.tar.gz \
+            dist/feidex-darwin-amd64 \
+            dist/feidex-darwin-amd64.tar.gz \
+            dist/feidex-darwin-arm64 \
+            dist/feidex-darwin-arm64.tar.gz \
             > dist/sha256sums.txt
 
       - name: Publish GitHub release assets
@@ -158,4 +182,8 @@ jobs:
             dist/feidex-linux-amd64.tar.gz
             dist/feidex-linux-aarch64
             dist/feidex-linux-aarch64.tar.gz
+            dist/feidex-darwin-amd64
+            dist/feidex-darwin-amd64.tar.gz
+            dist/feidex-darwin-arm64
+            dist/feidex-darwin-arm64.tar.gz
             dist/sha256sums.txt

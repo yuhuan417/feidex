@@ -45,6 +45,7 @@ func newAppUpgradeService(app *App) appUpgradeService {
 	// variables (not their current values), so test overrides of currentVersion
 	// etc. take effect even when set before newAppUpgradeService is called.
 	appupgradecmd.CurrentVersion = func() string { return currentVersion() }
+	appupgradecmd.CurrentGOOS = func() string { return currentGOOS() }
 	appupgradecmd.CurrentGOARCH = func() string { return currentGOARCH() }
 	appupgradecmd.NewReleaseClient = func() appupgradecmd.ReleaseClient {
 		return newReleaseClient()

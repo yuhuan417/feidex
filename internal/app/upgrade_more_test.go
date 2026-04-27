@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"feidex/internal/daemon"
@@ -17,18 +18,21 @@ func TestUpgradeBranches(t *testing.T) {
 	origManager := newDaemonManager
 	origRelease := newReleaseClient
 	origVersion := currentVersion
+	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
 	origStart := startDaemonUpgrade
 	defer func() {
 		newDaemonManager = origManager
 		newReleaseClient = origRelease
 		currentVersion = origVersion
+		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
 		startDaemonUpgrade = origStart
 	}()
 
 	a, _, _ := newTestApp(t)
 	currentVersion = func() string { return "v9.9.9" }
+	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
@@ -163,5 +167,59 @@ func TestUpgradeBranches(t *testing.T) {
 	}
 	if !foundLocal {
 		t.Fatal("expected staged local upgrade pending request")
+	}
+}
+
+func TestUpgradeCommandReturnsCheckOnlyCardOnDarwin(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOOS := currentGOOS
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOOS = origGOOS
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	daemonCalled := false
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		daemonCalled = true
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	newReleaseClient = func() releaseClient {
+		return &fakeReleaseClient{info: &release.ReleaseInfo{
+			Version:        "v0.2.0",
+			HTMLURL:        "https://example.test/releases/v0.2.0",
+			BinaryURL:      "https://github.com/example/feidex-darwin-arm64",
+			ExpectedSHA256: "abc123",
+		}}
+	}
+	currentVersion = func() string { return "v0.1.0" }
+	currentGOOS = func() string { return "darwin" }
+	currentGOARCH = func() string { return "arm64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-darwin", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newAppUpgradeService(a).commandUpgrade(msg, nil); err != nil {
+		t.Fatalf("commandUpgrade() error = %v", err)
+	}
+	if daemonCalled {
+		t.Fatal("expected darwin upgrade check to skip daemon validation")
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "当前平台仅支持 release 检查，不支持自动升级。") {
+		t.Fatalf("darwin upgrade card body = %q", body)
+	}
+	if !strings.Contains(body, "目标平台: `darwin/arm64`") || !strings.Contains(body, "目标包: `feidex-darwin-arm64`") {
+		t.Fatalf("darwin upgrade card body = %q", body)
+	}
+	if pending := a.store.PendingByID("upgrade-1"); pending != nil {
+		t.Fatalf("expected no upgrade pending request, got %+v", pending)
 	}
 }

@@ -10,6 +10,10 @@ import (
 )
 
 func TestLatestLinuxBinaryAMD64(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
 		responses: map[string]string{
 			"https://api.github.com/repos/test/feidex/releases/latest": `{
@@ -34,6 +38,10 @@ func TestLatestLinuxBinaryAMD64(t *testing.T) {
 }
 
 func TestLatestLinuxBinaryAARCH64(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
 		responses: map[string]string{
 			"https://api.github.com/repos/test/feidex/releases/latest": `{
@@ -58,6 +66,10 @@ func TestLatestLinuxBinaryAARCH64(t *testing.T) {
 }
 
 func TestLinuxBinaryByVersionAMD64(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
 		responses: map[string]string{
 			"https://api.github.com/repos/test/feidex/releases/tags/v0.3.0": `{
@@ -82,6 +94,10 @@ func TestLinuxBinaryByVersionAMD64(t *testing.T) {
 }
 
 func TestLatestDevLinuxBinaryAMD64(t *testing.T) {
+	origGOOS := currentGOOS
+	defer func() { currentGOOS = origGOOS }()
+	currentGOOS = func() string { return "linux" }
+
 	client := NewGitHubClient("test", "feidex", &http.Client{Transport: stubTransport{
 		responses: map[string]string{
 			"https://api.github.com/repos/test/feidex/releases/tags/dev-latest": `{
@@ -111,15 +127,29 @@ func TestLatestDevLinuxBinaryAMD64(t *testing.T) {
 	}
 }
 
-func TestCurrentLinuxAssetName(t *testing.T) {
-	if got, err := CurrentLinuxAssetName("amd64"); err != nil || got != "feidex-linux-amd64" {
-		t.Fatalf("CurrentLinuxAssetName(amd64) = %q, %v", got, err)
+func TestCurrentAssetName(t *testing.T) {
+	cases := []struct {
+		goos, goarch, want string
+	}{
+		{"linux", "amd64", "feidex-linux-amd64"},
+		{"linux", "arm64", "feidex-linux-aarch64"},
+		{"darwin", "amd64", "feidex-darwin-amd64"},
+		{"darwin", "arm64", "feidex-darwin-arm64"},
 	}
-	if got, err := CurrentLinuxAssetName("arm64"); err != nil || got != "feidex-linux-aarch64" {
-		t.Fatalf("CurrentLinuxAssetName(arm64) = %q, %v", got, err)
+	for _, tc := range cases {
+		got, err := CurrentAssetName(tc.goos, tc.goarch)
+		if err != nil || got != tc.want {
+			t.Fatalf("CurrentAssetName(%s, %s) = %q, %v", tc.goos, tc.goarch, got, err)
+		}
 	}
-	if _, err := CurrentLinuxAssetName("386"); err == nil {
-		t.Fatal("expected unsupported architecture to fail")
+	if _, err := CurrentAssetName("linux", "386"); err == nil {
+		t.Fatal("expected unsupported linux architecture to fail")
+	}
+	if _, err := CurrentAssetName("darwin", "386"); err == nil {
+		t.Fatal("expected unsupported darwin architecture to fail")
+	}
+	if _, err := CurrentAssetName("windows", "amd64"); err == nil {
+		t.Fatal("expected unsupported platform to fail")
 	}
 }
 
