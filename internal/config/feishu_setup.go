@@ -262,11 +262,21 @@ func registrationCall(client *http.Client, action string, params map[string]stri
 		return err
 	}
 	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if action == "poll" {
+			if pollResp, ok := out.(*registrationPollResponse); ok && resp.StatusCode == http.StatusBadRequest {
+				if err := json.Unmarshal(body, pollResp); err == nil && pollResp.Error != "" {
+					return nil
+				}
+			}
+		}
 		return fmt.Errorf("registration request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
+	return json.Unmarshal(body, out)
 }
 
 func parsePair(v string) (string, string, error) {

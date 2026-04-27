@@ -106,3 +106,21 @@ func TestRegistrationCallStatusError(t *testing.T) {
 		t.Fatalf("registrationCall(status error) = %v, want status error", err)
 	}
 }
+
+func TestRegistrationCallPollAuthorizationPendingStatus400(t *testing.T) {
+	client := &http.Client{Transport: setupRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 400,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"error":"authorization_pending","error_description":"","code":20094}`)),
+			Request:    req,
+		}, nil
+	})}
+	var poll registrationPollResponse
+	if err := registrationCall(client, "poll", map[string]string{"device_code": "device-1"}, &poll); err != nil {
+		t.Fatalf("registrationCall(poll authorization_pending) error = %v", err)
+	}
+	if poll.Error != "authorization_pending" {
+		t.Fatalf("registrationCall(poll authorization_pending) = %+v, want authorization_pending", poll)
+	}
+}
