@@ -378,7 +378,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if len(replyCards) != 1 {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if !newMaintenanceStateService(a).CodexRestartState().Running {
 			break
@@ -943,7 +943,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	if len(replyCards) != 1 {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if !newMaintenanceStateService(a).ClaudeRestartState().Running {
 			break

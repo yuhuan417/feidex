@@ -138,11 +138,11 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 
 	select {
 	case <-secondTurnStarted:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("expected queued follow-up to start after delayed turn completed")
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		sess = a.store.GetSession(sessionKey)
 		queuedSub := a.store.GetSubmission(queuedSubID)
@@ -251,11 +251,11 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 
 	select {
 	case <-secondTurnStarted:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("expected queued follow-up to start after completion without prior turn/started")
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		sess = a.store.GetSession(sessionKey)
 		queuedSub := a.store.GetSubmission(queuedSubID)

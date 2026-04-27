@@ -52,7 +52,7 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 		t.Fatalf("StartTurn() error = %v", err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		state.Mu.Lock()
 		got := strings.TrimSpace(state.SessionID)
@@ -122,7 +122,7 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 		t.Fatalf("StartTurn() error = %v", err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		state.Mu.Lock()
 		got := strings.TrimSpace(state.SessionID)

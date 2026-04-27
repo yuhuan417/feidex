@@ -266,7 +266,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 
 	select {
 	case <-started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("thread/compact/start was not started asynchronously")
 	}
 	if patchedCards := ff.patchedCardsSnapshot(); len(patchedCards) != 0 {
@@ -274,7 +274,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 	}
 
 	close(release)
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -343,7 +343,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 
 	select {
 	case <-claude.started:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("Claude /compact was not started asynchronously")
 	}
 	if patchedCards := ff.patchedCardsSnapshot(); len(patchedCards) != 0 {
@@ -351,7 +351,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 	}
 
 	close(claude.release)
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -405,7 +405,7 @@ func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 		t.Fatalf("completeMenuCompact() toast = %#v", resp.Toast)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}

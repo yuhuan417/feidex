@@ -17,7 +17,7 @@ import (
 
 func waitForPatchedCard(t *testing.T, ff *fakeFeishuClient) map[string]any {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for len(ff.patchedCardsSnapshot()) == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}

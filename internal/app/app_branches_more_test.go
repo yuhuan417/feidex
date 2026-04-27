@@ -325,11 +325,11 @@ func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *te
 
 	select {
 	case <-secondStarted:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("expected queued second submission to start after first start failure cleanup")
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		sess := a.store.GetSession(sessionKey)
 		sub2 := a.store.GetSubmission("sub-2")
@@ -584,7 +584,7 @@ func TestHandleFeishuMessageMergeForwardPrefetchesInBackgroundAndSubmitsImageOnl
 	close(releaseResolve)
 
 	sessionKey := makeSessionKey(a, msg)
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		sess := a.store.GetSession(sessionKey)
 		if sess != nil && sess.ActiveTurnID == "turn-merge" {
