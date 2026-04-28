@@ -1,6 +1,9 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -71,4 +74,20 @@ func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 			},
 		},
 	})
+}
+
+func currentWorkspaceForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
+	return newWorkspaceConfigServiceInner(a).CurrentWorkspaceForMessage(msg)
+}
+
+func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
+	sessionKey, sess, ws = currentWorkspaceForMessage(a, msg)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(configuredBackend(a)))
+	}
+	return sessionKey, sess, ws, strings.TrimSpace(sess.ActiveThreadID), nil
+}
+
+func commandWorkspace(a *App, msg *feishu.InboundMessage, args []string) error {
+	return newWorkspaceConfigServiceInner(a).CommandWorkspace(msg, args, newWorkspaceManagementServiceInner(a))
 }

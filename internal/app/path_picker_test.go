@@ -18,41 +18,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func TestRenderPathPickerCardShowsDropdownAndShortButtons(t *testing.T) {
-	a, _, _ := newTestApp(t)
-	root := t.TempDir()
-	current := filepath.Join(root, "work")
-	if err := os.MkdirAll(filepath.Join(current, "dir-a"), 0o755); err != nil {
-		t.Fatalf("Mkdir(dir-a) error = %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(current, "file-a.txt"), []byte("a"), 0o644); err != nil {
-		t.Fatalf("WriteFile(file-a.txt) error = %v", err)
-	}
-	card, err := newWorkspaceRenderService(a).renderPathPickerCard("path-1", pathPickerPayload{
-		Mode:        pathPickerModeDirectory,
-		Style:       pathPickerStyleDropdown,
-		RootPath:    root,
-		CurrentPath: current,
-	})
-	if err != nil {
-		t.Fatalf("renderPathPickerCard() error = %v", err)
-	}
-	if !cardHasTag(card, "select_static") {
-		t.Fatalf("path picker card missing select_static: %#v", card)
-	}
-	body := cardMarkdownContent(t, card)
-	for _, want := range []string{"浏览根目录", "当前目录", "已隐藏文件: `1`"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("path picker body = %q, want %q", body, want)
-		}
-	}
-	for _, want := range []string{"上一级", "确认", "取消"} {
-		if !cardHasButtonText(card, want) {
-			t.Fatalf("path picker missing button %q", want)
-		}
-	}
-}
-
 func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	root := a.cfg.Workspaces[0].Cwd

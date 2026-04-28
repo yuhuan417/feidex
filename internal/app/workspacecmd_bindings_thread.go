@@ -8,6 +8,8 @@ import (
 	"feidex/internal/state"
 )
 
+type workspaceThreadBinding = appworkspacecmd.ThreadBinding
+
 func newWorkspaceThreadServiceInner(a *App) *appworkspacecmd.ThreadService {
 	st := a.State()
 	return appworkspacecmd.NewThreadService(appworkspacecmd.ThreadServiceDeps{

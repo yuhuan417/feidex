@@ -8,7 +8,7 @@ import (
 type historyService = apphistorycmd.Service
 
 func newHistoryService(app *App) historyService {
-	return apphistorycmd.NewService(app)
+	return newHistoryServiceInner(app)
 }
 
 const historyPageSize = apphistorycmd.HistoryPageSize

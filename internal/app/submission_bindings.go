@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	appconvbackend "feidex/internal/app/convbackend"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -143,13 +144,13 @@ func (a submissionAppAdapter) SubmissionQueueClearSubmissionProcessingReactions(
 	newPendingQueueService(a.app).clearSubmissionProcessingReactions(sub)
 }
 func (a submissionAppAdapter) SubmissionQueueIsReviewSubmission(sub *state.Submission) bool {
-	return isReviewSubmission(sub)
+	return appreviewcmd.IsReviewSubmission(sub)
 }
 func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error) {
 	return startSubmissionTurn(a.app, ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort)
 }
 func (a submissionAppAdapter) SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
-	return startSubmissionReview(a.app, ctx, threadID, sub)
+	return appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a.app), ctx, threadID, sub)
 }
 func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams {
 	return buildThreadStartParams(a.app, ws, sess, model)

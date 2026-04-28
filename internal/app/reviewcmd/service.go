@@ -113,6 +113,16 @@ type App interface {
 	// ReviewMarkSubmissionQueuedReactions marks the submission with queued
 	// reactions.
 	ReviewMarkSubmissionQueuedReactions(sub *state.Submission)
+	// ReviewCompleteAsyncCommandAction runs a slash-command-style action
+	// asynchronously and patches the card.
+	ReviewCompleteAsyncCommandAction(
+		action *feishu.CardAction,
+		sessionKey, rawCommand, fallbackAction, toastText string,
+		preparingCard map[string]any,
+		successCardFromText func(sessionKey, text string) map[string]any,
+		failureCard func(sessionKey, errText string) map[string]any,
+		patchWarnMsg string,
+	) (*callback.CardActionTriggerResponse, error)
 	// ReviewCompleteAsyncRenderedCardAction runs an action asynchronously and
 	// patches the card.
 	ReviewCompleteAsyncRenderedCardAction(
@@ -123,10 +133,6 @@ type App interface {
 		failureCard func(sessionKey, errText string) map[string]any,
 		patchWarnMsg string,
 	) (*callback.CardActionTriggerResponse, error)
-	// ReviewRenderPreparingCard renders a preparing card for review operations.
-	ReviewRenderPreparingCard(sessionKey, body string) map[string]any
-	// ReviewRenderFailureCard renders a failure card for review operations.
-	ReviewRenderFailureCard(sessionKey, errText, retryAction string) map[string]any
 }
 
 // ---------------------------------------------------------------------------
@@ -626,12 +632,12 @@ func (s ReviewFormService) CompleteReviewBaseSelect(action *feishu.CardAction) (
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
-		s.app.ReviewRenderPreparingCard(pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
 			return s.completeReviewBaseSelectSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return s.app.ReviewRenderFailureCard(sessionKey, errText, "")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "")
 		},
 		"review base select patch failed",
 	)
@@ -670,12 +676,12 @@ func (s ReviewFormService) CompleteReviewCommitSelect(action *feishu.CardAction)
 		action,
 		pending.SessionKey,
 		"正在刷新 review 选项",
-		s.app.ReviewRenderPreparingCard(pending.SessionKey, "正在刷新 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, pending.SessionKey, "正在刷新 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
 			return s.completeReviewCommitSelectSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return s.app.ReviewRenderFailureCard(sessionKey, errText, "")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "")
 		},
 		"review commit select patch failed",
 	)
@@ -732,12 +738,12 @@ func (s ReviewFormService) CompleteReviewFormSubmit(action *feishu.CardAction) (
 		action,
 		pending.SessionKey,
 		"正在启动 review",
-		s.app.ReviewRenderPreparingCard(pending.SessionKey, "正在启动 review，请稍候。\n\n这张卡片会自动刷新。"),
+		renderReviewPreparingCard(s.app, pending.SessionKey, "正在启动 review，请稍候。\n\n这张卡片会自动刷新。"),
 		func() (*callback.CardActionTriggerResponse, error) {
 			return s.completeReviewFormSubmitSync(action)
 		},
 		func(sessionKey, errText string) map[string]any {
-			return s.app.ReviewRenderFailureCard(sessionKey, errText, "")
+			return renderReviewFailureCard(s.app, sessionKey, errText, "")
 		},
 		"review submit patch failed",
 	)

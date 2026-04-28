@@ -6,7 +6,6 @@ import (
 
 	appapproval "feidex/internal/app/approval"
 	appclauderuntime "feidex/internal/app/clauderuntime"
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appdelivery "feidex/internal/app/delivery"
 	apppendingforms "feidex/internal/app/pendingforms"
 	appturn "feidex/internal/app/turn"
@@ -64,7 +63,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
-				appdebugviewcmd.NewUsageService(app).RecordClaudeThreadUsage(threadID, usage)
+				newUsageServiceInner(app).RecordClaudeThreadUsage(threadID, usage)
 			},
 			RecordTurnTokenUsage: func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 				newRuntimeStateService(app).recordTurnTokenUsage(threadID, turnID, usage)

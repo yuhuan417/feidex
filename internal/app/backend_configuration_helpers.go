@@ -35,25 +35,25 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 					Args:       args[1:],
 					SessionKey: sessionKey,
 					CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
-						return newWorkspaceConfigService(app).currentWorkspaceForMessage(msg)
+						return currentWorkspaceForMessage(app, msg)
 					},
 					ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
-						return newWorkspaceConfigService(app).showWorkspaceSandboxMenu(msg)
+						return newWorkspaceConfigServiceInner(app).ShowWorkspaceSandboxMenu(msg)
 					},
 					ShowWorkspacePolicyMenu: func(msg *feishu.InboundMessage) error {
-						return newWorkspaceConfigService(app).showWorkspacePolicyMenu(msg)
+						return newWorkspaceConfigServiceInner(app).ShowWorkspacePolicyMenu(msg)
 					},
 					ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
 						return showClaudeWorkspacePermissionMenu(app, msg)
 					},
 					CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceService(app).completeWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
+						return newWorkspaceManagementServiceInner(app).CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
 					},
 					CompleteWorkspacePolicySet: func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceService(app).completeWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
+						return newWorkspaceManagementServiceInner(app).CompleteWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
 					},
 					CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceService(app).completeClaudeWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
+						return newWorkspaceManagementServiceInner(app).CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
 					},
 					ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 						return replyCommandActionResponse(app, msg, resp)

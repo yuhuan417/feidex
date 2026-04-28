@@ -1,8 +1,9 @@
-package app
+package reviewcmd
 
 import (
 	"strings"
 
+	apputil "feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -31,24 +32,24 @@ func reviewAsyncButtons(sessionKey, retryAction string) []feishu.Button {
 	return buttons
 }
 
-func renderReviewPreparingCard(a *App, sessionKey, body string) map[string]any {
-	return a.feishu.SimpleStatusCard("代码审查", "blue", menuCardBody("menu.review", strings.TrimSpace(body)), nil)
+func renderReviewPreparingCard(a App, sessionKey, body string) map[string]any {
+	return a.ReviewFeishu().SimpleStatusCard("代码审查", "blue", a.ReviewMenuCardBody("menu.review", strings.TrimSpace(body)), nil)
 }
 
-func renderReviewFailureCard(a *App, sessionKey, errText, retryAction string) map[string]any {
+func renderReviewFailureCard(a App, sessionKey, errText, retryAction string) map[string]any {
 	body := "这次 review 操作失败了。"
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return a.feishu.SimpleStatusCard("代码审查", "orange", menuCardBody("menu.review", body), reviewAsyncButtons(sessionKey, retryAction))
+	return a.ReviewFeishu().SimpleStatusCard("代码审查", "orange", a.ReviewMenuCardBody("menu.review", body), reviewAsyncButtons(sessionKey, retryAction))
 }
 
-func renderReviewResultCard(a *App, sessionKey, text string) map[string]any {
-	return a.feishu.SimpleStatusCard("代码审查", "green", menuCardBody("menu.review", firstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
+func renderReviewResultCard(a App, sessionKey, text string) map[string]any {
+	return a.ReviewFeishu().SimpleStatusCard("代码审查", "green", a.ReviewMenuCardBody("menu.review", apputil.FirstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
 }
 
-func completeMenuReviewUncommitted(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(a,
+func CompleteMenuReviewUncommitted(a App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.ReviewCompleteAsyncCommandAction(
 		action,
 		sessionKey,
 		"/review",
@@ -63,8 +64,8 @@ func completeMenuReviewUncommitted(a *App, action *feishu.CardAction, sessionKey
 	)
 }
 
-func completeMenuReviewBase(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(a,
+func CompleteMenuReviewBase(a App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.ReviewCompleteAsyncCommandAction(
 		action,
 		sessionKey,
 		"/review base",
@@ -79,8 +80,8 @@ func completeMenuReviewBase(a *App, action *feishu.CardAction, sessionKey string
 	)
 }
 
-func completeMenuReviewCommit(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(a,
+func CompleteMenuReviewCommit(a App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return a.ReviewCompleteAsyncCommandAction(
 		action,
 		sessionKey,
 		"/review commit",

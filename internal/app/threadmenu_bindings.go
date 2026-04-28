@@ -93,11 +93,11 @@ func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {
 }
 
 func (a *App) ThreadMenuWorkspaceThread() appthreadmenu.WorkspaceThreadProvider {
-	return newWorkspaceThreadService(a)
+	return newWorkspaceThreadServiceInner(a)
 }
 
 func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider {
-	return newWorkspaceConfigService(a)
+	return threadMenuWorkspaceConfigAdapter{app: a}
 }
 
 func (a *App) ThreadMenuBackendActions() appthreadmenu.BackendActionProvider {
@@ -142,4 +142,12 @@ func (a *App) RenderClaudeSessionPermissionMenuCard(sessionKey string) (map[stri
 
 func (a *App) ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage) error {
 	return showClaudeSessionPermissionMenu(a, msg)
+}
+
+type threadMenuWorkspaceConfigAdapter struct {
+	app *App
+}
+
+func (a threadMenuWorkspaceConfigAdapter) CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
+	return currentThreadForMessage(a.app, msg)
 }

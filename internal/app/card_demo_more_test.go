@@ -61,32 +61,3 @@ func TestBuildOutboundCardDemoValidatesAndBuildsKinds(t *testing.T) {
 		t.Fatalf("turn_plan body = %q, want default plan text", body)
 	}
 }
-
-func TestOutboundCardDemoHelpers(t *testing.T) {
-	cases := map[string]string{
-		"agent":            "turn_output",
-		"agent_message":    "turn_output",
-		"final":            "final_message",
-		"final_agent":      "final_message",
-		"turn_terminal":    "turn_terminal",
-		"turn_file_change": "turn_file_change",
-	}
-	for input, want := range cases {
-		if got := normalizeOutboundCardDemoKind(input); got != want {
-			t.Fatalf("normalizeOutboundCardDemoKind(%q) = %q, want %q", input, got, want)
-		}
-	}
-	if got := normalizeOutboundCardDemoKind("plain"); got != "" {
-		t.Fatalf("normalizeOutboundCardDemoKind(plain) = %q, want empty", got)
-	}
-
-	if got := defaultOutboundCardDemoBody("turn_command_execution"); !strings.Contains(got, "pwd") {
-		t.Fatalf("defaultOutboundCardDemoBody(command) = %q", got)
-	}
-	if got := defaultOutboundCardDemoBody("turn_file_change"); !strings.Contains(got, "main.go") {
-		t.Fatalf("defaultOutboundCardDemoBody(file_change) = %q", got)
-	}
-	if got := defaultOutboundCardDemoBody("unknown"); !strings.Contains(got, "卡片 demo") {
-		t.Fatalf("defaultOutboundCardDemoBody(default) = %q", got)
-	}
-}

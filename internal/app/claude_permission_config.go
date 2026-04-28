@@ -9,8 +9,6 @@ import (
 	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 const (
@@ -115,16 +113,4 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 	}
 	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 	return err
-}
-
-func (s workspaceService) completeClaudeWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	return appbackend.DriverForApp(s.app).Permission().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
-		App:                     s.app,
-		Session:                 s.app.State().Session,
-		UpdateWorkspaceDefaults: func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) { return updateWorkspaceDefaults(s.app, workspaceID, mutate) },
-		ApplyRuntime:            func(sessionKey, mode string) error { return applyClaudePermissionModeToRuntime(s.app, sessionKey, mode) },
-		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
-			return renderClaudeWorkspacePermissionMenuCard(s.app, sessionKey)
-		},
-	})
 }

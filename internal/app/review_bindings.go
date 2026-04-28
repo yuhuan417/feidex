@@ -4,6 +4,7 @@ import (
 	"context"
 
 	appcore "feidex/internal/app/appcore"
+	appreview "feidex/internal/app/review"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -13,93 +14,110 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Adapter methods on *App — satisfy reviewcmd.App interface
+// Type and constant aliases — reviewcmd exported types
 // ---------------------------------------------------------------------------
 
-// ReviewFeishu returns the Feishu bot client for the review service.
-func (a *App) ReviewFeishu() appcore.FeishuClient {
+type reviewPendingPayload = appreviewcmd.ReviewPendingPayload
+
+const (
+	submissionKindReview = appreviewcmd.SubmissionKindReview
+	pendingKindReview    = appreviewcmd.PendingKindReview
+
+	reviewFormModeBase   = appreviewcmd.ReviewFormModeBase
+	reviewFormModeCommit = appreviewcmd.ReviewFormModeCommit
+	reviewFormModeCustom = appreviewcmd.ReviewFormModeCustom
+)
+
+func reviewPendingPayloadFromPending(pending *state.PendingRequest) reviewPendingPayload {
+	return appreviewcmd.ReviewPendingPayloadFromPending(pending)
+}
+
+// ---------------------------------------------------------------------------
+// App adapters — satisfy reviewcmd.App without adding feature methods on *App
+// ---------------------------------------------------------------------------
+
+type reviewAppAdapter struct{ *App }
+
+func newReviewAppAdapter(a *App) reviewAppAdapter {
+	return reviewAppAdapter{App: a}
+}
+
+func newReviewFormServiceInner(app *App) appreviewcmd.ReviewFormService {
+	return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
+}
+
+func (a reviewAppAdapter) ReviewFeishu() appcore.FeishuClient {
 	return a.feishu
 }
 
-// ReviewAppState returns the narrowed app state provider for review ops.
-func (a *App) ReviewAppState() appreviewcmd.AppStateProvider {
+func (a reviewAppAdapter) ReviewAppState() appreviewcmd.AppStateProvider {
 	return a.State()
 }
 
-// ReviewWorkspaceProvider returns the narrowed workspace provider for review
-// ops.
-func (a *App) ReviewWorkspaceProvider() appreviewcmd.WorkspaceProvider {
-	return reviewWorkspaceProviderAdapter{app: a}
+func (a reviewAppAdapter) ReviewWorkspaceProvider() appreviewcmd.WorkspaceProvider {
+	return reviewWorkspaceProviderAdapter{app: a.App}
 }
 
-// ReviewGitProvider returns the narrowed git provider for review ops.
-func (a *App) ReviewGitProvider() appreviewcmd.ReviewGitProvider {
-	return newReviewGitService(a)
+func (a reviewAppAdapter) ReviewGitProvider() appreviewcmd.ReviewGitProvider {
+	return reviewGitProviderAdapter{}
 }
 
-// ReviewCodexClient returns the current Codex RPC client for the review
-// service.
-func (a *App) ReviewCodexClient() (appreviewcmd.CodexClient, error) {
-	return requireCodexClient(a)
+func (a reviewAppAdapter) ReviewCodexClient() (appreviewcmd.CodexClient, error) {
+	return requireCodexClient(a.App)
 }
 
-// ReviewMakeSessionKey builds a session key from an inbound message.
-func (a *App) ReviewMakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a, msg)
+func (a reviewAppAdapter) ReviewMakeSessionKey(msg *feishu.InboundMessage) string {
+	return makeSessionKey(a.App, msg)
 }
 
-// ReviewReplyInThreadEnabled reports whether reply-in-thread is enabled for
-// the given chat type.
-func (a *App) ReviewReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a, chatType)
+func (a reviewAppAdapter) ReviewReplyInThreadEnabled(chatType string) bool {
+	return replyInThreadEnabled(a.App, chatType)
 }
 
-// ReviewMenuCardBody formats a menu card body with breadcrumb navigation.
-func (a *App) ReviewMenuCardBody(action, body string) string {
+func (a reviewAppAdapter) ReviewMenuCardBody(action, body string) string {
 	return menuCardBody(action, body)
 }
 
-// ReviewActionStringValue extracts a string value from a card action.
-func (a *App) ReviewActionStringValue(action *feishu.CardAction, key string) string {
+func (a reviewAppAdapter) ReviewActionStringValue(action *feishu.CardAction, key string) string {
 	return actionStringValue(action, key)
 }
 
-// ReviewCommandMessageFromAction builds an InboundMessage from a card action.
-func (a *App) ReviewCommandMessageFromAction(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
-	return commandMessageFromAction(a, action, sessionKey, rawCommand)
+func (a reviewAppAdapter) ReviewCommandMessageFromAction(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
+	return commandMessageFromAction(a.App, action, sessionKey, rawCommand)
 }
 
-// ReviewSessionHasActiveWork reports whether the session has active work.
-func (a *App) ReviewSessionHasActiveWork(sess *state.Session) bool {
+func (a reviewAppAdapter) ReviewSessionHasActiveWork(sess *state.Session) bool {
 	return sessionHasActiveWork(sess)
 }
 
-// ReviewSessionHasInFlightSubmission reports whether the session has an
-// in-flight submission.
-func (a *App) ReviewSessionHasInFlightSubmission(sess *state.Session) bool {
+func (a reviewAppAdapter) ReviewSessionHasInFlightSubmission(sess *state.Session) bool {
 	return sessionHasInFlightSubmission(sess)
 }
 
-// ReviewStartNextSubmission starts the next queued submission for the given
-// session.
-func (a *App) ReviewStartNextSubmission(sessionKey string) error {
-	return startNextSubmission(a, sessionKey)
+func (a reviewAppAdapter) ReviewStartNextSubmission(sessionKey string) error {
+	return startNextSubmission(a.App, sessionKey)
 }
 
-// ReviewSendSubmissionQueuedNotice sends a queued notice for the submission.
-func (a *App) ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {
-	sendSubmissionQueuedNotice(a, ctx, sub)
+func (a reviewAppAdapter) ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {
+	sendSubmissionQueuedNotice(a.App, ctx, sub)
 }
 
-// ReviewMarkSubmissionQueuedReactions marks the submission with queued
-// reactions.
-func (a *App) ReviewMarkSubmissionQueuedReactions(sub *state.Submission) {
-	newPendingQueueService(a).markSubmissionQueuedReactions(sub)
+func (a reviewAppAdapter) ReviewMarkSubmissionQueuedReactions(sub *state.Submission) {
+	newPendingQueueService(a.App).markSubmissionQueuedReactions(sub)
 }
 
-// ReviewCompleteAsyncRenderedCardAction runs an action asynchronously and
-// patches the card.
-func (a *App) ReviewCompleteAsyncRenderedCardAction(
+func (a reviewAppAdapter) ReviewCompleteAsyncCommandAction(
+	action *feishu.CardAction,
+	sessionKey, rawCommand, fallbackAction, toastText string,
+	preparingCard map[string]any,
+	successCardFromText func(sessionKey, text string) map[string]any,
+	failureCard func(sessionKey, errText string) map[string]any,
+	patchWarnMsg string,
+) (*callback.CardActionTriggerResponse, error) {
+	return completeAsyncCommandAction(a.App, action, sessionKey, rawCommand, fallbackAction, toastText, preparingCard, successCardFromText, failureCard, patchWarnMsg)
+}
+
+func (a reviewAppAdapter) ReviewCompleteAsyncRenderedCardAction(
 	action *feishu.CardAction,
 	sessionKey, toastText string,
 	preparingCard map[string]any,
@@ -107,17 +125,7 @@ func (a *App) ReviewCompleteAsyncRenderedCardAction(
 	failureCard func(sessionKey, errText string) map[string]any,
 	patchWarnMsg string,
 ) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncRenderedCardAction(a, action, sessionKey, toastText, preparingCard, run, failureCard, patchWarnMsg)
-}
-
-// ReviewRenderPreparingCard renders a preparing card for review operations.
-func (a *App) ReviewRenderPreparingCard(sessionKey, body string) map[string]any {
-	return renderReviewPreparingCard(a, sessionKey, body)
-}
-
-// ReviewRenderFailureCard renders a failure card for review operations.
-func (a *App) ReviewRenderFailureCard(sessionKey, errText, retryAction string) map[string]any {
-	return renderReviewFailureCard(a, sessionKey, errText, retryAction)
+	return completeAsyncRenderedCardAction(a.App, action, sessionKey, toastText, preparingCard, run, failureCard, patchWarnMsg)
 }
 
 // ---------------------------------------------------------------------------
@@ -147,4 +155,18 @@ func (a reviewWorkspaceProviderAdapter) ReviewDefaultWorkspaceID() string {
 
 func (a reviewWorkspaceProviderAdapter) ReviewFindWorkspace(workspaceID string) *config.Workspace {
 	return config.FindWorkspace(a.app.cfg, workspaceID)
+}
+
+type reviewGitProviderAdapter struct{}
+
+func (reviewGitProviderAdapter) ReviewResolveTarget(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
+	return appreview.NewGitService().ResolveTarget(cwd, target)
+}
+
+func (reviewGitProviderAdapter) ReviewListBranches(cwd string) ([]appreview.BranchOption, error) {
+	return appreview.NewGitService().ListBranches(cwd)
+}
+
+func (reviewGitProviderAdapter) ReviewListCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
+	return appreview.NewGitService().ListCommits(cwd, limit)
 }

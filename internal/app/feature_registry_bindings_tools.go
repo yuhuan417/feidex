@@ -2,7 +2,7 @@ package app
 
 import (
 	"feidex/internal/app/debugviewcmd"
-	apphistorycmd "feidex/internal/app/historycmd"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -15,7 +15,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			"review": {
 				Match: matchReviewCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return commandReview(a, msg, args)
+					return appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: nil,
@@ -27,7 +27,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.review" {
 				return nil, false
 			}
-			return newReviewFormService(a).renderReviewMenuCard(sessionKey), true
+			return newReviewFormServiceInner(a).RenderReviewMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
@@ -35,11 +35,11 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			case "menu.review":
 				return newMenuActionService(s.app).completeMenuReview(action, sessionKey)
 			case "menu.review.uncommitted":
-				return completeMenuReviewUncommitted(s.app, action, sessionKey)
+				return appreviewcmd.CompleteMenuReviewUncommitted(newReviewAppAdapter(s.app), action, sessionKey)
 			case "menu.review.base":
-				return completeMenuReviewBase(s.app, action, sessionKey)
+				return appreviewcmd.CompleteMenuReviewBase(newReviewAppAdapter(s.app), action, sessionKey)
 			case "menu.review.commit":
-				return completeMenuReviewCommit(s.app, action, sessionKey)
+				return appreviewcmd.CompleteMenuReviewCommit(newReviewAppAdapter(s.app), action, sessionKey)
 			case "menu.review.custom":
 				return completeMenuCommand(s.app, action, sessionKey, "/review custom", "menu.review")
 			default:
@@ -90,7 +90,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			"download": {
 				Match: exactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return debugviewcmd.CommandDownload(a, msg, args)
+					return debugviewcmd.CommandDownload(newDebugViewAppAdapter(a), msg, args)
 				},
 			},
 		},
@@ -98,7 +98,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.download" {
 				return nil, nil
 			}
-			return debugviewcmd.CompleteMenuDownload(s.app, action, actionSessionKey(action))
+			return debugviewcmd.CompleteMenuDownload(newDebugViewAppAdapter(s.app), action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.history"] = featureBinding{
@@ -106,7 +106,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			"history": {
 				Match: matchHistoryCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return apphistorycmd.NewService(a).CommandHistory(msg, args)
+					return newHistoryServiceInner(a).CommandHistory(msg, args)
 				},
 			},
 		},
@@ -172,7 +172,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			"usage": {
 				Match: exactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return debugviewcmd.NewUsageService(a).CommandUsage(msg, args)
+					return newUsageServiceInner(a).CommandUsage(msg, args)
 				},
 			},
 		},

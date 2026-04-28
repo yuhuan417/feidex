@@ -8,58 +8,48 @@ import (
 	"feidex/internal/state"
 )
 
-// ---------------------------------------------------------------------------
-// Adapter methods on *App — satisfy historycmd.App interface
-// ---------------------------------------------------------------------------
+type historyAppAdapter struct{ *App }
 
-// HistoryFeishu returns the Feishu bot client for the history service.
-func (a *App) HistoryFeishu() appcore.FeishuClient {
+func newHistoryAppAdapter(app *App) historyAppAdapter {
+	return historyAppAdapter{App: app}
+}
+
+func newHistoryServiceInner(app *App) apphistorycmd.Service {
+	return apphistorycmd.NewService(newHistoryAppAdapter(app))
+}
+
+func (a historyAppAdapter) HistoryFeishu() appcore.FeishuClient {
 	return a.feishu
 }
 
-// HistoryAppState returns the narrowed app state provider for history ops.
-func (a *App) HistoryAppState() apphistorycmd.AppStateProvider {
+func (a historyAppAdapter) HistoryAppState() apphistorycmd.AppStateProvider {
 	return a.State()
 }
 
-// HistoryConversationBackend returns the narrowed conversation backend
-// provider for the history service.
-func (a *App) HistoryConversationBackend() apphistorycmd.ConversationBackendProvider {
-	return historyConversationBackendAdapter{app: a}
+func (a historyAppAdapter) HistoryConversationBackend() apphistorycmd.ConversationBackendProvider {
+	return historyConversationBackendAdapter{app: a.App}
 }
 
-// HistoryCodexClient returns the current Codex RPC client.
-func (a *App) HistoryCodexClient() (apphistorycmd.CodexClient, error) {
-	return requireCodexClient(a)
+func (a historyAppAdapter) HistoryCodexClient() (apphistorycmd.CodexClient, error) {
+	return requireCodexClient(a.App)
 }
 
-// HistoryMakeSessionKey builds a session key from an inbound message.
-func (a *App) HistoryMakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a, msg)
+func (a historyAppAdapter) HistoryMakeSessionKey(msg *feishu.InboundMessage) string {
+	return makeSessionKey(a.App, msg)
 }
 
-// HistoryReplyInThreadEnabled reports whether reply-in-thread is enabled
-// for the given chat type.
-func (a *App) HistoryReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a, chatType)
+func (a historyAppAdapter) HistoryReplyInThreadEnabled(chatType string) bool {
+	return replyInThreadEnabled(a.App, chatType)
 }
 
-// HistoryMenuCardBody formats a menu card body with breadcrumb navigation.
-func (a *App) HistoryMenuCardBody(action, body string) string {
+func (a historyAppAdapter) HistoryMenuCardBody(action, body string) string {
 	return menuCardBody(action, body)
 }
 
-// HistoryCurrentThreadLabel returns the display label for the active thread.
-func (a *App) HistoryCurrentThreadLabel(sess *state.Session) string {
+func (a historyAppAdapter) HistoryCurrentThreadLabel(sess *state.Session) string {
 	return appthreadmenu.SessionCurrentThreadLabel(sess)
 }
 
-// ---------------------------------------------------------------------------
-// Internal adapter types
-// ---------------------------------------------------------------------------
-
-// historyConversationBackendAdapter wraps the conversation backend facade to
-// satisfy historycmd.ConversationBackendProvider.
 type historyConversationBackendAdapter struct {
 	app *App
 }

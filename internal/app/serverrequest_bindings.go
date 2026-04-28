@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	appreview "feidex/internal/app/review"
-	"feidex/internal/app/serverrequest"
 	appruntime "feidex/internal/app/runtime"
+	"feidex/internal/app/serverrequest"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -145,7 +145,7 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 	case "workspace_new", "workspace_clone":
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},
-			Card:  rawCard(newWorkspaceConfigService(a).renderWorkspaceMenuCard(pending.SessionKey)),
+			Card:  rawCard(newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	case "review_form":
 		body := reviewCancelledBody(pending)
@@ -202,7 +202,7 @@ func handleRootPendingTextResponse(a *App, msg *feishu.InboundMessage, pending *
 	svc := newPendingInputService(a)
 	switch pending.Kind {
 	case "workspace_new":
-		return svc.completeWorkspaceNewText(msg, pending)
+		return newWorkspaceManagementServiceInner(a).CompleteWorkspaceNewText(msg, pending)
 	case claudePlanModePendingKind:
 		return svc.completeClaudePlanModeText(msg, pending)
 	default:

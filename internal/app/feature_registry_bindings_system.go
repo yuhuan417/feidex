@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -18,7 +17,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 					return exactOrSingleArgCommand(fields, "on", "off", "logs")
 				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return appdebugviewcmd.NewDebugService(a).CommandDebug(msg, args)
+					return newDebugServiceInner(a).CommandDebug(msg, args)
 				},
 			},
 		},
@@ -27,15 +26,15 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.debug.logs" {
 				return nil, false
 			}
-			return appdebugviewcmd.NewDebugService(a).RenderDebugLogsCard(sessionKey), true
+			return newDebugServiceInner(a).RenderDebugLogsCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.debug":
-				return appdebugviewcmd.NewDebugService(s.app).CompleteMenuDebug(action, sessionKey)
+				return newDebugServiceInner(s.app).CompleteMenuDebug(action, sessionKey)
 			case "menu.debug.logs":
-				return appdebugviewcmd.NewDebugService(s.app).CompleteMenuDebugLogs(action, sessionKey)
+				return newDebugServiceInner(s.app).CompleteMenuDebugLogs(action, sessionKey)
 			default:
 				return nil, nil
 			}
@@ -136,7 +135,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			"upgrade": {
 				Match: matchUpgradeCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newAppUpgradeService(a).commandUpgrade(msg, args)
+					return newUpgradeServiceInner(a).CommandUpgrade(msg, args)
 				},
 			},
 		},
