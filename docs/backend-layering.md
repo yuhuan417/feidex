@@ -53,3 +53,4 @@
 - 新的 backend 启停、runtime 维护、配置入口分发，优先放到 runtime / configuration facade。
 - 新的 Codex / Claude 专有调用，留在 implementation layer，不要直接散落到 Feishu 编排入口。
 - 如果两个 backend 都需要同一类抽象，先抽 capability / facade，再复用到底层实现。
+- 在 [docs/internal-app-refactor-execution-plan.md](/home/yuhuan/feidex/docs/internal-app-refactor-execution-plan.md) 执行期间，不要继续在 root `internal/app` 里新增 backend-specific wrapper、alias、或 scattered `switch configuredBackend(...)` 逻辑；新差异必须优先落到 backend layer。

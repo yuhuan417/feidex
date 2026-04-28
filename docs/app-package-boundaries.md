@@ -178,6 +178,7 @@ When a new helper is pure or can be expressed behind a small interface, place it
 - Subpackages must not import `internal/app`; use exported data structures or narrow interfaces instead.
 - Lifecycle-sensitive code stays in `internal/app` until its protocol contract is explicit and covered by tests.
 - Keep compatibility wrappers in `internal/app` only as migration shims; new code should import the owning subpackage directly when it does not need app coordination. Existing aliases for app-wide vocabulary should be removed once dependent call sites are migrated.
+- During the `internal/app` refactor plan in [docs/internal-app-refactor-execution-plan.md](/home/yuhuan/feidex/docs/internal-app-refactor-execution-plan.md), do not add new root-level `*_alias.go` files or new root-level `*_adapters.go` files unless the same PR removes a larger legacy shim.
 - Any change touching approvals, turn lifecycle, thread lifecycle, review submission, compaction, tool input, or server requests must be checked against the state-machine audit before merge.
 - Prefer pure packages with standard-library dependencies. If a subpackage needs `config`, `state`, `codexrpc`, or `feishu`, document why that dependency belongs below the app coordinator.
 
