@@ -5,6 +5,7 @@ import (
 	"time"
 
 	appupgradecmd "feidex/internal/app/upgradecmd"
+	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 
@@ -70,6 +71,23 @@ func newAppUpgradeService(app *App) appUpgradeService {
 		StateFunc: func() appupgradecmd.UpgradeState {
 			return app.State()
 		},
+		CurrentWorkspaceFunc: func(msg *feishu.InboundMessage) (string, *config.Workspace) {
+			sessionKey, _, ws := newWorkspaceConfigService(app).currentWorkspaceForMessage(msg)
+			return sessionKey, ws
+		},
+		WorkspaceForSessionFunc: func(sessionKey string) *config.Workspace {
+			wsID := defaultWorkspaceID(app)
+			if sess := app.State().Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+				wsID = sess.WorkspaceID
+			}
+			return config.FindWorkspace(app.cfg, wsID)
+		},
+		RenderPathPickerCardFunc: func(requestID string, payload appupgradecmd.PathPickerPayload) (map[string]any, error) {
+			return newWorkspaceRenderService(app).renderPathPickerCard(requestID, payload)
+		},
+		DataDirFunc: func() string {
+			return app.cfg.DataDir
+		},
 		DaemonNameFunc: func() string {
 			app.configMu.RLock()
 			defer app.configMu.RUnlock()
@@ -83,12 +101,6 @@ func newAppUpgradeService(app *App) appUpgradeService {
 		},
 		MenuCardBodyFunc: func(action, body string) string {
 			return menuCardBody(action, body)
-		},
-		LocalPickFunc: func(msg *feishu.InboundMessage) error {
-			return svc.commandUpgradeLocalPick(msg)
-		},
-		LocalPathFunc: func(msg *feishu.InboundMessage, rawPath string) error {
-			return svc.commandUpgradeLocalPath(msg, rawPath)
 		},
 	}
 	svc = appUpgradeService{

@@ -568,6 +568,85 @@ find internal/app -maxdepth 1 -name '*alias*.go' -o -name '*_alias.go'
 
 ---
 
+## 阶段 8: 继续瘦根包，收回重复 orchestration
+
+### 目标
+
+在不改协议状态机语义的前提下，继续把已经有 owner package 的逻辑从 root `app` 包收回去，优先删除“root 重复实现”和“root backend helper”。
+
+### 本阶段范围
+
+本阶段只做下面 4 类收敛，不额外开新 feature:
+
+1. `pending queue` 的实际实现统一收敛到 [internal/app/submission](/home/yuhuan/feidex/internal/app/submission)，root `app` 只保留薄包装。
+2. `conversation backend` 的 resume / interrupt / steer / startup-recovery helper 收敛到 [internal/app/convbackend](/home/yuhuan/feidex/internal/app/convbackend)。
+3. `local upgrade` 的 picker / staging / confirm 流程收敛到 [internal/app/upgradecmd](/home/yuhuan/feidex/internal/app/upgradecmd)。
+4. 同步更新边界文档，明确这几块 owner 已经迁移完成。
+
+### 必做动作
+
+1. 删除 root `app` 中和 [internal/app/submission/pending_queue.go](/home/yuhuan/feidex/internal/app/submission/pending_queue.go) 重复的 pending queue 业务实现。
+   - [internal/app/pending_inputs.go](/home/yuhuan/feidex/internal/app/pending_inputs.go) 只允许保留 root 兼容包装和少量测试兼容符号。
+   - 真实逻辑必须由 `submission.PendingQueueService` 提供。
+2. 把以下 helper 从 root `app` 迁到 [internal/app/convbackend](/home/yuhuan/feidex/internal/app/convbackend):
+   - [internal/app/conversation_backend_helpers.go](/home/yuhuan/feidex/internal/app/conversation_backend_helpers.go)
+   - [internal/app/conversation_backend_startup.go](/home/yuhuan/feidex/internal/app/conversation_backend_startup.go)
+3. 把以下本地升级流程迁到 [internal/app/upgradecmd](/home/yuhuan/feidex/internal/app/upgradecmd):
+   - `commandUpgradeLocalPick`
+   - `commandUpgradeLocalPath`
+   - `createUpgradeLocalPickerRequest`
+   - `createLocalUpgradeRequest`
+   - `completeUpgradeLocalPick`
+   - `completeUpgradeLocalBinaryConfirm`
+   - `stageLocalUpgradeArtifact`
+4. 更新 [docs/app-package-boundaries.md](/home/yuhuan/feidex/docs/app-package-boundaries.md)，把：
+   - `submission` 标记为 pending queue / reaction owner
+   - `convbackend` 标记为 conversation resume / startup recovery owner
+   - `upgradecmd` 标记为 local upgrade orchestration owner
+
+### 协议核对要求
+
+本阶段触及的协议敏感区域包括:
+
+- `SM-04` `TurnLifecycleCore`
+- `SM-05` `TurnSteerContinuation`
+- `SM-09` `CommandApproval`
+- `SM-10` `FileApproval`
+- `SM-11` `ToolRequestUserInput`
+- `SM-22` `PermissionsApproval`
+- `SM-23` `McpElicitationRequest`
+
+要求:
+
+- 不改变 pending request 的创建、reply、resolved、resume 时序。
+- 不改变 Codex `turn/steer`、`thread/resume`、`thread/start` 的请求形状。
+- 不改变 Claude session resume / interrupt / user-input resolve 的外部行为。
+
+### 必须清零的搜索项
+
+阶段结束时，下面两个 root 重复实现文件必须删除或降为纯薄包装:
+
+```bash
+rg -n 'func \\(s pendingQueueService\\) ' internal/app/pending_inputs.go
+rg -n 'func (resumeClaudeSelectedThread|resumeCodexSelectedThread|interruptCodexActiveTurn|continueCodexActiveTurn|tryCodexReplyContinuation|recoverClaudeStartupConversation|recoverCodexStartupConversation)\\(' internal/app
+```
+
+### 验收标准
+
+- root `app` 不再保留 pending queue 的完整业务实现。
+- `conversation backend` helper / startup recovery 不再以 root 文件族存在。
+- `local upgrade` 的主要业务流进入 `upgradecmd`，root 仅保留 wrapper。
+- `go test ./...` 通过，且关键状态机回归测试保持通过。
+
+### 建议验证命令
+
+```bash
+./scripts/with_tmp_go_cache.sh go test ./...
+./scripts/with_tmp_go_cache.sh go test ./internal/app -run 'Test(.*CriticalPath.*|.*StateMachine.*|.*Pending.*|.*Approval.*|.*SubmissionQueueClaude.*|.*CodexTurnRecovery.*|.*Upgrade.*)'
+```
+
+---
+
 ## 6. 推荐 PR 切分
 
 不要按“目录”切 PR，要按“可验证的结构增量”切。
@@ -584,6 +663,7 @@ find internal/app -maxdepth 1 -name '*alias*.go' -o -name '*_alias.go'
 8. PR-8: 阶段 5
 9. PR-9: 阶段 6
 10. PR-10: 阶段 7
+11. PR-11: 阶段 8
 
 规则:
 

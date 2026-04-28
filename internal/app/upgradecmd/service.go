@@ -13,6 +13,7 @@ import (
 	"time"
 
 	appdelivery "feidex/internal/app/delivery"
+	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
@@ -48,6 +49,17 @@ type App interface {
 	UpgradeFeishu() FeishuClient
 	// UpgradeState returns the narrowed app state provider for upgrade ops.
 	UpgradeState() UpgradeState
+	// UpgradeCurrentWorkspace resolves the active session key and workspace
+	// for an inbound message.
+	UpgradeCurrentWorkspace(msg *feishu.InboundMessage) (string, *config.Workspace)
+	// UpgradeWorkspaceForSession resolves the current workspace for a session.
+	UpgradeWorkspaceForSession(sessionKey string) *config.Workspace
+	// UpgradeRenderPathPickerCard renders the path picker card used by the
+	// local-upgrade flow.
+	UpgradeRenderPathPickerCard(requestID string, payload PathPickerPayload) (map[string]any, error)
+	// UpgradeDataDir returns the application data directory for staged local
+	// upgrade artifacts.
+	UpgradeDataDir() string
 	// DaemonServiceName returns the daemon service name from config (thread-safe).
 	DaemonServiceName() string
 	// MakeSessionKey builds a session key from an inbound message.
@@ -57,10 +69,6 @@ type App interface {
 	ReplyInThreadEnabled(chatType string) bool
 	// MenuCardBody formats a menu card body with breadcrumb navigation.
 	MenuCardBody(action, body string) string
-	// CommandUpgradeLocalPick handles the /upgrade local pick sub-command.
-	CommandUpgradeLocalPick(msg *feishu.InboundMessage) error
-	// CommandUpgradeLocalPath handles the /upgrade path <PATH> sub-command.
-	CommandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string) error
 }
 
 // FeishuClient is the narrow interface for the Feishu bot client methods
@@ -72,31 +80,37 @@ type FeishuClient interface {
 
 // DefaultApp provides an App implementation backed by function callbacks.
 type DefaultApp struct {
-	FeishuClientFunc   func() FeishuClient
-	StateFunc          func() UpgradeState
-	DaemonNameFunc     func() string
-	MakeSessionKeyFunc func(msg *feishu.InboundMessage) string
-	ReplyInThreadFunc  func(chatType string) bool
-	MenuCardBodyFunc   func(action, body string) string
-	LocalPickFunc      func(msg *feishu.InboundMessage) error
-	LocalPathFunc      func(msg *feishu.InboundMessage, rawPath string) error
+	FeishuClientFunc         func() FeishuClient
+	StateFunc                func() UpgradeState
+	CurrentWorkspaceFunc     func(msg *feishu.InboundMessage) (string, *config.Workspace)
+	WorkspaceForSessionFunc  func(sessionKey string) *config.Workspace
+	RenderPathPickerCardFunc func(requestID string, payload PathPickerPayload) (map[string]any, error)
+	DataDirFunc              func() string
+	DaemonNameFunc           func() string
+	MakeSessionKeyFunc       func(msg *feishu.InboundMessage) string
+	ReplyInThreadFunc        func(chatType string) bool
+	MenuCardBodyFunc         func(action, body string) string
 }
 
 func (a *DefaultApp) UpgradeFeishu() FeishuClient { return a.FeishuClientFunc() }
 func (a *DefaultApp) UpgradeState() UpgradeState  { return a.StateFunc() }
-func (a *DefaultApp) DaemonServiceName() string   { return a.DaemonNameFunc() }
+func (a *DefaultApp) UpgradeCurrentWorkspace(msg *feishu.InboundMessage) (string, *config.Workspace) {
+	return a.CurrentWorkspaceFunc(msg)
+}
+func (a *DefaultApp) UpgradeWorkspaceForSession(sessionKey string) *config.Workspace {
+	return a.WorkspaceForSessionFunc(sessionKey)
+}
+func (a *DefaultApp) UpgradeRenderPathPickerCard(requestID string, payload PathPickerPayload) (map[string]any, error) {
+	return a.RenderPathPickerCardFunc(requestID, payload)
+}
+func (a *DefaultApp) UpgradeDataDir() string    { return a.DataDirFunc() }
+func (a *DefaultApp) DaemonServiceName() string { return a.DaemonNameFunc() }
 func (a *DefaultApp) MakeSessionKey(msg *feishu.InboundMessage) string {
 	return a.MakeSessionKeyFunc(msg)
 }
 func (a *DefaultApp) ReplyInThreadEnabled(chatType string) bool { return a.ReplyInThreadFunc(chatType) }
 func (a *DefaultApp) MenuCardBody(action, body string) string {
 	return a.MenuCardBodyFunc(action, body)
-}
-func (a *DefaultApp) CommandUpgradeLocalPick(msg *feishu.InboundMessage) error {
-	return a.LocalPickFunc(msg)
-}
-func (a *DefaultApp) CommandUpgradeLocalPath(msg *feishu.InboundMessage, rawPath string) error {
-	return a.LocalPathFunc(msg, rawPath)
 }
 
 // ---------------------------------------------------------------------------
@@ -348,12 +362,12 @@ func (s UpgradeService) CommandUpgrade(msg *feishu.InboundMessage, args []string
 		if len(args) != 1 {
 			return fmt.Errorf(UpgradeCommandUsage)
 		}
-		return s.app.CommandUpgradeLocalPick(msg)
+		return s.CommandUpgradeLocalPick(msg)
 	case "path":
 		if len(args) < 2 {
 			return fmt.Errorf(UpgradeCommandUsage)
 		}
-		return s.app.CommandUpgradeLocalPath(msg, strings.Join(args[1:], " "))
+		return s.CommandUpgradeLocalPath(msg, strings.Join(args[1:], " "))
 	}
 	if len(args) > 1 {
 		return fmt.Errorf(UpgradeCommandUsage)

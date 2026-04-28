@@ -45,7 +45,7 @@ Current owner surface:
 
 - conversation start/interrupt/history/usage/compaction operations
 - workspace thread/session binding helpers
-- backend-specific fork/startup helpers exposed behind a common app-facing facade
+- backend-specific thread resume / steer / startup-recovery helpers exposed behind a common app-facing facade
 
 ### `internal/app/delivery`
 
@@ -88,6 +88,36 @@ Current owner surface:
 - review target constants and `TargetSpec`
 - branch/commit option models and labels
 - Git repository, branch, commit, diff, and working-tree probes used by review flows
+
+### `internal/app/submission`
+
+Responsibility: submission queue orchestration, pending queue operations, staged-image helpers, and message-reaction bookkeeping that do not require importing root `internal/app`.
+
+Allowed dependencies: lower `internal/app/*` packages plus `config`, `state`, `feishu`, `codexrpc`, and Go standard library.
+
+Must not: import `internal/app`, route Feishu events directly, patch cards directly, or own backend runtime startup/shutdown.
+
+Current owner surface:
+
+- submission enqueueing and queue advancement
+- pending queue discard / staged-image handling
+- source-message reaction updates for queued / running / discarded submissions
+- submission-local pure helpers and typed queue DTOs
+
+### `internal/app/upgradecmd`
+
+Responsibility: upgrade command orchestration and upgrade card flows, including local-binary upgrade picker / staging logic.
+
+Allowed dependencies: lower `internal/app/*` packages plus `config`, `state`, `release`, `daemon`, `feishu`, and Go standard library.
+
+Must not: import `internal/app`, mutate backend runtime fields directly, or own backend-specific smoke/restart behavior.
+
+Current owner surface:
+
+- `/upgrade` command parsing and pending-request lifecycle
+- release selection / confirm card rendering
+- local upgrade path picker, artifact staging, and confirm-card preparation
+- daemon upgrade request creation and upgrade payload persistence
 
 ### `internal/app/runtime`
 
@@ -236,3 +266,6 @@ These areas still have acceptable root glue, but further extractions should foll
 - `quietmode` — extracted as `internal/app/quietmode` with pure delivery predicates.
 - `sessionctx` — extracted as `internal/app/sessionctx` with thread lifecycle and effective-value computation.
 - `backendcaps` / `backend` / `convbackend` — extracted to own backend vocabulary, driver, and conversation implementation boundaries instead of root-level facade file families.
+- `submission` — reclaimed pending queue staging / discard / reaction bookkeeping; root `pending_inputs.go` is now compatibility glue.
+- `convbackend` — reclaimed Codex / Claude resume, steer, and startup-recovery helpers; root helper files were removed.
+- `upgradecmd` — reclaimed local upgrade picker, artifact staging, and local confirm-card preparation.

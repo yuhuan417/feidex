@@ -234,9 +234,15 @@ func (a pendingQueueAppAdapter) PendingQueueDefaultWorkspaceID() string {
 	return defaultWorkspaceID(a.app)
 }
 func (a pendingQueueAppAdapter) PendingQueueAddReaction(ctx context.Context, messageID, emoji string) error {
+	if a.app == nil || a.app.feishu == nil {
+		return nil
+	}
 	return a.app.feishu.AddReaction(ctx, messageID, emoji)
 }
 func (a pendingQueueAppAdapter) PendingQueueRemoveReaction(ctx context.Context, messageID, emoji string) error {
+	if a.app == nil || a.app.feishu == nil {
+		return nil
+	}
 	return a.app.feishu.RemoveReaction(ctx, messageID, emoji)
 }
 func (a pendingQueueAppAdapter) PendingQueueLogSessionState(event, sessionKey string, sess *state.Session) {

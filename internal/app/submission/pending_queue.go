@@ -280,6 +280,27 @@ func (s PendingQueueService) ClearSubmissionProcessingReactions(sub *state.Submi
 	s.clearMessageProcessingReactions(SourceMessageIDs(sub))
 }
 
+// MarkMessagesQueuedReactions marks arbitrary messages with the queue emoji.
+func (s PendingQueueService) MarkMessagesQueuedReactions(messageIDs []string) {
+	s.markMessagesQueuedReactions(messageIDs)
+}
+
+// MarkMessagesTypingReactions marks arbitrary messages with the typing emoji.
+func (s PendingQueueService) MarkMessagesTypingReactions(messageIDs []string) {
+	s.markMessagesTypingReactions(messageIDs)
+}
+
+// MarkMessagesDiscardedReactions marks arbitrary messages as discarded.
+func (s PendingQueueService) MarkMessagesDiscardedReactions(messageIDs []string) {
+	s.markMessagesDiscardedReactions(messageIDs)
+}
+
+// ClearMessageProcessingReactions clears queue and typing reactions from
+// arbitrary messages.
+func (s PendingQueueService) ClearMessageProcessingReactions(messageIDs []string) {
+	s.clearMessageProcessingReactions(messageIDs)
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
