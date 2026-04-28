@@ -109,7 +109,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Lookup: appclauderuntime.LookupDeps{
 			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
-				return findSubmissionByTurn(app, threadID, turnID)
+				return newSubmissionQueueServiceFromApp(app).FindSubmissionByTurn(threadID, turnID)
 			},
 			GetSession: func(sessionKey string) *state.Session {
 				return app.State().Session(sessionKey)

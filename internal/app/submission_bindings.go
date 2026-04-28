@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	appconvbackend "feidex/internal/app/convbackend"
 	appsubmission "feidex/internal/app/submission"
@@ -155,6 +156,46 @@ func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.W
 }
 func (a submissionAppAdapter) SubmissionQueueRequireCodexClient() (CodexClient, error) {
 	return requireCodexClient(a.app)
+}
+func (a submissionAppAdapter) SubmissionQueueClaudeClient() appsubmission.QueueClaudeClient {
+	if a.app.claude == nil {
+		return nil
+	}
+	return claudeClientAdapter{claude: a.app.claude}
+}
+func (a submissionAppAdapter) SubmissionQueueConfiguredClaudeModel() string {
+	return strings.TrimSpace(a.app.cfg.Claude.Model)
+}
+func (a submissionAppAdapter) SubmissionQueueNextLocalID(prefix string) (string, error) {
+	return a.app.State().NextLocalID(prefix)
+}
+func (a submissionAppAdapter) SubmissionQueueDeletePendingRequests(match func(*state.PendingRequest) bool) {
+	a.app.State().DeletePendingRequests(match)
+}
+func (a submissionAppAdapter) SubmissionQueueDeleteMessageLinks(match func(*state.MessageLink) bool) {
+	a.app.State().DeleteMessageLinks(match)
+}
+func (a submissionAppAdapter) SubmissionQueueUpdateSubmission(id string, mutate func(*state.Submission)) error {
+	return a.app.State().UpdateSubmission(id, mutate)
+}
+func (a submissionAppAdapter) SubmissionQueueSessions() []*state.Session {
+	return a.app.State().Sessions()
+}
+
+// ---------------------------------------------------------------------------
+// Claude client adapter
+// ---------------------------------------------------------------------------
+
+type claudeClientAdapter struct{ claude ClaudeCore }
+
+func (a claudeClientAdapter) EnsureSession(ctx context.Context, sessionKey string, ws *config.Workspace, resumeThreadID, model string) (string, error) {
+	return a.claude.EnsureSession(ctx, sessionKey, ws, resumeThreadID, model)
+}
+func (a claudeClientAdapter) StartTurn(ctx context.Context, sessionKey, threadID, turnID, prompt string) error {
+	return a.claude.StartTurn(ctx, sessionKey, threadID, turnID, prompt)
+}
+func (a claudeClientAdapter) StartSteerTurn(ctx context.Context, sessionKey, threadID, turnID, prompt, steerSubmissionID string) error {
+	return a.claude.StartSteerTurn(ctx, sessionKey, threadID, turnID, prompt, steerSubmissionID)
 }
 
 // ---------------------------------------------------------------------------

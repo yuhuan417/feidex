@@ -62,6 +62,10 @@ func (s runtimeStateService) boundSubmissionForTurn(turnID string) (string, *sta
 	return tracker.BoundSubmissionForTurn(turnID)
 }
 
+func (s runtimeStateService) BoundSubmissionForTurn(turnID string) (string, *state.Submission) {
+	return s.boundSubmissionForTurn(turnID)
+}
+
 func (s runtimeStateService) clearTurnBinding(turnID string) {
 	tracker := s.turnBindingTracker()
 	if tracker != nil {

@@ -15,7 +15,7 @@ import (
 type turnStreamSubmissionFinderAdapter struct{ app *App }
 
 func (a turnStreamSubmissionFinderAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
-	return findSubmissionByTurn(a.app, threadID, turnID)
+	return newSubmissionQueueServiceFromApp(a.app).FindSubmissionByTurn(threadID, turnID)
 }
 
 type turnStreamTurnLifecycleAdapter struct{ app *App }

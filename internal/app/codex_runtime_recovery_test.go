@@ -170,7 +170,7 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 		t.Fatalf("queueSubmission() error = %v", err)
 	}
 
-	if err := newSubmissionCoordinator(a).startNextSubmissionWithFailureNotice(sessionKey, true); err != nil {
+	if err := newSubmissionQueueServiceFromApp(a).StartNextSubmissionWithFailureNotice(sessionKey, true); err != nil {
 		t.Fatalf("startNextSubmissionWithFailureNotice() error = %v", err)
 	}
 

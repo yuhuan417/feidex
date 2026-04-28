@@ -65,6 +65,8 @@ type App interface {
 	SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error)
 	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams
 	SubmissionQueueRequireCodexClient() (appcore.CodexClient, error)
+	SubmissionQueueClaudeClient() QueueClaudeClient
+	SubmissionQueueConfiguredClaudeModel() string
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,11 @@ type QueueAppStateProvider interface {
 	MarkSubmissionRunning(id, threadID, turnID string) error
 	FinalizeSubmission(id, status string) error
 	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	NextLocalID(prefix string) (string, error)
+	DeletePendingRequests(match func(*state.PendingRequest) bool)
+	DeleteMessageLinks(match func(*state.MessageLink) bool)
+	UpdateSubmission(id string, mutate func(*state.Submission)) error
+	Sessions() []*state.Session
 }
 
 // QueueSkillResolver narrows skill resolution.
@@ -124,6 +131,9 @@ type QueueRuntimeStateProvider interface {
 	ClearPendingTurnBindingForSubmission(threadID, submissionID string)
 	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
 	MarkTurnStartedAt(turnID string, startedAt time.Time)
+	ClearTurnBinding(turnID string)
+	ClearTurnItemStates(turnID string)
+	BoundSubmissionForTurn(turnID string) (string, *state.Submission)
 }
 
 // QueueRuntimeMaintenanceProvider narrows runtime maintenance.
@@ -140,6 +150,7 @@ type QueueReplyContinuationProvider interface {
 // QueueTurnStreamProvider narrows turn stream.
 type QueueTurnStreamProvider interface {
 	NoteTurnStarted(sessionKey string, sub *state.Submission)
+	DeleteTurnStream(turnID string)
 }
 
 // QueueAutoRetryProvider narrows auto retry.
@@ -157,6 +168,13 @@ type QueueBackendRuntimeProvider interface {
 	ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session
 	DropThreadLineageAfterStartFailure(err error) bool
 	DeferQueuedSubmissionsDuringRecovery() bool
+}
+
+// QueueClaudeClient narrows the Claude backend client for submission startup.
+type QueueClaudeClient interface {
+	EnsureSession(ctx context.Context, sessionKey string, ws *config.Workspace, resumeThreadID, model string) (string, error)
+	StartTurn(ctx context.Context, sessionKey, threadID, turnID, prompt string) error
+	StartSteerTurn(ctx context.Context, sessionKey, threadID, turnID, prompt, steerSubmissionID string) error
 }
 
 // QueueInflightMode represents the inflight mode for session submissions.

@@ -123,6 +123,8 @@ func (s turnStreamService) deleteTurnStream(turnID string) {
 	s.service.DeleteStream(turnID)
 }
 
+func (s turnStreamService) DeleteTurnStream(turnID string) { s.deleteTurnStream(turnID) }
+
 func (s turnStreamService) markTurnStreamFinal(turnID string) {
 	s.service.MarkStreamFinal(turnID)
 }

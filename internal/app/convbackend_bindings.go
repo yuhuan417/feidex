@@ -164,9 +164,9 @@ func (a convBackendConversationAdapter) RecoverClaudeStartup(app appconvbackend.
 
 func (a convBackendConversationAdapter) StartNextSubmission(app appconvbackend.App, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	if appcore.ConfiguredBackend(app) == "claude" {
-		return newClaudeSubmissionService(app.(*App)).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+		return newSubmissionQueueServiceFromApp(app.(*App)).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 	}
-	return newSubmissionCoordinator(app.(*App)).startNextCodexSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	return newSubmissionQueueServiceFromApp(app.(*App)).StartNextCodexSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 func (a convBackendConversationAdapter) MarkThreadLive(app appconvbackend.App, sessionKey, threadID string) {

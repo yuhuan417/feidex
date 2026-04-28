@@ -78,10 +78,10 @@ func newReplyContinuationService(a *App) replyContinuationService {
 		return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
 	}
 	svc.StartSubmission = func(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
-		return newClaudeSubmissionService(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 	}
 	svc.StartSteerSubmission = func(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
-		return newClaudeSubmissionService(a).startNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
+		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
 	}
 	svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
 		return resolveInboundAttachments(a, msg, workspaceID, sessionKey)

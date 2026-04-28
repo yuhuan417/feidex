@@ -219,7 +219,7 @@ func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, session
 }
 
 func startNextSubmission(a *App, sessionKey string) error {
-	return newSubmissionCoordinator(a).startNextSubmission(sessionKey)
+	return newSubmissionQueueServiceFromApp(a).StartNextSubmission(sessionKey)
 }
 
 func buildTurnSandboxPolicy(mode string) map[string]any {

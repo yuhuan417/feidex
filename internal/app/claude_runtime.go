@@ -2,14 +2,11 @@ package app
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 const claudePlanModePendingKind = "claude_exit_plan_mode"
@@ -148,26 +145,4 @@ func claudePlanFilePathFromTool(toolName string, input map[string]interface{}) s
 
 func isFatalClaudeSessionError(state *claudeSessionState, event claudecli.ErrorEvent) bool {
 	return appclauderuntime.IsFatalSessionErrorFromState(state, event)
-}
-
-func buildClaudePrompt(sub *state.Submission) string {
-	if sub == nil {
-		return ""
-	}
-	parts := make([]string, 0, len(sub.Skills)+1+len(sub.Attachments))
-	for _, skill := range sub.Skills {
-		if strings.TrimSpace(skill.Name) == "" && strings.TrimSpace(skill.Path) == "" {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("Use skill `%s` (`%s`) if it is available in this Claude session.", firstNonEmpty(strings.TrimSpace(skill.Name), "skill"), firstNonEmpty(strings.TrimSpace(skill.Path), "-")))
-	}
-	if text := strings.TrimSpace(sub.InputText); text != "" {
-		parts = append(parts, text)
-	}
-	for _, attachment := range sub.Attachments {
-		if prompt := attachmentPrompt(attachment); prompt != "" {
-			parts = append(parts, prompt)
-		}
-	}
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
 }

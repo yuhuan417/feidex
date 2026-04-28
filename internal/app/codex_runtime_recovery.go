@@ -44,7 +44,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 			return sessionShouldStartNextSubmissionAsync(sess)
 		},
 		StartNextSubmissionAsync: func(sessionKey, reason string) {
-			newSubmissionCoordinator(a).startNextSubmissionAsync(sessionKey, reason)
+			newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)
 		},
 	}
 }

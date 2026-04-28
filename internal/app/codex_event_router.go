@@ -54,7 +54,7 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 		newTurnStreamService(a).recordTurnError(threadID, turnID, message)
 	}
 	router.UpdateSubmissionByTurn = func(threadID, turnID string, mutate func(*state.Submission)) {
-		updateSubmissionByTurn(a, threadID, turnID, mutate)
+		newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn(threadID, turnID, mutate)
 	}
 	router.ResolveServerPendingRequest = func(requestID string) *state.PendingRequest {
 		return newRuntimeStateService(a).resolveServerPendingRequest(requestID)
@@ -84,7 +84,7 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 		replyCodexError(a, requestID, code, message)
 	}
 	router.FindSubmissionByTurn = func(threadID, turnID string) (string, *state.Submission) {
-		return findSubmissionByTurn(a, threadID, turnID)
+		return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 	}
 	router.FindWorkspaceCwdForSubmission = func(sub *state.Submission) string {
 		if sub == nil {

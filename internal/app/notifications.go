@@ -136,5 +136,5 @@ func finshSteerSubmissionsForThread(a *App, threadID, status string) {
 }
 
 func startNextSubmissionAsync(a *App, sessionKey, source string) {
-	newSubmissionCoordinator(a).startNextSubmissionAsync(sessionKey, source)
+	newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, source)
 }

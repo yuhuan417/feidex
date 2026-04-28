@@ -72,7 +72,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 			return newRuntimeStateService(a).hasOpenPendingRequestForTurn(threadID, turnID, excludeID)
 		},
 		FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
-			return findSubmissionByTurn(a, threadID, turnID)
+			return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 		},
 		DeliverPendingCard: func(sub *state.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{

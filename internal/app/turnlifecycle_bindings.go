@@ -40,7 +40,7 @@ func (a *App) TurnLifecycleOutboundCard() appturnlifecycle.OutboundCardProvider 
 }
 
 func (a *App) TurnLifecycleSubmissionDispatch() appturnlifecycle.SubmissionDispatchProvider {
-	return newSubmissionCoordinator(a)
+	return submissionDispatchAdapter{app: a}
 }
 
 func (a *App) TurnLifecycleAutoRetry() appturnlifecycle.AutoRetryProvider {
@@ -76,7 +76,7 @@ func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool 
 }
 
 func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
-	return findSubmissionByTurn(a, threadID, turnID)
+	return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 }
 
 func (a *App) LogSessionState(event, sessionKey string, sess *state.Session) {
