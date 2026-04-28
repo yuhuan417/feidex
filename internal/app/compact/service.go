@@ -81,8 +81,8 @@ func SessionHasActiveWork(sess *state.Session) bool {
 	if sessionctx.HasActiveOperations(sess) {
 		return true
 	}
-	switch strings.TrimSpace(sess.Status) {
-	case SessionStatusCompacting, "turn_starting":
+	switch state.NormalizeSessionStatus(sess.Status) {
+	case state.SessionStatusCompacting, state.SessionStatusTurnStarting:
 		return true
 	default:
 		return false
@@ -191,7 +191,7 @@ func (s Service) StartThreadCompaction(sessionKey string) (*state.Session, error
 		return nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
 	previousStatus := strings.TrimSpace(sess.Status)
-	sess.Status = SessionStatusCompacting
+	sess.Status = state.SessionStatusCompacting.String()
 	if err := store.SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func (s Service) BindStandaloneCompactTurn(threadID, turnID string) bool {
 		if currentTurn := sessionctx.ForegroundOperation(sess); currentTurn != nil && strings.TrimSpace(currentTurn.TurnID) != "" && strings.TrimSpace(currentTurn.TurnID) != turnID {
 			continue
 		}
-		if strings.TrimSpace(sess.Status) != SessionStatusCompacting {
+		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
 			continue
 		}
 		sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
@@ -247,7 +247,7 @@ func (s Service) BindStandaloneCompactTurn(threadID, turnID string) bool {
 			ThreadID: threadID,
 			TurnID:   turnID,
 		})
-		sess.Status = SessionStatusCompacting
+		sess.Status = state.SessionStatusCompacting.String()
 		return store.SaveSession(sess) == nil
 	}
 	return false
@@ -285,7 +285,7 @@ func (s Service) CompleteStandaloneCompactTurn(threadID, turnID string) bool {
 		if turnID != "" && sessionctx.FindActiveOperationByTurn(sess, turnID) == nil && sessionctx.HasActiveOperations(sess) {
 			continue
 		}
-		if strings.TrimSpace(sess.Status) != SessionStatusCompacting && sessionctx.FindActiveOperationByThread(sess, threadID) == nil {
+		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && sessionctx.FindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
 		resolvedTurnID := strings.TrimSpace(turnID)
@@ -296,9 +296,9 @@ func (s Service) CompleteStandaloneCompactTurn(threadID, turnID string) bool {
 		}
 		sessionctx.RemoveActiveOperation(sess, "", resolvedTurnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-			sess.Status = "queued"
+			sess.Status = state.SessionStatusQueued.String()
 		} else {
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 		if err := store.SaveSession(sess); err != nil {
 			return false
@@ -352,9 +352,9 @@ func (s Service) FinishStandaloneCompactTurn(threadID, turnID, status string) bo
 		}
 		sessionctx.RemoveActiveOperation(sess, "", turnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-			sess.Status = "queued"
+			sess.Status = state.SessionStatusQueued.String()
 		} else {
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 		if err := store.SaveSession(sess); err != nil {
 			return false
@@ -391,7 +391,7 @@ func (s Service) FailStandaloneCompactTurn(threadID, turnID, message string) boo
 		if turnID != "" && sessionctx.FindActiveOperationByTurn(sess, turnID) == nil && sessionctx.HasActiveOperations(sess) {
 			continue
 		}
-		if strings.TrimSpace(sess.Status) != SessionStatusCompacting && sessionctx.FindActiveOperationByThread(sess, threadID) == nil {
+		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && sessionctx.FindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
 		resolvedTurnID := strings.TrimSpace(turnID)
@@ -402,9 +402,9 @@ func (s Service) FailStandaloneCompactTurn(threadID, turnID, message string) boo
 		}
 		sessionctx.RemoveActiveOperation(sess, "", resolvedTurnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-			sess.Status = "queued"
+			sess.Status = state.SessionStatusQueued.String()
 		} else {
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 		if err := store.SaveSession(sess); err != nil {
 			return false
@@ -435,12 +435,12 @@ func RestoreSession(store SessionStore, sessionKey, threadID, previousStatus str
 	if sessionctx.HasActiveOperations(sess) {
 		return
 	}
-	if strings.TrimSpace(sess.Status) != SessionStatusCompacting {
+	if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
 		return
 	}
 	sess.Status = strings.TrimSpace(previousStatus)
 	if sess.Status == "" {
-		sess.Status = "idle"
+		sess.Status = state.SessionStatusIdle.String()
 	}
 	_ = store.SaveSession(sess)
 }

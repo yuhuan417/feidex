@@ -81,7 +81,7 @@ type TurnLifecycleProvider interface {
 // RuntimeStateProvider narrows runtime state access to the methods used by
 // the service.
 type RuntimeStateProvider interface {
-	CompleteTurnItemState(threadID, turnID, itemID string, item map[string]any) map[string]any
+	CompleteTurnItemState(threadID, turnID, itemID string, item turnitem.ProtocolItem) turnitem.ProtocolItem
 	ClearTurnItemStates(turnID string)
 }
 
@@ -90,7 +90,7 @@ type RuntimeStateProvider interface {
 type OutboundCardProvider interface {
 	SendPlanCardWithReuse(ctx context.Context, sub *state.Submission, planText, reuseMessageID string) string
 	SendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, reuseMessageID string) string
-	CompleteStandaloneCompactItem(threadID, turnID string, item map[string]any) bool
+	CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool
 }
 
 // QuietCardExecutorProvider provides the executeQuietWorkingCardOp callback
@@ -234,13 +234,13 @@ func (svc Service) RecordTurnError(threadID, turnID, message string) {
 
 // CompleteTurnItem processes a completed turn item, building and sending the
 // appropriate card, managing quiet working cards, and updating stream state.
-func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
+func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 	if svc.app == nil {
 		return
 	}
 	svc.app.TurnStreamTurnLifecycle().BindPendingSubmissionTurn(threadID, turnID, true)
 	item = svc.app.TurnStreamRuntimeState().CompleteTurnItemState(threadID, turnID, itemID, item)
-	itemID = strings.TrimSpace(firstNonEmpty(strings.TrimSpace(itemID), stringValue(item["id"])))
+	itemID = strings.TrimSpace(item.EffectiveID(itemID))
 	if svc.app.TurnStreamOutboundCards().CompleteStandaloneCompactItem(threadID, turnID, item) {
 		return
 	}
@@ -249,7 +249,8 @@ func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemI
 		return
 	}
 	workspaceCwd := workspaceCwd(svc.app.Config(), sub.WorkspaceID)
-	payload, hasPayload := buildTurnItemCardPayload(itemID, item, workspaceCwd)
+	rawItem := item.MergedRaw()
+	payload, hasPayload := buildTurnItemCardPayload(itemID, rawItem, workspaceCwd)
 
 	var (
 		planText         string
@@ -459,7 +460,7 @@ func (svc Service) PrepareStreamQuietBoundary(turnID string) turn.QuietWorkingBo
 
 // PrepareStreamQuietUpdate prepares a quiet working card update for the given
 // turn stream.
-func (svc Service) PrepareStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) turn.QuietWorkingCardOp {
+func (svc Service) PrepareStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
 	tracker := svc.Tracker()
 	if tracker == nil || sub == nil {
 		return turn.QuietWorkingCardOp{}
@@ -522,12 +523,13 @@ func toStreamState(s *Stream) *turn.StreamState {
 
 // prepareStreamUpdateLocked wraps turn.PrepareUpdateLocked for use within the
 // service. It converts between Stream and turn.StreamState.
-func prepareStreamUpdateLocked(stream *Stream, itemID string, item map[string]any, workspaceCwd string) turn.QuietWorkingCardOp {
+func prepareStreamUpdateLocked(stream *Stream, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
+	rawItem := item.MergedRaw()
 	if stream == nil {
-		return prepareUpdateLocked(nil, itemID, item, workspaceCwd)
+		return prepareUpdateLocked(nil, itemID, rawItem, workspaceCwd)
 	}
 	ss := toStreamState(stream)
-	op := prepareUpdateLocked(ss, itemID, item, workspaceCwd)
+	op := prepareUpdateLocked(ss, itemID, rawItem, workspaceCwd)
 	stream.QuietWorking = ss.QuietWorking
 	return op
 }

@@ -78,7 +78,7 @@ func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, 
 		firstNonEmpty(selectedPreview, ws.Name),
 	)
 	_sessionResetActiveOps(sess)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	if err := a.State().SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -107,12 +107,10 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 		return nil, newUIWarningError("该线程不属于当前工作区，请先切换 workspace")
 	}
 	effectiveModel := _configuredGlobalModel(a.cfg)
-	params := map[string]any{
-		"threadId":               threadID,
-		"persistExtendedHistory": true,
-	}
-	if strings.TrimSpace(effectiveModel) != "" {
-		params["model"] = effectiveModel
+	params := codexrpc.ThreadResumeParams{
+		ThreadID:               threadID,
+		PersistExtendedHistory: true,
+		Model:                  strings.TrimSpace(effectiveModel),
 	}
 	slog.Debug("manual thread resume request",
 		"session_key", sessionKey,
@@ -120,7 +118,7 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 		"model", effectiveModel,
 	)
 	var result codexrpc.ThreadStartResult
-	if err := client.Call(context.Background(), "thread/resume", params, &result); err != nil {
+	if err := client.Call(context.Background(), "thread/resume", params.Map(), &result); err != nil {
 		return nil, err
 	}
 	boundThreadID := firstNonEmpty(strings.TrimSpace(result.Thread.ID), threadID)
@@ -130,7 +128,7 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 	_setSessionThreadContext(sess, firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)), boundThreadID, firstNonEmpty(selectedName, result.Thread.Name), firstNonEmpty(selectedPreview, result.Thread.Preview))
 	markSessionThreadLive(a, sessionKey, boundThreadID)
 	_sessionResetActiveOps(sess)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	if err := a.State().SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -208,7 +206,7 @@ func tryCodexReplyContinuation(a *App, msg *feishu.InboundMessage, link *state.M
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {

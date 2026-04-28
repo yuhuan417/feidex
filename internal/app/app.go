@@ -99,16 +99,16 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		backend:             backend,
 		feishu:              FeishuClient,
 		started:             time.Now(),
-		deduper:      newInboundDeduper(),
-		liveThreads:  newLiveThreadTracker(),
-		autoRetries:  newAutoRetryTracker(),
+		deduper:             newInboundDeduper(),
+		liveThreads:         newLiveThreadTracker(),
+		autoRetries:         newAutoRetryTracker(),
 		trackers: appTrackers{
-			turnStreams:      newTurnStreamTracker(),
-			turnItems:        newTurnItemTracker(),
+			turnStreams:       newTurnStreamTracker(),
+			turnItems:         newTurnItemTracker(),
 			workspaceCloneOps: newWorkspaceCloneTracker(),
-			turnBindings:     turnbinding.NewTracker(store),
-			finalCardPatches: newFinalCardPatchTracker(),
-			pendingSkills:    appskillscmd.NewPendingSkillTracker(),
+			turnBindings:      turnbinding.NewTracker(store),
+			finalCardPatches:  newFinalCardPatchTracker(),
+			pendingSkills:     appskillscmd.NewPendingSkillTracker(),
 		},
 	}
 	if backend != "" {
@@ -158,22 +158,17 @@ func runAsync(a *App, fn func()) {
 	go fn()
 }
 
-func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
-	params := map[string]any{
-		"cwd":                    ws.Cwd,
-		"approvalPolicy":         effectiveThreadApprovalPolicy(sess, ws),
-		"sandbox":                effectiveThreadSandboxMode(sess, ws),
-		"serviceName":            a.cfg.Codex.ServiceName,
-		"experimentalRawEvents":  false,
-		"persistExtendedHistory": true,
+func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+	return codexrpc.ThreadStartParams{
+		Cwd:                    ws.Cwd,
+		ApprovalPolicy:         effectiveThreadApprovalPolicy(sess, ws),
+		Sandbox:                effectiveThreadSandboxMode(sess, ws),
+		ServiceName:            a.cfg.Codex.ServiceName,
+		ExperimentalRawEvents:  false,
+		PersistExtendedHistory: true,
+		ServiceTier:            strings.TrimSpace(effectiveThreadServiceTier(sess)),
+		Model:                  strings.TrimSpace(effectiveModel),
 	}
-	if strings.TrimSpace(effectiveThreadServiceTier(sess)) != "" {
-		params["serviceTier"] = strings.TrimSpace(effectiveThreadServiceTier(sess))
-	}
-	if strings.TrimSpace(effectiveModel) != "" {
-		params["model"] = strings.TrimSpace(effectiveModel)
-	}
-	return params
 }
 
 func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {

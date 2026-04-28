@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -17,7 +18,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 	appState := s.app.State()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.Pending(requestID)
-	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != downloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
+	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != appdebugviewcmd.DownloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -60,7 +61,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
-		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消路径选择"},
 			Card:  rawCard(s.app.feishu.SimpleStatusCard("路径选择已取消", "grey", "本次路径选择已取消。", nil)),
@@ -146,10 +147,10 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
-		if pending.Kind == downloadFilePendingKind {
+		if pending.Kind == appdebugviewcmd.DownloadFilePendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-			return completeDownloadFileConfirm(s.app, action, pending, payload, selectedPath)
+			return appdebugviewcmd.CompleteDownloadFileConfirm(s.app, action, pending, payload, selectedPath)
 		}
 		if pending.Kind == upgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath
@@ -157,7 +158,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 			return newAppUpgradeService(s.app).completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
 		}
 		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = "resolved"
+			req.Status = state.PendingRequestStatusResolved.String()
 			req.PayloadJSON = mustJSON(payload)
 		})
 		body := "已选择路径：\n`" + selectedPath + "`"

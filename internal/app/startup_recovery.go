@@ -29,7 +29,7 @@ func recoverSharedRuntimeState(a *App) {
 				"workspace_id", sess.WorkspaceID,
 			)
 		}
-		if !sessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && sess.Status == "idle" {
+		if !sessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && state.NormalizeSessionStatus(sess.Status) == state.SessionStatusIdle {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 				clearSessionThreadContext(sess)
 			}
@@ -47,7 +47,7 @@ func recoverSharedRuntimeState(a *App) {
 		sessionResetActiveOperations(sess)
 		sess.Queue = nil
 		sess.StagedImages = nil
-		sess.Status = "idle"
+		sess.Status = state.SessionStatusIdle.String()
 		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 			clearSessionThreadContext(sess)
 		}
@@ -102,7 +102,7 @@ func recoverSessionThreadsOnStartup(a *App) {
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
 			continue
 		}
-		if strings.TrimSpace(firstNonEmpty(sess.Status, "idle")) != "idle" {
+		if state.NormalizeSessionStatus(firstNonEmpty(sess.Status, state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 			continue
 		}
 		if sessionHasInFlightSubmission(sess) {
@@ -122,7 +122,7 @@ func recoverSessionThreadsOnStartup(a *App) {
 				"workspace_id", workspaceID,
 			)
 			clearSessionThreadContext(sess)
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 			_ = appState.SaveSession(sess)
 			clearSessionLiveThread(a, sessionKey)
 			continue

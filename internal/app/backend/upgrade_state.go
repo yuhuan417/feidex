@@ -23,8 +23,8 @@ func SessionHasActiveWork(sess *state.Session) bool {
 	if appsessionctx.HasActiveOperations(sess) {
 		return true
 	}
-	switch strings.TrimSpace(sess.Status) {
-	case sessionStatusCompacting, "turn_starting":
+	switch state.NormalizeSessionStatus(sess.Status) {
+	case sessionStatusCompacting, state.SessionStatusTurnStarting:
 		return true
 	default:
 		return false

@@ -67,12 +67,12 @@ func finishSteerSubmission(a *App, submissionID, status string) {
 		return
 	}
 	switch status {
-	case "completed":
-		_ = st.FinalizeSubmission(submissionID, "completed")
-	case "interrupted":
-		_ = st.FinalizeSubmission(submissionID, "interrupted")
+	case state.SubmissionStatusCompleted.String():
+		_ = st.FinalizeSubmission(submissionID, state.SubmissionStatusCompleted.String())
+	case state.SubmissionStatusInterrupted.String():
+		_ = st.FinalizeSubmission(submissionID, state.SubmissionStatusInterrupted.String())
 	default:
-		_ = st.FinalizeSubmission(submissionID, "failed")
+		_ = st.FinalizeSubmission(submissionID, state.SubmissionStatusFailed.String())
 	}
 	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	// Remove the steer submission's ActiveOperation from the session.
@@ -85,7 +85,7 @@ func finishSteerSubmission(a *App, submissionID, status string) {
 			}
 			sessionRemoveActiveOperation(sess, submissionID, turnID)
 			if !sessionHasActiveOperations(sess) {
-				sess.Status = "idle"
+				sess.Status = state.SessionStatusIdle.String()
 			}
 		})
 	}
@@ -114,12 +114,12 @@ func finshSteerSubmissionsForThread(a *App, threadID, status string) {
 				continue
 			}
 			switch status {
-			case "completed":
-				_ = st.FinalizeSubmission(subID, "completed")
-			case "interrupted":
-				_ = st.FinalizeSubmission(subID, "interrupted")
+			case state.SubmissionStatusCompleted.String():
+				_ = st.FinalizeSubmission(subID, state.SubmissionStatusCompleted.String())
+			case state.SubmissionStatusInterrupted.String():
+				_ = st.FinalizeSubmission(subID, state.SubmissionStatusInterrupted.String())
 			default:
-				_ = st.FinalizeSubmission(subID, "failed")
+				_ = st.FinalizeSubmission(subID, state.SubmissionStatusFailed.String())
 			}
 			newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 			st.UpdateSession(sess.Key, func(s *state.Session) {
@@ -128,7 +128,7 @@ func finshSteerSubmissionsForThread(a *App, threadID, status string) {
 				}
 				sessionRemoveActiveOperation(s, subID, strings.TrimSpace(op.TurnID))
 				if !sessionHasActiveOperations(s) {
-					s.Status = "idle"
+					s.Status = state.SessionStatusIdle.String()
 				}
 			})
 		}

@@ -14,7 +14,7 @@ type compactService = appcompact.Service
 
 var newCompactService = appcompact.NewService
 
-const sessionStatusCompacting = appcompact.SessionStatusCompacting
+const sessionStatusCompacting = "compacting"
 
 // ---------------------------------------------------------------------------
 // Thin wrappers — canonical logic lives in compact.Service

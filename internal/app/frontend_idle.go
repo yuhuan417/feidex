@@ -1,6 +1,10 @@
 package app
 
-import "strings"
+import (
+	"strings"
+
+	"feidex/internal/state"
+)
 
 func frontendIsIdle(a *App) bool {
 	return frontendIdleBlockedReason(a) == ""
@@ -34,7 +38,7 @@ func frontendIdleBlockedReason(a *App) string {
 		if len(sess.StagedImages) > 0 {
 			return "当前仍有暂存图片待提交"
 		}
-		if firstNonEmpty(strings.TrimSpace(sess.Status), "idle") != "idle" {
+		if state.NormalizeSessionStatus(firstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 			return "当前会话还没有完全回到空闲态"
 		}
 	}

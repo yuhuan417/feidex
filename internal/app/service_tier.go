@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"feidex/internal/app/cardactions"
 	appruntime "feidex/internal/app/runtime"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -28,7 +30,7 @@ func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
 		body += "\n\n当前没有活动线程。"
 	} else {
 		current := normalizeServiceTier(sess.ActiveThreadServiceTier)
-		body += "\n\n当前线程: " + currentThreadLabel(sess)
+		body += "\n\n当前线程: " + appthreadmenu.SessionCurrentThreadLabel(sess)
 		body += "\n当前值: " + renderServiceTierValue(current)
 		buttons = append(buttons,
 			feishu.Button{
@@ -44,7 +46,11 @@ func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
 					}
 					return "default"
 				}(),
-				Value: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "thread_id": sess.ActiveThreadID, "service_tier": ""},
+				Value: cardactions.ThreadActionValue{
+					Action:     "service_tier.set",
+					SessionKey: sessionKey,
+					ThreadID:   sess.ActiveThreadID,
+				}.Map(),
 			},
 			feishu.Button{
 				Text: func() string {
@@ -59,14 +65,19 @@ func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
 					}
 					return "default"
 				}(),
-				Value: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "thread_id": sess.ActiveThreadID, "service_tier": serviceTierFast},
+				Value: cardactions.ThreadActionValue{
+					Action:      "service_tier.set",
+					SessionKey:  sessionKey,
+					ThreadID:    sess.ActiveThreadID,
+					ServiceTier: serviceTierFast,
+				}.Map(),
 			},
 		)
 	}
 	buttons = append(buttons, feishu.Button{
 		Text:  "返回上一级",
 		Type:  "default",
-		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		Value: cardactions.MenuActionValue{Action: "menu.group.model", SessionKey: sessionKey}.Map(),
 	})
 	return a.feishu.SimpleStatusCard("Service Tier", "blue", menuCardBody("menu.fast", body), buttons)
 }

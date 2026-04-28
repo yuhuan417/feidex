@@ -32,8 +32,8 @@ func (a turnStreamOutboundCardAdapter) SendPlanCardWithReuse(ctx context.Context
 func (a turnStreamOutboundCardAdapter) SendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
 	return newOutboundCardService(a.app).sendTurnItemCardWithReuse(ctx, sub, payload, reuseMessageID)
 }
-func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, turnID string, item map[string]any) bool {
-	return completeStandaloneCompactItem(a.app, threadID, turnID, item)
+func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool {
+	return completeStandaloneCompactItem(a.app, threadID, turnID, item.MergedRaw())
 }
 
 type turnStreamQuietCardExecutorAdapter struct{ app *App }

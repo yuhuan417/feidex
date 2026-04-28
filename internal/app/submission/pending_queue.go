@@ -97,7 +97,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -118,7 +118,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 		})
 	}
 	if sessionctx.HasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		sess.Status = "queued"
+		sess.Status = state.SessionStatusQueued.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
 		return err
@@ -210,7 +210,7 @@ func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot
 		return false
 	}
 	if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
-		value.Status = "discarded"
+		value.Status = state.SubmissionStatusDiscarded.String()
 		value.Finalized = true
 	}); err != nil {
 		slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
@@ -240,7 +240,7 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 		sub := appState.Submission(submissionID)
 		s.markMessagesDiscardedReactions(SourceMessageIDs(sub))
 		if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
-			value.Status = "discarded"
+			value.Status = state.SubmissionStatusDiscarded.String()
 			value.Finalized = true
 		}); err != nil {
 			slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
@@ -252,7 +252,7 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 	sess.Queue = nil
 	sess.StagedImages = nil
 	if !sessionctx.HasInFlightSubmission(sess) {
-		sess.Status = "idle"
+		sess.Status = state.SessionStatusIdle.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
 		slog.Error("discard session pending inputs failed", "session_key", sessionKey, "error", err)

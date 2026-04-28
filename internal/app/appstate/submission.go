@@ -41,7 +41,7 @@ func (s *Store) UpdateSubmission(id string, mutate func(*state.Submission)) erro
 // SetSubmissionStatus updates a submission status.
 func (s *Store) SetSubmissionStatus(id, status string) error {
 	return s.UpdateSubmission(id, func(sub *state.Submission) {
-		sub.Status = strings.TrimSpace(status)
+		sub.Status = state.NormalizeSubmissionStatus(status).String()
 	})
 }
 
@@ -52,14 +52,14 @@ func (s *Store) MarkSubmissionRunning(id, threadID, turnID string) error {
 		if strings.TrimSpace(turnID) != "" {
 			sub.TurnID = strings.TrimSpace(turnID)
 		}
-		sub.Status = "running"
+		sub.Status = state.SubmissionStatusRunning.String()
 	})
 }
 
 // FinalizeSubmission marks a submission terminal.
 func (s *Store) FinalizeSubmission(id, status string) error {
 	return s.UpdateSubmission(id, func(sub *state.Submission) {
-		sub.Status = strings.TrimSpace(status)
+		sub.Status = state.NormalizeSubmissionStatus(status).String()
 		sub.Finalized = true
 	})
 }

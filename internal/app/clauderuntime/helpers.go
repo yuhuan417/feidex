@@ -312,22 +312,27 @@ func (h *InteractiveHandler) HandleExitPlanMode(ctx interface{}, plan claudecli.
 
 // RenderApprovalPresentation computes the approval card kind, body, and payload
 // for a Claude permission request. workspaceCwdFunc is called to resolve workspace cwd.
-func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionRequest, workspaceCwdFunc func(string) string) (kind, body string, payload map[string]any) {
-	payload = map[string]any{
+func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionRequest, workspaceCwdFunc func(string) string) appapproval.Presentation {
+	request := map[string]any{
 		"tool":       req.ToolName,
 		"toolName":   req.ToolName,
 		"tool_input": req.Input,
 	}
 	if req.BlockedPath != nil && strings.TrimSpace(*req.BlockedPath) != "" {
-		payload["blockedPath"] = strings.TrimSpace(*req.BlockedPath)
+		request["blockedPath"] = strings.TrimSpace(*req.BlockedPath)
+	}
+	presentation := appapproval.Presentation{
+		Payload: appapproval.RequestPayload{
+			Request: request,
+		},
 	}
 	switch strings.TrimSpace(req.ToolName) {
 	case "Bash", "KillShell":
-		kind = "command"
-		payload["command"] = strings.TrimSpace(apputil.FirstNonEmpty(apputil.StringValue(req.Input["command"]), apputil.StringValue(req.Input["cmd"])))
-		body = appapproval.RenderCommandBody(payload)
+		presentation.Kind = appapproval.KindCommand
+		presentation.Payload.Request["command"] = strings.TrimSpace(apputil.FirstNonEmpty(apputil.StringValue(req.Input["command"]), apputil.StringValue(req.Input["cmd"])))
+		presentation.Body = appapproval.RenderCommandBody(presentation.Payload.Request)
 	case "Write", "Edit", "NotebookEdit":
-		kind = "file"
+		presentation.Kind = appapproval.KindFile
 		path := strings.TrimSpace(apputil.FirstNonEmpty(
 			apputil.StringValue(req.Input["file_path"]),
 			apputil.StringValue(req.Input["path"]),
@@ -336,15 +341,15 @@ func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionReq
 		if path == "" && req.BlockedPath != nil {
 			path = strings.TrimSpace(*req.BlockedPath)
 		}
-		payload["changes"] = []map[string]any{{"path": path, "kind": strings.TrimSpace(req.ToolName)}}
+		presentation.Payload.Request["changes"] = []map[string]any{{"path": path, "kind": strings.TrimSpace(req.ToolName)}}
 		cwd := ""
 		if workspaceCwdFunc != nil {
 			cwd = workspaceCwdFunc(workspaceID)
 		}
-		body = appapproval.RenderFileBodyWithWorkspace(payload, cwd)
+		presentation.Body = appapproval.RenderFileBodyWithWorkspace(presentation.Payload.Request, cwd)
 	default:
-		kind = "permissions"
-		payload["permissions"] = map[string]any{
+		presentation.Kind = appapproval.KindPermissions
+		presentation.Payload.Permissions = map[string]any{
 			"tool": req.ToolName,
 			"blocked_path": apputil.FirstNonEmpty(func() string {
 				if req.BlockedPath == nil {
@@ -353,9 +358,11 @@ func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionReq
 				return strings.TrimSpace(*req.BlockedPath)
 			}(), ""),
 		}
-		body = appapproval.RenderPermissionsApprovalBody(payload)
+		presentation.Payload.Request["permissions"] = appapproval.CloneJSONMap(presentation.Payload.Permissions)
+		presentation.Body = appapproval.RenderPermissionsApprovalBody(presentation.Payload.Request)
 	}
-	return kind, body, payload
+	presentation.Payload.Body = presentation.Body
+	return presentation
 }
 
 // NormalizePermissionMode normalizes a Claude permission mode string.
@@ -390,13 +397,13 @@ func PermissionModeValue(mode string) claudecli.PermissionMode {
 
 // SafeClaudeSessionPermissionUpdates filters and normalises permission
 // update suggestions, returning only valid session-scoped updates.
-func SafeClaudeSessionPermissionUpdates(suggestions []map[string]any) []map[string]any {
+func SafeClaudeSessionPermissionUpdates(suggestions []map[string]any) []SessionPermissionUpdate {
 	if len(suggestions) == 0 {
 		return nil
 	}
-	updates := make([]map[string]any, 0, len(suggestions))
+	updates := make([]SessionPermissionUpdate, 0, len(suggestions))
 	for _, suggestion := range suggestions {
-		normalized, ok := normalizeClaudeSessionPermissionUpdate(suggestion)
+		normalized, ok := NormalizeSessionPermissionUpdate(suggestion)
 		if ok {
 			updates = append(updates, normalized)
 		}
@@ -407,52 +414,21 @@ func SafeClaudeSessionPermissionUpdates(suggestions []map[string]any) []map[stri
 	return updates
 }
 
-func normalizeClaudeSessionPermissionUpdate(update map[string]any) (map[string]any, bool) {
-	if len(update) == 0 {
-		return nil, false
-	}
-	if strings.TrimSpace(apputil.StringValue(update["destination"])) != "session" {
-		return nil, false
-	}
-	switch strings.TrimSpace(apputil.StringValue(update["type"])) {
-	case "setMode":
-		mode := NormalizePermissionMode(apputil.StringValue(update["mode"]))
-		switch mode {
-		case string(appruntime.ClaudePermissionModeDefault),
-			string(appruntime.ClaudePermissionModeAcceptEdits),
-			string(appruntime.ClaudePermissionModeBypass):
-		default:
-			return nil, false
-		}
-		out := CopyPermissionUpdates([]map[string]any{update})
-		out[0]["mode"] = mode
-		return out[0], true
-	case "addRules":
-		if update["rules"] == nil && update["rule"] == nil {
-			return nil, false
-		}
-		out := CopyPermissionUpdates([]map[string]any{update})
-		return out[0], true
-	default:
-		return nil, false
-	}
-}
-
 // DescribeClaudeSessionPermissionUpdates returns a human-readable summary
 // of a list of session permission updates.
-func DescribeClaudeSessionPermissionUpdates(updates []map[string]any) string {
+func DescribeClaudeSessionPermissionUpdates(updates []SessionPermissionUpdate) string {
 	if len(updates) == 0 {
 		return ""
 	}
 	if len(updates) == 1 {
 		update := updates[0]
-		switch strings.TrimSpace(apputil.StringValue(update["type"])) {
-		case "setMode":
-			mode := NormalizePermissionMode(apputil.StringValue(update["mode"]))
+		switch update.Type {
+		case SessionPermissionUpdateTypeSetMode:
+			mode := NormalizePermissionMode(update.Mode)
 			if mode != "" {
 				return "切到 `" + mode + "`（当前会话）"
 			}
-		case "addRules":
+		case SessionPermissionUpdateTypeAddRules:
 			return "添加权限规则（当前会话）"
 		}
 	}

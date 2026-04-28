@@ -41,7 +41,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 		SessionKey:  sessionKey,
 		OwnerUserID: ownerUserID,
 		PayloadJSON: mustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(15 * time.Minute).Unix(),
 	}); err != nil {

@@ -12,6 +12,7 @@ import (
 type pendingInputService struct {
 	app *App
 }
+
 func newPendingInputService(app *App) pendingInputService {
 	return pendingInputService{app: app}
 }
@@ -35,7 +36,7 @@ func sendUserInputFormCard(a *App, requestID json.RawMessage, payload toolUserIn
 		itemID:          payload.ItemID,
 		ownerUserID:     sub.UserID,
 		payloadJSON:     mustJSON(payload),
-		waitingStatus:   "waiting_user_input",
+		waitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
 		linkKind:        "user_input_card",
 	})
 	if err == nil {

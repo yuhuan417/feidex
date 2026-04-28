@@ -131,7 +131,7 @@ type (
 // Codex client callbacks.
 type (
 	RequireCodexClientFn     func() (CodexClient, error)
-	BuildThreadStartParamsFn func(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any
+	BuildThreadStartParamsFn func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams
 )
 
 // Backend configuration callbacks.
@@ -657,9 +657,9 @@ func (s ManagementService) RequireCodexClient() (CodexClient, error) {
 	}
 	return s.deps.Codex.RequireCodexClient()
 }
-func (s ManagementService) BuildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
+func (s ManagementService) BuildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if s.deps.Codex.BuildThreadStartParams == nil {
-		return nil
+		return codexrpc.ThreadStartParams{}
 	}
 	return s.deps.Codex.BuildThreadStartParams(ws, sess, effectiveModel)
 }
@@ -911,9 +911,9 @@ func (s ThreadService) RequireCodexClient() (CodexClient, error) {
 	}
 	return s.deps.Codex.RequireCodexClient()
 }
-func (s ThreadService) BuildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
+func (s ThreadService) BuildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if s.deps.Codex.BuildThreadStartParams == nil {
-		return nil
+		return codexrpc.ThreadStartParams{}
 	}
 	return s.deps.Codex.BuildThreadStartParams(ws, sess, effectiveModel)
 }

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
+	appbackend "feidex/internal/app/backend"
 	appclaudesession "feidex/internal/app/claudesession"
 	"feidex/internal/app/modelconfig"
 	appthreadview "feidex/internal/app/threadview"
@@ -111,7 +111,7 @@ func (s *ThreadService) EnsureClaudeWorkspaceThreadBinding(sessionKey string, se
 		if err == nil {
 			s.SetSessionThreadCtx(sess, ws.ID, threadID, appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
 			s.SessionResetActiveOps(sess)
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 			if saveErr := s.SaveSession(sess); saveErr != nil {
 				return nil, saveErr
 			}
@@ -180,17 +180,15 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 		return nil, fmt.Errorf("missing thread id")
 	}
 	effectiveModel := modelconfig.ConfiguredGlobalModel(s.App.Config())
-	params := map[string]any{
-		"threadId":               threadID,
-		"persistExtendedHistory": true,
-	}
-	if strings.TrimSpace(effectiveModel) != "" {
-		params["model"] = effectiveModel
+	params := codexrpc.ThreadResumeParams{
+		ThreadID:               threadID,
+		PersistExtendedHistory: true,
+		Model:                  strings.TrimSpace(effectiveModel),
 	}
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := client.Call(ctx, "thread/resume", params, &result); err != nil {
+	if err := client.Call(ctx, "thread/resume", params.Map(), &result); err != nil {
 		return nil, err
 	}
 	boundThreadID := appcore.FirstNonEmpty(strings.TrimSpace(result.Thread.ID), threadID)
@@ -206,7 +204,7 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 		appcore.FirstNonEmpty(strings.TrimSpace(result.Thread.Preview), strings.TrimSpace(entry.Preview)),
 	)
 	s.SessionResetActiveOps(sess)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -241,7 +239,7 @@ func (s *ThreadService) StartClaudeWorkspaceThread(sessionKey string, sess *stat
 	s.ClearSessionThreadCtx(sess)
 	s.SetSessionThreadCtx(sess, ws.ID, threadID, "Claude", appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
 	s.SessionResetActiveOps(sess)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -265,7 +263,7 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := client.Call(ctx, "thread/start", threadParams, &result); err != nil {
+	if err := client.Call(ctx, "thread/start", threadParams.Map(), &result); err != nil {
 		return nil, err
 	}
 	threadID := strings.TrimSpace(result.Thread.ID)
@@ -275,7 +273,7 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state
 	s.ClearSessionThreadCtx(sess)
 	s.SetSessionThreadCtx(sess, ws.ID, threadID, result.Thread.Name, result.Thread.Preview)
 	s.SessionResetActiveOps(sess)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {
 		return nil, err
 	}

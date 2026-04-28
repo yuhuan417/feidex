@@ -33,7 +33,7 @@ func sendElicitationFormCard(a *App, requestID json.RawMessage, payload elicitat
 		turnID:          payload.TurnID,
 		ownerUserID:     sub.UserID,
 		payloadJSON:     mustJSON(payload),
-		waitingStatus:   "waiting_user_input",
+		waitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
 		linkKind:        "elicitation_form_card",
 	})
 	if err == nil {
@@ -68,7 +68,7 @@ func sendElicitationURLCard(a *App, requestID json.RawMessage, payload elicitati
 		turnID:          payload.TurnID,
 		ownerUserID:     sub.UserID,
 		payloadJSON:     mustJSON(payload),
-		waitingStatus:   "waiting_user_input",
+		waitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
 		linkKind:        "elicitation_url_card",
 	})
 	if err == nil {

@@ -10,12 +10,12 @@ import (
 
 // Type aliases to pendingforms types.
 type (
-	ToolUserInputOption      = pendingforms.ToolUserInputOption
-	ToolUserInputQuestion    = pendingforms.ToolUserInputQuestion
-	ToolUserInputPayload     = pendingforms.ToolUserInputPayload
-	FormDrafts               = pendingforms.FormDrafts
-	ElicitationFormPayload   = pendingforms.ElicitationFormPayload
-	ElicitationURLPayload    = pendingforms.ElicitationURLPayload
+	ToolUserInputOption    = pendingforms.ToolUserInputOption
+	ToolUserInputQuestion  = pendingforms.ToolUserInputQuestion
+	ToolUserInputPayload   = pendingforms.ToolUserInputPayload
+	FormDrafts             = pendingforms.FormDrafts
+	ElicitationFormPayload = pendingforms.ElicitationFormPayload
+	ElicitationURLPayload  = pendingforms.ElicitationURLPayload
 )
 
 // ParseStructuredLines parses "key: value" lines into a map.
@@ -29,7 +29,7 @@ func ParseStructuredLines(text string) map[string]string {
 func PendingTextRequest(allPending []*state.PendingRequest, sessionKey, userID string, pendingKinds map[string]bool) *state.PendingRequest {
 	sort.Slice(allPending, func(i, j int) bool { return allPending[i].CreatedAt > allPending[j].CreatedAt })
 	for _, req := range allPending {
-		if req == nil || req.Status != "pending" || req.SessionKey != sessionKey {
+		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || req.SessionKey != sessionKey {
 			continue
 		}
 		if req.OwnerUserID != "" && req.OwnerUserID != userID {

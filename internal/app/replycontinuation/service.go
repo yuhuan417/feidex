@@ -192,7 +192,7 @@ func (s *Service) ClearPendingStagedImages(targetSessionKey, bucketSessionKey st
 		}
 		sess.StagedImages = nil
 		if !s.HasInFlightSubmission(sess) && len(sess.Queue) == 0 {
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 		if err := s.SaveSession(sess); err != nil {
 			return err
@@ -223,7 +223,7 @@ func (s *Service) TrySteerInboundReply(msg *feishu.InboundMessage, link *state.M
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -278,7 +278,7 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 		UserID:      strings.TrimSpace(sess.OwnerUserID),
 		ChatID:      strings.TrimSpace(sess.ChatID),
 		InputText:   text,
-		Status:      "queued",
+		Status:      state.SubmissionStatusQueued.String(),
 	}
 	if rootMessageID := strings.TrimSpace(sess.RootMessageID); rootMessageID != "" {
 		sub.SourceRootMessageIDs = []string{rootMessageID}
@@ -339,7 +339,7 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.Inbou
 		SourceRootMessageIDs: sourceRootMessageIDs,
 		InputText:            msg.Text,
 		Attachments:          append(StagedImageAttachments(stagedImages), inboundAttachments...),
-		Status:               "queued",
+		Status:               state.SubmissionStatusQueued.String(),
 	}
 	if strings.TrimSpace(sub.InputText) == "" && len(sub.Attachments) == 0 {
 		return nil, nil

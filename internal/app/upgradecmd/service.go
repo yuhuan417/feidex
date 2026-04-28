@@ -319,7 +319,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		SessionKey:   sessionKey,
 		OwnerUserID:  ownerUserID,
 		PayloadJSON:  mustJSON(payload),
-		Status:       "pending",
+		Status:       state.PendingRequestStatusPending.String(),
 		CreatedAt:    time.Now().Unix(),
 		ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
 	}); err != nil {
@@ -408,7 +408,7 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个升级请求"}}, nil
 	}
 	if actionName == "upgrade.cancel" {
-		_ = st.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = st.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		sessionKey, _ := action.ActionValue["session_key"].(string)
 		if strings.TrimSpace(sessionKey) == "" {
 			sessionKey = pending.SessionKey
@@ -444,7 +444,7 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 		}, nil
 	}
 	_ = st.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "upgrading"
+		req.Status = state.PendingRequestStatusUpgrading.String()
 		var p UpgradePendingPayload
 		if jsonErr := json.Unmarshal([]byte(req.PayloadJSON), &p); jsonErr == nil {
 			p.UnitName = unitName

@@ -261,7 +261,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 			continue
 		}
 		appsessionctx.EnsureActiveOperations(sess)
-		if len(sess.ActiveOperations) == 0 && strings.TrimSpace(sess.Status) != sessionStatusCompacting {
+		if len(sess.ActiveOperations) == 0 && state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
 			continue
 		}
 		for _, op := range sess.ActiveOperations {
@@ -289,7 +289,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 				turnID:   strings.TrimSpace(op.TurnID),
 			})
 		}
-		if s.BackendRuntimeFailsStandaloneCompaction(backend) && strings.TrimSpace(sess.Status) == sessionStatusCompacting {
+		if s.BackendRuntimeFailsStandaloneCompaction(backend) && state.NormalizeSessionStatus(sess.Status) == state.SessionStatusCompacting {
 			threadID := strings.TrimSpace(sess.ActiveThreadID)
 			if threadID != "" {
 				compactTargets = append(compactTargets, compactTarget{threadID: threadID})
@@ -326,7 +326,7 @@ func (s BackendFailureService) ResolvePendingRequestsForTerminalFailure(sessionK
 			continue
 		}
 		_ = s.UpdatePending(req.ID, func(current *state.PendingRequest) {
-			current.Status = "resolved"
+			current.Status = state.PendingRequestStatusResolved.String()
 			if current.ExpiresAt < now {
 				return
 			}
@@ -356,7 +356,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 		flush = s.FlushTurnStream(context.Background(), threadID, turnID)
 	}
 	s.ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
-	_ = s.FinalizeSubmission(sub.ID, "failed")
+	_ = s.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
 	sub = s.GetSubmission(sub.ID)
 	if sub == nil {
 		return
@@ -370,17 +370,17 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 		appsessionctx.RemoveActiveOperation(sess, sub.ID, turnID)
 		switch {
 		case appsessionctx.HasActiveOperations(sess):
-			sess.Status = "turn_starting"
+			sess.Status = state.SessionStatusTurnStarting.String()
 			for _, op := range sess.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
-					sess.Status = "turn_in_progress"
+					sess.Status = state.SessionStatusTurnInProgress.String()
 					break
 				}
 			}
 		case len(sess.Queue) > 0 || len(sess.StagedImages) > 0:
-			sess.Status = "queued"
+			sess.Status = state.SessionStatusQueued.String()
 		default:
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 	})
 	suppressTerminalCard := false
@@ -414,8 +414,8 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 	if req == nil {
 		return false
 	}
-	switch strings.TrimSpace(req.Status) {
-	case "", "pending", "replied":
+	switch state.NormalizePendingRequestStatus(req.Status) {
+	case "", state.PendingRequestStatusPending, state.PendingRequestStatusReplied:
 		return true
 	default:
 		return false

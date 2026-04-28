@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
+	appbackend "feidex/internal/app/backend"
+	"feidex/internal/app/cardactions"
 	appcards "feidex/internal/app/cards"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -41,19 +42,19 @@ func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, pay
 			Text:  "选目录",
 			Type:  "default",
 			Name:  "workspace_new_pickdir",
-			Value: map[string]any{"action": "workspace.new.pickdir", "request_id": requestID},
+			Value: cardactions.RequestActionValue{Action: "workspace.new.pickdir", RequestID: requestID}.Map(),
 		},
 		{
 			Text:  "确认",
 			Type:  "primary",
 			Name:  "workspace_new_submit",
-			Value: map[string]any{"action": "workspace.new.submit", "request_id": requestID},
+			Value: cardactions.RequestActionValue{Action: "workspace.new.submit", RequestID: requestID}.Map(),
 		},
 		{
 			Text:  "取消",
 			Type:  "default",
 			Name:  "workspace_new_cancel",
-			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
+			Value: cardactions.RequestActionValue{Action: "pending_form.cancel", RequestID: requestID}.Map(),
 		},
 	})
 	for idx, row := range buttonRows {
@@ -152,19 +153,19 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 			Text:  "选父目录",
 			Type:  "default",
 			Name:  "workspace_clone_pickdir",
-			Value: map[string]any{"action": "workspace.clone.pickdir", "request_id": requestID},
+			Value: cardactions.RequestActionValue{Action: "workspace.clone.pickdir", RequestID: requestID}.Map(),
 		},
 		{
 			Text:  "确认",
 			Type:  "primary",
 			Name:  "workspace_clone_submit",
-			Value: map[string]any{"action": "workspace.clone.submit", "request_id": requestID},
+			Value: cardactions.RequestActionValue{Action: "workspace.clone.submit", RequestID: requestID}.Map(),
 		},
 		{
 			Text:  "取消",
 			Type:  "default",
 			Name:  "workspace_clone_cancel",
-			Value: map[string]any{"action": "pending_form.cancel", "request_id": requestID},
+			Value: cardactions.RequestActionValue{Action: "pending_form.cancel", RequestID: requestID}.Map(),
 		},
 	})
 	for idx, row := range buttonRows {
@@ -221,12 +222,9 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 	if snapshot.State != "cancelling" {
 		buttons = []feishu.Button{
 			{
-				Text: "取消克隆",
-				Type: "default",
-				Value: map[string]any{
-					"action":     "workspace.clone.cancel",
-					"request_id": requestID,
-				},
+				Text:  "取消克隆",
+				Type:  "default",
+				Value: cardactions.RequestActionValue{Action: "workspace.clone.cancel", RequestID: requestID}.Map(),
 			},
 		}
 	}
@@ -237,12 +235,9 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 func (s *RenderService) RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
 	buttons := []feishu.Button{
 		{
-			Text: "返回工作区管理",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.workspace",
-				"session_key": sessionKey,
-			},
+			Text:  "返回工作区管理",
+			Type:  "default",
+			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
 	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
@@ -263,19 +258,16 @@ func (s *RenderService) RenderWorkspaceSwitchExistingCard(sessionKey, workspaceI
 		{
 			Text: "切换到该工作区",
 			Type: "primary",
-			Value: map[string]any{
-				"action":       "workspace.use.existing",
-				"session_key":  sessionKey,
-				"workspace_id": strings.TrimSpace(workspaceID),
-			},
+			Value: cardactions.WorkspaceActionValue{
+				Action:      "workspace.use.existing",
+				SessionKey:  sessionKey,
+				WorkspaceID: strings.TrimSpace(workspaceID),
+			}.Map(),
 		},
 		{
-			Text: "返回工作区管理",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.workspace",
-				"session_key": sessionKey,
-			},
+			Text:  "返回工作区管理",
+			Type:  "default",
+			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
 	return s.App.Feishu().SimpleStatusCard("工作区已存在", "blue", body, buttons)
@@ -302,12 +294,9 @@ func (s *RenderService) RenderWorkspaceCloneManualHintCard(sessionKey, workspace
 	}
 	buttons := []feishu.Button{
 		{
-			Text: "返回工作区管理",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.workspace",
-				"session_key": sessionKey,
-			},
+			Text:  "返回工作区管理",
+			Type:  "default",
+			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
 	return s.App.Feishu().SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)

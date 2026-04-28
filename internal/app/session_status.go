@@ -7,10 +7,10 @@ func sessionRefreshPendingStatus(sess *state.Session) {
 		return
 	}
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		sess.Status = "queued"
+		sess.Status = state.SessionStatusQueued.String()
 		return
 	}
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 }
 
 // sessionShouldStartNextSubmissionAsync is defined in submission_queue.go.

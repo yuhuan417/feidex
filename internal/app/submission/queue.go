@@ -63,7 +63,7 @@ type App interface {
 	SubmissionQueueIsReviewSubmission(sub *state.Submission) bool
 	SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error)
 	SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error)
-	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) map[string]any
+	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams
 	SubmissionQueueRequireCodexClient() (appcore.CodexClient, error)
 }
 
@@ -196,7 +196,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -216,7 +216,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 	}
 	inboundAttachments, err := a.SubmissionQueueAttachmentResolver().ResolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
@@ -247,7 +247,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	shouldAttemptStart := !hasInFlight || a.SubmissionQueueInflightAllowsAdditional(mode)
 	willWaitInQueue := queueLenBefore > 0 || (hasInFlight && !a.SubmissionQueueInflightAllowsAdditional(mode))
 	if willWaitInQueue {
-		sess.Status = "queued"
+		sess.Status = state.SessionStatusQueued.String()
 	}
 	slog.Debug("submission enqueue begin",
 		"session_key", sessionKey,
@@ -277,7 +277,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		InputText:            skillResolution.InputText,
 		Skills:               skillResolution.Skills,
 		Attachments:          attachments,
-		Status:               "queued",
+		Status:               state.SubmissionStatusQueued.String(),
 		WaitedInQueue:        willWaitInQueue,
 	}
 	id, err := appState.CreateSubmission(sub)
@@ -435,10 +435,10 @@ func RefreshPendingStatus(sess *state.Session) {
 		return
 	}
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		sess.Status = "queued"
+		sess.Status = state.SessionStatusQueued.String()
 		return
 	}
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 }
 
 // HandleSubmissionStartFailure handles a submission start failure.
@@ -466,7 +466,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	a.SubmissionQueueClearSubmissionProcessingReactions(sub)
 	if sub != nil {
-		_ = appState.FinalizeSubmission(sub.ID, "failed")
+		_ = appState.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
 	}
 	shouldStartNext := false
 	clearedThreadLineage := false
@@ -484,9 +484,9 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 		}
 		if !sessionctx.HasActiveOperations(sess) {
 			if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-				sess.Status = "queued"
+				sess.Status = state.SessionStatusQueued.String()
 			} else {
-				sess.Status = "idle"
+				sess.Status = state.SessionStatusIdle.String()
 			}
 		}
 	}); saveErr != nil {
@@ -616,7 +616,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			"model", effectiveModel,
 		)
 		threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err = client.Call(threadCtx, "thread/start", threadParams, &threadResp)
+		err = client.Call(threadCtx, "thread/start", threadParams.Map(), &threadResp)
 		threadCancel()
 		if err != nil {
 			s.HandleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
@@ -651,9 +651,9 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 	})
-	sess.Status = "turn_starting"
+	sess.Status = state.SessionStatusTurnStarting.String()
 	sub.ThreadID = threadID
-	sub.Status = "running"
+	sub.Status = state.SubmissionStatusRunning.String()
 	a.SubmissionQueueRuntimeState().NotePendingTurnBinding(threadID, sessionKey, sub.ID)
 	if err := appState.SaveSession(sess); err != nil {
 		a.SubmissionQueueRuntimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
@@ -708,13 +708,13 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = "turn_in_progress"
+	sess.Status = state.SessionStatusTurnInProgress.String()
 	a.SubmissionQueueRuntimeState().BindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.SubmissionQueueRuntimeState().MarkTurnStartedAt(turnID, time.Now())
 	a.SubmissionQueueRuntimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
-	sub.Status = "running"
+	sub.Status = state.SubmissionStatusRunning.String()
 	if err := appState.SaveSession(sess); err != nil {
 		return err
 	}

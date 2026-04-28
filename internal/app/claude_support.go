@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/claudesupport"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
@@ -118,6 +119,22 @@ func claudePlanOriginalBody(pending *state.PendingRequest) string {
 
 func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
 	return newClaudeSupportService(a).SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
+}
+
+func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+	return sendClaudeApprovalCardWithPayload(
+		a,
+		presentation.Kind.String(),
+		requestID,
+		sessionKey,
+		sub,
+		presentation.ThreadID,
+		presentation.TurnID,
+		presentation.ItemID,
+		presentation.Body,
+		presentation.Payload.Request,
+		presentation.Payload.SessionActionLabel,
+	)
 }
 
 func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {

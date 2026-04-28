@@ -246,19 +246,19 @@ func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey 
 		}
 		switch {
 		case sessionHasActiveOperations(current):
-			current.Status = "turn_starting"
+			current.Status = state.SessionStatusTurnStarting.String()
 			for _, op := range current.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
-					current.Status = "turn_in_progress"
+					current.Status = state.SessionStatusTurnInProgress.String()
 					break
 				}
 			}
 		case len(current.Queue) > 0 || len(current.StagedImages) > 0:
 			clearSessionThreadContext(current)
-			current.Status = "queued"
+			current.Status = state.SessionStatusQueued.String()
 		default:
 			clearSessionThreadContext(current)
-			current.Status = "idle"
+			current.Status = state.SessionStatusIdle.String()
 		}
 	})
 	if err != nil {
@@ -273,7 +273,7 @@ func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey 
 			}
 			current.ThreadID = ""
 			current.TurnID = ""
-			current.Status = "queued"
+			current.Status = state.SessionStatusQueued.String()
 			current.Finalized = false
 		}); err != nil {
 			return updatedSess, nil, err
@@ -319,14 +319,14 @@ func (w *claudeSubmissionService) bindClaudeSubmissionStartState(sessionKey stri
 		} else {
 			sessionUpsertActiveOperation(current, op)
 		}
-		current.Status = "turn_in_progress"
+		current.Status = state.SessionStatusTurnInProgress.String()
 	})
 	if err != nil {
 		return nil, err
 	}
 	sub.ThreadID = claudeThreadID
 	sub.TurnID = turnID
-	sub.Status = "running"
+	sub.Status = state.SubmissionStatusRunning.String()
 	newRuntimeStateService(a).bindTurnSubmission(claudeThreadID, turnID, sessionKey, sub.ID)
 	if err := appState.MarkSubmissionRunning(sub.ID, claudeThreadID, turnID); err != nil {
 		return nil, err

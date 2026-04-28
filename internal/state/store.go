@@ -264,6 +264,7 @@ func (s *Store) UpsertSession(sess *Session) error {
 	if cp == nil {
 		return nil
 	}
+	normalizeSessionValues(cp)
 	cp.UpdatedAt = time.Now().Unix()
 	s.runtime.Sessions[sess.Key] = cp
 	s.syncPersistentSessionLocked(cp)
@@ -284,6 +285,7 @@ func (s *Store) UpdateSession(key string, mutate func(*Session)) (*Session, erro
 	if mutate != nil {
 		mutate(sess)
 	}
+	normalizeSessionValues(sess)
 	sess.UpdatedAt = time.Now().Unix()
 	s.syncPersistentSessionLocked(sess)
 	if err := s.saveLocked(); err != nil {
@@ -308,6 +310,7 @@ func (s *Store) CreateSubmission(sub *Submission) (string, error) {
 	cp.ID = id
 	cp.CreatedAt = now
 	cp.UpdatedAt = now
+	normalizeSubmissionValues(cp)
 	s.runtime.Submissions[id] = cp
 	return id, nil
 }
@@ -330,6 +333,7 @@ func (s *Store) UpdateSubmission(id string, mutate func(*Submission)) error {
 		return os.ErrNotExist
 	}
 	mutate(sub)
+	normalizeSubmissionValues(sub)
 	sub.UpdatedAt = time.Now().Unix()
 	return nil
 }
@@ -404,6 +408,7 @@ func (s *Store) UpsertPending(req *PendingRequest) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *req
+	normalizePendingRequestValues(&cp)
 	s.runtime.PendingRequests[pendingStoreKey(cp.FrontendID, cp.ID)] = &cp
 	return nil
 }
@@ -420,6 +425,7 @@ func (s *Store) UpdateScopedPending(frontendID, id string, mutate func(*PendingR
 		return os.ErrNotExist
 	}
 	mutate(req)
+	normalizePendingRequestValues(req)
 	return nil
 }
 
@@ -571,12 +577,31 @@ func normalizeSessionValues(sess *Session) bool {
 	normalizedServiceTier := normalizeStoredServiceTier(sess.ActiveThreadServiceTier)
 	changed := sess.ActiveThreadServiceTier != normalizedServiceTier
 	sess.ActiveThreadServiceTier = normalizedServiceTier
+	normalizedStatus := NormalizeSessionStatus(sess.Status).String()
+	if sess.Status != normalizedStatus {
+		changed = true
+	}
+	sess.Status = normalizedStatus
 	normalizedThreads := normalizeSessionBackendThreads(sess.BackendThreads)
 	if !sessionBackendThreadsEqual(sess.BackendThreads, normalizedThreads) {
 		changed = true
 	}
 	sess.BackendThreads = normalizedThreads
 	return changed
+}
+
+func normalizeSubmissionValues(sub *Submission) {
+	if sub == nil {
+		return
+	}
+	sub.Status = NormalizeSubmissionStatus(sub.Status).String()
+}
+
+func normalizePendingRequestValues(req *PendingRequest) {
+	if req == nil {
+		return
+	}
+	req.Status = NormalizePendingRequestStatus(req.Status).String()
 }
 
 func storedSessionFromSession(sess *Session) *storedSession {
@@ -626,7 +651,7 @@ func sessionFromStored(sess *storedSession) *Session {
 		OwnerUserID:                sess.OwnerUserID,
 		ModelOverride:              sess.ModelOverride,
 		RecentWorkspaceIDs:         cloneStringSlice(sess.RecentWorkspaceIDs),
-		Status:                     "idle",
+		Status:                     SessionStatusIdle.String(),
 		UpdatedAt:                  sess.UpdatedAt,
 	}
 	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
@@ -846,7 +871,7 @@ func (s *Store) ensureSessionLocked(key string) *Session {
 		s.runtime.Sessions[key] = sess
 		return sess
 	}
-	sess := &Session{Key: key, Status: "idle", UpdatedAt: time.Now().Unix()}
+	sess := &Session{Key: key, Status: SessionStatusIdle.String(), UpdatedAt: time.Now().Unix()}
 	s.runtime.Sessions[key] = sess
 	s.syncPersistentSessionLocked(sess)
 	return sess

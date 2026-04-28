@@ -9,6 +9,7 @@ import (
 
 	appapproval "feidex/internal/app/approval"
 	apppendingforms "feidex/internal/app/pendingforms"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
@@ -19,14 +20,14 @@ type CodexEventRouter struct {
 	// ---- notification callbacks ----
 
 	// NoteTurnItemStarted records that a turn item started.
-	NoteTurnItemStarted func(threadID, turnID string, item map[string]any)
+	NoteTurnItemStarted func(threadID, turnID string, item turnitem.ProtocolItem)
 
 	// NoteStandaloneCompactItemStarted records that a standalone compact
 	// item started.
-	NoteStandaloneCompactItemStarted func(threadID, turnID string, item map[string]any)
+	NoteStandaloneCompactItemStarted func(threadID, turnID string, item turnitem.ProtocolItem)
 
 	// CompleteTurnItem completes a turn item.
-	CompleteTurnItem func(ctx context.Context, threadID, turnID, itemID string, item map[string]any)
+	CompleteTurnItem func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
 
 	// UpdatePendingPlan updates the pending plan for a turn.
 	UpdatePendingPlan func(turnID, plan string)
@@ -59,10 +60,7 @@ type CodexEventRouter struct {
 	// ---- server request callbacks ----
 
 	// SendApprovalCardWithPayload sends an approval card.
-	SendApprovalCardWithPayload func(approvalType string, requestID json.RawMessage, threadID, turnID, itemID string, body string, payload map[string]any)
-
-	// SendPermissionsCardWithPayload sends a permissions approval card.
-	SendPermissionsCardWithPayload func(requestID json.RawMessage, threadID, turnID, itemID string, body string, permissions map[string]any, payload map[string]any)
+	SendApprovalCard func(requestID json.RawMessage, presentation appapproval.Presentation)
 
 	// SendUserInputCard sends a simple user input card.
 	SendUserInputCard func(requestID json.RawMessage, payload apppendingforms.ToolUserInputPayload)
@@ -77,7 +75,7 @@ type CodexEventRouter struct {
 	SendElicitationFormCard func(requestID json.RawMessage, payload apppendingforms.ElicitationFormPayload)
 
 	// MergeRequestPayloadWithTurnItem merges a request payload with turn item data.
-	MergeRequestPayloadWithTurnItem func(threadID, turnID, itemID string, raw map[string]any) map[string]any
+	MergeApprovalPresentationWithTurnItem func(presentation appapproval.Presentation) appapproval.Presentation
 
 	// ReplyCodexError sends an error reply for a Codex request.
 	ReplyCodexError func(requestID json.RawMessage, code int, message string)
@@ -152,11 +150,12 @@ func (r *CodexEventRouter) handleItemStarted(params json.RawMessage) {
 	if json.Unmarshal(params, &p) != nil {
 		return
 	}
+	item := turnitem.NewProtocolItem(p.Item)
 	if r.NoteTurnItemStarted != nil {
-		r.NoteTurnItemStarted(p.ThreadID, p.TurnID, p.Item)
+		r.NoteTurnItemStarted(p.ThreadID, p.TurnID, item)
 	}
 	if r.NoteStandaloneCompactItemStarted != nil {
-		r.NoteStandaloneCompactItemStarted(p.ThreadID, p.TurnID, p.Item)
+		r.NoteStandaloneCompactItemStarted(p.ThreadID, p.TurnID, item)
 	}
 }
 
@@ -174,7 +173,7 @@ func (r *CodexEventRouter) handleItemCompleted(params json.RawMessage) {
 		p.ItemID = strings.TrimSpace(stringValue(p.Item["id"]))
 	}
 	if r.CompleteTurnItem != nil {
-		r.CompleteTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, p.Item)
+		r.CompleteTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, turnitem.NewProtocolItemWithID(p.ItemID, p.Item))
 	}
 }
 
@@ -271,7 +270,7 @@ func (r *CodexEventRouter) handleError(params json.RawMessage) {
 	}
 	if r.UpdateSubmissionByTurn != nil {
 		r.UpdateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
-			sub.Status = "failed"
+			sub.Status = state.SubmissionStatusFailed.String()
 		})
 	}
 }
@@ -306,11 +305,20 @@ func (r *CodexEventRouter) OnCommandApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	if r.MergeRequestPayloadWithTurnItem != nil {
-		raw = r.MergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	presentation := appapproval.Presentation{
+		Kind:     appapproval.KindCommand,
+		ThreadID: threadID,
+		TurnID:   turnID,
+		ItemID:   itemID,
+		Payload:  appapproval.RequestPayload{Request: raw},
 	}
-	if r.SendApprovalCardWithPayload != nil {
-		r.SendApprovalCardWithPayload("command", req.ID, threadID, turnID, itemID, appapproval.RenderCommandBody(raw), raw)
+	if r.MergeApprovalPresentationWithTurnItem != nil {
+		presentation = r.MergeApprovalPresentationWithTurnItem(presentation)
+	}
+	presentation.Body = appapproval.RenderCommandBody(presentation.Payload.Request)
+	presentation.Payload.Body = presentation.Body
+	if r.SendApprovalCard != nil {
+		r.SendApprovalCard(req.ID, presentation)
 	}
 }
 
@@ -324,8 +332,15 @@ func (r *CodexEventRouter) OnFileApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	if r.MergeRequestPayloadWithTurnItem != nil {
-		raw = r.MergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	presentation := appapproval.Presentation{
+		Kind:     appapproval.KindFile,
+		ThreadID: threadID,
+		TurnID:   turnID,
+		ItemID:   itemID,
+		Payload:  appapproval.RequestPayload{Request: raw},
+	}
+	if r.MergeApprovalPresentationWithTurnItem != nil {
+		presentation = r.MergeApprovalPresentationWithTurnItem(presentation)
 	}
 	workspaceCwd := ""
 	if r.FindSubmissionByTurn != nil && r.FindWorkspaceCwdForSubmission != nil {
@@ -333,8 +348,10 @@ func (r *CodexEventRouter) OnFileApproval(req codexrpc.RequestEnvelope) {
 			workspaceCwd = r.FindWorkspaceCwdForSubmission(sub)
 		}
 	}
-	if r.SendApprovalCardWithPayload != nil {
-		r.SendApprovalCardWithPayload("file", req.ID, threadID, turnID, itemID, appapproval.RenderFileBodyWithWorkspace(raw, workspaceCwd), raw)
+	presentation.Body = appapproval.RenderFileBodyWithWorkspace(presentation.Payload.Request, workspaceCwd)
+	presentation.Payload.Body = presentation.Body
+	if r.SendApprovalCard != nil {
+		r.SendApprovalCard(req.ID, presentation)
 	}
 }
 
@@ -348,12 +365,23 @@ func (r *CodexEventRouter) OnPermissionsApproval(req codexrpc.RequestEnvelope) {
 	threadID := strings.TrimSpace(stringValue(raw["threadId"]))
 	turnID := strings.TrimSpace(stringValue(raw["turnId"]))
 	itemID := strings.TrimSpace(stringValue(raw["itemId"]))
-	if r.MergeRequestPayloadWithTurnItem != nil {
-		raw = r.MergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	presentation := appapproval.Presentation{
+		Kind:     appapproval.KindPermissions,
+		ThreadID: threadID,
+		TurnID:   turnID,
+		ItemID:   itemID,
+		Payload:  appapproval.RequestPayload{Request: raw},
 	}
-	permissions, _ := raw["permissions"].(map[string]any)
-	if r.SendPermissionsCardWithPayload != nil {
-		r.SendPermissionsCardWithPayload(req.ID, threadID, turnID, itemID, appapproval.RenderPermissionsApprovalBody(raw), permissions, raw)
+	if r.MergeApprovalPresentationWithTurnItem != nil {
+		presentation = r.MergeApprovalPresentationWithTurnItem(presentation)
+	}
+	if permissions, ok := presentation.Payload.Request["permissions"].(map[string]any); ok && len(presentation.Payload.Permissions) == 0 {
+		presentation.Payload.Permissions = appapproval.CloneJSONMap(permissions)
+	}
+	presentation.Body = appapproval.RenderPermissionsApprovalBody(presentation.Payload.Request)
+	presentation.Payload.Body = presentation.Body
+	if r.SendApprovalCard != nil {
+		r.SendApprovalCard(req.ID, presentation)
 	}
 }
 

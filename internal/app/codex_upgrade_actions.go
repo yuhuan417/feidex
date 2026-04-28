@@ -64,7 +64,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 	appState := s.app.State()
 	requestID := actionStringValue(action, "request_id")
 	pending := appState.Pending(requestID)
-	if pending == nil || pending.Kind != codexUpgradePendingKind || strings.TrimSpace(pending.Status) != "pending" {
+	if pending == nil || pending.Kind != codexUpgradePendingKind || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -72,7 +72,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 	}
 	sessionKey := firstNonEmpty(actionSessionKey(action), pending.SessionKey)
 	if actionName == "codex_upgrade.cancel" {
-		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		view, err := newBackendUpgradeService(s.app).loadCodexUpgradeView(ctx, false)
@@ -116,7 +116,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 			Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).CodexUpgradeState())),
 		}, nil
 	}
-	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	messageID := firstNonEmpty(strings.TrimSpace(action.MessageID), strings.TrimSpace(pending.FeishuMsgID))
 	go newBackendUpgradeService(s.app).runCodexUpgradeOperation(messageID, sessionKey, payload)
 	return &callback.CardActionTriggerResponse{

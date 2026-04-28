@@ -24,6 +24,13 @@ const (
 	MenuItemBack    MenuItemKind = "back"
 )
 
+// ActionName is a registry-owned action identifier.
+type ActionName string
+
+func (a ActionName) String() string {
+	return string(a)
+}
+
 // HelpCommandSpec describes a single help command entry.
 type HelpCommandSpec struct {
 	Command string
@@ -80,7 +87,7 @@ type Spec struct {
 	Nodes       []MenuNode
 	MenuGroup   *MenuGroupSpec
 	MenuItems   []MenuItemSpec
-	ActionNames []string
+	ActionNames []ActionName
 }
 
 // SupportsBackend reports whether the feature should be visible for the
@@ -137,7 +144,7 @@ func (s Spec) OwnsAction(action string) bool {
 		return false
 	}
 	for _, name := range s.ActionNames {
-		if strings.TrimSpace(name) == action {
+		if strings.TrimSpace(name.String()) == action {
 			return true
 		}
 	}

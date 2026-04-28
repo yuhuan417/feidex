@@ -5,6 +5,8 @@ import (
 
 	appcore "feidex/internal/app/appcore"
 	appconvbackend "feidex/internal/app/convbackend"
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+	apphistorycmd "feidex/internal/app/historycmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -117,19 +119,19 @@ func (a convBackendConversationAdapter) MarkThreadLive(app appconvbackend.App, s
 type convBackendWorkspaceConfigAdapter struct{}
 
 func (a convBackendWorkspaceConfigAdapter) HistoryIndexForOrdinal(app appconvbackend.App, sessionKey string, ordinal int) (int, error) {
-	return newHistoryService(app.(*App)).CodexHistoryIndexForOrdinal(sessionKey, ordinal)
+	return apphistorycmd.NewService(app.(*App)).CodexHistoryIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexHistoryCard(app appconvbackend.App, sessionKey string, page int) (map[string]any, error) {
-	return newHistoryService(app.(*App)).RenderCodexHistoryCard(sessionKey, page)
+	return apphistorycmd.NewService(app.(*App)).RenderCodexHistoryCard(sessionKey, page)
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexHistoryDetailCard(app appconvbackend.App, sessionKey string, index int) (map[string]any, error) {
-	return newHistoryService(app.(*App)).RenderCodexHistoryDetailCard(sessionKey, index)
+	return apphistorycmd.NewService(app.(*App)).RenderCodexHistoryDetailCard(sessionKey, index)
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexUsageBody(app appconvbackend.App, sess *state.Session) string {
-	return newUsageService(app.(*App)).RenderCodexUsageBody(sess)
+	return appdebugviewcmd.NewUsageService(app.(*App)).RenderCodexUsageBody(sess)
 }
 
 func (a convBackendWorkspaceConfigAdapter) HistoryTurnIndexForOrdinal(app appconvbackend.App, sessionKey string, ordinal int) (int, error) {
@@ -145,7 +147,7 @@ func (a convBackendWorkspaceConfigAdapter) RenderClaudeHistoryDetailCard(app app
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderClaudeUsageBody(app appconvbackend.App, sess *state.Session) string {
-	return newUsageService(app.(*App)).RenderClaudeUsageBody(sess)
+	return appdebugviewcmd.NewUsageService(app.(*App)).RenderClaudeUsageBody(sess)
 }
 
 // ---------------------------------------------------------------------------

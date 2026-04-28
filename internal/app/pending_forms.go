@@ -29,7 +29,7 @@ func pendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest
 	pending := a.State().PendingRequests()
 	sort.Slice(pending, func(i, j int) bool { return pending[i].CreatedAt > pending[j].CreatedAt })
 	for _, req := range pending {
-		if req == nil || req.Status != "pending" || req.SessionKey != sessionKey {
+		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || req.SessionKey != sessionKey {
 			continue
 		}
 		if req.OwnerUserID != "" && req.OwnerUserID != userID {

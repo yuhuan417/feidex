@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"feidex/internal/app/appcore"
+	apputil "feidex/internal/app/apputil"
+	"feidex/internal/app/cardactions"
 	appdebugview "feidex/internal/app/debugview"
 	appmodelconfig "feidex/internal/app/modelconfig"
 	appquietmode "feidex/internal/app/quietmode"
@@ -212,8 +214,8 @@ func autoRetryEnabled(app App) bool {
 func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[string]any {
 	body := s.FormatMenuBody("menu.group.model", unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.App)))
 	buttons := []feishu.Button{
-		{Text: "后端选择 /backend", Type: "default", Value: map[string]any{"action": "menu.group.backend", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+		{Text: "后端选择 /backend", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.group.backend", SessionKey: sessionKey}.Map()},
+		{Text: "返回上一级", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	return s.App.Feishu().SimpleStatusCard("模型配置", "orange", body, buttons)
 }
@@ -300,8 +302,8 @@ func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[s
 		"切换成功后会尝试立即应用到当前会话；后续新会话会使用新配置。",
 	}, "\n")
 	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
+		{Text: "返回上一级", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	body = s.FormatMenuBody("menu.group.model", body)
 	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
@@ -324,9 +326,9 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 		"当前 fast: " + fastValue,
 	}, "\n")
 	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
+		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.fast", SessionKey: sessionKey}.Map()},
+		{Text: "返回上一级", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	body = s.FormatMenuBody("menu.group.model", body)
 	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
@@ -350,8 +352,8 @@ func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, 
 
 // CompleteCodexGlobalModelSet completes a Codex global model set action.
 func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey, _ := action.ActionValue["session_key"].(string)
-	menuAction, _ := action.ActionValue["menu_action"].(string)
+	sessionKey := apputil.StringValue(action.ActionValue["session_key"])
+	menuAction := apputil.StringValue(action.ActionValue["menu_action"])
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}
@@ -394,8 +396,8 @@ func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.Ca
 // CompleteCodexGlobalReasoningEffortSet completes a Codex global reasoning
 // effort set action.
 func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey, _ := action.ActionValue["session_key"].(string)
-	menuAction, _ := action.ActionValue["menu_action"].(string)
+	sessionKey := apputil.StringValue(action.ActionValue["session_key"])
+	menuAction := apputil.StringValue(action.ActionValue["menu_action"])
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}

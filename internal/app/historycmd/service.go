@@ -12,8 +12,9 @@ import (
 
 	appcore "feidex/internal/app/appcore"
 	apphistory "feidex/internal/app/apphistory"
-	appcards "feidex/internal/app/cards"
 	apputil "feidex/internal/app/apputil"
+	"feidex/internal/app/cardactions"
+	appcards "feidex/internal/app/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -228,33 +229,22 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 	}
 	if page > 0 {
 		buttons = append(buttons, feishu.Button{
-			Text: "上一页",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "history.page",
-				"session_key": sessionKey,
-				"page":        page - 1,
-			},
+			Text:  "上一页",
+			Type:  "default",
+			Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: page - 1}.Map(),
 		})
 	}
 	if end < total {
 		buttons = append(buttons, feishu.Button{
-			Text: "下一页",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "history.page",
-				"session_key": sessionKey,
-				"page":        page + 1,
-			},
+			Text:  "下一页",
+			Type:  "default",
+			Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: page + 1}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.tools",
-			"session_key": sessionKey,
-		},
+		Text:  "返回上一级",
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.tools", SessionKey: sessionKey}.Map(),
 	})
 	card := appcards.NewMarkdownBodyCard("历史记录", "blue")
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.app.HistoryMenuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
@@ -262,7 +252,7 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 			"history_detail_select",
 			"选择要查看的 turn",
-			map[string]any{"action": "history.detail.select", "session_key": sessionKey},
+			cardactions.HistoryDetailSelectActionValue{SessionKey: sessionKey}.Map(),
 			selectOptions,
 			initialOption,
 		))
@@ -316,34 +306,22 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 	buttons := make([]feishu.Button, 0, 3)
 	if index > 0 {
 		buttons = append(buttons, feishu.Button{
-			Text: "更新一条",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "history.detail",
-				"session_key": sessionKey,
-				"index":       index - 1,
-			},
+			Text:  "更新一条",
+			Type:  "default",
+			Value: cardactions.HistoryDetailActionValue{SessionKey: sessionKey, Index: index - 1}.Map(),
 		})
 	}
 	if index+1 < len(turns) {
 		buttons = append(buttons, feishu.Button{
-			Text: "更旧一条",
-			Type: "default",
-			Value: map[string]any{
-				"action":      "history.detail",
-				"session_key": sessionKey,
-				"index":       index + 1,
-			},
+			Text:  "更旧一条",
+			Type:  "default",
+			Value: cardactions.HistoryDetailActionValue{SessionKey: sessionKey, Index: index + 1}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "history.page",
-			"session_key": sessionKey,
-			"page":        index / HistoryPageSize,
-		},
+		Text:  "返回上一级",
+		Type:  "default",
+		Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: index / HistoryPageSize}.Map(),
 	})
 	return s.app.HistoryFeishu().SimpleStatusCard("Turn 详情", "blue", s.app.HistoryMenuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
 }

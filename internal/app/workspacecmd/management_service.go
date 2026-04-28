@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -52,7 +52,7 @@ func (s *ManagementService) BeginWorkspaceNewWithPayload(msg *feishu.InboundMess
 		OwnerUserID: msg.UserID,
 		FeishuMsgID: msgID,
 		PayloadJSON: appcore.MustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	})
@@ -71,7 +71,7 @@ func (s *ManagementService) CreateWorkspaceNewPending(sessionKey, userID, feishu
 		OwnerUserID: userID,
 		FeishuMsgID: strings.TrimSpace(feishuMsgID),
 		PayloadJSON: appcore.MustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	}); err != nil {
@@ -308,7 +308,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 			payload.SelectedParentDir = parentDir
 			payload.ErrorMessage = ""
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-				req.Status = "resolved"
+				req.Status = state.PendingRequestStatusResolved.String()
 				req.PayloadJSON = appcore.MustJSON(payload)
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
@@ -337,7 +337,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 				payload.ErrorMessage = err.Error()
 			}
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-				req.Status = "resolved"
+				req.Status = state.PendingRequestStatusResolved.String()
 				req.PayloadJSON = appcore.MustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
@@ -357,7 +357,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 		payload.SelectedParentDir = parentDir
 		payload.ErrorMessage = err.Error()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = "pending"
+			req.Status = state.PendingRequestStatusPending.String()
 			req.PayloadJSON = appcore.MustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
@@ -376,7 +376,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 	payload.SelectedParentDir = parentDir
 	payload.ErrorMessage = ""
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "resolved"
+		req.Status = state.PendingRequestStatusResolved.String()
 		req.PayloadJSON = appcore.MustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
@@ -499,7 +499,7 @@ func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, se
 		OwnerUserID: action.UserID,
 		FeishuMsgID: strings.TrimSpace(action.MessageID),
 		PayloadJSON: appcore.MustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	}); err != nil {
@@ -577,7 +577,7 @@ func (s *ManagementService) CompleteWorkspaceCloneCancel(action *feishu.CardActi
 	if op := s.GetWorkspaceCloneOperation(requestID); op != nil {
 		snapshot := op.RequestCancel()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = "cancelling"
+			req.Status = state.PendingRequestStatusCancelling.String()
 			req.PayloadJSON = appcore.MustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
@@ -650,7 +650,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	}
 	if existingWS := s.WorkspaceByIDAndCWD(id, cwd); existingWS != nil {
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = "resolved"
+			req.Status = state.PendingRequestStatusResolved.String()
 			req.PayloadJSON = appcore.MustJSON(payload)
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
@@ -674,7 +674,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 		}, nil
 	}
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "resolved"
+		req.Status = state.PendingRequestStatusResolved.String()
 		req.PayloadJSON = appcore.MustJSON(payload)
 	})
 	body := "已创建并切换到工作区 `" + id + "`\n\ncwd: `" + cwd + "`"
@@ -711,8 +711,8 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 	}
 	payload.SelectedParentDir = parentDir
 	messageID := appcore.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
-	if status := strings.TrimSpace(pending.Status); status == "processing" || status == "cancelling" {
-		snapshot := CloneProgressSnapshot{State: status}
+	if status := state.NormalizePendingRequestStatus(pending.Status); status == state.PendingRequestStatusProcessing || status == state.PendingRequestStatusCancelling {
+		snapshot := CloneProgressSnapshot{State: status.String()}
 		if op := s.GetWorkspaceCloneOperation(requestID); op != nil {
 			snapshot = op.Snapshot()
 		}
@@ -725,7 +725,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		var existingWorkspaceErr *CloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-				req.Status = "resolved"
+				req.Status = state.PendingRequestStatusResolved.String()
 				req.PayloadJSON = appcore.MustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
@@ -737,7 +737,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		var existingDirErr *CloneExistingDirError
 		if errors.As(err, &existingDirErr) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-				req.Status = "resolved"
+				req.Status = state.PendingRequestStatusResolved.String()
 				req.PayloadJSON = appcore.MustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
@@ -753,7 +753,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		}
 		payload.ErrorMessage = err.Error()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = "pending"
+			req.Status = state.PendingRequestStatusPending.String()
 			req.PayloadJSON = appcore.MustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
@@ -766,7 +766,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 	op := NewCloneOperation(cancel)
 	s.SetWorkspaceCloneOperation(requestID, op)
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "processing"
+		req.Status = state.PendingRequestStatusProcessing.String()
 		req.PayloadJSON = appcore.MustJSON(payload)
 		req.FeishuMsgID = appcore.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
@@ -830,7 +830,7 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 		payload.DraftID = id
 		payload.DraftName = name
 		_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) {
-			req.Status = "resolved"
+			req.Status = state.PendingRequestStatusResolved.String()
 			req.PayloadJSON = appcore.MustJSON(payload)
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
@@ -842,7 +842,7 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 	if err := s.CreateWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
-	_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	if pending.FeishuMsgID != "" {
 		_ = s.App.Feishu().PatchCard(context.Background(), pending.FeishuMsgID, s.App.Feishu().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}

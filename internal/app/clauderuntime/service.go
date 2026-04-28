@@ -12,11 +12,13 @@ import (
 	"sync"
 	"time"
 
+	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/apputil"
 	appdelivery "feidex/internal/app/delivery"
 	apppendingforms "feidex/internal/app/pendingforms"
 	appruntime "feidex/internal/app/runtime"
 	appturn "feidex/internal/app/turn"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -81,7 +83,7 @@ type PendingInteraction struct {
 	Kind                     string
 	Session                  *SessionState
 	Tool                     string
-	SessionPermissionUpdates []map[string]any
+	SessionPermissionUpdates []SessionPermissionUpdate
 	RespCh                   chan PendingResponse
 }
 
@@ -103,9 +105,9 @@ type LifecycleDeps struct {
 
 type TurnStreamDeps struct {
 	RecordTurnError                func(threadID, turnID, message string)
-	CompleteTurnItem               func(ctx context.Context, threadID, turnID, itemID string, item map[string]any)
+	CompleteTurnItem               func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
 	PrepareTurnStreamQuietBoundary func(turnID string) (reuseMessageID string)
-	PrepareTurnStreamQuietUpdate   func(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp
+	PrepareTurnStreamQuietUpdate   func(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp
 	MarkTurnStreamFinal            func(turnID string)
 }
 
@@ -125,7 +127,7 @@ type DeliveryDeps struct {
 }
 
 type InteractiveDeps struct {
-	SendClaudeApprovalCard      func(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error
+	SendClaudeApprovalCard      func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error
 	SendClaudeUserInputCard     func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
 	SendClaudeUserInputFormCard func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
 	SendClaudePlanModeCard      func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error
@@ -216,6 +218,10 @@ func (s *Service) RecordTurnError(threadID, turnID, message string) {
 }
 
 func (s *Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
+	s.CompleteTurnItemPayload(ctx, threadID, turnID, itemID, turnitem.NewProtocolItemWithID(itemID, item))
+}
+
+func (s *Service) CompleteTurnItemPayload(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 	if s != nil && s.deps.TurnStream.CompleteTurnItem != nil {
 		s.deps.TurnStream.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
 	}
@@ -229,6 +235,10 @@ func (s *Service) PrepareTurnStreamQuietBoundary(turnID string) string {
 }
 
 func (s *Service) PrepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp {
+	return s.PrepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, turnitem.NewProtocolItemWithID(itemID, item), workspaceCwd)
+}
+
+func (s *Service) PrepareTurnStreamQuietUpdatePayload(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
 	if s == nil || s.deps.TurnStream.PrepareTurnStreamQuietUpdate == nil {
 		return appturn.QuietWorkingCardOp{}
 	}
@@ -300,11 +310,11 @@ func (s *Service) ReplyInThread(sub *state.Submission) bool {
 	return s.deps.Delivery.ReplyInThread(sub)
 }
 
-func (s *Service) SendClaudeApprovalCard(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+func (s *Service) SendClaudeApprovalCard(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
 	if s == nil || s.deps.Interactive.SendClaudeApprovalCard == nil {
 		return fmt.Errorf("approval card delivery unavailable")
 	}
-	return s.deps.Interactive.SendClaudeApprovalCard(kind, requestID, sessionKey, sub, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
+	return s.deps.Interactive.SendClaudeApprovalCard(requestID, sessionKey, sub, presentation)
 }
 
 func (s *Service) SendClaudeUserInputCard(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
@@ -680,7 +690,7 @@ func (s *Service) ResolveApproval(requestID string, resolution appruntime.Claude
 		resp.Behavior = claudecli.PermissionAllow
 		resp.UpdatedPermissions = CopyPermissionUpdates(resolution.UpdatedPermissions)
 		if strings.TrimSpace(resolution.Scope) == "session" && len(resp.UpdatedPermissions) == 0 {
-			resp.UpdatedPermissions = CopyPermissionUpdates(pending.SessionPermissionUpdates)
+			resp.UpdatedPermissions = MapSessionPermissionUpdates(pending.SessionPermissionUpdates)
 		}
 	default:
 		resp.Behavior = claudecli.PermissionDeny
@@ -1366,17 +1376,21 @@ func (s *Service) handlePermission(ctx context.Context, state *SessionState, req
 	requestID := strings.TrimSpace(req.RequestID)
 	sessionUpdates := SafeClaudeSessionPermissionUpdates(req.PermissionSuggestions)
 	sessionLabel := DescribeClaudeSessionPermissionUpdates(sessionUpdates)
-	kind, body, payload := s.approvalPresentation(sub.WorkspaceID, req)
+	presentation := s.approvalPresentation(sub.WorkspaceID, req)
+	presentation.ThreadID = threadID
+	presentation.TurnID = turnID
+	presentation.ItemID = requestID
+	presentation.Payload.SessionActionLabel = sessionLabel
 
-	if err := s.SendClaudeApprovalCard(kind, requestID, sessionKey, sub, threadID, turnID, requestID, body, payload, sessionLabel); err != nil {
+	if err := s.SendClaudeApprovalCard(requestID, sessionKey, sub, presentation); err != nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: err.Error()}, nil
 	}
 
 	pending := &PendingInteraction{
-		Kind:                     kind,
+		Kind:                     presentation.Kind.String(),
 		Session:                  state,
 		Tool:                     req.ToolName,
-		SessionPermissionUpdates: CopyPermissionUpdates(sessionUpdates),
+		SessionPermissionUpdates: CopySessionPermissionUpdates(sessionUpdates),
 		RespCh:                   make(chan PendingResponse, 1),
 	}
 	s.storePending(requestID, pending)
@@ -1506,7 +1520,7 @@ func (s *Service) HandleExitPlanMode(ctx context.Context, state *SessionState, p
 // Approval presentation
 // ---------------------------------------------------------------------------
 
-func (s *Service) approvalPresentation(workspaceID string, req *claudecli.PermissionRequest) (kind, body string, payload map[string]any) {
+func (s *Service) approvalPresentation(workspaceID string, req *claudecli.PermissionRequest) appapproval.Presentation {
 	workspaceCwdFunc := func(wsID string) string {
 		return s.WorkspaceCwd(wsID)
 	}

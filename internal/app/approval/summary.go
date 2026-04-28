@@ -41,20 +41,26 @@ func RenderCommandBody(params map[string]any) string {
 }
 
 func Buttons(kind, requestKey string, requestPayload ...map[string]any) []feishu.Button {
-	switch strings.TrimSpace(kind) {
-	case "command":
+	switch NormalizeKind(kind) {
+	case KindCommand:
 		return []feishu.Button{
 			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval.command.accept", "request_id": requestKey}},
 			{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.command.accept_session", "request_id": requestKey}},
 			{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.command.decline", "request_id": requestKey}},
 			{Text: "拒绝并中断", Type: "danger", Value: map[string]any{"action": "approval.command.cancel", "request_id": requestKey}},
 		}
-	case "file":
+	case KindFile:
 		return []feishu.Button{
 			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval.file.accept", "request_id": requestKey}},
 			{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.file.accept_session", "request_id": requestKey}},
 			{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.file.decline", "request_id": requestKey}},
 			{Text: "拒绝并中断", Type: "danger", Value: map[string]any{"action": "approval.file.cancel", "request_id": requestKey}},
+		}
+	case KindPermissions:
+		return []feishu.Button{
+			{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
+			{Text: "本会话允许", Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}},
+			{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.permissions.decline", "request_id": requestKey}},
 		}
 	default:
 		return []feishu.Button{

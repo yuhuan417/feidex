@@ -101,7 +101,7 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *sta
 		flush = newTurnStreamService(a).flushTurnStream(context.Background(), threadID, turnID)
 	}
 	newBackendFailureService(a).ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
-	_ = appState.FinalizeSubmission(sub.ID, "failed")
+	_ = appState.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
 	sub = appState.Submission(sub.ID)
 	if sub == nil {
 		return
@@ -116,17 +116,17 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *sta
 		appsessionctx.RemoveActiveOperation(sess, sub.ID, turnID)
 		switch {
 		case appsessionctx.HasActiveOperations(sess):
-			sess.Status = "turn_starting"
+			sess.Status = state.SessionStatusTurnStarting.String()
 			for _, op := range sess.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
-					sess.Status = "turn_in_progress"
+					sess.Status = state.SessionStatusTurnInProgress.String()
 					break
 				}
 			}
 		case len(sess.Queue) > 0 || len(sess.StagedImages) > 0:
-			sess.Status = "queued"
+			sess.Status = state.SessionStatusQueued.String()
 		default:
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 	})
 	suppressTerminalCard := false

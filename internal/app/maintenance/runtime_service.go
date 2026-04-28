@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	appattachments "feidex/internal/app/attachments"
 	"feidex/internal/app/appcore"
+	appattachments "feidex/internal/app/attachments"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -153,11 +153,15 @@ func (s RuntimeMaintenanceService) ExpirePendingRequestsOnStartup() {
 		return
 	}
 	for _, req := range store.AllPendingRequests() {
-		if req == nil || (req.Status != "pending" && req.Status != "replied") {
+		if req == nil {
+			continue
+		}
+		status := state.NormalizePendingRequestStatus(req.Status)
+		if status != state.PendingRequestStatusPending && status != state.PendingRequestStatusReplied {
 			continue
 		}
 		_ = store.UpdateScopedPending(req.FrontendID, req.ID, func(p *state.PendingRequest) {
-			p.Status = "expired"
+			p.Status = state.PendingRequestStatusExpired.String()
 			if p.ExpiresAt < time.Now().Unix() {
 				return
 			}
@@ -401,7 +405,7 @@ func (s RuntimeMaintenanceService) CheckPendingUpgrades(source string) {
 	}
 	pendings := s.app.MaintenanceAppState().PendingRequests()
 	for _, pending := range pendings {
-		if pending != nil && pending.Status == "upgrading" {
+		if pending != nil && state.NormalizePendingRequestStatus(pending.Status) == state.PendingRequestStatusUpgrading {
 			s.CheckOneUpgrade(source, pending)
 		}
 	}
@@ -416,13 +420,13 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 	var payload UpgradePendingPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		slog.Warn("upgrade check: bad payload", "request_id", pending.ID, "error", err)
-		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return
 	}
 	unitName := strings.TrimSpace(payload.UnitName)
 	if unitName == "" {
 		slog.Warn("upgrade check: missing unit name", "request_id", pending.ID)
-		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return
 	}
 
@@ -434,7 +438,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 	if st == nil {
 		// unit not found (collected or never existed)
 		slog.Warn("upgrade check: unit not found, marking resolved", "unit", unitName, "source", source)
-		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return
 	}
 	if st.ActiveState == "active" || st.ActiveState == "activating" {
@@ -442,7 +446,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 	}
 
 	// Unit has exited — patch card and clean up
-	s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	daemon.CleanupUpgradeUnit(unitName)
 
 	sessionKey := strings.TrimSpace(pending.SessionKey)

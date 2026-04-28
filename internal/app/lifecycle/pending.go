@@ -3,14 +3,15 @@ package lifecycle
 import (
 	"strings"
 
+	appapproval "feidex/internal/app/approval"
 	"feidex/internal/state"
 )
 
 func IsServerResolvedPendingKind(kind string) bool {
 	switch strings.TrimSpace(kind) {
-	case "command",
-		"file",
-		"permissions",
+	case appapproval.KindCommand.String(),
+		appapproval.KindFile.String(),
+		appapproval.KindPermissions.String(),
 		"tool_request_user_input",
 		"tool_request_user_input_form",
 		"mcp_elicitation_url",
@@ -25,8 +26,8 @@ func IsPendingRequestOpen(req *state.PendingRequest) bool {
 	if req == nil {
 		return false
 	}
-	switch strings.TrimSpace(req.Status) {
-	case "pending", "replied":
+	switch state.NormalizePendingRequestStatus(req.Status) {
+	case state.PendingRequestStatusPending, state.PendingRequestStatusReplied:
 		return true
 	default:
 		return false

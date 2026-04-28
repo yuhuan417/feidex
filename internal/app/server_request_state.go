@@ -21,9 +21,9 @@ func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.
 	if pending == nil {
 		return nil
 	}
-	nextStatus := "resolved"
+	nextStatus := state.PendingRequestStatusResolved.String()
 	if isServerResolvedPendingKind(pending.Kind) {
-		nextStatus = "replied"
+		nextStatus = state.PendingRequestStatusReplied.String()
 	}
 	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = nextStatus
@@ -37,11 +37,11 @@ func (s runtimeStateService) markPendingRequestResolved(requestID string) *state
 	if pending == nil {
 		return nil
 	}
-	if strings.TrimSpace(pending.Status) == "resolved" {
+	if state.NormalizePendingRequestStatus(pending.Status) == state.PendingRequestStatusResolved {
 		return nil
 	}
 	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "resolved"
+		req.Status = state.PendingRequestStatusResolved.String()
 	})
 	return appState.Pending(requestID)
 }

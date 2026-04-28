@@ -20,7 +20,7 @@ var registry = []Spec{
 		Kind:     SpecKindCapability,
 		Commands: []CommandSpec{{ID: "menu", Names: []string{"/menu"}, HelpEntries: []HelpCommandSpec{{Command: "/menu", Summary: "打开命令菜单。"}}}},
 		Nodes:    []MenuNode{{Action: "menu.root", Label: "主菜单"}},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.root",
 		},
 	},
@@ -34,7 +34,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.tools",
 		},
 	},
@@ -48,7 +48,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.model", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.group.model",
 		},
 	},
@@ -62,7 +62,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.group.system",
 		},
 	},
@@ -82,7 +82,7 @@ var registry = []Spec{
 			{GroupAction: "menu.group.backend", Action: "menu.auto_retry", Label: "自动重试", Slash: "/backend retry", Kind: MenuItemDirect},
 			{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: "返回上一级", Kind: MenuItemBack},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.group.backend",
 			"menu.backend",
 			"menu.backend.switch",
@@ -102,7 +102,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.review", Label: "代码审查", Slash: "/review", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.review",
 			"menu.review.uncommitted",
 			"menu.review.base",
@@ -120,7 +120,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.quiet", Label: "静默模式", Slash: "/quiet config", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.quiet",
 			"quiet.set",
 		},
@@ -132,7 +132,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.compact", Label: "压缩上下文", Slash: "/compact", Kind: MenuItemDirect, IncludeParentAction: true},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.compact",
 		},
 	},
@@ -143,7 +143,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.download", Label: "下载文件", Slash: "/download", Kind: MenuItemDirect, IncludeParentAction: true},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.download",
 		},
 	},
@@ -158,7 +158,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.history", Label: "历史记录", Slash: "/history", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.history",
 			"history.page",
 			"history.detail",
@@ -176,7 +176,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.skills", Label: "技能列表", Slash: "/skills", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.skills",
 			"skills.select",
 			"skills.reload",
@@ -192,7 +192,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.usage", Label: "Token 消耗", Slash: "/usage", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.usage",
 		},
 	},
@@ -203,7 +203,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.interrupt", Label: "中断任务", Slash: "/stop", Kind: MenuItemDirect, IncludeParentAction: true},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.interrupt",
 		},
 	},
@@ -224,7 +224,7 @@ var registry = []Spec{
 			{Action: "thread.permission_mode.menu", Label: "会话权限", Parent: "menu.thread"},
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.thread", Label: "线程管理", Description: "查看当前线程状态，并通过下拉切换线程。", ShowInRoot: true},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.thread",
 			"menu.new",
 			"menu.fork",
@@ -245,7 +245,7 @@ var registry = []Spec{
 			{Action: "workspace.delete.confirm", Label: "确认删除", Parent: "workspace.delete.menu"},
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.workspace", Label: "工作区管理", Description: "查看当前工作区状态，并通过下拉切换工作区。", ShowInRoot: true},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.workspace",
 		},
 	},
@@ -262,7 +262,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.model", Action: "menu.model", Label: "模型配置", Slash: "/model", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.model",
 			"model.config.set_model",
 			"model.config.select_model",
@@ -281,7 +281,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.model", Action: "menu.fast", Label: "响应速度", Slash: "/fast config", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.fast",
 			"service_tier.set",
 		},
@@ -297,7 +297,7 @@ var registry = []Spec{
 			{GroupAction: "menu.group.system", Action: "menu.debug", Label: "日志级别", Slash: "/debug", Kind: MenuItemDirect},
 			{GroupAction: "menu.group.system", Action: "menu.debug.logs", Label: "查看日志", Slash: "/debug logs", Kind: MenuItemDirect},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.debug",
 			"menu.debug.logs",
 		},
@@ -312,7 +312,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.system", Action: "menu.status", Label: "状态面板", Slash: "/status", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.status",
 		},
 	},
@@ -326,7 +326,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.system", Action: "menu.help", Label: "命令帮助", Slash: "/help", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.help",
 		},
 	},
@@ -340,7 +340,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.backend", Action: "menu.codex_upgrade", Label: "Codex 管理", Slash: "/codex", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.codex_upgrade",
 		},
 	},
@@ -354,7 +354,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.backend", Action: "menu.claude_upgrade", Label: "Claude 管理", Slash: "/claude", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.claude_upgrade",
 		},
 	},
@@ -368,7 +368,7 @@ var registry = []Spec{
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.system", Action: "menu.upgrade", Label: "升级服务", Slash: "/upgrade", Kind: MenuItemSubmenu},
 		},
-		ActionNames: []string{
+		ActionNames: []ActionName{
 			"menu.upgrade",
 		},
 	},

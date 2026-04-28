@@ -5,6 +5,7 @@ import (
 
 	appconvbackend "feidex/internal/app/convbackend"
 	appsubmission "feidex/internal/app/submission"
+	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -149,7 +150,7 @@ func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Con
 func (a submissionAppAdapter) SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
 	return startSubmissionReview(a.app, ctx, threadID, sub)
 }
-func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) map[string]any {
+func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams {
 	return buildThreadStartParams(a.app, ws, sess, model)
 }
 func (a submissionAppAdapter) SubmissionQueueRequireCodexClient() (CodexClient, error) {

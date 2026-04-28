@@ -82,7 +82,7 @@ func persistForkedConversation(a *App, sessionKey string, sess *state.Session, w
 		clearSessionLiveThread(a, sessionKey)
 	}
 	sessionResetActiveOperations(sess)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	sess.Queue = nil
 	sess.StagedImages = nil
 	return a.State().SaveSession(sess)

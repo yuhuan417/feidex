@@ -5,10 +5,11 @@ import (
 	"strings"
 
 	appcore "feidex/internal/app/appcore"
+	"feidex/internal/app/cardactions"
+	appruntime "feidex/internal/app/runtime"
 	appsessionctx "feidex/internal/app/sessionctx"
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -22,7 +23,7 @@ type claudeConversationDriver struct{}
 type codexPermissionDriver struct{}
 type claudePermissionDriver struct{}
 
-func (codexDriver) Kind() string { return appruntime.BackendCodex }
+func (codexDriver) Kind() string  { return appruntime.BackendCodex }
 func (claudeDriver) Kind() string { return appruntime.BackendClaude }
 
 func (codexDriver) Capabilities() CapabilitySet {
@@ -61,18 +62,18 @@ func (claudeDriver) Runtime() RuntimeDriver {
 	return backendRuntimeDriver{displayName: "Claude", autoRetry: "Claude 自动重试"}
 }
 
-func (codexDriver) Conversation() ConversationDriver { return codexConversationDriver{} }
+func (codexDriver) Conversation() ConversationDriver  { return codexConversationDriver{} }
 func (claudeDriver) Conversation() ConversationDriver { return claudeConversationDriver{} }
-func (codexDriver) Permission() PermissionDriver { return codexPermissionDriver{} }
-func (claudeDriver) Permission() PermissionDriver { return claudePermissionDriver{} }
+func (codexDriver) Permission() PermissionDriver      { return codexPermissionDriver{} }
+func (claudeDriver) Permission() PermissionDriver     { return claudePermissionDriver{} }
 
-func (codexConversationDriver) PrimarySlash() string { return "/thread" }
+func (codexConversationDriver) PrimarySlash() string  { return "/thread" }
 func (claudeConversationDriver) PrimarySlash() string { return "/session" }
 
-func (codexConversationDriver) Noun() string { return "线程" }
+func (codexConversationDriver) Noun() string  { return "线程" }
 func (claudeConversationDriver) Noun() string { return "会话" }
 
-func (codexConversationDriver) SummaryLabel() string { return "thread" }
+func (codexConversationDriver) SummaryLabel() string  { return "thread" }
 func (claudeConversationDriver) SummaryLabel() string { return "session" }
 
 func (codexConversationDriver) WorkspaceSwitchInFlightNotice() string {
@@ -174,32 +175,23 @@ func (claudePermissionDriver) AppendWorkspaceSummaryLines(app PermissionApp, lin
 func (codexPermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu.Button {
 	return []feishu.Button{
 		{
-			Text: submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.sandbox.menu",
-				"session_key": sessionKey,
-			},
+			Text:  submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
+			Type:  "default",
+			Value: cardactions.MenuActionValue{Action: "workspace.sandbox.menu", SessionKey: sessionKey}.Map(),
 		},
 		{
-			Text: submenuCommandLabel("配置默认策略", "/workspace policy"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.policy.menu",
-				"session_key": sessionKey,
-			},
+			Text:  submenuCommandLabel("配置默认策略", "/workspace policy"),
+			Type:  "default",
+			Value: cardactions.MenuActionValue{Action: "workspace.policy.menu", SessionKey: sessionKey}.Map(),
 		},
 	}
 }
 
 func (claudePermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu.Button {
 	return []feishu.Button{{
-		Text: submenuCommandLabel("默认权限", "/workspace permissions"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "workspace.permission_mode.menu",
-			"session_key": sessionKey,
-		},
+		Text:  submenuCommandLabel("默认权限", "/workspace permissions"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "workspace.permission_mode.menu", SessionKey: sessionKey}.Map(),
 	}}
 }
 
@@ -394,21 +386,18 @@ func (d codexPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, dep
 		buttons = append(buttons, feishu.Button{
 			Text: label,
 			Type: btnType,
-			Value: map[string]any{
-				"action":       "workspace.sandbox.set",
-				"session_key":  sessionKey,
-				"workspace_id": ws.ID,
-				"sandbox_mode": opt.Value,
-			},
+			Value: cardactions.WorkspaceActionValue{
+				Action:      "workspace.sandbox.set",
+				SessionKey:  sessionKey,
+				WorkspaceID: ws.ID,
+				SandboxMode: opt.Value,
+			}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+		Text:  commandLabel("返回工作区", "/workspace"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
 	bodyText := body
 	if deps.FormatMenuBody != nil {
@@ -437,21 +426,18 @@ func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps
 		buttons = append(buttons, feishu.Button{
 			Text: label,
 			Type: btnType,
-			Value: map[string]any{
-				"action":          "workspace.policy.set",
-				"session_key":     sessionKey,
-				"workspace_id":    ws.ID,
-				"approval_policy": opt.Value,
-			},
+			Value: cardactions.WorkspaceActionValue{
+				Action:         "workspace.policy.set",
+				SessionKey:     sessionKey,
+				WorkspaceID:    ws.ID,
+				ApprovalPolicy: opt.Value,
+			}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+		Text:  commandLabel("返回工作区", "/workspace"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
 	bodyText := body
 	if deps.FormatMenuBody != nil {
@@ -491,12 +477,11 @@ func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey str
 	buttons = append(buttons, feishu.Button{
 		Text: followLabel,
 		Type: followType,
-		Value: map[string]any{
-			"action":       "workspace.permission_mode.set",
-			"session_key":  sessionKey,
-			"workspace_id": ws.ID,
-			"mode":         "",
-		},
+		Value: cardactions.WorkspaceActionValue{
+			Action:      "workspace.permission_mode.set",
+			SessionKey:  sessionKey,
+			WorkspaceID: ws.ID,
+		}.Map(),
 	})
 	for _, opt := range driverClaudePermissionModeOptions(driverClaudeBypassEnabled(deps.App.Config())) {
 		btnType := "default"
@@ -508,21 +493,18 @@ func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey str
 		buttons = append(buttons, feishu.Button{
 			Text: label,
 			Type: btnType,
-			Value: map[string]any{
-				"action":       "workspace.permission_mode.set",
-				"session_key":  sessionKey,
-				"workspace_id": ws.ID,
-				"mode":         opt.Value,
-			},
+			Value: cardactions.WorkspaceActionValue{
+				Action:      "workspace.permission_mode.set",
+				SessionKey:  sessionKey,
+				WorkspaceID: ws.ID,
+				Mode:        opt.Value,
+			}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+		Text:  commandLabel("返回工作区", "/workspace"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
 	body := strings.Join(bodyLines, "\n")
 	if deps.FormatMenuBody != nil {
@@ -673,21 +655,18 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 		buttons = append(buttons, feishu.Button{
 			Text: label,
 			Type: btnType,
-			Value: map[string]any{
-				"action":       "thread.sandbox.set",
-				"session_key":  sessionKey,
-				"thread_id":    threadID,
-				"sandbox_mode": opt.Value,
-			},
+			Value: cardactions.ThreadActionValue{
+				Action:      "thread.sandbox.set",
+				SessionKey:  sessionKey,
+				ThreadID:    threadID,
+				SandboxMode: opt.Value,
+			}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: deps.CommandLabel("返回 thread", "/thread"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.thread",
-			"session_key": sessionKey,
-		},
+		Text:  deps.CommandLabel("返回 thread", "/thread"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("thread.sandbox.menu", body)
@@ -722,21 +701,18 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 		buttons = append(buttons, feishu.Button{
 			Text: label,
 			Type: btnType,
-			Value: map[string]any{
-				"action":          "thread.policy.set",
-				"session_key":     sessionKey,
-				"thread_id":       threadID,
-				"approval_policy": opt.Value,
-			},
+			Value: cardactions.ThreadActionValue{
+				Action:         "thread.policy.set",
+				SessionKey:     sessionKey,
+				ThreadID:       threadID,
+				ApprovalPolicy: opt.Value,
+			}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: deps.CommandLabel("返回 thread", "/thread"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.thread",
-			"session_key": sessionKey,
-		},
+		Text:  deps.CommandLabel("返回 thread", "/thread"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("thread.policy.menu", body)
@@ -781,12 +757,11 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 	buttons = append(buttons, feishu.Button{
 		Text: followLabel,
 		Type: followType,
-		Value: map[string]any{
-			"action":      "thread.permission_mode.set",
-			"session_key": sessionKey,
-			"thread_id":   threadID,
-			"mode":        "",
-		},
+		Value: cardactions.ThreadActionValue{
+			Action:     "thread.permission_mode.set",
+			SessionKey: sessionKey,
+			ThreadID:   threadID,
+		}.Map(),
 	})
 	for _, opt := range driverClaudePermissionModeOptions(driverClaudeBypassEnabled(deps.App.Config())) {
 		btnType := "default"
@@ -798,21 +773,18 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 		buttons = append(buttons, feishu.Button{
 			Text: label,
 			Type: btnType,
-			Value: map[string]any{
-				"action":      "thread.permission_mode.set",
-				"session_key": sessionKey,
-				"thread_id":   threadID,
-				"mode":        opt.Value,
-			},
+			Value: cardactions.ThreadActionValue{
+				Action:     "thread.permission_mode.set",
+				SessionKey: sessionKey,
+				ThreadID:   threadID,
+				Mode:       opt.Value,
+			}.Map(),
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: deps.CommandLabel("返回会话", "/session"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.thread",
-			"session_key": sessionKey,
-		},
+		Text:  deps.CommandLabel("返回会话", "/session"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})
 	body := strings.Join(bodyLines, "\n")
 	if deps.FormatMenuBody != nil {

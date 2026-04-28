@@ -20,10 +20,11 @@ func TestFeatureActionNamesAreUnique(t *testing.T) {
 	seen := map[string]string{}
 	for _, spec := range All() {
 		for _, actionName := range spec.ActionNames {
-			if previous, exists := seen[actionName]; exists {
-				t.Fatalf("action %q belongs to both %q and %q", actionName, previous, spec.ID)
+			name := actionName.String()
+			if previous, exists := seen[name]; exists {
+				t.Fatalf("action %q belongs to both %q and %q", name, previous, spec.ID)
 			}
-			seen[actionName] = spec.ID
+			seen[name] = spec.ID
 		}
 	}
 }

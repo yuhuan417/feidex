@@ -30,63 +30,54 @@ func CommandApprovalReplyPayload(pending *state.PendingRequest, action *feishu.C
 }
 
 func ApprovalRequestPayload(pending *state.PendingRequest) map[string]any {
-	if pending == nil || strings.TrimSpace(pending.PayloadJSON) == "" {
+	if pending == nil {
 		return nil
 	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
-		return nil
+	payload := appapproval.ParseStoredPayload(pending.PayloadJSON)
+	if len(payload.Request) > 0 {
+		return payload.Request
 	}
-	if request, ok := payload["request"].(map[string]any); ok {
-		return request
+	if len(payload.Permissions) > 0 {
+		return payload.Permissions
 	}
-	return payload
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &raw); err == nil && len(raw) > 0 {
+		return raw
+	}
+	return nil
 }
 
 func ApprovalBodyText(pending *state.PendingRequest) string {
 	if pending == nil {
 		return ""
 	}
-	var payload map[string]any
-	if strings.TrimSpace(pending.PayloadJSON) != "" {
-		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err == nil {
-			if body := strings.TrimSpace(apputil.StringValue(payload["body"])); body != "" {
-				return body
-			}
-			if pending.Kind == "command" {
-				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(appapproval.RenderCommandBody(request)); body != "" {
-						return body
-					}
-				}
-			}
-			if pending.Kind == "file" {
-				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(appapproval.RenderFileBody(request)); body != "" {
-						return body
-					}
-				}
-			}
-			if pending.Kind == "permissions" {
-				if request, ok := payload["request"].(map[string]any); ok {
-					if body := strings.TrimSpace(appapproval.RenderPermissionsApprovalBody(request)); body != "" {
-						return body
-					}
-				}
-				if permissions, ok := payload["permissions"]; ok {
-					if rendered := strings.TrimSpace(apputil.PrettyJSON(permissions)); rendered != "" {
-						return "权限审批\n" + rendered
-					}
-				}
-			}
+	payload := appapproval.ParseStoredPayload(pending.PayloadJSON)
+	if body := strings.TrimSpace(payload.Body); body != "" {
+		return body
+	}
+	switch appapproval.NormalizeKind(pending.Kind) {
+	case appapproval.KindCommand:
+		if body := strings.TrimSpace(appapproval.RenderCommandBody(payload.Request)); body != "" {
+			return body
+		}
+	case appapproval.KindFile:
+		if body := strings.TrimSpace(appapproval.RenderFileBody(payload.Request)); body != "" {
+			return body
+		}
+	case appapproval.KindPermissions:
+		if body := strings.TrimSpace(appapproval.RenderPermissionsApprovalBody(payload.Request)); body != "" {
+			return body
+		}
+		if rendered := strings.TrimSpace(apputil.PrettyJSON(payload.Permissions)); rendered != "" {
+			return "权限审批\n" + rendered
 		}
 	}
-	switch pending.Kind {
-	case "command":
+	switch appapproval.NormalizeKind(pending.Kind) {
+	case appapproval.KindCommand:
 		return "命令审批"
-	case "file":
+	case appapproval.KindFile:
 		return "文件变更审批"
-	case "permissions":
+	case appapproval.KindPermissions:
 		return "权限审批"
 	default:
 		return ""

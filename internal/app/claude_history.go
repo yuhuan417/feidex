@@ -6,7 +6,9 @@ import (
 
 	"feidex/internal/app/claudesession"
 	"feidex/internal/app/claudesupport"
+	apphistorycmd "feidex/internal/app/historycmd"
 	appruntime "feidex/internal/app/runtime"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
@@ -22,9 +24,9 @@ func newClaudeHistoryService(a *App) *claudeHistoryService {
 		FetchClaudeSessionTurns: func(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
 			return fetchClaudeCurrentSessionTurns(a, sessionKey)
 		},
-		ThreadLabel:  currentThreadLabel,
+		ThreadLabel:  appthreadmenu.SessionCurrentThreadLabel,
 		MenuCardBody: menuCardBody,
-		PageSize:     historyPageSize,
+		PageSize:     apphistorycmd.HistoryPageSize,
 	}
 }
 

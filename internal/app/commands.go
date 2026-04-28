@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	appdebugview "feidex/internal/app/debugview"
 	"feidex/internal/feishu"
 )
 
@@ -86,7 +87,7 @@ func renderContextMenuCard(a *App, sessionKey string) map[string]any {
 func renderSystemMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
 	backend := firstNonEmpty(configuredBackend(a), "unset")
-	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + renderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
+	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + appdebugview.RenderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
 	return a.feishu.SimpleStatusCard(spec.Label, "blue", menuCardBody(spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 

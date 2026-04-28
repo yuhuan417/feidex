@@ -15,8 +15,8 @@ import (
 	apputil "feidex/internal/app/apputil"
 	appcards "feidex/internal/app/cards"
 	appclauderuntime "feidex/internal/app/clauderuntime"
-	appdelivery "feidex/internal/app/delivery"
 	appdebugview "feidex/internal/app/debugview"
+	appdelivery "feidex/internal/app/delivery"
 	apppathpick "feidex/internal/app/pathpick"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	turnbinding "feidex/internal/app/turnbinding"
@@ -169,6 +169,8 @@ const (
 const DebugAccessUnauthorizedText = "当前用户无权使用 debug 功能"
 
 const downloadFilePendingKind = "download_file"
+
+const DownloadFilePendingKind = downloadFilePendingKind
 
 // ---------------------------------------------------------------------------
 // Helper functions (local to avoid importing app/)
@@ -579,7 +581,7 @@ func CommandDownload(a App, msg *feishu.InboundMessage, args []string) error {
 		OwnerUserID: msg.UserID,
 		FeishuMsgID: msgID,
 		PayloadJSON: MustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	})
@@ -609,7 +611,7 @@ func CompleteDownloadFileConfirm(a App, action *feishu.CardAction, pending *stat
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "下载请求已过期"}}, nil
 	}
-	if strings.TrimSpace(pending.Status) == "processing" {
+	if state.NormalizePendingRequestStatus(pending.Status) == state.PendingRequestStatusProcessing {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在生成下载链接，请稍候"},
 			Card:  RawCard(RenderDownloadPreparingCard(a, selectedPath, payload.RootPath)),
@@ -629,7 +631,7 @@ func CompleteDownloadFileConfirm(a App, action *feishu.CardAction, pending *stat
 		}
 	}
 	_ = appState.UpdatePending(pending.ID, func(req *state.PendingRequest) {
-		req.Status = "processing"
+		req.Status = state.PendingRequestStatusProcessing.String()
 		req.PayloadJSON = MustJSON(payload)
 		if strings.TrimSpace(req.FeishuMsgID) == "" {
 			req.FeishuMsgID = messageID
@@ -665,7 +667,7 @@ func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPic
 			"error", err,
 		)
 		_ = appState.UpdatePending(requestID, func(p *state.PendingRequest) {
-			p.Status = "pending"
+			p.Status = state.PendingRequestStatusPending.String()
 			p.PayloadJSON = MustJSON(payload)
 		})
 		if strings.TrimSpace(messageID) == "" {
@@ -691,7 +693,7 @@ func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPic
 		"url", result.URL,
 	)
 	_ = appState.UpdatePending(requestID, func(p *state.PendingRequest) {
-		p.Status = "resolved"
+		p.Status = state.PendingRequestStatusResolved.String()
 		p.PayloadJSON = MustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) == "" {

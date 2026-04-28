@@ -337,7 +337,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 		if err := stateProvider.SaveSession(sess); err != nil {
 			return err
@@ -348,7 +348,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 	shouldAttemptStart := !hasInFlight
 	willWaitInQueue := queueLenBefore > 0 || hasInFlight
 	if willWaitInQueue {
-		sess.Status = "queued"
+		sess.Status = state.SessionStatusQueued.String()
 		if err := stateProvider.SaveSession(sess); err != nil {
 			return err
 		}
@@ -369,7 +369,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 		ReviewCommitSHA:      strings.TrimSpace(target.CommitSHA),
 		ReviewCommitTitle:    strings.TrimSpace(target.CommitTitle),
 		ReviewInstructions:   strings.TrimSpace(target.Instructions),
-		Status:               "queued",
+		Status:               state.SubmissionStatusQueued.String(),
 		WaitedInQueue:        willWaitInQueue,
 	}
 	id, err := stateProvider.CreateSubmission(sub)
@@ -526,7 +526,7 @@ func (s ReviewFormService) BeginReviewForm(msg *feishu.InboundMessage, mode stri
 		OwnerUserID: msg.UserID,
 		FeishuMsgID: msgID,
 		PayloadJSON: mustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	})
@@ -781,7 +781,7 @@ func (s ReviewFormService) completeReviewFormSubmitSync(action *feishu.CardActio
 		}, nil
 	}
 	_ = stateProvider.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = "resolved"
+		req.Status = state.PendingRequestStatusResolved.String()
 		req.PayloadJSON = mustJSON(payload)
 	})
 	return &callback.CardActionTriggerResponse{

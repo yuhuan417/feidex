@@ -1,11 +1,11 @@
 package app
 
 import (
-	"encoding/json"
 	appapprovalview "feidex/internal/app/approvalview"
 	"log/slog"
 	"strings"
 
+	appapproval "feidex/internal/app/approval"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -24,10 +24,10 @@ func completeApprovalAction(a *App, action *feishu.CardAction, actionName string
 	}
 	var replyPayload any
 	var warning string
-	switch pending.Kind {
-	case "command":
+	switch appapproval.NormalizeKind(pending.Kind) {
+	case appapproval.KindCommand:
 		replyPayload, warning = commandApprovalReplyPayload(pending, action, actionName)
-	case "file":
+	case appapproval.KindFile:
 		resp := map[string]any{"decision": "decline"}
 		switch actionName {
 		case "approval.file.accept":
@@ -40,11 +40,8 @@ func completeApprovalAction(a *App, action *feishu.CardAction, actionName string
 			resp["decision"] = "decline"
 		}
 		replyPayload = resp
-	case "permissions":
-		var payload struct {
-			Permissions map[string]any `json:"permissions"`
-		}
-		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	case appapproval.KindPermissions:
+		payload := appapproval.ParseStoredPayload(pending.PayloadJSON)
 		scope := "turn"
 		if actionName == "approval.permissions.accept_session" {
 			scope = "session"
@@ -127,5 +124,5 @@ func resumeSubmissionAfterRequest(a *App, pending *state.PendingRequest) {
 	if sub == nil {
 		return
 	}
-	_ = appState.SetSubmissionStatus(sub.ID, "running")
+	_ = appState.SetSubmissionStatus(sub.ID, state.SubmissionStatusRunning.String())
 }

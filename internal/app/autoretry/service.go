@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	appbackend "feidex/internal/app/backend"
 	appcore "feidex/internal/app/appcore"
 	apputil "feidex/internal/app/apputil"
+	appbackend "feidex/internal/app/backend"
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -232,7 +232,7 @@ func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, u
 	if sessionKey == "" || threadID == "" {
 		return false
 	}
-	if status != "failed" {
+	if state.NormalizeSubmissionStatus(status) != state.SubmissionStatusFailed {
 		s.FinishAutoRetryOnTerminal(sessionKey, threadID, status)
 		return false
 	}
@@ -297,7 +297,7 @@ func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, upda
 	if updatedSess == nil || strings.TrimSpace(updatedSess.ActiveThreadID) != threadID || strings.TrimSpace(updatedSess.ActiveThreadID) == "" {
 		return false
 	}
-	if apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), "idle") != "idle" || s.app.SessionHasActiveWork(updatedSess) || len(updatedSess.Queue) > 0 {
+	if state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle || s.app.SessionHasActiveWork(updatedSess) || len(updatedSess.Queue) > 0 {
 		return false
 	}
 
@@ -385,7 +385,7 @@ func (s Service) RunAutoRetryTimer(sessionKey string, expectedSeq uint64) {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "检测到当前线程已有新任务，自动重试结束。")
 		return
 	}
-	if apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), "idle") != "idle" {
+	if state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不再处于空闲态。")
 		return
 	}
@@ -467,7 +467,7 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *state.Session
 		TriggerMessageID:     triggerMessageID,
 		SourceRootMessageIDs: uniqueStrings(sourceRootMessageIDs),
 		InputText:            "继续",
-		Status:               "queued",
+		Status:               state.SubmissionStatusQueued.String(),
 	}
 	id, err := s.app.AppState().CreateSubmission(sub)
 	if err != nil {

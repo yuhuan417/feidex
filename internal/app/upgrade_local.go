@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -87,7 +88,7 @@ func (s appUpgradeService) createUpgradeLocalPickerRequest(sessionKey string, ws
 		return "", pathPickerPayload{}, err
 	}
 	appState := s.app.State()
-	payload, err := newDownloadPathPickerPayload(ws)
+	payload, err := appdebugviewcmd.NewDownloadPathPickerPayload(ws)
 	if err != nil {
 		return "", pathPickerPayload{}, err
 	}
@@ -102,7 +103,7 @@ func (s appUpgradeService) createUpgradeLocalPickerRequest(sessionKey string, ws
 		OwnerUserID: ownerUserID,
 		FeishuMsgID: feishuMsgID,
 		PayloadJSON: mustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
 	}); err != nil {
@@ -142,7 +143,7 @@ func (s appUpgradeService) createLocalUpgradeRequest(sessionKey, ownerUserID, fe
 		OwnerUserID: ownerUserID,
 		FeishuMsgID: feishuMsgID,
 		PayloadJSON: mustJSON(payload),
-		Status:      "pending",
+		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
 	}); err != nil {
@@ -179,7 +180,7 @@ func (s appUpgradeService) completeUpgradeLocalBinaryConfirm(action *feishu.Card
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	_ = s.app.State().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = s.app.State().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已选择本地 Binary"},
 		Card:  rawCard(newAppUpgradeService(s.app).renderUpgradeConfirmCard("升级确认", sessionKey, requestID, upgradePayload, upgradeLocalConfirmLines(upgradePayload.BinaryPath))),

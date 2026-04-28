@@ -6,6 +6,8 @@ import (
 
 	appbackend "feidex/internal/app/backend"
 	apppendingforms "feidex/internal/app/pendingforms"
+	appapproval "feidex/internal/app/approval"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -26,12 +28,12 @@ func newCodexEventRouter(app *App) *codexEventRouter {
 func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	a := r.app
 	router := appbackend.NewCodexEventRouter()
-	router.NoteTurnItemStarted = func(threadID, turnID string, item map[string]any) {
-		newRuntimeStateService(a).noteTurnItemStarted(threadID, turnID, item)
-		noteStandaloneCompactItemStarted(a, threadID, turnID, item)
+	router.NoteTurnItemStarted = func(threadID, turnID string, item turnitem.ProtocolItem) {
+		newRuntimeStateService(a).noteTurnItemStartedPayload(threadID, turnID, item)
+		noteStandaloneCompactItemStarted(a, threadID, turnID, item.MergedRaw())
 	}
-	router.CompleteTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
-		newTurnStreamService(a).completeTurnItem(ctx, threadID, turnID, itemID, item)
+	router.CompleteTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+		newTurnStreamService(a).completeTurnItemPayload(ctx, threadID, turnID, itemID, item)
 	}
 	router.UpdatePendingPlan = func(turnID, plan string) {
 		newTurnStreamService(a).updatePendingPlan(turnID, plan)
@@ -60,14 +62,11 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	router.ResumeSubmissionAfterRequest = func(pending *state.PendingRequest) {
 		resumeSubmissionAfterRequest(a, pending)
 	}
-	router.MergeRequestPayloadWithTurnItem = func(threadID, turnID, itemID string, raw map[string]any) map[string]any {
-		return newRuntimeStateService(a).mergeRequestPayloadWithTurnItem(threadID, turnID, itemID, raw)
+	router.MergeApprovalPresentationWithTurnItem = func(presentation appapproval.Presentation) appapproval.Presentation {
+		return newRuntimeStateService(a).mergeApprovalPresentationWithTurnItem(presentation)
 	}
-	router.SendApprovalCardWithPayload = func(approvalType string, requestID json.RawMessage, threadID, turnID, itemID string, body string, payload map[string]any) {
-		newOutboundCardService(a).sendApprovalCardWithPayload(approvalType, requestID, threadID, turnID, itemID, body, payload)
-	}
-	router.SendPermissionsCardWithPayload = func(requestID json.RawMessage, threadID, turnID, itemID string, body string, permissions map[string]any, payload map[string]any) {
-		newOutboundCardService(a).sendPermissionsCardWithPayload(requestID, threadID, turnID, itemID, body, permissions, payload)
+	router.SendApprovalCard = func(requestID json.RawMessage, presentation appapproval.Presentation) {
+		newOutboundCardService(a).sendApprovalCardPresentation(requestID, presentation)
 	}
 	router.SendUserInputCard = func(requestID json.RawMessage, payload apppendingforms.ToolUserInputPayload) {
 		newOutboundCardService(a).sendUserInputCard(requestID, payload)

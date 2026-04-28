@@ -78,7 +78,7 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 		}
 		if sub := a.State().Submission(subID); sub != nil && !sub.Finalized {
 			if err := a.State().UpdateSubmission(subID, func(value *state.Submission) {
-				value.Status = "interrupted"
+				value.Status = state.SubmissionStatusInterrupted.String()
 				value.Finalized = true
 			}); err != nil {
 				slog.Error("clear active submission after interrupt failed", "submission_id", subID, "error", err)
@@ -90,7 +90,7 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 			return
 		}
 		sessionResetActiveOperations(current)
-		current.Status = "idle"
+		current.Status = state.SessionStatusIdle.String()
 	})
 	if err != nil {
 		slog.Error("clear active operations after interrupt failed", "session_key", sessionKey, "error", err)

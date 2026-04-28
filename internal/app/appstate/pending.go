@@ -73,7 +73,7 @@ func (s *Store) UpdatePending(id string, mutate func(*state.PendingRequest)) err
 
 // ResolvePending marks a pending request resolved and returns the snapshot.
 func (s *Store) ResolvePending(id string) *state.PendingRequest {
-	_ = s.UpdatePending(id, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = s.UpdatePending(id, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	return s.Pending(id)
 }
 

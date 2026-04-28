@@ -63,7 +63,7 @@ func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, deli
 		OwnerUserID:  strings.TrimSpace(delivery.ownerUserID),
 		FeishuMsgID:  msgID,
 		PayloadJSON:  delivery.payloadJSON,
-		Status:       "pending",
+		Status:       state.PendingRequestStatusPending.String(),
 		CreatedAt:    now.Unix(),
 		ExpiresAt:    now.Add(ttl).Unix(),
 	})

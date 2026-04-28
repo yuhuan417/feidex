@@ -4,10 +4,13 @@ import (
 	"context"
 	"time"
 
+	appapproval "feidex/internal/app/approval"
 	appclauderuntime "feidex/internal/app/clauderuntime"
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appdelivery "feidex/internal/app/delivery"
 	apppendingforms "feidex/internal/app/pendingforms"
 	appturn "feidex/internal/app/turn"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -45,15 +48,15 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			RecordTurnError: func(threadID, turnID, message string) {
 				newTurnStreamService(app).recordTurnError(threadID, turnID, message)
 			},
-			CompleteTurnItem: func(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
-				newTurnStreamService(app).completeTurnItem(ctx, threadID, turnID, itemID, item)
+			CompleteTurnItem: func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+				newTurnStreamService(app).completeTurnItemPayload(ctx, threadID, turnID, itemID, item)
 			},
 			PrepareTurnStreamQuietBoundary: func(turnID string) string {
 				boundary := newTurnStreamService(app).prepareTurnStreamQuietBoundary(turnID)
 				return boundary.ReuseMessageID
 			},
-			PrepareTurnStreamQuietUpdate: func(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp {
-				return newTurnStreamService(app).prepareTurnStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
+			PrepareTurnStreamQuietUpdate: func(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
+				return newTurnStreamService(app).prepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 			},
 			MarkTurnStreamFinal: func(turnID string) {
 				newTurnStreamService(app).markTurnStreamFinal(turnID)
@@ -61,7 +64,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
-				newUsageService(app).RecordClaudeThreadUsage(threadID, usage)
+				appdebugviewcmd.NewUsageService(app).RecordClaudeThreadUsage(threadID, usage)
 			},
 			RecordTurnTokenUsage: func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 				newRuntimeStateService(app).recordTurnTokenUsage(threadID, turnID, usage)
@@ -91,8 +94,8 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		Interactive: appclauderuntime.InteractiveDeps{
-			SendClaudeApprovalCard: func(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
-				return sendClaudeApprovalCardWithPayload(app, kind, requestID, sessionKey, sub, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
+			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+				return sendClaudeApprovalCard(app, requestID, sessionKey, sub, presentation)
 			},
 			SendClaudeUserInputCard: func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
 				return sendClaudeUserInputCard(app, requestID, sessionKey, sub, payload)

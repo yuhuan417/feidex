@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
-	appclauderuntime "feidex/internal/app/clauderuntime"
-	appruntime "feidex/internal/app/runtime"
+	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/apputil"
+	"feidex/internal/app/cardactions"
+	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/pendingforms"
+	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -111,19 +113,19 @@ type PendingLookupFunc func(requestID string) *state.PendingRequest
 // dependencies.
 type Service struct {
 	// Card delivery
-	DeliverPendingCard    DeliverPendingCardFunc
-	RenderApprovalCard    RenderApprovalCardFunc
-	SimpleStatusCard      SimpleStatusCardFunc
-	PatchCard             PatchCardFunc
-	PrepareMentionText    PrepareMentionTextFunc
-	RenderFormCard        RenderFormCardFunc
-	BackendClaude         string
+	DeliverPendingCard DeliverPendingCardFunc
+	RenderApprovalCard RenderApprovalCardFunc
+	SimpleStatusCard   SimpleStatusCardFunc
+	PatchCard          PatchCardFunc
+	PrepareMentionText PrepareMentionTextFunc
+	RenderFormCard     RenderFormCardFunc
+	BackendClaude      string
 	// Plan mode
-	ResolvePlanFeedback   ResolvePlanFeedbackFunc
-	FinalizePendingReply  FinalizePendingReplyFunc
-	CancelPending         CancelPendingFunc
-	RawCard               RawCardFunc
-	PendingLookup         PendingLookupFunc
+	ResolvePlanFeedback  ResolvePlanFeedbackFunc
+	FinalizePendingReply FinalizePendingReplyFunc
+	CancelPending        CancelPendingFunc
+	RawCard              RawCardFunc
+	PendingLookup        PendingLookupFunc
 }
 
 // ---------- exported pure helper functions ----------
@@ -140,48 +142,48 @@ func ClaudeRequestIDStored(requestID string) string {
 // ClaudeApprovalButtons returns the approval buttons for a given kind.
 func ClaudeApprovalButtons(kind, requestKey, sessionActionLabel string) []feishu.Button {
 	sessionActionLabel = strings.TrimSpace(sessionActionLabel)
-	switch strings.TrimSpace(kind) {
-	case "command":
+	switch appapproval.NormalizeKind(kind) {
+	case appapproval.KindCommand:
 		buttons := []feishu.Button{
-			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval.command.accept", "request_id": requestKey}},
+			{Text: "允许一次", Type: "primary", Value: cardactions.RequestActionValue{Action: "approval.command.accept", RequestID: requestKey}.Map()},
 		}
 		if sessionActionLabel != "" {
-			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval.command.accept_session", "request_id": requestKey}})
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: cardactions.RequestActionValue{Action: "approval.command.accept_session", RequestID: requestKey}.Map()})
 		}
 		buttons = append(buttons,
-			feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.command.decline", "request_id": requestKey}},
-			feishu.Button{Text: "拒绝并中断", Type: "danger", Value: map[string]any{"action": "approval.command.cancel", "request_id": requestKey}},
+			feishu.Button{Text: "拒绝", Type: "danger", Value: cardactions.RequestActionValue{Action: "approval.command.decline", RequestID: requestKey}.Map()},
+			feishu.Button{Text: "拒绝并中断", Type: "danger", Value: cardactions.RequestActionValue{Action: "approval.command.cancel", RequestID: requestKey}.Map()},
 		)
 		return buttons
-	case "file":
+	case appapproval.KindFile:
 		buttons := []feishu.Button{
-			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval.file.accept", "request_id": requestKey}},
+			{Text: "允许一次", Type: "primary", Value: cardactions.RequestActionValue{Action: "approval.file.accept", RequestID: requestKey}.Map()},
 		}
 		if sessionActionLabel != "" {
-			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval.file.accept_session", "request_id": requestKey}})
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: cardactions.RequestActionValue{Action: "approval.file.accept_session", RequestID: requestKey}.Map()})
 		}
 		buttons = append(buttons,
-			feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.file.decline", "request_id": requestKey}},
-			feishu.Button{Text: "拒绝并中断", Type: "danger", Value: map[string]any{"action": "approval.file.cancel", "request_id": requestKey}},
+			feishu.Button{Text: "拒绝", Type: "danger", Value: cardactions.RequestActionValue{Action: "approval.file.decline", RequestID: requestKey}.Map()},
+			feishu.Button{Text: "拒绝并中断", Type: "danger", Value: cardactions.RequestActionValue{Action: "approval.file.cancel", RequestID: requestKey}.Map()},
 		)
 		return buttons
-	case "permissions":
+	case appapproval.KindPermissions:
 		buttons := []feishu.Button{
-			{Text: "本次允许", Type: "primary", Value: map[string]any{"action": "approval.permissions.accept_turn", "request_id": requestKey}},
+			{Text: "本次允许", Type: "primary", Value: cardactions.RequestActionValue{Action: "approval.permissions.accept_turn", RequestID: requestKey}.Map()},
 		}
 		if sessionActionLabel != "" {
-			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval.permissions.accept_session", "request_id": requestKey}})
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: cardactions.RequestActionValue{Action: "approval.permissions.accept_session", RequestID: requestKey}.Map()})
 		}
-		buttons = append(buttons, feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval.permissions.decline", "request_id": requestKey}})
+		buttons = append(buttons, feishu.Button{Text: "拒绝", Type: "danger", Value: cardactions.RequestActionValue{Action: "approval.permissions.decline", RequestID: requestKey}.Map()})
 		return buttons
 	default:
 		buttons := []feishu.Button{
-			{Text: "允许一次", Type: "primary", Value: map[string]any{"action": "approval." + kind + ".accept", "request_id": requestKey}},
+			{Text: "允许一次", Type: "primary", Value: cardactions.RequestActionValue{Action: "approval." + kind + ".accept", RequestID: requestKey}.Map()},
 		}
 		if sessionActionLabel != "" {
-			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: map[string]any{"action": "approval." + kind + ".accept_session", "request_id": requestKey}})
+			buttons = append(buttons, feishu.Button{Text: sessionActionLabel, Type: "default", Value: cardactions.RequestActionValue{Action: "approval." + kind + ".accept_session", RequestID: requestKey}.Map()})
 		}
-		buttons = append(buttons, feishu.Button{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "approval." + kind + ".decline", "request_id": requestKey}})
+		buttons = append(buttons, feishu.Button{Text: "拒绝", Type: "danger", Value: cardactions.RequestActionValue{Action: "approval." + kind + ".decline", RequestID: requestKey}.Map()})
 		return buttons
 	}
 }
@@ -189,74 +191,23 @@ func ClaudeApprovalButtons(kind, requestKey, sessionActionLabel string) []feishu
 // SafeClaudeSessionPermissionUpdates filters and normalises permission
 // update suggestions, returning only valid session-scoped updates.
 func SafeClaudeSessionPermissionUpdates(suggestions []map[string]any) []map[string]any {
-	if len(suggestions) == 0 {
-		return nil
-	}
-	updates := make([]map[string]any, 0, len(suggestions))
-	for _, suggestion := range suggestions {
-		normalized, ok := NormalizeClaudeSessionPermissionUpdate(suggestion)
-		if ok {
-			updates = append(updates, normalized)
-		}
-	}
-	if len(updates) == 0 {
-		return nil
-	}
-	return updates
+	return appclauderuntime.MapSessionPermissionUpdates(appclauderuntime.SafeClaudeSessionPermissionUpdates(suggestions))
 }
 
 // NormalizeClaudeSessionPermissionUpdate validates and normalises a single
 // session permission update map.
 func NormalizeClaudeSessionPermissionUpdate(update map[string]any) (map[string]any, bool) {
-	if len(update) == 0 {
+	normalized, ok := appclauderuntime.NormalizeSessionPermissionUpdate(update)
+	if !ok {
 		return nil, false
 	}
-	if strings.TrimSpace(stringValue(update["destination"])) != "session" {
-		return nil, false
-	}
-	switch strings.TrimSpace(stringValue(update["type"])) {
-	case "setMode":
-		mode := normalizePermissionModeValue(stringValue(update["mode"]))
-		switch mode {
-		case string(appruntime.ClaudePermissionModeDefault),
-			string(appruntime.ClaudePermissionModeAcceptEdits),
-			string(appruntime.ClaudePermissionModeBypass):
-		default:
-			return nil, false
-		}
-		out := appclauderuntime.CopyPermissionUpdates([]map[string]any{update})
-		out[0]["mode"] = mode
-		return out[0], true
-	case "addRules":
-		if firstNonEmptyValue(update["rules"], update["rule"]) == nil {
-			return nil, false
-		}
-		out := appclauderuntime.CopyPermissionUpdates([]map[string]any{update})
-		return out[0], true
-	default:
-		return nil, false
-	}
+	return normalized.Map(), true
 }
 
 // DescribeClaudeSessionPermissionUpdates returns a human-readable summary
 // of a list of session permission updates.
 func DescribeClaudeSessionPermissionUpdates(updates []map[string]any) string {
-	if len(updates) == 0 {
-		return ""
-	}
-	if len(updates) == 1 {
-		update := updates[0]
-		switch strings.TrimSpace(stringValue(update["type"])) {
-		case "setMode":
-			mode := normalizePermissionModeValue(stringValue(update["mode"]))
-			if mode != "" {
-				return "切到 `" + mode + "`（当前会话）"
-			}
-		case "addRules":
-			return "当前会话允许同类操作"
-		}
-	}
-	return "应用建议（当前会话）"
+	return appclauderuntime.DescribeClaudeSessionPermissionUpdates(appclauderuntime.SafeClaudeSessionPermissionUpdates(updates))
 }
 
 // ClaudeApprovalResolutionForAction maps a card action name to the
@@ -384,20 +335,15 @@ func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, reque
 
 	title := "等待审批"
 	buttons := ClaudeApprovalButtons(kind, requestKey, sessionActionLabel)
-	payload := map[string]any{}
-	if strings.TrimSpace(body) != "" {
-		payload["body"] = body
+	payload := appapproval.RequestPayload{
+		Body:               strings.TrimSpace(body),
+		Request:            requestPayload,
+		SessionActionLabel: strings.TrimSpace(sessionActionLabel),
 	}
-	if len(requestPayload) > 0 {
-		payload["request"] = requestPayload
-	}
-	if strings.TrimSpace(sessionActionLabel) != "" {
-		payload["session_action_label"] = strings.TrimSpace(sessionActionLabel)
-	}
-	if strings.TrimSpace(kind) == "permissions" {
+	if appapproval.NormalizeKind(kind) == appapproval.KindPermissions {
 		title = "权限请求"
-		if permissions, ok := requestPayload["permissions"]; ok {
-			payload["permissions"] = permissions
+		if permissions, ok := requestPayload["permissions"].(map[string]any); ok {
+			payload.Permissions = appapproval.CloneJSONMap(permissions)
 		}
 	}
 
@@ -412,8 +358,8 @@ func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, reque
 		strings.TrimSpace(turnID),
 		strings.TrimSpace(itemID),
 		strings.TrimSpace(sub.UserID),
-		mustJSON(payload),
-		"waiting_approval",
+		payload.MarshalJSONText(),
+		state.SubmissionStatusWaitingApproval.String(),
 		"approval_card",
 		0,
 	)
@@ -454,7 +400,7 @@ func (s *Service) SendUserInputCard(sub *state.Submission, requestID, sessionKey
 		payload.ItemID,
 		strings.TrimSpace(sub.UserID),
 		mustJSON(payload),
-		"waiting_user_input",
+		state.SubmissionStatusWaitingUserInput.String(),
 		"user_input_card",
 		0,
 	)
@@ -481,7 +427,7 @@ func (s *Service) SendUserInputFormCard(sub *state.Submission, requestID, sessio
 		payload.ItemID,
 		strings.TrimSpace(sub.UserID),
 		mustJSON(payload),
-		"waiting_user_input",
+		state.SubmissionStatusWaitingUserInput.String(),
 		"user_input_card",
 		0,
 	)
@@ -511,7 +457,7 @@ func (s *Service) SendPlanModeCard(sub *state.Submission, requestID, sessionKey,
 		requestKey,
 		strings.TrimSpace(sub.UserID),
 		mustJSON(map[string]any{"body": strings.TrimSpace(body)}),
-		"waiting_user_input",
+		state.SubmissionStatusWaitingUserInput.String(),
 		"claude_plan_card",
 		0,
 	)

@@ -20,8 +20,8 @@ type State struct {
 	TurnID    string
 	ItemID    string
 	Status    string
-	Started   map[string]any
-	Completed map[string]any
+	Started   ProtocolItem
+	Completed ProtocolItem
 }
 
 func StateKey(turnID, itemID string) string {

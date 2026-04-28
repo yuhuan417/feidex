@@ -129,16 +129,16 @@ func SourceMessageIDs(sub *state.Submission) []string {
 // completes. Returns "" for successful completions.
 func CompletionTerminalText(status, lastError string) string {
 	lastError = strings.TrimSpace(lastError)
-	if status == "completed" {
+	if state.NormalizeSubmissionStatus(status) == state.SubmissionStatusCompleted {
 		return ""
 	}
 
 	fallback := lastError
 	if fallback == "" {
 		switch status {
-		case "interrupted":
+		case state.SubmissionStatusInterrupted.String():
 			fallback = "任务已中断。"
-		case "failed":
+		case state.SubmissionStatusFailed.String():
 			fallback = "任务失败。"
 		default:
 			fallback = "任务已结束。"
@@ -146,7 +146,7 @@ func CompletionTerminalText(status, lastError string) string {
 	}
 
 	switch status {
-	case "interrupted":
+	case state.SubmissionStatusInterrupted.String():
 		return "任务已中断。"
 	default:
 		return fallback

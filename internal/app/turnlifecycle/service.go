@@ -173,8 +173,8 @@ func sessionHasActiveWork(sess *state.Session) bool {
 	if sessionHasActiveOperations(sess) {
 		return true
 	}
-	switch strings.TrimSpace(sess.Status) {
-	case "turn_starting":
+	switch state.NormalizeSessionStatus(sess.Status) {
+	case state.SessionStatusTurnStarting:
 		return true
 	default:
 		return false
@@ -225,7 +225,7 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = "turn_in_progress"
+	sess.Status = state.SessionStatusTurnInProgress.String()
 	sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		return false
@@ -233,7 +233,7 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 	_ = st.MarkSubmissionRunning(sub.ID, threadID, turnID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
-	sub.Status = "running"
+	sub.Status = state.SubmissionStatusRunning.String()
 	w.replyContinuation().RecordSubmissionSourceLinks(sub)
 	w.replyContinuation().RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 	w.turnStream().NoteTurnStarted(sessionKey, sub)
@@ -307,7 +307,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = "turn_in_progress"
+	sess.Status = state.SessionStatusTurnInProgress.String()
 	sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		slog.Error("turn started notification session bind failed",
@@ -322,7 +322,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 	_ = st.MarkSubmissionRunning(sub.ID, threadID, turnID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
-	sub.Status = "running"
+	sub.Status = state.SubmissionStatusRunning.String()
 	w.runtimeState().BindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	w.runtimeState().MarkTurnStartedAt(turnID, time.Now())
 	w.runtimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
@@ -379,7 +379,7 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = "turn_in_progress"
+	sess.Status = state.SessionStatusTurnInProgress.String()
 	sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		slog.Error("turn completed fallback session bind failed",
@@ -478,7 +478,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		)
 		terminalText = TurnCompletionTerminalText(sub.Status, flush.LastError)
 		attentionUserID = w.app.TurnStopAttentionUserID(sub, turnID)
-		if sub.Status == "completed" && !flush.SawFinal {
+		if state.NormalizeSubmissionStatus(sub.Status) == state.SubmissionStatusCompleted && !flush.SawFinal {
 			w.app.SendEmptyFinalCardWithReuse(
 				context.Background(), sub,
 				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
@@ -497,17 +497,17 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		sessionctx.RemoveActiveOperation(sess, sub.ID, turnID)
 		switch {
 		case sessionHasActiveOperations(sess):
-			sess.Status = "turn_starting"
+			sess.Status = state.SessionStatusTurnStarting.String()
 			for _, op := range sess.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
-					sess.Status = "turn_in_progress"
+					sess.Status = state.SessionStatusTurnInProgress.String()
 					break
 				}
 			}
 		case len(sess.Queue) > 0 || len(sess.StagedImages) > 0:
-			sess.Status = "queued"
+			sess.Status = state.SessionStatusQueued.String()
 		default:
-			sess.Status = "idle"
+			sess.Status = state.SessionStatusIdle.String()
 		}
 	})
 	suppressTerminalCard := false

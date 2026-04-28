@@ -85,7 +85,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 		payload.DraftID = id
 		payload.DraftName = name
 		_ = appState.UpdatePending(pending.ID, func(req *state.PendingRequest) {
-			req.Status = "resolved"
+			req.Status = state.PendingRequestStatusResolved.String()
 			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
@@ -97,7 +97,7 @@ func (s pendingInputService) completeWorkspaceNewText(msg *feishu.InboundMessage
 	if err := newWorkspaceManagementService(s.app).createWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
-	_ = appState.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = appState.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	if pending.FeishuMsgID != "" {
 		_ = s.app.feishu.PatchCard(context.Background(), pending.FeishuMsgID, s.app.feishu.SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}

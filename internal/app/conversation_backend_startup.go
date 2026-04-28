@@ -32,12 +32,10 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 		return
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	resumeParams := map[string]any{
-		"threadId":               threadID,
-		"persistExtendedHistory": true,
-	}
-	if strings.TrimSpace(effectiveModel) != "" {
-		resumeParams["model"] = effectiveModel
+	resumeParams := codexrpc.ThreadResumeParams{
+		ThreadID:               threadID,
+		PersistExtendedHistory: true,
+		Model:                  strings.TrimSpace(effectiveModel),
 	}
 	var resumeResp codexrpc.ThreadStartResult
 	slog.Debug("startup thread resume request",
@@ -47,7 +45,7 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 		"model", effectiveModel,
 	)
 	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err := client.Call(resumeCtx, "thread/resume", resumeParams, &resumeResp)
+	err := client.Call(resumeCtx, "thread/resume", resumeParams.Map(), &resumeResp)
 	resumeCancel()
 	if err == nil {
 		setSessionThreadContext(sess,
@@ -56,7 +54,7 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 			firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Name), sess.ActiveThreadName),
 			firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Preview), sess.ActiveThreadPreview),
 		)
-		sess.Status = "idle"
+		sess.Status = state.SessionStatusIdle.String()
 		if upsertErr := a.State().SaveSession(sess); upsertErr != nil {
 			slog.Error("startup thread resume persistence failed",
 				"session_key", sessionKey,
@@ -113,7 +111,7 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 		"model", effectiveModel,
 	)
 	threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err = client.Call(threadCtx, "thread/start", threadParams, &threadResp)
+	err = client.Call(threadCtx, "thread/start", threadParams.Map(), &threadResp)
 	threadCancel()
 	if err != nil {
 		if codexRuntimeRecovering(a) || currentCodexClient(a) == nil {
@@ -134,13 +132,13 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 			"error", err,
 		)
 		clearSessionThreadContext(sess)
-		sess.Status = "idle"
+		sess.Status = state.SessionStatusIdle.String()
 		_ = a.State().SaveSession(sess)
 		clearSessionLiveThread(a, sessionKey)
 		return
 	}
 	setSessionThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
-	sess.Status = "idle"
+	sess.Status = state.SessionStatusIdle.String()
 	if upsertErr := a.State().SaveSession(sess); upsertErr != nil {
 		slog.Error("startup fresh thread persistence failed",
 			"session_key", sessionKey,

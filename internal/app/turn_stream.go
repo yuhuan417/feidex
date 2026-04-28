@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"feidex/internal/app/turnitem"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"
 )
@@ -94,6 +95,10 @@ func (s turnStreamService) recordTurnError(threadID, turnID, message string) {
 }
 
 func (s turnStreamService) completeTurnItem(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
+	s.completeTurnItemPayload(ctx, threadID, turnID, itemID, turnitem.NewProtocolItemWithID(itemID, item))
+}
+
+func (s turnStreamService) completeTurnItemPayload(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 	s.service.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
 }
 
@@ -127,6 +132,10 @@ func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) quietWo
 }
 
 func (s turnStreamService) prepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
+	return s.prepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, turnitem.NewProtocolItemWithID(itemID, item), workspaceCwd)
+}
+
+func (s turnStreamService) prepareTurnStreamQuietUpdatePayload(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) quietWorkingCardOp {
 	return s.service.PrepareStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 }
 
