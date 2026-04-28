@@ -28,11 +28,11 @@ var (
 
 // Function aliases — other sub-packages used by helpers
 var (
-	_configuredGlobalModel    = appmodelconfig.ConfiguredGlobalModel
+	_configuredGlobalModel     = appmodelconfig.ConfiguredGlobalModel
 	_clearSessionThreadContext = appsessionctx.ClearThreadContext
 	_setSessionThreadContext   = appsessionctx.SetThreadContext
-	_sessionResetActiveOps    = appsessionctx.ResetActiveOperations
-	_sameWorkspaceCWD         = appthreadview.SameWorkspaceCWD
+	_sessionResetActiveOps     = appsessionctx.ResetActiveOperations
+	_sameWorkspaceCWD          = appthreadview.SameWorkspaceCWD
 )
 
 // ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, 
 	)
 	_sessionResetActiveOps(sess)
 	sess.Status = "idle"
-	if err := appState(a).saveSession(sess); err != nil {
+	if err := a.State().SaveSession(sess); err != nil {
 		return nil, err
 	}
 	markSessionThreadLive(a, sessionKey, resumedID)
@@ -131,7 +131,7 @@ func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, w
 	markSessionThreadLive(a, sessionKey, boundThreadID)
 	_sessionResetActiveOps(sess)
 	sess.Status = "idle"
-	if err := appState(a).saveSession(sess); err != nil {
+	if err := a.State().SaveSession(sess); err != nil {
 		return nil, err
 	}
 	return &workspaceThreadBinding{
@@ -176,7 +176,7 @@ func continueCodexActiveTurn(a *App, sessionKey, text string) error {
 	if text == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	sess := appState(a).session(sessionKey)
+	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
@@ -246,7 +246,7 @@ func tryCodexReplyContinuation(a *App, msg *feishu.InboundMessage, link *state.M
 		return false, err
 	}
 	sess.WorkspaceID = firstNonEmpty(sess.WorkspaceID, defaultWorkspaceID(a))
-	if err := appState(a).saveSession(sess); err != nil {
+	if err := a.State().SaveSession(sess); err != nil {
 		return false, err
 	}
 	if err := newReplyContinuationService(a).clearPendingStagedImages(sessionKey, bucketSessionKey); err != nil {

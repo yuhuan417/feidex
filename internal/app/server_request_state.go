@@ -16,8 +16,8 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 }
 
 func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.PendingRequest {
-	appState := appState(s.app)
-	pending := appState.pending(requestID)
+	appState := s.app.State()
+	pending := appState.Pending(requestID)
 	if pending == nil {
 		return nil
 	}
@@ -25,25 +25,25 @@ func (s runtimeStateService) markPendingRequestReplied(requestID string) *state.
 	if isServerResolvedPendingKind(pending.Kind) {
 		nextStatus = "replied"
 	}
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = nextStatus
 	})
-	return appState.pending(requestID)
+	return appState.Pending(requestID)
 }
 
 func (s runtimeStateService) markPendingRequestResolved(requestID string) *state.PendingRequest {
-	appState := appState(s.app)
-	pending := appState.pending(requestID)
+	appState := s.app.State()
+	pending := appState.Pending(requestID)
 	if pending == nil {
 		return nil
 	}
 	if strings.TrimSpace(pending.Status) == "resolved" {
 		return nil
 	}
-	_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = "resolved"
 	})
-	return appState.pending(requestID)
+	return appState.Pending(requestID)
 }
 
 func (s runtimeStateService) resolveServerPendingRequest(requestID string) *state.PendingRequest {
@@ -73,11 +73,11 @@ func (s runtimeStateService) finalizePendingReply(pending *state.PendingRequest)
 }
 
 func (s runtimeStateService) hasOpenPendingRequestForTurn(threadID, turnID, excludeID string) bool {
-	appState := appState(s.app)
+	appState := s.app.State()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	excludeID = strings.TrimSpace(excludeID)
-	for _, req := range appState.pendingRequests() {
+	for _, req := range appState.PendingRequests() {
 		if req == nil || !isServerResolvedPendingKind(req.Kind) || !isPendingRequestOpen(req) {
 			continue
 		}

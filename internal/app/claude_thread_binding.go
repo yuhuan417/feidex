@@ -17,26 +17,26 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 		return
 	}
 
-	appState := appState(a)
+	appState := a.State()
 	var workspaceID string
 
 	if turnID != "" {
 		if _, sub := findSubmissionByTurn(a, "", turnID); sub != nil {
 			workspaceID = strings.TrimSpace(sub.WorkspaceID)
-			_ = appState.updateSubmission(sub.ID, func(value *state.Submission) {
+			_ = appState.UpdateSubmission(sub.ID, func(value *state.Submission) {
 				value.ThreadID = threadID
 				if strings.TrimSpace(value.TurnID) == "" {
 					value.TurnID = turnID
 				}
 			})
 			newRuntimeStateService(a).rebindTurnThreadID(turnID, threadID)
-			if updated := appState.submission(sub.ID); updated != nil {
+			if updated := appState.Submission(sub.ID); updated != nil {
 				newReplyContinuationService(a).recordSubmissionSourceLinks(updated)
 			}
 		}
 	}
 
-	sess := appState.session(sessionKey)
+	sess := appState.Session(sessionKey)
 	if sess == nil {
 		return
 	}
@@ -58,21 +58,21 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 		if strings.TrimSpace(op.SubmissionID) == "" {
 			continue
 		}
-		_ = appState.updateSubmission(op.SubmissionID, func(value *state.Submission) {
+		_ = appState.UpdateSubmission(op.SubmissionID, func(value *state.Submission) {
 			value.ThreadID = threadID
 			if strings.TrimSpace(value.TurnID) == "" && strings.TrimSpace(op.TurnID) != "" {
 				value.TurnID = strings.TrimSpace(op.TurnID)
 			}
 		})
 		newRuntimeStateService(a).rebindTurnThreadID(op.TurnID, threadID)
-		if updated := appState.submission(op.SubmissionID); updated != nil {
+		if updated := appState.Submission(op.SubmissionID); updated != nil {
 			if workspaceID == "" {
 				workspaceID = strings.TrimSpace(updated.WorkspaceID)
 			}
 			newReplyContinuationService(a).recordSubmissionSourceLinks(updated)
 		}
 	}
-	updatedSess, _ := appState.updateSession(sessionKey, func(current *state.Session) {
+	updatedSess, _ := appState.UpdateSession(sessionKey, func(current *state.Session) {
 		if current == nil {
 			return
 		}

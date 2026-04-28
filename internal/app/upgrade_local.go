@@ -35,7 +35,7 @@ func (s appUpgradeService) commandUpgradeLocalPick(msg *feishu.InboundMessage) e
 	if err != nil {
 		return err
 	}
-	return appState(s.app).updatePending(requestID, func(req *state.PendingRequest) {
+	return s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.FeishuMsgID = msgID
 	})
 }
@@ -58,7 +58,7 @@ func (s appUpgradeService) commandUpgradeLocalPath(msg *feishu.InboundMessage, r
 	if err != nil {
 		return err
 	}
-	return appState(s.app).updatePending(requestID, func(req *state.PendingRequest) {
+	return s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.FeishuMsgID = msgID
 	})
 }
@@ -86,16 +86,16 @@ func (s appUpgradeService) createUpgradeLocalPickerRequest(sessionKey string, ws
 	if _, _, err := newAppUpgradeService(s.app).validateUpgradeRuntime(); err != nil {
 		return "", pathPickerPayload{}, err
 	}
-	appState := appState(s.app)
+	appState := s.app.State()
 	payload, err := newDownloadPathPickerPayload(ws)
 	if err != nil {
 		return "", pathPickerPayload{}, err
 	}
-	requestID, err := appState.nextLocalID("upgrade-local")
+	requestID, err := appState.NextLocalID("upgrade-local")
 	if err != nil {
 		return "", pathPickerPayload{}, err
 	}
-	if err := appState.savePending(&state.PendingRequest{
+	if err := appState.SavePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        upgradeLocalBinaryPendingKind,
 		SessionKey:  sessionKey,
@@ -116,8 +116,8 @@ func (s appUpgradeService) createLocalUpgradeRequest(sessionKey, ownerUserID, fe
 	if err != nil {
 		return "", upgradePendingPayload{}, err
 	}
-	appState := appState(s.app)
-	requestID, err := appState.nextLocalID("upgrade")
+	appState := s.app.State()
+	requestID, err := appState.NextLocalID("upgrade")
 	if err != nil {
 		return "", upgradePendingPayload{}, err
 	}
@@ -135,7 +135,7 @@ func (s appUpgradeService) createLocalUpgradeRequest(sessionKey, ownerUserID, fe
 		SourceSize:     sizeBytes,
 		ExpectedSHA256: sha256Hex,
 	}
-	if err := appState.savePending(&state.PendingRequest{
+	if err := appState.SavePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        "upgrade_release",
 		SessionKey:  sessionKey,
@@ -153,9 +153,9 @@ func (s appUpgradeService) createLocalUpgradeRequest(sessionKey, ownerUserID, fe
 
 func (s appUpgradeService) completeUpgradeLocalPick(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	appState := appState(s.app)
+	appState := s.app.State()
 	wsID := defaultWorkspaceID(s.app)
-	if sess := appState.session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+	if sess := appState.Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		wsID = sess.WorkspaceID
 	}
 	ws := config.FindWorkspace(s.app.cfg, wsID)
@@ -179,7 +179,7 @@ func (s appUpgradeService) completeUpgradeLocalBinaryConfirm(action *feishu.Card
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	_ = appState(s.app).updatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
+	_ = s.app.State().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = "resolved" })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已选择本地 Binary"},
 		Card:  rawCard(newAppUpgradeService(s.app).renderUpgradeConfirmCard("升级确认", sessionKey, requestID, upgradePayload, upgradeLocalConfirmLines(upgradePayload.BinaryPath))),

@@ -14,6 +14,7 @@ import (
 type pendingQueueService struct {
 	app *App
 }
+
 func newPendingQueueService(app *App) pendingQueueService {
 	return pendingQueueService{app: app}
 }
@@ -40,8 +41,8 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	if msg == nil {
 		return nil
 	}
-	appState := appState(s.app)
-	sess := appState.session(sessionKey)
+	appState := s.app.State()
+	sess := appState.Session(sessionKey)
 	if sess == nil {
 		sess = &state.Session{
 			Key:           sessionKey,
@@ -73,7 +74,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	if sessionHasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		sess.Status = "queued"
 	}
-	if err := appState.saveSession(sess); err != nil {
+	if err := appState.SaveSession(sess); err != nil {
 		return err
 	}
 	newPendingQueueService(s.app).markMessagesQueuedReactions([]string{msg.MessageID})
@@ -88,8 +89,8 @@ func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bo
 	if messageID == "" {
 		return false
 	}
-	appState := appState(s.app)
-	for _, snapshot := range appState.sessions() {
+	appState := s.app.State()
+	for _, snapshot := range appState.Sessions() {
 		if snapshot == nil {
 			continue
 		}
@@ -97,7 +98,7 @@ func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bo
 			return true
 		}
 		for _, submissionID := range append([]string(nil), snapshot.Queue...) {
-			sub := appState.submission(submissionID)
+			sub := appState.Submission(submissionID)
 			if !submissionHasSourceMessage(sub, messageID) {
 				continue
 			}
@@ -114,9 +115,9 @@ func (s pendingQueueService) discardStagedImageFromSessionSnapshot(snapshot *sta
 	if s.app == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
 		return false
 	}
-	appState := appState(s.app)
+	appState := s.app.State()
 	discarded := false
-	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
+	if _, err := appState.UpdateSession(snapshot.Key, func(current *state.Session) {
 		if current == nil {
 			return
 		}
@@ -136,9 +137,9 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 	if s.app == nil || snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
 		return false
 	}
-	appState := appState(s.app)
+	appState := s.app.State()
 	discarded := false
-	if _, err := appState.updateSession(snapshot.Key, func(current *state.Session) {
+	if _, err := appState.UpdateSession(snapshot.Key, func(current *state.Session) {
 		if current == nil {
 			return
 		}
@@ -156,7 +157,7 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 	if !discarded {
 		return false
 	}
-	if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
+	if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
 		value.Status = "discarded"
 		value.Finalized = true
 	}); err != nil {
@@ -174,8 +175,8 @@ func (s pendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 }
 
 func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int {
-	appState := appState(s.app)
-	sess := appState.session(sessionKey)
+	appState := s.app.State()
+	sess := appState.Session(sessionKey)
 	if sess == nil {
 		return 0
 	}
@@ -186,9 +187,9 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 	}
 	queueIDs := append([]string(nil), sess.Queue...)
 	for _, submissionID := range queueIDs {
-		sub := appState.submission(submissionID)
+		sub := appState.Submission(submissionID)
 		newPendingQueueService(s.app).markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
-		if err := appState.updateSubmission(submissionID, func(value *state.Submission) {
+		if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
 			value.Status = "discarded"
 			value.Finalized = true
 		}); err != nil {
@@ -203,7 +204,7 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 	if !sessionHasInFlightSubmission(sess) {
 		sess.Status = "idle"
 	}
-	if err := appState.saveSession(sess); err != nil {
+	if err := appState.SaveSession(sess); err != nil {
 		slog.Error("discard session pending inputs failed", "session_key", sessionKey, "error", err)
 	}
 	return discarded

@@ -10,6 +10,7 @@ import (
 type upgradeRenderService struct {
 	app *App
 }
+
 func newUpgradeRenderService(app *App) upgradeRenderService {
 	return upgradeRenderService{app: app}
 }
@@ -23,7 +24,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || view.Probe.CurrentVersion == view.LatestVersion {
 		return upgraderender.RenderCodexUpgradeStatusCard(s.app.feishu, sessionKey, uv, true), "", nil
 	}
-	requestID, err := appState(s.app).nextLocalID("codex-upgrade")
+	requestID, err := s.app.State().NextLocalID("codex-upgrade")
 	if err != nil {
 		return nil, "", err
 	}
@@ -34,7 +35,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 		CommandPath:    view.Probe.CommandPath,
 		NPMPath:        view.Probe.NPMPath,
 	}
-	if err := appState(s.app).savePending(&state.PendingRequest{
+	if err := s.app.State().SavePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        codexUpgradePendingKind,
 		SessionKey:  sessionKey,

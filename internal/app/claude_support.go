@@ -63,7 +63,7 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 		},
 		RawCard: rawCard,
 		PendingLookup: func(requestID string) *state.PendingRequest {
-			return appState(a).pending(requestID)
+			return a.State().Pending(requestID)
 		},
 	}
 }

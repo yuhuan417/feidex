@@ -57,7 +57,7 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 			firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Preview), sess.ActiveThreadPreview),
 		)
 		sess.Status = "idle"
-		if upsertErr := appState(a).saveSession(sess); upsertErr != nil {
+		if upsertErr := a.State().SaveSession(sess); upsertErr != nil {
 			slog.Error("startup thread resume persistence failed",
 				"session_key", sessionKey,
 				"thread_id", sess.ActiveThreadID,
@@ -135,13 +135,13 @@ func recoverCodexStartupConversation(a *App, sessionKey, workspaceID string, ses
 		)
 		clearSessionThreadContext(sess)
 		sess.Status = "idle"
-		_ = appState(a).saveSession(sess)
+		_ = a.State().SaveSession(sess)
 		clearSessionLiveThread(a, sessionKey)
 		return
 	}
 	setSessionThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
 	sess.Status = "idle"
-	if upsertErr := appState(a).saveSession(sess); upsertErr != nil {
+	if upsertErr := a.State().SaveSession(sess); upsertErr != nil {
 		slog.Error("startup fresh thread persistence failed",
 			"session_key", sessionKey,
 			"thread_id", threadResp.Thread.ID,

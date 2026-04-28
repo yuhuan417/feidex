@@ -23,7 +23,7 @@ func (a *App) ReviewFeishu() appcore.FeishuClient {
 
 // ReviewAppState returns the narrowed app state provider for review ops.
 func (a *App) ReviewAppState() appreviewcmd.AppStateProvider {
-	return appState(a)
+	return a.State()
 }
 
 // ReviewWorkspaceProvider returns the narrowed workspace provider for review
@@ -131,7 +131,7 @@ type reviewWorkspaceProviderAdapter struct {
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewWorkspaceForSessionKey(sessionKey string) *config.Workspace {
-	sess := appState(a.app).session(sessionKey)
+	sess := a.app.State().Session(sessionKey)
 	workspaceID := defaultWorkspaceID(a.app)
 	if sess != nil {
 		if wid := sess.WorkspaceID; wid != "" {
@@ -148,4 +148,3 @@ func (a reviewWorkspaceProviderAdapter) ReviewDefaultWorkspaceID() string {
 func (a reviewWorkspaceProviderAdapter) ReviewFindWorkspace(workspaceID string) *config.Workspace {
 	return config.FindWorkspace(a.app.cfg, workspaceID)
 }
-

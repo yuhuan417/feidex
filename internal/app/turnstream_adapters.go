@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/app/turnitem"
+	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"
 )
 
@@ -51,7 +51,7 @@ func (a *App) TurnStreamState() appturnstream.StateProvider {
 	if a == nil {
 		return nil
 	}
-	return appState(a)
+	return a.State()
 }
 
 // TurnStreamSubmissionFinder returns the narrowed submission finder for the turn stream service.

@@ -3,8 +3,9 @@ package app
 import (
 	"sync"
 
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
+	"feidex/internal/app/appstate"
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -58,12 +59,12 @@ func (a *App) Codex() CodexClient {
 	return a.codex
 }
 
-// State returns the app-level state facade.
-func (a *App) State() *appStateFacade {
+// State returns the frontend-scoped app state store.
+func (a *App) State() *appstate.Store {
 	if a == nil {
 		return nil
 	}
-	return appState(a)
+	return appstate.New(a)
 }
 
 // ConfigPath returns the filesystem path to the configuration file.

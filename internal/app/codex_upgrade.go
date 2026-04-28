@@ -14,6 +14,7 @@ import (
 type backendUpgradeService struct {
 	app *App
 }
+
 func newBackendUpgradeService(app *App) backendUpgradeService {
 	return backendUpgradeService{app: app}
 }
@@ -22,7 +23,6 @@ const (
 	codexUpgradePendingKind  = "codex_npm_upgrade"
 	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade | /codex restart"
 )
-
 
 type codexUpgradeView struct {
 	Probe         codexinstall.Probe
@@ -76,7 +76,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = appState(s.app).updatePending(pendingID, func(req *state.PendingRequest) {
+		_ = s.app.State().UpdatePending(pendingID, func(req *state.PendingRequest) {
 			req.FeishuMsgID = msgID
 		})
 	}

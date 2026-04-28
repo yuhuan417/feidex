@@ -13,7 +13,7 @@ func replyInThreadForSubmission(a *App, sub *state.Submission) bool {
 	if sub == nil {
 		return false
 	}
-	sess := appState(a).session(sub.SessionKey)
+	sess := a.State().Session(sub.SessionKey)
 	return sess != nil && sess.ChatType == "group" && replyInThreadEnabled(a, sess.ChatType)
 }
 

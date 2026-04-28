@@ -18,7 +18,6 @@ const (
 	claudeWorkspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace permissions [MODE|inherit]"
 )
 
-
 func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 	if cfg == nil {
 		return false
@@ -75,7 +74,7 @@ func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(a) {
 		return nil
 	}
-	sess := appState(a).session(sessionKey)
+	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil
 	}
@@ -85,7 +84,7 @@ func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 }
 
 func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	sess := appState(a).session(sessionKey)
+	sess := a.State().Session(sessionKey)
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -166,7 +165,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	var sess *state.Session
 	if a.store != nil {
-		sess = appState(a).session(sessionKey)
+		sess = a.State().Session(sessionKey)
 	}
 	workspaceID := defaultWorkspaceID(a)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
@@ -262,7 +261,7 @@ func (s workspaceService) completeClaudeWorkspacePermissionModeSet(action *feish
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	sess := appState(s.app).session(sessionKey)
+	sess := s.app.State().Session(sessionKey)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) == strings.TrimSpace(workspaceID) && strings.TrimSpace(sess.ActiveClaudePermissionMode) == "" {
 		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, workspaceID), s.app.cfg.Claude)
 		if err := applyClaudePermissionModeToRuntime(s.app, sessionKey, effective); err != nil {

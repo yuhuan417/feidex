@@ -16,7 +16,7 @@ func queueFrontendCardNotification(a *App, note state.FrontendCardNotification) 
 	if a == nil || a.store == nil {
 		return
 	}
-	if err := appState(a).queueFrontendCardNotification(note); err != nil {
+	if err := a.State().QueueFrontendCardNotification(note); err != nil {
 		slog.Warn("queue frontend card notification failed",
 			"frontend_id", strings.TrimSpace(a.frontendID),
 			"kind", strings.TrimSpace(note.Kind),
@@ -29,7 +29,7 @@ func flushPendingFrontendCardNotifications(a *App, msg *feishu.InboundMessage) {
 	if a == nil || a.feishu == nil || a.store == nil || msg == nil {
 		return
 	}
-	notes, err := appState(a).drainFrontendCardNotifications()
+	notes, err := a.State().DrainFrontendCardNotifications()
 	if err != nil {
 		slog.Warn("load pending frontend card notifications failed",
 			"frontend_id", strings.TrimSpace(a.frontendID),

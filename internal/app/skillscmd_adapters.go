@@ -15,7 +15,7 @@ func newSkillsService(a *App) *appskillscmd.Service {
 		return requireCodexClient(a)
 	}
 	s.AppStateSession = func(sessionKey string) *state.Session {
-		return appState(a).session(sessionKey)
+		return a.State().Session(sessionKey)
 	}
 	s.DefaultWorkspaceID = func() string {
 		return defaultWorkspaceID(a)

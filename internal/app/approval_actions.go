@@ -13,9 +13,9 @@ import (
 )
 
 func completeApprovalAction(a *App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(a)
+	appState := a.State()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := appState.pending(requestID)
+	pending := appState.Pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "审批已过期"}}, nil
 	}
@@ -116,7 +116,7 @@ var approvalDecisionDetail = appapprovalview.ApprovalDecisionDetail
 var approvalDecisionColor = appapprovalview.ApprovalDecisionColor
 
 func resumeSubmissionAfterRequest(a *App, pending *state.PendingRequest) {
-	appState := appState(a)
+	appState := a.State()
 	if pending == nil {
 		return
 	}
@@ -127,5 +127,5 @@ func resumeSubmissionAfterRequest(a *App, pending *state.PendingRequest) {
 	if sub == nil {
 		return
 	}
-	_ = appState.setSubmissionStatus(sub.ID, "running")
+	_ = appState.SetSubmissionStatus(sub.ID, "running")
 }

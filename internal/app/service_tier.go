@@ -21,7 +21,7 @@ var renderServiceTierValue = appruntime.RenderServiceTierValue
 var renderServiceTierReplyValue = appruntime.RenderServiceTierReplyValue
 
 func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
-	sess := appState(a).session(sessionKey)
+	sess := a.State().Session(sessionKey)
 	body := "配置当前 thread 的 service tier。"
 	buttons := []feishu.Button{}
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
@@ -72,8 +72,8 @@ func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
 }
 
 func setThreadServiceTier(a *App, sessionKey, threadID, serviceTier string) (*state.Session, error) {
-	appState := appState(a)
-	sess := appState.session(sessionKey)
+	appState := a.State()
+	sess := appState.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动线程，无法切换 service tier")
 	}
@@ -81,7 +81,7 @@ func setThreadServiceTier(a *App, sessionKey, threadID, serviceTier string) (*st
 		return nil, fmt.Errorf("当前 thread 已失效")
 	}
 	sess.ActiveThreadServiceTier = normalizeServiceTier(serviceTier)
-	if err := appState.saveSession(sess); err != nil {
+	if err := appState.SaveSession(sess); err != nil {
 		return nil, err
 	}
 	return sess, nil
@@ -93,14 +93,14 @@ func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
 			return nil
 		}
 		sessionKey := makeSessionKey(a, msg)
-		appState := appState(a)
-		sess := appState.session(sessionKey)
+		appState := a.State()
+		sess := appState.Session(sessionKey)
 		if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 			return fmt.Errorf("当前没有活动线程，无法切换 service tier")
 		}
 		next := toggleServiceTier(sess.ActiveThreadServiceTier)
 		sess.ActiveThreadServiceTier = next
-		if err := appState.saveSession(sess); err != nil {
+		if err := appState.SaveSession(sess); err != nil {
 			return err
 		}
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", replyInThreadEnabled(a, msg.ChatType))
@@ -122,8 +122,8 @@ func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
 		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
 		return err
 	}
-	appState := appState(a)
-	sess := appState.session(sessionKey)
+	appState := a.State()
+	sess := appState.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return fmt.Errorf("当前没有活动线程，无法切换 service tier")
 	}
@@ -137,7 +137,7 @@ func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
 		next = toggleServiceTier(sess.ActiveThreadServiceTier)
 	}
 	sess.ActiveThreadServiceTier = next
-	if err := appState.saveSession(sess); err != nil {
+	if err := appState.SaveSession(sess); err != nil {
 		return err
 	}
 	return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+renderServiceTierReplyValue(next)+"。", replyInThreadEnabled(a, msg.ChatType))

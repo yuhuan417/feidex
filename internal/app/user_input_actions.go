@@ -12,11 +12,11 @@ import (
 )
 
 func completeUserInputAnswer(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(a)
+	appState := a.State()
 	requestID := actionStringValue(action, "request_id")
 	questionID := actionStringValue(action, "question_id")
 	answer := actionStringValue(action, "answer")
-	pending := appState.pending(requestID)
+	pending := appState.Pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}
@@ -94,11 +94,11 @@ func completeUserInputFormSubmit(a *App, action *feishu.CardAction, pending *sta
 }
 
 func completeUserInputMultiToggle(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(a)
+	appState := a.State()
 	requestID := actionStringValue(action, "request_id")
 	questionID := actionStringValue(action, "question_id")
 	optionLabel := actionStringValue(action, "option_label")
-	pending := appState.pending(requestID)
+	pending := appState.Pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}

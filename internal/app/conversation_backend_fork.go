@@ -85,5 +85,5 @@ func persistForkedConversation(a *App, sessionKey string, sess *state.Session, w
 	sess.Status = "idle"
 	sess.Queue = nil
 	sess.StagedImages = nil
-	return appState(a).saveSession(sess)
+	return a.State().SaveSession(sess)
 }

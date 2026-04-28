@@ -138,18 +138,18 @@ func NewService(app App) Service {
 
 // Provider accessors — delegate to App methods for testability.
 
-func (w Service) appState() AppStateProvider         { return w.app.TurnLifecycleAppState() }
+func (w Service) stateProvider() AppStateProvider    { return w.app.TurnLifecycleAppState() }
 func (w Service) runtimeState() RuntimeStateProvider { return w.app.TurnLifecycleRuntimeState() }
 func (w Service) replyContinuation() ReplyContinuationProvider {
 	return w.app.TurnLifecycleReplyContinuation()
 }
-func (w Service) turnStream() TurnStreamProvider       { return w.app.TurnLifecycleTurnStream() }
-func (w Service) pendingQueue() PendingQueueProvider   { return w.app.TurnLifecyclePendingQueue() }
-func (w Service) outboundCard() OutboundCardProvider   { return w.app.TurnLifecycleOutboundCard() }
+func (w Service) turnStream() TurnStreamProvider     { return w.app.TurnLifecycleTurnStream() }
+func (w Service) pendingQueue() PendingQueueProvider { return w.app.TurnLifecyclePendingQueue() }
+func (w Service) outboundCard() OutboundCardProvider { return w.app.TurnLifecycleOutboundCard() }
 func (w Service) submissionDispatch() SubmissionDispatchProvider {
 	return w.app.TurnLifecycleSubmissionDispatch()
 }
-func (w Service) autoRetry() AutoRetryProvider               { return w.app.TurnLifecycleAutoRetry() }
+func (w Service) autoRetry() AutoRetryProvider { return w.app.TurnLifecycleAutoRetry() }
 func (w Service) runtimeMaintenance() RuntimeMaintenanceProvider {
 	return w.app.TurnLifecycleRuntimeMaintenance()
 }
@@ -198,7 +198,7 @@ func TurnCompletionTerminalText(status, lastError string) string {
 // BindPendingSubmissionTurn attempts to bind a pending submission to the
 // given turn. Returns true if binding succeeded.
 func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
-	st := w.appState()
+	st := w.stateProvider()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -245,7 +245,7 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 // attempting to bind a pending submission, falling back to standalone
 // compact turn binding.
 func (w Service) OnTurnStartedNotification(threadID, turnID string) {
-	st := w.appState()
+	st := w.stateProvider()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -343,7 +343,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 // submission to a turn that is completing (no prior turn-start notification).
 // Returns the session key and submission if binding succeeded.
 func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
-	st := w.appState()
+	st := w.stateProvider()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
@@ -421,7 +421,7 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 // FinishTurn finalizes a turn, cleans up session state, delivers terminal
 // cards, and optionally schedules the next submission.
 func (w Service) FinishTurn(threadID, turnID, status string) {
-	st := w.appState()
+	st := w.stateProvider()
 	sessionKey, sub := w.app.FindSubmissionByTurn(threadID, turnID)
 	slog.Debug("finishTurn entry",
 		"thread_id", threadID,

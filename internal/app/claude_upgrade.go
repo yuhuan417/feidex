@@ -16,7 +16,6 @@ const (
 	claudeUpgradeCommandUsage = "usage: /claude | /claude check | /claude upgrade | /claude restart"
 )
 
-
 type claudeUpgradeView struct {
 	Probe         claudeinstall.Probe
 	LatestVersion string
@@ -69,7 +68,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = appState(s.app).updatePending(pendingID, func(req *state.PendingRequest) {
+		_ = s.app.State().UpdatePending(pendingID, func(req *state.PendingRequest) {
 			req.FeishuMsgID = msgID
 		})
 	}

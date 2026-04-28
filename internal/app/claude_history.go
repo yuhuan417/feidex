@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/claudesupport"
 	"feidex/internal/app/claudesession"
+	"feidex/internal/app/claudesupport"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
@@ -52,7 +52,7 @@ func fetchClaudeCurrentSessionTurns(a *App, sessionKey string) (*state.Session, 
 	if a == nil || a.store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}
-	sess := appState(a).session(sessionKey)
+	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, nil, nil, fmt.Errorf("当前没有活动会话")
 	}
@@ -85,4 +85,3 @@ func fetchClaudeCurrentSessionTurns(a *App, sessionKey string) (*state.Session, 
 	}
 	return sess, thread, turns, nil
 }
-

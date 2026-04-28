@@ -17,7 +17,7 @@ func (a *App) MaintenanceAppState() appmaintenance.AppStateProvider {
 	if a == nil {
 		return nil
 	}
-	return appState(a)
+	return a.State()
 }
 
 func (a *App) MaintenanceRuntimeState() appmaintenance.RuntimeStateProvider {

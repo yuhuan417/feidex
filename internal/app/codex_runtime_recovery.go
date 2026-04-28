@@ -32,7 +32,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 		},
 		SessionKeysForRecovery: func() []string {
 			var keys []string
-			for _, sess := range appState(a).sessions() {
+			for _, sess := range a.State().Sessions() {
 				if sess != nil && sessionBelongsToFrontend(a, sess.Key) {
 					keys = append(keys, strings.TrimSpace(sess.Key))
 				}
@@ -40,7 +40,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 			return keys
 		},
 		SessionShouldStartNextSubmissionAsync: func(sessionKey string) bool {
-			sess := appState(a).session(sessionKey)
+			sess := a.State().Session(sessionKey)
 			return sessionShouldStartNextSubmissionAsync(sess)
 		},
 		StartNextSubmissionAsync: func(sessionKey, reason string) {

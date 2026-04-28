@@ -7,7 +7,6 @@ import (
 	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -69,7 +68,7 @@ func newAppUpgradeService(app *App) appUpgradeService {
 			return app.feishu
 		},
 		StateFunc: func() appupgradecmd.UpgradeState {
-			return &upgradeStateAdapter{facade: appState(app)}
+			return app.State()
 		},
 		DaemonNameFunc: func() string {
 			app.configMu.RLock()
@@ -97,27 +96,6 @@ func newAppUpgradeService(app *App) appUpgradeService {
 		app:            app,
 	}
 	return svc
-}
-
-// ---------------------------------------------------------------------------
-// upgradeStateAdapter — bridges *appStateFacade to upgradecmd.UpgradeState
-// ---------------------------------------------------------------------------
-
-type upgradeStateAdapter struct {
-	facade *appStateFacade
-}
-
-func (a *upgradeStateAdapter) NextLocalID(prefix string) (string, error) {
-	return a.facade.nextLocalID(prefix)
-}
-func (a *upgradeStateAdapter) SavePending(req *state.PendingRequest) error {
-	return a.facade.savePending(req)
-}
-func (a *upgradeStateAdapter) Pending(id string) *state.PendingRequest {
-	return a.facade.pending(id)
-}
-func (a *upgradeStateAdapter) UpdatePending(id string, mutate func(*state.PendingRequest)) error {
-	return a.facade.updatePending(id, mutate)
 }
 
 // ---------------------------------------------------------------------------

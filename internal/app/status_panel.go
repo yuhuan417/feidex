@@ -11,7 +11,7 @@ import (
 func renderStatusCard(a *App, sessionKey string) map[string]any {
 	var sess *state.Session
 	if strings.TrimSpace(sessionKey) != "" {
-		sess = appState(a).session(sessionKey)
+		sess = a.State().Session(sessionKey)
 	}
 	buttons := []feishu.Button{
 		{Text: commandLabel("刷新", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},

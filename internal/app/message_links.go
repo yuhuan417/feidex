@@ -20,5 +20,5 @@ func recordMessageLink(a *App, messageID, kind string, sub *state.Submission, re
 		link.ThreadID = sub.ThreadID
 		link.TurnID = sub.TurnID
 	}
-	_ = appState(a).saveMessageLink(link)
+	_ = a.State().SaveMessageLink(link)
 }

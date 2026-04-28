@@ -82,7 +82,7 @@ func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, s
 type submissionAppAdapter struct{ app *App }
 
 func (a submissionAppAdapter) SubmissionQueueAppState() appsubmission.QueueAppStateProvider {
-	return appState(a.app)
+	return a.app.State()
 }
 func (a submissionAppAdapter) SubmissionQueueSkillResolver() appsubmission.QueueSkillResolver {
 	return sqSkillResolverAdapter{app: a.app}
@@ -266,7 +266,7 @@ func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool
 type pendingQueueAppAdapter struct{ app *App }
 
 func (a pendingQueueAppAdapter) PendingQueueAppState() appsubmission.PendingQueueAppStateProvider {
-	return appState(a.app)
+	return a.app.State()
 }
 func (a pendingQueueAppAdapter) PendingQueueRuntimeMaintenance() appsubmission.PendingQueueRuntimeMaintenanceProvider {
 	return newRuntimeMaintenanceService(a.app)
@@ -283,7 +283,6 @@ func (a pendingQueueAppAdapter) PendingQueueRemoveReaction(ctx context.Context, 
 func (a pendingQueueAppAdapter) PendingQueueLogSessionState(event, sessionKey string, sess *state.Session) {
 	logSessionState(event, sessionKey, sess)
 }
-
 
 // ---------------------------------------------------------------------------
 // Convenience constructors

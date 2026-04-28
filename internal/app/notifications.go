@@ -57,29 +57,29 @@ func finishTurn(a *App, threadID, turnID, status string) {
 // part of the current conversation round. It finalizes the submission and
 // removes its ActiveOperation from the session.
 func finishSteerSubmission(a *App, submissionID, status string) {
-	st := appState(a)
+	st := a.State()
 	submissionID = strings.TrimSpace(submissionID)
 	if submissionID == "" {
 		return
 	}
-	sub := st.submission(submissionID)
+	sub := st.Submission(submissionID)
 	if sub == nil || sub.Finalized {
 		return
 	}
 	switch status {
 	case "completed":
-		_ = st.finalizeSubmission(submissionID, "completed")
+		_ = st.FinalizeSubmission(submissionID, "completed")
 	case "interrupted":
-		_ = st.finalizeSubmission(submissionID, "interrupted")
+		_ = st.FinalizeSubmission(submissionID, "interrupted")
 	default:
-		_ = st.finalizeSubmission(submissionID, "failed")
+		_ = st.FinalizeSubmission(submissionID, "failed")
 	}
 	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	// Remove the steer submission's ActiveOperation from the session.
 	sessionKey := strings.TrimSpace(sub.SessionKey)
 	if sessionKey != "" {
 		turnID := strings.TrimSpace(sub.TurnID)
-		st.updateSession(sessionKey, func(sess *state.Session) {
+		st.UpdateSession(sessionKey, func(sess *state.Session) {
 			if sess == nil {
 				return
 			}
@@ -99,8 +99,8 @@ func finshSteerSubmissionsForThread(a *App, threadID, status string) {
 	if threadID == "" {
 		return
 	}
-	st := appState(a)
-	for _, sess := range st.sessions() {
+	st := a.State()
+	for _, sess := range st.Sessions() {
 		if sess == nil || strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
@@ -109,20 +109,20 @@ func finshSteerSubmissionsForThread(a *App, threadID, status string) {
 			if subID == "" {
 				continue
 			}
-			sub := st.submission(subID)
+			sub := st.Submission(subID)
 			if sub == nil || sub.Finalized {
 				continue
 			}
 			switch status {
 			case "completed":
-				_ = st.finalizeSubmission(subID, "completed")
+				_ = st.FinalizeSubmission(subID, "completed")
 			case "interrupted":
-				_ = st.finalizeSubmission(subID, "interrupted")
+				_ = st.FinalizeSubmission(subID, "interrupted")
 			default:
-				_ = st.finalizeSubmission(subID, "failed")
+				_ = st.FinalizeSubmission(subID, "failed")
 			}
 			newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
-			st.updateSession(sess.Key, func(s *state.Session) {
+			st.UpdateSession(sess.Key, func(s *state.Session) {
 				if s == nil {
 					return
 				}

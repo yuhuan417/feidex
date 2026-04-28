@@ -85,8 +85,8 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *sta
 	if a == nil || a.store == nil || sub == nil {
 		return
 	}
-	appState := appState(a)
-	current := appState.submission(sub.ID)
+	appState := a.State()
+	current := appState.Submission(sub.ID)
 	if current == nil || current.Finalized {
 		return
 	}
@@ -101,15 +101,15 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *sta
 		flush = newTurnStreamService(a).flushTurnStream(context.Background(), threadID, turnID)
 	}
 	newBackendFailureService(a).ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
-	_ = appState.finalizeSubmission(sub.ID, "failed")
-	sub = appState.submission(sub.ID)
+	_ = appState.FinalizeSubmission(sub.ID, "failed")
+	sub = appState.Submission(sub.ID)
 	if sub == nil {
 		return
 	}
 	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	terminalText := appturnlifecycle.TurnCompletionTerminalText(sub.Status, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
 	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
-	updatedSess, _ := appState.updateSession(sessionKey, func(sess *state.Session) {
+	updatedSess, _ := appState.UpdateSession(sessionKey, func(sess *state.Session) {
 		if sess == nil {
 			return
 		}
@@ -159,22 +159,22 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 	return appbackend.BackendFailureService{
 		App: a,
 		AllSessions: func() []*state.Session {
-			return appState(a).sessions()
+			return a.State().Sessions()
 		},
 		GetSubmission: func(id string) *state.Submission {
-			return appState(a).submission(id)
+			return a.State().Submission(id)
 		},
 		AllPendingRequests: func() []*state.PendingRequest {
-			return appState(a).pendingRequests()
+			return a.State().PendingRequests()
 		},
 		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error {
-			return appState(a).updatePending(id, mutate)
+			return a.State().UpdatePending(id, mutate)
 		},
 		FinalizeSubmission: func(id, status string) error {
-			return appState(a).finalizeSubmission(id, status)
+			return a.State().FinalizeSubmission(id, status)
 		},
 		UpdateSession: func(key string, mutate func(*state.Session)) (*state.Session, error) {
-			return appState(a).updateSession(key, mutate)
+			return a.State().UpdateSession(key, mutate)
 		},
 		SessionBelongsToFrontend: func(sessionKey string) bool {
 			return sessionBelongsToFrontend(a, sessionKey)

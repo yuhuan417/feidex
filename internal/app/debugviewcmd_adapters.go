@@ -22,7 +22,7 @@ func (a *App) DebugFeishu() appdebugviewcmd.FeishuClient {
 
 // DebugAppState returns the narrowed app state provider for debug/usage/download ops.
 func (a *App) DebugAppState() appdebugviewcmd.AppStateProvider {
-	return appState(a)
+	return a.State()
 }
 
 // DebugRuntimeState returns the narrowed runtime state provider for usage ops.
@@ -111,7 +111,6 @@ func (a *App) DebugConfigPath() string {
 	return a.cfgPath
 }
 
-
 // debugConversationBackendAdapter wraps the conversation backend facade to
 // satisfy debugviewcmd.ConversationBackendProvider.
 type debugConversationBackendAdapter struct {
@@ -196,14 +195,14 @@ var (
 
 // Function aliases for usage helpers.
 var (
-	formatUsageInt                = appdebugviewcmd.FormatUsageInt
-	formatUsageRatio              = appdebugviewcmd.FormatUsageRatio
-	formatUsageCost               = appdebugviewcmd.FormatUsageCost
-	formatTurnUsageLine           = appdebugviewcmd.FormatTurnUsageLine
-	formatTurnElapsedLine         = appdebugviewcmd.FormatTurnElapsedLine
-	formatContextLeftLine         = appdebugviewcmd.FormatContextLeftLine
-	formatContextUsedLine         = appdebugviewcmd.FormatContextUsedLine
-	renderThreadUsageCardBody     = appdebugviewcmd.RenderThreadUsageCardBody
+	formatUsageInt                  = appdebugviewcmd.FormatUsageInt
+	formatUsageRatio                = appdebugviewcmd.FormatUsageRatio
+	formatUsageCost                 = appdebugviewcmd.FormatUsageCost
+	formatTurnUsageLine             = appdebugviewcmd.FormatTurnUsageLine
+	formatTurnElapsedLine           = appdebugviewcmd.FormatTurnElapsedLine
+	formatContextLeftLine           = appdebugviewcmd.FormatContextLeftLine
+	formatContextUsedLine           = appdebugviewcmd.FormatContextUsedLine
+	renderThreadUsageCardBody       = appdebugviewcmd.RenderThreadUsageCardBody
 	renderClaudeThreadUsageCardBody = appdebugviewcmd.RenderClaudeThreadUsageCardBody
 )
 

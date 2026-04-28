@@ -16,7 +16,7 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || view.Probe.CurrentVersion == view.LatestVersion {
 		return upgraderender.RenderClaudeUpgradeStatusCard(s.app.feishu, sessionKey, uv, true), "", nil
 	}
-	requestID, err := appState(s.app).nextLocalID("claude-upgrade")
+	requestID, err := s.app.State().NextLocalID("claude-upgrade")
 	if err != nil {
 		return nil, "", err
 	}
@@ -27,7 +27,7 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 		CommandPath:    view.Probe.CommandPath,
 		NPMPath:        view.Probe.NPMPath,
 	}
-	if err := appState(s.app).savePending(&state.PendingRequest{
+	if err := s.app.State().SavePending(&state.PendingRequest{
 		ID:          requestID,
 		Kind:        claudeUpgradePendingKind,
 		SessionKey:  sessionKey,

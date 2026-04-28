@@ -24,7 +24,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), kind) {
 		return nil
 	}
-	appState := appState(a)
+	appState := a.State()
 	enablePreview := strings.TrimSpace(kind) == "final_message"
 	if !enablePreview {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
@@ -44,7 +44,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 		ids := make([]string, 0, len(results))
 		for _, result := range results {
 			ids = append(ids, result.MessageID)
-			_ = appState.saveMessageLink(&state.MessageLink{
+			_ = appState.SaveMessageLink(&state.MessageLink{
 				MessageID:    result.MessageID,
 				SessionKey:   sub.SessionKey,
 				SubmissionID: sub.ID,
@@ -61,7 +61,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, title, color, "", text, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
-			_ = appState.saveMessageLink(&state.MessageLink{
+			_ = appState.SaveMessageLink(&state.MessageLink{
 				MessageID:    reuseMessageID,
 				SessionKey:   sub.SessionKey,
 				SubmissionID: sub.ID,
@@ -82,7 +82,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	if err != nil || strings.TrimSpace(id) == "" {
 		return nil
 	}
-	_ = appState.saveMessageLink(&state.MessageLink{
+	_ = appState.SaveMessageLink(&state.MessageLink{
 		MessageID:    id,
 		SessionKey:   sub.SessionKey,
 		SubmissionID: sub.ID,

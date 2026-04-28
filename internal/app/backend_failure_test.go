@@ -13,7 +13,7 @@ import (
 func TestFailSubmissionWithoutTerminalCompletionMentionsUserWhenQueueEmpty(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if err := appState(a).savePending(&state.PendingRequest{
+	if err := a.State().SavePending(&state.PendingRequest{
 		ID:         "req-1",
 		Kind:       "command",
 		SessionKey: "sess-1",
@@ -29,7 +29,7 @@ func TestFailSubmissionWithoutTerminalCompletionMentionsUserWhenQueueEmpty(t *te
 	if got := a.store.GetSubmission(sub.ID); got != nil {
 		t.Fatalf("submission after forced failure = %+v, want deleted", got)
 	}
-	if pending := appState(a).pending("req-1"); pending != nil {
+	if pending := a.State().Pending("req-1"); pending != nil {
 		t.Fatalf("pending request after forced failure = %+v, want cleared", pending)
 	}
 	sess := a.store.GetSession("sess-1")

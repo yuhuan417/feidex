@@ -10,23 +10,23 @@ import (
 )
 
 func updateSubmissionByTurn(a *App, threadID, turnID string, mutate func(*state.Submission)) {
-	appState := appState(a)
+	appState := a.State()
 	_, sub := findSubmissionByTurn(a, threadID, turnID)
 	if sub == nil {
 		return
 	}
-	_ = appState.updateSubmission(sub.ID, mutate)
+	_ = appState.UpdateSubmission(sub.ID, mutate)
 }
 
 var turnCompletionTerminalText = appturnlifecycle.TurnCompletionTerminalText
 
 func findSubmissionByTurn(a *App, threadID, turnID string) (string, *state.Submission) {
-	appState := appState(a)
+	appState := a.State()
 	if strings.TrimSpace(turnID) != "" {
 		if sessionKey, sub := newRuntimeStateService(a).boundSubmissionForTurn(turnID); sub != nil {
 			return sessionKey, sub
 		}
-		for _, sess := range appState.sessions() {
+		for _, sess := range appState.Sessions() {
 			if sess == nil {
 				continue
 			}
@@ -34,7 +34,7 @@ func findSubmissionByTurn(a *App, threadID, turnID string) (string, *state.Submi
 			if op == nil || strings.TrimSpace(op.SubmissionID) == "" {
 				continue
 			}
-			sub := appState.submission(op.SubmissionID)
+			sub := appState.Submission(op.SubmissionID)
 			if sub != nil {
 				return sess.Key, sub
 			}
@@ -42,7 +42,7 @@ func findSubmissionByTurn(a *App, threadID, turnID string) (string, *state.Submi
 		return "", nil
 	}
 	if strings.TrimSpace(threadID) != "" {
-		for _, sess := range appState.sessions() {
+		for _, sess := range appState.Sessions() {
 			if sess == nil {
 				continue
 			}
@@ -50,7 +50,7 @@ func findSubmissionByTurn(a *App, threadID, turnID string) (string, *state.Submi
 			if op == nil || strings.TrimSpace(op.SubmissionID) == "" {
 				continue
 			}
-			sub := appState.submission(op.SubmissionID)
+			sub := appState.Submission(op.SubmissionID)
 			if sub != nil {
 				return sess.Key, sub
 			}

@@ -68,7 +68,7 @@ func commandMessageFromAction(a *App, action *feishu.CardAction, sessionKey, raw
 	if msg.UserID == "" {
 		msg.UserID = sessionUserID
 	}
-	if sess := appState(a).session(sessionKey); sess != nil {
+	if sess := a.State().Session(sessionKey); sess != nil {
 		msg.ChatID = firstNonEmpty(msg.ChatID, strings.TrimSpace(sess.ChatID))
 		msg.ChatType = firstNonEmpty(msg.ChatType, strings.TrimSpace(sess.ChatType))
 		msg.UserID = firstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))

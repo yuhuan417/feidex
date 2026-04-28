@@ -26,7 +26,7 @@ func parseStructuredLines(text string) map[string]string {
 }
 
 func pendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest {
-	pending := appState(a).pendingRequests()
+	pending := a.State().PendingRequests()
 	sort.Slice(pending, func(i, j int) bool { return pending[i].CreatedAt > pending[j].CreatedAt })
 	for _, req := range pending {
 		if req == nil || req.Status != "pending" || req.SessionKey != sessionKey {
@@ -84,9 +84,9 @@ func (s pendingInputService) handlePendingTextResponse(msg *feishu.InboundMessag
 }
 
 func completePendingFormCancel(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(a)
+	appState := a.State()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := appState.pending(requestID)
+	pending := appState.Pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}

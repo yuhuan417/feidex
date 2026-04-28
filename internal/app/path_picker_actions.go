@@ -14,9 +14,9 @@ import (
 )
 
 func (s workspaceService) completePathPickerAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(s.app)
+	appState := s.app.State()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := appState.pending(requestID)
+	pending := appState.Pending(requestID)
 	if pending == nil || (pending.Kind != pathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != downloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择请求已过期"}}, nil
 	}
@@ -46,7 +46,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 	case "path_picker.cancel":
 		if pending.Kind == "workspace_new" {
 			workspacePayload.Picker = nil
-			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回工作区创建"},
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
@@ -54,13 +54,13 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 		}
 		if pending.Kind == "workspace_clone" {
 			clonePayload.Picker = nil
-			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
+			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回从仓库创建"},
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = "resolved" })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消路径选择"},
 			Card:  rawCard(s.app.feishu.SimpleStatusCard("路径选择已取消", "grey", "本次路径选择已取消。", nil)),
@@ -131,7 +131,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 			workspacePayload.SelectedCWD = selectedPath
 			workspacePayload = appworkspace.UpdateNewSuggestedID(workspacePayload, selectedPath)
 			workspacePayload.Picker = nil
-			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择目录"},
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
@@ -140,7 +140,7 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 		if pending.Kind == "workspace_clone" {
 			clonePayload.SelectedParentDir = selectedPath
 			clonePayload.Picker = nil
-			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
+			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择父目录"},
 				Card:  rawCard(newWorkspaceRenderService(s.app).renderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
@@ -148,15 +148,15 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 		}
 		if pending.Kind == downloadFilePendingKind {
 			payload.SelectedPath = selectedPath
-			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 			return completeDownloadFileConfirm(s.app, action, pending, payload, selectedPath)
 		}
 		if pending.Kind == upgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath
-			_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 			return newAppUpgradeService(s.app).completeUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
 		}
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) {
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = "resolved"
 			req.PayloadJSON = mustJSON(payload)
 		})
@@ -171,12 +171,12 @@ func (s workspaceService) completePathPickerAction(action *feishu.CardAction, ac
 
 	if pending.Kind == "workspace_new" {
 		workspacePayload.Picker = &payload
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 	} else if pending.Kind == "workspace_clone" {
 		clonePayload.Picker = &payload
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 	} else {
-		_ = appState.updatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
+		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	}
 	card, err := newWorkspaceRenderService(s.app).renderPathPickerCard(requestID, payload)
 	if err != nil {

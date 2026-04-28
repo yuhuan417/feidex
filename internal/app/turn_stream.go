@@ -10,8 +10,8 @@ import (
 
 // Type aliases — exported types from the turnstream sub-package.
 type (
-	turnStreamTracker    = appturnstream.Tracker
-	turnStream           = appturnstream.Stream
+	turnStreamTracker     = appturnstream.Tracker
+	turnStream            = appturnstream.Stream
 	turnStreamFlushResult = appturnstream.FlushResult
 )
 
@@ -65,9 +65,9 @@ func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context,
 	if s.app == nil || sub == nil || strings.TrimSpace(sub.ID) == "" {
 		return
 	}
-	appState := appState(s.app)
+	appState := s.app.State()
 	shouldSend := false
-	if err := appState.updateSubmission(sub.ID, func(current *state.Submission) {
+	if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) {
 		if current == nil || !current.WaitedInQueue || current.StartNoticeSent {
 			return
 		}
@@ -76,7 +76,7 @@ func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context,
 	}); err != nil || !shouldSend {
 		return
 	}
-	updated := appState.submission(sub.ID)
+	updated := appState.Submission(sub.ID)
 	if updated != nil {
 		sub = updated
 	}

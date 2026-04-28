@@ -33,8 +33,8 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 	if a == nil || a.store == nil {
 		return 0, "", fmt.Errorf("store not initialized")
 	}
-	appState := appState(a)
-	sess := appState.session(sessionKey)
+	appState := a.State()
+	sess := appState.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(configuredBackend(a)))
 	}
@@ -47,7 +47,7 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 		return 0, "", fmt.Errorf("workspace %q not found", workspaceID)
 	}
 	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
-	sess = appState.session(sessionKey)
+	sess = appState.Session(sessionKey)
 	if sess == nil {
 		return 0, "", fmt.Errorf("session %q disappeared", sessionKey)
 	}

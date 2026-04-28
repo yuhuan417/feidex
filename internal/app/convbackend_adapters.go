@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	appconvbackend "feidex/internal/app/convbackend"
 	appcore "feidex/internal/app/appcore"
+	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -156,7 +156,7 @@ func (a *App) ConvBackendState() appconvbackend.AppStateProvider {
 	if a == nil {
 		return nil
 	}
-	return appState(a)
+	return a.State()
 }
 
 func (a *App) ConvBackendConversation() appconvbackend.ConversationProvider {

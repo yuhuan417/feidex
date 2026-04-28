@@ -108,13 +108,13 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		return findSubmissionByTurn(app, threadID, turnID)
 	}
 	svc.GetSession = func(sessionKey string) *state.Session {
-		return appState(app).session(sessionKey)
+		return app.State().Session(sessionKey)
 	}
 	svc.SessionHasActiveOps = func(sess *state.Session) bool {
 		return sessionHasActiveOperations(sess)
 	}
 	svc.NextLocalID = func(prefix string) (string, error) {
-		return appState(app).nextLocalID(prefix)
+		return app.State().NextLocalID(prefix)
 	}
 	svc.WorkspaceCwd = func(workspaceID string) string {
 		return workspaceCwd(app.cfg, workspaceID)

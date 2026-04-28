@@ -49,7 +49,7 @@ func (a *App) AppState() appautoretry.AppStateProvider {
 	if a == nil {
 		return nil
 	}
-	return appState(a)
+	return a.State()
 }
 
 func (a *App) AutoRetryBackendRuntime() appautoretry.BackendRuntimeProvider {

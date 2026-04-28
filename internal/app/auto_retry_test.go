@@ -51,7 +51,7 @@ func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *st
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	return appState(a).session(sessionKey)
+	return a.State().Session(sessionKey)
 }
 
 func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {

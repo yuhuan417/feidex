@@ -19,7 +19,7 @@ func (a *App) HistoryFeishu() appcore.FeishuClient {
 
 // HistoryAppState returns the narrowed app state provider for history ops.
 func (a *App) HistoryAppState() apphistorycmd.AppStateProvider {
-	return appState(a)
+	return a.State()
 }
 
 // HistoryConversationBackend returns the narrowed conversation backend

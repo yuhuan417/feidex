@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/app/appstate"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -20,7 +21,7 @@ import (
 // into app-level operations through that interface.
 type AppDeps interface {
 	// State access
-	State() *appStateFacade
+	State() *appstate.Store
 	Store() *state.Store
 	Config() *config.Config
 	ConfigPath() string

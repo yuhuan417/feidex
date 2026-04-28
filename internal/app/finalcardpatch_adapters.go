@@ -14,7 +14,7 @@ import (
 type finalCardPatchSubmissionFinderAdapter struct{ app *App }
 
 func (a finalCardPatchSubmissionFinderAdapter) Submission(id string) *state.Submission {
-	return appState(a.app).submission(id)
+	return a.app.State().Submission(id)
 }
 
 type finalCardPatchFeishuAdapter struct{ app *App }

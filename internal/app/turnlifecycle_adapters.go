@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func (a *App) TurnLifecycleAppState() appturnlifecycle.AppStateProvider {
-	return appState(a)
+	return a.State()
 }
 
 func (a *App) TurnLifecycleRuntimeState() appturnlifecycle.RuntimeStateProvider {

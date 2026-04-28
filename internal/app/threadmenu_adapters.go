@@ -58,8 +58,8 @@ func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(ses
 }
 
 type threadMenuBackendActionAdapter struct {
-	app     *App
-	facade  backendActionFacade
+	app    *App
+	facade backendActionFacade
 }
 
 func (a threadMenuBackendActionAdapter) CompleteMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
@@ -74,7 +74,7 @@ func (a *App) ThreadMenuAppState() appthreadmenu.AppStateProvider {
 	if a == nil {
 		return nil
 	}
-	return appState(a)
+	return a.State()
 }
 
 func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendProvider {

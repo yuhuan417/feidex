@@ -243,7 +243,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 	sess.ActiveThreadWorkspaceID = "default"
 	sess.ActiveThreadName = "Claude Session"
 	sess.ActiveThreadPreview = "claude preview"
-	if err := appState(a).saveSession(sess); err != nil {
+	if err := a.State().SaveSession(sess); err != nil {
 		t.Fatalf("saveSession(claude lineage) error = %v", err)
 	}
 

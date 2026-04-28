@@ -28,7 +28,7 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNotice(ses
 
 func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNoticeEx(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure, steer bool) error {
 	a := w.app
-	appState := appState(a)
+	appState := a.State()
 	if a == nil || a.claude == nil {
 		err := fmt.Errorf("claude backend not initialized")
 		threadID := ""
@@ -91,7 +91,7 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNoticeEx(s
 			"error", err,
 		)
 		clearSessionThreadContext(sess)
-		if saveErr := appState.saveSession(sess); saveErr != nil {
+		if saveErr := appState.SaveSession(sess); saveErr != nil {
 			return saveErr
 		}
 		ensureCtx, ensureCancel = context.WithTimeout(context.Background(), 30*time.Second)
@@ -125,7 +125,7 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNoticeEx(s
 		ensureCancel()
 		if err == nil {
 			if sess == nil {
-				sess = appState.session(sessionKey)
+				sess = appState.Session(sessionKey)
 			}
 			if sess == nil {
 				err = fmt.Errorf("session %q disappeared during Claude retry", sessionKey)
@@ -163,7 +163,7 @@ func (w *claudeSubmissionService) startNextClaudeSubmissionWithFailureNoticeEx(s
 
 func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string, steer bool) (*state.Session, string, error) {
 	a := w.app
-	appState := appState(a)
+	appState := a.State()
 	if a == nil || a.claude == nil {
 		return nil, "", fmt.Errorf("claude backend not initialized")
 	}
@@ -172,7 +172,7 @@ func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string
 		return w.startSteerSubmissionAttempt(sessionKey, sess, sub, claudeThreadID, prompt)
 	}
 
-	turnID, err := appState.nextLocalID("claude-turn")
+	turnID, err := appState.NextLocalID("claude-turn")
 	if err != nil || strings.TrimSpace(turnID) == "" {
 		if err == nil {
 			err = fmt.Errorf("failed to allocate Claude turn id")
@@ -204,9 +204,9 @@ func (w *claudeSubmissionService) startClaudeSubmissionAttempt(sessionKey string
 // the SteerSubmissionID recorded on the current TurnState.
 func (w *claudeSubmissionService) startSteerSubmissionAttempt(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
 	a := w.app
-	appState := appState(a)
+	appState := a.State()
 
-	turnID, err := appState.nextLocalID("claude-turn")
+	turnID, err := appState.NextLocalID("claude-turn")
 	if err != nil || strings.TrimSpace(turnID) == "" {
 		if err == nil {
 			err = fmt.Errorf("failed to allocate Claude steer turn id")
@@ -231,13 +231,13 @@ func (w *claudeSubmissionService) startSteerSubmissionAttempt(sessionKey string,
 
 func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string) (*state.Session, *state.Submission, error) {
 	a := w.app
-	appState := appState(a)
+	appState := a.State()
 	submissionID := ""
 	if sub != nil {
 		submissionID = strings.TrimSpace(sub.ID)
 	}
 
-	updatedSess, err := appState.updateSession(sessionKey, func(current *state.Session) {
+	updatedSess, err := appState.UpdateSession(sessionKey, func(current *state.Session) {
 		if current == nil {
 			return
 		}
@@ -267,7 +267,7 @@ func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey 
 
 	var refreshedSub *state.Submission
 	if submissionID != "" {
-		if err := appState.updateSubmission(submissionID, func(current *state.Submission) {
+		if err := appState.UpdateSubmission(submissionID, func(current *state.Submission) {
 			if current == nil {
 				return
 			}
@@ -278,14 +278,14 @@ func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey 
 		}); err != nil {
 			return updatedSess, nil, err
 		}
-		refreshedSub = appState.submission(submissionID)
+		refreshedSub = appState.Submission(submissionID)
 	}
 
 	if strings.TrimSpace(turnID) != "" {
-		appState.deletePendingRequests(func(req *state.PendingRequest) bool {
+		appState.DeletePendingRequests(func(req *state.PendingRequest) bool {
 			return req != nil && strings.TrimSpace(req.TurnID) == strings.TrimSpace(turnID)
 		})
-		appState.deleteMessageLinks(func(link *state.MessageLink) bool {
+		appState.DeleteMessageLinks(func(link *state.MessageLink) bool {
 			return link != nil && strings.TrimSpace(link.TurnID) == strings.TrimSpace(turnID)
 		})
 		newRuntimeStateService(a).clearTurnBinding(turnID)
@@ -301,9 +301,9 @@ func (w *claudeSubmissionService) rollbackClaudeSubmissionStartState(sessionKey 
 
 func (w *claudeSubmissionService) bindClaudeSubmissionStartState(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, turnID string) (*state.Session, error) {
 	a := w.app
-	appState := appState(a)
+	appState := a.State()
 	setSessionThreadContext(sess, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), truncate(sub.InputText, 48)))
-	updatedSess, err := appState.updateSession(sessionKey, func(current *state.Session) {
+	updatedSess, err := appState.UpdateSession(sessionKey, func(current *state.Session) {
 		if current == nil {
 			return
 		}
@@ -328,7 +328,7 @@ func (w *claudeSubmissionService) bindClaudeSubmissionStartState(sessionKey stri
 	sub.TurnID = turnID
 	sub.Status = "running"
 	newRuntimeStateService(a).bindTurnSubmission(claudeThreadID, turnID, sessionKey, sub.ID)
-	if err := appState.markSubmissionRunning(sub.ID, claudeThreadID, turnID); err != nil {
+	if err := appState.MarkSubmissionRunning(sub.ID, claudeThreadID, turnID); err != nil {
 		return nil, err
 	}
 	newReplyContinuationService(a).recordSubmissionSourceLinks(sub)

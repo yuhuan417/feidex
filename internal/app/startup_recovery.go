@@ -18,8 +18,8 @@ func recoverRuntimeState(a *App) {
 
 func recoverSharedRuntimeState(a *App) {
 	resetLiveThreadState(a)
-	appState := appState(a)
-	sessions := appState.sessions()
+	appState := a.State()
+	sessions := appState.Sessions()
 	cleared := 0
 	for _, sess := range sessions {
 		if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -33,7 +33,7 @@ func recoverSharedRuntimeState(a *App) {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 				clearSessionThreadContext(sess)
 			}
-			_ = appState.saveSession(sess)
+			_ = appState.SaveSession(sess)
 			continue
 		}
 		slog.Warn("clearing stale runtime session state on startup",
@@ -51,7 +51,7 @@ func recoverSharedRuntimeState(a *App) {
 		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 			clearSessionThreadContext(sess)
 		}
-		_ = appState.saveSession(sess)
+		_ = appState.SaveSession(sess)
 		cleared++
 	}
 	if cleared > 0 {
@@ -90,9 +90,9 @@ func recoverSessionThreadsOnStartup(a *App) {
 	if a == nil || a.store == nil {
 		return
 	}
-	appState := appState(a)
+	appState := a.State()
 	effectiveModel := configuredGlobalModel(a.cfg)
-	for _, sess := range appState.sessions() {
+	for _, sess := range appState.Sessions() {
 		if sess == nil {
 			continue
 		}
@@ -123,7 +123,7 @@ func recoverSessionThreadsOnStartup(a *App) {
 			)
 			clearSessionThreadContext(sess)
 			sess.Status = "idle"
-			_ = appState.saveSession(sess)
+			_ = appState.SaveSession(sess)
 			clearSessionLiveThread(a, sessionKey)
 			continue
 		}
@@ -170,7 +170,7 @@ func sendStartupReadyNotifications(a *App) {
 	if a == nil || a.feishu == nil || a.store == nil {
 		return
 	}
-	chatIDs := appStartupReadyChatIDs(a, appState(a).sessions())
+	chatIDs := appStartupReadyChatIDs(a, a.State().Sessions())
 	if len(chatIDs) == 0 {
 		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return

@@ -55,7 +55,7 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 		"turn_id", turnID,
 	)
 	finishTurn(a, threadID, turnID, "completed")
-	return appState(a).session(sessionKey)
+	return a.State().Session(sessionKey)
 }
 
 func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *state.Session) *state.Session {
@@ -76,8 +76,8 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 		if subID == "" {
 			continue
 		}
-		if sub := appState(a).submission(subID); sub != nil && !sub.Finalized {
-			if err := appState(a).updateSubmission(subID, func(value *state.Submission) {
+		if sub := a.State().Submission(subID); sub != nil && !sub.Finalized {
+			if err := a.State().UpdateSubmission(subID, func(value *state.Submission) {
 				value.Status = "interrupted"
 				value.Finalized = true
 			}); err != nil {
@@ -85,7 +85,7 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 			}
 		}
 	}
-	updatedSess, err := appState(a).updateSession(sessionKey, func(current *state.Session) {
+	updatedSess, err := a.State().UpdateSession(sessionKey, func(current *state.Session) {
 		if current == nil {
 			return
 		}

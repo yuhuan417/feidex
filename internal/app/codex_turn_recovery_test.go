@@ -107,7 +107,7 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 	if err != nil {
 		t.Fatalf("CreateSubmission(queued) error = %v", err)
 	}
-	if err := appState(a).queueSubmission(sessionKey, queuedID); err != nil {
+	if err := a.State().QueueSubmission(sessionKey, queuedID); err != nil {
 		t.Fatalf("queueSubmission() error = %v", err)
 	}
 

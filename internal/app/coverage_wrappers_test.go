@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/appcore"
+	"feidex/internal/app/appstate"
 	"feidex/internal/app/sessionctx"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -13,137 +15,137 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func TestAppStateFacadeBranches(t *testing.T) {
-	var nilFacade *appStateFacade
-	if got := nilFacade.session("sess"); got != nil {
-		t.Fatalf("nil session() = %+v, want nil", got)
+func TestAppStateStoreBranches(t *testing.T) {
+	var nilFacade *appstate.Store
+	if got := nilFacade.Session("sess"); got != nil {
+		t.Fatalf("nil Session() = %+v, want nil", got)
 	}
-	if got := nilFacade.sessions(); got != nil {
-		t.Fatalf("nil sessions() = %+v, want nil", got)
+	if got := nilFacade.Sessions(); got != nil {
+		t.Fatalf("nil Sessions() = %+v, want nil", got)
 	}
-	if err := nilFacade.saveSession(&state.Session{}); err != nil {
-		t.Fatalf("nil saveSession() error = %v", err)
+	if err := nilFacade.SaveSession(&state.Session{}); err != nil {
+		t.Fatalf("nil SaveSession() error = %v", err)
 	}
-	if id, err := nilFacade.createSubmission(&state.Submission{}); id != "" || err != nil {
-		t.Fatalf("nil createSubmission() = %q, %v", id, err)
+	if id, err := nilFacade.CreateSubmission(&state.Submission{}); id != "" || err != nil {
+		t.Fatalf("nil CreateSubmission() = %q, %v", id, err)
 	}
-	nilFacade.deleteSubmission("sub")
-	if got := nilFacade.submission("sub"); got != nil {
-		t.Fatalf("nil submission() = %+v, want nil", got)
+	nilFacade.DeleteSubmission("sub")
+	if got := nilFacade.Submission("sub"); got != nil {
+		t.Fatalf("nil Submission() = %+v, want nil", got)
 	}
-	if err := nilFacade.updateSubmission("sub", func(*state.Submission) {}); err != nil {
-		t.Fatalf("nil updateSubmission() error = %v", err)
+	if err := nilFacade.UpdateSubmission("sub", func(*state.Submission) {}); err != nil {
+		t.Fatalf("nil UpdateSubmission() error = %v", err)
 	}
-	if err := nilFacade.queueSubmission("sess", "sub"); err != nil {
-		t.Fatalf("nil queueSubmission() error = %v", err)
+	if err := nilFacade.QueueSubmission("sess", "sub"); err != nil {
+		t.Fatalf("nil QueueSubmission() error = %v", err)
 	}
-	if got, err := nilFacade.dequeueSubmission("sess"); got != "" || err != nil {
-		t.Fatalf("nil dequeueSubmission() = %q, %v", got, err)
+	if got, err := nilFacade.DequeueSubmission("sess"); got != "" || err != nil {
+		t.Fatalf("nil DequeueSubmission() = %q, %v", got, err)
 	}
-	if got := nilFacade.pending("req"); got != nil {
-		t.Fatalf("nil pending() = %+v, want nil", got)
+	if got := nilFacade.Pending("req"); got != nil {
+		t.Fatalf("nil Pending() = %+v, want nil", got)
 	}
-	if err := nilFacade.savePending(&state.PendingRequest{}); err != nil {
-		t.Fatalf("nil savePending() error = %v", err)
+	if err := nilFacade.SavePending(&state.PendingRequest{}); err != nil {
+		t.Fatalf("nil SavePending() error = %v", err)
 	}
-	if got := nilFacade.pendingRequests(); got != nil {
-		t.Fatalf("nil pendingRequests() = %+v, want nil", got)
+	if got := nilFacade.PendingRequests(); got != nil {
+		t.Fatalf("nil PendingRequests() = %+v, want nil", got)
 	}
-	if err := nilFacade.updatePending("req", func(*state.PendingRequest) {}); err != nil {
-		t.Fatalf("nil updatePending() error = %v", err)
+	if err := nilFacade.UpdatePending("req", func(*state.PendingRequest) {}); err != nil {
+		t.Fatalf("nil UpdatePending() error = %v", err)
 	}
-	nilFacade.deletePendingRequests(nil)
-	if got, err := nilFacade.nextLocalID("x"); got != "" || err != nil {
-		t.Fatalf("nil nextLocalID() = %q, %v", got, err)
+	nilFacade.DeletePendingRequests(nil)
+	if got, err := nilFacade.NextLocalID("x"); got != "" || err != nil {
+		t.Fatalf("nil NextLocalID() = %q, %v", got, err)
 	}
-	if got := nilFacade.messageLink("msg"); got != nil {
-		t.Fatalf("nil messageLink() = %+v, want nil", got)
+	if got := nilFacade.MessageLink("msg"); got != nil {
+		t.Fatalf("nil MessageLink() = %+v, want nil", got)
 	}
-	if err := nilFacade.saveMessageLink(&state.MessageLink{}); err != nil {
-		t.Fatalf("nil saveMessageLink() error = %v", err)
+	if err := nilFacade.SaveMessageLink(&state.MessageLink{}); err != nil {
+		t.Fatalf("nil SaveMessageLink() error = %v", err)
 	}
-	nilFacade.deleteMessageLinks(nil)
+	nilFacade.DeleteMessageLinks(nil)
 
 	a, _, _ := newTestApp(t)
-	facade := appState(a)
-	if facade == nil || facade.store != a.store {
-		t.Fatalf("appState() = %+v", facade)
+	facade := a.State()
+	if facade == nil || facade.Store != a.store {
+		t.Fatalf(".State() = %+v", facade)
 	}
-	if err := facade.saveSession(&state.Session{Key: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID}); err != nil {
-		t.Fatalf("saveSession() error = %v", err)
+	if err := facade.SaveSession(&state.Session{Key: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID}); err != nil {
+		t.Fatalf("SaveSession() error = %v", err)
 	}
-	if got := facade.session(" sess-1 "); got == nil || got.Key != "sess-1" {
-		t.Fatalf("session() = %+v", got)
+	if got := facade.Session(" sess-1 "); got == nil || got.Key != "sess-1" {
+		t.Fatalf("Session() = %+v", got)
 	}
-	if got := facade.sessions(); len(got) == 0 {
-		t.Fatalf("sessions() = %+v", got)
+	if got := facade.Sessions(); len(got) == 0 {
+		t.Fatalf("Sessions() = %+v", got)
 	}
 
-	subID, err := facade.createSubmission(&state.Submission{SessionKey: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID})
+	subID, err := facade.CreateSubmission(&state.Submission{SessionKey: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID})
 	if err != nil || subID == "" {
-		t.Fatalf("createSubmission() = %q, %v", subID, err)
+		t.Fatalf("CreateSubmission() = %q, %v", subID, err)
 	}
-	if got := facade.submission(subID); got == nil || got.ID != subID {
-		t.Fatalf("submission() = %+v", got)
+	if got := facade.Submission(subID); got == nil || got.ID != subID {
+		t.Fatalf("Submission() = %+v", got)
 	}
-	if err := facade.setSubmissionStatus(subID, "queued"); err != nil {
-		t.Fatalf("setSubmissionStatus() error = %v", err)
+	if err := facade.SetSubmissionStatus(subID, "queued"); err != nil {
+		t.Fatalf("SetSubmissionStatus() error = %v", err)
 	}
-	if err := facade.markSubmissionRunning(subID, "thread-1", "turn-1"); err != nil {
-		t.Fatalf("markSubmissionRunning() error = %v", err)
+	if err := facade.MarkSubmissionRunning(subID, "thread-1", "turn-1"); err != nil {
+		t.Fatalf("MarkSubmissionRunning() error = %v", err)
 	}
-	if err := facade.finalizeSubmission(subID, "done"); err != nil {
-		t.Fatalf("finalizeSubmission() error = %v", err)
+	if err := facade.FinalizeSubmission(subID, "done"); err != nil {
+		t.Fatalf("FinalizeSubmission() error = %v", err)
 	}
-	if got := facade.submission(subID); got == nil || got.Status != "done" || !got.Finalized || got.ThreadID != "thread-1" || got.TurnID != "turn-1" {
-		t.Fatalf("submission after finalize = %+v", got)
+	if got := facade.Submission(subID); got == nil || got.Status != "done" || !got.Finalized || got.ThreadID != "thread-1" || got.TurnID != "turn-1" {
+		t.Fatalf("Submission after FinalizeSubmission() = %+v", got)
 	}
-	facade.deleteSubmission(" " + subID + " ")
-	if got := facade.submission(subID); got != nil {
-		t.Fatalf("deleteSubmission() should remove, got %+v", got)
-	}
-
-	if err := facade.queueSubmission(" sess-1 ", " sub-2 "); err != nil {
-		t.Fatalf("queueSubmission() error = %v", err)
-	}
-	if got, err := facade.dequeueSubmission("sess-1"); err != nil || got != "sub-2" {
-		t.Fatalf("dequeueSubmission() = %q, %v", got, err)
+	facade.DeleteSubmission(" " + subID + " ")
+	if got := facade.Submission(subID); got != nil {
+		t.Fatalf("DeleteSubmission() should remove, got %+v", got)
 	}
 
-	if err := facade.savePending(&state.PendingRequest{ID: "req-1", Status: "pending"}); err != nil {
-		t.Fatalf("savePending() error = %v", err)
+	if err := facade.QueueSubmission(" sess-1 ", " sub-2 "); err != nil {
+		t.Fatalf("QueueSubmission() error = %v", err)
 	}
-	if got := facade.pending(" req-1 "); got == nil || got.ID != "req-1" {
-		t.Fatalf("pending() = %+v", got)
-	}
-	if got := facade.pendingRequests(); len(got) != 1 {
-		t.Fatalf("pendingRequests() = %+v", got)
-	}
-	if err := facade.updatePending("req-1", func(req *state.PendingRequest) { req.Status = "done" }); err != nil {
-		t.Fatalf("updatePending() error = %v", err)
-	}
-	if got := facade.resolvePending("req-1"); got == nil || got.Status != "resolved" {
-		t.Fatalf("resolvePending() = %+v", got)
-	}
-	facade.deletePendingRequests(func(req *state.PendingRequest) bool { return req != nil && req.ID == "req-1" })
-	if got := facade.pending("req-1"); got != nil {
-		t.Fatalf("deletePendingRequests() should remove, got %+v", got)
+	if got, err := facade.DequeueSubmission("sess-1"); err != nil || got != "sub-2" {
+		t.Fatalf("DequeueSubmission() = %q, %v", got, err)
 	}
 
-	localID, err := facade.nextLocalID(" x ")
+	if err := facade.SavePending(&state.PendingRequest{ID: "req-1", Status: "pending"}); err != nil {
+		t.Fatalf("SavePending() error = %v", err)
+	}
+	if got := facade.Pending(" req-1 "); got == nil || got.ID != "req-1" {
+		t.Fatalf("Pending() = %+v", got)
+	}
+	if got := facade.PendingRequests(); len(got) != 1 {
+		t.Fatalf("PendingRequests() = %+v", got)
+	}
+	if err := facade.UpdatePending("req-1", func(req *state.PendingRequest) { req.Status = "done" }); err != nil {
+		t.Fatalf("UpdatePending() error = %v", err)
+	}
+	if got := facade.ResolvePending("req-1"); got == nil || got.Status != "resolved" {
+		t.Fatalf("ResolvePending() = %+v", got)
+	}
+	facade.DeletePendingRequests(func(req *state.PendingRequest) bool { return req != nil && req.ID == "req-1" })
+	if got := facade.Pending("req-1"); got != nil {
+		t.Fatalf("DeletePendingRequests() should remove, got %+v", got)
+	}
+
+	localID, err := facade.NextLocalID(" x ")
 	if err != nil || !strings.HasPrefix(localID, "x-") {
-		t.Fatalf("nextLocalID() = %q, %v", localID, err)
+		t.Fatalf("NextLocalID() = %q, %v", localID, err)
 	}
 
-	if err := facade.saveMessageLink(&state.MessageLink{MessageID: "msg-1", TurnID: "turn-1"}); err != nil {
-		t.Fatalf("saveMessageLink() error = %v", err)
+	if err := facade.SaveMessageLink(&state.MessageLink{MessageID: "msg-1", TurnID: "turn-1"}); err != nil {
+		t.Fatalf("SaveMessageLink() error = %v", err)
 	}
-	if got := facade.messageLink(" msg-1 "); got == nil || got.TurnID != "turn-1" {
-		t.Fatalf("messageLink() = %+v", got)
+	if got := facade.MessageLink(" msg-1 "); got == nil || got.TurnID != "turn-1" {
+		t.Fatalf("MessageLink() = %+v", got)
 	}
-	facade.deleteMessageLinks(func(link *state.MessageLink) bool { return link != nil && link.MessageID == "msg-1" })
-	if got := facade.messageLink("msg-1"); got != nil {
-		t.Fatalf("deleteMessageLinks() should remove, got %+v", got)
+	facade.DeleteMessageLinks(func(link *state.MessageLink) bool { return link != nil && link.MessageID == "msg-1" })
+	if got := facade.MessageLink("msg-1"); got != nil {
+		t.Fatalf("DeleteMessageLinks() should remove, got %+v", got)
 	}
 }
 
@@ -311,9 +313,14 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	}
 }
 
-func TestAppStateFacadeScopesPendingAndMessageLinksByFrontend(t *testing.T) {
+func TestAppStateStoreScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	facade := &appStateFacade{store: a.store, frontendID: "frontend-a"}
+	facade := &appstate.Store{
+		AppStateFacade: appcore.AppStateFacade{
+			Store:      a.store,
+			FrontendID: "frontend-a",
+		},
+	}
 
 	if err := a.store.UpsertPending(&state.PendingRequest{FrontendID: "frontend-a", ID: "req-1", Status: "pending"}); err != nil {
 		t.Fatalf("UpsertPending(frontend-a) error = %v", err)
@@ -321,10 +328,10 @@ func TestAppStateFacadeScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 	if err := a.store.UpsertPending(&state.PendingRequest{FrontendID: "frontend-b", ID: "req-1", Status: "pending"}); err != nil {
 		t.Fatalf("UpsertPending(frontend-b) error = %v", err)
 	}
-	if got := facade.pending("req-1"); got == nil || got.FrontendID != "frontend-a" {
+	if got := facade.Pending("req-1"); got == nil || got.FrontendID != "frontend-a" {
 		t.Fatalf("pending(req-1) = %+v, want frontend-a", got)
 	}
-	if got := facade.pendingRequests(); len(got) != 1 || got[0].FrontendID != "frontend-a" {
+	if got := facade.PendingRequests(); len(got) != 1 || got[0].FrontendID != "frontend-a" {
 		t.Fatalf("pendingRequests() = %+v, want only frontend-a", got)
 	}
 
@@ -334,7 +341,7 @@ func TestAppStateFacadeScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 	if err := a.store.UpsertMessageLink(&state.MessageLink{FrontendID: "frontend-b", MessageID: "msg-1", TurnID: "turn-b"}); err != nil {
 		t.Fatalf("UpsertMessageLink(frontend-b) error = %v", err)
 	}
-	if got := facade.messageLink("msg-1"); got == nil || got.TurnID != "turn-a" {
+	if got := facade.MessageLink("msg-1"); got == nil || got.TurnID != "turn-a" {
 		t.Fatalf("messageLink(msg-1) = %+v, want frontend-a link", got)
 	}
 }

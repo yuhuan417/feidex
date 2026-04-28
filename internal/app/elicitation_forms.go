@@ -78,9 +78,9 @@ func sendElicitationURLCard(a *App, requestID json.RawMessage, payload elicitati
 }
 
 func completeElicitationURLAction(a *App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	appState := appState(a)
+	appState := a.State()
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := appState.pending(requestID)
+	pending := appState.Pending(requestID)
 	if pending == nil || pending.Kind != "mcp_elicitation_url" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}

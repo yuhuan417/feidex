@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	appcards "feidex/internal/app/cards"
 	"feidex/internal/app/appcore"
+	appcards "feidex/internal/app/cards"
 	apppathpick "feidex/internal/app/pathpick"
 	appworkspace "feidex/internal/app/workspace"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
@@ -42,19 +42,19 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
-	st := appState(a)
+	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return &appworkspacecmd.ConfigService{
 		App: a,
 
 		// State callbacks
-		GetSession:    func(key string) *state.Session { return st.session(key) },
-		Sessions:      func() []*state.Session { return st.sessions() },
-		SaveSession:   func(sess *state.Session) error { return st.saveSession(sess) },
-		NextLocalID:   func(prefix string) (string, error) { return st.nextLocalID(prefix) },
-		Pending:       func(id string) *state.PendingRequest { return st.pending(id) },
-		SavePending:   func(req *state.PendingRequest) error { return st.savePending(req) },
-		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.updatePending(id, mutate) },
+		GetSession:    func(key string) *state.Session { return st.Session(key) },
+		Sessions:      func() []*state.Session { return st.Sessions() },
+		SaveSession:   func(sess *state.Session) error { return st.SaveSession(sess) },
+		NextLocalID:   func(prefix string) (string, error) { return st.NextLocalID(prefix) },
+		Pending:       func(id string) *state.PendingRequest { return st.Pending(id) },
+		SavePending:   func(req *state.PendingRequest) error { return st.SavePending(req) },
+		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.UpdatePending(id, mutate) },
 
 		// Session context callbacks
 		SessionHasInFlight:     sessionHasInFlightSubmission,
@@ -89,30 +89,44 @@ func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 		FormatMenuBody: menuCardBody,
 
 		// Render callbacks
-		RenderMenuCard:                func(sessionKey string) map[string]any { return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey) },
-		RenderChooseMenuCard:          func(sessionKey string) map[string]any { return newWorkspaceRenderServiceInner(a).RenderWorkspaceChooseCard(sessionKey) },
-		RenderSandboxMenuCard:         func(sessionKey string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspaceSandboxMenuCard(sessionKey) },
-		RenderPolicyMenuCard:          func(sessionKey string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey) },
-		RenderDeleteMenuCard:          func(sessionKey string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey) },
-		RenderDeleteConfirmCard:       func(sessionKey, workspaceID string) (map[string]any, error) { return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID) },
-		RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any { return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir) },
+		RenderMenuCard: func(sessionKey string) map[string]any {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+		},
+		RenderChooseMenuCard: func(sessionKey string) map[string]any {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceChooseCard(sessionKey)
+		},
+		RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceSandboxMenuCard(sessionKey)
+		},
+		RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey)
+		},
+		RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey)
+		},
+		RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+		},
+		RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+		},
 	}
 }
 
 func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementService {
-	st := appState(a)
+	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return &appworkspacecmd.ManagementService{
 		App: a,
 
 		// State callbacks
-		GetSession:    func(key string) *state.Session { return st.session(key) },
-		Sessions:      func() []*state.Session { return st.sessions() },
-		SaveSession:   func(sess *state.Session) error { return st.saveSession(sess) },
-		NextLocalID:   func(prefix string) (string, error) { return st.nextLocalID(prefix) },
-		Pending:       func(id string) *state.PendingRequest { return st.pending(id) },
-		SavePending:   func(req *state.PendingRequest) error { return st.savePending(req) },
-		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.updatePending(id, mutate) },
+		GetSession:    func(key string) *state.Session { return st.Session(key) },
+		Sessions:      func() []*state.Session { return st.Sessions() },
+		SaveSession:   func(sess *state.Session) error { return st.SaveSession(sess) },
+		NextLocalID:   func(prefix string) (string, error) { return st.NextLocalID(prefix) },
+		Pending:       func(id string) *state.PendingRequest { return st.Pending(id) },
+		SavePending:   func(req *state.PendingRequest) error { return st.SavePending(req) },
+		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.UpdatePending(id, mutate) },
 
 		// Session context callbacks
 		SessionHasInFlight:     sessionHasInFlightSubmission,
@@ -237,7 +251,9 @@ func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementServi
 		RenderCloneCanceledCard: func(sessionKey string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
 			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
 		},
-		RenderMenuCard: func(sessionKey string) map[string]any { return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey) },
+		RenderMenuCard: func(sessionKey string) map[string]any {
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+		},
 	}
 }
 
@@ -383,7 +399,7 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 		App: a,
 
 		// Session state
-		GetSession: func(key string) *state.Session { return appState(a).session(key) },
+		GetSession: func(key string) *state.Session { return a.State().Session(key) },
 
 		// Backend config
 		BackendWorkspaceSummaryLines:  bcfg.appendBackendWorkspaceSummaryLines,
@@ -398,7 +414,7 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 		},
 
 		// Management helpers
-		DefaultWorkspaceCloneRoot:   func(ws *config.Workspace) string { return "/" },
+		DefaultWorkspaceCloneRoot: func(ws *config.Workspace) string { return "/" },
 		DefaultWorkspaceCloneParent: func(ws *config.Workspace) string {
 			if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
 				return filepath.Dir(strings.TrimSpace(ws.Cwd))
@@ -412,13 +428,13 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 }
 
 func newWorkspaceThreadServiceInner(a *App) *appworkspacecmd.ThreadService {
-	st := appState(a)
+	st := a.State()
 	return &appworkspacecmd.ThreadService{
 		App: a,
 
 		// State callbacks
-		GetSession:  func(key string) *state.Session { return st.session(key) },
-		SaveSession: func(sess *state.Session) error { return st.saveSession(sess) },
+		GetSession:  func(key string) *state.Session { return st.Session(key) },
+		SaveSession: func(sess *state.Session) error { return st.SaveSession(sess) },
 
 		// Thread callbacks
 		MarkSessionThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
@@ -440,5 +456,3 @@ func newWorkspaceThreadServiceInner(a *App) *appworkspacecmd.ThreadService {
 		RequireClaudeCore: func() (appcore.ClaudeCore, error) { return a.Claude(), nil },
 	}
 }
-
-

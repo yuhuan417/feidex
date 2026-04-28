@@ -16,13 +16,15 @@ import (
 // to *App accessor methods.
 type replyContinuationAppAdapter struct{ app *App }
 
-func (a replyContinuationAppAdapter) Config() *config.Config               { return a.app.Config() }
-func (a replyContinuationAppAdapter) ConfigMu() *sync.RWMutex             { return a.app.ConfigMu() }
-func (a replyContinuationAppAdapter) Backend() string                      { return a.app.Backend() }
-func (a replyContinuationAppAdapter) FrontendID() string                   { return a.app.FrontendID() }
-func (a replyContinuationAppAdapter) FrontendConfigIndex() int             { return a.app.FrontendConfigIndex() }
-func (a replyContinuationAppAdapter) Store() *state.Store                  { return a.app.Store() }
-func (a replyContinuationAppAdapter) DefaultWorkspaceID() string           { return appcore.DefaultWorkspaceID(a.app) }
+func (a replyContinuationAppAdapter) Config() *config.Config   { return a.app.Config() }
+func (a replyContinuationAppAdapter) ConfigMu() *sync.RWMutex  { return a.app.ConfigMu() }
+func (a replyContinuationAppAdapter) Backend() string          { return a.app.Backend() }
+func (a replyContinuationAppAdapter) FrontendID() string       { return a.app.FrontendID() }
+func (a replyContinuationAppAdapter) FrontendConfigIndex() int { return a.app.FrontendConfigIndex() }
+func (a replyContinuationAppAdapter) Store() *state.Store      { return a.app.Store() }
+func (a replyContinuationAppAdapter) DefaultWorkspaceID() string {
+	return appcore.DefaultWorkspaceID(a.app)
+}
 
 // replyContinuationService wraps replycontinuation.Service to preserve the
 // lowercase method names used throughout app/.
@@ -35,39 +37,39 @@ func newReplyContinuationService(a *App) replyContinuationService {
 
 	// Wire callback function fields that need *App internals.
 	svc.GetSession = func(key string) *state.Session {
-		st := appState(a)
+		st := a.State()
 		if st == nil {
 			return nil
 		}
-		return st.session(key)
+		return st.Session(key)
 	}
 	svc.SaveSession = func(sess *state.Session) error {
-		st := appState(a)
+		st := a.State()
 		if st == nil {
 			return nil
 		}
-		return st.saveSession(sess)
+		return st.SaveSession(sess)
 	}
 	svc.GetMessageLink = func(messageID string) *state.MessageLink {
-		st := appState(a)
+		st := a.State()
 		if st == nil {
 			return nil
 		}
-		return st.messageLink(messageID)
+		return st.MessageLink(messageID)
 	}
 	svc.SaveMessageLink = func(link *state.MessageLink) error {
-		st := appState(a)
+		st := a.State()
 		if st == nil {
 			return nil
 		}
-		return st.saveMessageLink(link)
+		return st.SaveMessageLink(link)
 	}
 	svc.CreateSubmission = func(sub *state.Submission) (string, error) {
-		st := appState(a)
+		st := a.State()
 		if st == nil {
 			return "", nil
 		}
-		return st.createSubmission(sub)
+		return st.CreateSubmission(sub)
 	}
 	svc.HasInFlightSubmission = func(sess *state.Session) bool {
 		return sessionctx.HasInFlightSubmission(sess)
@@ -154,8 +156,8 @@ func (s replyContinuationService) RecordRootTurnBinding(rootMessageID, sessionKe
 
 // Re-export staged image helpers for use by other app/ code.
 var (
-	stagedImageAttachments       = submission.StagedImageAttachments
-	stagedImageSourceMessageIDs  = submission.StagedImageSourceMessageIDs
-	stagedImageRootMessageIDs    = submission.StagedImageRootMessageIDs
+	stagedImageAttachments        = submission.StagedImageAttachments
+	stagedImageSourceMessageIDs   = submission.StagedImageSourceMessageIDs
+	stagedImageRootMessageIDs     = submission.StagedImageRootMessageIDs
 	sourceMessageIDsForSubmission = submission.SourceMessageIDs
 )
