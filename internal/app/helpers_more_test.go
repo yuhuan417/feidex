@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -41,11 +42,11 @@ func TestPendingTextRequestPrefersLatestMatchingRequest(t *testing.T) {
 		}
 	}
 
-	got := pendingTextRequest(a, "sess", "u-1")
+	got := a.ServerRequestService().PendingTextRequest( "sess", "u-1")
 	if got == nil || got.ID != "latest" {
 		t.Fatalf("pendingTextRequest() = %+v, want latest matching request", got)
 	}
-	if got := pendingTextRequest(a, "sess", "missing"); got != nil {
+	if got := a.ServerRequestService().PendingTextRequest( "sess", "missing"); got != nil {
 		t.Fatalf("pendingTextRequest(non-owner) = %+v, want nil", got)
 	}
 }
@@ -57,7 +58,7 @@ func TestShouldRedactInboundTextForSensitiveRequests(t *testing.T) {
 	}
 	a := &App{store: store}
 
-	if shouldRedactInboundText(a, "sess", "u-1") {
+	if a.ServerRequestService().ShouldRedactInboundText( "sess", "u-1") {
 		t.Fatal("expected no redaction without pending request")
 	}
 
@@ -67,14 +68,14 @@ func TestShouldRedactInboundTextForSensitiveRequests(t *testing.T) {
 		SessionKey:  "sess",
 		OwnerUserID: "u-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(toolUserInputPayload{
-			Questions: []toolUserInputQuestion{{ID: "password", IsSecret: true}},
+		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{
+			Questions: []pendingforms.ToolUserInputQuestion{{ID: "password", IsSecret: true}},
 		}),
 	}
 	if err := a.store.UpsertPending(req); err != nil {
 		t.Fatalf("UpsertPending(secret form): %v", err)
 	}
-	if !shouldRedactInboundText(a, "sess", "u-1") {
+	if !a.ServerRequestService().ShouldRedactInboundText( "sess", "u-1") {
 		t.Fatal("expected secret user-input request to be redacted")
 	}
 
@@ -88,18 +89,18 @@ func TestShouldRedactInboundTextForSensitiveRequests(t *testing.T) {
 	if err := a.store.UpsertPending(req); err != nil {
 		t.Fatalf("UpsertPending(elicitation): %v", err)
 	}
-	if !shouldRedactInboundText(a, "sess2", "u-1") {
+	if !a.ServerRequestService().ShouldRedactInboundText( "sess2", "u-1") {
 		t.Fatal("expected elicitation request to be redacted")
 	}
 }
 
 func TestRenderToolUserInputBodyAndParsingHelpers(t *testing.T) {
-	payload := toolUserInputPayload{
-		Questions: []toolUserInputQuestion{
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
 			{
 				ID:       "env",
 				Question: "Choose environment",
-				Options:  []toolUserInputOption{{Label: "dev"}, {Label: "prod"}},
+				Options:  []pendingforms.ToolUserInputOption{{Label: "dev"}, {Label: "prod"}},
 			},
 			{
 				ID:       "password",
@@ -109,76 +110,76 @@ func TestRenderToolUserInputBodyAndParsingHelpers(t *testing.T) {
 		},
 	}
 
-	body := renderToolUserInputBody(payload)
+	body := pendingforms.RenderToolUserInputBody(payload)
 	if !strings.Contains(body, "Choose environment (`env`)") || !strings.Contains(body, "可选值: dev, prod") {
-		t.Fatalf("renderToolUserInputBody() missing expected question text:\n%s", body)
+		t.Fatalf("pendingforms.RenderToolUserInputBody() missing expected question text:\n%s", body)
 	}
 	if !strings.Contains(body, "注意: 此答案会按敏感输入处理") || !strings.Contains(body, "单选题会显示下拉选择，多选题会显示可切换按钮") {
-		t.Fatalf("renderToolUserInputBody() missing secret or form hint:\n%s", body)
+		t.Fatalf("pendingforms.RenderToolUserInputBody() missing secret or form hint:\n%s", body)
 	}
 
-	if got := parseStructuredLines("env: prod\npassword: secret"); got["env"] != "prod" || got["password"] != "secret" {
-		t.Fatalf("parseStructuredLines() = %+v, want parsed key-value map", got)
+	if got := pendingforms.ParseStructuredLines("env: prod\npassword: secret"); got["env"] != "prod" || got["password"] != "secret" {
+		t.Fatalf("pendingforms.ParseStructuredLines() = %+v, want parsed key-value map", got)
 	}
-	if got := splitAnswerParts("dev, prod\nother"); len(got) != 3 || got[2] != "other" {
-		t.Fatalf("splitAnswerParts() = %+v, want split answers", got)
+	if got := pendingforms.SplitAnswerParts("dev, prod\nother"); len(got) != 3 || got[2] != "other" {
+		t.Fatalf("pendingforms.SplitAnswerParts() = %+v, want split answers", got)
 	}
-	if got := summarizeAnswers([]string{"a", "b"}, false); got != "a, b" {
-		t.Fatalf("summarizeAnswers(false) = %q, want joined values", got)
+	if got := pendingforms.SummarizeAnswers([]string{"a", "b"}, false); got != "a, b" {
+		t.Fatalf("pendingforms.SummarizeAnswers(false) = %q, want joined values", got)
 	}
-	if got := summarizeAnswers([]string{"secret"}, true); got != "[redacted]" {
-		t.Fatalf("summarizeAnswers(true) = %q, want redacted", got)
+	if got := pendingforms.SummarizeAnswers([]string{"secret"}, true); got != "[redacted]" {
+		t.Fatalf("pendingforms.SummarizeAnswers(true) = %q, want redacted", got)
 	}
 }
 
 func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
-	question := toolUserInputQuestion{
+	question := pendingforms.ToolUserInputQuestion{
 		ID:      "mode",
-		Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+		Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
 	}
-	answers, err := parseQuestionAnswers("fast", question)
+	answers, err := pendingforms.ParseQuestionAnswers("fast", question)
 	if err != nil {
-		t.Fatalf("parseQuestionAnswers(options) error = %v", err)
+		t.Fatalf("pendingforms.ParseQuestionAnswers(options) error = %v", err)
 	}
 	if len(answers) != 1 || answers[0] != "Fast" {
-		t.Fatalf("parseQuestionAnswers(options) = %+v, want canonical label", answers)
+		t.Fatalf("pendingforms.ParseQuestionAnswers(options) = %+v, want canonical label", answers)
 	}
-	if _, err := parseQuestionAnswers("fast, safe", question); err == nil {
+	if _, err := pendingforms.ParseQuestionAnswers("fast, safe", question); err == nil {
 		t.Fatal("expected single-select question to reject multiple answers")
 	}
-	multiAnswers, err := parseQuestionAnswers("fast, safe", toolUserInputQuestion{
+	multiAnswers, err := pendingforms.ParseQuestionAnswers("fast, safe", pendingforms.ToolUserInputQuestion{
 		ID:          "targets",
-		Options:     []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+		Options:     []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
 		MultiSelect: true,
 	})
 	if err != nil || len(multiAnswers) != 2 {
-		t.Fatalf("parseQuestionAnswers(multi) = %+v, %v", multiAnswers, err)
+		t.Fatalf("pendingforms.ParseQuestionAnswers(multi) = %+v, %v", multiAnswers, err)
 	}
 
-	otherAnswers, err := parseQuestionAnswers("custom", toolUserInputQuestion{
+	otherAnswers, err := pendingforms.ParseQuestionAnswers("custom", pendingforms.ToolUserInputQuestion{
 		ID:      "mode",
 		IsOther: true,
-		Options: []toolUserInputOption{{Label: "Fast"}},
+		Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}},
 	})
 	if err != nil || len(otherAnswers) != 1 || otherAnswers[0] != "custom" {
-		t.Fatalf("parseQuestionAnswers(other) = %+v, %v", otherAnswers, err)
+		t.Fatalf("pendingforms.ParseQuestionAnswers(other) = %+v, %v", otherAnswers, err)
 	}
-	if _, err := parseQuestionAnswers("", toolUserInputQuestion{ID: "empty"}); err == nil {
+	if _, err := pendingforms.ParseQuestionAnswers("", pendingforms.ToolUserInputQuestion{ID: "empty"}); err == nil {
 		t.Fatal("expected empty answer to fail")
 	}
-	if _, err := parseQuestionAnswers("unknown", question); err == nil {
+	if _, err := pendingforms.ParseQuestionAnswers("unknown", question); err == nil {
 		t.Fatal("expected unsupported option to fail")
 	}
 
-	payload := toolUserInputPayload{
-		Questions: []toolUserInputQuestion{
-			{ID: "mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{ID: "mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 			{ID: "note", IsSecret: true},
 		},
 	}
-	result, summary, err := parseToolUserInputResponse("mode: safe\nnote: hidden", payload)
+	result, summary, err := pendingforms.ParseToolUserInputResponse("mode: safe\nnote: hidden", payload)
 	if err != nil {
-		t.Fatalf("parseToolUserInputResponse() error = %v", err)
+		t.Fatalf("pendingforms.ParseToolUserInputResponse() error = %v", err)
 	}
 	answersMap, _ := result["answers"].(map[string]any)
 	modeEntry, _ := answersMap["mode"].(map[string]any)
@@ -190,11 +191,11 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 		t.Fatalf("summary = %q, want visible and redacted lines", summary)
 	}
 
-	single, singleSummary, err := parseToolUserInputResponse("just one answer", toolUserInputPayload{
-		Questions: []toolUserInputQuestion{{ID: "text"}},
+	single, singleSummary, err := pendingforms.ParseToolUserInputResponse("just one answer", pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{{ID: "text"}},
 	})
 	if err != nil {
-		t.Fatalf("single-question parseToolUserInputResponse() error = %v", err)
+		t.Fatalf("single-question pendingforms.ParseToolUserInputResponse() error = %v", err)
 	}
 	singleMap := single["answers"].(map[string]any)["text"].(map[string]any)
 	if got := singleMap["answers"].([]string); len(got) != 1 || got[0] != "just one answer" {
@@ -206,12 +207,12 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 }
 
 func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
-	payload := toolUserInputPayload{
-		Questions: []toolUserInputQuestion{
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
 			{
 				ID:       "mode",
 				Question: "Choose mode",
-				Options:  []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+				Options:  []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
 			},
 			{
 				ID:       "note",
@@ -221,7 +222,7 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 		},
 	}
 
-	card := renderToolUserInputFormCard("req-1", payload, toolUserInputFormDrafts{
+	card := pendingforms.RenderToolUserInputFormCard("req-1", payload, pendingforms.FormDrafts{
 		Values: map[string]string{"mode": "Safe"},
 	}, "")
 	form := toolUserInputFormForTest(t, card)
@@ -244,7 +245,7 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 		t.Fatalf("cancel button missing from form: %+v", buttons)
 	}
 
-	drafts := toolUserInputDraftsFromCardAction(payload, &feishu.CardAction{
+	drafts := pendingforms.ToolUserInputDraftsFromCardAction(payload, &feishu.CardAction{
 		ActionValue: map[string]any{
 			"multi_drafts": map[string]any{"extra": []any{"A", "B"}},
 		},
@@ -253,24 +254,24 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 			"note": "hidden",
 		},
 	})
-	selections := toolUserInputSelectionsFromDrafts(payload, drafts)
+	selections := pendingforms.ToolUserInputSelectionsFromDrafts(payload, drafts)
 	if selections["mode"] != "Fast" || selections["note"] != "hidden" {
-		t.Fatalf("toolUserInputSelectionsFromDrafts() = %+v", selections)
+		t.Fatalf("pendingforms.ToolUserInputSelectionsFromDrafts() = %+v", selections)
 	}
 
-	multiPayload := toolUserInputPayload{
-		Questions: []toolUserInputQuestion{
+	multiPayload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
 			{
 				ID:          "targets",
 				Question:    "Pick targets",
-				Options:     []toolUserInputOption{{Label: "A"}, {Label: "B"}, {Label: "C"}},
+				Options:     []pendingforms.ToolUserInputOption{{Label: "A"}, {Label: "B"}, {Label: "C"}},
 				MultiSelect: true,
 				IsOther:     true,
 			},
 		},
 	}
-	multiCard := renderToolUserInputFormCard("req-2", multiPayload, toolUserInputFormDrafts{
-		Values: map[string]string{toolUserInputOtherFieldName(multiPayload.Questions[0]): "custom"},
+	multiCard := pendingforms.RenderToolUserInputFormCard("req-2", multiPayload, pendingforms.FormDrafts{
+		Values: map[string]string{pendingforms.ToolUserInputOtherFieldName(multiPayload.Questions[0]): "custom"},
 		Multi:  map[string][]string{"targets": []string{"A", "C"}},
 	}, "")
 	multiForm := toolUserInputFormForTest(t, multiCard)
@@ -281,20 +282,20 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 	if toggle := toolUserInputToggleButtonsForTest(t, multiForm); len(toggle) != 3 {
 		t.Fatalf("multi-select toggle buttons = %+v, want 3", toggle)
 	}
-	if otherInput := toolUserInputFormInputsForTest(t, multiForm)[toolUserInputOtherFieldName(multiPayload.Questions[0])]; otherInput == nil {
+	if otherInput := toolUserInputFormInputsForTest(t, multiForm)[pendingforms.ToolUserInputOtherFieldName(multiPayload.Questions[0])]; otherInput == nil {
 		t.Fatalf("multi-select other input missing: %+v", toolUserInputFormInputsForTest(t, multiForm))
 	}
-	multiDrafts := toolUserInputDraftsFromCardAction(multiPayload, &feishu.CardAction{
+	multiDrafts := pendingforms.ToolUserInputDraftsFromCardAction(multiPayload, &feishu.CardAction{
 		ActionValue: map[string]any{
 			"multi_drafts": map[string]any{"targets": []any{"A", "C"}},
 		},
 		FormValue: map[string]any{
-			toolUserInputOtherFieldName(multiPayload.Questions[0]): "custom",
+			pendingforms.ToolUserInputOtherFieldName(multiPayload.Questions[0]): "custom",
 		},
 	})
-	multiSelections := toolUserInputSelectionsFromDrafts(multiPayload, multiDrafts)
+	multiSelections := pendingforms.ToolUserInputSelectionsFromDrafts(multiPayload, multiDrafts)
 	if multiSelections["targets"] != "A, C, custom" {
-		t.Fatalf("toolUserInputSelectionsFromDrafts(multi) = %+v", multiSelections)
+		t.Fatalf("pendingforms.ToolUserInputSelectionsFromDrafts(multi) = %+v", multiSelections)
 	}
 }
 
@@ -377,7 +378,7 @@ func toolUserInputToggleButtonsForTest(t *testing.T, form map[string]any) []map[
 }
 
 func TestRenderAndParseElicitationForms(t *testing.T) {
-	payload := elicitationFormPayload{
+	payload := pendingforms.ElicitationFormPayload{
 		Message: "Fill in the form",
 		Schema: map[string]any{
 			"required": []any{"name", "enabled"},
@@ -398,17 +399,17 @@ func TestRenderAndParseElicitationForms(t *testing.T) {
 		},
 	}
 
-	body := renderElicitationFormBody(payload)
+	body := pendingforms.RenderElicitationFormBody(payload)
 	if !strings.Contains(body, "Fill in the form") || !strings.Contains(body, "Project Name *") {
-		t.Fatalf("renderElicitationFormBody() missing header or required marker:\n%s", body)
+		t.Fatalf("pendingforms.RenderElicitationFormBody() missing header or required marker:\n%s", body)
 	}
 	if !strings.Contains(body, "可选值: Fast, Safe") || !strings.Contains(body, "field_name: value") {
-		t.Fatalf("renderElicitationFormBody() missing option labels or hint:\n%s", body)
+		t.Fatalf("pendingforms.RenderElicitationFormBody() missing option labels or hint:\n%s", body)
 	}
 
-	content, summary, err := parseElicitationFormResponse("name: Feidex\nenabled: yes\nchoice: Safe", payload)
+	content, summary, err := pendingforms.ParseElicitationFormResponse("name: Feidex\nenabled: yes\nchoice: Safe", payload)
 	if err != nil {
-		t.Fatalf("parseElicitationFormResponse() error = %v", err)
+		t.Fatalf("pendingforms.ParseElicitationFormResponse() error = %v", err)
 	}
 	if content["name"] != "Feidex" || content["enabled"] != true || content["choice"] != "safe" {
 		t.Fatalf("parsed elicitation content = %+v, want normalized values", content)
@@ -417,11 +418,11 @@ func TestRenderAndParseElicitationForms(t *testing.T) {
 		t.Fatalf("elicitation summary = %q, want field summaries", summary)
 	}
 
-	if _, _, err := parseElicitationFormResponse("enabled: yes", payload); err == nil {
+	if _, _, err := pendingforms.ParseElicitationFormResponse("enabled: yes", payload); err == nil {
 		t.Fatal("expected missing required field to fail")
 	}
 
-	singleContent, singleSummary, err := parseElicitationFormResponse("42", elicitationFormPayload{
+	singleContent, singleSummary, err := pendingforms.ParseElicitationFormResponse("42", pendingforms.ElicitationFormPayload{
 		Schema: map[string]any{
 			"properties": map[string]any{
 				"count": map[string]any{"type": "integer"},
@@ -429,7 +430,7 @@ func TestRenderAndParseElicitationForms(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("single-field parseElicitationFormResponse() error = %v", err)
+		t.Fatalf("single-field pendingforms.ParseElicitationFormResponse() error = %v", err)
 	}
 	if singleContent["count"] != int64(42) || !strings.Contains(singleSummary, "`count`: 42") {
 		t.Fatalf("single-field parse result = %+v, summary=%q", singleContent, singleSummary)
@@ -437,34 +438,34 @@ func TestRenderAndParseElicitationForms(t *testing.T) {
 }
 
 func TestElicitationFieldHelpers(t *testing.T) {
-	boolValue, boolSummary, err := parseElicitationFieldValue("yes", map[string]any{"type": "boolean"})
+	boolValue, boolSummary, err := pendingforms.ParseElicitationFieldValue("yes", map[string]any{"type": "boolean"})
 	if err != nil || boolValue != true || boolSummary != "true" {
-		t.Fatalf("parseElicitationFieldValue(boolean) = %v, %q, %v", boolValue, boolSummary, err)
+		t.Fatalf("pendingforms.ParseElicitationFieldValue(boolean) = %v, %q, %v", boolValue, boolSummary, err)
 	}
-	numberValue, _, err := parseElicitationFieldValue("3.14", map[string]any{"type": "number"})
+	numberValue, _, err := pendingforms.ParseElicitationFieldValue("3.14", map[string]any{"type": "number"})
 	if err != nil || numberValue != 3.14 {
-		t.Fatalf("parseElicitationFieldValue(number) = %v, %v", numberValue, err)
+		t.Fatalf("pendingforms.ParseElicitationFieldValue(number) = %v, %v", numberValue, err)
 	}
-	integerValue, _, err := parseElicitationFieldValue("7", map[string]any{"type": "integer"})
+	integerValue, _, err := pendingforms.ParseElicitationFieldValue("7", map[string]any{"type": "integer"})
 	if err != nil || integerValue != int64(7) {
-		t.Fatalf("parseElicitationFieldValue(integer) = %v, %v", integerValue, err)
+		t.Fatalf("pendingforms.ParseElicitationFieldValue(integer) = %v, %v", integerValue, err)
 	}
-	arrayValue, arraySummary, err := parseElicitationFieldValue("a, b", map[string]any{"type": "array"})
+	arrayValue, arraySummary, err := pendingforms.ParseElicitationFieldValue("a, b", map[string]any{"type": "array"})
 	if err != nil || len(arrayValue.([]string)) != 2 || arraySummary != "a, b" {
-		t.Fatalf("parseElicitationFieldValue(array) = %v, %q, %v", arrayValue, arraySummary, err)
+		t.Fatalf("pendingforms.ParseElicitationFieldValue(array) = %v, %q, %v", arrayValue, arraySummary, err)
 	}
-	enumValue, enumSummary, err := parseElicitationFieldValue("Fast", map[string]any{
+	enumValue, enumSummary, err := pendingforms.ParseElicitationFieldValue("Fast", map[string]any{
 		"enum":      []any{"fast", "safe"},
 		"enumNames": []any{"Fast", "Safe"},
 	})
 	if err != nil || enumValue != "fast" || enumSummary != "fast" {
-		t.Fatalf("parseElicitationFieldValue(enum) = %v, %q, %v", enumValue, enumSummary, err)
+		t.Fatalf("pendingforms.ParseElicitationFieldValue(enum) = %v, %q, %v", enumValue, enumSummary, err)
 	}
-	stringValue, stringSummary, err := parseElicitationFieldValue("hello", map[string]any{"type": "string"})
+	stringValue, stringSummary, err := pendingforms.ParseElicitationFieldValue("hello", map[string]any{"type": "string"})
 	if err != nil || stringValue != "hello" || stringSummary != "hello" {
-		t.Fatalf("parseElicitationFieldValue(string) = %v, %q, %v", stringValue, stringSummary, err)
+		t.Fatalf("pendingforms.ParseElicitationFieldValue(string) = %v, %q, %v", stringValue, stringSummary, err)
 	}
-	if _, _, err := parseElicitationFieldValue("bad", map[string]any{"type": "boolean"}); err == nil {
+	if _, _, err := pendingforms.ParseElicitationFieldValue("bad", map[string]any{"type": "boolean"}); err == nil {
 		t.Fatal("expected invalid boolean to fail")
 	}
 
@@ -475,41 +476,41 @@ func TestElicitationFieldHelpers(t *testing.T) {
 		"enum":        []any{"dev", "prod"},
 		"enumNames":   []any{"Development", "Production"},
 	}
-	if got := stringField(field, "title"); got != "Environment" {
-		t.Fatalf("stringField(title) = %q, want Environment", got)
+	if got := pendingforms.StringField(field, "title"); got != "Environment" {
+		t.Fatalf("pendingforms.StringField(title) = %q, want Environment", got)
 	}
-	if got := fieldType(field); got != "string" {
-		t.Fatalf("fieldType() = %q, want string", got)
+	if got := pendingforms.FieldType(field); got != "string" {
+		t.Fatalf("pendingforms.FieldType() = %q, want string", got)
 	}
-	if got := displayFieldTitle("env", field); got != "Environment" {
-		t.Fatalf("displayFieldTitle() = %q, want title", got)
+	if got := pendingforms.DisplayFieldTitle("env", field); got != "Environment" {
+		t.Fatalf("pendingforms.DisplayFieldTitle() = %q, want title", got)
 	}
-	if got := schemaOptionLabels(field); len(got) != 2 || got[0] != "Development" || got[1] != "Production" {
-		t.Fatalf("schemaOptionLabels(enum) = %+v, want enum names", got)
+	if got := pendingforms.SchemaOptionLabels(field); len(got) != 2 || got[0] != "Development" || got[1] != "Production" {
+		t.Fatalf("pendingforms.SchemaOptionLabels(enum) = %+v, want enum names", got)
 	}
-	if got, err := matchSchemaOption("Production", field); err != nil || got != "prod" {
-		t.Fatalf("matchSchemaOption(enum) = %q, %v", got, err)
+	if got, err := pendingforms.MatchSchemaOption("Production", field); err != nil || got != "prod" {
+		t.Fatalf("pendingforms.MatchSchemaOption(enum) = %q, %v", got, err)
 	}
-	if got, err := matchSchemaOption("beta", map[string]any{
+	if got, err := pendingforms.MatchSchemaOption("beta", map[string]any{
 		"oneOf": []any{
 			map[string]any{"const": "alpha", "title": "Alpha"},
 			map[string]any{"const": "beta", "title": "Beta"},
 		},
 	}); err != nil || got != "beta" {
-		t.Fatalf("matchSchemaOption(oneOf) = %q, %v", got, err)
+		t.Fatalf("pendingforms.MatchSchemaOption(oneOf) = %q, %v", got, err)
 	}
-	if got := schemaOptionLabels(map[string]any{
+	if got := pendingforms.SchemaOptionLabels(map[string]any{
 		"oneOf": []any{
 			map[string]any{"const": "alpha", "title": "Alpha"},
 			map[string]any{"const": "beta"},
 		},
 	}); len(got) != 2 || got[0] != "Alpha" || got[1] != "beta" {
-		t.Fatalf("schemaOptionLabels(oneOf) = %+v, want labels and fallback const", got)
+		t.Fatalf("pendingforms.SchemaOptionLabels(oneOf) = %+v, want labels and fallback const", got)
 	}
-	if got, err := matchSchemaOption("anything", map[string]any{"items": map[string]any{"anyOf": []any{}}}); err != nil || got != "anything" {
-		t.Fatalf("matchSchemaOption(items) = %q, %v", got, err)
+	if got, err := pendingforms.MatchSchemaOption("anything", map[string]any{"items": map[string]any{"anyOf": []any{}}}); err != nil || got != "anything" {
+		t.Fatalf("pendingforms.MatchSchemaOption(items) = %q, %v", got, err)
 	}
-	if got := schemaOptionLabels(map[string]any{
+	if got := pendingforms.SchemaOptionLabels(map[string]any{
 		"items": map[string]any{
 			"anyOf": []any{
 				map[string]any{"const": "a", "title": "Option A"},
@@ -517,34 +518,34 @@ func TestElicitationFieldHelpers(t *testing.T) {
 			},
 		},
 	}); len(got) != 2 || got[0] != "Option A" || got[1] != "b" {
-		t.Fatalf("schemaOptionLabels(items.anyOf) = %+v, want labels and fallback const", got)
+		t.Fatalf("pendingforms.SchemaOptionLabels(items.anyOf) = %+v, want labels and fallback const", got)
 	}
-	if _, err := matchSchemaOption("missing", field); err == nil {
+	if _, err := pendingforms.MatchSchemaOption("missing", field); err == nil {
 		t.Fatal("expected unsupported option to fail")
 	}
 
-	required := requiredSet(map[string]any{"required": []any{"name", "enabled"}})
+	required := pendingforms.RequiredSet(map[string]any{"required": []any{"name", "enabled"}})
 	if !required["name"] || !required["enabled"] {
-		t.Fatalf("requiredSet() = %+v, want required flags", required)
+		t.Fatalf("pendingforms.RequiredSet() = %+v, want required flags", required)
 	}
-	keys := sortedMapKeys(map[string]any{"b": 1, "a": 2})
+	keys := pendingforms.SortedMapKeys(map[string]any{"b": 1, "a": 2})
 	if len(keys) != 2 || keys[0] != "a" || keys[1] != "b" {
-		t.Fatalf("sortedMapKeys() = %+v, want sorted keys", keys)
+		t.Fatalf("pendingforms.SortedMapKeys() = %+v, want sorted keys", keys)
 	}
-	if got := requiredMarker(true); got != " *" {
-		t.Fatalf("requiredMarker(true) = %q, want marker", got)
+	if got := pendingforms.RequiredMarker(true); got != " *" {
+		t.Fatalf("pendingforms.RequiredMarker(true) = %q, want marker", got)
 	}
-	if got := requiredMarker(false); got != "" {
-		t.Fatalf("requiredMarker(false) = %q, want empty string", got)
+	if got := pendingforms.RequiredMarker(false); got != "" {
+		t.Fatalf("pendingforms.RequiredMarker(false) = %q, want empty string", got)
 	}
-	if got, err := parseBool("是"); err != nil || !got {
-		t.Fatalf("parseBool(是) = %v, %v", got, err)
+	if got, err := pendingforms.ParseBool("是"); err != nil || !got {
+		t.Fatalf("pendingforms.ParseBool(是) = %v, %v", got, err)
 	}
-	if got, err := parseBool("0"); err != nil || got {
-		t.Fatalf("parseBool(0) = %v, %v", got, err)
+	if got, err := pendingforms.ParseBool("0"); err != nil || got {
+		t.Fatalf("pendingforms.ParseBool(0) = %v, %v", got, err)
 	}
-	if _, err := parseBool("maybe"); err == nil {
-		t.Fatal("expected parseBool(maybe) to fail")
+	if _, err := pendingforms.ParseBool("maybe"); err == nil {
+		t.Fatal("expected pendingforms.ParseBool(maybe) to fail")
 	}
 }
 

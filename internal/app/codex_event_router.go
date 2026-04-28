@@ -60,25 +60,25 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 		return newRuntimeStateService(a).resolveServerPendingRequest(requestID)
 	}
 	router.ResumeSubmissionAfterRequest = func(pending *state.PendingRequest) {
-		resumeSubmissionAfterRequest(a, pending)
+		a.ServerRequestService().ResumeSubmissionAfterRequest(pending)
 	}
 	router.MergeApprovalPresentationWithTurnItem = func(presentation appapproval.Presentation) appapproval.Presentation {
 		return newRuntimeStateService(a).mergeApprovalPresentationWithTurnItem(presentation)
 	}
 	router.SendApprovalCard = func(requestID json.RawMessage, presentation appapproval.Presentation) {
-		newOutboundCardService(a).sendApprovalCardPresentation(requestID, presentation)
+		a.ServerRequestService().SendApprovalCardPresentation(requestID, presentation)
 	}
 	router.SendUserInputCard = func(requestID json.RawMessage, payload apppendingforms.ToolUserInputPayload) {
-		newOutboundCardService(a).sendUserInputCard(requestID, payload)
+		a.ServerRequestService().SendUserInputCard(requestID, payload)
 	}
 	router.SendUserInputFormCard = func(requestID json.RawMessage, payload apppendingforms.ToolUserInputPayload) {
-		sendUserInputFormCard(a, requestID, payload)
+		a.ServerRequestService().SendUserInputFormCard(requestID, payload)
 	}
 	router.SendElicitationURLCard = func(requestID json.RawMessage, payload apppendingforms.ElicitationURLPayload) {
-		sendElicitationURLCard(a, requestID, payload)
+		a.ServerRequestService().SendElicitationURLCard(requestID, payload)
 	}
 	router.SendElicitationFormCard = func(requestID json.RawMessage, payload apppendingforms.ElicitationFormPayload) {
-		sendElicitationFormCard(a, requestID, payload)
+		a.ServerRequestService().SendElicitationFormCard(requestID, payload)
 	}
 	router.ReplyCodexError = func(requestID json.RawMessage, code int, message string) {
 		replyCodexError(a, requestID, code, message)

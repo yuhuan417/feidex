@@ -8,6 +8,7 @@ import (
 
 	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/claudesupport"
+	"feidex/internal/app/pendingforms"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -50,7 +51,7 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 			return a.feishu.PatchCard(context.Background(), messageID, card)
 		},
 		PrepareMentionText: prependAttentionMentionMarkdown,
-		RenderFormCard:     renderToolUserInputFormCard,
+		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
 		BackendClaude:      backendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {
 			return a.claude.ResolvePlanFeedback(pendingID, feedback)
@@ -59,8 +60,7 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 			return newRuntimeStateService(a).finalizePendingReply(pending)
 		},
 		CancelPending: func(pending *state.PendingRequest) error {
-			adapter := serverRequestAdapterForPending(a, pending)
-			return adapter.cancelPending(pending)
+			return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
 		},
 		RawCard: rawCard,
 		PendingLookup: func(requestID string) *state.PendingRequest {
@@ -89,15 +89,15 @@ func claudeApprovalResolutionForAction(actionName string) (appruntime.ClaudeAppr
 	return claudesupport.ClaudeApprovalResolutionForAction(actionName)
 }
 
-func claudeAnswersFromSelections(payload toolUserInputPayload, selections map[string]string) (map[string]string, string, error) {
+func claudeAnswersFromSelections(payload pendingforms.ToolUserInputPayload, selections map[string]string) (map[string]string, string, error) {
 	return claudesupport.ClaudeAnswersFromSelections(payload, selections)
 }
 
-func parseClaudeToolUserInputResponse(text string, payload toolUserInputPayload) (map[string]string, string, error) {
+func parseClaudeToolUserInputResponse(text string, payload pendingforms.ToolUserInputPayload) (map[string]string, string, error) {
 	return claudesupport.ParseClaudeToolUserInputResponse(text, payload)
 }
 
-func claudeQuestionAnswer(raw string, q toolUserInputQuestion) (string, string, error) {
+func claudeQuestionAnswer(raw string, q pendingforms.ToolUserInputQuestion) (string, string, error) {
 	return claudesupport.ClaudeQuestionAnswer(raw, q)
 }
 
@@ -137,11 +137,11 @@ func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *state.Sub
 	)
 }
 
-func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
+func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *state.Submission, payload pendingforms.ToolUserInputPayload) error {
 	return newClaudeSupportService(a).SendUserInputCard(sub, requestID, sessionKey, payload)
 }
 
-func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *state.Submission, payload toolUserInputPayload) error {
+func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *state.Submission, payload pendingforms.ToolUserInputPayload) error {
 	return newClaudeSupportService(a).SendUserInputFormCard(sub, requestID, sessionKey, payload)
 }
 
@@ -179,8 +179,7 @@ func completePlanReject(a *App, action *feishu.CardAction) (*callback.CardAction
 	requestID, _ := action.ActionValue["request_id"].(string)
 	svc := newClaudeSupportService(a)
 	result, err := svc.CompletePlanReject(requestID, action.UserID, func(pending *state.PendingRequest) error {
-		adapter := serverRequestAdapterForPending(a, pending)
-		return adapter.cancelPending(pending)
+		return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
 	})
 	if err != nil {
 		return nil, err

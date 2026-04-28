@@ -11,6 +11,7 @@ import (
 
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/backend"
+	"feidex/internal/app/serverrequest"
 	appskillscmd "feidex/internal/app/skillscmd"
 	"feidex/internal/app/turnbinding"
 	"feidex/internal/codexrpc"
@@ -51,6 +52,8 @@ type App struct {
 	backendSwitchTarget    string
 
 	liveThreads *liveThreadTracker
+
+	serverRequestSvc *serverrequest.Service
 	trackers    appTrackers
 }
 

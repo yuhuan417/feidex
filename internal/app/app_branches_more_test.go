@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -79,7 +80,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		TurnID:      "turn-1",
 		OwnerUserID: "user",
 		Status:      "pending",
-		PayloadJSON: mustJSON(toolUserInputPayload{Questions: []toolUserInputQuestion{{ID: "mode"}}}),
+		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "mode"}}}),
 	}); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}

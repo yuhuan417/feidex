@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	appapprovalview "feidex/internal/app/approvalview"
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/app/turnbinding"
 	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/codexrpc"
@@ -1493,7 +1495,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
 
-	newOutboundCardService(a).sendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
+	a.ServerRequestService().SendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
 
 	if len(ff.sendCards) != 1 {
 		t.Fatalf("approval card count = %d, want 1", len(ff.sendCards))
@@ -1958,7 +1960,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		{ID: "command-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "命令审批\n`ls`\nneed approval"})},
 		{ID: "file-1", Kind: "file", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"})},
 		{ID: "perm-1", Kind: "permissions", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "权限审批\n需要写权限", "permissions": map[string]any{"mode": "write"}})},
-		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(toolUserInputPayload{Questions: []toolUserInputQuestion{{ID: "q-1", Question: "Choose", Options: []toolUserInputOption{{Label: "A"}, {Label: "B"}}}}})},
+		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "q-1", Question: "Choose", Options: []pendingforms.ToolUserInputOption{{Label: "A"}, {Label: "B"}}}}})},
 	} {
 		if err := a.store.UpsertPending(req); err != nil {
 			t.Fatalf("UpsertPending(%s) error = %v", req.ID, err)
@@ -1966,7 +1968,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}
 
 	action := &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-1"}}
-	resp, err := completeApprovalAction(a, action, "approval.command.accept_session")
+	resp, err := a.ServerRequestService().CompleteApprovalAction( action, "approval.command.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(command) = %#v, %v", resp, err)
 	}
@@ -2003,7 +2005,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(command-2) error = %v", err)
 	}
-	resp, err = completeApprovalAction(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
+	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(command-2) = %#v, %v", resp, err)
 	}
@@ -2015,7 +2017,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("command approval resolved-from-request card = %q", got)
 	}
 
-	resp, err = completeApprovalAction(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
+	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file) = %#v, %v", resp, err)
 	}
@@ -2045,7 +2047,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(file-2) error = %v", err)
 	}
-	resp, err = completeApprovalAction(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
+	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file-2) = %#v, %v", resp, err)
 	}
@@ -2057,7 +2059,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("file approval resolved-from-request card = %q", got)
 	}
 
-	resp, err = completeApprovalAction(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
+	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(permissions) = %#v, %v", resp, err)
 	}
@@ -2086,7 +2088,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(perm-2) error = %v", err)
 	}
-	resp, err = completeApprovalAction(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
+	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(perm-2) = %#v, %v", resp, err)
 	}
@@ -2098,7 +2100,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("permissions resolved-from-request card = %q", got)
 	}
 
-	resp, err = completeUserInputAnswer(a, &feishu.CardAction{
+	resp, err = a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-1", "question_id": "q-1", "answer": "A"},
 	})
@@ -2109,24 +2111,24 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("user input pending = %+v, want replied", pending)
 	}
 
-	if got := approvalDecisionText("approval.command.accept"); got != "已允许本次执行" {
-		t.Fatalf("approvalDecisionText(command.accept) = %q", got)
+	if got := appapprovalview.ApprovalDecisionText("approval.command.accept"); got != "已允许本次执行" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(command.accept) = %q", got)
 	}
-	if got := approvalDecisionText("approval.command.cancel"); got != "已拒绝并中断任务" {
-		t.Fatalf("approvalDecisionText(command.cancel) = %q", got)
+	if got := appapprovalview.ApprovalDecisionText("approval.command.cancel"); got != "已拒绝并中断任务" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(command.cancel) = %q", got)
 	}
-	if got := approvalDecisionText("approval.permissions.accept_session"); got != "已授权本会话权限请求" {
-		t.Fatalf("approvalDecisionText(permissions.accept_session) = %q", got)
+	if got := appapprovalview.ApprovalDecisionText("approval.permissions.accept_session"); got != "已授权本会话权限请求" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(permissions.accept_session) = %q", got)
 	}
-	if got := approvalDecisionText("other"); got != "已拒绝" {
-		t.Fatalf("approvalDecisionText(default) = %q", got)
+	if got := appapprovalview.ApprovalDecisionText("other"); got != "已拒绝" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(default) = %q", got)
 	}
 }
 
 func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	fc.replies = nil
-	resp, err := completeApprovalAction(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "missing"},
 	}, "approval.command.decline")
@@ -2140,12 +2142,12 @@ func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
 
 func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	payload := toolUserInputPayload{
-		Questions: []toolUserInputQuestion{
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
 			{
 				ID:       "mode",
 				Question: "Choose mode",
-				Options:  []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+				Options:  []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
 			},
 			{
 				ID:       "secret",
@@ -2168,7 +2170,7 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
 	}
 
-	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-form-1"},
 		FormValue: map[string]any{
@@ -2208,12 +2210,12 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 
 func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	payload := toolUserInputPayload{
-		Questions: []toolUserInputQuestion{
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
 			{
 				ID:          "targets",
 				Question:    "Pick targets",
-				Options:     []toolUserInputOption{{Label: "A"}, {Label: "B"}},
+				Options:     []pendingforms.ToolUserInputOption{{Label: "A"}, {Label: "B"}},
 				MultiSelect: true,
 			},
 		},
@@ -2231,7 +2233,7 @@ func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 		t.Fatalf("UpsertPending(input-toggle-1) error = %v", err)
 	}
 
-	resp, err := completeUserInputMultiToggle(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputMultiToggle( &feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id":   "input-toggle-1",
@@ -2270,7 +2272,7 @@ func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 		t.Fatalf("UpsertPending(file-cancel) error = %v", err)
 	}
 
-	resp, err := completeApprovalAction(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "file-cancel"},
 	}, "approval.file.cancel")
@@ -2326,7 +2328,7 @@ func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeApprovalAction(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "0"},
 	}, "approval.command.accept")
@@ -2377,7 +2379,7 @@ func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := completeApprovalAction(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "command-1"},
 	}, "approval.command.accept")
@@ -2831,11 +2833,11 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 		TurnID:      "turn-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(toolUserInputPayload{Questions: []toolUserInputQuestion{{ID: "choice"}}}),
+		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "choice"}}}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(tool form) error = %v", err)
 	}
-	if err := newPendingInputService(a).completeToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
+	if err := a.ServerRequestService().CompleteToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
 		t.Fatalf("completeToolUserInputText() error = %v", err)
 	}
 	if len(fc.replies) == 0 {
@@ -2851,13 +2853,13 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 		OwnerUserID: "user-1",
 		FeishuMsgID: "card-elicitation",
 		Status:      "pending",
-		PayloadJSON: mustJSON(elicitationFormPayload{
+		PayloadJSON: mustJSON(pendingforms.ElicitationFormPayload{
 			Schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
 		}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(elicitation form) error = %v", err)
 	}
-	if err := newPendingInputService(a).completeElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
+	if err := a.ServerRequestService().CompleteElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
 		t.Fatalf("completeElicitationFormText() error = %v", err)
 	}
 
@@ -2872,7 +2874,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(url) error = %v", err)
 	}
-	resp, err := completeElicitationURLAction(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
+	resp, err := a.ServerRequestService().CompleteElicitationURLAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeElicitationURLAction() = %#v, %v", resp, err)
 	}

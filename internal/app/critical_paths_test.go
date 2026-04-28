@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	appapprovalview "feidex/internal/app/approvalview"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -118,7 +119,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		t.Fatalf("queued submission = %+v", queuedSub)
 	}
 
-	resp, err := completeApprovalAction(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
 		UserID:      msg1.UserID,
 		ActionValue: map[string]any{"request_id": "cmd-1"},
 	}, "approval.command.accept")
@@ -237,24 +238,24 @@ func TestCompleteMenuReviewReturnsReviewEntryCard(t *testing.T) {
 }
 
 func TestApprovalRequestPayloadPrefersNestedRequestAndFallsBackCleanly(t *testing.T) {
-	nested := approvalRequestPayload(&state.PendingRequest{
+	nested := appapprovalview.ApprovalRequestPayload(&state.PendingRequest{
 		PayloadJSON: `{"request":{"command":"pwd","cwd":"/tmp/work"},"body":"command approval"}`,
 	})
 	if nested["command"] != "pwd" || nested["cwd"] != "/tmp/work" {
-		t.Fatalf("approvalRequestPayload(nested) = %+v, want nested request payload", nested)
+		t.Fatalf("appapprovalview.ApprovalRequestPayload(nested) = %+v, want nested request payload", nested)
 	}
 
-	root := approvalRequestPayload(&state.PendingRequest{
+	root := appapprovalview.ApprovalRequestPayload(&state.PendingRequest{
 		PayloadJSON: `{"command":"pwd","cwd":"/tmp/work"}`,
 	})
 	if root["command"] != "pwd" || root["cwd"] != "/tmp/work" {
-		t.Fatalf("approvalRequestPayload(root) = %+v, want root payload", root)
+		t.Fatalf("appapprovalview.ApprovalRequestPayload(root) = %+v, want root payload", root)
 	}
 
-	if got := approvalRequestPayload(&state.PendingRequest{PayloadJSON: "{"}); got != nil {
-		t.Fatalf("approvalRequestPayload(invalid) = %+v, want nil", got)
+	if got := appapprovalview.ApprovalRequestPayload(&state.PendingRequest{PayloadJSON: "{"}); got != nil {
+		t.Fatalf("appapprovalview.ApprovalRequestPayload(invalid) = %+v, want nil", got)
 	}
-	if got := approvalRequestPayload(nil); got != nil {
-		t.Fatalf("approvalRequestPayload(nil) = %+v, want nil", got)
+	if got := appapprovalview.ApprovalRequestPayload(nil); got != nil {
+		t.Fatalf("appapprovalview.ApprovalRequestPayload(nil) = %+v, want nil", got)
 	}
 }

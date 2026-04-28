@@ -103,10 +103,6 @@ func (claudeRuntimeFacade) conversationBackend(a *App) appconvbackend.Conversati
 	return appconvbackend.NewClaudeConversationBackend(a)
 }
 
-func (claudeRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
-	return claudeServerRequestAdapter{app: a}
-}
-
 func (claudeRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
 	if a == nil {
 		return &backendRuntimeHandle{backend: backendClaude}

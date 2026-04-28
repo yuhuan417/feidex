@@ -54,10 +54,6 @@ func (codexRuntimeFacade) conversationBackend(a *App) appconvbackend.Conversatio
 	return appconvbackend.NewCodexConversationBackend(a)
 }
 
-func (codexRuntimeFacade) serverRequestAdapter(a *App) serverRequestBackendAdapter {
-	return codexServerRequestAdapter{app: a}
-}
-
 func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
 	if a == nil {
 		return &backendRuntimeHandle{backend: backendCodex}

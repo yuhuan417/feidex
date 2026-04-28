@@ -11,6 +11,7 @@ import (
 	"time"
 
 	appruntime "feidex/internal/app/runtime"
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -938,7 +939,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeApprovalAction(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "approve-1"},
 	}, "approval.command.accept_session")
@@ -1010,12 +1011,12 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	a.claude = claude
 	a.feishu = ff
 
-	payload := toolUserInputPayload{
+	payload := pendingforms.ToolUserInputPayload{
 		ThreadID: "claude-thread-1",
 		TurnID:   "claude-turn-1",
 		ItemID:   "item-1",
-		Questions: []toolUserInputQuestion{
-			{ID: "q1", Question: "Choose a mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{ID: "q1", Question: "Choose a mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 		},
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -1029,7 +1030,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-1", "question_id": "q1", "answer": "Fast"},
 	})
@@ -1059,12 +1060,12 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	a.claude = claude
 	a.feishu = ff
 
-	payload := toolUserInputPayload{
+	payload := pendingforms.ToolUserInputPayload{
 		ThreadID: "claude-thread-1",
 		TurnID:   "claude-turn-1",
 		ItemID:   "item-1",
-		Questions: []toolUserInputQuestion{
-			{ID: "q1", Question: "Choose a mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{ID: "q1", Question: "Choose a mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 			{ID: "q2", Question: "Provide secret", IsSecret: true},
 		},
 	}
@@ -1079,7 +1080,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completeUserInputAnswer(a, &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-form-1"},
 		FormValue: map[string]any{
@@ -1122,12 +1123,12 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 		Kind:        "tool_request_user_input_form",
 		OwnerUserID: "user-1",
 		FeishuMsgID: "card-1",
-		PayloadJSON: mustJSON(toolUserInputPayload{
+		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{
 			ThreadID: "claude-thread-1",
 			TurnID:   "claude-turn-1",
 			ItemID:   "item-1",
-			Questions: []toolUserInputQuestion{
-				{ID: "q1", Question: "Choose a mode", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			Questions: []pendingforms.ToolUserInputQuestion{
+				{ID: "q1", Question: "Choose a mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 			},
 		}),
 		Status: "pending",
@@ -1135,7 +1136,7 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := newPendingInputService(a).completeToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
+	if err := a.ServerRequestService().CompleteToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
 		t.Fatalf("completeToolUserInputText() error = %v", err)
 	}
 	if len(claude.userInputCalls) != 1 {
@@ -1313,7 +1314,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completePendingFormCancel(a, &feishu.CardAction{
+	resp, err := completePendingFormCancelDispatch(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "plan-cancel-1"},
 	})
@@ -1359,7 +1360,7 @@ func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completePendingFormCancel(a, &feishu.CardAction{
+	resp, err := completePendingFormCancelDispatch(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "review-cancel-1"},
 	})

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/pendingforms"
 	appreview "feidex/internal/app/review"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -23,11 +24,11 @@ func TestPendingFormCancelBranches(t *testing.T) {
 			RequestIDRaw: `"req-1"`,
 			FeishuMsgID:  "card-" + kind,
 			Status:       "pending",
-			PayloadJSON:  mustJSON(toolUserInputPayload{ThreadID: "thread-1", TurnID: "turn-1"}),
+			PayloadJSON:  mustJSON(pendingforms.ToolUserInputPayload{ThreadID: "thread-1", TurnID: "turn-1"}),
 		}); err != nil {
 			t.Fatalf("UpsertPending(%s) error = %v", kind, err)
 		}
-		resp, err := completePendingFormCancel(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": kind}})
+		resp, err := completePendingFormCancelDispatch(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": kind}})
 		if err != nil || resp == nil || resp.Toast == nil {
 			t.Fatalf("completePendingFormCancel(%s) = %#v, %v", kind, resp, err)
 		}
@@ -51,18 +52,18 @@ func TestPendingFormCancelPreservesToolUserInputBody(t *testing.T) {
 		OwnerUserID:  "user-1",
 		RequestIDRaw: `"req-1"`,
 		Status:       "pending",
-		PayloadJSON: mustJSON(toolUserInputPayload{
+		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{
 			ThreadID: "thread-1",
 			TurnID:   "turn-1",
-			Questions: []toolUserInputQuestion{
-				{ID: "mode", Question: "Pick one", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			Questions: []pendingforms.ToolUserInputQuestion{
+				{ID: "mode", Question: "Pick one", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 			},
 		}),
 	}); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completePendingFormCancel(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "input-form-1"}})
+	resp, err := a.ServerRequestService().CompletePendingFormCancel( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "input-form-1"}})
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completePendingFormCancel() = %#v, %v", resp, err)
 	}
@@ -99,7 +100,7 @@ func TestPendingFormCancelPreservesReviewSummary(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := completePendingFormCancel(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "review-1"}})
+	resp, err := completePendingFormCancelDispatch(a, &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "review-1"}})
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completePendingFormCancel() = %#v, %v", resp, err)
 	}

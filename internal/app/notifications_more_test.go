@@ -2,11 +2,12 @@ package app
 
 import (
 	"encoding/json"
-	appapproval "feidex/internal/app/approval"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	appapproval "feidex/internal/app/approval"
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/codexrpc"
 )
 
@@ -151,7 +152,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newOutboundCardService(a).sendApprovalCardWithPayload("command", json.RawMessage(`"req-1"`), "thread-1", "turn-1", "item-1", "need approve", map[string]any{"command": "pwd"})
+	a.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"req-1"`), "thread-1", "turn-1", "item-1", "need approve", map[string]any{"command": "pwd"})
 	if len(ff.sendCards) != 1 {
 		t.Fatalf("sendApprovalCardWithPayload() cards = %d, want 1", len(ff.sendCards))
 	}
@@ -163,17 +164,17 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("submission status = %q, want waiting_approval", got.Status)
 	}
 
-	newOutboundCardService(a).sendPermissionsCardWithPayload(json.RawMessage(`"perm-1"`), "thread-1", "turn-1", "item-2", "need perms", map[string]any{"mode": "read"}, map[string]any{"permissions": map[string]any{"mode": "read"}})
+	a.ServerRequestService().SendPermissionsCardWithPayload(json.RawMessage(`"perm-1"`), "thread-1", "turn-1", "item-2", "need perms", map[string]any{"mode": "read"}, map[string]any{"permissions": map[string]any{"mode": "read"}})
 	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Kind != "permissions" || pending.Backend != backendCodex {
 		t.Fatalf("permissions pending = %+v, want stored permissions request", pending)
 	}
 
-	newOutboundCardService(a).sendUserInputCard(json.RawMessage(`"input-1"`), toolUserInputPayload{
+	a.ServerRequestService().SendUserInputCard(json.RawMessage(`"input-1"`), pendingforms.ToolUserInputPayload{
 		ThreadID: "thread-1",
 		TurnID:   "turn-1",
 		ItemID:   "item-3",
-		Questions: []toolUserInputQuestion{
-			{ID: "mode", Question: "Pick one", Options: []toolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{ID: "mode", Question: "Pick one", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 		},
 	})
 	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" || pending.Backend != backendCodex {
@@ -181,8 +182,8 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	}
 
 	empty := &App{store: a.store, codex: fc, feishu: ff}
-	newOutboundCardService(empty).sendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
-	newOutboundCardService(empty).sendUserInputCard(json.RawMessage(`"missing-input"`), toolUserInputPayload{})
+	empty.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
+	empty.ServerRequestService().SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
 	handleServerRequest(empty, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})
 	if len(fc.replyErrors) < 3 {
 		t.Fatalf("replyErrors = %+v, want errors for missing session/input/unknown method", fc.replyErrors)

@@ -57,7 +57,6 @@ type backendRuntimeFacade interface {
 	// in "queuing" state if the interrupt doesn't trigger a turn completion.
 	clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *state.Session) *state.Session
 	conversationBackend(a *App) appconvbackend.ConversationBackendFacade
-	serverRequestAdapter(a *App) serverRequestBackendAdapter
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error
 	maintenanceActive(a *App) bool
