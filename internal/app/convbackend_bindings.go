@@ -30,7 +30,7 @@ func (a convBackendConversationAdapter) StartCodexThread(app appconvbackend.App,
 }
 
 func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
-	return resumeCodexSelectedThread(app.(*App), sessionKey, sess, ws, threadResumeSelection{
+	return resumeCodexSelectedThread(app.(*App), sessionKey, sess, ws, appconvbackend.ThreadResumeSelection{
 		ThreadID: sel.ThreadID,
 		Name:     sel.Name,
 		Preview:  sel.Preview,
@@ -71,7 +71,7 @@ func (a convBackendConversationAdapter) StartClaudeThread(app appconvbackend.App
 }
 
 func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
-	return resumeClaudeSelectedThread(app.(*App), sessionKey, sess, ws, threadResumeSelection{
+	return resumeClaudeSelectedThread(app.(*App), sessionKey, sess, ws, appconvbackend.ThreadResumeSelection{
 		ThreadID: sel.ThreadID,
 		Name:     sel.Name,
 		Preview:  sel.Preview,

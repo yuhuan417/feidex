@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	appconvbackend "feidex/internal/app/convbackend"
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -21,13 +22,15 @@ func (a sqLiveThreadAdapter) ClearSessionLiveThread(sessionKey string) {
 	clearSessionLiveThread(a.app, sessionKey)
 }
 
-type sqConversationBackendAdapter struct{ facade conversationBackendFacade }
+type sqConversationBackendAdapter struct {
+	facade appconvbackend.ConversationBackendFacade
+}
 
 func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	if a.facade == nil {
 		return nil
 	}
-	return a.facade.startQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
+	return a.facade.StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 // ---------------------------------------------------------------------------

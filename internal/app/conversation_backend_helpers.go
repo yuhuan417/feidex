@@ -39,7 +39,7 @@ var (
 // Resume helpers — these call app-level services and stay in app/
 // ---------------------------------------------------------------------------
 
-func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
+func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection appconvbackend.ThreadResumeSelection) (*workspaceThreadBinding, error) {
 	if a == nil || a.claude == nil {
 		return nil, fmt.Errorf("claude backend not initialized")
 	}
@@ -91,7 +91,7 @@ func resumeClaudeSelectedThread(a *App, sessionKey string, sess *state.Session, 
 	}, nil
 }
 
-func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection threadResumeSelection) (*workspaceThreadBinding, error) {
+func resumeCodexSelectedThread(a *App, sessionKey string, sess *state.Session, ws *config.Workspace, selection appconvbackend.ThreadResumeSelection) (*workspaceThreadBinding, error) {
 	client, err := requireCodexClient(a)
 	if err != nil {
 		return nil, err

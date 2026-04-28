@@ -3953,7 +3953,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 		return nil
 	}
 
-	card, err := conversationBackend(a).renderThreadsCard(sessionKey, false)
+	card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
@@ -3999,7 +3999,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		return nil
 	}
 
-	card, err := conversationBackend(a).renderThreadsCard(sessionKey, false)
+	card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}

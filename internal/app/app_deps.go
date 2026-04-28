@@ -1,6 +1,7 @@
 package app
 
 import (
+	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/app/appstate"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -37,7 +38,7 @@ type AppDeps interface {
 
 	// Facades
 	BackendRuntime() backendRuntimeFacade
-	ConversationBackend() conversationBackendFacade
+	ConversationBackend() appconvbackend.ConversationBackendFacade
 
 	// Trackers
 	Trackers() *appTrackers

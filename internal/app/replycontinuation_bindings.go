@@ -75,7 +75,7 @@ func newReplyContinuationService(a *App) replyContinuationService {
 		return sessionctx.HasInFlightSubmission(sess)
 	}
 	svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
-		return conversationBackend(a).tryReplyContinuation(msg, link, sessionKey, sess)
+		return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
 	}
 	svc.StartSubmission = func(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 		return newClaudeSubmissionService(a).startNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)

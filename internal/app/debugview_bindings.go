@@ -118,7 +118,7 @@ type debugConversationBackendAdapter struct {
 }
 
 func (a debugConversationBackendAdapter) RenderUsageBody(sess *state.Session) string {
-	return conversationBackend(a.app).renderUsageBody(sess)
+	return conversationBackend(a.app).RenderUsageBody(sess)
 }
 
 // debugWorkspaceConfigAdapter wraps workspace config operations to satisfy

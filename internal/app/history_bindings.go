@@ -65,13 +65,13 @@ type historyConversationBackendAdapter struct {
 }
 
 func (a historyConversationBackendAdapter) HistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return conversationBackend(a.app).historyIndexForOrdinal(sessionKey, ordinal)
+	return conversationBackend(a.app).HistoryIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (a historyConversationBackendAdapter) RenderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return conversationBackend(a.app).renderHistoryCard(sessionKey, page)
+	return conversationBackend(a.app).RenderHistoryCard(sessionKey, page)
 }
 
 func (a historyConversationBackendAdapter) RenderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return conversationBackend(a.app).renderHistoryDetailCard(sessionKey, index)
+	return conversationBackend(a.app).RenderHistoryDetailCard(sessionKey, index)
 }

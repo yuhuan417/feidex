@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 
+	appbackend "feidex/internal/app/backend"
+	appconvbackend "feidex/internal/app/convbackend"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -15,19 +17,21 @@ import (
 // Provider adapters — satisfy threadmenu narrow interfaces
 // ---------------------------------------------------------------------------
 
-type threadMenuConversationBackendAdapter struct{ backend conversationBackendFacade }
+type threadMenuConversationBackendAdapter struct {
+	backend appconvbackend.ConversationBackendFacade
+}
 
 func (a threadMenuConversationBackendAdapter) RenderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return a.backend.renderThreadsCard(sessionKey, includeAll)
+	return a.backend.RenderThreadsCard(sessionKey, includeAll)
 }
 func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Context, sessionKey string, sess *state.Session) error {
-	return a.backend.interruptActiveTurn(ctx, sessionKey, sess)
+	return a.backend.InterruptActiveTurn(ctx, sessionKey, sess)
 }
 func (a threadMenuConversationBackendAdapter) ContinueActiveTurn(sessionKey string, text string) error {
-	return a.backend.continueActiveTurn(sessionKey, text)
+	return a.backend.ContinueActiveTurn(sessionKey, text)
 }
 func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection appthreadmenu.ThreadResumeSelection) (*appthreadmenu.ThreadBinding, error) {
-	return a.backend.resumeSelectedThread(sessionKey, sess, ws, threadResumeSelection{
+	return a.backend.ResumeSelectedThread(sessionKey, sess, ws, appconvbackend.ThreadResumeSelection{
 		ThreadID: selection.ThreadID,
 		Name:     selection.Name,
 		Preview:  selection.Preview,
@@ -35,7 +39,7 @@ func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey st
 	})
 }
 func (a threadMenuConversationBackendAdapter) ForkReplyMessage(forkedID string) string {
-	return a.backend.forkReplyMessage(forkedID)
+	return a.backend.ForkReplyMessage(forkedID)
 }
 
 type threadMenuBackendRuntimeAdapter struct {
@@ -58,12 +62,11 @@ func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(ses
 }
 
 type threadMenuBackendActionAdapter struct {
-	app    *App
-	facade backendActionFacade
+	service appbackend.ActionService
 }
 
 func (a threadMenuBackendActionAdapter) CompleteMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
-	return a.facade.completeMenuInterrupt(a.app, action, sessionKey, targetTurnID)
+	return a.service.CompleteMenuInterrupt(action, sessionKey, targetTurnID)
 }
 
 // ---------------------------------------------------------------------------
@@ -98,11 +101,7 @@ func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider 
 }
 
 func (a *App) ThreadMenuBackendActions() appthreadmenu.BackendActionProvider {
-	actions := backendActions(a)
-	if actions == nil {
-		return nil
-	}
-	return threadMenuBackendActionAdapter{app: a, facade: actions}
+	return threadMenuBackendActionAdapter{service: newBackendActionService(a)}
 }
 
 func (a *App) CommandFork(msg *feishu.InboundMessage, args []string) error {

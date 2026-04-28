@@ -44,17 +44,14 @@ func (a *App) SessionStore() appcompact.SessionStore {
 }
 
 func (a *App) HandleBackendCompactCommand(msg *feishu.InboundMessage) error {
-	return handleBackendCompactCommand(a, msg)
+	svc := appcompact.NewService(a)
+	return newBackendActionService(a).HandleCompactCommand(msg, &svc)
 }
 
 func (a *App) RunBackendCompactAction(sessionKey string, svc *appcompact.Service, action any) error {
-	actions := backendActions(a)
-	if actions == nil {
-		return nil
-	}
 	var cardAction *feishu.CardAction
 	if action != nil {
 		cardAction, _ = action.(*feishu.CardAction)
 	}
-	return actions.runMenuCompactActionWithService(a, cardAction, sessionKey, svc)
+	return newBackendActionService(a).RunMenuCompactAction(cardAction, sessionKey, svc)
 }

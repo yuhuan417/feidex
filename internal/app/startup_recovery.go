@@ -127,7 +127,7 @@ func recoverSessionThreadsOnStartup(a *App) {
 			clearSessionLiveThread(a, sessionKey)
 			continue
 		}
-		conversationBackend(a).recoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
+		conversationBackend(a).RecoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
 	}
 }
 

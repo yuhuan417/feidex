@@ -26,8 +26,6 @@ func handleBackendCompactCommand(a *App, msg *feishu.InboundMessage) error {
 	if a == nil || msg == nil {
 		return nil
 	}
-	if actions := backendActions(a); actions != nil {
-		return actions.handleCompactCommand(a, msg)
-	}
-	return nil
+	svc := newCompactService(a)
+	return newBackendActionService(a).HandleCompactCommand(msg, &svc)
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -25,10 +26,12 @@ func (a backendRuntimeAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
 	return a.runtime.deferQueuedSubmissionsDuringRecovery(a.app)
 }
 
-type conversationBackendAdapter struct{ backend conversationBackendFacade }
+type conversationBackendAdapter struct {
+	backend appconvbackend.ConversationBackendFacade
+}
 
 func (a conversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
-	return a.backend.startQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
+	return a.backend.StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 // ---------------------------------------------------------------------------
