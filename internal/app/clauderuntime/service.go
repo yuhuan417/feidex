@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"feidex/internal/app/apputil"
 	appdelivery "feidex/internal/app/delivery"
 	apppendingforms "feidex/internal/app/pendingforms"
 	appruntime "feidex/internal/app/runtime"
 	appturn "feidex/internal/app/turn"
-	"feidex/internal/app/apputil"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -93,74 +93,288 @@ type PendingResponse struct {
 	Err      error
 }
 
-// ---------------------------------------------------------------------------
-// Callback function types — operations that depend on *App internals
-// ---------------------------------------------------------------------------
+type LifecycleDeps struct {
+	BindClaudeSessionThread func(sessionKey, turnID, threadID string)
+	FinishTurn              func(threadID, turnID, status string)
+	FinishSteerSubmission   func(submissionID, status string)
+	FailClaudeSessionWork   func(sessionKey, threadID string, err error)
+	FailBackendActiveWork   func(backend, sessionKey, threadID, message string)
+}
 
-// Service provides Claude CLI session management. All exported methods
-// satisfy the appcore.ClaudeCore interface.
-type Service struct {
-	App     App
-	Cfg     config.ClaudeConfig
-
-	mu       sync.Mutex
-	sessions map[string]*SessionState
-	pending  map[string]*PendingInteraction
-
-	// Lifecycle callbacks
-	BindClaudeSessionThread  func(sessionKey, turnID, threadID string)
-	FinishTurn               func(threadID, turnID, status string)
-	FinishSteerSubmission    func(submissionID, status string)
-	FailClaudeSessionWork    func(sessionKey, threadID string, err error)
-	FailBackendActiveWork    func(backend, sessionKey, threadID, message string)
-
-	// Turn-stream callbacks
-	RecordTurnError               func(threadID, turnID, message string)
-	CompleteTurnItem              func(ctx context.Context, threadID, turnID, itemID string, item map[string]any)
+type TurnStreamDeps struct {
+	RecordTurnError                func(threadID, turnID, message string)
+	CompleteTurnItem               func(ctx context.Context, threadID, turnID, itemID string, item map[string]any)
 	PrepareTurnStreamQuietBoundary func(turnID string) (reuseMessageID string)
-	PrepareTurnStreamQuietUpdate  func(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp
-	MarkTurnStreamFinal           func(turnID string)
+	PrepareTurnStreamQuietUpdate   func(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp
+	MarkTurnStreamFinal            func(turnID string)
+}
 
-	// Usage callbacks
-	RecordClaudeThreadUsage      func(threadID string, usage claudecli.TurnUsage)
-	RecordTurnTokenUsage         func(threadID, turnID string, usage codexrpc.ThreadTokenUsage)
+type UsageDeps struct {
+	RecordClaudeThreadUsage       func(threadID string, usage claudecli.TurnUsage)
+	RecordTurnTokenUsage          func(threadID, turnID string, usage codexrpc.ThreadTokenUsage)
 	RecordTurnContextUsagePercent func(turnID string, percent float64)
-	TurnFinalFooterLines         func(turnID string, completedAt time.Time) []string
+	TurnFinalFooterLines          func(turnID string, completedAt time.Time) []string
+}
 
-	// Delivery callbacks
+type DeliveryDeps struct {
 	ExecuteQuietWorkingCardOp func(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp)
 	UpdateOutputSegment       func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool)
 	FinalizeOutputSegment     func(ctx context.Context, threadID, turnID, body string) bool
 	SendFinalMessages         func(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk
 	ReplyInThread             func(sub *state.Submission) bool
+}
 
-	// Card-sending callbacks
-	SendClaudeApprovalCard       func(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error
-	SendClaudeUserInputCard      func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
-	SendClaudeUserInputFormCard  func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
-	SendClaudePlanModeCard       func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error
+type InteractiveDeps struct {
+	SendClaudeApprovalCard      func(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error
+	SendClaudeUserInputCard     func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
+	SendClaudeUserInputFormCard func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
+	SendClaudePlanModeCard      func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error
+}
 
-	// Submission/session lookup callbacks
-	FindSubmissionByTurn    func(threadID, turnID string) (string, *state.Submission)
-	GetSession              func(sessionKey string) *state.Session
-	SessionHasActiveOps     func(sess *state.Session) bool
-	NextLocalID             func(prefix string) (string, error)
-	WorkspaceCwd            func(workspaceID string) string
+type LookupDeps struct {
+	FindSubmissionByTurn func(threadID, turnID string) (string, *state.Submission)
+	GetSession           func(sessionKey string) *state.Session
+	SessionHasActiveOps  func(sess *state.Session) bool
+	NextLocalID          func(prefix string) (string, error)
+	WorkspaceCwd         func(workspaceID string) string
+}
 
-	// Permission mode callbacks
+type PermissionDeps struct {
 	EffectivePermissionMode func(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string
 	QuietWorkingCardEnabled func() bool
 }
 
-// NewService creates a new Service. Callbacks must be set by the caller
-// before using the service.
-func NewService(app App, cfg config.ClaudeConfig) *Service {
+type Deps struct {
+	App         App
+	Cfg         config.ClaudeConfig
+	Lifecycle   LifecycleDeps
+	TurnStream  TurnStreamDeps
+	Usage       UsageDeps
+	Delivery    DeliveryDeps
+	Interactive InteractiveDeps
+	Lookup      LookupDeps
+	Permission  PermissionDeps
+}
+
+// Service provides Claude CLI session management. All exported methods
+// satisfy the appcore.ClaudeCore interface.
+type Service struct {
+	App  App
+	Cfg  config.ClaudeConfig
+	deps Deps
+
+	mu       sync.Mutex
+	sessions map[string]*SessionState
+	pending  map[string]*PendingInteraction
+}
+
+// NewService creates a new Service.
+func NewService(deps Deps) *Service {
 	return &Service{
-		App:      app,
-		Cfg:      cfg,
+		App:      deps.App,
+		Cfg:      deps.Cfg,
+		deps:     deps,
 		sessions: map[string]*SessionState{},
 		pending:  map[string]*PendingInteraction{},
 	}
+}
+
+func (s *Service) BindClaudeSessionThread(sessionKey, turnID, threadID string) {
+	if s != nil && s.deps.Lifecycle.BindClaudeSessionThread != nil {
+		s.deps.Lifecycle.BindClaudeSessionThread(sessionKey, turnID, threadID)
+	}
+}
+
+func (s *Service) FinishTurn(threadID, turnID, status string) {
+	if s != nil && s.deps.Lifecycle.FinishTurn != nil {
+		s.deps.Lifecycle.FinishTurn(threadID, turnID, status)
+	}
+}
+
+func (s *Service) FinishSteerSubmission(submissionID, status string) {
+	if s != nil && s.deps.Lifecycle.FinishSteerSubmission != nil {
+		s.deps.Lifecycle.FinishSteerSubmission(submissionID, status)
+	}
+}
+
+func (s *Service) FailClaudeSessionWork(sessionKey, threadID string, err error) {
+	if s != nil && s.deps.Lifecycle.FailClaudeSessionWork != nil {
+		s.deps.Lifecycle.FailClaudeSessionWork(sessionKey, threadID, err)
+	}
+}
+
+func (s *Service) FailBackendActiveWork(backend, sessionKey, threadID, message string) {
+	if s != nil && s.deps.Lifecycle.FailBackendActiveWork != nil {
+		s.deps.Lifecycle.FailBackendActiveWork(backend, sessionKey, threadID, message)
+	}
+}
+
+func (s *Service) RecordTurnError(threadID, turnID, message string) {
+	if s != nil && s.deps.TurnStream.RecordTurnError != nil {
+		s.deps.TurnStream.RecordTurnError(threadID, turnID, message)
+	}
+}
+
+func (s *Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item map[string]any) {
+	if s != nil && s.deps.TurnStream.CompleteTurnItem != nil {
+		s.deps.TurnStream.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
+	}
+}
+
+func (s *Service) PrepareTurnStreamQuietBoundary(turnID string) string {
+	if s == nil || s.deps.TurnStream.PrepareTurnStreamQuietBoundary == nil {
+		return ""
+	}
+	return s.deps.TurnStream.PrepareTurnStreamQuietBoundary(turnID)
+}
+
+func (s *Service) PrepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp {
+	if s == nil || s.deps.TurnStream.PrepareTurnStreamQuietUpdate == nil {
+		return appturn.QuietWorkingCardOp{}
+	}
+	return s.deps.TurnStream.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
+}
+
+func (s *Service) MarkTurnStreamFinal(turnID string) {
+	if s != nil && s.deps.TurnStream.MarkTurnStreamFinal != nil {
+		s.deps.TurnStream.MarkTurnStreamFinal(turnID)
+	}
+}
+
+func (s *Service) RecordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage) {
+	if s != nil && s.deps.Usage.RecordClaudeThreadUsage != nil {
+		s.deps.Usage.RecordClaudeThreadUsage(threadID, usage)
+	}
+}
+
+func (s *Service) RecordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
+	if s != nil && s.deps.Usage.RecordTurnTokenUsage != nil {
+		s.deps.Usage.RecordTurnTokenUsage(threadID, turnID, usage)
+	}
+}
+
+func (s *Service) RecordTurnContextUsagePercent(turnID string, percent float64) {
+	if s != nil && s.deps.Usage.RecordTurnContextUsagePercent != nil {
+		s.deps.Usage.RecordTurnContextUsagePercent(turnID, percent)
+	}
+}
+
+func (s *Service) TurnFinalFooterLines(turnID string, completedAt time.Time) []string {
+	if s == nil || s.deps.Usage.TurnFinalFooterLines == nil {
+		return nil
+	}
+	return s.deps.Usage.TurnFinalFooterLines(turnID, completedAt)
+}
+
+func (s *Service) ExecuteQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp) {
+	if s != nil && s.deps.Delivery.ExecuteQuietWorkingCardOp != nil {
+		s.deps.Delivery.ExecuteQuietWorkingCardOp(ctx, sub, op)
+	}
+}
+
+func (s *Service) UpdateOutputSegment(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
+	if s == nil || s.deps.Delivery.UpdateOutputSegment == nil {
+		return nil, false
+	}
+	return s.deps.Delivery.UpdateOutputSegment(ctx, threadID, turnID, body, reuseMessageID)
+}
+
+func (s *Service) FinalizeOutputSegment(ctx context.Context, threadID, turnID, body string) bool {
+	if s == nil || s.deps.Delivery.FinalizeOutputSegment == nil {
+		return false
+	}
+	return s.deps.Delivery.FinalizeOutputSegment(ctx, threadID, turnID, body)
+}
+
+func (s *Service) SendFinalMessages(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+	if s == nil || s.deps.Delivery.SendFinalMessages == nil {
+		return nil
+	}
+	return s.deps.Delivery.SendFinalMessages(ctx, sub, text, footerLines, inThread, reuseMessageIDs)
+}
+
+func (s *Service) ReplyInThread(sub *state.Submission) bool {
+	if s == nil || s.deps.Delivery.ReplyInThread == nil {
+		return false
+	}
+	return s.deps.Delivery.ReplyInThread(sub)
+}
+
+func (s *Service) SendClaudeApprovalCard(kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+	if s == nil || s.deps.Interactive.SendClaudeApprovalCard == nil {
+		return fmt.Errorf("approval card delivery unavailable")
+	}
+	return s.deps.Interactive.SendClaudeApprovalCard(kind, requestID, sessionKey, sub, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
+}
+
+func (s *Service) SendClaudeUserInputCard(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
+	if s == nil || s.deps.Interactive.SendClaudeUserInputCard == nil {
+		return fmt.Errorf("question card delivery unavailable")
+	}
+	return s.deps.Interactive.SendClaudeUserInputCard(requestID, sessionKey, sub, payload)
+}
+
+func (s *Service) SendClaudeUserInputFormCard(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
+	if s == nil || s.deps.Interactive.SendClaudeUserInputFormCard == nil {
+		return fmt.Errorf("question card delivery unavailable")
+	}
+	return s.deps.Interactive.SendClaudeUserInputFormCard(requestID, sessionKey, sub, payload)
+}
+
+func (s *Service) SendClaudePlanModeCard(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
+	if s == nil || s.deps.Interactive.SendClaudePlanModeCard == nil {
+		return fmt.Errorf("plan card delivery unavailable")
+	}
+	return s.deps.Interactive.SendClaudePlanModeCard(requestID, sessionKey, sub, threadID, turnID, body)
+}
+
+func (s *Service) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+	if s == nil || s.deps.Lookup.FindSubmissionByTurn == nil {
+		return "", nil
+	}
+	return s.deps.Lookup.FindSubmissionByTurn(threadID, turnID)
+}
+
+func (s *Service) GetSession(sessionKey string) *state.Session {
+	if s == nil || s.deps.Lookup.GetSession == nil {
+		return nil
+	}
+	return s.deps.Lookup.GetSession(sessionKey)
+}
+
+func (s *Service) SessionHasActiveOps(sess *state.Session) bool {
+	if s == nil || s.deps.Lookup.SessionHasActiveOps == nil {
+		return false
+	}
+	return s.deps.Lookup.SessionHasActiveOps(sess)
+}
+
+func (s *Service) NextLocalID(prefix string) (string, error) {
+	if s == nil || s.deps.Lookup.NextLocalID == nil {
+		return "", nil
+	}
+	return s.deps.Lookup.NextLocalID(prefix)
+}
+
+func (s *Service) WorkspaceCwd(workspaceID string) string {
+	if s == nil || s.deps.Lookup.WorkspaceCwd == nil {
+		return ""
+	}
+	return s.deps.Lookup.WorkspaceCwd(workspaceID)
+}
+
+func (s *Service) EffectivePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+	if s == nil || s.deps.Permission.EffectivePermissionMode == nil {
+		return ""
+	}
+	return s.deps.Permission.EffectivePermissionMode(sess, ws, cfg)
+}
+
+func (s *Service) QuietWorkingCardEnabled() bool {
+	if s == nil || s.deps.Permission.QuietWorkingCardEnabled == nil {
+		return false
+	}
+	return s.deps.Permission.QuietWorkingCardEnabled()
 }
 
 // ---------------------------------------------------------------------------
@@ -702,17 +916,14 @@ func (s *Service) permissionModeForSession(ctx context.Context, sessionKey strin
 	_ = ctx
 	_ = sessionKey
 	var sess *state.Session
-	if s != nil && s.App != nil && s.GetSession != nil {
+	if s != nil {
 		sess = s.GetSession(sessionKey)
 	}
 	return PermissionModeValue(s.effectivePermissionMode(sess, ws, cfg))
 }
 
 func (s *Service) effectivePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-	if s.EffectivePermissionMode != nil {
-		return s.EffectivePermissionMode(sess, ws, cfg)
-	}
-	return ""
+	return s.EffectivePermissionMode(sess, ws, cfg)
 }
 
 // ---------------------------------------------------------------------------
@@ -774,9 +985,7 @@ func (s *Service) runSession(state *SessionState) {
 			sessionKey := strings.TrimSpace(state.SessionKey)
 			threadID := strings.TrimSpace(state.SessionID)
 			state.Mu.Unlock()
-			if s.BindClaudeSessionThread != nil {
-				s.BindClaudeSessionThread(sessionKey, "", threadID)
-			}
+			s.BindClaudeSessionThread(sessionKey, "", threadID)
 			state.ReadyOnce.Do(func() { close(state.ReadyCh) })
 		case claudecli.TurnStartedEvent:
 			state.Mu.Lock()
@@ -789,7 +998,7 @@ func (s *Service) runSession(state *SessionState) {
 				turnID = strings.TrimSpace(turn.TurnID)
 			}
 			state.Mu.Unlock()
-			if threadID != "" && turnID != "" && s.BindClaudeSessionThread != nil {
+			if threadID != "" && turnID != "" {
 				s.BindClaudeSessionThread(sessionKey, turnID, threadID)
 			}
 		case claudecli.TextEvent:
@@ -832,27 +1041,19 @@ func (s *Service) HandleThinkingEvent(state *SessionState, event claudecli.Think
 	if s == nil || turnID == "" {
 		return
 	}
-	quietEnabled := s.QuietWorkingCardEnabled != nil && s.QuietWorkingCardEnabled()
+	quietEnabled := s.QuietWorkingCardEnabled()
 	if !quietEnabled {
-		return
-	}
-	if s.FindSubmissionByTurn == nil {
 		return
 	}
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return
 	}
-	workspaceCwd := ""
-	if s.WorkspaceCwd != nil {
-		workspaceCwd = s.WorkspaceCwd(sub.WorkspaceID)
-	}
-	if s.PrepareTurnStreamQuietUpdate != nil && s.ExecuteQuietWorkingCardOp != nil {
-		op := s.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
-			"type": "reasoning",
-		}, workspaceCwd)
-		s.ExecuteQuietWorkingCardOp(context.Background(), sub, op)
-	}
+	workspaceCwd := s.WorkspaceCwd(sub.WorkspaceID)
+	op := s.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
+		"type": "reasoning",
+	}, workspaceCwd)
+	s.ExecuteQuietWorkingCardOp(context.Background(), sub, op)
 }
 
 func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent) {
@@ -880,11 +1081,8 @@ func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent
 		return
 	}
 	sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turnID)
-	if sub != nil && s.ExecuteQuietWorkingCardOp != nil {
+	if sub != nil {
 		s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
-	}
-	if s.UpdateOutputSegment == nil {
-		return
 	}
 	chunks, ok := s.UpdateOutputSegment(context.Background(), threadID, turnID, body, reuseMessageID)
 	if !ok {
@@ -914,16 +1112,14 @@ func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCo
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
-	if s.CompleteTurnItem != nil {
-		item := map[string]any{
-			"type":   "dynamic_tool_call",
-			"id":     strings.TrimSpace(event.ID),
-			"tool":   strings.TrimSpace(event.Name),
-			"status": "completed",
-			"input":  event.Input,
-		}
-		s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+	item := map[string]any{
+		"type":   "dynamic_tool_call",
+		"id":     strings.TrimSpace(event.ID),
+		"tool":   strings.TrimSpace(event.Name),
+		"status": "completed",
+		"input":  event.Input,
 	}
+	s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 }
 
 func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCompleteEvent) {
@@ -979,16 +1175,12 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 	}
 
 	// Record usage
-	if s.RecordClaudeThreadUsage != nil {
-		s.RecordClaudeThreadUsage(threadID, event.Usage)
-	}
-	if s.RecordTurnTokenUsage != nil {
-		s.RecordTurnTokenUsage(threadID, turn.TurnID, TurnUsageAsThreadUsage(event.Usage))
-	}
-	if percentage, ok := TurnContextUsagePercent(event.Usage); ok && s.RecordTurnContextUsagePercent != nil {
+	s.RecordClaudeThreadUsage(threadID, event.Usage)
+	s.RecordTurnTokenUsage(threadID, turn.TurnID, TurnUsageAsThreadUsage(event.Usage))
+	if percentage, ok := TurnContextUsagePercent(event.Usage); ok {
 		s.RecordTurnContextUsagePercent(turn.TurnID, percentage)
 	}
-	if event.Error != nil && s.RecordTurnError != nil {
+	if event.Error != nil {
 		s.RecordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 
@@ -1004,9 +1196,7 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				if s.ExecuteQuietWorkingCardOp != nil {
-					s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
-				}
+				s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(reuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
@@ -1019,24 +1209,17 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 					}
 				}
 				footerLines := s.turnFinalFooterLines(turn.TurnID, completedAt)
-				inThread := false
-				if s.ReplyInThread != nil {
-					inThread = s.ReplyInThread(sub)
-				}
-				if s.SendFinalMessages != nil {
-					results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
-					if len(results) > 0 && s.MarkTurnStreamFinal != nil {
-						s.MarkTurnStreamFinal(turn.TurnID)
-					} else if s.FinalizeOutputSegment == nil || !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-						if s.CompleteTurnItem != nil {
-							s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
-								"type":  "agent_message",
-								"id":    "claude-agent-" + turn.TurnID,
-								"text":  finalText,
-								"phase": "final_answer",
-							})
-						}
-					}
+				inThread := s.ReplyInThread(sub)
+				results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
+				if len(results) > 0 {
+					s.MarkTurnStreamFinal(turn.TurnID)
+				} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+					s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+						"type":  "agent_message",
+						"id":    "claude-agent-" + turn.TurnID,
+						"text":  finalText,
+						"phase": "final_answer",
+					})
 				}
 			}
 		}
@@ -1048,35 +1231,17 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				if s.ExecuteQuietWorkingCardOp != nil {
-					s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
-				}
+				s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(reuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
 				footerLines := s.turnFinalFooterLines(turn.TurnID, completedAt)
-				inThread := false
-				if s.ReplyInThread != nil {
-					inThread = s.ReplyInThread(sub)
-				}
-				if s.SendFinalMessages != nil {
-					results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
-					if len(results) > 0 && s.MarkTurnStreamFinal != nil {
-						s.MarkTurnStreamFinal(turn.TurnID)
-					} else if s.FinalizeOutputSegment == nil || !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-						if s.CompleteTurnItem != nil {
-							s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
-								"type":  "agent_message",
-								"id":    "claude-agent-" + turn.TurnID,
-								"text":  finalText,
-								"phase": "final_answer",
-							})
-						}
-					}
-				}
-			} else if s.FinalizeOutputSegment == nil || !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-				if s.CompleteTurnItem != nil {
+				inThread := s.ReplyInThread(sub)
+				results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
+				if len(results) > 0 {
+					s.MarkTurnStreamFinal(turn.TurnID)
+				} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
 					s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
@@ -1084,6 +1249,13 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 						"phase": "final_answer",
 					})
 				}
+			} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
+				s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+					"type":  "agent_message",
+					"id":    "claude-agent-" + turn.TurnID,
+					"text":  finalText,
+					"phase": "final_answer",
+				})
 			}
 		}
 	}
@@ -1097,14 +1269,12 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 			status = "failed"
 		}
 	}
-	if s.FinishTurn != nil {
-		s.FinishTurn(threadID, turn.TurnID, status)
-	}
+	s.FinishTurn(threadID, turn.TurnID, status)
 
 	// Finalize the steer submission if one was attached to this turn.
 	// The steer message was processed as part of this conversation round,
 	// so its submission completes together with the turn.
-	if steerID := strings.TrimSpace(turn.SteerSubmissionID); steerID != "" && s.FinishSteerSubmission != nil {
+	if steerID := strings.TrimSpace(turn.SteerSubmissionID); steerID != "" {
 		s.FinishSteerSubmission(steerID, status)
 	}
 }
@@ -1129,19 +1299,15 @@ func (s *Service) HandleSessionError(state *SessionState, event claudecli.ErrorE
 	)
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		if IsFatalSessionErrorFromState(state, event) {
-			if s.FailClaudeSessionWork != nil {
-				s.FailClaudeSessionWork(sessionKey, threadID, event.Error)
-			}
+			s.FailClaudeSessionWork(sessionKey, threadID, event.Error)
 		}
 		return
 	}
-	if event.Error != nil && s.RecordTurnError != nil {
+	if event.Error != nil {
 		s.RecordTurnError(threadID, turn.TurnID, event.Error.Error())
 	}
 	if IsFatalSessionErrorFromState(state, event) {
-		if s.FailClaudeSessionWork != nil {
-			s.FailClaudeSessionWork(sessionKey, threadID, event.Error)
-		}
+		s.FailClaudeSessionWork(sessionKey, threadID, event.Error)
 	}
 }
 
@@ -1156,9 +1322,6 @@ func (s *Service) cleanupStaleSessionOps(state *SessionState) {
 	if sessionKey == "" {
 		return
 	}
-	if s.GetSession == nil || s.SessionHasActiveOps == nil {
-		return
-	}
 	sess := s.GetSession(sessionKey)
 	if sess == nil || !s.SessionHasActiveOps(sess) {
 		return
@@ -1169,12 +1332,12 @@ func (s *Service) cleanupStaleSessionOps(state *SessionState) {
 	)
 	for _, op := range sess.ActiveOperations {
 		tID := strings.TrimSpace(op.TurnID)
-		if tID != "" && s.FinishTurn != nil {
+		if tID != "" {
 			s.FinishTurn(threadID, tID, "failed")
 		}
 	}
 	sess = s.GetSession(sessionKey)
-	if sess != nil && s.SessionHasActiveOps(sess) && s.FailBackendActiveWork != nil {
+	if sess != nil && s.SessionHasActiveOps(sess) {
 		s.FailBackendActiveWork("claude", sessionKey, threadID, "Claude 会话事件循环异常退出")
 	}
 }
@@ -1195,9 +1358,6 @@ func (s *Service) handlePermission(ctx context.Context, state *SessionState, req
 	}
 	state.Mu.Unlock()
 
-	if s.FindSubmissionByTurn == nil {
-		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "no active submission for approval"}, nil
-	}
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "no active submission for approval"}, nil
@@ -1208,9 +1368,6 @@ func (s *Service) handlePermission(ctx context.Context, state *SessionState, req
 	sessionLabel := DescribeClaudeSessionPermissionUpdates(sessionUpdates)
 	kind, body, payload := s.approvalPresentation(sub.WorkspaceID, req)
 
-	if s.SendClaudeApprovalCard == nil {
-		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "approval card delivery unavailable"}, nil
-	}
 	if err := s.SendClaudeApprovalCard(kind, requestID, sessionKey, sub, threadID, turnID, requestID, body, payload, sessionLabel); err != nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: err.Error()}, nil
 	}
@@ -1247,19 +1404,14 @@ func (s *Service) handleAskUserQuestion(ctx context.Context, state *SessionState
 	}
 	state.Mu.Unlock()
 
-	if s.FindSubmissionByTurn == nil {
-		return nil, fmt.Errorf("no active submission for question")
-	}
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return nil, fmt.Errorf("no active submission for question")
 	}
 
 	requestID := "claude-question-" + strings.TrimSpace(turnID)
-	if s.NextLocalID != nil {
-		if nextID, err := s.NextLocalID("claude-question"); err == nil && strings.TrimSpace(nextID) != "" {
-			requestID = nextID
-		}
+	if nextID, err := s.NextLocalID("claude-question"); err == nil && strings.TrimSpace(nextID) != "" {
+		requestID = nextID
 	}
 	payload := apppendingforms.ToolUserInputPayload{
 		ThreadID:  threadID,
@@ -1269,10 +1421,6 @@ func (s *Service) handleAskUserQuestion(ctx context.Context, state *SessionState
 	}
 	if len(payload.Questions) == 0 {
 		return nil, fmt.Errorf("Claude question payload was empty")
-	}
-
-	if s.SendClaudeUserInputCard == nil || s.SendClaudeUserInputFormCard == nil {
-		return nil, fmt.Errorf("question card delivery unavailable")
 	}
 
 	if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 && !payload.Questions[0].MultiSelect && !payload.Questions[0].IsOther {
@@ -1317,29 +1465,18 @@ func (s *Service) HandleExitPlanMode(ctx context.Context, state *SessionState, p
 	startedAt := state.StartedAt
 	state.Mu.Unlock()
 
-	if s.FindSubmissionByTurn == nil {
-		return "", fmt.Errorf("no active submission for plan confirmation")
-	}
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return "", fmt.Errorf("no active submission for plan confirmation")
 	}
 
 	workspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), workspaceID)
-	workspaceCwdVal := ""
-	if s.WorkspaceCwd != nil {
-		workspaceCwdVal = s.WorkspaceCwd(workspaceID)
-	}
+	workspaceCwdVal := s.WorkspaceCwd(workspaceID)
 	plan = EnrichPlanForDisplay(plan, planFilePath, workspaceCwdVal, startedAt)
 
 	requestID := "claude-plan-" + strings.TrimSpace(turnID)
-	if s.NextLocalID != nil {
-		if nextID, err := s.NextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
-			requestID = nextID
-		}
-	}
-	if s.SendClaudePlanModeCard == nil {
-		return "", fmt.Errorf("plan card delivery unavailable")
+	if nextID, err := s.NextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
+		requestID = nextID
 	}
 	if err := s.SendClaudePlanModeCard(requestID, sessionKey, sub, threadID, turnID, PlanModeBody(plan)); err != nil {
 		return "", err
@@ -1371,10 +1508,7 @@ func (s *Service) HandleExitPlanMode(ctx context.Context, state *SessionState, p
 
 func (s *Service) approvalPresentation(workspaceID string, req *claudecli.PermissionRequest) (kind, body string, payload map[string]any) {
 	workspaceCwdFunc := func(wsID string) string {
-		if s.WorkspaceCwd != nil {
-			return s.WorkspaceCwd(wsID)
-		}
-		return ""
+		return s.WorkspaceCwd(wsID)
 	}
 	return RenderApprovalPresentation(workspaceID, req, workspaceCwdFunc)
 }
@@ -1384,25 +1518,18 @@ func (s *Service) approvalPresentation(workspaceID string, req *claudecli.Permis
 // ---------------------------------------------------------------------------
 
 func (s *Service) prepareQuietWorkingBoundary(threadID, turnID string) (*state.Submission, string) {
-	if s == nil || strings.TrimSpace(turnID) == "" || s.FindSubmissionByTurn == nil {
+	if s == nil || strings.TrimSpace(turnID) == "" {
 		return nil, ""
 	}
 	_, sub := s.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
 		return nil, ""
 	}
-	reuseMessageID := ""
-	if s.PrepareTurnStreamQuietBoundary != nil {
-		reuseMessageID = s.PrepareTurnStreamQuietBoundary(turnID)
-	}
-	return sub, reuseMessageID
+	return sub, s.PrepareTurnStreamQuietBoundary(turnID)
 }
 
 func (s *Service) turnFinalFooterLines(turnID string, completedAt time.Time) []string {
-	if s.TurnFinalFooterLines != nil {
-		return s.TurnFinalFooterLines(turnID, completedAt)
-	}
-	return nil
+	return s.TurnFinalFooterLines(turnID, completedAt)
 }
 
 // ---------------------------------------------------------------------------
@@ -1442,4 +1569,3 @@ func IsFatalSessionErrorFromState(state *SessionState, event claudecli.ErrorEven
 	}
 	return IsFatalSessionError(stopped, exitErr, event.Error)
 }
-

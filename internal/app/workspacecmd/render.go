@@ -105,9 +105,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		payload.Picker = nil
 	}
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -124,9 +122,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		"已选父目录: `" + appcore.FirstNonEmpty(parentDir, "-") + "`\n" +
 		"浏览根目录: `" + appcore.FirstNonEmpty(rootPath, "-") + "`\n\n" +
 		"先填写 Git 地址，再按需调整父目录和可选 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。"
-	if s.FormatMenuBody != nil {
-		body = s.FormatMenuBody("workspace.clone", body)
-	}
+	body = s.FormatMenuBody("workspace.clone", body)
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
 		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
 	}
@@ -352,18 +348,14 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 // RenderWorkspaceMenuCard renders the workspace management menu card.
 func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]any {
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	currentID := appcore.DefaultWorkspaceID(s.App)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		currentID = sess.WorkspaceID
 	}
 	currentWS := config.FindWorkspace(s.App.Config(), currentID)
 	bodyLines := []string{"当前工作区: `" + currentID + "`"}
-	if s.BackendWorkspaceSummaryLines != nil {
-		bodyLines = s.BackendWorkspaceSummaryLines(bodyLines, currentWS)
-	}
+	bodyLines = s.BackendWorkspaceSummaryLines(bodyLines, currentWS)
 	buttons := make([]feishu.Button, 0, 6)
 	workspaces := s.App.Config().Workspaces
 	selectOptions := make([]appcards.SelectStaticOption, 0, len(workspaces))
@@ -395,9 +387,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 			},
 		},
 	)
-	if s.BackendWorkspaceConfigButtons != nil {
-		buttons = append(buttons, s.BackendWorkspaceConfigButtons(sessionKey)...)
-	}
+	buttons = append(buttons, s.BackendWorkspaceConfigButtons(sessionKey)...)
 	buttons = append(buttons,
 		feishu.Button{
 			Text: submenuCommandLabel("删除工作区", "/workspace delete"),
@@ -418,9 +408,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 	)
 	card := appcards.NewMarkdownBodyCard("工作区管理", "blue")
 	body := strings.Join(bodyLines, "\n")
-	if s.FormatMenuBody != nil {
-		body = s.FormatMenuBody("menu.workspace", body)
-	}
+	body = s.FormatMenuBody("menu.workspace", body)
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 		"workspace_select",
@@ -438,9 +426,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 // RenderWorkspaceChooseCard renders the workspace choose card with buttons sorted by recently used.
 func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]any {
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	currentID := appcore.DefaultWorkspaceID(s.App)
 	var recentIDs []string
 	if sess != nil {
@@ -468,8 +454,8 @@ func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]
 			Text: label,
 			Type: btnType,
 			Value: map[string]any{
-				"action":      "workspace.use.existing",
-				"session_key": sessionKey,
+				"action":       "workspace.use.existing",
+				"session_key":  sessionKey,
 				"workspace_id": ws.ID,
 			},
 		})
@@ -512,9 +498,7 @@ func sortWorkspacesByRecent(workspaces []config.Workspace, recentIDs []string, c
 // RenderWorkspaceSandboxMenuCard renders the sandbox configuration menu card.
 func (s *RenderService) RenderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -552,18 +536,14 @@ func (s *RenderService) RenderWorkspaceSandboxMenuCard(sessionKey string) (map[s
 		},
 	})
 	bodyText := body
-	if s.FormatMenuBody != nil {
-		bodyText = s.FormatMenuBody("workspace.sandbox.menu", body)
-	}
+	bodyText = s.FormatMenuBody("workspace.sandbox.menu", body)
 	return s.App.Feishu().SimpleStatusCard("配置 Sandbox", "blue", bodyText, buttons), nil
 }
 
 // RenderWorkspacePolicyMenuCard renders the policy configuration menu card.
 func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -601,9 +581,7 @@ func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[st
 		},
 	})
 	bodyText := body
-	if s.FormatMenuBody != nil {
-		bodyText = s.FormatMenuBody("workspace.policy.menu", body)
-	}
+	bodyText = s.FormatMenuBody("workspace.policy.menu", body)
 	return s.App.Feishu().SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
 }
 
@@ -640,9 +618,7 @@ func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[st
 	}
 	card := appcards.NewMarkdownBodyCard("删除工作区", "orange")
 	body := strings.Join(lines, "\n")
-	if s.FormatMenuBody != nil {
-		body = s.FormatMenuBody("workspace.delete.menu", body)
-	}
+	body = s.FormatMenuBody("workspace.delete.menu", body)
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
 		"content": body,
@@ -707,8 +683,6 @@ func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID
 		},
 	}
 	bodyText := strings.Join(body, "\n")
-	if s.FormatMenuBody != nil {
-		bodyText = s.FormatMenuBody("workspace.delete.confirm", bodyText)
-	}
+	bodyText = s.FormatMenuBody("workspace.delete.confirm", bodyText)
 	return s.App.Feishu().SimpleStatusCard("确认删除工作区", "red", bodyText, buttons), nil
 }

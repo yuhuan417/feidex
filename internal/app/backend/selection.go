@@ -29,43 +29,41 @@ type BackendRuntimeHandle struct {
 	Install func()
 }
 
-// SelectionService manages backend selection, switching, and configuration
-// display. Operations that require deep app-package knowledge are injected
-// as callback function fields by the app-layer constructor.
-type SelectionService struct {
-	App App
-
-	// ListAvailableBackends returns backends found on this machine.
+type SelectionRuntimeDeps struct {
 	ListAvailableBackends func() []AvailableBackend
+	PrepareRuntime        func(ctx context.Context, target string) (*BackendRuntimeHandle, error)
+	SnapshotRuntime       func() *BackendRuntimeHandle
+	RecoverState          func()
+	IdleBlockedReason     func() string
+	RuntimeReady          func(target string) bool
+}
 
-	// PrepareRuntime builds and starts a runtime for the target backend.
-	PrepareRuntime func(ctx context.Context, target string) (*BackendRuntimeHandle, error)
-
-	// SnapshotRuntime returns a handle to the currently active runtime.
-	SnapshotRuntime func() *BackendRuntimeHandle
-
-	// RecoverState recovers frontend state after a backend switch.
-	RecoverState func()
-
-	// IdleBlockedReason returns non-empty if the frontend cannot accept a switch.
-	IdleBlockedReason func() string
-
-	// RuntimeReady reports whether the named backend's runtime is ready.
-	RuntimeReady func(target string) bool
-
-	// BuildMenuCard renders the backend menu card.
+type SelectionRenderDeps struct {
 	BuildMenuCard func(sessionKey string) map[string]any
-
-	// BuildCardBody builds card body text with breadcrumb navigation.
 	BuildCardBody func(action, body string) string
+}
 
-	// CommandAutoRetry delegates /backend retry sub-commands.
+type SelectionCommandDeps struct {
 	CommandAutoRetry func(msg *feishu.InboundMessage, args []string) error
 }
 
+type SelectionDeps struct {
+	App      App
+	Runtime  SelectionRuntimeDeps
+	Render   SelectionRenderDeps
+	Commands SelectionCommandDeps
+}
+
+// SelectionService manages backend selection, switching, and configuration
+// display.
+type SelectionService struct {
+	App  App
+	deps SelectionDeps
+}
+
 // NewSelectionService creates a new SelectionService.
-func NewSelectionService(app App) SelectionService {
-	return SelectionService{App: app}
+func NewSelectionService(deps SelectionDeps) SelectionService {
+	return SelectionService{App: deps.App, deps: deps}
 }
 
 // RawCard wraps a card map as a raw callback Card.
@@ -75,8 +73,8 @@ func RawCard(card map[string]any) *callback.Card {
 
 // AvailableBackends returns the list of backends available on this machine.
 func (s SelectionService) AvailableBackends() []AvailableBackend {
-	if s.ListAvailableBackends != nil {
-		return s.ListAvailableBackends()
+	if s.deps.Runtime.ListAvailableBackends != nil {
+		return s.deps.Runtime.ListAvailableBackends()
 	}
 	return nil
 }
@@ -97,16 +95,16 @@ func (s SelectionService) BackendAvailable(target string) bool {
 
 // BackendRuntimeReady reports whether the named backend's runtime is ready.
 func (s SelectionService) BackendRuntimeReady(target string) bool {
-	if s.RuntimeReady != nil {
-		return s.RuntimeReady(target)
+	if s.deps.Runtime.RuntimeReady != nil {
+		return s.deps.Runtime.RuntimeReady(target)
 	}
 	return false
 }
 
 // BackendSwitchBlockedReason returns a reason if a backend switch is blocked.
 func (s SelectionService) BackendSwitchBlockedReason() string {
-	if s.IdleBlockedReason != nil {
-		return s.IdleBlockedReason()
+	if s.deps.Runtime.IdleBlockedReason != nil {
+		return s.deps.Runtime.IdleBlockedReason()
 	}
 	return ""
 }
@@ -172,8 +170,8 @@ func (s SelectionService) RenderBackendSelectionCard(sessionKey, notice string) 
 		color = "green"
 	}
 	body := strings.Join(lines, "\n")
-	if s.BuildCardBody != nil {
-		body = s.BuildCardBody("menu.backend.switch", body)
+	if s.deps.Render.BuildCardBody != nil {
+		body = s.deps.Render.BuildCardBody("menu.backend.switch", body)
 	}
 	return s.App.Feishu().SimpleStatusCard("后端选择", color, body, buttons)
 }
@@ -186,8 +184,8 @@ func (s SelectionService) RenderBackendSwitchingCard(sessionKey, target string) 
 		"会先切换 runtime，再恢复这个 backend 之前的 thread lineage。",
 	}, "\n")
 	cardBody := body
-	if s.BuildCardBody != nil {
-		cardBody = s.BuildCardBody("menu.backend.switch", body)
+	if s.deps.Render.BuildCardBody != nil {
+		cardBody = s.deps.Render.BuildCardBody("menu.backend.switch", body)
 	}
 	return s.App.Feishu().SimpleStatusCard("切换后端", "orange", cardBody, []feishu.Button{
 		{Text: "处理中", Type: "default", Value: map[string]any{"action": "menu.backend.switch", "session_key": sessionKey}},
@@ -222,8 +220,8 @@ func (s SelectionService) CommandBackend(msg *feishu.InboundMessage, args []stri
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "retry":
-		if s.CommandAutoRetry != nil {
-			return s.CommandAutoRetry(msg, args[1:])
+		if s.deps.Commands.CommandAutoRetry != nil {
+			return s.deps.Commands.CommandAutoRetry(msg, args[1:])
 		}
 		return fmt.Errorf("auto-retry not available")
 	default:
@@ -234,8 +232,8 @@ func (s SelectionService) CommandBackend(msg *feishu.InboundMessage, args []stri
 // CompleteMenuBackend handles the menu.backend card action.
 func (s SelectionService) CompleteMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	var card map[string]any
-	if s.BuildMenuCard != nil {
-		card = s.BuildMenuCard(sessionKey)
+	if s.deps.Render.BuildMenuCard != nil {
+		card = s.deps.Render.BuildMenuCard(sessionKey)
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开后端选择"},
@@ -343,19 +341,19 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 
 	nextSessions := s.FrontendSessionsAfterBackendSwitch(current, target)
 
-	if s.PrepareRuntime == nil {
+	if s.deps.Runtime.PrepareRuntime == nil {
 		return fmt.Errorf("PrepareRuntime callback not set")
 	}
-	newHandle, err := s.PrepareRuntime(ctx, target)
+	newHandle, err := s.deps.Runtime.PrepareRuntime(ctx, target)
 	if err != nil {
 		return err
 	}
 
-	if s.SnapshotRuntime == nil {
+	if s.deps.Runtime.SnapshotRuntime == nil {
 		_ = newHandle.Close()
 		return fmt.Errorf("SnapshotRuntime callback not set")
 	}
-	oldHandle := s.SnapshotRuntime()
+	oldHandle := s.deps.Runtime.SnapshotRuntime()
 	oldBackend := appcore.CurrentRuntimeBackend(s.App)
 	if err := s.SetConfiguredBackend(target); err != nil {
 		_ = newHandle.Close()
@@ -378,8 +376,8 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 		"frontend_id", s.App.FrontendID(),
 		"target_backend", target,
 	)
-	if s.RecoverState != nil {
-		s.RecoverState()
+	if s.deps.Runtime.RecoverState != nil {
+		s.deps.Runtime.RecoverState()
 	}
 	if oldHandle != nil {
 		_ = oldHandle.Close()

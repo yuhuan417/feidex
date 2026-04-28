@@ -259,24 +259,17 @@ func (s *ManagementService) PrepareWorkspaceClone(repoURL, explicitID, parentDir
 
 // SetWorkspaceCloneOperation sets a clone operation for tracking.
 func (s *ManagementService) SetWorkspaceCloneOperation(requestID string, op *CloneOperation) {
-	if s.SetCloneOp != nil {
-		s.SetCloneOp(requestID, op)
-	}
+	s.SetCloneOp(requestID, op)
 }
 
 // GetWorkspaceCloneOperation gets a clone operation by request ID.
 func (s *ManagementService) GetWorkspaceCloneOperation(requestID string) *CloneOperation {
-	if s.GetCloneOp != nil {
-		return s.GetCloneOp(requestID)
-	}
-	return nil
+	return s.GetCloneOp(requestID)
 }
 
 // ClearWorkspaceCloneOperation clears a clone operation.
 func (s *ManagementService) ClearWorkspaceCloneOperation(requestID string) {
-	if s.ClearCloneOp != nil {
-		s.ClearCloneOp(requestID)
-	}
+	s.ClearCloneOp(requestID)
 }
 
 // FinishWorkspaceCloneSubmit completes a clone operation (called in a goroutine).
@@ -496,9 +489,7 @@ func (s *ManagementService) runAsyncThreadBinding(sessionKey, workspaceID string
 				"thread_id", binding.ThreadID,
 			)
 		}
-		if s.OnAsyncDone != nil {
-			s.OnAsyncDone()
-		}
+		s.OnAsyncDone()
 	})
 }
 
@@ -964,9 +955,7 @@ func (s *ManagementService) updateWorkspaceDefaults(workspaceID string, mutate f
 // renderSandboxMenuCard is a helper that re-renders the sandbox menu card.
 func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -1004,18 +993,14 @@ func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string
 		},
 	})
 	bodyText := body
-	if s.FormatMenuBody != nil {
-		bodyText = s.FormatMenuBody("workspace.sandbox.menu", body)
-	}
+	bodyText = s.FormatMenuBody("workspace.sandbox.menu", body)
 	return s.App.Feishu().SimpleStatusCard("配置 Sandbox", "blue", bodyText, buttons), nil
 }
 
 // renderPolicyMenuCard is a helper that re-renders the policy menu card.
 func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]any, error) {
 	var sess *state.Session
-	if s.GetSession != nil {
-		sess = s.GetSession(sessionKey)
-	}
+	sess = s.GetSession(sessionKey)
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
@@ -1053,8 +1038,6 @@ func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]
 		},
 	})
 	bodyText := body
-	if s.FormatMenuBody != nil {
-		bodyText = s.FormatMenuBody("workspace.policy.menu", body)
-	}
+	bodyText = s.FormatMenuBody("workspace.policy.menu", body)
 	return s.App.Feishu().SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
 }

@@ -12,84 +12,185 @@ import (
 )
 
 // BackendFailureService handles backend failure logic: iterating sessions,
-// failing submissions, and resolving pending requests. All dependencies on
-// the host app are injected as callback function fields.
+// failing submissions, and resolving pending requests.
 type BackendFailureService struct {
-	App App
+	App  App
+	deps FailureDeps
+}
 
-	// ---- state access callbacks ----
-
-	// AllSessions returns all sessions (after frontend filtering by the host).
-	AllSessions func() []*state.Session
-
-	// GetSubmission returns a submission by ID.
-	GetSubmission func(id string) *state.Submission
-
-	// AllPendingRequests returns all pending requests.
+type FailureStateDeps struct {
+	AllSessions        func() []*state.Session
+	GetSubmission      func(id string) *state.Submission
 	AllPendingRequests func() []*state.PendingRequest
-
-	// UpdatePending applies a mutation to a pending request.
-	UpdatePending func(id string, mutate func(*state.PendingRequest)) error
-
-	// FinalizeSubmission marks a submission as finalized.
+	UpdatePending      func(id string, mutate func(*state.PendingRequest)) error
 	FinalizeSubmission func(id, status string) error
+	UpdateSession      func(key string, mutate func(*state.Session)) (*state.Session, error)
+}
 
-	// UpdateSession applies a mutation to a session.
-	UpdateSession func(key string, mutate func(*state.Session)) (*state.Session, error)
-
-	// ---- session helpers ----
-
-	// SessionBelongsToFrontend reports whether a session belongs to this frontend.
+type FailureSessionDeps struct {
 	SessionBelongsToFrontend func(sessionKey string) bool
+}
 
-	// ---- turn / submission callbacks ----
-
-	// RecordTurnError records an error for a turn.
-	RecordTurnError func(threadID, turnID, message string)
-
-	// FlushTurnStream flushes the turn stream and returns a flush result.
-	FlushTurnStream func(ctx context.Context, threadID, turnID string) appturnstream.FlushResult
-
-	// FailStandaloneCompactTurn fails a standalone compact turn.
-	// Returns true if the error was handled.
-	FailStandaloneCompactTurn func(threadID, turnID, message string) bool
-
-	// BackendRuntimeFailsStandaloneCompaction reports whether the given
-	// backend runtime fails standalone compaction.
+type FailureRuntimeDeps struct {
+	RecordTurnError                         func(threadID, turnID, message string)
+	FlushTurnStream                         func(ctx context.Context, threadID, turnID string) appturnstream.FlushResult
+	FailStandaloneCompactTurn               func(threadID, turnID, message string) bool
 	BackendRuntimeFailsStandaloneCompaction func(backend string) bool
+	BackendRuntimeHandleTransportFailure    func(backend, sessionKey, threadID string, err error)
+}
 
-	// BackendRuntimeHandleTransportFailure delegates transport failure
-	// handling to the backend runtime.
-	BackendRuntimeHandleTransportFailure func(backend, sessionKey, threadID string, err error)
-
-	// ---- card / retry callbacks ----
-
-	// ObserveAutoRetryTerminal observes an auto-retry terminal state.
-	// Returns true if the terminal card should be suppressed.
+type FailureCardDeps struct {
 	ObserveAutoRetryTerminal func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	ReplaceTurnEventCard     func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string)
+	PrependAttentionMention  func(text, userID string) string
+	TurnStopAttentionUserID  func(sub *state.Submission, turnID string) string
+}
 
-	// ReplaceTurnEventCard replaces the turn event card.
-	ReplaceTurnEventCard func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string)
-
-	// PrependAttentionMention prepends an attention mention to text.
-	PrependAttentionMention func(text, userID string) string
-
-	// TurnStopAttentionUserID returns the user ID for turn stop attention.
-	TurnStopAttentionUserID func(sub *state.Submission, turnID string) string
-
-	// CleanupSubmissionRuntimeState cleans up runtime state for a submission.
+type FailureAsyncDeps struct {
 	CleanupSubmissionRuntimeState func(sub *state.Submission)
+	StartNextSubmissionAsync      func(sessionKey, reason string)
+	RunAsync                      func(fn func())
+}
 
-	// StartNextSubmissionAsync starts the next submission asynchronously.
-	StartNextSubmissionAsync func(sessionKey, reason string)
-
-	// RunAsync runs a function asynchronously.
-	RunAsync func(fn func())
+type FailureDeps struct {
+	App      App
+	State    FailureStateDeps
+	Sessions FailureSessionDeps
+	Runtime  FailureRuntimeDeps
+	Cards    FailureCardDeps
+	Async    FailureAsyncDeps
 }
 
 // NewBackendFailureService creates a new service.
-func NewBackendFailureService(app App) BackendFailureService {
-	return BackendFailureService{App: app}
+func NewBackendFailureService(deps FailureDeps) BackendFailureService {
+	return BackendFailureService{App: deps.App, deps: deps}
+}
+
+func (s BackendFailureService) AllSessions() []*state.Session {
+	if s.deps.State.AllSessions == nil {
+		return nil
+	}
+	return s.deps.State.AllSessions()
+}
+
+func (s BackendFailureService) GetSubmission(id string) *state.Submission {
+	if s.deps.State.GetSubmission == nil {
+		return nil
+	}
+	return s.deps.State.GetSubmission(id)
+}
+
+func (s BackendFailureService) AllPendingRequests() []*state.PendingRequest {
+	if s.deps.State.AllPendingRequests == nil {
+		return nil
+	}
+	return s.deps.State.AllPendingRequests()
+}
+
+func (s BackendFailureService) UpdatePending(id string, mutate func(*state.PendingRequest)) error {
+	if s.deps.State.UpdatePending == nil {
+		return nil
+	}
+	return s.deps.State.UpdatePending(id, mutate)
+}
+
+func (s BackendFailureService) FinalizeSubmission(id, status string) error {
+	if s.deps.State.FinalizeSubmission == nil {
+		return nil
+	}
+	return s.deps.State.FinalizeSubmission(id, status)
+}
+
+func (s BackendFailureService) UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error) {
+	if s.deps.State.UpdateSession == nil {
+		return nil, nil
+	}
+	return s.deps.State.UpdateSession(key, mutate)
+}
+
+func (s BackendFailureService) SessionBelongsToFrontend(sessionKey string) bool {
+	if s.deps.Sessions.SessionBelongsToFrontend == nil {
+		return true
+	}
+	return s.deps.Sessions.SessionBelongsToFrontend(sessionKey)
+}
+
+func (s BackendFailureService) RecordTurnError(threadID, turnID, message string) {
+	if s.deps.Runtime.RecordTurnError != nil {
+		s.deps.Runtime.RecordTurnError(threadID, turnID, message)
+	}
+}
+
+func (s BackendFailureService) FlushTurnStream(ctx context.Context, threadID, turnID string) appturnstream.FlushResult {
+	if s.deps.Runtime.FlushTurnStream == nil {
+		return appturnstream.FlushResult{}
+	}
+	return s.deps.Runtime.FlushTurnStream(ctx, threadID, turnID)
+}
+
+func (s BackendFailureService) FailStandaloneCompactTurn(threadID, turnID, message string) bool {
+	if s.deps.Runtime.FailStandaloneCompactTurn == nil {
+		return false
+	}
+	return s.deps.Runtime.FailStandaloneCompactTurn(threadID, turnID, message)
+}
+
+func (s BackendFailureService) BackendRuntimeFailsStandaloneCompaction(backend string) bool {
+	if s.deps.Runtime.BackendRuntimeFailsStandaloneCompaction == nil {
+		return false
+	}
+	return s.deps.Runtime.BackendRuntimeFailsStandaloneCompaction(backend)
+}
+
+func (s BackendFailureService) BackendRuntimeHandleTransportFailure(backend, sessionKey, threadID string, err error) {
+	if s.deps.Runtime.BackendRuntimeHandleTransportFailure != nil {
+		s.deps.Runtime.BackendRuntimeHandleTransportFailure(backend, sessionKey, threadID, err)
+	}
+}
+
+func (s BackendFailureService) ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool {
+	if s.deps.Cards.ObserveAutoRetryTerminal == nil {
+		return false
+	}
+	return s.deps.Cards.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID)
+}
+
+func (s BackendFailureService) ReplaceTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
+	if s.deps.Cards.ReplaceTurnEventCard != nil {
+		s.deps.Cards.ReplaceTurnEventCard(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
+	}
+}
+
+func (s BackendFailureService) PrependAttentionMention(text, userID string) string {
+	if s.deps.Cards.PrependAttentionMention == nil {
+		return text
+	}
+	return s.deps.Cards.PrependAttentionMention(text, userID)
+}
+
+func (s BackendFailureService) TurnStopAttentionUserID(sub *state.Submission, turnID string) string {
+	if s.deps.Cards.TurnStopAttentionUserID == nil {
+		return ""
+	}
+	return s.deps.Cards.TurnStopAttentionUserID(sub, turnID)
+}
+
+func (s BackendFailureService) CleanupSubmissionRuntimeState(sub *state.Submission) {
+	if s.deps.Async.CleanupSubmissionRuntimeState != nil {
+		s.deps.Async.CleanupSubmissionRuntimeState(sub)
+	}
+}
+
+func (s BackendFailureService) StartNextSubmissionAsync(sessionKey, reason string) {
+	if s.deps.Async.StartNextSubmissionAsync != nil {
+		s.deps.Async.StartNextSubmissionAsync(sessionKey, reason)
+	}
+}
+
+func (s BackendFailureService) RunAsync(fn func()) {
+	if s.deps.Async.RunAsync != nil {
+		s.deps.Async.RunAsync(fn)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -136,17 +237,12 @@ func BackendFailureScopeMatches(sess *state.Session, scopeSessionKey, scopeThrea
 // FailClaudeSessionActiveWork delegates Claude session failure to the backend
 // runtime handle.
 func (s BackendFailureService) FailClaudeSessionActiveWork(sessionKey, threadID string, err error) {
-	if s.BackendRuntimeHandleTransportFailure != nil {
-		s.BackendRuntimeHandleTransportFailure("claude", sessionKey, threadID, err)
-	}
+	s.BackendRuntimeHandleTransportFailure("claude", sessionKey, threadID, err)
 }
 
 // FailBackendActiveWork iterates all sessions belonging to this frontend,
 // finds active operations matching the failure scope, and fails them.
 func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, scopeThreadID, message string) {
-	if s.AllSessions == nil {
-		return
-	}
 	sessions := s.AllSessions()
 	seenSubmissions := map[string]struct{}{}
 	type compactTarget struct {
@@ -158,7 +254,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 		if sess == nil {
 			continue
 		}
-		if s.SessionBelongsToFrontend != nil && !s.SessionBelongsToFrontend(sess.Key) {
+		if !s.SessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		if !BackendFailureScopeMatches(sess, scopeSessionKey, scopeThreadID) {
@@ -173,10 +269,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 				if _, ok := seenSubmissions[submissionID]; ok {
 					continue
 				}
-				var sub *state.Submission
-				if s.GetSubmission != nil {
-					sub = s.GetSubmission(submissionID)
-				}
+				sub := s.GetSubmission(submissionID)
 				if sub == nil {
 					continue
 				}
@@ -184,7 +277,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 				s.FailSubmissionWithoutTerminalCompletion(sess.Key, sub, strings.TrimSpace(op.ThreadID), strings.TrimSpace(op.TurnID), message)
 				continue
 			}
-			if s.BackendRuntimeFailsStandaloneCompaction != nil && !s.BackendRuntimeFailsStandaloneCompaction(backend) {
+			if !s.BackendRuntimeFailsStandaloneCompaction(backend) {
 				continue
 			}
 			threadID := firstNonEmpty(strings.TrimSpace(op.ThreadID), strings.TrimSpace(sess.ActiveThreadID))
@@ -196,7 +289,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 				turnID:   strings.TrimSpace(op.TurnID),
 			})
 		}
-		if s.BackendRuntimeFailsStandaloneCompaction != nil && s.BackendRuntimeFailsStandaloneCompaction(backend) && strings.TrimSpace(sess.Status) == sessionStatusCompacting {
+		if s.BackendRuntimeFailsStandaloneCompaction(backend) && strings.TrimSpace(sess.Status) == sessionStatusCompacting {
 			threadID := strings.TrimSpace(sess.ActiveThreadID)
 			if threadID != "" {
 				compactTargets = append(compactTargets, compactTarget{threadID: threadID})
@@ -210,18 +303,13 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 			continue
 		}
 		seenCompacts[key] = struct{}{}
-		if s.FailStandaloneCompactTurn != nil {
-			s.FailStandaloneCompactTurn(target.threadID, target.turnID, message)
-		}
+		s.FailStandaloneCompactTurn(target.threadID, target.turnID, message)
 	}
 }
 
 // ResolvePendingRequestsForTerminalFailure resolves pending requests that
 // match the given session/thread/turn scope.
 func (s BackendFailureService) ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID string) {
-	if s.AllPendingRequests == nil || s.UpdatePending == nil {
-		return
-	}
 	now := time.Now().Unix()
 	for _, req := range s.AllPendingRequests() {
 		if req == nil || !isPendingRequestOpen(req) {
@@ -250,7 +338,7 @@ func (s BackendFailureService) ResolvePendingRequestsForTerminalFailure(sessionK
 // FailSubmissionWithoutTerminalCompletion fails a submission without waiting
 // for a terminal completion event.
 func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKey string, sub *state.Submission, threadID, turnID, message string) {
-	if sub == nil || s.GetSubmission == nil || s.FinalizeSubmission == nil || s.UpdateSession == nil {
+	if sub == nil {
 		return
 	}
 	current := s.GetSubmission(sub.ID)
@@ -260,11 +348,11 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	sub = current
 	threadID = firstNonEmpty(strings.TrimSpace(threadID), strings.TrimSpace(sub.ThreadID))
 	turnID = firstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
-	if turnID != "" && message != "" && s.RecordTurnError != nil {
+	if turnID != "" && message != "" {
 		s.RecordTurnError(threadID, turnID, message)
 	}
 	flush := appturnstream.FlushResult{}
-	if turnID != "" && s.FlushTurnStream != nil {
+	if turnID != "" {
 		flush = s.FlushTurnStream(context.Background(), threadID, turnID)
 	}
 	s.ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
@@ -296,18 +384,12 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 		}
 	})
 	suppressTerminalCard := false
-	if updatedSess != nil && s.ObserveAutoRetryTerminal != nil {
+	if updatedSess != nil {
 		suppressTerminalCard = s.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub, reuseMessageID)
 	}
-	if terminalText != "" && !suppressTerminalCard && s.ReplaceTurnEventCard != nil {
-		attentionUserID := ""
-		if s.TurnStopAttentionUserID != nil {
-			attentionUserID = s.TurnStopAttentionUserID(sub, turnID)
-		}
-		body := terminalText
-		if s.PrependAttentionMention != nil {
-			body = s.PrependAttentionMention(body, attentionUserID)
-		}
+	if terminalText != "" && !suppressTerminalCard {
+		attentionUserID := s.TurnStopAttentionUserID(sub, turnID)
+		body := s.PrependAttentionMention(terminalText, attentionUserID)
 		s.ReplaceTurnEventCard(
 			context.Background(),
 			sub,
@@ -319,10 +401,8 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 			reuseMessageID,
 		)
 	}
-	if s.CleanupSubmissionRuntimeState != nil {
-		s.CleanupSubmissionRuntimeState(sub)
-	}
-	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) && s.StartNextSubmissionAsync != nil && s.RunAsync != nil {
+	s.CleanupSubmissionRuntimeState(sub)
+	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		s.RunAsync(func() {
 			s.StartNextSubmissionAsync(sessionKey, "backendFailed")
 		})

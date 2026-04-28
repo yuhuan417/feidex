@@ -65,10 +65,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
 	if args[0] == "permissions" {
-		if s.BackendWorkspacePermissionCommand != nil {
-			return s.BackendWorkspacePermissionCommand(msg, args, sessionKey)
-		}
-		return fmt.Errorf("permissions command not available")
+		return s.BackendWorkspacePermissionCommand(msg, args, sessionKey)
 	}
 	if args[0] == "sandbox" {
 		if len(args) == 1 {
@@ -146,10 +143,10 @@ func (s *ConfigService) ShowWorkspaceMenu(msg *feishu.InboundMessage) error {
 
 // ShowWorkspaceChooseMenu shows the workspace choose card with buttons.
 func (s *ConfigService) ShowWorkspaceChooseMenu(msg *feishu.InboundMessage) error {
-	if s.RenderChooseMenuCard == nil {
+	card := s.RenderChooseMenuCard(appcore.MakeSessionKey(s.App, msg))
+	if card == nil {
 		return s.ShowWorkspaceMenu(msg)
 	}
-	card := s.RenderChooseMenuCard(appcore.MakeSessionKey(s.App, msg))
 	_, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
@@ -345,20 +342,16 @@ func (s *ConfigService) CompleteMenuWorkspace(action *feishu.CardAction, session
 }
 
 func completeMenuWorkspaceImpl(s *ConfigService, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if s.CompleteMenuCommand != nil {
-		resp, err := s.CompleteMenuCommand(action, sessionKey, "/workspace", "menu.root")
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-		if resp != nil {
-			return resp, nil
-		}
-		// Re-render menu card
-		card := s.RenderMenuCard(sessionKey)
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "info", Content: "已执行 /workspace"},
-			Card:  rawCard(card),
-		}, nil
+	resp, err := s.CompleteMenuCommand(action, sessionKey, "/workspace", "menu.root")
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "menu command not available"}}, nil
+	if resp != nil {
+		return resp, nil
+	}
+	card := s.RenderMenuCard(sessionKey)
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已执行 /workspace"},
+		Card:  rawCard(card),
+	}, nil
 }

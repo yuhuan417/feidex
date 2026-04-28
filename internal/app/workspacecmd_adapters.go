@@ -44,217 +44,218 @@ func init() {
 func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
-	return &appworkspacecmd.ConfigService{
+	return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
 		App: a,
-
-		// State callbacks
-		GetSession:    func(key string) *state.Session { return st.Session(key) },
-		Sessions:      func() []*state.Session { return st.Sessions() },
-		SaveSession:   func(sess *state.Session) error { return st.SaveSession(sess) },
-		NextLocalID:   func(prefix string) (string, error) { return st.NextLocalID(prefix) },
-		Pending:       func(id string) *state.PendingRequest { return st.Pending(id) },
-		SavePending:   func(req *state.PendingRequest) error { return st.SavePending(req) },
-		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.UpdatePending(id, mutate) },
-
-		// Session context callbacks
-		SessionHasInFlight:     sessionHasInFlightSubmission,
-		SwitchSessionWorkspace: switchSessionWorkspace,
-		ClearSessionThreadCtx:  clearSessionThreadContext,
-		ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
-
-		// Thread callbacks
-		EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-			return newWorkspaceThreadServiceInner(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+		State: appworkspacecmd.StateDeps{
+			GetSession:    func(key string) *state.Session { return st.Session(key) },
+			Sessions:      func() []*state.Session { return st.Sessions() },
+			SaveSession:   func(sess *state.Session) error { return st.SaveSession(sess) },
+			NextLocalID:   func(prefix string) (string, error) { return st.NextLocalID(prefix) },
+			Pending:       func(id string) *state.PendingRequest { return st.Pending(id) },
+			SavePending:   func(req *state.PendingRequest) error { return st.SavePending(req) },
+			UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.UpdatePending(id, mutate) },
 		},
-
-		// Backend config callbacks
-		BackendWorkspaceSummaryLines:               bcfg.appendBackendWorkspaceSummaryLines,
-		BackendWorkspaceConfigButtons:              bcfg.backendWorkspaceConfigButtons,
-		BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
-		BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
-		BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,
-		BackendWorkspaceCommandUsage:               bcfg.backendWorkspaceCommandUsage,
-		BackendWorkspacePermissionCommand:          bcfg.handleBackendWorkspacePermissionCommand,
-
-		// Action callbacks
-		CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-			return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+		SessionContext: appworkspacecmd.SessionContextDeps{
+			SessionHasInFlight:     sessionHasInFlightSubmission,
+			SwitchSessionWorkspace: switchSessionWorkspace,
+			ClearSessionThreadCtx:  clearSessionThreadContext,
+			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 		},
-		ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-			return indirectReplyCommandActionResponse(a, msg, resp)
+		Threads: appworkspacecmd.ThreadDeps{
+			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				return newWorkspaceThreadServiceInner(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+			},
 		},
-		CommandActionFromMessage: commandActionFromMessage,
-
-		// Formatting
-		FormatMenuBody: menuCardBody,
-
-		// Render callbacks
-		RenderMenuCard: func(sessionKey string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+		Backend: appworkspacecmd.BackendConfigDeps{
+			BackendWorkspaceSummaryLines:               bcfg.appendBackendWorkspaceSummaryLines,
+			BackendWorkspaceConfigButtons:              bcfg.backendWorkspaceConfigButtons,
+			BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
+			BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
+			BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,
+			BackendWorkspaceCommandUsage:               bcfg.backendWorkspaceCommandUsage,
+			BackendWorkspacePermissionCommand:          bcfg.handleBackendWorkspacePermissionCommand,
 		},
-		RenderChooseMenuCard: func(sessionKey string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceChooseCard(sessionKey)
+		Actions: appworkspacecmd.ActionDeps{
+			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+				return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+			},
+			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+				return indirectReplyCommandActionResponse(a, msg, resp)
+			},
+			CommandActionFromMessage: commandActionFromMessage,
 		},
-		RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceSandboxMenuCard(sessionKey)
+		Formatting: appworkspacecmd.FormattingDeps{
+			FormatMenuBody: menuCardBody,
 		},
-		RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey)
+		Render: appworkspacecmd.ConfigRenderDeps{
+			RenderMenuCard: func(sessionKey string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+			},
+			RenderChooseMenuCard: func(sessionKey string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceChooseCard(sessionKey)
+			},
+			RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceSandboxMenuCard(sessionKey)
+			},
+			RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey)
+			},
+			RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey)
+			},
+			RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+			},
+			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+			},
 		},
-		RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey)
-		},
-		RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
-		},
-		RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
-		},
-	}
+	})
 }
 
 func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementService {
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
-	return &appworkspacecmd.ManagementService{
+	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
 		App: a,
-
-		// State callbacks
-		GetSession:    func(key string) *state.Session { return st.Session(key) },
-		Sessions:      func() []*state.Session { return st.Sessions() },
-		SaveSession:   func(sess *state.Session) error { return st.SaveSession(sess) },
-		NextLocalID:   func(prefix string) (string, error) { return st.NextLocalID(prefix) },
-		Pending:       func(id string) *state.PendingRequest { return st.Pending(id) },
-		SavePending:   func(req *state.PendingRequest) error { return st.SavePending(req) },
-		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.UpdatePending(id, mutate) },
-
-		// Session context callbacks
-		SessionHasInFlight:     sessionHasInFlightSubmission,
-		SwitchSessionWorkspace: switchSessionWorkspace,
-		ClearSessionThreadCtx:  clearSessionThreadContext,
-		SetSessionThreadCtx:    setSessionThreadContext,
-		SessionResetActiveOps:  sessionResetActiveOperations,
-
-		// Thread callbacks
-		EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-			return newWorkspaceThreadServiceInner(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+		State: appworkspacecmd.StateDeps{
+			GetSession:    func(key string) *state.Session { return st.Session(key) },
+			Sessions:      func() []*state.Session { return st.Sessions() },
+			SaveSession:   func(sess *state.Session) error { return st.SaveSession(sess) },
+			NextLocalID:   func(prefix string) (string, error) { return st.NextLocalID(prefix) },
+			Pending:       func(id string) *state.PendingRequest { return st.Pending(id) },
+			SavePending:   func(req *state.PendingRequest) error { return st.SavePending(req) },
+			UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return st.UpdatePending(id, mutate) },
 		},
-		MarkSessionThreadLive:  func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
-		ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
-		StartWorkspaceThread: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-			return newWorkspaceThreadServiceInner(a).StartWorkspaceThread(sessionKey, sess, ws)
+		SessionContext: appworkspacecmd.SessionContextDeps{
+			SessionHasInFlight:     sessionHasInFlightSubmission,
+			SwitchSessionWorkspace: switchSessionWorkspace,
+			ClearSessionThreadCtx:  clearSessionThreadContext,
+			SetSessionThreadCtx:    setSessionThreadContext,
+			SessionResetActiveOps:  sessionResetActiveOperations,
+			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 		},
-
-		// Clone operation callbacks
-		SetCloneOp: func(requestID string, op *appworkspacecmd.CloneOperation) {
-			if a == nil {
-				return
-			}
-			requestID = strings.TrimSpace(requestID)
-			if requestID == "" || op == nil {
-				return
-			}
-			tracker := a.trackers.workspaceCloneOps
-			if tracker == nil {
-				tracker = newWorkspaceCloneTracker()
-				a.trackers.workspaceCloneOps = tracker
-			}
-			tracker.Mu.Lock()
-			defer tracker.Mu.Unlock()
-			if tracker.Ops == nil {
-				tracker.Ops = map[string]*appworkspacecmd.CloneOperation{}
-			}
-			if previous := tracker.Ops[requestID]; previous != nil && previous.Cancel != nil && previous != op {
-				previous.Cancel()
-			}
-			tracker.Ops[requestID] = op
+		Threads: appworkspacecmd.ThreadDeps{
+			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				return newWorkspaceThreadServiceInner(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+			},
+			MarkSessionThreadLive:  func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
+			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
+			StartWorkspaceThread: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				return newWorkspaceThreadServiceInner(a).StartWorkspaceThread(sessionKey, sess, ws)
+			},
 		},
-		GetCloneOp: func(requestID string) *appworkspacecmd.CloneOperation {
-			if a == nil {
-				return nil
-			}
-			tracker := a.trackers.workspaceCloneOps
-			if tracker == nil {
-				return nil
-			}
-			tracker.Mu.Lock()
-			defer tracker.Mu.Unlock()
-			return tracker.Ops[strings.TrimSpace(requestID)]
+		Clone: appworkspacecmd.CloneDeps{
+			SetCloneOp: func(requestID string, op *appworkspacecmd.CloneOperation) {
+				if a == nil {
+					return
+				}
+				requestID = strings.TrimSpace(requestID)
+				if requestID == "" || op == nil {
+					return
+				}
+				tracker := a.trackers.workspaceCloneOps
+				if tracker == nil {
+					tracker = newWorkspaceCloneTracker()
+					a.trackers.workspaceCloneOps = tracker
+				}
+				tracker.Mu.Lock()
+				defer tracker.Mu.Unlock()
+				if tracker.Ops == nil {
+					tracker.Ops = map[string]*appworkspacecmd.CloneOperation{}
+				}
+				if previous := tracker.Ops[requestID]; previous != nil && previous.Cancel != nil && previous != op {
+					previous.Cancel()
+				}
+				tracker.Ops[requestID] = op
+			},
+			GetCloneOp: func(requestID string) *appworkspacecmd.CloneOperation {
+				if a == nil {
+					return nil
+				}
+				tracker := a.trackers.workspaceCloneOps
+				if tracker == nil {
+					return nil
+				}
+				tracker.Mu.Lock()
+				defer tracker.Mu.Unlock()
+				return tracker.Ops[strings.TrimSpace(requestID)]
+			},
+			ClearCloneOp: func(requestID string) {
+				if a == nil {
+					return
+				}
+				tracker := a.trackers.workspaceCloneOps
+				if tracker == nil {
+					return
+				}
+				tracker.Mu.Lock()
+				defer tracker.Mu.Unlock()
+				delete(tracker.Ops, strings.TrimSpace(requestID))
+			},
+			GitClone: workspaceGitClone,
 		},
-		ClearCloneOp: func(requestID string) {
-			if a == nil {
-				return
-			}
-			tracker := a.trackers.workspaceCloneOps
-			if tracker == nil {
-				return
-			}
-			tracker.Mu.Lock()
-			defer tracker.Mu.Unlock()
-			delete(tracker.Ops, strings.TrimSpace(requestID))
+		Codex: appworkspacecmd.CodexDeps{
+			RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
+			BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
+				return buildThreadStartParams(a, ws, sess, effectiveModel)
+			},
 		},
-		GitClone: workspaceGitClone,
-
-		// Codex client callbacks
-		RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
-		BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
-			return buildThreadStartParams(a, ws, sess, effectiveModel)
+		Backend: appworkspacecmd.BackendConfigDeps{
+			BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
+			BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
+			BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,
+			BackendWorkspaceCommandUsage:               bcfg.backendWorkspaceCommandUsage,
+			BackendWorkspacePermissionCommand:          bcfg.handleBackendWorkspacePermissionCommand,
 		},
-
-		// Backend config callbacks
-		BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
-		BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
-		BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,
-		BackendWorkspaceCommandUsage:               bcfg.backendWorkspaceCommandUsage,
-		BackendWorkspacePermissionCommand:          bcfg.handleBackendWorkspacePermissionCommand,
-
-		// Action callbacks
-		CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-			return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+		Actions: appworkspacecmd.ActionDeps{
+			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+				return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+			},
+			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+				return indirectReplyCommandActionResponse(a, msg, resp)
+			},
+			CommandActionFromMessage: commandActionFromMessage,
+			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
+				return commandMessageFromAction(a, action, sessionKey, rawCommand)
+			},
 		},
-		ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-			return indirectReplyCommandActionResponse(a, msg, resp)
+		Formatting: appworkspacecmd.FormattingDeps{
+			FormatMenuBody: menuCardBody,
 		},
-		CommandActionFromMessage: commandActionFromMessage,
-		CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
-			return commandMessageFromAction(a, action, sessionKey, rawCommand)
+		Async: appworkspacecmd.AsyncDeps{
+			RunAsync: func(fn func()) { runAsync(a, fn) },
 		},
-
-		// Formatting
-		FormatMenuBody: menuCardBody,
-
-		// Async callbacks
-		RunAsync: func(fn func()) { runAsync(a, fn) },
-
-		// Render callbacks
-		RenderNewCard: func(sessionKey, requestID string, payload appworkspacecmd.NewPayload) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceNewCard(sessionKey, requestID, payload)
+		Render: appworkspacecmd.ManagementRenderDeps{
+			RenderNewCard: func(sessionKey, requestID string, payload appworkspacecmd.NewPayload) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceNewCard(sessionKey, requestID, payload)
+			},
+			RenderCloneCard: func(sessionKey, requestID string, payload appworkspacecmd.ClonePayload) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
+			},
+			RenderClonePreparingCard: func(requestID string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
+			},
+			RenderCloneSuccessCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir)
+			},
+			RenderSwitchExistingCard: func(sessionKey, workspaceID, targetDir, notice string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice)
+			},
+			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+			},
+			RenderCloneManualHintCard: func(sessionKey, workspaceID, targetDir, errText string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText)
+			},
+			RenderCloneCanceledCard: func(sessionKey string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
+			},
+			RenderMenuCard: func(sessionKey string) map[string]any {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+			},
 		},
-		RenderCloneCard: func(sessionKey, requestID string, payload appworkspacecmd.ClonePayload) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
-		},
-		RenderClonePreparingCard: func(requestID string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
-		},
-		RenderCloneSuccessCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir)
-		},
-		RenderSwitchExistingCard: func(sessionKey, workspaceID, targetDir, notice string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice)
-		},
-		RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
-		},
-		RenderCloneManualHintCard: func(sessionKey, workspaceID, targetDir, errText string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText)
-		},
-		RenderCloneCanceledCard: func(sessionKey string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
-		},
-		RenderMenuCard: func(sessionKey string) map[string]any {
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
-		},
-	}
+	})
 }
 
 // renderPathPickerCardDirect implements the full path picker card rendering
@@ -395,64 +396,64 @@ func renderPathPickerCardDirect(requestID string, payload appworkspace.PathPicke
 
 func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 	bcfg := newBackendConfigurationService(a)
-	return &appworkspacecmd.RenderService{
+	return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
 		App: a,
-
-		// Session state
-		GetSession: func(key string) *state.Session { return a.State().Session(key) },
-
-		// Backend config
-		BackendWorkspaceSummaryLines:  bcfg.appendBackendWorkspaceSummaryLines,
-		BackendWorkspaceConfigButtons: bcfg.backendWorkspaceConfigButtons,
-
-		// Formatting
-		FormatMenuBody: menuCardBody,
-
-		// Path picker render callback
-		RenderPathPickerCard: func(requestID string, payload appworkspacecmd.PathPickerPayload) (map[string]any, error) {
-			return renderPathPickerCardDirect(requestID, payload)
+		State: appworkspacecmd.StateDeps{
+			GetSession: func(key string) *state.Session { return a.State().Session(key) },
 		},
-
-		// Management helpers
-		DefaultWorkspaceCloneRoot: func(ws *config.Workspace) string { return "/" },
-		DefaultWorkspaceCloneParent: func(ws *config.Workspace) string {
-			if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
-				return filepath.Dir(strings.TrimSpace(ws.Cwd))
-			}
-			if cp := strings.TrimSpace(a.ConfigPath()); cp != "" {
-				return filepath.Dir(cp)
-			}
-			return "."
+		Backend: appworkspacecmd.BackendConfigDeps{
+			BackendWorkspaceSummaryLines:  bcfg.appendBackendWorkspaceSummaryLines,
+			BackendWorkspaceConfigButtons: bcfg.backendWorkspaceConfigButtons,
 		},
-	}
+		Formatting: appworkspacecmd.FormattingDeps{
+			FormatMenuBody: menuCardBody,
+		},
+		PathPicker: appworkspacecmd.PathPickerDeps{
+			RenderPathPickerCard: func(requestID string, payload appworkspacecmd.PathPickerPayload) (map[string]any, error) {
+				return renderPathPickerCardDirect(requestID, payload)
+			},
+		},
+		Management: appworkspacecmd.RenderManagementDeps{
+			DefaultWorkspaceCloneRoot: func(ws *config.Workspace) string { return "/" },
+			DefaultWorkspaceCloneParent: func(ws *config.Workspace) string {
+				if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
+					return filepath.Dir(strings.TrimSpace(ws.Cwd))
+				}
+				if cp := strings.TrimSpace(a.ConfigPath()); cp != "" {
+					return filepath.Dir(cp)
+				}
+				return "."
+			},
+		},
+	})
 }
 
 func newWorkspaceThreadServiceInner(a *App) *appworkspacecmd.ThreadService {
 	st := a.State()
-	return &appworkspacecmd.ThreadService{
+	return appworkspacecmd.NewThreadService(appworkspacecmd.ThreadServiceDeps{
 		App: a,
-
-		// State callbacks
-		GetSession:  func(key string) *state.Session { return st.Session(key) },
-		SaveSession: func(sess *state.Session) error { return st.SaveSession(sess) },
-
-		// Thread callbacks
-		MarkSessionThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
-
-		// Session context callbacks
-		SessionHasInFlight:     sessionHasInFlightSubmission,
-		SwitchSessionWorkspace: switchSessionWorkspace,
-		ClearSessionThreadCtx:  clearSessionThreadContext,
-		SetSessionThreadCtx:    setSessionThreadContext,
-		SessionResetActiveOps:  sessionResetActiveOperations,
-
-		// Codex client callbacks
-		RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
-		BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
-			return buildThreadStartParams(a, ws, sess, effectiveModel)
+		State: appworkspacecmd.StateDeps{
+			GetSession:  func(key string) *state.Session { return st.Session(key) },
+			SaveSession: func(sess *state.Session) error { return st.SaveSession(sess) },
 		},
-
-		// Claude client callbacks
-		RequireClaudeCore: func() (appcore.ClaudeCore, error) { return a.Claude(), nil },
-	}
+		Threads: appworkspacecmd.ThreadDeps{
+			MarkSessionThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
+		},
+		SessionContext: appworkspacecmd.SessionContextDeps{
+			SessionHasInFlight:     sessionHasInFlightSubmission,
+			SwitchSessionWorkspace: switchSessionWorkspace,
+			ClearSessionThreadCtx:  clearSessionThreadContext,
+			SetSessionThreadCtx:    setSessionThreadContext,
+			SessionResetActiveOps:  sessionResetActiveOperations,
+		},
+		Codex: appworkspacecmd.CodexDeps{
+			RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
+			BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) map[string]any {
+				return buildThreadStartParams(a, ws, sess, effectiveModel)
+			},
+		},
+		Claude: appworkspacecmd.ClaudeDeps{
+			RequireClaudeCore: func() (appcore.ClaudeCore, error) { return a.Claude(), nil },
+		},
+	})
 }

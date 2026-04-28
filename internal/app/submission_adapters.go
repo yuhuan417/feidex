@@ -9,19 +9,6 @@ import (
 	"feidex/internal/state"
 )
 
-// ---------------------------------------------------------------------------
-// Provider adapters — satisfy submission.App narrow interfaces
-// ---------------------------------------------------------------------------
-
-type sqPendingQueueAdapter struct {
-	app *App
-}
-
-func (a sqPendingQueueAdapter) PendingInputSessionKey(msg interface{ GetSessionKey() string }) string {
-	// This is a simplified adapter — the actual implementation is in the wrapper.
-	return ""
-}
-
 type sqLiveThreadAdapter struct{ app *App }
 
 func (a sqLiveThreadAdapter) MarkSessionThreadLive(sessionKey, threadID string) {
@@ -32,38 +19,6 @@ func (a sqLiveThreadAdapter) SessionHasLiveThread(sessionKey, threadID string) b
 }
 func (a sqLiveThreadAdapter) ClearSessionLiveThread(sessionKey string) {
 	clearSessionLiveThread(a.app, sessionKey)
-}
-
-type sqAttachmentResolverAdapter struct{ app *App }
-
-func (a sqAttachmentResolverAdapter) ResolveInboundAttachments(msg interface{}, workspaceID, sessionKey string) (interface{}, error) {
-	// Placeholder — actual implementation uses the app-level function.
-	return nil, nil
-}
-
-type sqBackendRuntimeAdapter struct{ facade backendRuntimeFacade }
-
-func (a sqBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
-	if a.facade == nil {
-		return sess
-	}
-	return a.facade.reconcileCompletedTurnFromFinalOutput(a.app(), sessionKey, sess)
-}
-func (a sqBackendRuntimeAdapter) DropThreadLineageAfterStartFailure(err error) bool {
-	if a.facade == nil {
-		return false
-	}
-	return a.facade.dropThreadLineageAfterStartFailure(a.app(), err)
-}
-func (a sqBackendRuntimeAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
-	if a.facade == nil {
-		return false
-	}
-	return a.facade.deferQueuedSubmissionsDuringRecovery(a.app())
-}
-func (a sqBackendRuntimeAdapter) app() *App {
-	// The facade operates on *App — this is injected at construction.
-	return nil
 }
 
 type sqConversationBackendAdapter struct{ facade conversationBackendFacade }

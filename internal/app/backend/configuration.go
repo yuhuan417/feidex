@@ -15,8 +15,8 @@ import (
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/buildinfo"
-	"feidex/internal/config"
 	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -29,47 +29,99 @@ const (
 )
 
 // ConfigurationService handles backend-specific configuration display and
-// model/workspace configuration card rendering. Methods that need deep
-// app-package knowledge are injected as callback function fields by the
-// app-layer constructor.
+// model/workspace configuration card rendering.
 type ConfigurationService struct {
-	App App
+	App  App
+	deps ConfigurationDeps
+}
 
-	// FormatMenuBody builds card body text with breadcrumb navigation.
+type ConfigurationFormattingDeps struct {
 	FormatMenuBody func(action, body string) string
+}
 
-	// HandleModelCommand dispatches model commands for the active backend.
-	HandleModelCommand func(msg *feishu.InboundMessage, args []string) error
-
-	// HandleWorkspacePermissionCommand dispatches workspace permission
-	// commands for the active backend.
+type ConfigurationCommandDeps struct {
+	HandleModelCommand               func(msg *feishu.InboundMessage, args []string) error
 	HandleWorkspacePermissionCommand func(msg *feishu.InboundMessage, args []string, sessionKey string) error
+}
 
-	// CompleteClaudeModelSet completes a Claude model set action.
-	CompleteClaudeModelSet func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error)
+type ConfigurationClaudeDeps struct {
+	CompleteModelSet  func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error)
+	CompleteEffortSet func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error)
+}
 
-	// CompleteClaudeEffortSet completes a Claude effort set action.
-	CompleteClaudeEffortSet func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error)
-
-	// FetchModelList fetches the Codex model catalog.
-	FetchModelList func(ctx context.Context) (codexrpc.ModelListResult, error)
-
-	// UpdateGlobalModelConfig persists a Codex config mutation.
+type ConfigurationCodexDeps struct {
+	FetchModelList          func(ctx context.Context) (codexrpc.ModelListResult, error)
 	UpdateGlobalModelConfig func(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error
+	RenderModelConfigCard   func(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any
+}
 
-	// RenderModelConfigCard renders the Codex model config card.
-	RenderModelConfigCard func(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any
-
-	// CommandActionFromMessage builds a CardAction from an InboundMessage.
-	CommandActionFromMessage func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction
-
-	// ReplyCommandActionResponse sends a card action response as a reply.
-	ReplyCommandActionResponse func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
+type ConfigurationDeps struct {
+	App        App
+	Formatting ConfigurationFormattingDeps
+	Commands   ConfigurationCommandDeps
+	Claude     ConfigurationClaudeDeps
+	Codex      ConfigurationCodexDeps
 }
 
 // NewConfigurationService creates a new ConfigurationService.
-func NewConfigurationService(app App) ConfigurationService {
-	return ConfigurationService{App: app}
+func NewConfigurationService(deps ConfigurationDeps) ConfigurationService {
+	return ConfigurationService{App: deps.App, deps: deps}
+}
+
+func (s ConfigurationService) FormatMenuBody(action, body string) string {
+	if s.deps.Formatting.FormatMenuBody == nil {
+		return body
+	}
+	return s.deps.Formatting.FormatMenuBody(action, body)
+}
+
+func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, args []string) error {
+	if s.deps.Commands.HandleModelCommand == nil {
+		return fmt.Errorf("model command handler not configured")
+	}
+	return s.deps.Commands.HandleModelCommand(msg, args)
+}
+
+func (s ConfigurationService) HandleWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
+	if s.deps.Commands.HandleWorkspacePermissionCommand == nil {
+		return fmt.Errorf("workspace permission handler not configured")
+	}
+	return s.deps.Commands.HandleWorkspacePermissionCommand(msg, args, sessionKey)
+}
+
+func (s ConfigurationService) CompleteClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	if s.deps.Claude.CompleteModelSet == nil {
+		return nil, fmt.Errorf("Claude model set handler not configured")
+	}
+	return s.deps.Claude.CompleteModelSet(action, modelID)
+}
+
+func (s ConfigurationService) CompleteClaudeEffortSet(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+	if s.deps.Claude.CompleteEffortSet == nil {
+		return nil, fmt.Errorf("Claude effort set handler not configured")
+	}
+	return s.deps.Claude.CompleteEffortSet(action, effort)
+}
+
+func (s ConfigurationService) FetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
+	if s.deps.Codex.FetchModelList == nil {
+		return codexrpc.ModelListResult{}, fmt.Errorf("Codex model list fetcher not configured")
+	}
+	return s.deps.Codex.FetchModelList(ctx)
+}
+
+func (s ConfigurationService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
+	if s.deps.Codex.UpdateGlobalModelConfig == nil {
+		return fmt.Errorf("Codex model config updater not configured")
+	}
+	return s.deps.Codex.UpdateGlobalModelConfig(mutate, result)
+}
+
+func (s ConfigurationService) RenderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
+	if s.deps.Codex.RenderModelConfigCard == nil {
+		return nil
+	}
+	return s.deps.Codex.RenderModelConfigCard(result, sessionKey, menuAction)
 }
 
 // ---------------------------------------------------------------------------
@@ -164,19 +216,13 @@ func (s ConfigurationService) BackendWorkspaceCommandUsage() string {
 
 // HandleBackendModelCommand dispatches model commands for the active backend.
 func (s ConfigurationService) HandleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
-	if s.HandleModelCommand != nil {
-		return s.HandleModelCommand(msg, args)
-	}
-	return fmt.Errorf("model command handler not configured")
+	return s.HandleModelCommand(msg, args)
 }
 
 // HandleBackendWorkspacePermissionCommand dispatches workspace permission
 // commands for the active backend.
 func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	if s.HandleWorkspacePermissionCommand != nil {
-		return s.HandleWorkspacePermissionCommand(msg, args, sessionKey)
-	}
-	return fmt.Errorf("workspace permission handler not configured")
+	return s.HandleWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
 // AppendBackendWorkspaceSummaryLines appends backend-specific workspace
@@ -305,9 +351,7 @@ func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[s
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	if s.FormatMenuBody != nil {
-		body = s.FormatMenuBody("menu.group.model", body)
-	}
+	body = s.FormatMenuBody("menu.group.model", body)
 	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
 }
 
@@ -332,9 +376,7 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	}
-	if s.FormatMenuBody != nil {
-		body = s.FormatMenuBody("menu.group.model", body)
-	}
+	body = s.FormatMenuBody("menu.group.model", body)
 	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
 }
 
@@ -343,7 +385,7 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	switch appcore.ConfiguredBackend(s.App) {
 	case appruntime.BackendClaude:
-		if s.CompleteClaudeModelSet != nil {
+		if s.deps.Claude.CompleteModelSet != nil {
 			return s.CompleteClaudeModelSet(action, modelID)
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Claude model set handler not configured"}}, nil
@@ -359,7 +401,7 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}
-	if s.FetchModelList == nil || s.UpdateGlobalModelConfig == nil || s.RenderModelConfigCard == nil {
+	if s.deps.Codex.FetchModelList == nil || s.deps.Codex.UpdateGlobalModelConfig == nil || s.deps.Codex.RenderModelConfigCard == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Codex model operations not configured"}}, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -384,7 +426,7 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
 	switch appcore.ConfiguredBackend(s.App) {
 	case appruntime.BackendClaude:
-		if s.CompleteClaudeEffortSet != nil {
+		if s.deps.Claude.CompleteEffortSet != nil {
 			return s.CompleteClaudeEffortSet(action, reasoningEffort)
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Claude effort set handler not configured"}}, nil
@@ -401,7 +443,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}
-	if s.FetchModelList == nil || s.UpdateGlobalModelConfig == nil || s.RenderModelConfigCard == nil {
+	if s.deps.Codex.FetchModelList == nil || s.deps.Codex.UpdateGlobalModelConfig == nil || s.deps.Codex.RenderModelConfigCard == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Codex model operations not configured"}}, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
