@@ -647,6 +647,302 @@ rg -n 'func (resumeClaudeSelectedThread|resumeCodexSelectedThread|interruptCodex
 
 ---
 
+## 阶段 9: 建立 `serverrequest` owner package，统一 pending request 流程
+
+### 目标
+
+把当前分散在 root `app` 包里的 pending request 相关业务流收敛成一个明确 owner。阶段结束后，root `app` 只保留:
+
+- action registry / routing 入口
+- 极薄的 `*_bindings.go`
+- 必须直接接触 `*App` 字段的 glue
+
+pending request 的创建、渲染、reply、cancel、resolved 后恢复，必须由单一 package 管理。
+
+### 本阶段范围
+
+本阶段只处理以下 4 类请求流:
+
+1. tool user input
+2. MCP elicitation form / URL
+3. approval（command / file / permissions）
+4. backend-specific pending request reply adapter
+
+本阶段不处理:
+
+- review 表单
+- workspace new / clone 表单
+- path picker 主流程
+- final card patch 或 turn stream
+
+### 推荐 owner 包
+
+新建:
+
+- `internal/app/serverrequest`
+
+该包的职责边界:
+
+- pending request payload 结构和解析
+- approval / user-input / elicitation card 构造
+- reply / cancel / quick answer / form answer / URL decision
+- backend-specific server-request reply adapter
+- resolved 之后是否恢复 submission 的纯决策或 service-level orchestration
+
+该包不负责:
+
+- Feishu 事件路由
+- root `App` 生命周期其它逻辑
+- review/workspace 特定表单
+- `turn/completed` 收口
+
+### 必做动作
+
+1. 把以下 root 文件的主要业务逻辑迁入 `serverrequest`:
+   - [internal/app/pending_forms.go](/home/yuhuan/feidex/internal/app/pending_forms.go)
+   - [internal/app/tool_user_input_forms.go](/home/yuhuan/feidex/internal/app/tool_user_input_forms.go)
+   - [internal/app/user_input_actions.go](/home/yuhuan/feidex/internal/app/user_input_actions.go)
+   - [internal/app/elicitation_forms.go](/home/yuhuan/feidex/internal/app/elicitation_forms.go)
+   - [internal/app/approval_actions.go](/home/yuhuan/feidex/internal/app/approval_actions.go)
+   - [internal/app/approval_cards.go](/home/yuhuan/feidex/internal/app/approval_cards.go)
+   - [internal/app/backend_server_request_adapter.go](/home/yuhuan/feidex/internal/app/backend_server_request_adapter.go)
+2. 在 `serverrequest` 包内明确分文件，不允许再形成一个新的 god file。最低建议拆成:
+   - `types.go`: kind / payload / typed DTO
+   - `adapter.go`: Codex / Claude reply adapter
+   - `approval.go`: approval action + resolved card
+   - `user_input.go`: quick answer / form answer / text answer
+   - `elicitation.go`: form / URL request and reply
+   - `cancel.go`: cancel flow
+   - `service.go` 或 `deps.go`: 注入边界
+3. `tool user input` 和 `elicitation` 的 payload 类型继续复用或下沉现有:
+   - [internal/app/pendingforms](/home/yuhuan/feidex/internal/app/pendingforms)
+4. `approval` 的展示和按钮构造继续复用现有:
+   - [internal/app/approval](/home/yuhuan/feidex/internal/app/approval)
+   - [internal/app/approvalview](/home/yuhuan/feidex/internal/app/approvalview)
+5. root `app` 允许保留的内容仅限:
+   - registry 把 action name 映射到 `serverrequest.Service`
+   - 少量 test-only compatibility shim
+6. 如果阶段过程中发现 review / workspace form 和 `serverrequest` 逻辑强耦合，不允许顺手一起并入；必须留到后续阶段单独处理。
+
+### 协议核对要求
+
+本阶段是高风险协议阶段，必须逐项核对:
+
+- `SM-09` `CommandApproval`
+- `SM-10` `FileApproval`
+- `SM-11` `ToolRequestUserInput`
+- `SM-22` `PermissionsApproval`
+- `SM-23` `McpElicitationRequest`
+
+必须保持不变的语义:
+
+1. pending request 创建后，只有 reply 成功才允许本地推进到 replied / resolved 后续状态。
+2. `serverRequest/resolved` 仍然是恢复 submission 的唯一 resolved 边界。
+3. user input / elicitation 的 cancel 路径不能跳过协议 reply。
+4. permissions approval 不能退回裸 map string switch 的实现方式。
+5. Claude / Codex 的 reply payload shape 不能被“统一抽象”错误抹平。
+
+### 必须清零的搜索项
+
+阶段结束时，以下 root 文件必须删除或降为纯 glue:
+
+```bash
+rg -n 'func (completeUserInputAnswer|completeUserInputQuickAnswer|completeUserInputFormSubmit|completeUserInputMultiToggle)\\(' internal/app
+rg -n 'func (sendUserInputFormCard|sendElicitationFormCard|sendElicitationURLCard|completeElicitationURLAction)\\(' internal/app
+rg -n 'func (completeApprovalAction|renderResolvedApprovalCard|resumeSubmissionAfterRequest)\\(' internal/app
+rg -n 'type serverRequestBackendAdapter|func serverRequestAdapterForPending\\(' internal/app
+```
+
+允许残留的 root 符号:
+
+- action registry 中的路由入口
+- test-only `_test.go` 兼容导出
+
+### 验收标准
+
+- pending request 主流程存在单一 owner package。
+- root `app` 不再同时持有 approval / user input / elicitation / adapter 四套业务实现。
+- 相关状态机测试仍然全部通过。
+- 不新增新的 root wrapper 文件族来“过桥”。
+
+### 建议验证命令
+
+```bash
+./scripts/with_tmp_go_cache.sh go test ./...
+./scripts/with_tmp_go_cache.sh go test ./internal/app -run 'Test(.*Approval.*|.*Pending.*|.*StateMachine.*|.*ItemStartedServerRequest.*|.*ServerRequestReplyError.*)'
+```
+
+---
+
+## 阶段 10: 收走 Claude submission 主流程，压缩 root `submission_*` orchestration
+
+### 目标
+
+把剩余的 submission 主流程进一步从 root `app` 收回到 owner package，尤其是 Claude-specific turn start / retry / rollback / bind turn。阶段结束后，root `app` 不应继续保留大块 submission 启动链路实现。
+
+### 本阶段范围
+
+重点处理以下文件:
+
+- [internal/app/submission_queue_claude.go](/home/yuhuan/feidex/internal/app/submission_queue_claude.go)
+- [internal/app/submission_queue.go](/home/yuhuan/feidex/internal/app/submission_queue.go)
+- [internal/app/submission_status.go](/home/yuhuan/feidex/internal/app/submission_status.go)
+- [internal/app/replycontinuation_bindings.go](/home/yuhuan/feidex/internal/app/replycontinuation_bindings.go)
+- [internal/app/convbackend_bindings.go](/home/yuhuan/feidex/internal/app/convbackend_bindings.go) 中与 `StartNextSubmission` 强绑定的薄 glue
+
+本阶段不处理:
+
+- turn lifecycle service 本体
+- turn stream service 本体
+- backend runtime recovery 本体
+
+### 推荐 owner 方向
+
+优先方案:
+
+- 扩展 [internal/app/submission](/home/yuhuan/feidex/internal/app/submission) 成为完整 submission orchestration owner
+
+允许的次优方案:
+
+- 如果 Claude-specific 启动逻辑确实太重，可在 `submission` 包内再拆 `claude_start.go`、`codex_start.go`、`failure.go`、`status.go`
+
+不允许的方案:
+
+- 把同一套逻辑一半留 root、一半复制到 `submission`
+- 新增 `submission_helpers_root.go` 这类过渡层
+
+### 必做动作
+
+1. 把 Claude-specific 启动逻辑下沉:
+   - fresh session start
+   - resumed session failure -> fresh retry
+   - steer submission start
+   - rollback stale start state
+   - bind submission start state
+2. 把 submission 状态辅助逻辑下沉:
+   - by turn 查 submission
+   - pending status refresh
+   - source message / root binding bookkeeping 中和 submission 本身强相关的部分
+3. 让 [internal/app/convbackend](/home/yuhuan/feidex/internal/app/convbackend) 不再直接依赖 root 里的大号 submission coordinator 逻辑。
+4. `replycontinuation` 对 Claude continuation submission 的启动，改为依赖 `submission` owner，而不是 root 私有实现。
+5. root `submission_queue.go` 只保留:
+   - compatibility wrapper
+   - 少量 protocol-sensitive bridge
+   - 不能再持有成片业务逻辑
+
+### 协议核对要求
+
+本阶段必须核对:
+
+- `SM-04` `TurnLifecycleCore`
+- `SM-05` `TurnSteerContinuation`
+- `SM-06` `TurnInterruptCompletion`
+- `SM-07` `TurnErrorFailureCompletion`
+
+必须保持不变的语义:
+
+1. `turn/start` 失败后的回滚逻辑不能提前 finalize submission。
+2. Claude steer submission 仍然共享当前会话 turn 语义，不能误开独立 CLI session。
+3. queued submission 的推进时机仍受 in-flight / live-thread / recovery 状态约束。
+4. missing queued submission、runtime unavailable、resume stale session 的恢复路径不能退化。
+
+### 必须清零的搜索项
+
+```bash
+rg -n 'type claudeSubmissionService|func newClaudeSubmissionService\\(' internal/app
+rg -n 'func \\(w \\*claudeSubmissionService\\) ' internal/app
+rg -n 'func \\(w \\*submissionCoordinator\\) (startNextSubmission|startNextSubmissionWithFailureNotice|startNextCodexSubmissionWithFailureNotice|startNextSubmissionAsync)\\(' internal/app
+```
+
+允许残留的 root 符号:
+
+- 纯兼容包装
+- 明确协议敏感桥接
+
+### 验收标准
+
+- Claude submission start/retry/bind/rollback 有明确子包 owner。
+- root `submission_queue*.go` 文件族不再是主要业务实现位置。
+- `replycontinuation`、`convbackend`、`turnlifecycle` 与 submission 的依赖边界更清晰。
+
+### 建议验证命令
+
+```bash
+./scripts/with_tmp_go_cache.sh go test ./...
+./scripts/with_tmp_go_cache.sh go test ./internal/app -run 'Test(.*SubmissionQueueClaude.*|.*CriticalPath.*|.*CodexTurnRecovery.*|.*SessionStatus.*|.*Reply.*)'
+```
+
+---
+
+## 阶段 11: 测试归位与 root `app` 最终审计
+
+### 目标
+
+完成最后一轮结构收口。重点不是再搬业务，而是让测试和代码边界一致，并对 root `package app` 做一次明确、可审计的最终分类。
+
+### 本阶段范围
+
+1. 把 feature-local 测试从 root `app` 迁到 owning package。
+2. 精简 root `app` 的测试职责，只保留跨边界集成路径和状态机 guard。
+3. 对 root `app` 生产文件做最终审计和留存说明。
+
+### 必做动作
+
+1. 以 feature 为单位，逐步把下列类型测试迁走:
+   - approval / pending request 相关测试 -> 对应 owner package
+   - submission / pending queue 相关测试 -> `submission`
+   - conversation resume / startup recovery 相关测试 -> `convbackend`
+   - local upgrade 相关测试 -> `upgradecmd`
+2. root `app` 允许保留的测试只限以下类别:
+   - Feishu event routing 整体入口
+   - command/menu/action registry 直达性
+   - 跨 package 的 critical path
+   - state-machine 契约 guard
+3. 在文档中为 root `app` 剩余生产文件建立最终分类表，至少按这 4 类:
+   - bootstrap / composition
+   - routing / registries
+   - protocol-sensitive orchestration
+   - minimal glue
+4. 对每个仍然较大的 root 文件写明保留原因；不允许“因为历史原因先放着”这种模糊结论。
+5. 如果阶段结束后 root `app` 仍有明显超大文件，必须在文档里列出下一轮单独计划，而不是默认回流到日常开发中继续膨胀。
+
+### 推荐测试迁移顺序
+
+1. `upgrade_*_test.go`
+2. `pending_*_test.go` / `approval_*_test.go`
+3. `submission_queue_claude_test.go` 与其同主题补充测试
+4. `conversation` / `reply continuation` 相关 feature-local 测试
+
+### 必须清零的搜索项
+
+以下搜索结果原则上应显著减少；如仍保留，必须在 PR 描述中逐项解释:
+
+```bash
+find internal/app -maxdepth 1 -name '*_test.go'
+find internal/app -maxdepth 1 -name '*.go' ! -name '*_test.go'
+```
+
+硬性要求不是“清零 root 测试文件”，而是:
+
+- feature-local 测试不应继续默认堆在 root `app`
+- root 生产文件必须都有明确 owner 理由
+
+### 验收标准
+
+- 测试布局与 package owner 基本一致。
+- root `app` 的测试重心回到集成和协议 guard。
+- root `app` 生产文件完成最终审计并写入文档。
+- 团队以后新增 feature 时，有明确规则判断测试应放在哪个 package。
+
+### 建议验证命令
+
+```bash
+./scripts/with_tmp_go_cache.sh go test ./...
+./scripts/with_tmp_go_cache.sh go test ./internal/app -run 'Test(.*CriticalPath.*|.*StateMachine.*|.*MenuCommandDirectAccess.*|.*BackendSelection.*)'
+```
+
+---
+
 ## 6. 推荐 PR 切分
 
 不要按“目录”切 PR，要按“可验证的结构增量”切。
@@ -664,6 +960,9 @@ rg -n 'func (resumeClaudeSelectedThread|resumeCodexSelectedThread|interruptCodex
 9. PR-9: 阶段 6
 10. PR-10: 阶段 7
 11. PR-11: 阶段 8
+12. PR-12: 阶段 9
+13. PR-13: 阶段 10
+14. PR-14: 阶段 11
 
 规则:
 
