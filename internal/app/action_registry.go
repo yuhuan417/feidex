@@ -17,7 +17,7 @@ type cardActionService struct {
 }
 
 func newCardActionService(app *App) cardActionService {
-	return cardActionService{app: app, handlers: cardActionHandlers}
+	return cardActionService{app: app, handlers: cardActionHandlers()}
 }
 
 func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -55,12 +55,14 @@ type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*ca
 // Do not put clone/download/fetch/review/upgrade or other blocking workflows
 // directly in these handlers.
 
-var cardActionHandlers = mergeCardActionHandlerSets(
-	menuCardActionHandlers,
-	workspaceCardActionHandlers,
-	maintenanceCardActionHandlers,
-	pendingCardActionHandlers,
-)
+func cardActionHandlers() map[string]cardActionHandler {
+	return mergeCardActionHandlerSets(
+		menuCardActionHandlers(),
+		workspaceCardActionHandlers,
+		maintenanceCardActionHandlers,
+		pendingCardActionHandlers,
+	)
+}
 
 func mergeCardActionHandlerSets(sets ...map[string]cardActionHandler) map[string]cardActionHandler {
 	merged := make(map[string]cardActionHandler)

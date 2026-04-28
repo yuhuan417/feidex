@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	appcommandmatch "feidex/internal/app/commandmatch"
+	appfeatures "feidex/internal/app/features"
 	"feidex/internal/app/menutypes"
 	"feidex/internal/feishu"
 )
@@ -55,38 +56,11 @@ var matchClaudeWorkspaceCommand = appcommandmatch.MatchClaudeWorkspaceCommand
 
 var normalizeUpgradeVersion = appcommandmatch.NormalizeUpgradeVersion
 
-func hiddenBackendCommand() localCommandBackendSpec {
-	return localCommandBackendSpec{HideInHelp: true}
-}
-
-func partialBackendCommand(match func([]string) bool, helpEntries []helpCommandSpec) localCommandBackendSpec {
-	return localCommandBackendSpec{
-		Match:       match,
-		HelpEntries: append([]helpCommandSpec(nil), helpEntries...),
-	}
-}
-
 func localCommandSpecList() []localCommandSpec {
-	specs := make([]localCommandSpec, 0, 25)
-	specs = append(specs, localCommandSystemIntroSpecs()...)
-	specs = append(specs, localCommandCommonToolSpecs()...)
-	specs = append(specs, localCommandModelSpecs()...)
-	specs = append(specs, localCommandSystemDebugSpecs()...)
-	specs = append(specs, localCommandFastSpecs()...)
-	specs = append(specs, localCommandWorkspaceToolSpecs()...)
-	specs = append(specs, localCommandConversationSpecs()...)
-	specs = append(specs, localCommandSystemRuntimeSpecs()...)
-	specs = append(specs, localCommandWorkspaceSpecs()...)
-	return specs
+	return localCommandSpecsRegistry()
 }
 
-var helpGroupOrder = []string{
-	"常用工具",
-	"model",
-	"thread",
-	"workspace",
-	"system",
-}
+var helpGroupOrder = appfeatures.HelpGroupOrder()
 
 func findLocalCommandSpec(name string) *localCommandSpec {
 	specs := localCommandSpecList()
