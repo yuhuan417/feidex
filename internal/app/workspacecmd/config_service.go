@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -64,42 +65,43 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
 		return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
-	if args[0] == "permissions" {
-		return s.BackendWorkspacePermissionCommand(msg, args, sessionKey)
-	}
-	if args[0] == "sandbox" {
-		if len(args) == 1 {
-			return s.ShowWorkspaceSandboxMenu(msg)
-		}
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /workspace sandbox [MODE]")
-		}
-		_, _, ws := s.CurrentWorkspaceForMessage(msg)
-		if ws == nil {
-			return fmt.Errorf("workspace not found")
-		}
-		resp, err := mgmt.CompleteWorkspaceSandboxSet(s.CommandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
-		if err != nil {
-			return err
-		}
-		return s.ReplyCommandActionResponse(msg, resp)
-	}
-	if args[0] == "policy" {
-		if len(args) == 1 {
-			return s.ShowWorkspacePolicyMenu(msg)
-		}
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /workspace policy [POLICY]")
-		}
-		_, _, ws := s.CurrentWorkspaceForMessage(msg)
-		if ws == nil {
-			return fmt.Errorf("workspace not found")
-		}
-		resp, err := mgmt.CompleteWorkspacePolicySet(s.CommandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
-		if err != nil {
-			return err
-		}
-		return s.ReplyCommandActionResponse(msg, resp)
+	if args[0] == "permissions" || args[0] == "sandbox" || args[0] == "policy" {
+		return appbackend.DriverForApp(s.App).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+			Message:    msg,
+			Args:       args,
+			SessionKey: sessionKey,
+			CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
+				return s.CurrentWorkspaceForMessage(msg)
+			},
+			ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
+				return s.ShowWorkspaceSandboxMenu(msg)
+			},
+			ShowWorkspacePolicyMenu: func(msg *feishu.InboundMessage) error {
+				return s.ShowWorkspacePolicyMenu(msg)
+			},
+			ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
+				card, err := appbackend.DriverForApp(s.App).Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+					App:            s.App,
+					FormatMenuBody: s.FormatMenuBody,
+				})
+				if err != nil {
+					return err
+				}
+				_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+				return err
+			},
+			CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+				return mgmt.CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
+			},
+			CompleteWorkspacePolicySet: func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+				return mgmt.CompleteWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
+			},
+			CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+				return mgmt.CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
+			},
+			ReplyCommandActionResponse: s.ReplyCommandActionResponse,
+			CommandActionFromMessage:   s.CommandActionFromMessage,
+		})
 	}
 	if args[0] == "choose" {
 		return s.ShowWorkspaceChooseMenu(msg)

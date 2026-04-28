@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
 	appcards "feidex/internal/app/cards"
 	"feidex/internal/config"
@@ -497,92 +498,18 @@ func sortWorkspacesByRecent(workspaces []config.Workspace, recentIDs []string, c
 
 // RenderWorkspaceSandboxMenuCard renders the sandbox configuration menu card.
 func (s *RenderService) RenderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("current workspace not found")
-	}
-	body := "配置当前工作区默认 sandbox。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.SandboxMode + "`"
-	buttons := make([]feishu.Button, 0, len(SandboxOptions())+1)
-	for _, opt := range SandboxOptions() {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == ws.SandboxMode {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":       "workspace.sandbox.set",
-				"session_key":  sessionKey,
-				"workspace_id": ws.ID,
-				"sandbox_mode": opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+	return appbackend.DriverForApp(s.App).Permission().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.App,
+		FormatMenuBody: s.FormatMenuBody,
 	})
-	bodyText := body
-	bodyText = s.FormatMenuBody("workspace.sandbox.menu", body)
-	return s.App.Feishu().SimpleStatusCard("配置 Sandbox", "blue", bodyText, buttons), nil
 }
 
 // RenderWorkspacePolicyMenuCard renders the policy configuration menu card.
 func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("current workspace not found")
-	}
-	body := "配置当前工作区默认 approval policy。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.ApprovalPolicy + "`"
-	buttons := make([]feishu.Button, 0, len(ApprovalPolicyOptions())+1)
-	for _, opt := range ApprovalPolicyOptions() {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == ws.ApprovalPolicy {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":          "workspace.policy.set",
-				"session_key":     sessionKey,
-				"workspace_id":    ws.ID,
-				"approval_policy": opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+	return appbackend.DriverForApp(s.App).Permission().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.App,
+		FormatMenuBody: s.FormatMenuBody,
 	})
-	bodyText := body
-	bodyText = s.FormatMenuBody("workspace.policy.menu", body)
-	return s.App.Feishu().SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
 }
 
 // RenderWorkspaceDeleteMenuCard renders the workspace delete menu card.

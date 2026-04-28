@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -385,59 +386,35 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 
 // CompleteWorkspaceSandboxSet handles sandbox mode setting.
 func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-	valid := false
-	for _, opt := range SandboxOptions() {
-		if opt.Value == sandboxMode {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 sandbox"}}, nil
-	}
-	_, err := s.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
-		w.SandboxMode = sandboxMode
+	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode, appbackend.WorkspacePermissionUpdateDeps{
+		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		RenderSandboxMenu:       s.renderSandboxMenuCard,
+		RenderPolicyMenu:        s.renderPolicyMenuCard,
 	})
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	// Re-render the sandbox menu card
-	card, renderErr := s.renderSandboxMenuCard(sessionKey)
-	if renderErr != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 sandbox"},
-		Card:  rawCard(card),
-	}, nil
 }
 
 // CompleteWorkspacePolicySet handles approval policy setting.
 func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-	valid := false
-	for _, opt := range ApprovalPolicyOptions() {
-		if opt.Value == approvalPolicy {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 policy"}}, nil
-	}
-	_, err := s.updateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
-		w.ApprovalPolicy = approvalPolicy
+	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy, appbackend.WorkspacePermissionUpdateDeps{
+		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		RenderSandboxMenu:       s.renderSandboxMenuCard,
+		RenderPolicyMenu:        s.renderPolicyMenuCard,
 	})
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	card, renderErr := s.renderPolicyMenuCard(sessionKey)
-	if renderErr != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 policy"},
-		Card:  rawCard(card),
-	}, nil
+}
+
+func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
+		App:                     s.App,
+		Session:                 s.GetSession,
+		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		ApplyRuntime:            func(sessionKey, mode string) error { return nil },
+		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
+			return appbackend.DriverForApp(s.App).Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+				App:            s.App,
+				FormatMenuBody: s.FormatMenuBody,
+			})
+		},
+	})
 }
 
 // CompleteWorkspaceUse handles workspace use action.
@@ -954,90 +931,16 @@ func (s *ManagementService) updateWorkspaceDefaults(workspaceID string, mutate f
 
 // renderSandboxMenuCard is a helper that re-renders the sandbox menu card.
 func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("current workspace not found")
-	}
-	body := "配置当前工作区默认 sandbox。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.SandboxMode + "`"
-	buttons := make([]feishu.Button, 0, len(SandboxOptions())+1)
-	for _, opt := range SandboxOptions() {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == ws.SandboxMode {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":       "workspace.sandbox.set",
-				"session_key":  sessionKey,
-				"workspace_id": ws.ID,
-				"sandbox_mode": opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+	return appbackend.DriverForApp(s.App).Permission().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.App,
+		FormatMenuBody: s.FormatMenuBody,
 	})
-	bodyText := body
-	bodyText = s.FormatMenuBody("workspace.sandbox.menu", body)
-	return s.App.Feishu().SimpleStatusCard("配置 Sandbox", "blue", bodyText, buttons), nil
 }
 
 // renderPolicyMenuCard is a helper that re-renders the policy menu card.
 func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]any, error) {
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("current workspace not found")
-	}
-	body := "配置当前工作区默认 approval policy。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.ApprovalPolicy + "`"
-	buttons := make([]feishu.Button, 0, len(ApprovalPolicyOptions())+1)
-	for _, opt := range ApprovalPolicyOptions() {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == ws.ApprovalPolicy {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":          "workspace.policy.set",
-				"session_key":     sessionKey,
-				"workspace_id":    ws.ID,
-				"approval_policy": opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
+	return appbackend.DriverForApp(s.App).Permission().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.App,
+		FormatMenuBody: s.FormatMenuBody,
 	})
-	bodyText := body
-	bodyText = s.FormatMenuBody("workspace.policy.menu", body)
-	return s.App.Feishu().SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
 }

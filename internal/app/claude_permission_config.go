@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -84,73 +84,12 @@ func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 }
 
 func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	sess := a.State().Session(sessionKey)
-	workspaceID := defaultWorkspaceID(a)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return nil, fmt.Errorf("当前没有活动会话")
-	}
-	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	effective := effectiveClaudePermissionMode(sess, ws, a.cfg.Claude)
-	override := strings.TrimSpace(sess.ActiveClaudePermissionMode)
-	bodyLines := []string{
-		"配置当前 Claude 会话权限模式。",
-		"",
-		"session: `" + threadID + "`",
-		"生效值: " + claudePermissionModeLabel(effective),
-	}
-	if override == "" {
-		bodyLines = append(bodyLines, "当前覆盖: 跟随工作区")
-	} else {
-		bodyLines = append(bodyLines, "当前覆盖: "+claudePermissionModeLabel(override))
-	}
-	buttons := make([]feishu.Button, 0, 6)
-	followType := "default"
-	followLabel := "跟随工作区"
-	if override == "" {
-		followType = "primary"
-		followLabel = "当前 · 跟随工作区"
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: followLabel,
-		Type: followType,
-		Value: map[string]any{
-			"action":      "thread.permission_mode.set",
-			"session_key": sessionKey,
-			"thread_id":   threadID,
-			"mode":        "",
-		},
+	return appbackend.DriverForApp(a).Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+		App:            a,
+		Session:        a.State().Session,
+		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
+		CommandLabel:   commandLabel,
 	})
-	for _, opt := range claudePermissionModeOptions(isClaudeBypassPermissionsEnabled(a.cfg)) {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == override {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":      "thread.permission_mode.set",
-				"session_key": sessionKey,
-				"thread_id":   threadID,
-				"mode":        opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回会话", "/session"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.thread",
-			"session_key": sessionKey,
-		},
-	})
-	return a.feishu.SimpleStatusCard("配置会话权限", "blue", menuCardBodyForBackend(configuredBackend(a), "thread.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
 func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
@@ -163,75 +102,10 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 }
 
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	var sess *state.Session
-	if a.store != nil {
-		sess = a.State().Session(sessionKey)
-	}
-	workspaceID := defaultWorkspaceID(a)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(a.cfg, workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("current workspace not found")
-	}
-	effective := effectiveClaudePermissionMode(nil, ws, a.cfg.Claude)
-	override := strings.TrimSpace(ws.ClaudePermissionMode)
-	bodyLines := []string{
-		"配置当前工作区默认 Claude 权限模式。",
-		"",
-		"当前工作区: `" + ws.ID + "`",
-		"生效值: " + claudePermissionModeLabel(effective),
-	}
-	if override == "" {
-		bodyLines = append(bodyLines, "当前覆盖: 跟随全局")
-	} else {
-		bodyLines = append(bodyLines, "当前覆盖: "+claudePermissionModeLabel(override))
-	}
-	buttons := make([]feishu.Button, 0, 6)
-	followType := "default"
-	followLabel := "跟随全局"
-	if override == "" {
-		followType = "primary"
-		followLabel = "当前 · 跟随全局"
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: followLabel,
-		Type: followType,
-		Value: map[string]any{
-			"action":       "workspace.permission_mode.set",
-			"session_key":  sessionKey,
-			"workspace_id": ws.ID,
-			"mode":         "",
-		},
+	return appbackend.DriverForApp(a).Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            a,
+		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
 	})
-	for _, opt := range claudePermissionModeOptions(isClaudeBypassPermissionsEnabled(a.cfg)) {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == override {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":       "workspace.permission_mode.set",
-				"session_key":  sessionKey,
-				"workspace_id": ws.ID,
-				"mode":         opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: commandLabel("返回工作区", "/workspace"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.workspace",
-			"session_key": sessionKey,
-		},
-	})
-	return a.feishu.SimpleStatusCard("配置默认权限", "blue", menuCardBodyForBackend(configuredBackend(a), "workspace.permission_mode.menu", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
 func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {
@@ -244,40 +118,13 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 }
 
 func (s workspaceService) completeClaudeWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	mode := ""
-	warning := ""
-	if override, ok := normalizeClaudePermissionOverrideValue(rawMode); ok {
-		mode = override
-	} else {
-		var err error
-		mode, warning, err = normalizeRequestedClaudePermissionMode(s.app, context.Background(), rawMode)
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
-	_, err := updateWorkspaceDefaults(s.app, workspaceID, func(w *config.Workspace) {
-		w.ClaudePermissionMode = mode
+	return appbackend.DriverForApp(s.app).Permission().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
+		App:                     s.app,
+		Session:                 s.app.State().Session,
+		UpdateWorkspaceDefaults: func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) { return updateWorkspaceDefaults(s.app, workspaceID, mutate) },
+		ApplyRuntime:            func(sessionKey, mode string) error { return applyClaudePermissionModeToRuntime(s.app, sessionKey, mode) },
+		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
+			return renderClaudeWorkspacePermissionMenuCard(s.app, sessionKey)
+		},
 	})
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	sess := s.app.State().Session(sessionKey)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) == strings.TrimSpace(workspaceID) && strings.TrimSpace(sess.ActiveClaudePermissionMode) == "" {
-		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.cfg, workspaceID), s.app.cfg.Claude)
-		if err := applyClaudePermissionModeToRuntime(s.app, sessionKey, effective); err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-		}
-	}
-	card, renderErr := renderClaudeWorkspacePermissionMenuCard(s.app, sessionKey)
-	if renderErr != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: renderErr.Error()}}, nil
-	}
-	content := "已更新 Claude 默认权限模式"
-	if warning != "" {
-		content = warning
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: content},
-		Card:  rawCard(card),
-	}, nil
 }

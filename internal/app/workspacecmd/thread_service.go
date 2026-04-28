@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
 	appclaudesession "feidex/internal/app/claudesession"
 	"feidex/internal/app/modelconfig"
@@ -19,22 +20,12 @@ import (
 // EnsureWorkspaceThreadBinding dispatches to the Claude or Codex
 // implementation based on the configured backend.
 func (s *ThreadService) EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
-	switch appcore.ConfiguredBackend(s.App) {
-	case "codex":
-		return s.EnsureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
-	default:
-		return s.EnsureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
-	}
+	return appbackend.DriverForApp(s.App).Conversation().EnsureWorkspaceThreadBinding(s, sessionKey, sess, ws)
 }
 
 // ListWorkspaceThreads dispatches to the Claude or Codex implementation.
 func (s *ThreadService) ListWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	switch appcore.ConfiguredBackend(s.App) {
-	case "codex":
-		return s.ListCodexWorkspaceThreads(sessionKey, ws, includeAll)
-	default:
-		return s.ListClaudeWorkspaceThreads(sessionKey, ws, includeAll)
-	}
+	return appbackend.DriverForApp(s.App).Conversation().ListWorkspaceThreads(s, sessionKey, ws, includeAll)
 }
 
 // ListClaudeWorkspaceThreads lists Claude sessions for a workspace.
@@ -230,12 +221,7 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 
 // StartWorkspaceThread dispatches to the Claude or Codex implementation.
 func (s *ThreadService) StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
-	switch appcore.ConfiguredBackend(s.App) {
-	case "codex":
-		return s.StartCodexWorkspaceThread(sessionKey, sess, ws)
-	default:
-		return s.StartClaudeWorkspaceThread(sessionKey, sess, ws)
-	}
+	return appbackend.DriverForApp(s.App).Conversation().StartWorkspaceThread(s, sessionKey, sess, ws)
 }
 
 // StartClaudeWorkspaceThread starts a new Claude session for a workspace.

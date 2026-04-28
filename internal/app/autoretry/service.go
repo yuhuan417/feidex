@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/app/backend"
 	appcore "feidex/internal/app/appcore"
 	apputil "feidex/internal/app/apputil"
 	appsubmission "feidex/internal/app/submission"
@@ -17,9 +18,6 @@ import (
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
-
-// backendClaude is the normalized backend name for Claude.
-const backendClaude = "claude"
 
 // ---------------------------------------------------------------------------
 // App interface — what the service needs from the host application
@@ -172,13 +170,7 @@ func (s Service) UpdateAutoRetryEnabled(enabled bool) error {
 // AutoRetryTitle returns the display title for auto-retry cards based on the
 // active backend.
 func (s Service) AutoRetryTitle() string {
-	backend := strings.TrimSpace(appcore.ConfiguredBackend(s.app))
-	switch appcore.NormalizeRuntimeBackend(backend) {
-	case backendClaude:
-		return "Claude 自动重试"
-	default:
-		return "Codex 自动重试"
-	}
+	return appbackend.DriverForApp(s.app).Runtime().AutoRetryTitle()
 }
 
 // ScheduleDelayedTask schedules a delayed function, using the tracker's After

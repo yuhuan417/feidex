@@ -11,7 +11,6 @@ import (
 	appmodelconfig "feidex/internal/app/modelconfig"
 	appquietmode "feidex/internal/app/quietmode"
 	appruntime "feidex/internal/app/runtime"
-	appsessionctx "feidex/internal/app/sessionctx"
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/buildinfo"
@@ -40,7 +39,8 @@ type ConfigurationFormattingDeps struct {
 }
 
 type ConfigurationCommandDeps struct {
-	HandleModelCommand               func(msg *feishu.InboundMessage, args []string) error
+	HandleCodexModelCommand          func(msg *feishu.InboundMessage, args []string) error
+	HandleClaudeModelCommand         func(msg *feishu.InboundMessage, args []string) error
 	HandleWorkspacePermissionCommand func(msg *feishu.InboundMessage, args []string, sessionKey string) error
 }
 
@@ -76,10 +76,18 @@ func (s ConfigurationService) FormatMenuBody(action, body string) string {
 }
 
 func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, args []string) error {
-	if s.deps.Commands.HandleModelCommand == nil {
-		return fmt.Errorf("model command handler not configured")
+	switch DriverForApp(s.App).Kind() {
+	case appruntime.BackendClaude:
+		if s.deps.Commands.HandleClaudeModelCommand == nil {
+			return fmt.Errorf("Claude model command handler not configured")
+		}
+		return s.deps.Commands.HandleClaudeModelCommand(msg, args)
+	default:
+		if s.deps.Commands.HandleCodexModelCommand == nil {
+			return fmt.Errorf("Codex model command handler not configured")
+		}
+		return s.deps.Commands.HandleCodexModelCommand(msg, args)
 	}
-	return s.deps.Commands.HandleModelCommand(msg, args)
 }
 
 func (s ConfigurationService) HandleWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
@@ -206,12 +214,7 @@ func autoRetryEnabled(app App) bool {
 // BackendWorkspaceCommandUsage returns the /workspace usage string for the
 // active backend.
 func (s ConfigurationService) BackendWorkspaceCommandUsage() string {
-	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
-		return ClaudeWorkspaceCommandUsage
-	default:
-		return appworkspace.CommandUsage
-	}
+	return DriverForApp(s.App).Permission().WorkspaceCommandUsage()
 }
 
 // HandleBackendModelCommand dispatches model commands for the active backend.
@@ -228,102 +231,31 @@ func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feish
 // AppendBackendWorkspaceSummaryLines appends backend-specific workspace
 // summary lines to the given slice.
 func (s ConfigurationService) AppendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	if currentWS == nil {
-		return lines
-	}
-	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
-		effectiveMode := effectiveClaudePermissionMode(nil, currentWS, s.App.Config().Claude)
-		override := strings.TrimSpace(currentWS.ClaudePermissionMode)
-		overrideLabel := "跟随全局"
-		if override != "" {
-			overrideLabel = claudePermissionModeLabel(override)
-		}
-		return append(lines,
-			"默认 Claude 权限: "+claudePermissionModeLabel(effectiveMode),
-			"工作区覆盖: "+overrideLabel,
-		)
-	default:
-		return append(lines,
-			"默认 sandbox: `"+currentWS.SandboxMode+"`",
-			"默认 policy: `"+currentWS.ApprovalPolicy+"`",
-		)
-	}
+	return DriverForApp(s.App).Permission().AppendWorkspaceSummaryLines(s.App, lines, currentWS)
 }
 
 // BackendWorkspaceConfigButtons returns the workspace configuration buttons
 // for the active backend.
 func (s ConfigurationService) BackendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
-		return []feishu.Button{{
-			Text: submenuCommandLabel("默认权限", "/workspace permissions"),
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.permission_mode.menu",
-				"session_key": sessionKey,
-			},
-		}}
-	default:
-		return []feishu.Button{
-			{
-				Text: submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
-				Type: "default",
-				Value: map[string]any{
-					"action":      "workspace.sandbox.menu",
-					"session_key": sessionKey,
-				},
-			},
-			{
-				Text: submenuCommandLabel("配置默认策略", "/workspace policy"),
-				Type: "default",
-				Value: map[string]any{
-					"action":      "workspace.policy.menu",
-					"session_key": sessionKey,
-				},
-			},
-		}
-	}
+	return DriverForApp(s.App).Permission().WorkspaceConfigButtons(sessionKey)
 }
 
 // BackendWorkspaceSwitchInFlightNotice returns the notice text for a
 // workspace switch that is in flight.
 func (s ConfigurationService) BackendWorkspaceSwitchInFlightNotice() string {
-	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
-		return "。当前运行中的任务仍归属原会话；后续新任务会使用新工作区。"
-	default:
-		return "。当前运行中的任务仍归属原线程；后续新任务会使用新工作区。"
-	}
+	return DriverForApp(s.App).Conversation().WorkspaceSwitchInFlightNotice()
 }
 
 // BackendWorkspaceSwitchBindingFailureNotice returns the notice text for a
 // workspace switch binding failure.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingFailureNotice() string {
-	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
-		return "。自动绑定会话失败，可稍后重试。"
-	default:
-		return "。自动绑定 thread 失败，可稍后重试。"
-	}
+	return DriverForApp(s.App).Conversation().WorkspaceSwitchBindingFailureNotice()
 }
 
 // BackendWorkspaceSwitchBindingNotice returns the notice text for a
 // workspace switch binding result.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string {
-	resumed := binding != nil && binding.Resumed
-	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
-		if resumed {
-			return "。已自动恢复该工作区最近使用的会话。"
-		}
-		return "。已自动创建新会话。"
-	default:
-		if resumed {
-			return "。已自动恢复该工作区最近使用的线程。"
-		}
-		return "。已自动创建新线程。"
-	}
+	return DriverForApp(s.App).Conversation().WorkspaceSwitchBindingNotice(binding)
 }
 
 // RenderModelMenuCard renders the model menu card for the active backend.
@@ -470,7 +402,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 // StatusCardBody returns the status card body text for the given session,
 // dispatching by backend.
 func (s ConfigurationService) StatusCardBody(sess *state.Session) string {
-	switch appcore.ConfiguredBackend(s.App) {
+	switch DriverForApp(s.App).Kind() {
 	case appruntime.BackendClaude:
 		return s.RenderClaudeStatusBody(sess)
 	default:
@@ -499,18 +431,8 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *state.Session) string
 	ws = config.FindWorkspace(cfg, workspaceID)
 	model := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	effort := firstNonEmpty(appmodelconfig.ConfiguredClaudeEffort(cfg), "(follow Claude default)")
-	workspacePermission := "-"
-	sessionPermission := "跟随工作区"
-	effectivePermission := "-"
-	if ws != nil {
-		workspacePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(nil, ws, cfg.Claude))
-		effectivePermission = claudePermissionModeLabel(effectiveClaudePermissionMode(sess, ws, cfg.Claude))
-	}
-	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
-		sessionPermission = claudePermissionModeLabel(sess.ActiveClaudePermissionMode)
-	}
 	feishuCfg := appcore.FeishuConfig(s.App)
-	return strings.Join([]string{
+	lines := []string{
 		"状态: `" + status + "`",
 		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.App), "unset") + "`",
 		"版本: `" + buildinfo.CurrentVersion() + "`",
@@ -522,11 +444,11 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *state.Session) string
 		"Claude effort: `" + effort + "`",
 		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.App)] + "`",
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
-		"workspace permission mode: " + workspacePermission,
-		"session permission mode: " + sessionPermission,
-		"effective permission mode: " + effectivePermission,
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
-	}, "\n")
+	}
+	lines = DriverForApp(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
+	return strings.Join(lines, "\n")
 }
 
 // RenderCodexStatusBody renders the Codex status card body.
@@ -556,26 +478,8 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *state.Session) string 
 	if effort == "" {
 		effort = "(follow model default)"
 	}
-	workspaceSandbox := "-"
-	workspacePolicy := "-"
-	effectiveSandbox := "-"
-	effectivePolicy := "-"
-	if ws != nil {
-		workspaceSandbox = firstNonEmpty(ws.SandboxMode, "-")
-		workspacePolicy = firstNonEmpty(ws.ApprovalPolicy, "-")
-		effectiveSandbox = appsessionctx.EffectiveSandboxMode(sess, ws)
-		effectivePolicy = appsessionctx.EffectiveApprovalPolicy(sess, ws)
-	}
-	threadSandbox := appthreadview.RenderThreadSettingValue("", "")
-	threadPolicy := appthreadview.RenderThreadSettingValue("", "")
-	threadServiceTier := "-"
-	if sess != nil {
-		threadSandbox = appthreadview.RenderThreadSettingValue(sess.ActiveThreadSandboxMode, "")
-		threadPolicy = appthreadview.RenderThreadSettingValue(sess.ActiveThreadApprovalPolicy, "")
-		threadServiceTier = appruntime.RenderServiceTierValue(sess.ActiveThreadServiceTier)
-	}
 	feishuCfg := appcore.FeishuConfig(s.App)
-	return strings.Join([]string{
+	lines := []string{
 		"状态: `" + status + "`",
 		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.App), "unset") + "`",
 		"版本: `" + buildinfo.CurrentVersion() + "`",
@@ -587,13 +491,9 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *state.Session) string 
 		"全局推理强度: `" + effort + "`",
 		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.App)] + "`",
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
-		"workspace sandbox: `" + workspaceSandbox + "`",
-		"workspace policy: `" + workspacePolicy + "`",
-		"thread sandbox: " + threadSandbox,
-		"thread policy: " + threadPolicy,
-		"thread service tier: " + threadServiceTier,
-		"生效 sandbox: `" + effectiveSandbox + "`",
-		"生效 policy: `" + effectivePolicy + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
-	}, "\n")
+	}
+	lines = DriverForApp(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
+	return strings.Join(lines, "\n")
 }

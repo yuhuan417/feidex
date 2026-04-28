@@ -1,9 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"strings"
-
 	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -26,35 +23,45 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 			FormatMenuBody: menuCardBody,
 		},
 		Commands: appbackend.ConfigurationCommandDeps{
-			HandleModelCommand: func(msg *feishu.InboundMessage, args []string) error {
-				switch configuredBackend(app) {
-				case backendClaude:
-					return newModelConfigService(app).commandClaudeModel(msg, args)
-				default:
-					return newModelConfigService(app).commandCodexModel(msg, args)
-				}
+			HandleCodexModelCommand: func(msg *feishu.InboundMessage, args []string) error {
+				return newModelConfigService(app).commandCodexModel(msg, args)
+			},
+			HandleClaudeModelCommand: func(msg *feishu.InboundMessage, args []string) error {
+				return newModelConfigService(app).commandClaudeModel(msg, args)
 			},
 			HandleWorkspacePermissionCommand: func(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-				switch configuredBackend(app) {
-				case backendClaude:
-					if len(args) == 1 {
+				return appbackend.DriverForApp(app).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+					Message:    msg,
+					Args:       args[1:],
+					SessionKey: sessionKey,
+					CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
+						return newWorkspaceConfigService(app).currentWorkspaceForMessage(msg)
+					},
+					ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
+						return newWorkspaceConfigService(app).showWorkspaceSandboxMenu(msg)
+					},
+					ShowWorkspacePolicyMenu: func(msg *feishu.InboundMessage) error {
+						return newWorkspaceConfigService(app).showWorkspacePolicyMenu(msg)
+					},
+					ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
 						return showClaudeWorkspacePermissionMenu(app, msg)
-					}
-					if len(args) != 2 {
-						return fmt.Errorf("usage: /workspace permissions [MODE|inherit]")
-					}
-					_, _, ws := newWorkspaceConfigService(app).currentWorkspaceForMessage(msg)
-					if ws == nil {
-						return fmt.Errorf("workspace not found")
-					}
-					resp, err := newWorkspaceService(app).completeClaudeWorkspacePermissionModeSet(commandActionFromMessage(msg, nil), sessionKey, ws.ID, strings.TrimSpace(args[1]))
-					if err != nil {
-						return err
-					}
-					return replyCommandActionResponse(app, msg, resp)
-				default:
-					return fmt.Errorf("usage: %s", workspaceCommandUsage)
-				}
+					},
+					CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+						return newWorkspaceService(app).completeWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
+					},
+					CompleteWorkspacePolicySet: func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+						return newWorkspaceService(app).completeWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
+					},
+					CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+						return newWorkspaceService(app).completeClaudeWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
+					},
+					ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+						return replyCommandActionResponse(app, msg, resp)
+					},
+					CommandActionFromMessage: func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
+						return commandActionFromMessage(msg, actionValue)
+					},
+				})
 			},
 		},
 		Claude: appbackend.ConfigurationClaudeDeps{

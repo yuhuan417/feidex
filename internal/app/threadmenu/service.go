@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/app/backend"
 	appcore "feidex/internal/app/appcore"
 	appconvbackend "feidex/internal/app/convbackend"
 	appworkspace "feidex/internal/app/workspace"
 	appthreadview "feidex/internal/app/threadview"
 	appsessionctx "feidex/internal/app/sessionctx"
-	backendcaps "feidex/internal/app/backendcaps"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -235,15 +235,15 @@ var (
 // Pure helpers copied from the app package.
 
 func primaryConversationSlash(backend string) string {
-	return backendcaps.ForKind(backend).Conversation.Slash
+	return appbackend.DriverForKind(backend).Conversation().PrimarySlash()
 }
 
 func primaryConversationNoun(backend string) string {
-	return backendcaps.ForKind(backend).Conversation.Noun
+	return appbackend.DriverForKind(backend).Conversation().Noun()
 }
 
 func primaryConversationSummaryLabel(backend string) string {
-	return backendcaps.ForKind(backend).Conversation.SummaryLabel
+	return appbackend.DriverForKind(backend).Conversation().SummaryLabel()
 }
 
 func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) string {
@@ -440,38 +440,29 @@ func (s *Service) CommandThread(msg *feishu.InboundMessage, args []string) error
 			return err
 		}
 		return s.app.ReplyCommandActionResponse(msg, resp)
-	case "sandbox":
-		if len(args) == 1 {
-			return s.ShowThreadSandboxMenu(msg)
-		}
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /thread sandbox [MODE]")
-		}
-		_, _, _, threadID, err := s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
-		if err != nil {
-			return err
-		}
-		resp, err := s.CompleteThreadSandboxSet(CommandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
-		if err != nil {
-			return err
-		}
-		return s.app.ReplyCommandActionResponse(msg, resp)
-	case "policy":
-		if len(args) == 1 {
-			return s.ShowThreadPolicyMenu(msg)
-		}
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /thread policy [POLICY]")
-		}
-		_, _, _, threadID, err := s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
-		if err != nil {
-			return err
-		}
-		resp, err := s.CompleteThreadPolicySet(CommandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
-		if err != nil {
-			return err
-		}
-		return s.app.ReplyCommandActionResponse(msg, resp)
+	case "sandbox", "policy":
+		return appbackend.DriverForApp(s.app).Permission().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
+			Message:    msg,
+			Args:       args,
+			SessionKey: sessionKey,
+			CurrentThread: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace, string, error) {
+				return s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
+			},
+			ShowConversationSandboxMenu: func(msg *feishu.InboundMessage) error {
+				return s.ShowThreadSandboxMenu(msg)
+			},
+			ShowConversationPolicyMenu: func(msg *feishu.InboundMessage) error {
+				return s.ShowThreadPolicyMenu(msg)
+			},
+			CompleteConversationSandboxSet: func(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+				return s.CompleteThreadSandboxSet(action, sessionKey, threadID, sandboxMode)
+			},
+			CompleteConversationPolicySet: func(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+				return s.CompleteThreadPolicySet(action, sessionKey, threadID, approvalPolicy)
+			},
+			ReplyCommandActionResponse: s.app.ReplyCommandActionResponse,
+			CommandActionFromMessage:   CommandActionFromMessage,
+		})
 	default:
 		return fmt.Errorf("usage: %s", ThreadCommandUsage)
 	}
@@ -516,21 +507,32 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 		}
 		return s.app.ReplyCommandActionResponse(msg, resp)
 	case "permissions":
-		if len(args) == 1 {
-			return s.app.ShowClaudeSessionPermissionMenuFromApp(msg)
-		}
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /session permissions [MODE|inherit]")
-		}
-		_, _, _, threadID, err := s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
-		if err != nil {
-			return err
-		}
-		resp, err := s.CompleteClaudeSessionPermissionModeSet(CommandActionFromMessage(msg, nil), sessionKey, threadID, strings.TrimSpace(args[1]))
-		if err != nil {
-			return err
-		}
-		return s.app.ReplyCommandActionResponse(msg, resp)
+		return appbackend.DriverForApp(s.app).Permission().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
+			Message:    msg,
+			Args:       args,
+			SessionKey: sessionKey,
+			CurrentThread: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace, string, error) {
+				return s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
+			},
+			ShowConversationPermissionModeMenu: func(msg *feishu.InboundMessage) error {
+				card, err := appbackend.DriverForApp(s.app).Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+					App:            s.app,
+					Session:        s.app.ThreadMenuAppState().Session,
+					FormatMenuBody: s.app.MenuCardBody,
+					CommandLabel:   s.app.CommandLabel,
+				})
+				if err != nil {
+					return err
+				}
+				_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+				return err
+			},
+			CompleteConversationPermissionModeSet: func(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+				return s.CompleteClaudeSessionPermissionModeSet(action, sessionKey, threadID, rawMode)
+			},
+			ReplyCommandActionResponse: s.app.ReplyCommandActionResponse,
+			CommandActionFromMessage:   CommandActionFromMessage,
+		})
 	default:
 		return fmt.Errorf("usage: %s", ClaudeSessionCommandUsage)
 	}
@@ -611,46 +613,12 @@ func (s *Service) ShowThreadSandboxMenu(msg *feishu.InboundMessage) error {
 
 // RenderThreadSandboxMenuCard renders the sandbox configuration menu card.
 func (s *Service) RenderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	sess := s.app.ThreadMenuAppState().Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.app)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(s.app.Config(), workspaceID)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return nil, fmt.Errorf("当前没有活动线程")
-	}
-	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	current := effectiveThreadSandboxMode(sess, ws)
-	body := "配置当前 thread 默认 sandbox。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(workspaceSandboxOptions())+1)
-	for _, opt := range workspaceSandboxOptions() {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == current {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":       "thread.sandbox.set",
-				"session_key":  sessionKey,
-				"thread_id":    threadID,
-				"sandbox_mode": opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: s.app.CommandLabel("返回 thread", "/thread"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.thread",
-			"session_key": sessionKey,
-		},
+	return appbackend.DriverForApp(s.app).Permission().RenderConversationSandboxMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+		App:            s.app,
+		Session:        s.app.ThreadMenuAppState().Session,
+		FormatMenuBody: s.app.MenuCardBody,
+		CommandLabel:   s.app.CommandLabel,
 	})
-	return s.app.Feishu().SimpleStatusCard("配置 Thread Sandbox", "blue", s.app.MenuCardBody("thread.sandbox.menu", body), buttons), nil
 }
 
 // ShowThreadPolicyMenu shows the policy configuration menu.
@@ -665,46 +633,12 @@ func (s *Service) ShowThreadPolicyMenu(msg *feishu.InboundMessage) error {
 
 // RenderThreadPolicyMenuCard renders the policy configuration menu card.
 func (s *Service) RenderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
-	sess := s.app.ThreadMenuAppState().Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.app)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
-	ws := config.FindWorkspace(s.app.Config(), workspaceID)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return nil, fmt.Errorf("当前没有活动线程")
-	}
-	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	current := effectiveThreadApprovalPolicy(sess, ws)
-	body := "配置当前 thread 默认 approval policy。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(workspaceApprovalPolicyOptions())+1)
-	for _, opt := range workspaceApprovalPolicyOptions() {
-		btnType := "default"
-		label := opt.Label
-		if opt.Value == current {
-			btnType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{
-			Text: label,
-			Type: btnType,
-			Value: map[string]any{
-				"action":          "thread.policy.set",
-				"session_key":     sessionKey,
-				"thread_id":       threadID,
-				"approval_policy": opt.Value,
-			},
-		})
-	}
-	buttons = append(buttons, feishu.Button{
-		Text: s.app.CommandLabel("返回 thread", "/thread"),
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.thread",
-			"session_key": sessionKey,
-		},
+	return appbackend.DriverForApp(s.app).Permission().RenderConversationPolicyMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+		App:            s.app,
+		Session:        s.app.ThreadMenuAppState().Session,
+		FormatMenuBody: s.app.MenuCardBody,
+		CommandLabel:   s.app.CommandLabel,
 	})
-	return s.app.Feishu().SimpleStatusCard("配置 Thread Policy", "blue", s.app.MenuCardBody("thread.policy.menu", body), buttons), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -753,64 +687,30 @@ func (s *Service) CompleteClaudeSessionPermissionMenu(action *feishu.CardAction,
 
 // CompleteThreadSandboxSet handles the "thread.sandbox.set" card action.
 func (s *Service) CompleteThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.ThreadMenuAppState()
-	valid := false
-	for _, opt := range workspaceSandboxOptions() {
-		if opt.Value == sandboxMode {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 sandbox"}}, nil
-	}
-	sess := appState.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
-	}
-	sess.ActiveThreadSandboxMode = sandboxMode
-	if err := appState.SaveSession(sess); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	card, err := s.RenderThreadSandboxMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 thread sandbox"},
-		Card:  RawCard(card),
-	}, nil
+	return appbackend.DriverForApp(s.app).Permission().CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode, appbackend.ConversationPermissionUpdateDeps{
+		Session:     s.app.ThreadMenuAppState().Session,
+		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadSandboxMenuCard(sessionKey)
+		},
+		RenderPolicyMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadPolicyMenuCard(sessionKey)
+		},
+	})
 }
 
 // CompleteThreadPolicySet handles the "thread.policy.set" card action.
 func (s *Service) CompleteThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.ThreadMenuAppState()
-	valid := false
-	for _, opt := range workspaceApprovalPolicyOptions() {
-		if opt.Value == approvalPolicy {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 policy"}}, nil
-	}
-	sess := appState.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
-	}
-	sess.ActiveThreadApprovalPolicy = approvalPolicy
-	if err := appState.SaveSession(sess); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	card, err := s.RenderThreadPolicyMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 thread policy"},
-		Card:  RawCard(card),
-	}, nil
+	return appbackend.DriverForApp(s.app).Permission().CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy, appbackend.ConversationPermissionUpdateDeps{
+		Session:     s.app.ThreadMenuAppState().Session,
+		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadSandboxMenuCard(sessionKey)
+		},
+		RenderPolicyMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadPolicyMenuCard(sessionKey)
+		},
+	})
 }
 
 // CompleteThreadResume handles resuming a previously created thread.
@@ -872,42 +772,23 @@ func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, th
 
 // CompleteClaudeSessionPermissionModeSet handles setting the Claude session permission mode.
 func (s *Service) CompleteClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	appState := s.app.ThreadMenuAppState()
-	sess := appState.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前会话已失效"}}, nil
-	}
-	mode := ""
-	warning := ""
-	if override, ok := normalizeClaudePermissionOverrideValue(rawMode); ok {
-		mode = override
-	} else {
-		var err error
-		mode, warning, err = s.app.NormalizeRequestedClaudePermissionMode(context.Background(), rawMode)
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
-	sess.ActiveClaudePermissionMode = mode
-	if err := appState.SaveSession(sess); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(s.app.Config(), sess.WorkspaceID), s.app.Config().Claude)
-	if err := s.app.ApplyClaudePermissionModeToRuntime(sessionKey, effective); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	card, err := s.app.RenderClaudeSessionPermissionMenuCard(sessionKey)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	content := "已更新 Claude 会话权限模式"
-	if warning != "" {
-		content = warning
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: content},
-		Card:  RawCard(card),
-	}, nil
+	return appbackend.DriverForApp(s.app).Permission().CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode, appbackend.ConversationPermissionModeUpdateDeps{
+		App:         s.app,
+		Session:     s.app.ThreadMenuAppState().Session,
+		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		NormalizeRequested: func(raw string) (string, string, error) {
+			return s.app.NormalizeRequestedClaudePermissionMode(context.Background(), raw)
+		},
+		ApplyRuntime: s.app.ApplyClaudePermissionModeToRuntime,
+		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
+			return appbackend.DriverForApp(s.app).Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+				App:            s.app,
+				Session:        s.app.ThreadMenuAppState().Session,
+				FormatMenuBody: s.app.MenuCardBody,
+				CommandLabel:   s.app.CommandLabel,
+			})
+		},
+	})
 }
 
 // ---------------------------------------------------------------------------
