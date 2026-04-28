@@ -3,8 +3,8 @@ package app
 import (
 	"strings"
 
-	appmenuutil "feidex/internal/app/menuutil"
 	"feidex/internal/app/menutypes"
+	appmenuutil "feidex/internal/app/menuutil"
 	"feidex/internal/feishu"
 )
 
@@ -17,7 +17,10 @@ func menuGroupSpecForBackend(action, backend string) (commandMenuGroupSpec, bool
 }
 
 func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
-	backend = firstNonEmpty(normalizeRuntimeBackend(backend), backendCodex)
+	backend = normalizeRuntimeBackend(backend)
+	if backend == "" {
+		return menuItemVisibleWithoutBackend(spec)
+	}
 	if spec.Kind == menuItemBack {
 		return true
 	}
@@ -27,13 +30,34 @@ func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
 	return isLocalCommandForBackend(backend, spec.Slash)
 }
 
+func menuItemVisibleWithoutBackend(spec commandMenuItemSpec) bool {
+	if spec.Kind == menuItemBack {
+		return true
+	}
+	switch strings.TrimSpace(spec.Action) {
+	case "menu.group.backend", "menu.backend.switch", "menu.help":
+		return true
+	default:
+		return false
+	}
+}
+
+func menuActionVisibleWithoutBackend(action string) bool {
+	switch strings.TrimSpace(action) {
+	case "", "menu.root", "menu.group.system", "menu.group.backend", "menu.backend.switch", "menu.help":
+		return true
+	default:
+		return false
+	}
+}
+
 func menuItemSpecForAction(action string) (commandMenuItemSpec, bool) {
 	return appmenuutil.MenuItemSpecForAction(action)
 }
 
 func menuActionVisibleForBackend(action, backend string) bool {
 	action = strings.TrimSpace(action)
-	backend = firstNonEmpty(normalizeRuntimeBackend(backend), backendCodex)
+	backend = normalizeRuntimeBackend(backend)
 	if action == "" || action == "menu.root" {
 		return true
 	}
@@ -48,7 +72,7 @@ func menuActionVisibleForBackend(action, backend string) bool {
 
 func nearestVisibleMenuAction(action, backend string) string {
 	action = strings.TrimSpace(action)
-	backend = firstNonEmpty(normalizeRuntimeBackend(backend), backendCodex)
+	backend = normalizeRuntimeBackend(backend)
 	if action == "" {
 		action = "menu.root"
 	}
@@ -80,6 +104,9 @@ func menuItemsForGroup(action, backend string) []commandMenuItemSpec {
 }
 
 func groupHasVisibleMenuItems(action, backend string) bool {
+	if normalizeRuntimeBackend(backend) == "" {
+		return menuActionVisibleWithoutBackend(action)
+	}
 	hasDeclaredItems := false
 	for _, spec := range commandMenuItemSpecs {
 		if spec.GroupAction != strings.TrimSpace(action) {

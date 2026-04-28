@@ -108,7 +108,7 @@ func TestNormalizeRejectsClaudeAutoPermissionMode(t *testing.T) {
 		{
 			name: "global auto",
 			cfg: &Config{
-				Claude: ClaudeConfig{PermissionMode: "auto"},
+				Claude:     ClaudeConfig{PermissionMode: "auto"},
 				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
 			},
 		},
@@ -428,6 +428,31 @@ func TestResolvedFrontendsPreservesUnsetBackend(t *testing.T) {
 	if frontends[0].Backend != "" {
 		t.Fatalf("ResolvedFrontends()[0].Backend = %q, want empty", frontends[0].Backend)
 	}
+}
+
+func TestNormalizeRejectsUnsupportedFrontendBackend(t *testing.T) {
+	t.Run("legacy feishu backend", func(t *testing.T) {
+		cfg := Default()
+		cfg.Workspaces[0].Cwd = t.TempDir()
+		cfg.Feishu.Backend = "gemini"
+		if err := cfg.Normalize(t.TempDir()); err == nil {
+			t.Fatal("Normalize() error = nil, want unsupported backend error")
+		}
+	})
+
+	t.Run("frontend backend", func(t *testing.T) {
+		cfg := Default()
+		cfg.Workspaces[0].Cwd = t.TempDir()
+		cfg.Frontends = []FrontendConfig{{
+			ID: "bad-main",
+			FeishuConfig: FeishuConfig{
+				Backend: "gemini",
+			},
+		}}
+		if err := cfg.Normalize(t.TempDir()); err == nil {
+			t.Fatal("Normalize() error = nil, want unsupported backend error")
+		}
+	})
 }
 
 func TestLoadIgnoresLegacyWorkspaceBackendField(t *testing.T) {

@@ -290,6 +290,11 @@ func normalizeFeishuConfig(cfg *FeishuConfig) error {
 		return nil
 	}
 	cfg.Backend = normalizeBackendName(cfg.Backend)
+	switch cfg.Backend {
+	case "", RuntimeBackendCodex, RuntimeBackendClaude:
+	default:
+		return fmt.Errorf("unsupported feishu.backend %q; must be unset, %q, or %q", cfg.Backend, RuntimeBackendCodex, RuntimeBackendClaude)
+	}
 	quietMode, err := ParseQuietMode(cfg.Quiet)
 	if err != nil {
 		quietMode = QuietModeNormal

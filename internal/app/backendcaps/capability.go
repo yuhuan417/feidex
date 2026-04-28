@@ -46,6 +46,25 @@ func Kinds() []string {
 // ForKind returns the capability spec for the given backend kind.
 func ForKind(kind string) CapabilitySpec {
 	switch runtime.NormalizeBackend(kind) {
+	case runtime.BackendCodex:
+		return CapabilitySpec{
+			Kind: runtime.BackendCodex,
+			Conversation: ConversationPresentation{
+				Slash:          "/thread",
+				Noun:           "线程",
+				MenuLabel:      "线程管理",
+				IDLabel:        "thread id",
+				IDPlaceholder:  "THREAD_ID",
+				SummaryLabel:   "thread",
+				HelpGroupLabel: "thread",
+			},
+			Features: map[Feature]bool{
+				FeatureReview:                     true,
+				FeatureSkills:                     true,
+				FeatureFastMode:                   true,
+				FeatureConversationThreadCommands: true,
+			},
+		}
 	case runtime.BackendClaude:
 		return CapabilitySpec{
 			Kind: runtime.BackendClaude,
@@ -66,22 +85,17 @@ func ForKind(kind string) CapabilitySpec {
 		}
 	default:
 		return CapabilitySpec{
-			Kind: runtime.BackendCodex,
+			Kind: "",
 			Conversation: ConversationPresentation{
-				Slash:          "/thread",
-				Noun:           "线程",
-				MenuLabel:      "线程管理",
-				IDLabel:        "thread id",
-				IDPlaceholder:  "THREAD_ID",
-				SummaryLabel:   "thread",
-				HelpGroupLabel: "thread",
+				Slash:          "",
+				Noun:           "会话",
+				MenuLabel:      "会话管理",
+				IDLabel:        "conversation id",
+				IDPlaceholder:  "CONVERSATION_ID",
+				SummaryLabel:   "conversation",
+				HelpGroupLabel: "conversation",
 			},
-			Features: map[Feature]bool{
-				FeatureReview:                     true,
-				FeatureSkills:                     true,
-				FeatureFastMode:                   true,
-				FeatureConversationThreadCommands: true,
-			},
+			Features: map[Feature]bool{},
 		}
 	}
 }

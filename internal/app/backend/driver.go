@@ -1,9 +1,11 @@
 package backend
 
 import (
+	"strings"
+
 	"feidex/internal/app/appcore"
-	appworkspace "feidex/internal/app/workspace"
 	appruntime "feidex/internal/app/runtime"
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -68,18 +70,18 @@ type PermissionApp interface {
 }
 
 type WorkspacePermissionCommandRequest struct {
-	Message                             *feishu.InboundMessage
-	Args                                []string
-	SessionKey                          string
-	CurrentWorkspace                    func(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace)
-	ShowWorkspaceSandboxMenu            func(msg *feishu.InboundMessage) error
-	ShowWorkspacePolicyMenu             func(msg *feishu.InboundMessage) error
-	ShowWorkspacePermissionModeMenu     func(msg *feishu.InboundMessage) error
-	CompleteWorkspaceSandboxSet         func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error)
-	CompleteWorkspacePolicySet          func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error)
-	CompleteWorkspacePermissionModeSet  func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error)
-	ReplyCommandActionResponse          func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
-	CommandActionFromMessage            func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction
+	Message                            *feishu.InboundMessage
+	Args                               []string
+	SessionKey                         string
+	CurrentWorkspace                   func(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace)
+	ShowWorkspaceSandboxMenu           func(msg *feishu.InboundMessage) error
+	ShowWorkspacePolicyMenu            func(msg *feishu.InboundMessage) error
+	ShowWorkspacePermissionModeMenu    func(msg *feishu.InboundMessage) error
+	CompleteWorkspaceSandboxSet        func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error)
+	CompleteWorkspacePolicySet         func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error)
+	CompleteWorkspacePermissionModeSet func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error)
+	ReplyCommandActionResponse         func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
+	CommandActionFromMessage           func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction
 }
 
 type ConversationPermissionCommandRequest struct {
@@ -175,10 +177,12 @@ func DriverForApp(app appcore.AppConfig) Driver {
 
 func DriverForKind(kind string) Driver {
 	switch appruntime.NormalizeBackend(kind) {
+	case appruntime.BackendCodex:
+		return codexDriver{}
 	case appruntime.BackendClaude:
 		return claudeDriver{}
 	default:
-		return codexDriver{}
+		return unsupportedDriver{rawKind: strings.TrimSpace(kind)}
 	}
 }
 
@@ -194,4 +198,3 @@ func (d backendRuntimeDriver) DisplayName() string { return d.displayName }
 func (d backendRuntimeDriver) AutoRetryTitle() string {
 	return d.autoRetry
 }
-

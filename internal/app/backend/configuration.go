@@ -76,17 +76,19 @@ func (s ConfigurationService) FormatMenuBody(action, body string) string {
 }
 
 func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, args []string) error {
-	switch DriverForApp(s.App).Kind() {
+	switch appcore.ConfiguredBackend(s.App) {
+	case appruntime.BackendCodex:
+		if s.deps.Commands.HandleCodexModelCommand == nil {
+			return fmt.Errorf("Codex model command handler not configured")
+		}
+		return s.deps.Commands.HandleCodexModelCommand(msg, args)
 	case appruntime.BackendClaude:
 		if s.deps.Commands.HandleClaudeModelCommand == nil {
 			return fmt.Errorf("Claude model command handler not configured")
 		}
 		return s.deps.Commands.HandleClaudeModelCommand(msg, args)
 	default:
-		if s.deps.Commands.HandleCodexModelCommand == nil {
-			return fmt.Errorf("Codex model command handler not configured")
-		}
-		return s.deps.Commands.HandleCodexModelCommand(msg, args)
+		return unsupportedBackendError(appcore.ConfiguredBackend(s.App))
 	}
 }
 
@@ -207,6 +209,22 @@ func autoRetryEnabled(app App) bool {
 	return cfg != nil && cfg.AutoRetry
 }
 
+func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[string]any {
+	body := s.FormatMenuBody("menu.group.model", unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.App)))
+	buttons := []feishu.Button{
+		{Text: "后端选择 /backend", Type: "default", Value: map[string]any{"action": "menu.group.backend", "session_key": sessionKey}},
+		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+	}
+	return s.App.Feishu().SimpleStatusCard("模型配置", "orange", body, buttons)
+}
+
+func (s ConfigurationService) backendRequiredStatusBody() string {
+	return strings.Join([]string{
+		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.App), "unset") + "`",
+		unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.App)),
+	}, "\n")
+}
+
 // ---------------------------------------------------------------------------
 // Exported methods
 // ---------------------------------------------------------------------------
@@ -261,10 +279,12 @@ func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *appwo
 // RenderModelMenuCard renders the model menu card for the active backend.
 func (s ConfigurationService) RenderModelMenuCard(sessionKey string) map[string]any {
 	switch appcore.ConfiguredBackend(s.App) {
+	case appruntime.BackendCodex:
+		return s.RenderCodexModelMenuCard(sessionKey)
 	case appruntime.BackendClaude:
 		return s.RenderClaudeModelMenuCard(sessionKey)
 	default:
-		return s.RenderCodexModelMenuCard(sessionKey)
+		return s.renderBackendRequiredCard(sessionKey)
 	}
 }
 
@@ -316,13 +336,15 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 // by backend.
 func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	switch appcore.ConfiguredBackend(s.App) {
+	case appruntime.BackendCodex:
+		return s.CompleteCodexGlobalModelSet(action, modelID)
 	case appruntime.BackendClaude:
 		if s.deps.Claude.CompleteModelSet != nil {
 			return s.CompleteClaudeModelSet(action, modelID)
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Claude model set handler not configured"}}, nil
 	default:
-		return s.CompleteCodexGlobalModelSet(action, modelID)
+		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
 	}
 }
 
@@ -357,13 +379,15 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 // action, dispatching by backend.
 func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
 	switch appcore.ConfiguredBackend(s.App) {
+	case appruntime.BackendCodex:
+		return s.CompleteCodexGlobalReasoningEffortSet(action, reasoningEffort)
 	case appruntime.BackendClaude:
 		if s.deps.Claude.CompleteEffortSet != nil {
 			return s.CompleteClaudeEffortSet(action, reasoningEffort)
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Claude effort set handler not configured"}}, nil
 	default:
-		return s.CompleteCodexGlobalReasoningEffortSet(action, reasoningEffort)
+		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
 	}
 }
 
@@ -402,11 +426,13 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 // StatusCardBody returns the status card body text for the given session,
 // dispatching by backend.
 func (s ConfigurationService) StatusCardBody(sess *state.Session) string {
-	switch DriverForApp(s.App).Kind() {
+	switch appcore.ConfiguredBackend(s.App) {
+	case appruntime.BackendCodex:
+		return s.RenderCodexStatusBody(sess)
 	case appruntime.BackendClaude:
 		return s.RenderClaudeStatusBody(sess)
 	default:
-		return s.RenderCodexStatusBody(sess)
+		return s.backendRequiredStatusBody()
 	}
 }
 

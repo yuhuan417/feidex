@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	appbackend "feidex/internal/app/backend"
 	appcore "feidex/internal/app/appcore"
+	appbackend "feidex/internal/app/backend"
 	appconvbackend "feidex/internal/app/convbackend"
-	appworkspace "feidex/internal/app/workspace"
-	appthreadview "feidex/internal/app/threadview"
-	appsessionctx "feidex/internal/app/sessionctx"
 	appruntime "feidex/internal/app/runtime"
+	appsessionctx "feidex/internal/app/sessionctx"
+	appthreadview "feidex/internal/app/threadview"
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -647,12 +647,24 @@ func (s *Service) RenderThreadPolicyMenuCard(sessionKey string) (map[string]any,
 
 // CompleteMenuThread handles the "menu.thread" card action.
 func (s *Service) CompleteMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.CompleteMenuCommand(action, sessionKey, primaryConversationSlash(appcore.ConfiguredBackend(s.app)), "menu.root")
+	slash := primaryConversationSlash(appcore.ConfiguredBackend(s.app))
+	if strings.TrimSpace(slash) == "" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "当前 frontend 还没有设置 backend，请先选择。"},
+		}, nil
+	}
+	return s.app.CompleteMenuCommand(action, sessionKey, slash, "menu.root")
 }
 
 // CompleteMenuNew handles the "menu.thread.new" card action.
 func (s *Service) CompleteMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.app.CompleteMenuCommand(action, sessionKey, primaryConversationSlash(appcore.ConfiguredBackend(s.app))+" new", "menu.thread")
+	slash := primaryConversationSlash(appcore.ConfiguredBackend(s.app))
+	if strings.TrimSpace(slash) == "" {
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: "当前 frontend 还没有设置 backend，请先选择。"},
+		}, nil
+	}
+	return s.app.CompleteMenuCommand(action, sessionKey, slash+" new", "menu.thread")
 }
 
 // CompleteMenuInterrupt handles the "menu.interrupt" card action.

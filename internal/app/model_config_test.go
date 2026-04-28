@@ -79,6 +79,7 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 
 func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 	cfg := config.Default()
+	cfg.Feishu.Backend = backendCodex
 	cfg.Codex.Model = "gpt-5.4"
 	cfg.Codex.ReasoningEffort = "high"
 	sess := &state.Session{
@@ -89,7 +90,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		Status:                     "turn_in_progress",
 		Queue:                      []string{"sub-1"},
 	}
-	a := &App{cfg: cfg}
+	a := &App{cfg: cfg, backend: backendCodex}
 	body := newBackendConfigurationService(a).statusCardBody(sess)
 	for _, want := range []string{
 		"版本: `0.1.0`",
@@ -214,6 +215,21 @@ func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 	}
 	if seen["menu.fast"] {
 		t.Fatalf("Claude model menu should omit menu.fast: %+v", actions)
+	}
+}
+
+func TestRenderModelMenuCardWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = ""
+	a.cfg.Feishu.Backend = ""
+
+	card := newBackendConfigurationService(a).renderModelMenuCard("sess-1")
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "还没有设置 backend") {
+		t.Fatalf("unset backend model menu body = %q, want backend selection prompt", body)
+	}
+	if strings.Contains(body, "当前 fast:") || strings.Contains(body, "当前 reasoning:") {
+		t.Fatalf("unset backend model menu body = %q, should not render Codex model fields", body)
 	}
 }
 
