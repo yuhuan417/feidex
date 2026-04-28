@@ -941,6 +941,34 @@ find internal/app -maxdepth 1 -name '*.go' ! -name '*_test.go'
 ./scripts/with_tmp_go_cache.sh go test ./internal/app -run 'Test(.*CriticalPath.*|.*StateMachine.*|.*MenuCommandDirectAccess.*|.*BackendSelection.*)'
 ```
 
+### 阶段 11 完成记录
+
+**完成日期:** 2026-04-28
+
+**测试迁移:**
+- `session_status_test.go` → `submission/submission_pure_test.go`（`ShouldStartNextSubmissionAsync` 移入 submission 包）
+- `pending_forms_more_test.go` → `serverrequest/input_service_test.go`（pending text dispatch helper 移入 serverrequest 包）
+- `request_id_more_test.go` → `serverrequest/request_id_test.go`（request-id helper 移入 serverrequest 包）
+- root `sessionShouldStartNextSubmissionAsync` 改为委托 `submission.ShouldStartNextSubmissionAsync`
+- `turnlifecycle/service.go` 中的重复实现同步改为委托
+
+**新增子包测试:**
+- `submission/submission_pure_test.go` — 16 个测试，覆盖所有纯导出函数
+- `upgradecmd/upgrade_pure_test.go` — 8 个测试，覆盖所有纯导出函数
+- `serverrequest/input_service_test.go` — pending text dispatch owner-local 守卫
+- `serverrequest/request_id_test.go` — request-id owner-local 守卫
+
+**审计文档:**
+- `docs/root-app-test-audit.md` — 83 个 root 测试文件重新归入 Phase 11 允许的 4 个 retained buckets
+- `docs/root-app-production-audit.md` — 157 个 root 生产文件分类（4 类别）+ 大文件清单
+- `docs/root-app-next-wave-plan.md` — root `internal/app` 下一轮单独收敛计划
+
+**关键发现:**
+- 64/83 个 root 测试文件使用 `newTestApp(t)` 构造完整 App；这些文件统一按“整体入口 / 跨 package critical path / 状态机 guard”保留，不再作为 feature-local 测试类别单列
+- 低成本且 owner 清晰的 root-local 测试已继续迁出；剩余 root 测试默认不再新增 feature-local unit test
+- 157 个生产文件共 14,470 行，已全部写入 4 类留存理由
+- root 仍然偏大的文件族没有回流到“日常顺手重构”，而是单独记录到下一轮计划文档
+
 ---
 
 ## 6. 推荐 PR 切分

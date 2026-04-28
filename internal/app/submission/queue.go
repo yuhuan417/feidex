@@ -447,6 +447,16 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 	return a.SubmissionQueueConversationBackend().StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 
+// ShouldStartNextSubmissionAsync returns true when a session has queued
+// submissions and no in-flight work, meaning it is safe to start the next
+// submission asynchronously.
+func ShouldStartNextSubmissionAsync(sess *state.Session) bool {
+	if sess == nil {
+		return false
+	}
+	return !sessionctx.HasInFlightSubmission(sess) && len(sess.Queue) > 0
+}
+
 // RefreshPendingStatus refreshes the session status based on queue state.
 func RefreshPendingStatus(sess *state.Session) {
 	if sess == nil || sessionctx.HasInFlightSubmission(sess) {

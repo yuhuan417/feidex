@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -26,10 +27,7 @@ func shouldDropCodexThreadLineageAfterStartFailure(a *App, err error) bool {
 }
 
 func sessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
-	if sess == nil {
-		return false
-	}
-	return !sessionHasInFlightSubmission(sess) && len(sess.Queue) > 0
+	return appsubmission.ShouldStartNextSubmissionAsync(sess)
 }
 
 // submissionDispatchAdapter implements appturnlifecycle.SubmissionDispatchProvider

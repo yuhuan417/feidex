@@ -13,4 +13,5 @@ func sessionRefreshPendingStatus(sess *state.Session) {
 	sess.Status = state.SessionStatusIdle.String()
 }
 
-// sessionShouldStartNextSubmissionAsync is defined in submission_queue.go.
+// sessionShouldStartNextSubmissionAsync delegates to
+// submission.ShouldStartNextSubmissionAsync.

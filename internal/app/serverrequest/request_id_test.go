@@ -1,4 +1,4 @@
-package app
+package serverrequest
 
 import (
 	"encoding/json"

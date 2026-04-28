@@ -182,7 +182,7 @@ func sessionHasActiveWork(sess *state.Session) bool {
 }
 
 func sessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
-	return sess != nil && !sessionctx.HasInFlightSubmission(sess) && len(sess.Queue) > 0
+	return submission.ShouldStartNextSubmissionAsync(sess)
 }
 
 // TurnCompletionTerminalText returns the terminal text to display when a turn
