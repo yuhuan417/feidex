@@ -1,6 +1,6 @@
 # Feidex Backend Capability Matrix
 
-> 更新时间: 2026-04-22
+> 更新时间: 2026-04-28
 >
 > 口径:
 > - 只描述“当前 frontend 已选定 backend，且不在维护模式”时的正常行为。
@@ -13,8 +13,11 @@
 - `internal/app/command_registry.go`
 - `internal/app/menu_specs.go`
 - `internal/app/menu_actions.go`
-- `internal/app/backend_capability_facade.go`
-- `internal/app/conversation_backend_facade.go`
+- `internal/app/conversation_terms.go`
+- `internal/app/backendcaps/capability.go`
+- `internal/app/backend/driver.go`
+- `internal/app/backend/permission_driver.go`
+- `internal/app/backend/configuration.go`
 - `internal/app/claude_runtime.go`
 - `internal/app/claude_session_catalog.go`
 - `internal/app/claude_model_config.go`

@@ -51,7 +51,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        "idle",
+			Status:        state.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -72,7 +72,7 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 		})
 	}
 	if sessionHasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		sess.Status = "queued"
+		sess.Status = state.SessionStatusQueued.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
 		return err
@@ -81,8 +81,8 @@ func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMes
 	return nil
 }
 
-// stagedImageAttachments, stagedImageSourceMessageIDs, stagedImageRootMessageIDs
-// are re-exported from the submission package via replycontinuation_adapters.go.
+// stagedImageAttachments, stagedImageSourceMessageIDs, and
+// stagedImageRootMessageIDs are re-exported in replycontinuation_bindings.go.
 
 func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bool {
 	messageID = strings.TrimSpace(messageID)
@@ -158,7 +158,7 @@ func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot
 		return false
 	}
 	if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
-		value.Status = "discarded"
+		value.Status = state.SubmissionStatusDiscarded.String()
 		value.Finalized = true
 	}); err != nil {
 		slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
@@ -190,7 +190,7 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 		sub := appState.Submission(submissionID)
 		newPendingQueueService(s.app).markMessagesDiscardedReactions(sourceMessageIDsForSubmission(sub))
 		if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
-			value.Status = "discarded"
+			value.Status = state.SubmissionStatusDiscarded.String()
 			value.Finalized = true
 		}); err != nil {
 			slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
@@ -202,7 +202,7 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 	sess.Queue = nil
 	sess.StagedImages = nil
 	if !sessionHasInFlightSubmission(sess) {
-		sess.Status = "idle"
+		sess.Status = state.SessionStatusIdle.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
 		slog.Error("discard session pending inputs failed", "session_key", sessionKey, "error", err)
@@ -235,8 +235,8 @@ func submissionHasSourceMessage(sub *state.Submission, messageID string) bool {
 	return submission.HasSourceMessage(sub, messageID)
 }
 
-// sourceMessageIDsForSubmission is re-exported from the submission package
-// via replycontinuation_adapters.go.
+// sourceMessageIDsForSubmission is re-exported in
+// replycontinuation_bindings.go.
 
 func (s pendingQueueService) markSubmissionQueuedReactions(sub *state.Submission) {
 	newPendingQueueService(s.app).markMessagesQueuedReactions(sourceMessageIDsForSubmission(sub))

@@ -90,9 +90,10 @@
 
 - permission、workspace config、会话术语等差异没有收敛到单一 backend driver。
 - 代表文件:
-  - [internal/app/backend_runtime_facade.go](/home/yuhuan/feidex/internal/app/backend_runtime_facade.go)
-  - [internal/app/conversation_backend_facade.go](/home/yuhuan/feidex/internal/app/conversation_backend_facade.go)
-  - [internal/app/backend_action_facade.go](/home/yuhuan/feidex/internal/app/backend_action_facade.go)
+  - [internal/app/backend/driver.go](/home/yuhuan/feidex/internal/app/backend/driver.go)
+  - [internal/app/backend/permission_driver.go](/home/yuhuan/feidex/internal/app/backend/permission_driver.go)
+  - [internal/app/backend/actions.go](/home/yuhuan/feidex/internal/app/backend/actions.go)
+  - [internal/app/convbackend/service.go](/home/yuhuan/feidex/internal/app/convbackend/service.go)
   - [internal/app/backend/configuration.go](/home/yuhuan/feidex/internal/app/backend/configuration.go)
 
 ### 4.4 注册表不是单一事实源
@@ -316,10 +317,11 @@ root `app` 包只保留:
    - `skills*.go`
    - `model_config*.go`
    - 其他纯渲染 / 纯配置分发逻辑
-3. 删除兼容 facade 文件，把 backend / conversation 的 facade 真正下沉到 `internal/app/backend`:
-   - `internal/app/backend_runtime_facade.go`
-   - `internal/app/conversation_backend_facade.go`
-   - `internal/app/backend_action_facade.go`
+3. 删除兼容 facade 文件，把 backend / conversation 的职责真正下沉到 `internal/app/backend` 和 `internal/app/convbackend`:
+   - `internal/app/backend/driver.go`
+   - `internal/app/backend/permission_driver.go`
+   - `internal/app/backend/actions.go`
+   - `internal/app/convbackend/service.go`
 4. 删除无必要 alias 文件族；保留 alias 的唯一允许条件是“正在同一阶段内迁移调用方，且下一阶段删除”。
 5. root `app` 包里禁止继续新增“package-level helper + *App 第一参数”的业务函数。新业务必须先判断是否应该属于子包。
 
@@ -332,11 +334,11 @@ find internal/app -maxdepth 1 -name '*alias*.go' -o -name '*_alias.go'
 find internal/app -maxdepth 1 -name '*adapters.go'
 ```
 
-以下 facade 文件在阶段结束时不得继续承担真正业务决策:
+以下 root backend glue 文件在阶段结束时不得继续承担真正业务决策:
 
-- `internal/app/backend_runtime_facade.go`
-- `internal/app/conversation_backend_facade.go`
-- `internal/app/backend_action_facade.go`
+- `internal/app/backend_runtime.go`
+- `internal/app/backend_actions.go`
+- `internal/app/backend_configuration_helpers.go`
 
 ### 验收标准
 
@@ -381,8 +383,8 @@ find internal/app -maxdepth 1 -name '*adapters.go'
    - `internal/app/threadmenu/service.go`
    - `internal/app/workspacecmd/*`
    - `internal/app/modelconfig/*`
-   - `internal/app/backend_runtime_facade.go`
-   - `internal/app/conversation_backend_facade.go`
+   - `internal/app/backend/driver.go`
+   - `internal/app/convbackend/service.go`
 5. 定义一条明确规则:
    - root `app` 包不再直接判断“Claude 用 permissions / Codex 用 sandbox + policy”这类产品语义。
    - root 只选择 backend driver；具体语义由 driver 返回。

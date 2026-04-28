@@ -1,10 +1,51 @@
 # App Package Boundaries
 
-`internal/app` is the Feishu-facing application coordinator. It owns product orchestration, session and turn lifecycle integration, pending request handling, card callbacks, and all behavior that must be checked against `docs/codex-app-server-state-machine-audit.md`. Code in this package may call Feishu adapters, backend runtime facades, the persistent store, and the extracted `internal/app/*` helper packages. It should not grow new pure parsing, formatting, or backend-agnostic workflow logic when that logic can live behind a smaller package boundary.
-
-App carries 8 receiver methods (lifecycle: `Start`/`Stop`; event handlers: 5 `Handle*` methods; transport error coordination: `handleCodexTransportError`) and 209 package-level functions that take `*App` as their first parameter. Business logic is organized into ~30 small `{app *App}` service structs and package-level functions. There is no `commandService` or `conversationWorkflowService` — command routing and conversation workflows are package-level functions dispatched by the registries.
+`internal/app` is the Feishu-facing application coordinator. It owns event entrypoints, product orchestration, session/thread/turn/submission lifecycle integration, pending request handling, card callbacks, and every behavior that must be checked against [docs/codex-app-server-state-machine-audit.md](/home/yuhuan/feidex/docs/codex-app-server-state-machine-audit.md). Code in this package may call Feishu transport, frontend-scoped app state, backend driver/runtime glue, and extracted `internal/app/*` subpackages. It should not grow new pure parsing, formatting, terminology, or backend-local workflow logic when that logic can live behind a smaller package boundary.
 
 ## Physical Subpackages
+
+### `internal/app/backendcaps`
+
+Responsibility: backend-specific capability flags and UI vocabulary shared by menu/help/status presentation.
+
+Allowed dependencies: Go standard library, `internal/app/runtime`, and `internal/app/menutypes`.
+
+Must not: mutate app/config/state, call backend RPC, or send Feishu messages.
+
+Current owner surface:
+
+- conversation slash/noun/id/help labels
+- backend-visible feature flags
+- help/menu terminology rewriting
+
+### `internal/app/backend`
+
+Responsibility: backend-aware frontend services that do not require importing root `internal/app`.
+
+Allowed dependencies: lower `internal/app/*` packages plus `config`, `state`, `feishu`, `codexrpc`, and Go standard library.
+
+Must not: import `internal/app`, mutate `*App` fields directly, or bypass injected callbacks for root-owned lifecycle work.
+
+Current owner surface:
+
+- backend driver model and unsupported-backend behavior
+- permission drivers and backend-specific workspace/conversation setting flows
+- backend selection/configuration/action services
+- backend-visible status/help/menu support that depends on backend capabilities
+
+### `internal/app/convbackend`
+
+Responsibility: shared facade for concrete conversation operations and backend-specific thread/session workflows.
+
+Allowed dependencies: backend-local helper packages plus `config`, `state`, `codexrpc`, and Go standard library.
+
+Must not: own Feishu event routing, command/action registries, or pending request persistence policy.
+
+Current owner surface:
+
+- conversation start/interrupt/history/usage/compaction operations
+- workspace thread/session binding helpers
+- backend-specific fork/startup helpers exposed behind a common app-facing facade
 
 ### `internal/app/delivery`
 
@@ -16,7 +57,7 @@ Must not: depend on `internal/app`, call Feishu APIs, read or write application 
 
 Current owner surface:
 
-- reply card payload/component limits shared by app delivery code
+- reply-card payload/component limits shared by app delivery code
 - markdown table and fence-aware splitting
 - reply-card chunk data structures used before Feishu rendering/fitting
 
@@ -47,7 +88,6 @@ Current owner surface:
 - review target constants and `TargetSpec`
 - branch/commit option models and labels
 - Git repository, branch, commit, diff, and working-tree probes used by review flows
-
 
 ### `internal/app/runtime`
 
@@ -149,49 +189,50 @@ Current owner surface:
 
 ## Root App Responsibilities
 
-`internal/app` remains the composition root for behavior that crosses boundaries:
+`internal/app` remains the composition root only for behavior that crosses boundaries:
 
-- Feishu event routing through the 5 `Handle*` receiver methods
-- command dispatch via package-level `handleCommand` and local command registries (`localCommandSpec`)
-- card action dispatch via package-level `dispatchCardAction` and action registries
-- session, thread, turn, submission, queue, pending request, and recovery lifecycle
-- Codex App Server state-machine integration documented by the audit
-- backend runtime selection and facade calls
+- Feishu event routing through the `Handle*` receiver methods
+- command dispatch, menu dispatch, and card action dispatch
+- session, conversation, turn, submission, queue, pending request, and recovery lifecycle
+- Codex app-server protocol integration documented by the audit
+- backend runtime installation/startup/transport-failure coordination
+- server-request reply routing that depends on stored pending backend identity
 - review UI/form orchestration and review submission enqueueing
-- download, workspace orchestration, model, approval completion, compaction, history, and notification product flows
+- product flows such as workspace management, model/config menus, approval completion, compaction, history, usage, download, notifications, and maintenance entrypoints
 
-Service structs group related behavior without introducing package boundaries:
+Service structs and package-level helpers are acceptable in root `app` only when they coordinate multiple boundaries. If a new helper is pure or can be expressed behind a small interface, place it in a subpackage before adding more package-private logic here.
 
-- `workspaceService` / `workspaceConfigService` / `workspaceManagementService` / `workspaceRenderService` / `workspaceThreadService` — workspace lifecycle, config, rendering
-- `threadService` — thread and session command/action handlers
-- `backendConfigurationService` / `backendSelectionService` / `backendUpgradeService` — backend facade coordination
-- `replyContinuationService` / `pendingInputService` / `pendingQueueService` — inbound message staging and queue
-- `turnStreamService` / `outboundCardService` / `finalCardPatchService` — turn output streaming and card delivery
-- `reviewFormService` / `reviewGitService` / `skillsService` — review and skills integration
-- `runtimeStateService` / `runtimeMaintenanceService` / `autoRetryService` — runtime state and recovery
-- `historyService` / `usageService` / `debugService` / `menuActionService` / `modelConfigService` — tools and diagnostics
+## Final Root Audit
 
-When a new helper is pure or can be expressed behind a small interface, place it in a subpackage before adding more package-private functions to `internal/app`.
+Every remaining root `package app` file should fit exactly one of these buckets:
+
+- bootstrap/composition: `app.go`, `deps.go`, `accessors.go`, `app_deps.go`
+- routing/entrypoints: `feishu_event_router.go`, `commands.go`, `command_registry.go`, `menu_*.go`, `action_registry*.go`
+- protocol-sensitive orchestration: `submission_queue*.go`, `turn_lifecycle.go`, `server_request_state.go`, `startup_recovery.go`, `approval_actions.go`, `pending_*.go`, `backend_runtime*.go`
+- minimal glue: `*_bindings.go`, `backend_selection.go`, `backend_actions.go`, `backend_configuration_helpers.go`, `threadmenu_bindings.go`, `workspacecmd_bindings.go`
+
+Files that are only alias-only placeholders, comment-only migration stubs, or dead compatibility shims do not belong in root `app`.
 
 ## Extraction Rules
 
-- Subpackages must not import `internal/app`; use exported data structures or narrow interfaces instead.
+- Subpackages must not import `internal/app`; use exported data structures, narrow interfaces, or callback deps instead.
 - Lifecycle-sensitive code stays in `internal/app` until its protocol contract is explicit and covered by tests.
-- Keep compatibility wrappers in `internal/app` only as migration shims; new code should import the owning subpackage directly when it does not need app coordination. Existing aliases for app-wide vocabulary should be removed once dependent call sites are migrated.
-- During the `internal/app` refactor plan in [docs/internal-app-refactor-execution-plan.md](/home/yuhuan/feidex/docs/internal-app-refactor-execution-plan.md), do not add new root-level `*_alias.go` files or new root-level `*_adapters.go` files unless the same PR removes a larger legacy shim.
+- Root `internal/app` no longer accepts new compatibility shims. Do not add new root-level alias-only files, adapter-only files, placeholder wrappers, or comment-only migration stubs.
+- New business logic should default to the owning subpackage first. Only keep logic in root `app` when it must coordinate Feishu entrypoints, `*App` field mutation, frontend-scoped lifecycle, or audited protocol transitions.
+- Existing `*_bindings.go` files are tolerated only as minimal glue between subpackages and the root composition layer; they should not become dumping grounds for new product logic.
 - Any change touching approvals, turn lifecycle, thread lifecycle, review submission, compaction, tool input, or server requests must be checked against the state-machine audit before merge.
 - Prefer pure packages with standard-library dependencies. If a subpackage needs `config`, `state`, `codexrpc`, or `feishu`, document why that dependency belongs below the app coordinator.
 
-## Planned Boundaries
+## Remaining Extraction Candidates
 
-These are not fully physical packages yet because current code still crosses app state, Feishu rendering, and lifecycle boundaries:
+These areas still have acceptable root glue, but further extractions should follow the same boundary rules:
 
-- `workspace`: move validation and filesystem planning helpers after config mutation boundaries are explicit.
-- `runtime`: move capability probing and transition-state helpers after backend facade ownership is explicit.
-- `approval`: move decision formatting only after backend reply/resume semantics are isolated behind tests.
-- `cards`: move app-specific renderers only after markdown normalization and submission context dependencies are parameterized.
+- `workspace`: move more validation and filesystem planning only after config mutation boundaries are explicit.
+- `approval`: move additional presentation helpers only after backend reply/resume semantics stay covered by tests.
+- `cards`: move more renderers only after submission context and markdown normalization inputs are parameterized.
 
-### Previously planned, now realized
+### Already realized during this refactor
 
-- `quietmode` (was: "quiet mode evaluation") — extracted as `internal/app/quietmode` with pure delivery predicates.
-- `sessionctx` (was: "session thread context") — extracted as `internal/app/sessionctx` with thread lifecycle and effective-value computation.
+- `quietmode` — extracted as `internal/app/quietmode` with pure delivery predicates.
+- `sessionctx` — extracted as `internal/app/sessionctx` with thread lifecycle and effective-value computation.
+- `backendcaps` / `backend` / `convbackend` — extracted to own backend vocabulary, driver, and conversation implementation boundaries instead of root-level facade file families.

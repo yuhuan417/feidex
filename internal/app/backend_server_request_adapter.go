@@ -19,10 +19,55 @@ type serverRequestBackendAdapter interface {
 }
 
 func serverRequestAdapterForPending(a *App, pending *state.PendingRequest) serverRequestBackendAdapter {
-	if runtime := backendRuntimeForKind(pendingBackend(a, pending)); runtime != nil {
+	backend := pendingBackend(a, pending)
+	if runtime := backendRuntimeForKind(backend); runtime != nil {
 		return runtime.serverRequestAdapter(a)
 	}
-	return codexServerRequestAdapter{app: a}
+	return unsupportedServerRequestAdapter{backend: backend}
+}
+
+type unsupportedServerRequestAdapter struct {
+	backend string
+}
+
+func (u unsupportedServerRequestAdapter) kind() string {
+	return strings.TrimSpace(u.backend)
+}
+
+func (u unsupportedServerRequestAdapter) err() error {
+	backend := strings.TrimSpace(u.backend)
+	if backend == "" {
+		return fmt.Errorf("backend not configured")
+	}
+	return fmt.Errorf("unsupported backend %q", backend)
+}
+
+func (u unsupportedServerRequestAdapter) replyApproval(*state.PendingRequest, string, any) error {
+	return u.err()
+}
+
+func (u unsupportedServerRequestAdapter) replyQuickUserInput(*state.PendingRequest, toolUserInputPayload, string, string) (string, error) {
+	return "", u.err()
+}
+
+func (u unsupportedServerRequestAdapter) replyFormUserInput(*state.PendingRequest, toolUserInputPayload, map[string]string) (string, error) {
+	return "", u.err()
+}
+
+func (u unsupportedServerRequestAdapter) replyTextUserInput(*state.PendingRequest, toolUserInputPayload, string) (string, error) {
+	return "", u.err()
+}
+
+func (u unsupportedServerRequestAdapter) replyElicitationForm(*state.PendingRequest, elicitationFormPayload, string) (string, error) {
+	return "", u.err()
+}
+
+func (u unsupportedServerRequestAdapter) replyElicitationURL(*state.PendingRequest, string) (string, error) {
+	return "", u.err()
+}
+
+func (u unsupportedServerRequestAdapter) cancelPending(*state.PendingRequest) error {
+	return u.err()
 }
 
 type codexServerRequestAdapter struct {
