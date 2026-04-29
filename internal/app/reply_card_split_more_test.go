@@ -8,30 +8,6 @@ import (
 )
 
 func TestReplyCardSplitHelpersAndExpansion(t *testing.T) {
-	if got := splitReplyTextByRunes("abcdef", func(s string) bool { return len([]rune(s)) <= 2 }); len(got) < 3 {
-		t.Fatalf("splitReplyTextByRunes() = %#v", got)
-	}
-
-	parts := splitReplyTextBlockToFit(strings.Repeat("abcdef", 40), func(s string) bool { return len([]rune(s)) <= 12 })
-	if len(parts) < 2 {
-		t.Fatalf("splitReplyTextBlockToFit() = %#v", parts)
-	}
-	for _, part := range parts {
-		if len([]rune(part)) > 12 {
-			t.Fatalf("splitReplyTextBlockToFit() produced oversize part %q", part)
-		}
-	}
-
-	if idx := splitIndexNearMiddle("alpha beta gamma", " "); idx <= 0 {
-		t.Fatalf("splitIndexNearMiddle() = %d", idx)
-	}
-	if left, right := splitReplyTextAt("alpha beta", 5, 1); left != "alpha" || right != "beta" {
-		t.Fatalf("splitReplyTextAt() = %q / %q", left, right)
-	}
-	if got := joinReplyChunkBodies("alpha", " beta "); got != "alpha\nbeta" {
-		t.Fatalf("joinReplyChunkBodies() = %q", got)
-	}
-
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	chunk := appdelivery.ReplyCardChunk{

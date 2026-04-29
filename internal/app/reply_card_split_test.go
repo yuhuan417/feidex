@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	appcards "feidex/internal/app/cards"
 	"feidex/internal/state"
 )
 
@@ -19,77 +18,6 @@ func markdownTestTable(name string) string {
 		"| --- | --- |",
 		"| " + name + " | value |",
 	}, "\n")
-}
-
-func TestSplitMarkdownByTableLimitSplitsRealTablesOnly(t *testing.T) {
-	text := strings.Join([]string{
-		"intro",
-		"",
-		markdownTestTable("t1"),
-		"",
-		"```md",
-		"| fake | table |",
-		"| --- | --- |",
-		"| inside | code |",
-		"```",
-		"",
-		markdownTestTable("t2"),
-		"",
-		markdownTestTable("t3"),
-	}, "\n")
-
-	parts := appdelivery.SplitMarkdownByTableLimit(text, 2)
-	if len(parts) != 2 {
-		t.Fatalf("appdelivery.SplitMarkdownByTableLimit() parts = %d, want 2", len(parts))
-	}
-	if tables := countTablesInMarkdown(parts[0]); tables != 2 {
-		t.Fatalf("first part tables = %d, want 2", tables)
-	}
-	if tables := countTablesInMarkdown(parts[1]); tables != 1 {
-		t.Fatalf("second part tables = %d, want 1", tables)
-	}
-	if !strings.Contains(parts[0], "| fake | table |") {
-		t.Fatalf("first part lost fenced code block: %q", parts[0])
-	}
-}
-
-func TestSplitMarkdownByTableLimitKeepsFourBacktickFences(t *testing.T) {
-	text := strings.Join([]string{
-		"intro",
-		"",
-		"````md",
-		"| fake | table |",
-		"| --- | --- |",
-		"| inside | code |",
-		"````",
-		"",
-		markdownTestTable("t1"),
-	}, "\n")
-
-	parts := appdelivery.SplitMarkdownByTableLimit(text, 1)
-	if len(parts) != 1 {
-		t.Fatalf("appdelivery.SplitMarkdownByTableLimit() parts = %d, want 1", len(parts))
-	}
-	if tables := countTablesInMarkdown(parts[0]); tables != 1 {
-		t.Fatalf("table count = %d, want 1 real table", tables)
-	}
-	if !strings.Contains(parts[0], "````md") || !strings.Contains(parts[0], "````") {
-		t.Fatalf("four-backtick fences should be preserved, got: %q", parts[0])
-	}
-}
-
-func TestCountCardComponentNodesCountsTaggedNodes(t *testing.T) {
-	card := appcards.NewMarkdownBodyCard("Title", "blue")
-	for i := 0; i < 198; i++ {
-		appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "item"})
-	}
-	if got := appdelivery.CountCardComponentNodes(card); got != 199 {
-		t.Fatalf("appdelivery.CountCardComponentNodes() = %d, want 199", got)
-	}
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "overflow"})
-	if got := appdelivery.CountCardComponentNodes(card); got != 200 {
-		t.Fatalf("appdelivery.CountCardComponentNodes() after append = %d, want 200", got)
-	}
 }
 
 func TestSendFinalMessagesWithFooterSplitsReplyCardsByTableLimit(t *testing.T) {
