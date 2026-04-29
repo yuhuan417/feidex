@@ -62,7 +62,6 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 	var mu sync.Mutex
 	var methods []string
 	turnStartCalls := 0
-	secondTurnStarted := make(chan struct{}, 1)
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		mu.Lock()
 		methods = append(methods, method)
@@ -86,10 +85,6 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 			}
 			result := out.(*codexrpc.TurnStartResult)
 			result.Turn.ID = "turn-2"
-			select {
-			case secondTurnStarted <- struct{}{}:
-			default:
-			}
 		default:
 			t.Fatalf("unexpected method: %s", method)
 		}
@@ -135,12 +130,6 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 	}
 
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
-
-	select {
-	case <-secondTurnStarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected queued follow-up to start after delayed turn completed")
-	}
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -190,7 +179,6 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 	var mu sync.Mutex
 	var methods []string
 	turnStartCalls := 0
-	secondTurnStarted := make(chan struct{}, 1)
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		mu.Lock()
 		methods = append(methods, method)
@@ -214,10 +202,6 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 			}
 			result := out.(*codexrpc.TurnStartResult)
 			result.Turn.ID = "turn-2"
-			select {
-			case secondTurnStarted <- struct{}{}:
-			default:
-			}
 		default:
 			t.Fatalf("unexpected method: %s", method)
 		}
@@ -248,12 +232,6 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 	queuedSubID := sess.Queue[0]
 
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
-
-	select {
-	case <-secondTurnStarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected queued follow-up to start after completion without prior turn/started")
-	}
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
