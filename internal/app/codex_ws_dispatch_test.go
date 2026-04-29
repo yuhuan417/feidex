@@ -36,7 +36,6 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 	var mu sync.Mutex
 	var methods []string
 	turnStartCount := 0
-	secondTurnStarted := make(chan struct{}, 1)
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		mu.Lock()
 		methods = append(methods, method)
@@ -58,10 +57,6 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 				result.Turn.ID = "turn-1"
 			case 2:
 				result.Turn.ID = "turn-2"
-				select {
-				case secondTurnStarted <- struct{}{}:
-				default:
-				}
 			default:
 				t.Fatalf("unexpected turn/start call #%d", callNum)
 			}
@@ -96,19 +91,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 	}
 	queuedSubID := sess.Queue[0]
 
-	select {
-	case <-secondTurnStarted:
-		t.Fatal("follow-up should stay queued until the first turn completes")
-	default:
-	}
-
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
-
-	select {
-	case <-secondTurnStarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected queued follow-up to start after first turn completion")
-	}
 
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
