@@ -96,6 +96,9 @@ func (a submissionAppAdapter) SubmissionQueueConfiguredInflightMode() appsubmiss
 func (a submissionAppAdapter) SubmissionQueueInflightAllowsAdditional(mode appsubmission.QueueInflightMode) bool {
 	return sessionInflightAllowsAdditional(intToInflightMode(mode))
 }
+func (a submissionAppAdapter) SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *state.Session, bindOnlyCurrentRoot bool) string {
+	return resolveSubmissionWorkspaceID(a.app, msg, sess, bindOnlyCurrentRoot)
+}
 
 func inflightModeToInt(m sessionInflightMode) appsubmission.QueueInflightMode {
 	switch m {

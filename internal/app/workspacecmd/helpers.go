@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/app/appcore"
 	"feidex/internal/config"
+	"feidex/internal/feishu"
+	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -78,4 +81,36 @@ func defaultWorkspaceCloneParent(ws *config.Workspace, cfgPath string) string {
 		return filepath.Dir(strings.TrimSpace(cfgPath))
 	}
 	return "."
+}
+
+func selectedWorkspaceIDForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, sess *state.Session) string {
+	return appcore.ResolveWorkspaceSelectionForMessage(app, msg, sess)
+}
+
+func selectedWorkspaceIDForSession(app appcore.AppConfig, sess *state.Session) string {
+	return appcore.ResolveWorkspaceSelectionForSession(app, sess)
+}
+
+func setSelectedWorkspaceForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, workspaceID string) error {
+	return appcore.SetWorkspaceSelectionForMessage(app, msg, workspaceID)
+}
+
+func setSelectedWorkspaceForSession(app appcore.AppConfig, sess *state.Session, workspaceID string) error {
+	return appcore.SetWorkspaceSelectionForSession(app, sess, workspaceID)
+}
+
+func sessionCanRetargetWorkspace(sess *state.Session, hasInFlight bool) bool {
+	if sess == nil {
+		return true
+	}
+	if hasInFlight {
+		return false
+	}
+	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
+		return false
+	}
+	if strings.TrimSpace(sess.ActiveThreadID) != "" || strings.TrimSpace(sess.ActiveThreadWorkspaceID) != "" {
+		return false
+	}
+	return len(sess.BackendThreads) == 0
 }

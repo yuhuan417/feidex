@@ -1968,7 +1968,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}
 
 	action := &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-1"}}
-	resp, err := a.ServerRequestService().CompleteApprovalAction( action, "approval.command.accept_session")
+	resp, err := a.ServerRequestService().CompleteApprovalAction(action, "approval.command.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(command) = %#v, %v", resp, err)
 	}
@@ -2005,7 +2005,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(command-2) error = %v", err)
 	}
-	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(command-2) = %#v, %v", resp, err)
 	}
@@ -2017,7 +2017,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("command approval resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file) = %#v, %v", resp, err)
 	}
@@ -2047,7 +2047,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(file-2) error = %v", err)
 	}
-	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file-2) = %#v, %v", resp, err)
 	}
@@ -2059,7 +2059,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("file approval resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(permissions) = %#v, %v", resp, err)
 	}
@@ -2088,7 +2088,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(perm-2) error = %v", err)
 	}
-	resp, err = a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(perm-2) = %#v, %v", resp, err)
 	}
@@ -2100,7 +2100,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("permissions resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
+	resp, err = a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-1", "question_id": "q-1", "answer": "A"},
 	})
@@ -2128,7 +2128,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	fc.replies = nil
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "missing"},
 	}, "approval.command.decline")
@@ -2170,7 +2170,7 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-form-1"},
 		FormValue: map[string]any{
@@ -2233,7 +2233,7 @@ func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 		t.Fatalf("UpsertPending(input-toggle-1) error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputMultiToggle( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputMultiToggle(&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id":   "input-toggle-1",
@@ -2272,7 +2272,7 @@ func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 		t.Fatalf("UpsertPending(file-cancel) error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "file-cancel"},
 	}, "approval.file.cancel")
@@ -2328,7 +2328,7 @@ func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "0"},
 	}, "approval.command.accept")
@@ -2379,7 +2379,7 @@ func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "command-1"},
 	}, "approval.command.accept")
@@ -2874,7 +2874,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(url) error = %v", err)
 	}
-	resp, err := a.ServerRequestService().CompleteElicitationURLAction( &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
+	resp, err := a.ServerRequestService().CompleteElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeElicitationURLAction() = %#v, %v", resp, err)
 	}
@@ -3192,6 +3192,7 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	targetSessionKey := "feishu:group:chat-1:root:root-msg"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
@@ -3213,6 +3214,9 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 		TurnID:     "turn-old",
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, targetSessionKey, "alt"); err != nil {
+		t.Fatalf("completeWorkspaceUse() error = %v", err)
 	}
 
 	steerAttempts := 0
@@ -3241,6 +3245,164 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	targetSess := a.store.GetSession(targetSessionKey)
 	if targetSess == nil || len(targetSess.Queue) != 1 {
 		t.Fatalf("target session after fallback = %+v, want one queued submission", targetSess)
+	}
+	sub := a.store.GetSubmission(targetSess.Queue[0])
+	if sub == nil || sub.WorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("reply fallback submission = %+v, want workspace %q", sub, a.cfg.Workspaces[0].ID)
+	}
+}
+
+func TestHandleFeishuMessageUsesSelectedWorkspaceForNewGroupRoots(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	rootASessionKey := makeSessionKey(a, &feishu.InboundMessage{
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		MessageID:     "root-a",
+		RootMessageID: "root-a",
+	})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     rootASessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		OwnerUserID:             "user-1",
+		RootMessageID:           "root-a",
+		ActiveThreadID:          "thread-a",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "turn-a",
+		ActiveSubmissionID:      "sub-a",
+		Status:                  state.SessionStatusTurnInProgress.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession(root-a) error = %v", err)
+	}
+
+	threadStartCwds := []string{}
+	threadStartIDs := []string{"thread-b", "thread-c"}
+	turnStartIDs := []string{"turn-b", "turn-c"}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			got, _ := params.(map[string]any)
+			cwd, _ := got["cwd"].(string)
+			threadStartCwds = append(threadStartCwds, strings.TrimSpace(cwd))
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = threadStartIDs[0]
+			threadStartIDs = threadStartIDs[1:]
+			return nil
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = turnStartIDs[0]
+			turnStartIDs = turnStartIDs[1:]
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, rootASessionKey, "alt"); err != nil {
+		t.Fatalf("completeWorkspaceUse(root-a -> alt) error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "root-b",
+		RootMessageID: "root-b",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "run in B",
+	})
+
+	rootBSessionKey := makeSessionKey(a, &feishu.InboundMessage{
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		MessageID:     "root-b",
+		RootMessageID: "root-b",
+	})
+	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, rootBSessionKey, "default"); err != nil {
+		t.Fatalf("completeWorkspaceUse(root-b -> default) error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "root-c",
+		RootMessageID: "root-c",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "run in A",
+	})
+
+	if len(threadStartCwds) != 2 {
+		t.Fatalf("thread/start cwds = %+v, want 2 calls", threadStartCwds)
+	}
+	if threadStartCwds[0] != a.cfg.Workspaces[1].Cwd {
+		t.Fatalf("first thread/start cwd = %q, want alt cwd %q", threadStartCwds[0], a.cfg.Workspaces[1].Cwd)
+	}
+	if threadStartCwds[1] != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("second thread/start cwd = %q, want default cwd %q", threadStartCwds[1], a.cfg.Workspaces[0].Cwd)
+	}
+	if sess := a.store.GetSession(rootASessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("root-a session should keep workspace A lineage: %+v", sess)
+	}
+	if sess := a.store.GetSession(rootBSessionKey); sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("root-b session should run in workspace B: %+v", sess)
+	}
+	rootCSessionKey := makeSessionKey(a, &feishu.InboundMessage{
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		MessageID:     "root-c",
+		RootMessageID: "root-c",
+	})
+	if sess := a.store.GetSession(rootCSessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("root-c session should run in workspace A: %+v", sess)
+	}
+}
+
+func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-1",
+		ChatType:                "p2p",
+		OwnerUserID:             "user-1",
+		ActiveThreadID:          "thread-a",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "turn-a",
+		ActiveSubmissionID:      "sub-a",
+		Status:                  state.SessionStatusTurnInProgress.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession(p2p active) error = %v", err)
+	}
+
+	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "alt"); err != nil {
+		t.Fatalf("completeWorkspaceUse() error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID: "msg-b",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+		Text:      "queue in B",
+	})
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 1 {
+		t.Fatalf("session after enqueue = %+v, want one queued submission", sess)
+	}
+	if sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("active p2p session should keep workspace A lineage: %+v", sess)
+	}
+	sub := a.store.GetSubmission(sess.Queue[0])
+	if sub == nil || sub.WorkspaceID != "alt" {
+		t.Fatalf("queued submission = %+v, want workspace alt", sub)
 	}
 }
 

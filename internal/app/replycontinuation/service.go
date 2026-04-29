@@ -271,7 +271,7 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), s.App.DefaultWorkspaceID())
+	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.App.DefaultWorkspaceID())
 	sub := &state.Submission{
 		SessionKey:  strings.TrimSpace(sessionKey),
 		WorkspaceID: workspaceID,
@@ -316,7 +316,7 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.Inbou
 	if s == nil || s.App == nil || msg == nil || sess == nil {
 		return nil, nil
 	}
-	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), s.App.DefaultWorkspaceID())
+	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.App.DefaultWorkspaceID())
 	bucketSessionKey := s.PendingInputSessionKey(msg)
 	inboundAttachments, err := s.ResolveInboundAttachments(msg, workspaceID, sessionKey)
 	if err != nil {

@@ -274,10 +274,11 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = valueOrEmpty(deps.DefaultWorkspaceID)
 	}
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), valueOrEmpty(deps.DefaultWorkspaceID))
 	var inboundAttachments []state.SubmissionAttachment
 	var err error
 	if deps.ResolveInboundAttachments != nil {
-		inboundAttachments, err = deps.ResolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+		inboundAttachments, err = deps.ResolveInboundAttachments(msg, workspaceID, sessionKey)
 		if err != nil {
 			return false, err
 		}
@@ -293,7 +294,7 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 	inputSub := &state.Submission{
 		InputText:            msg.Text,
 		Attachments:          append(appsubmission.StagedImageAttachments(stagedImages), inboundAttachments...),
-		WorkspaceID:          sess.WorkspaceID,
+		WorkspaceID:          workspaceID,
 		SessionKey:           sessionKey,
 		TriggerMessageID:     msg.MessageID,
 		SourceRootMessageIDs: appsubmission.UniqueStrings(append([]string{firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))}, appsubmission.StagedImageRootMessageIDs(stagedImages)...)),

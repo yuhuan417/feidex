@@ -152,11 +152,17 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
 	}
-	s.SwitchSessionWorkspace(sess, id)
-	if err := s.SaveSession(sess); err != nil {
+	if err := appcore.SetWorkspaceSelection(s.App, chatType, chatID, userID, id); err != nil {
 		return err
 	}
-	if !s.SessionHasInFlight(sess) && ws != nil {
+	retargeted := sessionCanRetargetWorkspace(sess, s.SessionHasInFlight(sess))
+	if retargeted {
+		s.SwitchSessionWorkspace(sess, id)
+		if err := s.SaveSession(sess); err != nil {
+			return err
+		}
+	}
+	if retargeted && !s.SessionHasInFlight(sess) && ws != nil {
 		s.runAsyncThreadBinding(sessionKey, id, ws)
 	}
 	return nil
@@ -429,9 +435,15 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
-	s.SwitchSessionWorkspace(sess, workspaceID)
-	_ = s.SaveSession(sess)
-	if !s.SessionHasInFlight(sess) {
+	if err := setSelectedWorkspaceForSession(s.App, sess, workspaceID); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	retargeted := sessionCanRetargetWorkspace(sess, s.SessionHasInFlight(sess))
+	if retargeted {
+		s.SwitchSessionWorkspace(sess, workspaceID)
+		_ = s.SaveSession(sess)
+	}
+	if retargeted && !s.SessionHasInFlight(sess) {
 		s.runAsyncThreadBinding(sessionKey, workspaceID, ws)
 	}
 	return &callback.CardActionTriggerResponse{
@@ -854,10 +866,7 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 func (s *ManagementService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
 	sessionKey = appcore.MakeSessionKey(s.App, msg)
 	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
+	workspaceID := selectedWorkspaceIDForMessage(s.App, msg, sess)
 	return sessionKey, sess, config.FindWorkspace(s.App.Config(), workspaceID)
 }
 

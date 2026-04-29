@@ -48,6 +48,7 @@ type App interface {
 	SubmissionQueueReplyInThreadForSubmission(sub *state.Submission) bool
 	SubmissionQueueConfiguredInflightMode() QueueInflightMode
 	SubmissionQueueInflightAllowsAdditional(mode QueueInflightMode) bool
+	SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *state.Session, bindOnlyCurrentRoot bool) string
 	SubmissionQueueReplyText(ctx context.Context, messageID, text string, inThread bool) error
 	SubmissionQueueSendQueuedNotice(ctx context.Context, sub *state.Submission)
 	SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *state.Submission, err error, willContinue bool)
@@ -217,8 +218,9 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 			Status:        state.SessionStatusIdle.String(),
 		}
 	}
+	workspaceID := strings.TrimSpace(a.SubmissionQueueResolveWorkspaceID(msg, sess, bindOnlyCurrentRoot))
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = a.SubmissionQueueDefaultWorkspaceID()
+		sess.WorkspaceID = firstNonEmpty(workspaceID, a.SubmissionQueueDefaultWorkspaceID())
 	}
 	if runtime := a.SubmissionQueueBackendRuntime(); runtime != nil {
 		sess = runtime.ReconcileCompletedTurnFromFinalOutput(sessionKey, sess)
@@ -237,7 +239,10 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 			Status:        state.SessionStatusIdle.String(),
 		}
 	}
-	inboundAttachments, err := a.SubmissionQueueAttachmentResolver().ResolveInboundAttachments(msg, sess.WorkspaceID, sessionKey)
+	if workspaceID == "" {
+		workspaceID = firstNonEmpty(strings.TrimSpace(a.SubmissionQueueResolveWorkspaceID(msg, sess, bindOnlyCurrentRoot)), strings.TrimSpace(sess.WorkspaceID), a.SubmissionQueueDefaultWorkspaceID())
+	}
+	inboundAttachments, err := a.SubmissionQueueAttachmentResolver().ResolveInboundAttachments(msg, workspaceID, sessionKey)
 	if err != nil {
 		return err
 	}
@@ -245,7 +250,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	bucketSessionKey := pendingQueue.PendingInputSessionKey(msg)
 	stagedImages := pendingQueue.CollectPendingStagedImages(sessionKey, bucketSessionKey)
 	attachments := append(StagedImageAttachments(stagedImages), inboundAttachments...)
-	skillResolution := a.SubmissionQueueSkillResolver().ResolveSubmissionSkill(sessionKey, sess.WorkspaceID, msg.Text, attachments)
+	skillResolution := a.SubmissionQueueSkillResolver().ResolveSubmissionSkill(sessionKey, workspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
 		a.SubmissionQueueSkillResolver().SetSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
 		if err := a.SubmissionQueueReplyText(context.Background(), msg.MessageID, PendingConfirmationText(skillResolution.PendingReplacement.Name), a.SubmissionQueueReplyInThreadEnabled(msg.ChatType)); err != nil {
@@ -271,7 +276,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		"session_key", sessionKey,
 		"chat_id", msg.ChatID,
 		"user_id", msg.UserID,
-		"workspace_id", sess.WorkspaceID,
+		"workspace_id", workspaceID,
 		"active_thread_id", sess.ActiveThreadID,
 		"active_turn_id", sess.ActiveTurnID,
 		"queue_len", len(sess.Queue),
@@ -286,7 +291,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	a.SubmissionQueueLogSessionState("submission enqueue session persisted", sessionKey, appState.Session(sessionKey))
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          sess.WorkspaceID,
+		WorkspaceID:          workspaceID,
 		UserID:               msg.UserID,
 		ChatID:               msg.ChatID,
 		TriggerMessageID:     msg.MessageID,

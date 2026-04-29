@@ -30,6 +30,7 @@ func SetThreadContext(sess *state.Session, workspaceID, threadID, name, preview 
 	if sess == nil {
 		return
 	}
+	sess.WorkspaceID = strings.TrimSpace(workspaceID)
 	sess.ActiveThreadID = strings.TrimSpace(threadID)
 	sess.ActiveThreadWorkspaceID = strings.TrimSpace(workspaceID)
 	sess.ActiveThreadName = strings.TrimSpace(name)

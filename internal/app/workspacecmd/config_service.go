@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/appcore"
+	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -115,13 +115,22 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		if sess == nil {
 			sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
-		s.SwitchSessionWorkspace(sess, ws.ID)
-		if err := s.SaveSession(sess); err != nil {
+		if err := setSelectedWorkspaceForMessage(s.App, msg, ws.ID); err != nil {
 			return err
 		}
+		retargeted := sessionCanRetargetWorkspace(sess, s.SessionHasInFlight(sess))
 		reply := "已切换工作区到 " + ws.ID
+		if retargeted {
+			s.SwitchSessionWorkspace(sess, ws.ID)
+			if err := s.SaveSession(sess); err != nil {
+				return err
+			}
+		}
 		if s.SessionHasInFlight(sess) {
 			reply += s.BackendWorkspaceSwitchInFlightNotice()
+			return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		}
+		if !retargeted {
 			return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 		}
 		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
@@ -157,10 +166,7 @@ func (s *ConfigService) ShowWorkspaceChooseMenu(msg *feishu.InboundMessage) erro
 func (s *ConfigService) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
 	sessionKey = appcore.MakeSessionKey(s.App, msg)
 	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
+	workspaceID := selectedWorkspaceIDForMessage(s.App, msg, sess)
 	return sessionKey, sess, config.FindWorkspace(s.App.Config(), workspaceID)
 }
 
@@ -208,10 +214,7 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 	if len(s.App.Config().Workspaces) <= 1 {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
-	currentID := appcore.DefaultWorkspaceID(s.App)
-	if sess := s.GetSession(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		currentID = strings.TrimSpace(sess.WorkspaceID)
-	}
+	currentID := selectedWorkspaceIDForSession(s.App, s.GetSession(sessionKey))
 	if workspaceID == currentID {
 		return fmt.Errorf("不能删除当前 workspace，请先切换到其他 workspace")
 	}

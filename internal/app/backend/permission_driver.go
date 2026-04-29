@@ -923,10 +923,7 @@ func currentWorkspaceForDriver(app appcore.AppConfig, sessionKey string) (*state
 	if store := app.Store(); store != nil {
 		sess = store.GetSession(strings.TrimSpace(sessionKey))
 	}
-	workspaceID := appcore.DefaultWorkspaceID(app)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
+	workspaceID := appcore.ResolveWorkspaceSelectionForSession(app, sess)
 	ws := config.FindWorkspace(app.Config(), workspaceID)
 	if ws == nil {
 		return sess, nil, fmt.Errorf("current workspace not found")

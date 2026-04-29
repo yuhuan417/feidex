@@ -98,6 +98,9 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     "sess-1",
+		OwnerUserID:             "u-1",
+		ChatID:                  "c-1",
+		ChatType:                "p2p",
 		WorkspaceID:             "default",
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: "default",
@@ -118,14 +121,18 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 	if sess == nil {
 		t.Fatal("expected session to exist")
 	}
-	if sess.WorkspaceID != "alt" {
-		t.Fatalf("workspace = %q, want alt", sess.WorkspaceID)
+	if sess.WorkspaceID != "default" {
+		t.Fatalf("workspace = %q, want default", sess.WorkspaceID)
 	}
 	if sess.ActiveThreadID != "thread-1" || sess.ActiveThreadWorkspaceID != "default" {
 		t.Fatalf("expected thread lineage preserved, got %#v", sess)
 	}
 	if sess.ActiveTurnID != "turn-1" || sess.ActiveSubmissionID != "sub-1" {
 		t.Fatalf("expected turn lineage preserved, got %#v", sess)
+	}
+	selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "c-1", "u-1"))
+	if selection == nil || selection.WorkspaceID != "alt" {
+		t.Fatalf("workspace selection session = %+v, want alt", selection)
 	}
 }
 

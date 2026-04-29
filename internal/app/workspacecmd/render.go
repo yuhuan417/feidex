@@ -108,10 +108,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 	}
 	var sess *state.Session
 	sess = s.GetSession(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		workspaceID = sess.WorkspaceID
-	}
+	workspaceID := selectedWorkspaceIDForSession(s.App, sess)
 	ws := config.FindWorkspace(s.App.Config(), workspaceID)
 	rootPath := appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), s.DefaultWorkspaceCloneRoot(ws))
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
@@ -339,10 +336,7 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	sess = s.GetSession(sessionKey)
-	currentID := appcore.DefaultWorkspaceID(s.App)
-	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		currentID = sess.WorkspaceID
-	}
+	currentID := selectedWorkspaceIDForSession(s.App, sess)
 	currentWS := config.FindWorkspace(s.App.Config(), currentID)
 	bodyLines := []string{"当前工作区: `" + currentID + "`"}
 	bodyLines = s.BackendWorkspaceSummaryLines(bodyLines, currentWS)
@@ -417,13 +411,17 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	sess = s.GetSession(sessionKey)
-	currentID := appcore.DefaultWorkspaceID(s.App)
+	currentID := selectedWorkspaceIDForSession(s.App, sess)
 	var recentIDs []string
 	if sess != nil {
-		if strings.TrimSpace(sess.WorkspaceID) != "" {
-			currentID = sess.WorkspaceID
+		if selectionKey := appcore.MakeWorkspaceSelectionKeyForSession(s.App, sess); selectionKey != "" {
+			if selectionSess := s.GetSession(selectionKey); selectionSess != nil {
+				recentIDs = selectionSess.RecentWorkspaceIDs
+			}
 		}
-		recentIDs = sess.RecentWorkspaceIDs
+		if len(recentIDs) == 0 {
+			recentIDs = sess.RecentWorkspaceIDs
+		}
 	}
 
 	workspaces := s.App.Config().Workspaces
@@ -503,10 +501,7 @@ func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[st
 
 // RenderWorkspaceDeleteMenuCard renders the workspace delete menu card.
 func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
-	currentID := appcore.DefaultWorkspaceID(s.App)
-	if sess := s.GetSession(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
-		currentID = strings.TrimSpace(sess.WorkspaceID)
-	}
+	currentID := selectedWorkspaceIDForSession(s.App, s.GetSession(sessionKey))
 	workspaces := s.App.Config().Workspaces
 	lines := []string{
 		"删除 workspace 只会移除配置，不会删除磁盘目录。",
