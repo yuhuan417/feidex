@@ -47,9 +47,10 @@ type FailureCardDeps struct {
 }
 
 type FailureAsyncDeps struct {
-	CleanupSubmissionRuntimeState func(sub *state.Submission)
-	StartNextSubmissionAsync      func(sessionKey, reason string)
-	RunAsync                      func(fn func())
+	CleanupSubmissionRuntimeState      func(sub *state.Submission)
+	ClearSubmissionProcessingReactions func(sub *state.Submission)
+	StartNextSubmissionAsync           func(sessionKey, reason string)
+	RunAsync                           func(fn func())
 }
 
 type FailureDeps struct {
@@ -178,6 +179,12 @@ func (s BackendFailureService) TurnStopAttentionUserID(sub *state.Submission, tu
 func (s BackendFailureService) CleanupSubmissionRuntimeState(sub *state.Submission) {
 	if s.deps.Async.CleanupSubmissionRuntimeState != nil {
 		s.deps.Async.CleanupSubmissionRuntimeState(sub)
+	}
+}
+
+func (s BackendFailureService) ClearSubmissionProcessingReactions(sub *state.Submission) {
+	if s.deps.Async.ClearSubmissionProcessingReactions != nil {
+		s.deps.Async.ClearSubmissionProcessingReactions(sub)
 	}
 }
 
@@ -361,6 +368,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	if sub == nil {
 		return
 	}
+	s.ClearSubmissionProcessingReactions(sub)
 	terminalText := appturnlifecycle.TurnCompletionTerminalText(sub.Status, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
 	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
 	updatedSess, _ := s.UpdateSession(sessionKey, func(sess *state.Session) {

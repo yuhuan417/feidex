@@ -1,4 +1,4 @@
-package app
+package maintenance
 
 import (
 	"context"
@@ -7,31 +7,41 @@ import (
 	"strings"
 	"time"
 
+	appcore "feidex/internal/app/appcore"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
-func recoverRuntimeState(a *App) {
-	recoverSharedRuntimeState(a)
-	recoverFrontendRuntimeState(a)
+func (s RuntimeMaintenanceService) RecoverRuntimeState() {
+	s.RecoverSharedRuntimeState()
+	s.RecoverFrontendRuntimeState()
 }
 
-func recoverSharedRuntimeState(a *App) {
-	resetLiveThreadState(a)
-	appState := a.State()
+func (s RuntimeMaintenanceService) RecoverSharedRuntimeState() {
+	if s.app == nil {
+		return
+	}
+	s.app.MaintenanceResetLiveThreadState()
+	appState := s.app.MaintenanceAppState()
+	if appState == nil {
+		return
+	}
 	sessions := appState.Sessions()
 	cleared := 0
 	for _, sess := range sessions {
+		if sess == nil {
+			continue
+		}
 		if strings.TrimSpace(sess.WorkspaceID) == "" {
-			sess.WorkspaceID = defaultWorkspaceID(a)
+			sess.WorkspaceID = appcore.DefaultWorkspaceID(s.app)
 			slog.Warn("repairing empty workspace on startup",
 				"session_key", sess.Key,
 				"workspace_id", sess.WorkspaceID,
 			)
 		}
-		if !sessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && state.NormalizeSessionStatus(sess.Status) == state.SessionStatusIdle {
+		if !s.app.MaintenanceSessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && state.NormalizeSessionStatus(sess.Status) == state.SessionStatusIdle {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-				clearSessionThreadContext(sess)
+				s.app.MaintenanceClearSessionThreadContext(sess)
 			}
 			_ = appState.SaveSession(sess)
 			continue
@@ -44,12 +54,12 @@ func recoverSharedRuntimeState(a *App) {
 			"queue_len", len(sess.Queue),
 			"status", sess.Status,
 		)
-		sessionResetActiveOperations(sess)
+		s.app.MaintenanceResetSessionActiveOperations(sess)
 		sess.Queue = nil
 		sess.StagedImages = nil
 		sess.Status = state.SessionStatusIdle.String()
 		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-			clearSessionThreadContext(sess)
+			s.app.MaintenanceClearSessionThreadContext(sess)
 		}
 		_ = appState.SaveSession(sess)
 		cleared++
@@ -57,46 +67,42 @@ func recoverSharedRuntimeState(a *App) {
 	if cleared > 0 {
 		slog.Debug("runtime session state recovery complete", "cleared_sessions", cleared)
 	}
-	newRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup()
-	newRuntimeMaintenanceService(a).CleanupExpiredAttachments()
+	s.ExpirePendingRequestsOnStartup()
+	s.CleanupExpiredAttachments()
 }
 
-func recoverFrontendRuntimeState(a *App) {
-	if a == nil {
+func (s RuntimeMaintenanceService) RecoverFrontendRuntimeState() {
+	if s.app == nil {
 		return
 	}
-	a.frontendRecoveryMu.Lock()
-	defer a.frontendRecoveryMu.Unlock()
-	resetLiveThreadState(a)
-	if !hasConfiguredBackend(a) {
-		return
-	}
-	endBackendRecovery := func() {}
-	if runtime := backendRuntime(a); runtime != nil {
-		endBackendRecovery = runtime.beginStartupRecoveryScope(a)
-	}
-	defer endBackendRecovery()
-	recoverSessionThreadsOnStartup(a)
+	s.app.MaintenanceWithFrontendRecoveryLock(func() {
+		s.app.MaintenanceResetLiveThreadState()
+		if !appcore.HasConfiguredBackend(s.app) {
+			return
+		}
+		endBackendRecovery := s.app.MaintenanceBeginBackendStartupRecovery()
+		if endBackendRecovery == nil {
+			endBackendRecovery = func() {}
+		}
+		defer endBackendRecovery()
+		s.recoverSessionThreadsOnStartup()
+	})
 }
 
-func resetLiveThreadState(a *App) {
-	if a == nil {
+func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
+	if s.app == nil {
 		return
 	}
-	a.liveThreads = newLiveThreadTracker()
-}
-
-func recoverSessionThreadsOnStartup(a *App) {
-	if a == nil || a.store == nil {
+	appState := s.app.MaintenanceAppState()
+	if appState == nil {
 		return
 	}
-	appState := a.State()
-	effectiveModel := configuredGlobalModel(a.cfg)
+	effectiveModel := s.app.MaintenanceConfiguredGlobalModel()
 	for _, sess := range appState.Sessions() {
 		if sess == nil {
 			continue
 		}
-		if !sessionBelongsToFrontend(a, sess.Key) {
+		if !s.app.MaintenanceSessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
@@ -105,7 +111,7 @@ func recoverSessionThreadsOnStartup(a *App) {
 		if state.NormalizeSessionStatus(firstNonEmpty(sess.Status, state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 			continue
 		}
-		if sessionHasInFlightSubmission(sess) {
+		if s.app.MaintenanceSessionHasInFlightSubmission(sess) {
 			continue
 		}
 		if len(sess.Queue) != 0 || len(sess.StagedImages) != 0 {
@@ -113,25 +119,25 @@ func recoverSessionThreadsOnStartup(a *App) {
 		}
 
 		sessionKey := strings.TrimSpace(sess.Key)
-		workspaceID := firstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, defaultWorkspaceID(a))
-		ws := config.FindWorkspace(a.cfg, workspaceID)
+		workspaceID := firstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, appcore.DefaultWorkspaceID(s.app))
+		ws := config.FindWorkspace(s.app.Config(), workspaceID)
 		if ws == nil {
 			slog.Warn("startup thread recovery dropped unknown workspace lineage",
 				"session_key", sessionKey,
 				"thread_id", sess.ActiveThreadID,
 				"workspace_id", workspaceID,
 			)
-			clearSessionThreadContext(sess)
+			s.app.MaintenanceClearSessionThreadContext(sess)
 			sess.Status = state.SessionStatusIdle.String()
 			_ = appState.SaveSession(sess)
-			clearSessionLiveThread(a, sessionKey)
+			s.app.MaintenanceClearSessionLiveThread(sessionKey)
 			continue
 		}
-		conversationBackend(a).RecoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
+		s.app.MaintenanceRecoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
 	}
 }
 
-func startupReadyChatIDs(sessions []*state.Session) []string {
+func StartupReadyChatIDs(sessions []*state.Session) []string {
 	seen := map[string]struct{}{}
 	chatIDs := make([]string, 0, len(sessions))
 	for _, sess := range sessions {
@@ -152,25 +158,29 @@ func startupReadyChatIDs(sessions []*state.Session) []string {
 	return chatIDs
 }
 
-func appStartupReadyChatIDs(a *App, sessions []*state.Session) []string {
-	if a == nil {
-		return startupReadyChatIDs(sessions)
+func (s RuntimeMaintenanceService) FrontendStartupReadyChatIDs(sessions []*state.Session) []string {
+	if s.app == nil {
+		return StartupReadyChatIDs(sessions)
 	}
 	filtered := make([]*state.Session, 0, len(sessions))
 	for _, sess := range sessions {
-		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
+		if sess == nil || !s.app.MaintenanceSessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		filtered = append(filtered, sess)
 	}
-	return startupReadyChatIDs(filtered)
+	return StartupReadyChatIDs(filtered)
 }
 
-func sendStartupReadyNotifications(a *App) {
-	if a == nil || a.feishu == nil || a.store == nil {
+func (s RuntimeMaintenanceService) SendStartupReadyNotifications() {
+	if s.app == nil || s.app.Feishu() == nil || s.app.Store() == nil {
 		return
 	}
-	chatIDs := appStartupReadyChatIDs(a, a.State().Sessions())
+	appState := s.app.MaintenanceAppState()
+	if appState == nil {
+		return
+	}
+	chatIDs := s.FrontendStartupReadyChatIDs(appState.Sessions())
 	if len(chatIDs) == 0 {
 		slog.Debug("startup ready notification skipped", "reason", "no_known_chats")
 		return
@@ -178,7 +188,7 @@ func sendStartupReadyNotifications(a *App) {
 	const text = "feidex 已就绪，可继续发送消息。"
 	for _, chatID := range chatIDs {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := a.feishu.SendText(ctx, chatID, text)
+		err := s.app.Feishu().SendText(ctx, chatID, text)
 		cancel()
 		if err != nil {
 			slog.Error("startup ready notification failed", "chat_id", chatID, "error", err)

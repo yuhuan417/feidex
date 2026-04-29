@@ -23,8 +23,13 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
 	backend := configuredBackend(a)
-	if err := handleBackendMaintenanceBlock(a, raw); err != nil {
-		return err
+	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
+		return newUIWarningError(reason)
+	}
+	if runtime := backendRuntime(a); runtime != nil {
+		if err := runtime.maintenanceBlocksCommand(a, raw); err != nil {
+			return err
+		}
 	}
 	if !commandHandlesLocallyForBackend(spec, backend, fields) {
 		return enqueuePassthroughCommand(a, msg, raw)

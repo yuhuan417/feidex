@@ -2,9 +2,7 @@ package app
 
 import (
 	"context"
-	"log/slog"
-	"strings"
-	"time"
+	appmaintenance "feidex/internal/app/maintenance"
 
 	"feidex/internal/feishu"
 
@@ -12,13 +10,10 @@ import (
 )
 
 func patchMaintenanceCard(a *App, messageID string, card map[string]any, warnMsg string, attrs ...any) {
-	if a == nil || a.feishu == nil || strings.TrimSpace(messageID) == "" || card == nil {
+	if a == nil {
 		return
 	}
-	if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
-		attrs = append(attrs, "error", err)
-		slog.Warn(warnMsg, attrs...)
-	}
+	appmaintenance.PatchCard(a.feishu, messageID, card, warnMsg, attrs...)
 }
 
 func completeMaintenanceAsyncAction(a *App,
@@ -49,19 +44,7 @@ func maintenanceFallbackResponse(
 	loadStatusCard func(context.Context) (map[string]any, error),
 	failureCard func(sessionKey, errText string) map[string]any,
 ) (*callback.CardActionTriggerResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	card, err := loadStatusCard(ctx)
-	if err == nil {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: cause.Error()},
-			Card:  rawCard(card),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "warning", Content: cause.Error()},
-		Card:  rawCard(failureCard(sessionKey, err.Error())),
-	}, nil
+	return appmaintenance.FallbackResponse(sessionKey, cause, loadStatusCard, failureCard)
 }
 
 func completeMaintenanceRestartRun[S any](
@@ -75,16 +58,7 @@ func completeMaintenanceRestartRun[S any](
 	toastText string,
 ) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	snapshot, err := begin()
-	if err != nil {
-		return maintenanceFallbackResponse(sessionKey, err, loadStatusCard, failureCard)
-	}
-	messageID := strings.TrimSpace(action.MessageID)
-	go run(messageID, sessionKey)
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: toastText},
-		Card:  rawCard(renderOperationCard(sessionKey, snapshot)),
-	}, nil
+	return appmaintenance.CompleteRestartRun(action, sessionKey, begin, run, renderOperationCard, loadStatusCard, failureCard, toastText)
 }
 
 func startMaintenanceRestartFromMessage[S any](
@@ -95,21 +69,8 @@ func startMaintenanceRestartFromMessage[S any](
 	renderOperationCard func(sessionKey string, snapshot S) map[string]any,
 	finishFailed func(message string),
 ) error {
-	if msg == nil {
-		return nil
-	}
 	sessionKey := makeSessionKey(a, msg)
-	snapshot, err := begin()
-	if err != nil {
-		return err
-	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, renderOperationCard(sessionKey, snapshot), replyInThreadEnabled(a, msg.ChatType))
-	if err != nil {
-		finishFailed("启动重启卡片失败: " + err.Error())
-		return err
-	}
-	go run(msgID, sessionKey)
-	return nil
+	return appmaintenance.StartRestartFromMessage(msg, sessionKey, a.feishu.ReplyCard, replyInThreadEnabled(a, msg.ChatType), begin, run, renderOperationCard, finishFailed)
 }
 
 func maintenanceSnapshotLifecycle[S any](
@@ -122,20 +83,14 @@ func maintenanceSnapshotLifecycle[S any](
 	finishState func(result, message string) S,
 	setProgress func(snapshot *S, phase, message string),
 ) (func(S), func(string, string) S, func(string, string)) {
-	patch := func(snapshot S) {
-		patchMaintenanceCard(a, messageID, renderCard(sessionKey, snapshot), warnMsg,
-			"message_id", messageID,
-		)
-	}
-	update := func(phase, message string) S {
-		snapshot := updateState(func(snapshot *S) {
-			setProgress(snapshot, phase, message)
-		})
-		patch(snapshot)
-		return snapshot
-	}
-	finalize := func(result, message string) {
-		patch(finishState(result, message))
-	}
-	return patch, update, finalize
+	return appmaintenance.SnapshotLifecycle(
+		func(card map[string]any) {
+			patchMaintenanceCard(a, messageID, card, warnMsg, "message_id", messageID)
+		},
+		sessionKey,
+		renderCard,
+		updateState,
+		finishState,
+		setProgress,
+	)
 }

@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	appbackend "feidex/internal/app/backend"
-	appsessionctx "feidex/internal/app/sessionctx"
-	appturnlifecycle "feidex/internal/app/turnlifecycle"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
@@ -85,72 +83,7 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *sta
 	if a == nil || a.store == nil || sub == nil {
 		return
 	}
-	appState := a.State()
-	current := appState.Submission(sub.ID)
-	if current == nil || current.Finalized {
-		return
-	}
-	sub = current
-	threadID = firstNonEmpty(strings.TrimSpace(threadID), strings.TrimSpace(sub.ThreadID))
-	turnID = firstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
-	if turnID != "" && message != "" {
-		newTurnStreamService(a).recordTurnError(threadID, turnID, message)
-	}
-	flush := appturnstream.FlushResult{}
-	if turnID != "" {
-		flush = newTurnStreamService(a).flushTurnStream(context.Background(), threadID, turnID)
-	}
-	newBackendFailureService(a).ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
-	_ = appState.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
-	sub = appState.Submission(sub.ID)
-	if sub == nil {
-		return
-	}
-	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
-	terminalText := appturnlifecycle.TurnCompletionTerminalText(sub.Status, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
-	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
-	updatedSess, _ := appState.UpdateSession(sessionKey, func(sess *state.Session) {
-		if sess == nil {
-			return
-		}
-		appsessionctx.RemoveActiveOperation(sess, sub.ID, turnID)
-		switch {
-		case appsessionctx.HasActiveOperations(sess):
-			sess.Status = state.SessionStatusTurnStarting.String()
-			for _, op := range sess.ActiveOperations {
-				if strings.TrimSpace(op.TurnID) != "" {
-					sess.Status = state.SessionStatusTurnInProgress.String()
-					break
-				}
-			}
-		case len(sess.Queue) > 0 || len(sess.StagedImages) > 0:
-			sess.Status = state.SessionStatusQueued.String()
-		default:
-			sess.Status = state.SessionStatusIdle.String()
-		}
-	})
-	suppressTerminalCard := false
-	if updatedSess != nil {
-		suppressTerminalCard = newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub, reuseMessageID)
-	}
-	if terminalText != "" && !suppressTerminalCard {
-		newOutboundCardService(a).replaceTurnEventCardWithReuse(
-			context.Background(),
-			sub,
-			"任务状态",
-			"grey",
-			prependAttentionMentionMarkdown(terminalText, turnStopAttentionUserID(a, sub, turnID)),
-			"turn_terminal",
-			"",
-			reuseMessageID,
-		)
-	}
-	newRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
-	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
-		runAsync(a, func() {
-			newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, "backendFailed")
-		})
-	}
+	newBackendFailureService(a).FailSubmissionWithoutTerminalCompletion(sessionKey, sub, threadID, turnID, message)
 }
 
 // newBackendFailureService builds a backend.BackendFailureService with
@@ -222,6 +155,9 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 		Async: appbackend.FailureAsyncDeps{
 			CleanupSubmissionRuntimeState: func(sub *state.Submission) {
 				newRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
+			},
+			ClearSubmissionProcessingReactions: func(sub *state.Submission) {
+				newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 			},
 			StartNextSubmissionAsync: func(sessionKey, reason string) {
 				newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)

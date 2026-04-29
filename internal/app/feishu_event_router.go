@@ -105,8 +105,13 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			return nil
 		}
 	}
-	if err := backendMaintenanceBlocksInboundMessage(a); err != nil {
-		return err
+	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
+		return newUIWarningError(reason)
+	}
+	if runtime := backendRuntime(a); runtime != nil {
+		if err := runtime.maintenanceBlocksCommand(a, ""); err != nil {
+			return err
+		}
 	}
 	rcs := newReplyContinuationService(a)
 	replyLink := rcs.replyRootTurnLink(msg)

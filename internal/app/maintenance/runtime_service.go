@@ -15,6 +15,7 @@ import (
 	"feidex/internal/app/appcore"
 	appattachments "feidex/internal/app/attachments"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
+	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -52,11 +53,36 @@ type App interface {
 	MaintenanceRuntimeState() RuntimeStateProvider
 	// MenuCardBody formats a menu card body with breadcrumb navigation.
 	MenuCardBody(action, body string) string
-	// AppStartupReadyChatIDs returns chat IDs for sessions that belong to the
-	// current frontend and are ready to receive notifications.
-	AppStartupReadyChatIDs(sessions []*state.Session) []string
 	// QueueFrontendCardNotification queues a card notification for later delivery.
 	QueueFrontendCardNotification(note state.FrontendCardNotification)
+	// MaintenanceResetLiveThreadState clears the in-memory live-thread tracker.
+	MaintenanceResetLiveThreadState()
+	// MaintenanceWithFrontendRecoveryLock runs fn while holding the frontend
+	// recovery mutex.
+	MaintenanceWithFrontendRecoveryLock(fn func())
+	// MaintenanceBeginBackendStartupRecovery begins a backend-specific startup
+	// recovery scope and returns its end callback.
+	MaintenanceBeginBackendStartupRecovery() func()
+	// MaintenanceSessionBelongsToFrontend reports whether the session belongs to
+	// the current frontend.
+	MaintenanceSessionBelongsToFrontend(sessionKey string) bool
+	// MaintenanceClearSessionThreadContext clears the active thread lineage from
+	// the session.
+	MaintenanceClearSessionThreadContext(sess *state.Session)
+	// MaintenanceResetSessionActiveOperations clears active session operations.
+	MaintenanceResetSessionActiveOperations(sess *state.Session)
+	// MaintenanceSessionHasInFlightSubmission reports whether the session still
+	// has in-flight submission state.
+	MaintenanceSessionHasInFlightSubmission(sess *state.Session) bool
+	// MaintenanceClearSessionLiveThread clears live-thread tracking for the
+	// session.
+	MaintenanceClearSessionLiveThread(sessionKey string)
+	// MaintenanceConfiguredGlobalModel returns the effective global model used
+	// for startup thread recovery.
+	MaintenanceConfiguredGlobalModel() string
+	// MaintenanceRecoverStartupConversation rebuilds backend-specific startup
+	// conversation state for an active thread.
+	MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +103,8 @@ type AppStateProvider interface {
 	DeleteSubmission(id string)
 	// Sessions returns all sessions in the store.
 	Sessions() []*state.Session
+	// SaveSession persists a session snapshot.
+	SaveSession(sess *state.Session) error
 }
 
 // RuntimeStateProvider narrows runtime state access to the methods used by
@@ -334,7 +362,11 @@ func (s RuntimeMaintenanceService) NotifyDriveArtifactGCPermissionIssue(source s
 		return
 	}
 	notifier, _ := feishuClient.(PermissionIssueDiagnosticSender)
-	chatIDs := s.app.AppStartupReadyChatIDs(s.app.MaintenanceAppState().Sessions())
+	appState := s.app.MaintenanceAppState()
+	if appState == nil {
+		return
+	}
+	chatIDs := s.FrontendStartupReadyChatIDs(appState.Sessions())
 	if len(chatIDs) == 0 {
 		s.app.QueueFrontendCardNotification(state.FrontendCardNotification{
 			Kind:        FrontendCardNotificationKindFeishuPermissionIssue,
