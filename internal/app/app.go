@@ -63,6 +63,7 @@ type appTrackers struct {
 	turnStreams         *turnStreamTracker
 	turnItems           *turnItemTracker
 	turnBindings        *turnbinding.Tracker
+	submissionStarts    submissionStartTracker
 	workspaceCloneOps   *workspaceCloneTracker
 	finalCardPatches    *finalCardPatchTracker
 	pendingSkills       *appskillscmd.PendingSkillTracker

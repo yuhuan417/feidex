@@ -53,6 +53,8 @@ type App interface {
 	SubmissionQueueSendQueuedNotice(ctx context.Context, sub *state.Submission)
 	SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *state.Submission, err error, willContinue bool)
 	SubmissionQueueRunAsync(fn func())
+	SubmissionQueueTryBeginStart(sessionKey string) bool
+	SubmissionQueueFinishStart(sessionKey string) bool
 	SubmissionQueueLogSessionState(event, sessionKey string, sess *state.Session)
 
 	// Reactions (delegated to PendingQueueService through app).
@@ -357,41 +359,82 @@ func (s SubmissionQueueService) StartNextSubmission(sessionKey string) error {
 // optionally notifying on failure.
 func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey string, notifyFailure bool) error {
 	a := s.App
-	appState := a.SubmissionQueueAppState()
-	sess := appState.Session(sessionKey)
-	a.SubmissionQueueLogSessionState("startNextSubmission entry", sessionKey, sess)
-	if sess == nil {
-		slog.Debug("startNextSubmission skipped", "session_key", sessionKey, "has_session", false)
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
 		return nil
 	}
-	nextMode := a.SubmissionQueueConfiguredInflightMode()
-	if len(sess.Queue) > 0 {
-		if nextSub := appState.Submission(sess.Queue[0]); nextSub != nil {
-			nextMode = a.SubmissionQueueConfiguredInflightMode()
+	if !a.SubmissionQueueTryBeginStart(sessionKey) {
+		slog.Debug("startNextSubmission coalesced",
+			"session_key", sessionKey,
+		)
+		return nil
+	}
+	defer func() {
+		if a.SubmissionQueueFinishStart(sessionKey) {
+			a.SubmissionQueueRunAsync(func() {
+				s.StartNextSubmissionAsync(sessionKey, "coalesced")
+			})
 		}
-	}
-	if sessionctx.HasInFlightSubmission(sess) && !a.SubmissionQueueInflightAllowsAdditional(nextMode) {
-		slog.Debug("startNextSubmission skipped",
-			"session_key", sessionKey,
-			"has_session", true,
-			"active_turn_id", sess.ActiveTurnID,
-		)
-		return nil
-	}
-	if runtime := a.SubmissionQueueBackendRuntime(); runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery() {
-		slog.Debug("startNextSubmission deferred",
-			"session_key", sessionKey,
-			"reason", "codex_runtime_recovering",
-		)
-		return nil
-	}
-	subID, err := appState.DequeueSubmission(sessionKey)
-	if err != nil || subID == "" {
-		slog.Debug("startNextSubmission no queued item",
-			"session_key", sessionKey,
-			"error", err,
-		)
-		if err == nil {
+	}()
+
+	appState := a.SubmissionQueueAppState()
+	for {
+		sess := appState.Session(sessionKey)
+		a.SubmissionQueueLogSessionState("startNextSubmission entry", sessionKey, sess)
+		if sess == nil {
+			slog.Debug("startNextSubmission skipped", "session_key", sessionKey, "has_session", false)
+			return nil
+		}
+		nextMode := a.SubmissionQueueConfiguredInflightMode()
+		if len(sess.Queue) > 0 {
+			if nextSub := appState.Submission(sess.Queue[0]); nextSub != nil {
+				nextMode = a.SubmissionQueueConfiguredInflightMode()
+			}
+		}
+		if sessionctx.HasInFlightSubmission(sess) && !a.SubmissionQueueInflightAllowsAdditional(nextMode) {
+			slog.Debug("startNextSubmission skipped",
+				"session_key", sessionKey,
+				"has_session", true,
+				"active_turn_id", sess.ActiveTurnID,
+			)
+			return nil
+		}
+		if runtime := a.SubmissionQueueBackendRuntime(); runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery() {
+			slog.Debug("startNextSubmission deferred",
+				"session_key", sessionKey,
+				"reason", "codex_runtime_recovering",
+			)
+			return nil
+		}
+		subID, err := appState.DequeueSubmission(sessionKey)
+		if err != nil || subID == "" {
+			slog.Debug("startNextSubmission no queued item",
+				"session_key", sessionKey,
+				"error", err,
+			)
+			if err == nil {
+				updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *state.Session) {
+					if current == nil {
+						return
+					}
+					RefreshPendingStatus(current)
+				})
+				if updateErr != nil {
+					return updateErr
+				}
+				a.SubmissionQueueLogSessionState("startNextSubmission empty-after-dequeue", sessionKey, updatedSess)
+			} else {
+				a.SubmissionQueueLogSessionState("startNextSubmission empty-after-dequeue", sessionKey, appState.Session(sessionKey))
+			}
+			return err
+		}
+		a.SubmissionQueueLogSessionState("startNextSubmission after dequeue", sessionKey, appState.Session(sessionKey))
+		sub := appState.Submission(subID)
+		if sub == nil {
+			slog.Warn("queued submission missing",
+				"session_key", sessionKey,
+				"submission_id", subID,
+			)
 			updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *state.Session) {
 				if current == nil {
 					return
@@ -401,55 +444,34 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 			if updateErr != nil {
 				return updateErr
 			}
-			a.SubmissionQueueLogSessionState("startNextSubmission empty-after-dequeue", sessionKey, updatedSess)
-		} else {
-			a.SubmissionQueueLogSessionState("startNextSubmission empty-after-dequeue", sessionKey, appState.Session(sessionKey))
-		}
-		return err
-	}
-	a.SubmissionQueueLogSessionState("startNextSubmission after dequeue", sessionKey, appState.Session(sessionKey))
-	sub := appState.Submission(subID)
-	if sub == nil {
-		slog.Warn("queued submission missing",
-			"session_key", sessionKey,
-			"submission_id", subID,
-		)
-		updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *state.Session) {
-			if current == nil {
-				return
+			a.SubmissionQueueLogSessionState("startNextSubmission after missing queued item", sessionKey, updatedSess)
+			if updatedSess != nil && !sessionctx.HasInFlightSubmission(updatedSess) && len(updatedSess.Queue) > 0 {
+				continue
 			}
-			RefreshPendingStatus(current)
-		})
-		if updateErr != nil {
-			return updateErr
+			return nil
 		}
-		a.SubmissionQueueLogSessionState("startNextSubmission after missing queued item", sessionKey, updatedSess)
-		if updatedSess != nil && !sessionctx.HasInFlightSubmission(updatedSess) && len(updatedSess.Queue) > 0 {
-			return s.StartNextSubmissionWithFailureNotice(sessionKey, notifyFailure)
+		ws := a.SubmissionQueueWorkspace(sub.WorkspaceID)
+		if ws == nil {
+			slog.Error("workspace resolution failed",
+				"submission_id", sub.ID,
+				"workspace_id", sub.WorkspaceID,
+				"default_workspace_id", a.SubmissionQueueDefaultWorkspaceID(),
+			)
+			return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
 		}
-		return nil
-	}
-	ws := a.SubmissionQueueWorkspace(sub.WorkspaceID)
-	if ws == nil {
-		slog.Error("workspace resolution failed",
+		sess = appState.Session(sessionKey)
+		if sess == nil {
+			return fmt.Errorf("session %q disappeared after dequeue", sessionKey)
+		}
+		slog.Debug("startNextSubmission picked",
+			"session_key", sessionKey,
 			"submission_id", sub.ID,
 			"workspace_id", sub.WorkspaceID,
-			"default_workspace_id", a.SubmissionQueueDefaultWorkspaceID(),
+			"cwd", ws.Cwd,
+			"thread_id", sess.ActiveThreadID,
 		)
-		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
+		return a.SubmissionQueueConversationBackend().StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 	}
-	sess = appState.Session(sessionKey)
-	if sess == nil {
-		return fmt.Errorf("session %q disappeared after dequeue", sessionKey)
-	}
-	slog.Debug("startNextSubmission picked",
-		"session_key", sessionKey,
-		"submission_id", sub.ID,
-		"workspace_id", sub.WorkspaceID,
-		"cwd", ws.Cwd,
-		"thread_id", sess.ActiveThreadID,
-	)
-	return a.SubmissionQueueConversationBackend().StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 // ShouldStartNextSubmissionAsync returns true when a session has queued
