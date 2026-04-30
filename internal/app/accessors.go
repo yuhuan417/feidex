@@ -54,10 +54,7 @@ func (a *App) Claude() ClaudeCore {
 
 // Codex returns the Codex client.
 func (a *App) Codex() CodexClient {
-	if a == nil {
-		return nil
-	}
-	return a.codex
+	return getCodex(a)
 }
 
 // State returns the frontend-scoped app state store.

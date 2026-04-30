@@ -141,16 +141,14 @@ func TestUpgradeStartedSummaryLine(t *testing.T) {
 }
 
 func TestUpgradeLocalConfirmLines(t *testing.T) {
-	oldVersion := CurrentVersion
-	oldGOARCH := CurrentGOARCH
-	CurrentVersion = func() string { return "v0.1.0" }
-	CurrentGOARCH = func() string { return "amd64" }
-	defer func() {
-		CurrentVersion = oldVersion
-		CurrentGOARCH = oldGOARCH
-	}()
+	svc := UpgradeService{
+		deps: UpgradeServiceDeps{
+			CurrentVersion: func() string { return "v0.1.0" },
+			CurrentGOARCH:  func() string { return "amd64" },
+		},
+	}
 
-	lines := UpgradeLocalConfirmLines("/usr/local/bin/feidex")
+	lines := svc.UpgradeLocalConfirmLines("/usr/local/bin/feidex")
 	if len(lines) != 3 {
 		t.Fatalf("expected 3 lines, got %d", len(lines))
 	}

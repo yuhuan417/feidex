@@ -104,6 +104,6 @@ func formatUpgradeReleasePublishedAt(ts time.Time) string {
 	return ts.In(upgradeDisplayLocation).Format("2006-01-02 15:04:05")
 }
 
-func upgradeLocalConfirmLines(binaryPath string) []string {
-	return appupgradecmd.UpgradeLocalConfirmLines(binaryPath)
+func upgradeLocalConfirmLines(svc appupgradecmd.UpgradeService, binaryPath string) []string {
+	return svc.UpgradeLocalConfirmLines(binaryPath)
 }

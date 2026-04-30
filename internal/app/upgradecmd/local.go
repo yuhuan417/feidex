@@ -89,7 +89,7 @@ func (s UpgradeService) CommandUpgradeLocalPath(msg *feishu.InboundMessage, rawP
 	if err != nil {
 		return err
 	}
-	card := s.RenderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, UpgradeLocalConfirmLines(payload.BinaryPath))
+	card := s.RenderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, s.UpgradeLocalConfirmLines(payload.BinaryPath))
 	msgID, err := s.app.UpgradeFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func (s UpgradeService) CreateLocalUpgradeRequest(sessionKey, ownerUserID, feish
 		return "", UpgradePendingPayload{}, err
 	}
 	payload := UpgradePendingPayload{
-		CurrentVersion: CurrentVersion(),
+		CurrentVersion: s.deps.CurrentVersion(),
 		TargetVersion:  filepath.Base(selectedPath),
 		BinaryPath:     exePath,
 		SourcePath:     stagedPath,
@@ -197,7 +197,7 @@ func (s UpgradeService) CompleteUpgradeLocalBinaryConfirm(action *feishu.CardAct
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已选择本地 Binary"},
-		Card:  rawCard(s.RenderUpgradeConfirmCard("升级确认", sessionKey, requestID, upgradePayload, UpgradeLocalConfirmLines(upgradePayload.BinaryPath))),
+		Card:  rawCard(s.RenderUpgradeConfirmCard("升级确认", sessionKey, requestID, upgradePayload, s.UpgradeLocalConfirmLines(upgradePayload.BinaryPath))),
 	}, nil
 }
 
@@ -242,10 +242,10 @@ func (s UpgradeService) StageLocalUpgradeArtifact(requestID, sourcePath string) 
 	return targetPath, hex.EncodeToString(hash.Sum(nil)), written, nil
 }
 
-func UpgradeLocalConfirmLines(binaryPath string) []string {
+func (s UpgradeService) UpgradeLocalConfirmLines(binaryPath string) []string {
 	return []string{
-		"当前版本: `" + CurrentVersion() + "`",
-		"目标架构: `" + CurrentGOARCH() + "`",
+		"当前版本: `" + s.deps.CurrentVersion() + "`",
+		"目标架构: `" + s.deps.CurrentGOARCH() + "`",
 		"二进制: `" + binaryPath + "`",
 	}
 }

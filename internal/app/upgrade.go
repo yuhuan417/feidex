@@ -14,23 +14,25 @@ type upgradePendingPayload = appupgradecmd.UpgradePendingPayload
 const upgradeLocalBinaryPendingKind = appupgradecmd.UpgradeLocalBinaryPendingKind
 
 func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
-	appupgradecmd.CurrentVersion = func() string { return currentVersion() }
-	appupgradecmd.CurrentGOOS = func() string { return currentGOOS() }
-	appupgradecmd.CurrentGOARCH = func() string { return currentGOARCH() }
-	appupgradecmd.NewReleaseClient = func() appupgradecmd.ReleaseClient {
-		return newReleaseClient()
-	}
-	appupgradecmd.NewDaemonManager = func(serviceName string) (daemon.Manager, error) {
-		return newDaemonManager(serviceName)
-	}
-	appupgradecmd.StartDaemonUpgrade = func(spec daemon.UpgradeSpec) (string, error) {
-		return startDaemonUpgrade(spec)
-	}
-	appupgradecmd.NormalizeUpgradeVersion = func(raw string) (string, error) {
-		return normalizeUpgradeVersion(raw)
-	}
-	appupgradecmd.RenderSystemMenuCard = func(sessionKey string) map[string]any {
-		return renderSystemMenuCard(app, sessionKey)
+	deps := appupgradecmd.UpgradeServiceDeps{
+		CurrentVersion: func() string { return currentVersion() },
+		CurrentGOOS:    func() string { return currentGOOS() },
+		CurrentGOARCH:  func() string { return currentGOARCH() },
+		NewReleaseClient: func() appupgradecmd.ReleaseClient {
+			return newReleaseClient()
+		},
+		NewDaemonManager: func(serviceName string) (daemon.Manager, error) {
+			return newDaemonManager(serviceName)
+		},
+		StartDaemonUpgrade: func(spec daemon.UpgradeSpec) (string, error) {
+			return startDaemonUpgrade(spec)
+		},
+		NormalizeUpgradeVersion: func(raw string) (string, error) {
+			return normalizeUpgradeVersion(raw)
+		},
+		RenderSystemMenuCard: func(sessionKey string) map[string]any {
+			return renderSystemMenuCard(app, sessionKey)
+		},
 	}
 
 	adapter := &appupgradecmd.DefaultApp{
@@ -72,5 +74,5 @@ func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
 			return menuCardBody(action, body)
 		},
 	}
-	return appupgradecmd.NewUpgradeService(adapter)
+	return appupgradecmd.NewUpgradeService(adapter, deps)
 }

@@ -57,6 +57,24 @@ func codexRuntimeRecovering(a *App) bool {
 	return buildCodexRecoveryService(a).IsRecovering()
 }
 
+func getCodex(a *App) CodexClient {
+	if a == nil {
+		return nil
+	}
+	a.codexRuntimeMu.Lock()
+	defer a.codexRuntimeMu.Unlock()
+	return a.codex
+}
+
+func setCodex(a *App, c CodexClient) {
+	if a == nil {
+		return
+	}
+	a.codexRuntimeMu.Lock()
+	a.codex = c
+	a.codexRuntimeMu.Unlock()
+}
+
 func currentCodexClient(a *App) CodexClient {
 	if a == nil {
 		return nil
@@ -65,8 +83,8 @@ func currentCodexClient(a *App) CodexClient {
 	if svc.IsRecovering() {
 		return svc.CurrentClient()
 	}
-	if a.codex != nil {
-		return a.codex
+	if c := getCodex(a); c != nil {
+		return c
 	}
 	return svc.CurrentClient()
 }
@@ -81,9 +99,7 @@ func requireCodexClient(a *App) (CodexClient, error) {
 
 func replaceCodexClient(a *App, next CodexClient) CodexClient {
 	prev := buildCodexRecoveryService(a).ReplaceClient(next)
-	if a != nil {
-		a.codex = next
-	}
+	setCodex(a, next)
 	return prev
 }
 
@@ -93,9 +109,7 @@ func replyCodexError(a *App, requestID json.RawMessage, code int, message string
 
 func completeCodexTransportRecovery(a *App, next CodexClient) bool {
 	if ok := buildCodexRecoveryService(a).CompleteRecovery(next); ok {
-		if a != nil {
-			a.codex = next
-		}
+		setCodex(a, next)
 		return true
 	}
 	return false
@@ -117,7 +131,7 @@ func recoverCodexRuntimeAfterTransportFailure(a *App, failed CodexClient, skipFr
 	svc.RecoverAfterTransportFailure(failed, skipFrontendRecovery)
 	if a != nil && !svc.IsRecovering() {
 		if next := svc.CurrentClient(); next != nil {
-			a.codex = next
+			setCodex(a, next)
 		}
 	}
 }

@@ -152,38 +152,33 @@ const (
 // Defaults to time.Local; callers may override for tests.
 var DisplayLocation = time.Local
 
-// Function variables — injected by the parent package, overridable in tests.
-var (
-	// CurrentVersion returns the current binary version.
-	CurrentVersion func() string
-	// CurrentGOOS returns the target operating system.
-	CurrentGOOS func() string
-	// CurrentGOARCH returns the target architecture.
-	CurrentGOARCH func() string
-	// NewReleaseClient creates a new release query client.
-	NewReleaseClient func() ReleaseClient
-	// NewDaemonManager creates a new daemon manager for the given service name.
-	NewDaemonManager func(serviceName string) (daemon.Manager, error)
-	// StartDaemonUpgrade starts a background daemon upgrade.
-	StartDaemonUpgrade func(spec daemon.UpgradeSpec) (string, error)
-	// NormalizeUpgradeVersion normalizes a user-supplied version string.
-	NormalizeUpgradeVersion func(raw string) (string, error)
-	// RenderSystemMenuCard renders the system menu card for the given session.
-	RenderSystemMenuCard func(sessionKey string) map[string]any
-)
-
 // ---------------------------------------------------------------------------
 // Service — manages daemon upgrade commands
 // ---------------------------------------------------------------------------
 
+// UpgradeServiceDeps holds the function dependencies injected into an
+// UpgradeService. These replace the former package-level mutable globals
+// and make the service safe for concurrent use.
+type UpgradeServiceDeps struct {
+	CurrentVersion         func() string
+	CurrentGOOS            func() string
+	CurrentGOARCH          func() string
+	NewReleaseClient       func() ReleaseClient
+	NewDaemonManager       func(serviceName string) (daemon.Manager, error)
+	StartDaemonUpgrade     func(spec daemon.UpgradeSpec) (string, error)
+	NormalizeUpgradeVersion func(raw string) (string, error)
+	RenderSystemMenuCard   func(sessionKey string) map[string]any
+}
+
 // UpgradeService manages daemon upgrade commands for a single app instance.
 type UpgradeService struct {
-	app App
+	app  App
+	deps UpgradeServiceDeps
 }
 
 // NewUpgradeService creates a new upgrade service bound to the given app.
-func NewUpgradeService(app App) UpgradeService {
-	return UpgradeService{app: app}
+func NewUpgradeService(app App, deps UpgradeServiceDeps) UpgradeService {
+	return UpgradeService{app: app, deps: deps}
 }
 
 // ---------------------------------------------------------------------------
@@ -219,7 +214,7 @@ func (s UpgradeService) RenderUpgradeDevCard(sessionKey, ownerUserID string) (ma
 // (specific version, latest, or dev release).
 func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion string, useDevRelease bool) (map[string]any, error) {
 	st := s.app.UpgradeState()
-	goos := strings.TrimSpace(CurrentGOOS())
+	goos := strings.TrimSpace(s.deps.CurrentGOOS())
 	var exePath, assetName string
 	var err error
 	if goos == "linux" {
@@ -234,8 +229,8 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	current := CurrentVersion()
-	goarch := strings.TrimSpace(CurrentGOARCH())
+	current := s.deps.CurrentVersion()
+	goarch := strings.TrimSpace(s.deps.CurrentGOARCH())
 	bodyLines := []string{
 		"当前版本: `" + current + "`",
 		"目标平台: `" + firstNonEmpty(goos, "unknown") + "/" + firstNonEmpty(goarch, "unknown") + "`",
@@ -247,7 +242,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 	forceVersion := strings.TrimSpace(requestedVersion) != ""
 	switch {
 	case useDevRelease:
-		target, err = NewReleaseClient().LatestDevLinuxBinary(ctx, goarch)
+		target, err = s.deps.NewReleaseClient().LatestDevLinuxBinary(ctx, goarch)
 		if err != nil {
 			if goos != "linux" {
 				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
@@ -263,7 +258,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 			bodyLines = append(bodyLines, "提交: `"+commit+"`")
 		}
 	case forceVersion:
-		target, err = NewReleaseClient().LinuxBinaryByVersion(ctx, requestedVersion, goarch)
+		target, err = s.deps.NewReleaseClient().LinuxBinaryByVersion(ctx, requestedVersion, goarch)
 		if err != nil {
 			if goos != "linux" {
 				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
@@ -273,7 +268,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		}
 		bodyLines = append(bodyLines, "指定版本: `"+target.Version+"`")
 	default:
-		target, err = NewReleaseClient().LatestLinuxBinary(ctx, goarch)
+		target, err = s.deps.NewReleaseClient().LatestLinuxBinary(ctx, goarch)
 		if err != nil {
 			if goos != "linux" {
 				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
@@ -372,7 +367,7 @@ func (s UpgradeService) CommandUpgrade(msg *feishu.InboundMessage, args []string
 	if len(args) > 1 {
 		return fmt.Errorf(UpgradeCommandUsage)
 	}
-	targetVersion, err := NormalizeUpgradeVersion(args[0])
+	targetVersion, err := s.deps.NormalizeUpgradeVersion(args[0])
 	if err != nil {
 		return fmt.Errorf("版本格式不正确: %q，示例: /upgrade v0.3.0", args[0])
 	}
@@ -429,7 +424,7 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-			Card:  rawCard(RenderSystemMenuCard(sessionKey)),
+			Card:  rawCard(s.deps.RenderSystemMenuCard(sessionKey)),
 		}, nil
 	}
 
@@ -437,7 +432,7 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级参数损坏"}}, nil
 	}
-	unitName, err := StartDaemonUpgrade(daemon.UpgradeSpec{
+	unitName, err := s.deps.StartDaemonUpgrade(daemon.UpgradeSpec{
 		ServiceName:    s.app.DaemonServiceName(),
 		Version:        firstNonEmpty(strings.TrimSpace(payload.TargetVersion), firstNonEmpty(strings.TrimSpace(payload.SourceName), "local-artifact")),
 		BinaryPath:     payload.BinaryPath,
@@ -497,11 +492,11 @@ func (s UpgradeService) ValidateUpgradeRuntime() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	if strings.TrimSpace(CurrentGOOS()) != "linux" {
+	if strings.TrimSpace(s.deps.CurrentGOOS()) != "linux" {
 		return "", "", fmt.Errorf("当前平台不支持 daemon 自动升级")
 	}
 	serviceName := s.app.DaemonServiceName()
-	manager, err := NewDaemonManager(serviceName)
+	manager, err := s.deps.NewDaemonManager(serviceName)
 	if err != nil {
 		return "", "", fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
 	}
@@ -528,7 +523,7 @@ func (s UpgradeService) probeUpgradeRuntime() (string, string, error) {
 	if realPath, err := filepath.EvalSymlinks(exePath); err == nil {
 		exePath = realPath
 	}
-	assetName, err := release.CurrentAssetName(CurrentGOOS(), CurrentGOARCH())
+	assetName, err := release.CurrentAssetName(s.deps.CurrentGOOS(), s.deps.CurrentGOARCH())
 	if err != nil {
 		return "", "", fmt.Errorf("当前平台不支持自动升级: %w", err)
 	}
