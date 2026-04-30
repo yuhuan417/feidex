@@ -511,6 +511,8 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 
 	finishTurn(a, "claude-thread-1", "claude-turn-current", "completed")
 
+	time.Sleep(50 * time.Millisecond)
+
 	deadline := time.Now().Add(5 * time.Second)
 	iterations := 0
 	for time.Now().Before(deadline) {

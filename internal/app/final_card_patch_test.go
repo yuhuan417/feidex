@@ -22,8 +22,13 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 	}
 	svc.markFinalCardPreviewDone("card-1")
 
-	waitForTestCondition(t, "final card patch", func() bool {
-		return len(ff.patchedCardsSnapshot()) > 0
+	waitForTestCondition(t, "final card patch with rewritten body", func() bool {
+		for _, p := range ff.patchedCardsSnapshot() {
+			if strings.Contains(cardMarkdownContent(t, p), "rewritten body") {
+				return true
+			}
+		}
+		return false
 	})
 	patched := ff.patchedCardsSnapshot()
 	if len(patched) == 0 {
