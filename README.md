@@ -1,13 +1,14 @@
 # Feidex
 
-Feidex 是一个把 Codex App Server 接到飞书消息流上的中间层服务。
+Feidex 是一个把 Codex App Server / Claude Code 接到飞书消息流上的中间层服务。
 
-它的目标不是做一个通用聊天机器人，而是把「在本机/服务器上运行的 Codex 能力」以飞书对话的形式暴露出来，让你可以在飞书里：
+它的目标不是做一个通用聊天机器人，而是把「在本机/服务器上运行的 Codex/Claude 能力」以飞书对话的形式暴露出来，让你可以在飞书里：
 
-- 发起 Codex 任务
-- 在同一个 thread 里继续多轮交互
-- 查看线程历史、状态、工作区、模型配置
+- 发起 Codex 或 Claude 任务
+- 在同一个 thread/session 里继续多轮交互
+- 查看线程/会话历史、状态、工作区、模型配置
 - 审批命令/文件/权限请求
+- 在 Codex 和 Claude 后端之间动态切换
 - 通过 daemon 模式做后台运行与自升级
 
 项目面向中文使用场景，README 也以中文为主。
@@ -17,11 +18,15 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
 
 ## 最近更新
 
-- 这轮更新主要补齐了：
-  - `/compact`、`/usage`、`/thread fork`、立即生效的 `/thread new`
-  - 启动时恢复活动 thread，切换 workspace 时自动绑定对应 thread
-  - workspace 路径选择器与 `/download` 文件下载分享
-  - `/debug`、`/debug logs`、权限问题卡片、`/upgrade [VERSION]`、`/upgrade dev`
+- Claude Code 后端支持：`/session`、权限模式、reasoning effort、插件控制等完整 Claude 集成
+- 多前端/多后端架构：`[[frontend]]` 配置支持单进程多飞书 bot，每个可独立选择 Codex 或 Claude
+- 后端切换：`/backend` 命令可在线切换后端，无需重启
+- Data race 全面修复：包级全局变量改为实例依赖注入，`a.codex` 字段加互斥锁保护
+- 内部大重构：`internal/app` 从 God package 拆分为 50+ 子包（`features/` 统一命令注册、`submission/` 队列管理等）
+- 自动重试：失败线程可自动 retry，`/backend retry on/off` 切换
+- 技能支持：`/skills` 命令、`$skill-name <content>` 前缀语法
+- 新命令：`/review`、`/claude`、`/codex`、`/workspace clone/delete/choose`
+- WaitGroup 同步测试：异步测试不再依赖 `time.Sleep`/polling
 
 ## 主要能力
 
@@ -29,13 +34,17 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
   - 支持单聊与群聊
   - 群聊可配置为仅在 `@bot` 时响应
   - 支持回复树内的会话连续性
-- Codex thread / turn 管理
-  - 新消息默认 queue / 新 turn
+  - 多前端（`[[frontend]]`）支持单进程运行多个飞书 bot
+- 双后端支持：Codex + Claude
+  - Codex：thread / turn 模型，`/thread` 命令族，审批流程
+  - Claude：session / conversation 模型，`/session` 命令族，权限模式
+  - 在线后端切换：`/backend` 命令，无需重启
+  - 后端特定的 CLI 升级：`/codex`、`/claude` 命令
+- 会话与队列管理
+  - 新消息默认 queue / 新 turn（Codex）或新 message（Claude）
   - 回复消息支持 steer 到当前 root 绑定的 turn
   - steer 失败时自动回退到 queue
-  - 支持查看当前 thread 的 `/history`
-  - 支持 `/compact`、`/usage`、`/thread new`、`/thread fork`
-  - 支持启动恢复活动 thread，以及按 workspace 自动恢复/绑定 thread
+  - 支持自动重试（auto-retry）失败线程
 - 菜单卡片
   - 单卡片内导航
   - 面包屑路径
@@ -43,42 +52,88 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
   - 真实命令项会显示对应 slash 命令
 - 工作区管理
   - 多 workspace
-  - workspace 级别 sandbox / approval policy
-  - thread 级别 sandbox / policy / service tier
+  - workspace 级别 sandbox / approval policy / Claude permission mode
+  - thread/session 级别 sandbox / policy / service tier / permission mode
+  - 支持 workspace 克隆（`/workspace clone`）、删除、选择
   - 支持 workspace 范围内的路径选择与文件下载分享
 - 审批与补充输入
   - 命令审批
   - 文件变更审批
   - 权限审批
   - request_user_input / elicitation 表单
+- Code Review（Codex only）
+  - `/review` 未提交变更
+  - `/review base` / `/review commit` 指定范围
+  - `/review custom` 自定义审查指令
+- 技能支持（Codex only）
+  - `/skills` 查看可用技能
+  - `$skill-name <content>` 前缀语法指定技能
 - 诊断与可观测性
   - 运行时日志级别切换与最近日志查看
-  - thread token usage / context left 展示
+  - thread/session token usage / context left 展示
   - 飞书权限问题卡片化提示
 - 运行与升级
   - Linux 用户态 systemd daemon
   - GitHub Release 自升级
   - 自动按本机架构选择 `amd64` 或 `aarch64` 资产
   - 支持 `/upgrade [VERSION]` 直接指定目标版本
-  - 支持 `/upgrade dev` 升级到 `dev-latest` 当前指向的开发版构建
+  - 支持 `/upgrade dev` 升级到 `dev-latest`
+  - 支持 `/upgrade local`/`/upgrade path` 本地二进制升级
 - 发布
   - 自带打 tag 脚本
   - 可自动从 GitHub 远端 tag 推导下一个 minor 版本
+  - 同时生成 Linux (amd64/aarch64) 和 macOS (amd64/arm64) 二进制
 
 ## 目录结构
 
 ```text
 cmd/feidex/                 主程序入口
 cmd/feishu_card_demo/       飞书卡片 demo
-internal/app/               飞书侧应用协调层（frontend、session、菜单、审批、turn lifecycle）
-internal/app/approval/      审批卡片文案、按钮、文件摘要等纯 presentation helper
-internal/app/cards/         飞书卡片 skeleton/action/select 等通用构造 helper
-internal/app/delivery/      回复卡片分片、markdown 拆分等纯 outbound delivery helper
+internal/app/               应用协调层（frontend、session、菜单、审批、turn lifecycle）
+internal/app/appcore/       核心组合（client 接口、session key、workspace 选择）
+internal/app/apphistory/    进程历史
+internal/app/appstate/      应用状态 store
+internal/app/approval/      审批卡片文案、按钮、文件摘要
+internal/app/approvalview/  审批视图渲染
+internal/app/autoretry/     自动重试状态
+internal/app/backend/       后端驱动抽象（选择、action、failure、transition）
+internal/app/cards/         飞书卡片构造 helper
+internal/app/clauderuntime/ Claude 运行时集成
+internal/app/claudesession/ Claude session 生命周期
+internal/app/claudesupport/ Claude 诊断/历史 helper
+internal/app/codexruntime/  Codex 运行时集成
+internal/app/compact/       上下文压缩
+internal/app/convbackend/   会话后端 facade
+internal/app/delivery/      回复卡片分片、markdown 拆分
+internal/app/features/      统一命令/菜单/action 注册
+internal/app/feishuwrap/    飞书适配包装器
+internal/app/finalcardpatch/最终卡片 patch 逻辑
+internal/app/historycmd/    历史命令处理
 internal/app/lifecycle/     pending request / lifecycle 共享谓词
-internal/app/maintenance/   backend-agnostic 升级/维护 workflow helper
-internal/app/review/        review target 数据结构与 Git target 解析/查询 helper
-internal/app/runtime/       backend 标识规范化、in-flight mode 等 runtime helper
-internal/app/workspace/     workspace/path picker/clone payload 与值对象
+internal/app/maintenance/   backend-agnostic 升级/维护 workflow
+internal/app/modelconfig/   模型配置流
+internal/app/pathpick/      路径选择器
+internal/app/pendingforms/  待处理表单
+internal/app/replycontinuation/ 回复接续处理
+internal/app/review/        review target 数据结构
+internal/app/reviewcmd/     review 命令处理
+internal/app/serverrequest/ 服务端请求处理
+internal/app/sessionctx/    session 上下文类型
+internal/app/skills/        技能管理
+internal/app/skillscmd/     技能命令处理
+internal/app/submission/    submission 队列与生命周期
+internal/app/threadmenu/    thread 菜单渲染
+internal/app/threadview/    thread 视图渲染
+internal/app/turn/          turn 管理
+internal/app/turnbinding/   turn 绑定逻辑
+internal/app/turnitem/      turn item 类型
+internal/app/turnlifecycle/ turn 生命周期协调
+internal/app/turnstream/    turn 流处理
+internal/app/upgradecmd/    升级命令处理
+internal/app/upgraderender/ 升级卡片渲染
+internal/app/usageview/     usage 视图渲染
+internal/app/workspace/     workspace payload 与值对象
+internal/app/workspacecmd/  workspace 命令处理
 internal/feishu/            飞书适配层
 internal/codexrpc/          Codex App Server RPC 客户端与类型
 internal/claudecli/         Claude CLI stream-json 适配层
@@ -99,20 +154,22 @@ config.example.toml         配置样例
 关键边界：
 
 - `frontend` 是运行时隔离边界；backend 选择、session lineage、pending request、message link 和运行时缓存都必须按 frontend 隔离。
-- `internal/app` 拥有产品语义；Codex/Claude 协议细节应收敛在 backend adapter/facade，避免散落到消息、菜单和审批编排里。已物理拆出的 `internal/app/*` 子包只承载无 `*App` 依赖的纯逻辑、值对象或窄职责 helper。
-- `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；不要让它理解飞书、session 或卡片。
+- `internal/app` 拥有产品语义；Codex/Claude 协议细节应收敛在 backend adapter/facade（`internal/app/backend/`），避免散落到消息、菜单和审批编排里。已物理拆出的 50+ 子包只承载无 `*App` 依赖的纯逻辑、值对象或窄职责 helper。
+- `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；`internal/claudecli` 只负责 Claude CLI stream-json 协议。不要让它们理解飞书、session 或卡片。
+- 命令与菜单通过 `internal/app/features/` 统一注册，按 backend 自动过滤可用命令。
 - app 物理子包的职责边界见 [docs/app-package-boundaries.md](docs/app-package-boundaries.md)；新增子包不得反向 import `internal/app`。
 - `internal/feishu` 只负责飞书 SDK、消息/卡片发送、文件分享、链接改写和权限问题转换；不要把业务策略放进适配层。
-- 慢操作必须走“快速 callback ack -> 异步执行 -> patch card / follow-up”，尤其是 clone、review、upgrade、download 和外部网络请求。
-- 触碰 `internal/app`、`internal/codexrpc`、审批、turn/thread lifecycle、review、compaction、tool input 或 server request 时，要同步检查状态机审计文档。
+- 慢操作必须走"快速 callback ack → 异步执行 → patch card / follow-up"，尤其是 clone、review、upgrade、download 和外部网络请求。
+- 异步操作使用 `RunAsync` + `sync.WaitGroup` 追踪，测试通过 `a.waitAsync()` 同步而非 `time.Sleep`。
+- 触碰 `internal/app`、`internal/codexrpc`、`internal/claudecli`、审批、turn/thread lifecycle、review、compaction、tool input 或 server request 时，要同步检查状态机审计文档。
 
 ### 目前的架构问题
 
-- `internal/app` 已开始从 God package 向 composition root 收敛：reply delivery、maintenance upgrade workflow、review Git target、approval presentation、runtime/lifecycle predicates、workspace payloads 和通用 card builders 已经拆到物理子包。剩余高耦合区域主要是 lifecycle coordinator、审批 completion、workspace/runtime 状态变更和带 submission 上下文的卡片渲染，继续拆分前必须先定义接口边界并对照状态机审计。
-- backend 抽象已经有 `backendRuntimeFacade`，但 Codex/Claude 逻辑仍有不少直接分支和专用状态散在 `internal/app`。新增 backend 或改 backend 行为时，应先补 facade/helper，不要在命令和卡片路径继续增加 `if backend == ...`。
-- 状态同时存在内存 map 与 `internal/state` 持久化快照，字段已包含 frontend/backend 归属但仍容易发生跨 frontend 污染。新增 pending/form/message-link/session 数据时，必须明确 frontend scope，并补恢复与迁移测试。
-- README、`DEVELOPER.md` 和状态机审计共同构成开发契约。协议行为变化不能只改代码；如果改变 Codex app-server lifecycle 或审批语义，应同时更新审计文档和对应测试映射。
-- 升级链路是救援路径，但它和普通 app 编排仍共处 `internal/app`。相关改动要保持 daemon/release/pending store 最小依赖，避免因为 Codex/Claude runtime 不可用而阻断 `/upgrade`。
+- God package 拆分基本完成：`internal/app` 已从单一巨型 package 收敛为 50+ 子包，卡片渲染、升级流程、审批、命令行、review、compaction、turn 生命周期等各有关键包。剩余的高耦合区域主要在 lifecycle coordinator 和多后端共享状态。
+- backend 抽象通过 `backend/driver.go` + `backendRuntimeFacade` 统一，但部分 Codex/Claude 专用状态仍在 `internal/app`。新增 backend 时应先补 facade，不要在命令和卡片路径继续增加 `if backend == ...`。
+- 状态同时存在内存 map 与 `internal/state` 持久化快照。新增 pending/form/message-link/session 数据时，必须明确 frontend scope。
+- README、`DEVELOPER.md` 和状态机审计共同构成开发契约。协议行为变化不能只改代码。
+- 升级链路是救援路径，相关改动要保持 daemon/release/pending store 最小依赖。
 
 ## 运行前提
 
@@ -170,16 +227,35 @@ transport = "stdio"
 experimental_api = true
 service_name = "feidex"
 
+# 可选：Claude Code 后端
+# [claude]
+# command = "claude"
+# model = "sonnet"
+# permission_mode = "default"
+
 [daemon]
 service_name = "feidex"
+
+# 可选：多前端配置（替换单一 [feishu]）
+# [[frontend]]
+# id = "codex-main"
+# backend = "codex"
+# app_id = "cli_xxx"
+# app_secret = "sec_xxx"
+#
+# [[frontend]]
+# id = "claude-main"
+# backend = "claude"
+# app_id = "cli_yyy"
+# app_secret = "sec_yyy"
 
 [[workspace]]
 id = "default"
 name = "Default"
 cwd = "."
-model = "gpt-5.4"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
+# claude_permission_mode = "default"
 ```
 
 ### 3. 启动
@@ -257,17 +333,52 @@ Feidex 会把这些状态写进去：
 - `command`
   - 默认是 `codex`
 - `transport`
-  - 当前只支持 `stdio`
+  - 只支持 `stdio`
 - `experimental_api`
   - 当前建议保持 `true`
 - `service_name`
   - 提交到 Codex 的 service name
 - `app_server_dir`
-  - `transport=stdio` 时，启动 `codex app-server` 的工作目录
+  - 启动 `codex app-server` 的工作目录
 - `model`
-  - 全局模型
+  - Codex 全局模型
 - `reasoning_effort`
-  - 全局推理强度
+  - Codex 全局推理强度
+
+### `[claude]`
+
+Claude Code 后端配置：
+
+- `command`
+  - Claude CLI 路径，默认 `claude`
+- `model`
+  - 模型名称，默认 `sonnet`（可选 `opus`、`haiku`）
+- `effort`
+  - reasoning effort：`low`、`medium`、`high`、`xhigh`、`max`（留空 = 自动）
+- `permission_mode`
+  - 权限模式：`default`、`acceptEdits`、`plan`、`bypassPermissions`
+- `dangerously_skip_permissions`
+  - 启用 `bypassPermissions` 前必须设为 `true`
+- `disable_plugins`
+  - 禁用 Claude Code 插件
+- `system_prompt`
+  - 自定义 system prompt
+- `permission_prompt_tool_stdio`
+  - 是否在 tool stdio 时提示（默认 true）
+
+### `[[frontend]]`
+
+多前端配置（可选，替换单一 `[feishu]` 配置）。每个 frontend 可运行独立的飞书 bot：
+
+- `id`
+  - 前端标识符
+- `backend`
+  - 后端选择：`"codex"` 或 `"claude"`
+  - 留空则在启动时弹出交互式选择卡片
+- `app_id` / `app_secret`
+  - 该前端的飞书应用凭据
+- `allow_from` / `debug_allow_from` / `group_at_only` 等
+  - 与 `[feishu]` 下的同名字段含义相同
 
 ### `[daemon]`
 
@@ -280,9 +391,9 @@ Feidex 会把这些状态写进去：
 支持多个 workspace，每个 workspace 可以有自己独立的：
 
 - `cwd`
-- `model`
 - `approval_policy`
 - `sandbox_mode`
+- `claude_permission_mode`（Claude 权限模式，留空跟随全局默认）
 
 ## 消息与会话语义
 
@@ -336,7 +447,7 @@ Feidex 会把这些状态写进去：
 
 ## 菜单与命令
 
-主菜单分五组：
+主菜单按后端分不同入口（Codex 侧重 thread，Claude 侧重 session）：
 
 - 常用工具
   - `中断任务 /stop`
@@ -345,24 +456,31 @@ Feidex 会把这些状态写进去：
   - `下载文件 /download`
   - `历史记录 /history`
   - `Token 消耗 /usage`
+  - `代码审查 /review`（Codex only）
 - model
   - `模型配置 /model`
+  - `推理强度 /effort`（Claude only）
   - `响应速度 /fast`
-- thread
-  - `list` 下拉切换当前 workspace 的线程
-  - `新建线程 /thread new`
-  - `派生线程 /thread fork`
-  - `配置线程沙箱 /thread sandbox`
-  - `配置审批策略 /thread policy`
+- thread（Codex）/ session（Claude）
+  - list 下拉切换
+  - 新建 / fork / resume
+  - 配置 sandbox / policy / permissions
 - workspace
   - `list` 下拉切换工作区
   - `新建工作区 /workspace new`
+  - `克隆工作区 /workspace clone`
+  - `选择工作区 /workspace choose`
+  - `删除工作区 /workspace delete`
   - `配置默认沙箱 /workspace sandbox`
   - `配置默认策略 /workspace policy`
+  - `配置默认权限模式 /workspace permissions`（Claude）
 - system
+  - `后端管理 /backend`
   - `日志级别 /debug`
   - `查看日志 /debug logs`
   - `升级服务 /upgrade`
+  - `Codex CLI /codex`
+  - `Claude CLI /claude`
   - `状态面板 /status`
   - `命令帮助 /help`
 
@@ -446,6 +564,62 @@ Feidex 会把这些状态写进去：
   - 打开当前 workspace 的文件选择器，选择本地 Binary 升级
 - `/upgrade path ./dist/feidex-linux-amd64`
   - 直接用当前 workspace 下的本地 Binary 发起升级确认
+- `/backend`
+  - 查看可用后端，空闲时切换 Codex ↔ Claude
+- `/backend retry on` / `/backend retry off`
+  - 开关自动 retry 失败线程
+- `/codex`
+  - 检查 Codex CLI 安装/升级状态
+- `/codex check`
+  - 查询 npm 最新 Codex CLI 版本
+- `/codex upgrade`
+  - 升级 Codex CLI（失败自动回退）
+- `/codex restart`
+  - 重启 Codex 运行时（空闲时）
+- `/claude`
+  - 检查 Claude CLI 安装/升级状态
+- `/claude check`
+  - 查询 npm 最新 Claude CLI 版本
+- `/claude upgrade`
+  - 升级 Claude CLI（含 smoke test，失败自动回退）
+- `/claude restart`
+  - 重启 Claude 运行时（空闲时）
+- `/session`
+  - Claude session 菜单（对应 Codex 的 `/thread`）
+- `/session list` / `/session list all`
+  - 查看可恢复的 Claude session
+- `/session new`
+  - 新建 Claude session
+- `/session fork`
+  - fork 当前 Claude session
+- `/session resume SESSION_ID`
+  - 恢复指定 Claude session
+- `/session permissions [MODE]`
+  - 配置 Claude session 权限模式
+- `/effort [effort]`
+  - 设置 Claude reasoning effort（`low`/`medium`/`high`/`xhigh`/`max`）
+- `/review`
+  - Review 未提交变更（Codex only）
+- `/review uncommitted`
+  - 等价于 `/review`
+- `/review base [branch]`
+  - Review 相对指定 base 分支的变更
+- `/review commit [rev]`
+  - Review 指定 commit
+- `/review custom [instructions]`
+  - 自定义 review 指令
+- `/skills`
+  - 查看可用 Codex 技能
+- `/skills reload`
+  - 刷新技能列表
+- `/workspace clone GIT_URL [ID] [--parent DIR]`
+  - clone Git 仓库创建新工作区
+- `/workspace choose`
+  - 按钮式工作区选择器（按最近使用排序）
+- `/workspace delete [ID]`
+  - 删除工作区配置（不删磁盘文件）
+- `/workspace permissions [MODE]`
+  - 配置 workspace 默认 Claude 权限模式
 
 ## 审批卡片
 
@@ -592,10 +766,30 @@ GitHub Actions 会在 tag push 后自动发布 release。
 
 ## 开发与测试
 
+### Data Race 检测
+
+所有测试必须在 `-race` 下通过：
+
+```bash
+go test -race ./...
+```
+
+### 异步操作测试
+
+项目使用 `sync.WaitGroup` 追踪所有通过 `RunAsync` 派发的异步 goroutine。测试中调用触发异步操作的函数后，用 `a.waitAsync()` 等待所有 goroutine 完成，然后直接断言——不需要 `time.Sleep` 或 polling 循环。
+
+```go
+finishTurn(a, "thread-1", "turn-1", "completed")
+a.waitAsync()  // 等待 RunAsync goroutine 完成，状态已落盘
+// 直接断言
+sess := a.store.GetSession(sessionKey)
+if sess.Status != "turn_in_progress" { ... }
+```
+
 ### 常用测试
 
 ```bash
-./scripts/with_tmp_go_cache.sh go test ./internal/app
+./scripts/with_tmp_go_cache.sh go test -race ./internal/app
 ./scripts/with_tmp_go_cache.sh go test ./internal/feishu
 ./scripts/with_tmp_go_cache.sh go test ./internal/state
 ./scripts/with_tmp_go_cache.sh go test ./internal/release
