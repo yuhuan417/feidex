@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	appapprovalview "feidex/internal/app/approvalview"
 	"feidex/internal/codexrpc"
@@ -30,7 +29,6 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 	var methods []string
 	var turnStartThreadIDs []string
 	turnStartCount := 0
-	secondTurnStarted := make(chan struct{}, 1)
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		mu.Lock()
 		methods = append(methods, method)
@@ -59,10 +57,6 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 				result.Turn.ID = "turn-1"
 			case 2:
 				result.Turn.ID = "turn-2"
-				select {
-				case secondTurnStarted <- struct{}{}:
-				default:
-				}
 			default:
 				t.Fatalf("unexpected turn/start call #%d", callNum)
 			}
@@ -144,30 +138,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 	}
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
-	time.Sleep(50 * time.Millisecond)
-
-	select {
-	case <-secondTurnStarted:
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected queued follow-up to start after first turn completion")
-	}
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		sess = a.store.GetSession(sessionKey)
-		queuedSub = a.store.GetSubmission(queuedSubID)
-		if sess != nil &&
-			queuedSub != nil &&
-			sess.ActiveSubmissionID == queuedSubID &&
-			sess.ActiveTurnID == "turn-2" &&
-			sess.Status == "turn_in_progress" &&
-			queuedSub.ThreadID == "thread-1" &&
-			queuedSub.TurnID == "turn-2" &&
-			queuedSub.Status == "running" {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	a.waitAsync()
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveSubmissionID != queuedSubID || sess.ActiveTurnID != "turn-2" || sess.Status != "turn_in_progress" {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
-	"time"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
@@ -93,24 +92,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
-	time.Sleep(50 * time.Millisecond)
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		sess = a.store.GetSession(sessionKey)
-		queuedSub := a.store.GetSubmission(queuedSubID)
-		if sess != nil &&
-			queuedSub != nil &&
-			sess.ActiveSubmissionID == queuedSubID &&
-			sess.ActiveTurnID == "turn-2" &&
-			sess.Status == "turn_in_progress" &&
-			queuedSub.ThreadID == "thread-1" &&
-			queuedSub.TurnID == "turn-2" &&
-			queuedSub.Status == "running" {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	a.waitAsync()
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveSubmissionID != queuedSubID || sess.ActiveTurnID != "turn-2" || sess.Status != "turn_in_progress" {

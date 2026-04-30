@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -511,46 +510,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 
 	finishTurn(a, "claude-thread-1", "claude-turn-current", "completed")
 
-	time.Sleep(50 * time.Millisecond)
-
-	deadline := time.Now().Add(5 * time.Second)
-	iterations := 0
-	for time.Now().Before(deadline) {
-		iterations++
-		sess = a.store.GetSession(sessionKey)
-		queuedSub = a.store.GetSubmission(queuedSubID)
-		startTurnCalls := claude.startTurnCallsSnapshot()
-		if len(startTurnCalls) == 1 &&
-			sess != nil &&
-			queuedSub != nil &&
-			sess.ActiveSubmissionID == queuedSubID &&
-			sess.ActiveTurnID == queuedSub.TurnID &&
-			sess.Status == "turn_in_progress" &&
-			queuedSub.ThreadID == "claude-thread-1" &&
-			queuedSub.Status == "running" {
-			break
-		}
-		if iterations <= 5 || iterations%50 == 0 {
-			var subStatus, subThreadID, subTurnID string
-			if queuedSub != nil {
-				subStatus = queuedSub.Status
-				subThreadID = queuedSub.ThreadID
-				subTurnID = queuedSub.TurnID
-			}
-			var sessStatus, sessActiveSub, sessActiveTurn, sessQueueLen string
-			if sess != nil {
-				sessStatus = sess.Status
-				sessActiveSub = sess.ActiveSubmissionID
-				sessActiveTurn = sess.ActiveTurnID
-				sessQueueLen = fmt.Sprintf("%d", len(sess.Queue))
-			} else {
-				sessStatus = "<nil>"
-			}
-			t.Logf("poll iter %d: startTurnCalls=%d sess={status:%s activeSub:%s activeTurn:%s queue:%s} sub={status:%s thread:%s turn:%s}",
-				iterations, len(startTurnCalls), sessStatus, sessActiveSub, sessActiveTurn, sessQueueLen, subStatus, subThreadID, subTurnID)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	a.waitAsync()
 
 	ensureCalls := claude.ensureCallsSnapshot()
 	if len(ensureCalls) != 1 || ensureCalls[0].resumeID != "claude-thread-1" {
