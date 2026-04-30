@@ -12,11 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
 type fakeUpgradeManager struct {
+	mu       sync.Mutex
 	startErr error
 	stopErr  error
 	running  bool
@@ -28,6 +30,8 @@ func (m *fakeUpgradeManager) Uninstall() error     { return nil }
 func (m *fakeUpgradeManager) Platform() string     { return "test" }
 func (m *fakeUpgradeManager) Restart() error       { return nil }
 func (m *fakeUpgradeManager) Start() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.startErr != nil {
 		return m.startErr
 	}
@@ -36,6 +40,8 @@ func (m *fakeUpgradeManager) Start() error {
 	return nil
 }
 func (m *fakeUpgradeManager) Stop() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.stopErr != nil {
 		return m.stopErr
 	}
@@ -44,6 +50,8 @@ func (m *fakeUpgradeManager) Stop() error {
 	return nil
 }
 func (m *fakeUpgradeManager) Status() (*Status, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return &Status{Installed: true, Running: m.running, PID: m.pid}, nil
 }
 
@@ -104,8 +112,10 @@ func TestWaitForServiceHealthy(t *testing.T) {
 	manager := &fakeUpgradeManager{}
 	go func() {
 		time.Sleep(10 * time.Millisecond)
+		manager.mu.Lock()
 		manager.running = true
 		manager.pid = 1
+		manager.mu.Unlock()
 	}()
 	if err := waitForServiceHealthy(context.Background(), manager, time.Second); err != nil {
 		t.Fatalf("waitForServiceHealthy() error = %v", err)
