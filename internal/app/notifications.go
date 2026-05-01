@@ -45,12 +45,12 @@ func onMcpElicitationRequest(a *App, req codexrpc.RequestEnvelope) {
 }
 
 func finishTurn(a *App, threadID, turnID, status string) {
+	// Steer-submission cleanup (which used to happen here) is now
+	// handled inside turnLifecycleService.FinishTurn, synchronously
+	// before the async StartNextSubmissionAsync is launched.  This
+	// prevents a race where the newly started submission (same thread)
+	// was incorrectly finalized by a post-hoc steer scan.
 	newTurnLifecycleService(a).finishTurn(threadID, turnID, status)
-	// Also finalize any steer submissions that were part of this turn.
-	// The steer submission's ActiveOperation shares the thread but has its
-	// own turnID. After the original turn is finished, scan for remaining
-	// steer operations on the same thread and finalize them.
-	finshSteerSubmissionsForThread(a, threadID, status)
 }
 
 // finishSteerSubmission finalizes a steer submission that was processed as

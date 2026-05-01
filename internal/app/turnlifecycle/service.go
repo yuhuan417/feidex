@@ -535,6 +535,51 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			reuseMessageID,
 		)
 	}
+	// Finalize steer submissions that were part of the same thread.  This
+	// must happen synchronously BEFORE the async StartNextSubmissionAsync
+	// below, otherwise the newly started submission (which shares the same
+	// thread) would be picked up by a post-hoc steer scan and incorrectly
+	// finalized as "completed", clearing the session to idle.
+	for _, op := range updatedSess.ActiveOperations {
+		if strings.TrimSpace(op.ThreadID) != threadID {
+			continue
+		}
+		opTurnID := strings.TrimSpace(op.TurnID)
+		if opTurnID != "" && opTurnID == turnID {
+			continue
+		}
+		steerSub := st.Submission(strings.TrimSpace(op.SubmissionID))
+		if steerSub == nil || steerSub.Finalized {
+			continue
+		}
+		switch status {
+		case "completed":
+			_ = st.FinalizeSubmission(steerSub.ID, "completed")
+		case "interrupted":
+			_ = st.FinalizeSubmission(steerSub.ID, "interrupted")
+		default:
+			_ = st.FinalizeSubmission(steerSub.ID, "failed")
+		}
+		w.pendingQueue().ClearSubmissionProcessingReactions(steerSub)
+		if _, err := st.UpdateSession(sessionKey, func(s *state.Session) {
+			if s == nil {
+				return
+			}
+			sessionctx.RemoveActiveOperation(s, steerSub.ID, opTurnID)
+			submission.RefreshPendingStatus(s)
+		}); err != nil {
+			slog.Error("finishTurn steer cleanup session update failed",
+				"session_key", sessionKey,
+				"steer_submission_id", steerSub.ID,
+				"error", err,
+			)
+		}
+	}
+	// Re-read session after steer cleanup to get accurate status for
+	// ShouldStartNextSubmissionAsync.
+	if refreshedSess := st.Session(sessionKey); refreshedSess != nil {
+		updatedSess = refreshedSess
+	}
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		slog.Debug("finishTurn scheduling next submission asynchronously",
 			"session_key", sessionKey,
