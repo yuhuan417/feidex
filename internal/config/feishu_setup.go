@@ -38,6 +38,8 @@ type FeishuSetupOptions struct {
 	AppSecret  string
 	Timeout    time.Duration
 	QRImage    string
+	FrontendID string
+	Backend    string
 }
 
 type registrationInitResponse struct {
@@ -119,13 +121,62 @@ func SetupFeishu(mode FeishuSetupMode, opts FeishuSetupOptions) error {
 		return fmt.Errorf("unsupported mode %q", mode)
 	}
 
-	cfg.Feishu.AppID = appID
-	cfg.Feishu.AppSecret = appSecret
+	frontendID := strings.TrimSpace(opts.FrontendID)
+	if frontendID != "" {
+		if err := saveToFrontend(cfg, frontendID, appID, appSecret, strings.TrimSpace(opts.Backend)); err != nil {
+			return err
+		}
+	} else {
+		cfg.Feishu.AppID = appID
+		cfg.Feishu.AppSecret = appSecret
+	}
 	if err := Save(cfgPath, cfg); err != nil {
 		return err
 	}
-	fmt.Printf("Feishu credentials saved to %s\n", cfgPath)
+	if frontendID != "" {
+		fmt.Printf("Feishu credentials saved to %s (frontend %q)\n", cfgPath, frontendID)
+	} else {
+		fmt.Printf("Feishu credentials saved to %s\n", cfgPath)
+	}
 	fmt.Printf("App ID: %s\n", appID)
+	return nil
+}
+
+func saveToFrontend(cfg *Config, id, appID, appSecret, backend string) error {
+	if strings.Contains(id, ":") {
+		return fmt.Errorf("frontend id %q must not contain ':'", id)
+	}
+	idx := -1
+	for i := range cfg.Frontends {
+		if cfg.Frontends[i].ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		cfg.Frontends[idx].AppID = appID
+		cfg.Frontends[idx].AppSecret = appSecret
+		if backend != "" {
+			cfg.Frontends[idx].Backend = backend
+		}
+		return nil
+	}
+	// Migrate top-level feishu section to a [[frontend]] entry when the first
+	// named frontend is added, so the config stays in one consistent form.
+	if cfg.Feishu.AppID != "" && len(cfg.Frontends) == 0 {
+		cfg.Frontends = append(cfg.Frontends, FrontendConfig{
+			ID:           DefaultFrontendID,
+			FeishuConfig: cfg.Feishu,
+		})
+		cfg.Feishu = FeishuConfig{}
+	}
+	fc := FrontendConfig{ID: id}
+	fc.AppID = appID
+	fc.AppSecret = appSecret
+	if backend != "" {
+		fc.Backend = backend
+	}
+	cfg.Frontends = append(cfg.Frontends, fc)
 	return nil
 }
 

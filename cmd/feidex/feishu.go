@@ -41,6 +41,8 @@ func runFeishuSetup(mode config.FeishuSetupMode, args []string) int {
 	appSecret := fs.String("app-secret", "", "existing app secret")
 	timeout := fs.Int("timeout", 600, "registration timeout in seconds")
 	qrImage := fs.String("qr-image", "", "optional PNG path for saved QR code")
+	frontendID := fs.String("frontend-id", "", "add or update a [[frontend]] entry instead of top-level [feishu]")
+	backend := fs.String("backend", "", "backend for the new frontend (codex or claude)")
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
@@ -52,6 +54,8 @@ func runFeishuSetup(mode config.FeishuSetupMode, args []string) int {
 		AppSecret:  *appSecret,
 		Timeout:    time.Duration(*timeout) * time.Second,
 		QRImage:    *qrImage,
+		FrontendID: *frontendID,
+		Backend:    *backend,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "feishu setup failed: %v\n", err)
 		return 1
@@ -61,7 +65,7 @@ func runFeishuSetup(mode config.FeishuSetupMode, args []string) int {
 
 func printFeishuUsage() {
 	fmt.Println(`Usage:
-  feidex feishu setup [--config config.toml]
-  feidex feishu new [--config config.toml]
-  feidex feishu bind --app app_id:app_secret`)
+  feidex feishu setup [--config config.toml] [--frontend-id id] [--backend codex|claude]
+  feidex feishu new [--config config.toml] [--frontend-id id] [--backend codex|claude]
+  feidex feishu bind --app app_id:app_secret [--config config.toml] [--frontend-id id]`)
 }
