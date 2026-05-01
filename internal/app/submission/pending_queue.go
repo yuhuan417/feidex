@@ -67,15 +67,11 @@ const (
 )
 
 // ShouldStageInboundImages returns true if the message should be staged as
-// pending images (image-only messages without text).
+// pending files to be included in the next submission.  Any attachment-only
+// message without text (images, STL, PDF, etc.) is eligible.
 func (s PendingQueueService) ShouldStageInboundImages(msg *feishu.InboundMessage) bool {
 	if msg == nil || msg.ExpandedMergeForward || strings.TrimSpace(msg.Text) != "" || len(msg.Attachments) == 0 {
 		return false
-	}
-	for _, attachment := range msg.Attachments {
-		if strings.TrimSpace(attachment.Kind) != "image" {
-			return false
-		}
 	}
 	return true
 }

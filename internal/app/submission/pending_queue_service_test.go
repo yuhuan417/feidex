@@ -27,6 +27,15 @@ func TestPendingQueueServiceStageInboundImagesForSession(t *testing.T) {
 	if svc.ShouldStageInboundImages(&feishu.InboundMessage{Text: "hello", Attachments: msg.Attachments}) {
 		t.Fatal("ShouldStageInboundImages() should reject text+image message")
 	}
+	if !svc.ShouldStageInboundImages(&feishu.InboundMessage{
+		MessageID:   "file-1",
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		UserID:      "user-1",
+		Attachments: []feishu.Attachment{{Kind: "file", ResourceKey: "file-key"}},
+	}) {
+		t.Fatal("ShouldStageInboundImages() should accept file-only message")
+	}
 
 	if err := svc.StageInboundImagesForSession(msg, "sess-1", func(_ *feishu.InboundMessage, _, _ string) ([]state.SubmissionAttachment, error) {
 		return []state.SubmissionAttachment{{Kind: "image", Name: "image.png", LocalPath: "/tmp/image.png"}}, nil
