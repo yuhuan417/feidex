@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"feidex/internal/buildinfo"
 	"feidex/internal/config"
@@ -38,6 +39,8 @@ func runDaemon(args []string) int {
 		return daemonRestart(args[1:])
 	case "status":
 		return daemonStatus(args[1:])
+	case "logs":
+		return daemonLogs(args[1:])
 	case "upgrade-runner":
 		return daemonUpgradeRunner(args[1:])
 	case "help", "--help", "-h":
@@ -234,6 +237,43 @@ func daemonStatus(args []string) int {
 	return 0
 }
 
+func daemonLogs(args []string) int {
+	fs := flag.NewFlagSet("daemon logs", flag.ContinueOnError)
+	configPath := fs.String("config", "config.toml", "path to config file")
+	lines := fs.Int("n", 50, "number of log lines to show")
+	follow := fs.Bool("f", false, "follow log output")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	cfg, err := loadConfig(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		return 1
+	}
+	unitName := daemon.NormalizeServiceName(cfg.Daemon.ServiceName) + ".service"
+
+	if _, err := exec.LookPath("journalctl"); err != nil {
+		fmt.Fprintf(os.Stderr, "journalctl not found; daemon logs are managed by systemd journald on Linux\n")
+		fmt.Fprintf(os.Stderr, "You can view logs manually with: journalctl --user -u %s\n", unitName)
+		return 1
+	}
+
+	journalArgs := []string{"--user", "-u", unitName, "-n", fmt.Sprintf("%d", *lines)}
+	if *follow {
+		journalArgs = append(journalArgs, "-f")
+	}
+
+	cmd := exec.Command("journalctl", journalArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "journalctl failed: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
 func daemonUpgradeRunner(args []string) int {
 	fs := flag.NewFlagSet("daemon upgrade-runner", flag.ContinueOnError)
 	binaryPath := fs.String("binary-path", "", "installed daemon binary path")
@@ -278,7 +318,8 @@ func printDaemonUsage() {
   feidex daemon start [--config config.toml]
   feidex daemon stop [--config config.toml]
   feidex daemon restart [--config config.toml]
-  feidex daemon status [--config config.toml]`)
+  feidex daemon status [--config config.toml]
+  feidex daemon logs [-n LINES] [-f] [--config config.toml]`)
 }
 
 func loadDaemonManager(args []string, command string) (*config.Config, daemon.Manager, error) {

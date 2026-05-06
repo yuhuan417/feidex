@@ -80,10 +80,14 @@ func Resolve(cfg *Config) error {
 	return nil
 }
 
-func normalizeServiceName(serviceName string) string {
+func NormalizeServiceName(serviceName string) string {
 	serviceName = strings.TrimSpace(serviceName)
 	if serviceName == "" {
 		return DefaultServiceName
 	}
 	return serviceName
+}
+
+func normalizeServiceName(serviceName string) string {
+	return NormalizeServiceName(serviceName)
 }
