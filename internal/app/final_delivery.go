@@ -5,8 +5,8 @@ import (
 	appdelivery "feidex/internal/app/delivery"
 	"strings"
 
-	"feidex/internal/state"
 	appcards "feidex/internal/app/cards"
+	"feidex/internal/state"
 )
 
 func sendFinalMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
@@ -18,12 +18,15 @@ func sendEmptyFinalCard(a *App, ctx context.Context, sub *state.Submission, foot
 }
 
 func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string {
-	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if a == nil || a.feishu == nil || sub == nil {
 		return ""
 	}
 	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
 		return ""
 	}
+	triggerMessageID := strings.TrimSpace(sub.TriggerMessageID)
+	inThread := replyInThreadForSubmission(a, sub)
+	fallbackText := appendFooterText(prependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a, sub, sub.TurnID)), footerLines)
 	body := prependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
 	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, body, nil, true)
@@ -34,12 +37,24 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submiss
 			return reuseMessageID
 		}
 	}
-	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(a, sub))
-	if err != nil || strings.TrimSpace(id) == "" {
-		return ""
+	if triggerMessageID != "" {
+		id, err := a.feishu.ReplyCard(ctx, triggerMessageID, card, inThread)
+		if err == nil && strings.TrimSpace(id) != "" {
+			recordMessageLink(a, id, "final_message", sub, "")
+			return id
+		}
+		id, err = a.feishu.ReplyTextWithID(ctx, triggerMessageID, fallbackText, inThread)
+		if err == nil && strings.TrimSpace(id) != "" {
+			recordMessageLink(a, id, "final_message", sub, "")
+			return id
+		}
 	}
-	recordMessageLink(a, id, "final_message", sub, "")
-	return id
+	if chatID := strings.TrimSpace(sub.ChatID); chatID != "" {
+		if err := a.feishu.SendText(ctx, chatID, fallbackText); err == nil {
+			return ""
+		}
+	}
+	return ""
 }
 
 func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {

@@ -283,6 +283,31 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	}
 }
 
+func TestClaudeRuntimeTurnCompleteWithoutResultFallsBackToTerminalText(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeVerbose
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	ff.replyCardErr = errors.New("boom")
+
+	runtime := newTestClaudeRuntime(t, a)
+	session := &claudeSessionState{
+		SessionID: "thread-1",
+		Turns: map[int]*claudeTurnState{
+			1: {TurnNumber: 1, TurnID: "turn-1"},
+		},
+	}
+
+	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
+		TurnNumber: 1,
+		Success:    true,
+	})
+
+	if len(ff.replyTextWithIDs) != 1 || !strings.Contains(ff.replyTextWithIDs[0], "任务已结束。") {
+		t.Fatalf("replyTextWithIDs = %#v, want terminal fallback text", ff.replyTextWithIDs)
+	}
+}
+
 func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
