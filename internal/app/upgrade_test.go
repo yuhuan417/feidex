@@ -1067,6 +1067,7 @@ while IFS= read -r line; do
   case "$line" in
     *'"subtype":"initialize"'*)
       printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s"}}\n' "$rid"
+      sleep 0.05
       exit 0
       ;;
   esac

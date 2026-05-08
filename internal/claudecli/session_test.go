@@ -3,6 +3,7 @@ package claudecli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -213,6 +214,36 @@ func TestSessionInitializeSendsControlInitializeAndWaitsForResponse(t *testing.T
 
 	if got := out.String(); !strings.Contains(got, `"subtype":"initialize"`) {
 		t.Fatalf("Initialize() wrote %q, want initialize control request", got)
+	}
+}
+
+func TestSessionInitializeReturnsProcessExitWhenSessionStopsBeforeResponse(t *testing.T) {
+	session := NewSession()
+	session.started = true
+	var out bytes.Buffer
+	session.writer = newNDJSONWriter(&out)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Initialize(context.Background())
+	}()
+
+	_ = waitForPendingControlRequest(t, session)
+
+	session.mu.Lock()
+	session.stopped = true
+	session.mu.Unlock()
+	close(session.waitDone)
+	session.closeEvents()
+
+	select {
+	case err := <-done:
+		var procErr *ProcessError
+		if !errors.As(err, &procErr) {
+			t.Fatalf("Initialize() error = %v, want ProcessError", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Initialize() did not return after session exit")
 	}
 }
 

@@ -386,6 +386,12 @@ func (s *Session) sendControlRequestAndWait(ctx context.Context, request any) (w
 	case <-ctx.Done():
 		cleanup()
 		return wireControlResponsePayload{}, ctx.Err()
+	case <-s.done:
+		cleanup()
+		return wireControlResponsePayload{}, s.processExitError()
+	case <-s.waitDone:
+		cleanup()
+		return wireControlResponsePayload{}, s.processExitError()
 	case resp := <-respCh:
 		cleanup()
 		switch strings.TrimSpace(resp.Subtype) {
@@ -397,6 +403,18 @@ func (s *Session) sendControlRequestAndWait(ctx context.Context, request any) (w
 			return wireControlResponsePayload{}, fmt.Errorf("unexpected control response subtype: %s", strings.TrimSpace(resp.Subtype))
 		}
 	}
+}
+
+func (s *Session) processExitError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.exitErr != nil {
+		return &ProcessError{Message: "Claude CLI process exited", Cause: s.exitErr}
+	}
+	if s.stopped {
+		return &ProcessError{Message: "Claude CLI process exited"}
+	}
+	return ErrStopping
 }
 
 func (s *Session) cliArgs() []string {
