@@ -901,6 +901,7 @@ func buildV2ButtonRows(buttons []Button, rowSize int) []map[string]any {
 	if len(buttons) == 0 {
 		return nil
 	}
+	buttons = BackButtonsLast(buttons)
 	if rowSize <= 0 {
 		rowSize = len(buttons)
 	}

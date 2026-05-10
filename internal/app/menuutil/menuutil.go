@@ -3,6 +3,7 @@
 package menuutil
 
 import (
+	"slices"
 	"strings"
 
 	"feidex/internal/app/backendcaps"
@@ -116,7 +117,7 @@ func MenuItemSpecForAction(action string) (menutypes.MenuItemSpec, bool) {
 // RenderRootMenuButtons renders the top-level menu buttons.
 // The isItemVisible callback determines whether a menu item is visible for the backend.
 func RenderRootMenuButtons(backend, sessionKey string, isItemVisible func(spec menutypes.MenuItemSpec, backend string) bool, groupHasItems func(action, backend string) bool) []feishu.Button {
-	buttons := make([]feishu.Button, 0, len(menutypes.MenuGroupSpecs))
+	visible := make([]menutypes.MenuGroupSpec, 0, len(menutypes.MenuGroupSpecs))
 	for _, spec := range menutypes.MenuGroupSpecs {
 		if !spec.ShowInRoot {
 			continue
@@ -125,6 +126,20 @@ func RenderRootMenuButtons(backend, sessionKey string, isItemVisible func(spec m
 			continue
 		}
 		spec, _ = MenuGroupSpecForBackend(spec.Action, backend)
+		visible = append(visible, spec)
+	}
+	slices.SortStableFunc(visible, func(a, b menutypes.MenuGroupSpec) int {
+		const systemAction = "menu.group.system"
+		if a.Action == systemAction && b.Action != systemAction {
+			return 1
+		}
+		if a.Action != systemAction && b.Action == systemAction {
+			return -1
+		}
+		return 0
+	})
+	buttons := make([]feishu.Button, 0, len(visible))
+	for _, spec := range visible {
 		buttons = append(buttons, feishu.Button{
 			Text:  SubmenuLabel(spec.Label),
 			Type:  "default",

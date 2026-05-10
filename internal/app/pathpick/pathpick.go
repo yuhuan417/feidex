@@ -231,7 +231,7 @@ func BuildDropdownElement(requestID string, payload Payload, entries []Entry) ma
 func BuildFooterElement(requestID string, payload Payload) map[string]any {
 	buttons := []feishu.Button{
 		{
-			Text: "上一级",
+			Text: "上级目录",
 			Type: "default",
 			Value: map[string]any{
 				"action":     "path_picker.up",

@@ -107,6 +107,30 @@ func TestPostMessageAndCardRenderHelpers(t *testing.T) {
 	if got := buildV2ButtonRows(nil, 1); got != nil {
 		t.Fatalf("buildV2ButtonRows(nil) = %#v, want nil", got)
 	}
+	rows = buildV2ButtonRows([]Button{
+		{Text: "返回上一级"},
+		{Text: "A"},
+		{Text: "B"},
+	}, 1)
+	if len(rows) != 3 {
+		t.Fatalf("buildV2ButtonRows(back-last rows) = %#v", rows)
+	}
+	var labels []string
+	for _, row := range rows {
+		columns, _ := row["columns"].([]map[string]any)
+		if len(columns) == 0 {
+			t.Fatalf("buildV2ButtonRows(back-last columns) = %#v", row)
+		}
+		elements, _ := columns[0]["elements"].([]map[string]any)
+		if len(elements) == 0 {
+			t.Fatalf("buildV2ButtonRows(back-last elements) = %#v", columns[0])
+		}
+		text, _ := elements[0]["text"].(map[string]any)
+		labels = append(labels, text["content"].(string))
+	}
+	if strings.Join(labels, ",") != "A,B,返回上一级" {
+		t.Fatalf("buildV2ButtonRows(back-last labels) = %v", labels)
+	}
 
 	if got := messageBodyContent(nil); got != nil {
 		t.Fatalf("messageBodyContent(nil) = %#v", got)

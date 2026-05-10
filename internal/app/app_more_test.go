@@ -1836,6 +1836,16 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 			t.Fatalf("root menu should not expose backend group directly: %#v", rootActions)
 		}
 	}
+	lastRootValue, _ := rootActions[len(rootActions)-1]["value"].(map[string]any)
+	if len(lastRootValue) == 0 {
+		behaviors, _ := rootActions[len(rootActions)-1]["behaviors"].([]map[string]any)
+		if len(behaviors) > 0 {
+			lastRootValue, _ = behaviors[0]["value"].(map[string]any)
+		}
+	}
+	if got, _ := lastRootValue["action"].(string); got != "menu.group.system" {
+		t.Fatalf("root menu last action = %q, want menu.group.system", got)
+	}
 
 	toolsCard := renderToolsMenuCard(a, sessionKey)
 	if body := cardMarkdownContent(t, toolsCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") {
@@ -1866,6 +1876,10 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	}
 	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
 		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
+	}
+	lastToolsText, _ := contextActions[len(contextActions)-1]["text"].(map[string]any)["content"].(string)
+	if lastToolsText != "返回上一级" {
+		t.Fatalf("tools menu last button = %q, want 返回上一级", lastToolsText)
 	}
 
 	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)

@@ -56,6 +56,7 @@ func AppendMarkdownBodyCardElement(card map[string]any, elem map[string]any) {
 }
 
 func BuildMarkdownBodyCardActionElement(buttons []feishu.Button) map[string]any {
+	buttons = feishu.BackButtonsLast(buttons)
 	columns := make([]map[string]any, 0, len(buttons))
 	for _, btn := range buttons {
 		button := map[string]any{
@@ -90,6 +91,7 @@ func BuildMarkdownBodyCardActionElements(buttons []feishu.Button) []map[string]a
 	if len(buttons) == 0 {
 		return nil
 	}
+	buttons = feishu.BackButtonsLast(buttons)
 	rows := make([]map[string]any, 0, len(buttons))
 	for _, btn := range buttons {
 		rows = append(rows, BuildMarkdownBodyCardActionElement([]feishu.Button{btn}))

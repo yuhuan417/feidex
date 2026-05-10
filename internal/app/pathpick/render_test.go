@@ -36,7 +36,7 @@ func TestRenderCardShowsDropdownAndShortButtons(t *testing.T) {
 			t.Fatalf("path picker body = %q, want %q", body, want)
 		}
 	}
-	for _, want := range []string{"上一级", "确认", "取消"} {
+	for _, want := range []string{"上级目录", "确认", "取消"} {
 		if !testCardHasButtonText(card, want) {
 			t.Fatalf("path picker missing button %q", want)
 		}
