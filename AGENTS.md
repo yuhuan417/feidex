@@ -20,5 +20,6 @@ Read these documents before making non-trivial changes:
 ## Practical Expectation
 
 - Keep Feidex behavior conservative around approvals and lifecycle transitions.
+- When adjusting menus, preserve the current menu structure and item order unless the user explicitly asks to change them.
 - Treat protocol correctness as a product requirement, not optional cleanup.
 - If there is tension between local convenience and the documented contracts, follow the documented contracts.
