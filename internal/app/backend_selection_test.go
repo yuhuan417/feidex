@@ -102,7 +102,7 @@ func TestHandleCardActionMenuGroupBackendOpensBackendMenuCard(t *testing.T) {
 	}
 	cardData, _ := resp.Card.Data.(map[string]any)
 	body := cardMarkdownContent(t, cardData)
-	if !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端选择") {
+	if !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端管理") {
 		t.Fatalf("backend menu body = %q", body)
 	}
 }
@@ -111,7 +111,7 @@ func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
 	selection := newBackendSelectionService(a).renderBackendSelectionCard("sess-1", "")
-	if body := cardMarkdownContent(t, selection); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端选择 / 切换后端") {
+	if body := cardMarkdownContent(t, selection); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端管理 / 切换后端") {
 		t.Fatalf("backend selection body = %q", body)
 	}
 	foundBack := false
@@ -133,7 +133,7 @@ func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
 	}
 
 	switching := newBackendSelectionService(a).renderBackendSwitchingCard("sess-1", backendClaude)
-	if body := cardMarkdownContent(t, switching); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端选择 / 切换后端") {
+	if body := cardMarkdownContent(t, switching); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端管理 / 切换后端") {
 		t.Fatalf("backend switching body = %q", body)
 	}
 	buttons := cardButtonsForTest(switching)

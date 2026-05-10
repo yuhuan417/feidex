@@ -53,31 +53,17 @@ var registry = []Spec{
 		},
 	},
 	{
-		ID:   "menu.group.system",
-		Kind: SpecKindSection,
-		Nodes: []MenuNode{
-			{Action: "menu.group.system", Label: "系统运维", Parent: "menu.root"},
-		},
-		MenuGroup: &MenuGroupSpec{Action: "menu.group.system", Label: "系统运维", Description: "系统运维与帮助入口。", ShowInRoot: true},
-		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
-		},
-		ActionNames: []ActionName{
-			"menu.group.system",
-		},
-	},
-	{
 		ID:       "menu.group.backend",
 		Kind:     SpecKindCapability,
 		Commands: []CommandSpec{{ID: "backend", Names: []string{"/backend"}, HelpGroup: "system", HelpEntries: []HelpCommandSpec{{Command: "/backend", Summary: "查看本 frontend 当前可用的 backend，并在空闲态切换。"}, {Command: "/backend retry", Summary: "查看当前 frontend 的自动重试开关。"}, {Command: "/backend retry on", Summary: "开启当前 frontend 的自动重试。"}, {Command: "/backend retry off", Summary: "关闭当前 frontend 的自动重试。"}}}},
 		Nodes: []MenuNode{
-			{Action: "menu.group.backend", Label: "后端选择", Parent: "menu.group.system"},
+			{Action: "menu.group.backend", Label: "后端管理", Parent: "menu.group.system"},
 			{Action: "menu.backend.switch", Label: "切换后端", Parent: "menu.group.backend"},
 			{Action: "menu.auto_retry", Label: "自动重试", Parent: "menu.group.backend"},
 		},
-		MenuGroup: &MenuGroupSpec{Action: "menu.group.backend", Label: "后端选择", Description: "后端切换与各 CLI 管理入口。", ShowInRoot: false},
+		MenuGroup: &MenuGroupSpec{Action: "menu.group.backend", Label: "后端管理", Description: "后端切换与各 CLI 管理入口。", ShowInRoot: false},
 		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.group.system", Action: "menu.group.backend", Label: "后端选择", Kind: MenuItemSubmenu},
+			{GroupAction: "menu.group.system", Action: "menu.group.backend", Label: "后端管理", Kind: MenuItemSubmenu},
 			{GroupAction: "menu.group.backend", Action: "menu.backend.switch", Label: "切换后端", Slash: "/backend", Kind: MenuItemDirect},
 			{GroupAction: "menu.group.backend", Action: "menu.auto_retry", Label: "自动重试", Slash: "/backend retry", Kind: MenuItemDirect},
 			{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: "返回上一级", Kind: MenuItemBack},
@@ -247,6 +233,20 @@ var registry = []Spec{
 		MenuGroup: &MenuGroupSpec{Action: "menu.workspace", Label: "工作区管理", Description: "查看当前工作区状态，并通过下拉切换工作区。", ShowInRoot: true},
 		ActionNames: []ActionName{
 			"menu.workspace",
+		},
+	},
+	{
+		ID:   "menu.group.system",
+		Kind: SpecKindSection,
+		Nodes: []MenuNode{
+			{Action: "menu.group.system", Label: "系统运维", Parent: "menu.root"},
+		},
+		MenuGroup: &MenuGroupSpec{Action: "menu.group.system", Label: "系统运维", Description: "系统运维与帮助入口。", ShowInRoot: true},
+		MenuItems: []MenuItemSpec{
+			{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
+		},
+		ActionNames: []ActionName{
+			"menu.group.system",
 		},
 	},
 	{

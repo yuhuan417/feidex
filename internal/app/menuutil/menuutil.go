@@ -3,7 +3,6 @@
 package menuutil
 
 import (
-	"slices"
 	"strings"
 
 	"feidex/internal/app/backendcaps"
@@ -128,16 +127,6 @@ func RenderRootMenuButtons(backend, sessionKey string, isItemVisible func(spec m
 		spec, _ = MenuGroupSpecForBackend(spec.Action, backend)
 		visible = append(visible, spec)
 	}
-	slices.SortStableFunc(visible, func(a, b menutypes.MenuGroupSpec) int {
-		const systemAction = "menu.group.system"
-		if a.Action == systemAction && b.Action != systemAction {
-			return 1
-		}
-		if a.Action != systemAction && b.Action == systemAction {
-			return -1
-		}
-		return 0
-	})
 	buttons := make([]feishu.Button, 0, len(visible))
 	for _, spec := range visible {
 		buttons = append(buttons, feishu.Button{
