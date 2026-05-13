@@ -477,13 +477,13 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	}()
 
 	waitForTestCondition(t, "plan confirmation card", func() bool {
-		return len(ff.sendCardsSnapshot()) > 0
+		return len(ff.replyCardsSnapshot()) > 1
 	})
-	sendCards := ff.sendCardsSnapshot()
-	if len(sendCards) != 1 {
-		t.Fatalf("plan confirmation card count = %d, want 1", len(sendCards))
+	replyCards := ff.replyCardsSnapshot()
+	if len(replyCards) != 2 {
+		t.Fatalf("reply card count after plan confirmation = %d, want assistant + plan confirmation", len(replyCards))
 	}
-	if got := cardHeaderTitle(t, sendCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] Claude 计划确认" {
+	if got := cardHeaderTitle(t, replyCards[1]); got != "["+a.cfg.Workspaces[0].ID+"] Claude 计划确认" {
 		t.Fatalf("plan confirmation title = %q", got)
 	}
 
@@ -493,15 +493,15 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	}
 
 	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "after plan"})
-	if len(ff.replyCards) != 2 {
-		t.Fatalf("reply card count after second assistant message = %d, want 2", len(ff.replyCards))
+	if len(ff.replyCards) != 3 {
+		t.Fatalf("reply card count after second assistant message = %d, want assistant + plan confirmation + assistant", len(ff.replyCards))
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "after plan") {
+	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "after plan") {
 		t.Fatalf("post-plan assistant card body = %q, want after plan", body)
 	}
 
 	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "after plan"})
-	if len(ff.replyCards) != 2 {
+	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
 	}
 	if len(ff.patchedCards) != 1 {

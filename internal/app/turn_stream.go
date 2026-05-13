@@ -129,6 +129,14 @@ func (s turnStreamService) markTurnStreamFinal(turnID string) {
 	s.service.MarkStreamFinal(turnID)
 }
 
+func (s turnStreamService) markSubstantiveOutputAfterWorking(turnID string) {
+	s.service.MarkSubstantiveOutputAfterWorking(turnID)
+}
+
+func (s turnStreamService) takeReasoningOnlyWorkingMessageID(turnID string) string {
+	return s.service.TakeReasoningOnlyWorkingMessageID(turnID)
+}
+
 func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) quietWorkingBoundary {
 	return s.service.PrepareStreamQuietBoundary(turnID)
 }

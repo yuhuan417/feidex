@@ -34,8 +34,8 @@ func TestHandleServerRequestRoutesKnownMethods(t *testing.T) {
 	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Method: "item/tool/requestUserInput", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"Pick","options":[{"label":"A"}]}]}`)})
 	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Method: "mcpServer/elicitation/request", Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"open","url":"https://example.test"}`)})
 
-	if len(ff.sendCards) < 5 {
-		t.Fatalf("expected routed server requests to send cards, got %d", len(ff.sendCards))
+	if len(ff.replyCards) < 5 {
+		t.Fatalf("expected routed server requests to reply with cards, got %d", len(ff.replyCards))
 	}
 	if len(fc.replyErrors) != 0 {
 		t.Fatalf("unexpected replyErrors for known server requests: %+v", fc.replyErrors)
@@ -182,8 +182,8 @@ func TestNotificationHelperWrappers(t *testing.T) {
 	if pending := a.store.PendingByID("perm-wrap"); pending == nil || pending.Kind != "permissions" {
 		t.Fatalf("sendPermissionsCard() pending = %+v", pending)
 	}
-	if len(ff.sendCards) == 0 {
-		t.Fatal("sendPermissionsCard() should send a card")
+	if len(ff.replyCards) == 0 {
+		t.Fatal("sendPermissionsCard() should reply with a card")
 	}
 
 	fc.replyErrors = nil

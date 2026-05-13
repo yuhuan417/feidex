@@ -45,11 +45,27 @@ func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, deli
 	if ttl <= 0 {
 		ttl = 30 * time.Minute
 	}
-	msgID, err := a.feishu.SendCard(context.Background(), sub.ChatID, card)
-	if err != nil {
-		return err
+	ctx := context.Background()
+	msgID := ""
+	var err error
+	if reuseMessageID := newTurnStreamService(a).takeReasoningOnlyWorkingMessageID(delivery.turnID); reuseMessageID != "" {
+		if patchErr := a.feishu.PatchCard(ctx, reuseMessageID, card); patchErr == nil {
+			msgID = reuseMessageID
+		}
+	}
+	if msgID == "" {
+		if triggerMessageID := strings.TrimSpace(sub.TriggerMessageID); triggerMessageID != "" {
+			msgID, err = a.feishu.ReplyCard(ctx, triggerMessageID, card, replyInThreadForSubmission(a, sub))
+		}
+	}
+	if err != nil || strings.TrimSpace(msgID) == "" {
+		msgID, err = a.feishu.SendCard(ctx, sub.ChatID, card)
+		if err != nil {
+			return err
+		}
 	}
 	now := time.Now()
+	newTurnStreamService(a).markSubstantiveOutputAfterWorking(delivery.turnID)
 	recordMessageLink(a, msgID, linkKind, sub, requestKey)
 	_ = a.State().SavePending(&state.PendingRequest{
 		ID:           requestKey,

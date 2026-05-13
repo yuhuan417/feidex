@@ -986,7 +986,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	if pending := a.store.PendingByID("question-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != "tool_request_user_input" || pending.Status != "pending" {
 		t.Fatalf("user input pending = %+v, want Claude pending user input", pending)
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[1]); !strings.Contains(got, "Choose a mode") || !strings.Contains(got, "1. Fast - Prioritize speed") || !strings.Contains(got, "2. Safe - Prioritize safety") {
+	if got := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(got, "Choose a mode") || !strings.Contains(got, "1. Fast - Prioritize speed") || !strings.Contains(got, "2. Safe - Prioritize safety") {
 		t.Fatalf("Claude quick user input body = %q", got)
 	}
 
@@ -996,8 +996,8 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
 		t.Fatalf("plan pending = %+v, want Claude plan pending", pending)
 	}
-	if len(ff.sendCards) != 3 {
-		t.Fatalf("sendCards = %d, want 3", len(ff.sendCards))
+	if len(ff.replyCards) != 3 {
+		t.Fatalf("replyCards = %d, want 3", len(ff.replyCards))
 	}
 	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_user_input" {
 		t.Fatalf("submission after Claude pending cards = %+v, want waiting_user_input", updated)

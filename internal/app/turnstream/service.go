@@ -168,6 +168,10 @@ type Stream struct {
 	SentFinal     bool
 	ReviewFinal   bool
 	QuietWorking  *turn.QuietWorkingCard
+	// QuietWorkingReuseBlocked is set when a substantive card was sent after
+	// the current working card. In that case later final/agent output must not
+	// patch the older working card because it would reorder the visible thread.
+	QuietWorkingReuseBlocked bool
 }
 
 // FlushResult captures the result of flushing a turn stream.
@@ -301,8 +305,12 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 		stream.LastSentPlan = text
 		stream.PendingPlan = ""
 		if stream.QuietWorking != nil {
+			reuseBlocked := stream.QuietWorkingReuseBlocked
 			planBoundary = prepareStreamBoundaryLocked(stream)
-			planReuseMessage = planBoundary.ReuseMessageID
+			stream.QuietWorkingReuseBlocked = false
+			if !reuseBlocked {
+				planReuseMessage = planBoundary.ReuseMessageID
+			}
 		}
 	}
 	if hasPayload {
@@ -326,14 +334,22 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 	}
 	if hasPayload && IsQuietBoundaryTurnPayload(payload) {
 		if stream.QuietWorking != nil {
+			reuseBlocked := stream.QuietWorkingReuseBlocked
 			itemBoundary = prepareStreamBoundaryLocked(stream)
-			itemReuseMessage = itemBoundary.ReuseMessageID
+			stream.QuietWorkingReuseBlocked = false
+			if !reuseBlocked {
+				itemReuseMessage = itemBoundary.ReuseMessageID
+			}
 			if itemType == "plan" {
-				stream.PlanMessageID = strings.TrimSpace(firstNonEmpty(itemBoundary.ReuseMessageID, itemBoundary.Op.MessageID, stream.PlanMessageID))
+				stream.PlanMessageID = strings.TrimSpace(firstNonEmpty(itemReuseMessage, itemBoundary.Op.MessageID, stream.PlanMessageID))
 			}
 		}
 	} else if quietWorkingCardEnabled(svc.feishuConfig()) {
+		hadQuietWorking := stream.QuietWorking != nil
 		workingUpdate = prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
+		if !hadQuietWorking && stream.QuietWorking != nil {
+			stream.QuietWorkingReuseBlocked = false
+		}
 	}
 	tracker.Mu.Unlock()
 
@@ -381,14 +397,17 @@ func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string)
 	result.ShouldUsePlanExitPrompt = stream.SawPlanItem && stream.PlanCompleted && result.PlanMarkdown != ""
 	result.LastError = stream.LastError
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
-	if stream.QuietWorking != nil && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
+	reuseBlocked := stream.QuietWorkingReuseBlocked
+	if stream.QuietWorking != nil && stream.QuietWorking.IsReasoningOnly() && !reuseBlocked && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
 		result.WorkingMessageID = strings.TrimSpace(stream.QuietWorking.MessageID)
 	}
 	if pendingPlan != "" && pendingPlan != stream.LastSentPlan {
 		planText = pendingPlan
 		if stream.QuietWorking != nil {
 			planBoundary = prepareStreamBoundaryLocked(stream)
-			planReuseMessage = planBoundary.ReuseMessageID
+			if !reuseBlocked {
+				planReuseMessage = planBoundary.ReuseMessageID
+			}
 		}
 	}
 	delete(tracker.Streams, turnID)
@@ -475,6 +494,54 @@ func (svc Service) MarkStreamFinal(turnID string) {
 		stream.SentFinal = true
 	}
 	tracker.Mu.Unlock()
+}
+
+// MarkSubstantiveOutputAfterWorking prevents future final/agent output from
+// reusing the current working-card message. The marker only applies to the
+// currently active working card; a later working card starts with a clean
+// reuse state.
+func (svc Service) MarkSubstantiveOutputAfterWorking(turnID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := tracker.Streams[turnID]
+	if stream == nil || stream.QuietWorking == nil || strings.TrimSpace(stream.QuietWorking.MessageID) == "" {
+		return
+	}
+	stream.QuietWorkingReuseBlocked = true
+}
+
+// TakeReasoningOnlyWorkingMessageID claims a reasoning-only working card for
+// replacement by the first substantive card in the turn.
+func (svc Service) TakeReasoningOnlyWorkingMessageID(turnID string) string {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return ""
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return ""
+	}
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := tracker.Streams[turnID]
+	if stream == nil || stream.QuietWorking == nil || !stream.QuietWorking.IsReasoningOnly() {
+		return ""
+	}
+	messageID := strings.TrimSpace(stream.QuietWorking.MessageID)
+	if messageID == "" {
+		return ""
+	}
+	stream.QuietWorking = nil
+	stream.QuietWorkingReuseBlocked = false
+	return messageID
 }
 
 // PrepareStreamQuietBoundary prepares the quiet working card boundary for the

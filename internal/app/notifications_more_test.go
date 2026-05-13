@@ -153,8 +153,8 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	a.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"req-1"`), "thread-1", "turn-1", "item-1", "need approve", map[string]any{"command": "pwd"})
-	if len(ff.sendCards) != 1 {
-		t.Fatalf("sendApprovalCardWithPayload() cards = %d, want 1", len(ff.sendCards))
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("sendApprovalCardWithPayload() cards = %d, want 1", len(ff.replyCards))
 	}
 	pending := a.store.PendingByID("req-1")
 	if pending == nil || pending.Kind != "command" || pending.Status != "pending" || pending.Backend != backendCodex {

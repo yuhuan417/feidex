@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
 
@@ -170,7 +172,96 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T
 	}
 }
 
-func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
+func TestQuietModeReusesReasoningOnlyWorkingCardForApprovalButNotFinal(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+		"id":   "reason-1",
+		"type": "reasoning",
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
+	}
+
+	onCommandApproval(a, codexrpc.RequestEnvelope{
+		ID:     json.RawMessage(`"cmd-1"`),
+		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"cmd-1","command":"lark-cli calendar events create"}`),
+	})
+	if len(ff.sendCards) != 0 {
+		t.Fatalf("approval card should be a reply card, sendCards = %d", len(ff.sendCards))
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after approval = %d, want reused working card only", len(ff.replyCards))
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("approval should patch reasoning-only working card, patched=%d", len(ff.patchedCards))
+	}
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); !strings.Contains(got, "等待审批") {
+		t.Fatalf("approval card title = %q", got)
+	}
+
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "final-1", map[string]any{
+		"id":    "final-1",
+		"type":  "agentMessage",
+		"phase": "final_answer",
+		"text":  "审批后的最终答复",
+	})
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("final should not patch the approval card, patched=%d", len(ff.patchedCards))
+	}
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after final = %d, want approval + final", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[1]); got != "["+a.cfg.Workspaces[0].ID+"] 最终答复" {
+		t.Fatalf("final card title = %q", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "审批后的最终答复") {
+		t.Fatalf("final card body = %q", body)
+	}
+}
+
+func TestQuietModeDoesNotReuseNonReasoningWorkingCardForApproval(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-working", map[string]any{
+		"id":     "cmd-working",
+		"type":   "commandExecution",
+		"status": "completed",
+		"cwd":    workspace,
+		"commandActions": []any{
+			map[string]any{
+				"type": "read",
+				"path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+			},
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after command working card = %d, want 1", len(ff.replyCards))
+	}
+
+	onCommandApproval(a, codexrpc.RequestEnvelope{
+		ID:     json.RawMessage(`"cmd-approval"`),
+		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"cmd-approval","command":"pwd"}`),
+	})
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("approval should not patch non-reasoning working card, patched=%d", len(ff.patchedCards))
+	}
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after approval = %d, want working + approval", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[1]); !strings.Contains(got, "等待审批") {
+		t.Fatalf("approval card title = %q", got)
+	}
+}
+
+func TestQuietModeDoesNotReuseNonReasoningWorkingCardForFinalCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
@@ -196,21 +287,21 @@ func TestFinishTurnReusesLingeringWorkingCardForFinalCard(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 	finishTurn(a, "thread-1", "turn-1", "completed")
 
-	if len(ff.patchedCards) != 1 {
-		t.Fatalf("patched card count after finishTurn = %d, want 1", len(ff.patchedCards))
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched card count after finishTurn = %d, want 0", len(ff.patchedCards))
 	}
-	if got := cardHeaderTitle(t, ff.patchedCards[0]); !strings.Contains(got, "最终答复") {
-		t.Fatalf("patched card title = %q, want to contain 最终答复", got)
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after finishTurn = %d, want working + final", len(ff.replyCards))
 	}
-	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, `<at id=user-1></at>`) {
-		t.Fatalf("patched final card body = %q, want attention mention", body)
+	if got := cardHeaderTitle(t, ff.replyCards[1]); !strings.Contains(got, "最终答复") {
+		t.Fatalf("final card title = %q, want to contain 最终答复", got)
 	}
-	if len(ff.replyCards) != 1 {
-		t.Fatalf("reply card count after finishTurn = %d, want 1 because lingering card should be reused", len(ff.replyCards))
+	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, `<at id=user-1></at>`) {
+		t.Fatalf("final card body = %q, want attention mention", body)
 	}
 }
 
-func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
+func TestQuietModeDoesNotReuseNonReasoningWorkingCardForTerminalCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
@@ -233,16 +324,18 @@ func TestFinishTurnReusesLingeringWorkingCardForTerminalCard(t *testing.T) {
 		t.Fatalf("reply card count after command = %d, want 1", len(ff.replyCards))
 	}
 
-	a.cfg.Feishu.Quiet = config.QuietModeFinal
 	finishTurn(a, "thread-1", "turn-1", "failed")
 
-	if len(ff.patchedCards) != 1 {
-		t.Fatalf("patched card count after failed finishTurn = %d, want 1", len(ff.patchedCards))
+	if len(ff.patchedCards) != 0 {
+		t.Fatalf("patched card count after failed finishTurn = %d, want 0", len(ff.patchedCards))
 	}
-	if got := cardHeaderTitle(t, ff.patchedCards[0]); !strings.Contains(got, "任务状态") {
-		t.Fatalf("patched card title = %q, want to contain 任务状态", got)
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after failed finishTurn = %d, want working + terminal", len(ff.replyCards))
 	}
-	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, `<at id=user-1></at>`) || !strings.Contains(body, "任务失败。") {
-		t.Fatalf("patched terminal card body = %q", body)
+	if got := cardHeaderTitle(t, ff.replyCards[1]); !strings.Contains(got, "任务状态") {
+		t.Fatalf("terminal card title = %q, want to contain 任务状态", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, `<at id=user-1></at>`) || !strings.Contains(body, "任务失败。") {
+		t.Fatalf("terminal card body = %q", body)
 	}
 }

@@ -90,8 +90,8 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 	if pending := a.store.PendingByID("cmd-1"); pending == nil || pending.Status != "pending" {
 		t.Fatalf("pending approval after request = %+v, want pending", pending)
 	}
-	if len(ff.sendCards) == 0 {
-		t.Fatal("approval request should send a card")
+	if len(ff.replyCards) == 0 {
+		t.Fatal("approval request should reply with a card")
 	}
 
 	msg2 := &feishu.InboundMessage{
@@ -113,7 +113,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		t.Fatalf("queued submission = %+v", queuedSub)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      msg1.UserID,
 		ActionValue: map[string]any{"request_id": "cmd-1"},
 	}, "approval.command.accept")

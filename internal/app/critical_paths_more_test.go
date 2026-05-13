@@ -297,8 +297,8 @@ func TestToolUserInputFormFlowRepliesByTextAndResumesAfterServerResolution(t *te
 	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_user_input" {
 		t.Fatalf("submission after requestUserInput = %+v, want waiting_user_input", updated)
 	}
-	if len(ff.sendCards) != 1 {
-		t.Fatalf("user input form cards = %d, want 1", len(ff.sendCards))
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("user input form cards = %d, want 1", len(ff.replyCards))
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{
