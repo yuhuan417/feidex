@@ -16,17 +16,11 @@ Feidex 是一个把 Codex App Server / Claude Code 接到飞书消息流上的�
 开发约束、模块边界、构建产物放置规则见 [DEVELOPER.md](DEVELOPER.md)。
 Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-audit.md](docs/codex-app-server-state-machine-audit.md)。
 
-## 最近更新
+## 文档口径
 
-- Claude Code 后端支持：`/session`、权限模式、reasoning effort、插件控制等完整 Claude 集成
-- 多前端/多后端架构：`[[frontend]]` 配置支持单进程多飞书 bot，每个可独立选择 Codex 或 Claude
-- 后端切换：`/backend` 命令可在线切换后端，无需重启
-- Data race 全面修复：包级全局变量改为实例依赖注入，`a.codex` 字段加互斥锁保护
-- 内部大重构：`internal/app` 从 God package 拆分为 50+ 子包（`features/` 统一命令注册、`submission/` 队列管理等）
-- 自动重试：失败线程可自动 retry，`/backend retry on/off` 切换
-- 技能支持：`/skills` 命令、`$skill-name <content>` 前缀语法
-- 新命令：`/review`、`/claude`、`/codex`、`/workspace clone/delete/choose`
-- WaitGroup 同步测试：异步测试不再依赖 `time.Sleep`/polling
+- README 只描述“当前 release 的长期能力、当前行为和使用方式”，不承担按版本罗列增量的职责。
+- 当前 README 以 `v0.213.0` 的产品状态为准。
+- 版本级新增能力、行为调整和修复记录见 GitHub Releases。
 
 ## 主要能力
 
@@ -37,6 +31,7 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
   - 多前端（`[[frontend]]`）支持单进程运行多个飞书 bot
 - 双后端支持：Codex + Claude
   - Codex：thread / turn 模型，`/thread` 命令族，审批流程
+  - Codex：`/plan` collaboration mode 与计划完成后的实现确认流程
   - Claude：session / conversation 模型，`/session` 命令族，权限模式
   - 在线后端切换：`/backend` 命令，无需重启
   - 后端特定的 CLI 升级：`/codex`、`/claude` 命令
@@ -44,6 +39,7 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
   - 新消息默认 queue / 新 turn（Codex）或新 message（Claude）
   - 回复消息支持 steer 到当前 root 绑定的 turn
   - steer 失败时自动回退到 queue
+  - 支持暂存附件（不仅图片）；下一条文字会把暂存附件一起带入输入
   - 支持自动重试（auto-retry）失败线程
 - 菜单卡片
   - 单卡片内导航
@@ -61,6 +57,8 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
   - 文件变更审批
   - 权限审批
   - request_user_input / elicitation 表单
+  - 单题少选项时自动走 quick-card 按钮，其余场景走表单
+  - quick-card 正文会重复完整选项说明，避免手机端按钮文案被截断后看不清
 - Code Review（Codex only）
   - `/review` 未提交变更
   - `/review base` / `/review commit` 指定范围
@@ -74,6 +72,7 @@ Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-a
   - 飞书权限问题卡片化提示
 - 运行与升级
   - Linux 用户态 systemd daemon
+  - `feidex daemon logs` 直接查看 daemon 日志
   - GitHub Release 自升级
   - 自动按本机架构选择 `amd64` 或 `aarch64` 资产
   - 支持 `/upgrade [VERSION]` 直接指定目标版本
@@ -275,9 +274,9 @@ sandbox_mode = "workspace-write"
 Feidex 提供了三种飞书配置方式：
 
 ```bash
-feidex feishu setup [--config config.toml]
-feidex feishu new   [--config config.toml]
-feidex feishu bind  --app app_id:app_secret
+feidex feishu setup [--config config.toml] [--frontend-id id] [--backend codex|claude]
+feidex feishu new   [--config config.toml] [--frontend-id id] [--backend codex|claude]
+feidex feishu bind  --app app_id:app_secret [--config config.toml] [--frontend-id id]
 ```
 
 说明：
@@ -290,6 +289,18 @@ feidex feishu bind  --app app_id:app_secret
   - 强制新建
 - `feishu bind`
   - 绑定已有飞书应用
+- `--frontend-id`
+  - 直接创建或更新指定 `[[frontend]]`
+  - 如果当前配置还在用顶层 `[feishu]`，第一次增加命名 frontend 时会自动迁移成 `[[frontend]]`
+- `--backend`
+  - 给新建或更新的 frontend 预填 backend（`codex` 或 `claude`）
+
+多 frontend 示例：
+
+```bash
+feidex feishu setup --config config.toml --frontend-id codex-main --backend codex
+feidex feishu setup --config config.toml --frontend-id claude-main --backend claude
+```
 
 对应实现见：
 
@@ -379,6 +390,8 @@ Claude Code 后端配置：
   - 该前端的飞书应用凭据
 - `allow_from` / `debug_allow_from` / `group_at_only` 等
   - 与 `[feishu]` 下的同名字段含义相同
+- `feidex feishu setup/new/bind --frontend-id <id> [--backend ...]`
+  - 可直接创建或更新这些 `[[frontend]]` 条目，无需手动编辑 TOML
 
 ### `[daemon]`
 
@@ -420,12 +433,12 @@ Claude Code 后端配置：
   - 能 steer 就 steer
   - steer 失败自动回退 queue
 
-### Staged Images
+### Staged Attachments
 
-用户先发图片、后发文字时：
+用户先发图片、文件或其他支持的附件、后发文字时：
 
-- 图片先进入暂存桶
-- 下一条文字会把暂存图片一起带入输入
+- 附件先进入暂存桶
+- 下一条文字会把这些暂存附件一起带入输入
 - 形成新 turn 成功后，会把所有参与本次输入的 root 绑定到该 turn
 
 ### `/history`
@@ -520,6 +533,12 @@ Claude Code 后端配置：
 - `/debug logs`
   - 查看最近一段服务端 slog 日志
   - 仅 `debug_allow_from` 白名单内用户可用
+- `/plan`
+  - 切换当前 Codex thread 的 `plan` collaboration mode
+- `/plan on`
+  - 为当前 Codex thread 开启 `plan` collaboration mode
+- `/plan off`
+  - 关闭当前 Codex thread 的 `plan` collaboration mode
 - `/thread`
   - 打开 thread 菜单
 - `/thread list`
@@ -621,6 +640,20 @@ Claude Code 后端配置：
 - `/workspace permissions [MODE]`
   - 配置 workspace 默认 Claude 权限模式
 
+## Plan Mode（Codex only）
+
+- `/plan` 作用在当前活动 thread，需要 `[codex].experimental_api = true`
+- 开启后，当前 thread 会切到 Codex 的 `plan` collaboration mode；session-scoped 内容卡标题会带 `[plan]` 前缀，便于和普通执行态区分
+- 当真正的 plan turn 完成并产出正式计划结果后，Feidex 会发送 `Implement this plan?` 确认卡，而不是直接退出 plan mode
+- 退出确认有三个动作：
+  - `Yes, implement this plan`
+    - 退出当前 thread 的 plan mode，并在当前 thread 直接提交实现指令
+  - `Yes, clear context and implement`
+    - 新开一个 fresh thread，把刚生成的计划当成实现输入继续执行
+  - `No, stay in Plan mode`
+    - 保持当前 thread 继续处于 plan mode
+- `/plan off` 或再次切换 `/plan` 时，会清掉当前 thread 的 plan mode；旧的计划确认卡会随之失效
+
 ## 审批卡片
 
 支持三类审批：
@@ -630,6 +663,16 @@ Claude Code 后端配置：
 - 权限审批
 
 审批处理后，卡片不会只剩“已允许本会话执行”这类结果文案，而会保留原审批内容，便于回看上下文。
+
+## 补充输入卡片
+
+- `request_user_input`
+  - 单题、`1-3` 个选项、非多选、非 `other` 时走 quick-card 按钮
+  - 多题、多选、自由文本或允许 `other` 的场景走表单卡片
+- quick-card 会在正文里重复展示完整题目、题目 ID 和全部选项说明
+  - 如果 option 同时带 `label` 和 `description`，正文和提交后的确认卡片都会显示成 `label - description`
+  - 这样在手机端即使按钮本身显示不全，用户仍能从正文确认自己在选什么
+- 提交后，确认卡片会保留完整已选项文案，而不是只回显短 label
 
 ## 文件下载与预览
 
@@ -665,6 +708,7 @@ feidex daemon start
 feidex daemon stop
 feidex daemon restart
 feidex daemon status
+feidex daemon logs [-n 50] [-f]
 feidex daemon uninstall
 ```
 
@@ -677,6 +721,10 @@ feidex daemon uninstall
   - 手动为当前用户打开 linger；通常不需要单独执行，`install` 默认就会尝试开启
 - `start` / `stop` / `restart` / `status` / `uninstall`
   - 也默认读取当前目录的 `config.toml`，按其中的 `[daemon].service_name` 选择实例
+- `logs`
+  - 通过 `journalctl --user -u <service>.service` 查看当前 daemon 日志
+  - `-n` 控制输出行数，`-f` 持续跟随
+  - 依赖 Linux/systemd journald
 - `upgrade-runner`
   - 内部升级 runner，不需要手动调用
 
