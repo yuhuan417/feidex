@@ -76,6 +76,7 @@ func persistForkedConversation(a *App, sessionKey string, sess *state.Session, w
 		clearSessionThreadContext(sess)
 	}
 	setSessionThreadContext(sess, workspaceID, threadID, name, preview)
+	sess.ActiveThreadCollaborationMode = nil
 	if strings.TrimSpace(threadID) != "" {
 		markSessionThreadLive(a, sessionKey, threadID)
 	} else {

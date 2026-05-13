@@ -129,8 +129,13 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 		ActiveThreadApprovalPolicy: "never",
 		ActiveThreadSandboxMode:    "read-only",
 		ActiveThreadServiceTier:    serviceTierFast,
-		ActiveThreadName:           "Codex Thread",
-		ActiveThreadPreview:        "preview",
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:            "plan",
+			Model:           "gpt-5.4",
+			ReasoningEffort: "medium",
+		},
+		ActiveThreadName:    "Codex Thread",
+		ActiveThreadPreview: "preview",
 	}
 
 	sessionStoreBackendThread(sess, backendCodex)
@@ -145,5 +150,8 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 	}
 	if sess.ActiveThreadSandboxMode != "read-only" || sess.ActiveThreadApprovalPolicy != "never" || sess.ActiveThreadServiceTier != serviceTierFast {
 		t.Fatalf("restored thread defaults = %+v", sess)
+	}
+	if sess.ActiveThreadCollaborationMode == nil || sess.ActiveThreadCollaborationMode.Mode != "plan" || sess.ActiveThreadCollaborationMode.Model != "gpt-5.4" {
+		t.Fatalf("restored collaboration mode = %+v", sess.ActiveThreadCollaborationMode)
 	}
 }

@@ -69,6 +69,21 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			}
 		},
 	}
+	bindings["plan"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"plan": {
+				Match: func(fields []string) bool {
+					return exactOrSingleArgCommand(fields, "on", "off")
+				},
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return commandPlan(a, msg, args)
+				},
+				Backends: map[string]func(fields []string) bool{
+					backendClaude: nil,
+				},
+			},
+		},
+	}
 	bindings["menu.compact"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"compact": {

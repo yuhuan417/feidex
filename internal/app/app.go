@@ -54,7 +54,7 @@ type App struct {
 	liveThreads *liveThreadTracker
 
 	serverRequestSvc *serverrequest.Service
-	trackers    appTrackers
+	trackers         appTrackers
 }
 
 // appTrackers bundles per-service runtime trackers that are lazily initialized
@@ -261,6 +261,9 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 	if strings.TrimSpace(serviceTier) != "" {
 		turnParams["serviceTier"] = strings.TrimSpace(serviceTier)
 	}
+	if collaborationMode := codexCollaborationModeForTurnStart(a, sessionKey, threadID); collaborationMode != nil {
+		turnParams["collaborationMode"] = collaborationMode
+	}
 	slog.Debug("turn start request",
 		"session_key", sessionKey,
 		"submission_id", sub.ID,
@@ -269,6 +272,7 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 		"sandbox_mode", sandboxMode,
 		"reasoning_effort", reasoningEffort,
 		"model", model,
+		"collaboration_mode", turnParams["collaborationMode"],
 	)
 	client, err := requireCodexClient(a)
 	if err != nil {

@@ -42,21 +42,22 @@ type Counters struct {
 }
 
 type storedSession struct {
-	Key                        string                          `json:"key"`
-	WorkspaceID                string                          `json:"workspace_id"`
-	ActiveThreadID             string                          `json:"active_thread_id"`
-	ActiveThreadWorkspaceID    string                          `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy string                          `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode    string                          `json:"active_thread_sandbox_mode"`
-	ActiveClaudePermissionMode string                          `json:"active_claude_permission_mode,omitempty"`
-	ActiveThreadServiceTier    string                          `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadName           string                          `json:"active_thread_name"`
-	ActiveThreadPreview        string                          `json:"active_thread_preview"`
-	BackendThreads             map[string]SessionBackendThread `json:"backend_threads,omitempty"`
-	OwnerUserID                string                          `json:"owner_user_id"`
-	ModelOverride              string                          `json:"model_override"`
-	RecentWorkspaceIDs         []string                        `json:"recent_workspace_ids,omitempty"`
-	UpdatedAt                  int64                           `json:"updated_at"`
+	Key                           string                          `json:"key"`
+	WorkspaceID                   string                          `json:"workspace_id"`
+	ActiveThreadID                string                          `json:"active_thread_id"`
+	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode       string                          `json:"active_thread_sandbox_mode"`
+	ActiveClaudePermissionMode    string                          `json:"active_claude_permission_mode,omitempty"`
+	ActiveThreadServiceTier       string                          `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadCollaborationMode *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
+	ActiveThreadName              string                          `json:"active_thread_name"`
+	ActiveThreadPreview           string                          `json:"active_thread_preview"`
+	BackendThreads                map[string]SessionBackendThread `json:"backend_threads,omitempty"`
+	OwnerUserID                   string                          `json:"owner_user_id"`
+	ModelOverride                 string                          `json:"model_override"`
+	RecentWorkspaceIDs            []string                        `json:"recent_workspace_ids,omitempty"`
+	UpdatedAt                     int64                           `json:"updated_at"`
 }
 
 type FrontendCardNotification struct {
@@ -69,41 +70,50 @@ type FrontendCardNotification struct {
 }
 
 type SessionBackendThread struct {
-	ThreadID             string `json:"thread_id,omitempty"`
-	WorkspaceID          string `json:"workspace_id,omitempty"`
-	ApprovalPolicy       string `json:"approval_policy,omitempty"`
-	SandboxMode          string `json:"sandbox_mode,omitempty"`
-	ClaudePermissionMode string `json:"claude_permission_mode,omitempty"`
-	ServiceTier          string `json:"service_tier,omitempty"`
-	Name                 string `json:"name,omitempty"`
-	Preview              string `json:"preview,omitempty"`
+	ThreadID             string                    `json:"thread_id,omitempty"`
+	WorkspaceID          string                    `json:"workspace_id,omitempty"`
+	ApprovalPolicy       string                    `json:"approval_policy,omitempty"`
+	SandboxMode          string                    `json:"sandbox_mode,omitempty"`
+	ClaudePermissionMode string                    `json:"claude_permission_mode,omitempty"`
+	ServiceTier          string                    `json:"service_tier,omitempty"`
+	CollaborationMode    *SessionCollaborationMode `json:"collaboration_mode,omitempty"`
+	Name                 string                    `json:"name,omitempty"`
+	Preview              string                    `json:"preview,omitempty"`
+}
+
+type SessionCollaborationMode struct {
+	Mode                  string  `json:"mode"`
+	Model                 string  `json:"model"`
+	ReasoningEffort       string  `json:"reasoning_effort,omitempty"`
+	DeveloperInstructions *string `json:"developer_instructions"`
 }
 
 type Session struct {
-	Key                        string                          `json:"key"`
-	WorkspaceID                string                          `json:"workspace_id"`
-	ActiveThreadID             string                          `json:"active_thread_id"`
-	ActiveThreadWorkspaceID    string                          `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy string                          `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode    string                          `json:"active_thread_sandbox_mode"`
-	ActiveClaudePermissionMode string                          `json:"active_claude_permission_mode,omitempty"`
-	ActiveThreadServiceTier    string                          `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadName           string                          `json:"active_thread_name"`
-	ActiveThreadPreview        string                          `json:"active_thread_preview"`
-	BackendThreads             map[string]SessionBackendThread `json:"backend_threads,omitempty"`
-	ActiveTurnID               string                          `json:"active_turn_id"`
-	ActiveSubmissionID         string                          `json:"active_submission_id"`
-	OwnerUserID                string                          `json:"owner_user_id"`
-	ChatID                     string                          `json:"chat_id"`
-	ChatType                   string                          `json:"chat_type"`
-	RootMessageID              string                          `json:"root_message_id"`
-	ModelOverride              string                          `json:"model_override"`
-	Status                     string                          `json:"status"`
-	Queue                      []string                        `json:"queue"`
-	ActiveOperations           []SessionActiveOperation        `json:"active_operations,omitempty"`
-	StagedImages               []SessionStagedImage            `json:"staged_images,omitempty"`
-	RecentWorkspaceIDs         []string                        `json:"recent_workspace_ids,omitempty"`
-	UpdatedAt                  int64                           `json:"updated_at"`
+	Key                           string                          `json:"key"`
+	WorkspaceID                   string                          `json:"workspace_id"`
+	ActiveThreadID                string                          `json:"active_thread_id"`
+	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode       string                          `json:"active_thread_sandbox_mode"`
+	ActiveClaudePermissionMode    string                          `json:"active_claude_permission_mode,omitempty"`
+	ActiveThreadServiceTier       string                          `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadCollaborationMode *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
+	ActiveThreadName              string                          `json:"active_thread_name"`
+	ActiveThreadPreview           string                          `json:"active_thread_preview"`
+	BackendThreads                map[string]SessionBackendThread `json:"backend_threads,omitempty"`
+	ActiveTurnID                  string                          `json:"active_turn_id"`
+	ActiveSubmissionID            string                          `json:"active_submission_id"`
+	OwnerUserID                   string                          `json:"owner_user_id"`
+	ChatID                        string                          `json:"chat_id"`
+	ChatType                      string                          `json:"chat_type"`
+	RootMessageID                 string                          `json:"root_message_id"`
+	ModelOverride                 string                          `json:"model_override"`
+	Status                        string                          `json:"status"`
+	Queue                         []string                        `json:"queue"`
+	ActiveOperations              []SessionActiveOperation        `json:"active_operations,omitempty"`
+	StagedImages                  []SessionStagedImage            `json:"staged_images,omitempty"`
+	RecentWorkspaceIDs            []string                        `json:"recent_workspace_ids,omitempty"`
+	UpdatedAt                     int64                           `json:"updated_at"`
 }
 
 type SessionActiveOperation struct {
@@ -566,6 +576,7 @@ func cloneSession(sess *Session) *Session {
 	cp.Queue = append([]string(nil), sess.Queue...)
 	cp.ActiveOperations = append([]SessionActiveOperation(nil), sess.ActiveOperations...)
 	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
+	cp.ActiveThreadCollaborationMode = cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode)
 	cp.BackendThreads = cloneSessionBackendThreads(sess.BackendThreads)
 	return &cp
 }
@@ -587,6 +598,11 @@ func normalizeSessionValues(sess *Session) bool {
 		changed = true
 	}
 	sess.BackendThreads = normalizedThreads
+	normalizedCollaborationMode := normalizeSessionCollaborationMode(sess.ActiveThreadCollaborationMode)
+	if !sessionCollaborationModeEqual(sess.ActiveThreadCollaborationMode, normalizedCollaborationMode) {
+		changed = true
+	}
+	sess.ActiveThreadCollaborationMode = normalizedCollaborationMode
 	return changed
 }
 
@@ -614,21 +630,22 @@ func storedSessionFromSession(sess *Session) *storedSession {
 	}
 	normalizeSessionValues(cp)
 	return &storedSession{
-		Key:                        cp.Key,
-		WorkspaceID:                cp.WorkspaceID,
-		ActiveThreadID:             cp.ActiveThreadID,
-		ActiveThreadWorkspaceID:    cp.ActiveThreadWorkspaceID,
-		ActiveThreadApprovalPolicy: cp.ActiveThreadApprovalPolicy,
-		ActiveThreadSandboxMode:    cp.ActiveThreadSandboxMode,
-		ActiveClaudePermissionMode: cp.ActiveClaudePermissionMode,
-		ActiveThreadServiceTier:    cp.ActiveThreadServiceTier,
-		ActiveThreadName:           cp.ActiveThreadName,
-		ActiveThreadPreview:        cp.ActiveThreadPreview,
-		BackendThreads:             cloneSessionBackendThreads(cp.BackendThreads),
-		OwnerUserID:                cp.OwnerUserID,
-		ModelOverride:              cp.ModelOverride,
-		RecentWorkspaceIDs:         cloneStringSlice(cp.RecentWorkspaceIDs),
-		UpdatedAt:                  cp.UpdatedAt,
+		Key:                           cp.Key,
+		WorkspaceID:                   cp.WorkspaceID,
+		ActiveThreadID:                cp.ActiveThreadID,
+		ActiveThreadWorkspaceID:       cp.ActiveThreadWorkspaceID,
+		ActiveThreadApprovalPolicy:    cp.ActiveThreadApprovalPolicy,
+		ActiveThreadSandboxMode:       cp.ActiveThreadSandboxMode,
+		ActiveClaudePermissionMode:    cp.ActiveClaudePermissionMode,
+		ActiveThreadServiceTier:       cp.ActiveThreadServiceTier,
+		ActiveThreadCollaborationMode: cloneSessionCollaborationMode(cp.ActiveThreadCollaborationMode),
+		ActiveThreadName:              cp.ActiveThreadName,
+		ActiveThreadPreview:           cp.ActiveThreadPreview,
+		BackendThreads:                cloneSessionBackendThreads(cp.BackendThreads),
+		OwnerUserID:                   cp.OwnerUserID,
+		ModelOverride:                 cp.ModelOverride,
+		RecentWorkspaceIDs:            cloneStringSlice(cp.RecentWorkspaceIDs),
+		UpdatedAt:                     cp.UpdatedAt,
 	}
 }
 
@@ -637,22 +654,23 @@ func sessionFromStored(sess *storedSession) *Session {
 		return nil
 	}
 	cp := &Session{
-		Key:                        sess.Key,
-		WorkspaceID:                sess.WorkspaceID,
-		ActiveThreadID:             sess.ActiveThreadID,
-		ActiveThreadWorkspaceID:    sess.ActiveThreadWorkspaceID,
-		ActiveThreadApprovalPolicy: sess.ActiveThreadApprovalPolicy,
-		ActiveThreadSandboxMode:    sess.ActiveThreadSandboxMode,
-		ActiveClaudePermissionMode: sess.ActiveClaudePermissionMode,
-		ActiveThreadServiceTier:    sess.ActiveThreadServiceTier,
-		ActiveThreadName:           sess.ActiveThreadName,
-		ActiveThreadPreview:        sess.ActiveThreadPreview,
-		BackendThreads:             cloneSessionBackendThreads(sess.BackendThreads),
-		OwnerUserID:                sess.OwnerUserID,
-		ModelOverride:              sess.ModelOverride,
-		RecentWorkspaceIDs:         cloneStringSlice(sess.RecentWorkspaceIDs),
-		Status:                     SessionStatusIdle.String(),
-		UpdatedAt:                  sess.UpdatedAt,
+		Key:                           sess.Key,
+		WorkspaceID:                   sess.WorkspaceID,
+		ActiveThreadID:                sess.ActiveThreadID,
+		ActiveThreadWorkspaceID:       sess.ActiveThreadWorkspaceID,
+		ActiveThreadApprovalPolicy:    sess.ActiveThreadApprovalPolicy,
+		ActiveThreadSandboxMode:       sess.ActiveThreadSandboxMode,
+		ActiveClaudePermissionMode:    sess.ActiveClaudePermissionMode,
+		ActiveThreadServiceTier:       sess.ActiveThreadServiceTier,
+		ActiveThreadCollaborationMode: cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode),
+		ActiveThreadName:              sess.ActiveThreadName,
+		ActiveThreadPreview:           sess.ActiveThreadPreview,
+		BackendThreads:                cloneSessionBackendThreads(sess.BackendThreads),
+		OwnerUserID:                   sess.OwnerUserID,
+		ModelOverride:                 sess.ModelOverride,
+		RecentWorkspaceIDs:            cloneStringSlice(sess.RecentWorkspaceIDs),
+		Status:                        SessionStatusIdle.String(),
+		UpdatedAt:                     sess.UpdatedAt,
 	}
 	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
 		cp.ChatType = chatType
@@ -670,6 +688,7 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 	cp := *sess
 	cp.ActiveClaudePermissionMode = strings.TrimSpace(cp.ActiveClaudePermissionMode)
 	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
+	cp.ActiveThreadCollaborationMode = normalizeSessionCollaborationMode(cp.ActiveThreadCollaborationMode)
 	cp.BackendThreads = normalizeSessionBackendThreads(cp.BackendThreads)
 	return &cp
 }
@@ -694,6 +713,56 @@ func cloneStringSlice(src []string) []string {
 	return dst
 }
 
+func cloneSessionCollaborationMode(src *SessionCollaborationMode) *SessionCollaborationMode {
+	if src == nil {
+		return nil
+	}
+	cp := *src
+	if src.DeveloperInstructions != nil {
+		value := *src.DeveloperInstructions
+		cp.DeveloperInstructions = &value
+	}
+	return &cp
+}
+
+func normalizeSessionCollaborationMode(mode *SessionCollaborationMode) *SessionCollaborationMode {
+	if mode == nil {
+		return nil
+	}
+	cp := *mode
+	cp.Mode = strings.TrimSpace(cp.Mode)
+	cp.Model = strings.TrimSpace(cp.Model)
+	cp.ReasoningEffort = strings.TrimSpace(cp.ReasoningEffort)
+	if cp.DeveloperInstructions != nil {
+		value := strings.TrimSpace(*cp.DeveloperInstructions)
+		cp.DeveloperInstructions = &value
+	}
+	if cp.Mode == "" || cp.Model == "" {
+		return nil
+	}
+	return &cp
+}
+
+func sessionCollaborationModeEqual(a, b *SessionCollaborationMode) bool {
+	switch {
+	case a == nil && b == nil:
+		return true
+	case a == nil || b == nil:
+		return false
+	}
+	if a.Mode != b.Mode || a.Model != b.Model || a.ReasoningEffort != b.ReasoningEffort {
+		return false
+	}
+	switch {
+	case a.DeveloperInstructions == nil && b.DeveloperInstructions == nil:
+		return true
+	case a.DeveloperInstructions == nil || b.DeveloperInstructions == nil:
+		return false
+	default:
+		return *a.DeveloperInstructions == *b.DeveloperInstructions
+	}
+}
+
 func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendThread {
 	thread.ThreadID = strings.TrimSpace(thread.ThreadID)
 	thread.WorkspaceID = strings.TrimSpace(thread.WorkspaceID)
@@ -701,6 +770,7 @@ func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendTh
 	thread.SandboxMode = strings.TrimSpace(thread.SandboxMode)
 	thread.ClaudePermissionMode = strings.TrimSpace(thread.ClaudePermissionMode)
 	thread.ServiceTier = normalizeStoredServiceTier(thread.ServiceTier)
+	thread.CollaborationMode = normalizeSessionCollaborationMode(thread.CollaborationMode)
 	thread.Name = strings.TrimSpace(thread.Name)
 	thread.Preview = strings.TrimSpace(thread.Preview)
 	return thread

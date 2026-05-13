@@ -155,6 +155,7 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
+	sess.ActiveThreadCollaborationMode = nil
 	if deps.SetThreadContext != nil {
 		deps.SetThreadContext(
 			sess,

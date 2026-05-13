@@ -22,6 +22,7 @@ func ClearThreadContext(sess *state.Session) {
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
 	sess.ActiveThreadServiceTier = ""
+	sess.ActiveThreadCollaborationMode = nil
 	sess.ActiveThreadName = ""
 	sess.ActiveThreadPreview = ""
 }
@@ -58,6 +59,7 @@ func BackendThreadSnapshot(sess *state.Session) state.SessionBackendThread {
 		SandboxMode:          strings.TrimSpace(sess.ActiveThreadSandboxMode),
 		ClaudePermissionMode: strings.TrimSpace(sess.ActiveClaudePermissionMode),
 		ServiceTier:          strings.TrimSpace(sess.ActiveThreadServiceTier),
+		CollaborationMode:    cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode),
 		Name:                 strings.TrimSpace(sess.ActiveThreadName),
 		Preview:              strings.TrimSpace(sess.ActiveThreadPreview),
 	}
@@ -121,6 +123,7 @@ func RestoreBackendThread(sess *state.Session, backend string) bool {
 	sess.ActiveThreadSandboxMode = strings.TrimSpace(snapshot.SandboxMode)
 	sess.ActiveClaudePermissionMode = strings.TrimSpace(snapshot.ClaudePermissionMode)
 	sess.ActiveThreadServiceTier = NormalizeServiceTier(snapshot.ServiceTier)
+	sess.ActiveThreadCollaborationMode = cloneSessionCollaborationMode(snapshot.CollaborationMode)
 	return true
 }
 
@@ -204,6 +207,18 @@ func CanResumeThreadForSubmission(sess *state.Session, sub *state.Submission) bo
 		return false
 	}
 	return strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(sub.WorkspaceID)
+}
+
+func cloneSessionCollaborationMode(src *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+	if src == nil {
+		return nil
+	}
+	cp := *src
+	if src.DeveloperInstructions != nil {
+		value := *src.DeveloperInstructions
+		cp.DeveloperInstructions = &value
+	}
+	return &cp
 }
 
 // Active operations
