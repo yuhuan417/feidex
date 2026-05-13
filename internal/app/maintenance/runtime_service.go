@@ -31,6 +31,11 @@ const AttachmentRetention = 7 * 24 * time.Hour
 // ArtifactRetention is how long drive artifacts are kept before GC.
 const ArtifactRetention = 3 * 24 * time.Hour
 
+// ArtifactGCTimeout is the maximum duration for a background Drive artifact
+// cleanup pass. Deleting Drive folders can be slow because Feishu handles
+// folder deletion asynchronously server-side.
+const ArtifactGCTimeout = 5 * time.Minute
+
 // FrontendCardNotificationKindFeishuPermissionIssue is the notification kind
 // for Feishu permission diagnostic cards.
 const FrontendCardNotificationKindFeishuPermissionIssue = "feishu_permission_issue"
@@ -324,7 +329,7 @@ func (s RuntimeMaintenanceService) RunDriveArtifactGC(source string) {
 	if feishuClient == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), ArtifactGCTimeout)
 	defer cancel()
 	result, err := feishuClient.CleanupArtifactsBefore(ctx, time.Now().Add(-ArtifactRetention))
 	if err != nil {

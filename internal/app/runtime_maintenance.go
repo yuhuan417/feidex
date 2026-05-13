@@ -9,3 +9,4 @@ type runtimeMaintenanceService = appmaintenance.RuntimeMaintenanceService
 var newRuntimeMaintenanceService = appmaintenance.NewRuntimeMaintenanceService
 
 const attachmentRetention = appmaintenance.AttachmentRetention
+const artifactGCTimeout = appmaintenance.ArtifactGCTimeout

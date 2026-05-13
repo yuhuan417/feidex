@@ -281,6 +281,7 @@ type fakeFeishuClient struct {
 	lookupMessageSenderErr    error
 	cleanupResult             feishu.PreviewDriveCleanupResult
 	cleanupErr                error
+	cleanupHook               func(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
 	started                   bool
 	stopped                   bool
 	replyTexts                []string
@@ -357,10 +358,16 @@ func (f *fakeFeishuClient) RewriteLocalFileLinks(ctx context.Context, req feishu
 	return out, err
 }
 
-func (f *fakeFeishuClient) CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error) {
+func (f *fakeFeishuClient) CleanupArtifactsBefore(ctx context.Context, cutoff time.Time) (feishu.PreviewDriveCleanupResult, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.cleanupResult, f.cleanupErr
+	hook := f.cleanupHook
+	result := f.cleanupResult
+	err := f.cleanupErr
+	f.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, cutoff)
+	}
+	return result, err
 }
 
 func (f *fakeFeishuClient) AddReaction(context.Context, string, string) error {
@@ -524,6 +531,12 @@ func (f *fakeFeishuClient) setCleanupState(result feishu.PreviewDriveCleanupResu
 	defer f.mu.Unlock()
 	f.cleanupResult = result
 	f.cleanupErr = err
+}
+
+func (f *fakeFeishuClient) setCleanupHook(hook func(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cleanupHook = hook
 }
 
 func cloneTestCardSlice(cards []map[string]any) []map[string]any {

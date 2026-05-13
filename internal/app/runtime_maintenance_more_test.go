@@ -62,6 +62,26 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	}
 }
 
+func TestRunDriveArtifactGCUsesExtendedTimeout(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	var (
+		gotDeadline   time.Time
+		gotDeadlineOK bool
+	)
+	ff.setCleanupHook(func(ctx context.Context, _ time.Time) (feishu.PreviewDriveCleanupResult, error) {
+		gotDeadline, gotDeadlineOK = ctx.Deadline()
+		return feishu.PreviewDriveCleanupResult{}, nil
+	})
+
+	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	if !gotDeadlineOK {
+		t.Fatal("CleanupArtifactsBefore context should have a deadline")
+	}
+	if remaining := time.Until(gotDeadline); remaining < artifactGCTimeout-5*time.Second {
+		t.Fatalf("artifact GC timeout remaining = %s, want close to %s", remaining, artifactGCTimeout)
+	}
+}
+
 func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "default"
