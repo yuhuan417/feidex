@@ -30,6 +30,14 @@
 - 本文只审计 app-server 的方法、通知、server request 及其生命周期，不单独审计 `thread/read` 这类结果 payload 的枚举字段。
 - 因此像 `userMessage.content` 里的 `skill`、`mention`、`localImage` 这类输入项类型，属于历史/展示层兼容范围，不单列为 `SM-xx` 状态机。
 
+## 术语澄清: `item/plan` vs `turn/plan/updated`
+
+- `item(type=plan)` 和可选的 `item/plan/delta` 属于 item 生命周期，语义是 plan-mode turn 产出的计划文本。
+- 在 Feidex 当前语境里，这条线对应 Codex `collaborationMode.mode=plan` 的 turn 输出，也就是 `/plan` 刚接入的 plan mode 结果展示。
+- `turn/plan/updated` 是 turn 级 checklist 更新通知，payload 是 `[{step, status}]` 这样的步骤列表。
+- `turn/plan/updated` 在 Feidex 里只被当成执行中 checklist 的展示来源，不代表 plan mode，也不是 `item(type=plan)` 的别名、前置事件、降级事件或等价事件。
+- 两者没有协议上的从属关系；后文凡是提到 plan mode / plan item，都指 `item(type=plan)` 这条线，凡是提到 checklist 更新，都只指 `turn/plan/updated`。
+
 ## 状态机命名
 
 后续讨论统一使用 `SM-xx` 代号引用状态机:
@@ -155,14 +163,17 @@
   - `internal/app/submission_queue.go:248-305` 和 `internal/app/turn_lifecycle.go:10-122` 会处理返回的 `turn.id` 以及 `turn/started`。
   - `internal/app/codex_event_router.go` 现在同时消费 `item/started` 与 `item/completed`。
   - `internal/app/turn_item_state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
+  - `internal/app/turnitem/payload.go:30-36` 会把 `item(type=plan)` 当成普通 completed item 渲染成计划文本；这条线属于 plan mode item 生命周期。
   - `internal/app/codex_event_router.go:57-87` 消费 `turn/started` 和 `turn/completed`。
+  - `internal/app/codex_event_router.go:88-97` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
   - `internal/app/turn_item_payload.go:21-67` 按 completed item 渲染最终内容。
   - 当本地已经看到了 final output，但后续缺失 `turn/completed`、导致 session 卡在 in-flight 时，`internal/app/codex_turn_recovery.go` 会在下一次 `enqueue` 或显式 `/stop` 时，通过 `thread/read(includeTurns=true)` 对账该 `turnId` 的服务端终态；只有确认 turn 已进入 `completed|failed|interrupted` 后，才复用现有 `finishTurn` 收口本地状态。
   - `internal/codexrpc/client.go:113-125` 通过 `optOutNotificationMethods` 明确退订当前不接入的 item delta 通知。
 - 差异点:
   - `item/agentMessage/delta`、`item/plan/delta`、`item/commandExecution/outputDelta`、`item/fileChange/outputDelta` 等流式通知被明确视为非目标能力，并通过 opt-out 退订。
   - `item/started` 已经接入，因此 tool approval / file change 这类需要前置 item 上下文的流程，已经不再只依赖 completed item。
-  - 当前产品以 started/completed 为唯一消费边界，最终 completed item 仍被完整处理，没有用户可见信息损失。
+  - 当前产品以 started/completed 为唯一 item 消费边界，因此 `item(type=plan)` 只消费最终 completed item，不消费 `item/plan/delta`。
+  - `turn/plan/updated` 仍然保留，但它只是 checklist 展示通道；不要把它和 `/plan` collaboration mode 或 `item(type=plan)` 混为一谈。
   - 主协议边界仍然是 `turn/completed`；`thread/read` 对账只用于 missed notification 后的本地恢复，不把 final item 本身当作终态。
 - 修改建议:
   - 保持现状即可；如果后续仍有其他明确不用消费的流式通知，也可继续加入 opt-out。

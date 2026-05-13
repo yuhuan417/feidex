@@ -102,6 +102,12 @@ backend-neutral 抽象只覆盖共享的产品骨架，不代表最终产品能�
 - 通知方法: `item/started`、`item/completed`、`turn/plan/updated`、`turn/started`、`turn/completed`、`thread/tokenUsage/updated`、`serverRequest/resolved`
 - server request: `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`item/tool/requestUserInput`、`mcpServer/elicitation/request`
 
+这里要特别区分两条完全不同的 plan 语义:
+
+- `item(type=plan)` / `item/plan/delta` 是 plan-mode turn 的计划文本输出，属于 item 生命周期。
+- `turn/plan/updated` 是执行中 checklist 更新通知，只负责展示步骤状态。
+- 两者没有协议上的等价关系；`turn/plan/updated` 不是 plan mode，也不是 `item(type=plan)` 的别名。
+
 [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go) 和 [internal/app/turn_item_state.go](/home/yuhuan/feidex/internal/app/turn_item_state.go) 已经把这些语义写进了产品层。
 
 ### 2. Claude CLI stream-json 是另一种协议模型
@@ -147,7 +153,8 @@ backend-neutral 抽象只覆盖共享的产品骨架，不代表最终产品能�
 | 工具调用进度 | `item/started` / `item/completed` | `tool_use` content block + `input_json_delta` | `适配可行` | 可合成为 backend-neutral tool item 生命周期。 |
 | 权限审批 | `requestApproval` + `serverRequest/resolved` | `control_request(can_use_tool)` + `control_response` | `适配可行` | 没有原生 `resolved` 通知，需要 adapter 合成“可继续”边界。 |
 | 用户输入问题 | `item/tool/requestUserInput` | `AskUserQuestion` | `部分对齐` | 支持问答，但字段形状不同。 |
-| plan 审批 / 退出计划模式 | `turn/plan/updated` + user input | `ExitPlanMode` | `部分对齐` | 更接近“一次性计划确认”，不是连续 plan delta。 |
+| plan mode 计划输出 | `collaborationMode(mode=plan)` + `item(type=plan)` | `ExitPlanMode` | `部分对齐` | Claude 更接近“一次性计划确认”，不是 Codex 的 plan item 生命周期。 |
+| 执行中 checklist 更新 | `turn/plan/updated` | 无稳定等价原语 | `不对齐` | 这只是 checklist 展示，不是 plan mode，也不等于 `item(type=plan)`。 |
 | usage / 成本 | `thread/tokenUsage/updated` | `message_delta.usage` + `result.usage` + `total_cost_usd` | `适配可行` | 可做 turn 内更新和 turn 结束汇总。 |
 | 中断 | `turn/interrupt` | interrupt control | `适配可行` | 需要在 neutral layer 抽象为 `InterruptTurn`。 |
 | 模型列表 | `model/list` | 无稳定 catalog，只能看到当前 model / set-model | `不对齐` | Claude 第一阶段不支持当前 `model/list` UI。 |
@@ -363,8 +370,9 @@ McpElicitation
 
 限制:
 
-- `ExitPlanMode` 提供的是计划确认语义，不是 Codex 风格的连续 `turn/plan/updated` 增量流。
-- 如果 Feidex 继续保留“执行中 plan 实时更新”卡片，Claude backend 第一阶段需要降级成“仅在退出计划模式时展示一次计划确认”。
+- `ExitPlanMode` 更接近“计划确认 / 退出 plan mode”，不是 Codex 的 `item(type=plan)` item 生命周期。
+- `turn/plan/updated` 在 Codex 里只是 checklist 更新展示；Claude 当前也没有它的稳定等价原语。
+- 如果 Feidex 继续保留“执行中 checklist 实时更新”卡片，Claude backend 第一阶段需要降级成“仅在退出 plan mode 时展示一次计划确认”。
 
 ## 对现有代码结构的影响
 
@@ -593,7 +601,7 @@ cwd = "/path/to/repo"
 
 1. Claude protocol 目前是本地参考协议，不是 Feidex 现有产品合同的一部分，后续 CLI 漂移风险高于 Codex app-server。
 2. Claude 没有 `serverRequest/resolved` 等价事件，审批恢复边界只能做 synthetic semantics。
-3. `ExitPlanMode` 不提供 Codex 风格 plan delta，现有 plan 卡片交互需要降级。
+3. `ExitPlanMode` 既不提供 Codex `item(type=plan)` 生命周期，也不提供 `turn/plan/updated` checklist 更新流，现有相关卡片交互需要分别降级处理。
 4. `skills[]` 只有很轻的初始化信息，无法覆盖当前 `skills/list` 交互。
 5. `model/list` 缺失意味着当前模型卡 UI 不能原样复用。
 6. 如果实现时直接把 Claude raw protocol 塞进 `internal/app`，会得到一套更难维护的双重特判，而不是清晰的双后端架构。
