@@ -1237,11 +1237,11 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 
 	ff.sendCards = nil
-	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","questions":[{"id":"q1","question":"Choose","options":[{"label":"A"},{"label":"B"}]}]}`)})
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","questions":[{"id":"q1","question":"Choose","options":[{"label":"A","description":"First option"},{"label":"B","description":"Second option"}]}]}`)})
 	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" {
 		t.Fatalf("tool user input pending = %+v, want quick-pick request", pending)
 	}
-	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "Choose") {
+	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "Choose") || !strings.Contains(got, "1. A - First option") || !strings.Contains(got, "2. B - Second option") {
 		t.Fatalf("tool user input quick-pick body = %q", got)
 	}
 

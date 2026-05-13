@@ -389,7 +389,7 @@ func (s *Service) SendUserInputCard(sub *state.Submission, requestID, sessionKey
 			},
 		})
 	}
-	card := s.SimpleStatusCard("需要补充输入", "orange", s.PrepareMentionText(q.Question, sub.UserID), buttons)
+	card := s.SimpleStatusCard("需要补充输入", "orange", s.PrepareMentionText(pendingforms.RenderToolUserInputQuickBody(q), sub.UserID), buttons)
 	return s.DeliverPendingCard(sub, card,
 		requestKey,
 		ClaudeRequestIDStored(requestKey),

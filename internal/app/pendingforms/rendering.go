@@ -54,6 +54,17 @@ func RenderToolUserInputBody(payload ToolUserInputPayload) string {
 	return strings.Join(lines, "\n")
 }
 
+// RenderToolUserInputQuickBody builds the markdown body for a quick single-
+// question card with button answers. The result is plain text without
+// attention mentions.
+func RenderToolUserInputQuickBody(q ToolUserInputQuestion) string {
+	body := strings.TrimSpace(ToolUserInputQuestionMarkdown(q, "", nil, ""))
+	if body == "" {
+		return "请点击下方按钮完成选择。"
+	}
+	return "请点击下方按钮完成选择。\n\n" + body
+}
+
 // RenderToolUserInputFormCard builds a Feishu card containing a form for tool
 // user input questions. attentionUserID is the Feishu user to @-mention.
 func RenderToolUserInputFormCard(requestID string, payload ToolUserInputPayload, drafts FormDrafts, attentionUserID string) map[string]any {

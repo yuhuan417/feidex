@@ -973,14 +973,31 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 		t.Fatalf("approval pending = %+v, want Claude pending command", pending)
 	}
 
+	if err := sendClaudeUserInputCard(a, "question-card-1", "sess-1", sub, pendingforms.ToolUserInputPayload{
+		ThreadID: "claude-thread-1",
+		TurnID:   "claude-turn-1",
+		ItemID:   "item-2",
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{ID: "q1", Question: "Choose a mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast", Description: "Prioritize speed"}, {Label: "Safe", Description: "Prioritize safety"}}},
+		},
+	}); err != nil {
+		t.Fatalf("sendClaudeUserInputCard() error = %v", err)
+	}
+	if pending := a.store.PendingByID("question-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != "tool_request_user_input" || pending.Status != "pending" {
+		t.Fatalf("user input pending = %+v, want Claude pending user input", pending)
+	}
+	if got := cardMarkdownContent(t, ff.sendCards[1]); !strings.Contains(got, "Choose a mode") || !strings.Contains(got, "1. Fast - Prioritize speed") || !strings.Contains(got, "2. Safe - Prioritize safety") {
+		t.Fatalf("Claude quick user input body = %q", got)
+	}
+
 	if err := sendClaudePlanModeCard(a, "plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
 		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
 	}
 	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
 		t.Fatalf("plan pending = %+v, want Claude plan pending", pending)
 	}
-	if len(ff.sendCards) != 2 {
-		t.Fatalf("sendCards = %d, want 2", len(ff.sendCards))
+	if len(ff.sendCards) != 3 {
+		t.Fatalf("sendCards = %d, want 3", len(ff.sendCards))
 	}
 	if updated := a.store.GetSubmission(sub.ID); updated == nil || updated.Status != "waiting_user_input" {
 		t.Fatalf("submission after Claude pending cards = %+v, want waiting_user_input", updated)
@@ -1000,7 +1017,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		TurnID:   "claude-turn-1",
 		ItemID:   "item-1",
 		Questions: []pendingforms.ToolUserInputQuestion{
-			{ID: "q1", Question: "Choose a mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			{ID: "q1", Question: "Choose a mode", Options: []pendingforms.ToolUserInputOption{{Label: "Fast", Description: "Prioritize speed"}, {Label: "Safe", Description: "Prioritize safety"}}},
 		},
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -1024,11 +1041,18 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("user input response = %#v, want success toast", resp)
 	}
+	if resp.Card == nil {
+		t.Fatal("expected quick user input response card")
+	}
 	if len(claude.userInputCalls) != 1 {
 		t.Fatalf("user input calls = %d, want 1", len(claude.userInputCalls))
 	}
 	if got := claude.userInputCalls[0].answers["Choose a mode"]; got != "Fast" {
 		t.Fatalf("resolved Claude answer = %q, want Fast", got)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "Fast - Prioritize speed") {
+		t.Fatalf("Claude quick user input response card body = %q", got)
 	}
 	pending := a.store.PendingByID("question-1")
 	if pending == nil || pending.Status != "resolved" {

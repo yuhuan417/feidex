@@ -151,6 +151,31 @@ func TestToolUserInputQuestionMarkdownShowsDetailedSingleSelectOptions(t *testin
 	}
 }
 
+func TestRenderToolUserInputQuickBodyShowsDetailedSingleSelectOptions(t *testing.T) {
+	q := ToolUserInputQuestion{
+		ID:       "mode",
+		Question: "Choose mode",
+		Options: []ToolUserInputOption{
+			{Label: "Fast", Description: "Prioritize speed"},
+			{Label: "Safe", Description: "Prioritize safety"},
+		},
+	}
+
+	body := RenderToolUserInputQuickBody(q)
+	for _, want := range []string{
+		"请点击下方按钮完成选择。",
+		"**Choose mode**",
+		"`mode`",
+		"单选题",
+		"1. Fast - Prioritize speed",
+		"2. Safe - Prioritize safety",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("RenderToolUserInputQuickBody() = %q, missing %q", body, want)
+		}
+	}
+}
+
 func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 	payload := ToolUserInputPayload{
 		Questions: []ToolUserInputQuestion{

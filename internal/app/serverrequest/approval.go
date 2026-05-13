@@ -7,6 +7,7 @@ import (
 
 	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/approvalview"
+	"feidex/internal/app/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -228,7 +229,7 @@ func (s *Service) SendUserInputCard(requestID json.RawMessage, payload ToolUserI
 			},
 		})
 	}
-	card := s.SimpleStatusCard("需要补充输入", "orange", s.PrepareMentionText(q.Question, sub.UserID), buttons)
+	card := s.SimpleStatusCard("需要补充输入", "orange", s.PrepareMentionText(pendingforms.RenderToolUserInputQuickBody(q), sub.UserID), buttons)
 	requestKey := requestIDKey(requestID)
 	err := s.DeliverPendingCard(sub, card, PendingCardDelivery{
 		RequestKey:      requestKey,
