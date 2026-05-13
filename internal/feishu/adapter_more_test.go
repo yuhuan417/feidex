@@ -78,6 +78,81 @@ func TestShouldReconnectTransport(t *testing.T) {
 	}
 }
 
+func TestWSReconnectDelayForExit(t *testing.T) {
+	if got := wsReconnectDelayForExit(true, time.Minute); got != 0 {
+		t.Fatalf("wsReconnectDelayForExit(established) = %v, want 0", got)
+	}
+	if got := wsReconnectDelayForExit(false, 0); got != wsDefaultReconnectInterval {
+		t.Fatalf("wsReconnectDelayForExit(default) = %v, want %v", got, wsDefaultReconnectInterval)
+	}
+	if got := wsReconnectDelayForExit(false, 2*time.Minute); got != wsMaxReconnectInterval {
+		t.Fatalf("wsReconnectDelayForExit(capped) = %v, want %v", got, wsMaxReconnectInterval)
+	}
+}
+
+func TestCurrentWSReadTimeoutUsesSafetyWindow(t *testing.T) {
+	a := New(config.FeishuConfig{})
+	a.wsPingInterval = 5 * time.Second
+	if got := a.currentWSReadTimeout(); got != wsMinReadTimeout {
+		t.Fatalf("currentWSReadTimeout(short ping) = %v, want %v", got, wsMinReadTimeout)
+	}
+
+	a.wsPingInterval = 90 * time.Second
+	if got := a.currentWSReadTimeout(); got != 210*time.Second {
+		t.Fatalf("currentWSReadTimeout(long ping) = %v, want %v", got, 210*time.Second)
+	}
+
+	a.wsPingInterval = wsDefaultPingInterval
+	if got := a.currentWSReadTimeout(); got != 270*time.Second {
+		t.Fatalf("currentWSReadTimeout(default ping) = %v, want %v", got, 270*time.Second)
+	}
+}
+
+func TestWSShouldStartProbe(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	if wsShouldStartProbe(base, time.Time{}, time.Time{}, time.Time{}, wsPongGrace) {
+		t.Fatal("missing ping should not trigger probe")
+	}
+	if wsShouldStartProbe(base.Add(10*time.Second), base, base.Add(-time.Second), time.Time{}, wsPongGrace) {
+		t.Fatal("grace window should delay probe")
+	}
+	if !wsShouldStartProbe(base.Add(wsPongGrace), base, base.Add(-time.Second), time.Time{}, wsPongGrace) {
+		t.Fatal("missed heartbeat should trigger probe once grace expires")
+	}
+	if wsShouldStartProbe(base.Add(wsPongGrace), base, base.Add(-time.Second), base.Add(wsProbeTimeout), wsPongGrace) {
+		t.Fatal("active probe should suppress duplicate probe attempts")
+	}
+	if wsShouldStartProbe(base.Add(wsPongGrace), base, base.Add(time.Second), time.Time{}, wsPongGrace) {
+		t.Fatal("inbound traffic after ping should clear suspicion")
+	}
+}
+
+func TestWSProbeTimedOut(t *testing.T) {
+	base := time.Unix(1_700_000_000, 0)
+	if wsProbeTimedOut(base, time.Time{}) {
+		t.Fatal("zero probe deadline should not be expired")
+	}
+	if wsProbeTimedOut(base.Add(5*time.Second), base.Add(10*time.Second)) {
+		t.Fatal("future probe deadline should not be expired")
+	}
+	if !wsProbeTimedOut(base.Add(10*time.Second), base.Add(10*time.Second)) {
+		t.Fatal("probe deadline at now should be expired")
+	}
+}
+
+func TestWSWallClockAction(t *testing.T) {
+	pingInterval := 2 * time.Minute
+	if got := wsWallClockAction(30*time.Second, pingInterval); got != wsLivenessActionNone {
+		t.Fatalf("wsWallClockAction(short gap) = %v, want %v", got, wsLivenessActionNone)
+	}
+	if got := wsWallClockAction(pingInterval, pingInterval); got != wsLivenessActionProbe {
+		t.Fatalf("wsWallClockAction(soft gap) = %v, want %v", got, wsLivenessActionProbe)
+	}
+	if got := wsWallClockAction(3*pingInterval, pingInterval); got != wsLivenessActionReconnect {
+		t.Fatalf("wsWallClockAction(hard gap) = %v, want %v", got, wsLivenessActionReconnect)
+	}
+}
+
 func TestCloseWSConnWhileWriteBlockedDoesNotWaitForStateLock(t *testing.T) {
 	origSetDeadline := wsSetWriteDeadline
 	origWriteFrame := wsWriteFrame

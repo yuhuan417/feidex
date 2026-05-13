@@ -121,6 +121,9 @@ type Adapter struct {
 	wsFragments         *larkcache.Cache
 	wsPingInterval      time.Duration
 	wsReconnectInterval time.Duration
+	wsLastRxAt          time.Time
+	wsLastPingAt        time.Time
+	wsProbeDeadline     time.Time
 	wsRecycleAt         time.Time
 
 	startErr error
@@ -144,7 +147,10 @@ const (
 	wsDefaultReconnectInterval = 5 * time.Second
 	wsDefaultWriteTimeout      = 15 * time.Second
 	wsMaxReconnectInterval     = 1 * time.Minute
-	wsMinReadTimeout           = 3 * time.Minute
+	wsMinReadTimeout           = 45 * time.Second
+	wsMonitorTick              = 5 * time.Second
+	wsPongGrace                = 15 * time.Second
+	wsProbeTimeout             = 10 * time.Second
 	wsFragmentCacheTTL         = 5 * time.Second
 	wsRecycleCooldown          = 5 * time.Second
 )

@@ -29,48 +29,65 @@ var wsCloseConn = func(conn *gws.Conn) error {
 	return conn.Close()
 }
 
+var wsWallNow = func() time.Time {
+	return time.Now().Round(0)
+}
+
+type wsLivenessAction int
+
+const (
+	wsLivenessActionNone wsLivenessAction = iota
+	wsLivenessActionProbe
+	wsLivenessActionReconnect
+)
+
 func (a *Adapter) runWSLoop(ctx context.Context) {
 	for {
 		if ctx.Err() != nil {
 			a.closeWSConn()
 			return
 		}
-		if err := a.runWSConnection(ctx); err != nil && ctx.Err() == nil {
+		hadSession, err := a.runWSConnection(ctx)
+		if err != nil && ctx.Err() == nil {
 			slog.Warn("feishu websocket disconnected", "error", err)
 		}
 		if ctx.Err() != nil {
 			a.closeWSConn()
 			return
 		}
-		if !sleepWithContext(ctx, a.currentWSReconnectInterval()) {
+		if delay := wsReconnectDelayForExit(hadSession, a.currentWSReconnectInterval()); delay <= 0 {
+			continue
+		} else if !sleepWithContext(ctx, delay) {
 			a.closeWSConn()
 			return
 		}
 	}
 }
 
-func (a *Adapter) runWSConnection(ctx context.Context) error {
+func (a *Adapter) runWSConnection(ctx context.Context) (bool, error) {
+	hadSession := false
 	endpointURL, err := a.fetchWSEndpointURL(ctx)
 	if err != nil {
-		return err
+		return hadSession, err
 	}
 	conn, resp, err := wsDialContext(ctx, endpointURL, nil)
 	if err != nil {
 		if resp != nil {
-			return fmt.Errorf("feishu websocket connect failed: status=%d: %w", resp.StatusCode, err)
+			return hadSession, fmt.Errorf("feishu websocket connect failed: status=%d: %w", resp.StatusCode, err)
 		}
-		return fmt.Errorf("feishu websocket connect failed: %w", err)
+		return hadSession, fmt.Errorf("feishu websocket connect failed: %w", err)
 	}
 	if conn == nil {
-		return fmt.Errorf("feishu websocket connect returned nil connection")
+		return hadSession, fmt.Errorf("feishu websocket connect returned nil connection")
 	}
 	u, err := url.Parse(endpointURL)
 	if err != nil {
 		_ = conn.Close()
-		return err
+		return hadSession, err
 	}
 	serviceID, _ := strconv.ParseInt(u.Query().Get(larkws.ServiceID), 10, 32)
 	a.storeWSConn(conn, int32(serviceID))
+	hadSession = true
 	defer a.closeWSConn()
 	slog.Info("feishu websocket connected",
 		"conn_id", strings.TrimSpace(u.Query().Get(larkws.DeviceID)),
@@ -80,11 +97,12 @@ func (a *Adapter) runWSConnection(ctx context.Context) error {
 	errCh := make(chan error, 2)
 	go a.wsPingLoop(ctx, errCh)
 	go a.wsReadLoop(ctx, conn, errCh)
+	go a.wsLivenessMonitor(ctx, errCh)
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return hadSession, ctx.Err()
 	case err := <-errCh:
-		return err
+		return hadSession, err
 	}
 }
 
@@ -98,14 +116,8 @@ func (a *Adapter) wsPingLoop(ctx context.Context, errCh chan<- error) {
 			return
 		case <-timer.C:
 		}
-		frame := larkws.NewPingFrame(a.currentWSServiceID())
-		bs, err := frame.Marshal()
-		if err != nil {
-			a.failWSLoop(errCh, fmt.Errorf("marshal ping frame: %w", err))
-			return
-		}
-		if err := a.writeWSMessage(gws.BinaryMessage, bs); err != nil {
-			a.failWSLoop(errCh, fmt.Errorf("write ping frame: %w", err))
+		if err := a.writeWSPing(); err != nil {
+			a.failWSLoop(errCh, err)
 			return
 		}
 	}
@@ -122,6 +134,7 @@ func (a *Adapter) wsReadLoop(ctx context.Context, conn *gws.Conn, errCh chan<- e
 			a.failWSLoop(errCh, err)
 			return
 		}
+		a.noteWSInboundActivity(time.Now())
 		if mt != gws.BinaryMessage {
 			slog.Warn("feishu websocket ignored non-binary message", "message_type", mt)
 			continue
@@ -322,6 +335,9 @@ func (a *Adapter) storeWSConn(conn *gws.Conn, serviceID int32) {
 	a.wsMu.Lock()
 	a.wsConn = conn
 	a.wsServiceID = serviceID
+	a.wsLastRxAt = time.Now()
+	a.wsLastPingAt = time.Time{}
+	a.wsProbeDeadline = time.Time{}
 	a.wsMu.Unlock()
 }
 
@@ -330,10 +346,26 @@ func (a *Adapter) closeWSConn() {
 	conn := a.wsConn
 	a.wsConn = nil
 	a.wsServiceID = 0
+	a.wsLastRxAt = time.Time{}
+	a.wsLastPingAt = time.Time{}
+	a.wsProbeDeadline = time.Time{}
 	a.wsMu.Unlock()
 	if conn != nil {
 		_ = wsCloseConn(conn)
 	}
+}
+
+func (a *Adapter) writeWSPing() error {
+	frame := larkws.NewPingFrame(a.currentWSServiceID())
+	bs, err := frame.Marshal()
+	if err != nil {
+		return fmt.Errorf("marshal ping frame: %w", err)
+	}
+	if err := a.writeWSMessage(gws.BinaryMessage, bs); err != nil {
+		return fmt.Errorf("write ping frame: %w", err)
+	}
+	a.noteWSPingSent(time.Now())
+	return nil
 }
 
 func (a *Adapter) writeWSMessage(messageType int, data []byte) error {
@@ -365,6 +397,9 @@ func (a *Adapter) noteOutboundTransportFailure(err error) {
 	conn := a.wsConn
 	a.wsConn = nil
 	a.wsServiceID = 0
+	a.wsLastRxAt = time.Time{}
+	a.wsLastPingAt = time.Time{}
+	a.wsProbeDeadline = time.Time{}
 	a.wsMu.Unlock()
 	if conn != nil {
 		slog.Warn("feishu outbound transport failed, recycling websocket", "error", err)
@@ -414,6 +449,87 @@ func (a *Adapter) failWSLoop(errCh chan<- error, err error) {
 	a.closeWSConn()
 }
 
+func (a *Adapter) noteWSPingSent(now time.Time) {
+	a.wsMu.Lock()
+	a.wsLastPingAt = now
+	a.wsMu.Unlock()
+}
+
+func (a *Adapter) noteWSInboundActivity(now time.Time) {
+	a.wsMu.Lock()
+	a.wsLastRxAt = now
+	a.wsProbeDeadline = time.Time{}
+	a.wsMu.Unlock()
+}
+
+func (a *Adapter) currentWSLivenessSnapshot() (lastRxAt, lastPingAt, probeDeadline time.Time) {
+	a.wsMu.Lock()
+	defer a.wsMu.Unlock()
+	return a.wsLastRxAt, a.wsLastPingAt, a.wsProbeDeadline
+}
+
+func (a *Adapter) armWSProbe(now time.Time) bool {
+	a.wsMu.Lock()
+	defer a.wsMu.Unlock()
+	if a.wsConn == nil {
+		return false
+	}
+	if !a.wsProbeDeadline.IsZero() && now.Before(a.wsProbeDeadline) {
+		return false
+	}
+	a.wsProbeDeadline = now.Add(wsProbeTimeout)
+	return true
+}
+
+func (a *Adapter) startWSProbe(now time.Time, errCh chan<- error, reason string) bool {
+	if !a.armWSProbe(now) {
+		return true
+	}
+	slog.Warn("feishu websocket liveness probe started", "reason", reason)
+	if err := a.writeWSPing(); err != nil {
+		a.failWSLoop(errCh, fmt.Errorf("%s: %w", reason, err))
+		return false
+	}
+	return true
+}
+
+func (a *Adapter) wsLivenessMonitor(ctx context.Context, errCh chan<- error) {
+	ticker := time.NewTicker(wsMonitorTick)
+	defer ticker.Stop()
+	lastWall := wsWallNow()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			tickNow := time.Now()
+			pingInterval := a.currentWSPingInterval()
+			wallNow := wsWallNow()
+			switch wsWallClockAction(wallNow.Sub(lastWall), pingInterval) {
+			case wsLivenessActionReconnect:
+				a.failWSLoop(errCh, fmt.Errorf("wall clock jumped by %v after missing at least two heartbeat windows", wallNow.Sub(lastWall)))
+				return
+			case wsLivenessActionProbe:
+				if ok := a.startWSProbe(tickNow, errCh, fmt.Sprintf("wall clock jumped by %v after missing one heartbeat window", wallNow.Sub(lastWall))); !ok {
+					return
+				}
+			}
+			lastWall = wallNow
+
+			lastRxAt, lastPingAt, probeDeadline := a.currentWSLivenessSnapshot()
+			if wsProbeTimedOut(tickNow, probeDeadline) {
+				a.failWSLoop(errCh, fmt.Errorf("feishu websocket probe timed out after %v without inbound traffic", wsProbeTimeout))
+				return
+			}
+			if wsShouldStartProbe(tickNow, lastPingAt, lastRxAt, probeDeadline, wsPongGrace) {
+				if ok := a.startWSProbe(tickNow, errCh, fmt.Sprintf("no inbound websocket traffic within %v after ping", wsPongGrace)); !ok {
+					return
+				}
+			}
+		}
+	}
+}
+
 func sleepWithContext(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		d = wsDefaultReconnectInterval
@@ -426,4 +542,57 @@ func sleepWithContext(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+func wsShouldStartProbe(now, lastPingAt, lastRxAt, probeDeadline time.Time, grace time.Duration) bool {
+	if !probeDeadline.IsZero() {
+		return false
+	}
+	return wsHeartbeatOverdue(now, lastPingAt, lastRxAt, grace)
+}
+
+func wsHeartbeatOverdue(now, lastPingAt, lastRxAt time.Time, grace time.Duration) bool {
+	if grace <= 0 {
+		grace = wsPongGrace
+	}
+	if lastPingAt.IsZero() {
+		return false
+	}
+	if !lastRxAt.IsZero() && !lastRxAt.Before(lastPingAt) {
+		return false
+	}
+	return !now.Before(lastPingAt.Add(grace))
+}
+
+func wsProbeTimedOut(now, probeDeadline time.Time) bool {
+	if probeDeadline.IsZero() {
+		return false
+	}
+	return !now.Before(probeDeadline)
+}
+
+func wsWallClockAction(gap, pingInterval time.Duration) wsLivenessAction {
+	if pingInterval <= 0 {
+		pingInterval = wsDefaultPingInterval
+	}
+	if gap >= pingInterval*2 {
+		return wsLivenessActionReconnect
+	}
+	if gap >= pingInterval {
+		return wsLivenessActionProbe
+	}
+	return wsLivenessActionNone
+}
+
+func wsReconnectDelayForExit(hadSession bool, configured time.Duration) time.Duration {
+	if hadSession {
+		return 0
+	}
+	if configured <= 0 {
+		configured = wsDefaultReconnectInterval
+	}
+	if configured > wsMaxReconnectInterval {
+		return wsMaxReconnectInterval
+	}
+	return configured
 }
