@@ -1202,6 +1202,9 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if got, _ := ff.sendCards[0]["schema"].(string); got != "2.0" {
 		t.Fatalf("approval card schema = %#v, want 2.0", ff.sendCards[0]["schema"])
 	}
+	if got := cardHeaderTitle(t, ff.sendCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 等待审批" {
+		t.Fatalf("command approval card title = %q", got)
+	}
 	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "命令审批") || !strings.Contains(got, "ls -la") || !strings.Contains(got, "/repo") {
 		t.Fatalf("command approval card body = %q", got)
 	}
@@ -1222,6 +1225,9 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	}
 	if got, _ := ff.sendCards[0]["schema"].(string); got != "2.0" {
 		t.Fatalf("permissions card schema = %#v, want 2.0", ff.sendCards[0]["schema"])
+	}
+	if got := cardHeaderTitle(t, ff.sendCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 权限请求" {
+		t.Fatalf("permissions approval card title = %q", got)
 	}
 	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "权限审批") || !strings.Contains(got, "mode") || !strings.Contains(got, "network") || !strings.Contains(got, "/repo") {
 		t.Fatalf("permissions approval card body = %q", got)
@@ -1512,6 +1518,9 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 
 	if len(ff.sendCards) != 1 {
 		t.Fatalf("approval card count = %d, want 1", len(ff.sendCards))
+	}
+	if got := cardHeaderTitle(t, ff.sendCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 等待审批" {
+		t.Fatalf("approval card title = %q", got)
 	}
 	if got := cardMarkdownContent(t, ff.sendCards[0]); !strings.Contains(got, "命令审批") || !strings.Contains(got, `<at id=user-1></at>`) {
 		t.Fatalf("approval card in p2p body = %q", got)
@@ -1828,7 +1837,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	sessionKey := "feishu:p2p:chat:user"
 
 	rootCard := renderCommandMenuCard(a, sessionKey)
-	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：主菜单") {
+	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：主菜单") || strings.Contains(body, "当前模式: plan") {
 		t.Fatalf("root menu missing breadcrumb: %q", body)
 	}
 	rootActions := cardButtonsForTest(rootCard)
@@ -1861,12 +1870,13 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	}
 
 	toolsCard := renderToolsMenuCard(a, sessionKey)
-	if body := cardMarkdownContent(t, toolsCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") {
+	if body := cardMarkdownContent(t, toolsCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") || strings.Contains(body, "当前模式: plan") {
 		t.Fatalf("tools menu missing breadcrumb: %q", body)
 	}
 	contextActions := cardButtonsForTest(toolsCard)
 	indicatorByAction := map[string]bool{}
 	labelByAction := map[string]string{}
+	actionOrder := make([]string, 0, len(contextActions))
 	for _, action := range contextActions {
 		text, _ := action["text"].(map[string]any)
 		label, _ := text["content"].(string)
@@ -1878,17 +1888,32 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 			}
 		}
 		actionName, _ := value["action"].(string)
+		actionOrder = append(actionOrder, actionName)
 		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
 		labelByAction[actionName] = label
 	}
-	if indicatorByAction["menu.quiet"] != true || indicatorByAction["menu.history"] != true || indicatorByAction["menu.usage"] != true {
+	if indicatorByAction["menu.quiet"] != true || indicatorByAction["menu.plan"] || indicatorByAction["menu.history"] != true || indicatorByAction["menu.usage"] != true {
 		t.Fatalf("expected tools submenu indicators, got %#v", indicatorByAction)
 	}
 	if indicatorByAction["menu.interrupt"] || indicatorByAction["menu.download"] || indicatorByAction["menu.compact"] {
 		t.Fatalf("direct tools commands should not show submenu indicator, got %#v", indicatorByAction)
 	}
-	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
+	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.plan"], "/plan") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
 		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
+	}
+	quietIndex, planIndex, compactIndex := -1, -1, -1
+	for i, actionName := range actionOrder {
+		switch actionName {
+		case "menu.quiet":
+			quietIndex = i
+		case "menu.plan":
+			planIndex = i
+		case "menu.compact":
+			compactIndex = i
+		}
+	}
+	if !(quietIndex >= 0 && planIndex > quietIndex && compactIndex > planIndex) {
+		t.Fatalf("unexpected tools order: %#v", actionOrder)
 	}
 	lastToolsText, _ := contextActions[len(contextActions)-1]["text"].(map[string]any)["content"].(string)
 	if lastToolsText != "返回上一级" {
@@ -1916,8 +1941,43 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	}
 
 	helpCard := renderHelpCard(a, sessionKey)
-	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 命令帮助") {
+	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 命令帮助") || strings.Contains(body, "当前模式: plan") {
 		t.Fatalf("help card missing breadcrumb: %q", body)
+	}
+}
+
+func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                           sessionKey,
+		WorkspaceID:                   a.cfg.Workspaces[0].ID,
+		ActiveThreadID:                "thread-1",
+		ActiveThreadWorkspaceID:       a.cfg.Workspaces[0].ID,
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	workspacePrefix := "[" + a.cfg.Workspaces[0].ID + "] [plan] "
+	cases := []struct {
+		name  string
+		title string
+		body  string
+	}{
+		{name: "root", title: cardHeaderTitle(t, renderCommandMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderCommandMenuCard(a, sessionKey))},
+		{name: "tools", title: cardHeaderTitle(t, renderToolsMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderToolsMenuCard(a, sessionKey))},
+		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a, sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a, sessionKey))},
+		{name: "interrupt", title: cardHeaderTitle(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。")), body: cardMarkdownContent(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。"))},
+		{name: "compact", title: cardHeaderTitle(t, newCompactService(a).RenderCompactPreparingCard(sessionKey)), body: cardMarkdownContent(t, newCompactService(a).RenderCompactPreparingCard(sessionKey))},
+	}
+	for _, tc := range cases {
+		if !strings.HasPrefix(tc.title, workspacePrefix) {
+			t.Fatalf("%s card title = %q, want %q prefix", tc.name, tc.title, workspacePrefix)
+		}
+		if strings.Contains(tc.body, "当前模式: plan") {
+			t.Fatalf("%s card body = %q, want no plan banner", tc.name, tc.body)
+		}
 	}
 }
 
@@ -2286,6 +2346,12 @@ func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 
 func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         "sess-1",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-1) error = %v", err)
+	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "file-cancel",
 		Kind:        "file",
@@ -2314,6 +2380,9 @@ func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 		t.Fatalf("file cancel decision = %q, want cancel", got)
 	}
 	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardHeaderTitle(t, cardData); got != "["+a.cfg.Workspaces[0].ID+"] 审批已处理" {
+		t.Fatalf("file cancel resolved title = %q", got)
+	}
 	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已拒绝并中断任务") || !strings.Contains(got, "该 turn 会立即中断") {
 		t.Fatalf("file cancel resolved card = %q", got)
 	}

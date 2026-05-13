@@ -239,8 +239,8 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after TodoWrite = %d, want 2", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[1]); got != "待办更新" {
-		t.Fatalf("TodoWrite card title = %q, want 待办更新", got)
+	if got := cardHeaderTitle(t, ff.replyCards[1]); got != "["+a.cfg.Workspaces[0].ID+"] 待办更新" {
+		t.Fatalf("TodoWrite card title = %q", got)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "[in_progress] 核对日志") || !strings.Contains(body, "[pending] 补消息卡片") {
 		t.Fatalf("TodoWrite card body = %q", body)

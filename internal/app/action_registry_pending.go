@@ -52,6 +52,15 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 	"pending_form.plan_reject": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return completePlanReject(s.app, action)
 	},
+	codexPlanModeExitImplementCurrentAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return completeCodexPlanModeExit(s.app, action, codexPlanModeExitImplementCurrentAction)
+	},
+	codexPlanModeExitImplementFreshAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return completeCodexPlanModeExit(s.app, action, codexPlanModeExitImplementFreshAction)
+	},
+	codexPlanModeExitStayAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return completeCodexPlanModeExit(s.app, action, codexPlanModeExitStayAction)
+	},
 	"review.base.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newReviewFormServiceInner(s.app).CompleteReviewBaseSelect(action)
 	},

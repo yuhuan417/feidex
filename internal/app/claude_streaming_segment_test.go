@@ -483,8 +483,8 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	if len(sendCards) != 1 {
 		t.Fatalf("plan confirmation card count = %d, want 1", len(sendCards))
 	}
-	if got := cardHeaderTitle(t, sendCards[0]); got != "Claude 计划确认" {
-		t.Fatalf("plan confirmation title = %q, want Claude 计划确认", got)
+	if got := cardHeaderTitle(t, sendCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] Claude 计划确认" {
+		t.Fatalf("plan confirmation title = %q", got)
 	}
 
 	cancel()

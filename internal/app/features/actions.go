@@ -26,6 +26,7 @@ const (
 	ActionMenuModel               ActionName = "menu.model"
 	ActionMenuNew                 ActionName = "menu.new"
 	ActionMenuQuiet               ActionName = "menu.quiet"
+	ActionMenuPlan                ActionName = "menu.plan"
 	ActionMenuReview              ActionName = "menu.review"
 	ActionMenuReviewBase          ActionName = "menu.review.base"
 	ActionMenuReviewCommit        ActionName = "menu.review.commit"

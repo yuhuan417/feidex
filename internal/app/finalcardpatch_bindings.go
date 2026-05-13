@@ -55,7 +55,7 @@ func (a *App) FinalCardPatchSubmissionFinder() appfinalcardpatch.SubmissionFinde
 // final-card-patch service.
 func (a *App) FinalCardPatchCardRenderer() appfinalcardpatch.CardRendererFunc {
 	return func(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any {
-		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, body, nil, true)
+		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
 		appendReplyCardFooter(card, footerLines)
 		return card
 	}

@@ -104,18 +104,18 @@ type QuietCardExecutorProvider interface {
 // ---------------------------------------------------------------------------
 
 var (
-	firstNonEmpty               = apputil.FirstNonEmpty
-	stringValue                 = turnitem.StringValue
-	normalizeTurnItemType       = turnitem.NormalizeTurnItemType
-	buildTurnItemCardPayload    = turnitem.BuildTurnItemCardPayload
-	isQuietBoundaryTurnItem     = turn.IsQuietBoundaryTurnItem
-	prepareUpdateLocked         = turn.PrepareUpdateLocked
-	prepareBoundaryLocked       = turn.PrepareBoundaryLocked
-	quietMode                   = quietmode.Mode
-	quietModeEnabled            = quietmode.Enabled
-	quietWorkingCardEnabled     = quietmode.WorkingCardEnabled
+	firstNonEmpty                = apputil.FirstNonEmpty
+	stringValue                  = turnitem.StringValue
+	normalizeTurnItemType        = turnitem.NormalizeTurnItemType
+	buildTurnItemCardPayload     = turnitem.BuildTurnItemCardPayload
+	isQuietBoundaryTurnItem      = turn.IsQuietBoundaryTurnItem
+	prepareUpdateLocked          = turn.PrepareUpdateLocked
+	prepareBoundaryLocked        = turn.PrepareBoundaryLocked
+	quietMode                    = quietmode.Mode
+	quietModeEnabled             = quietmode.Enabled
+	quietWorkingCardEnabled      = quietmode.WorkingCardEnabled
 	shouldDeliverTurnItemPayload = quietmode.ShouldDeliverTurnItemPayload
-	isClaudeTodoToolPayload     = quietmode.IsClaudeTodoToolPayload
+	isClaudeTodoToolPayload      = quietmode.IsClaudeTodoToolPayload
 )
 
 // workspaceCwd returns the Cwd for the given workspace ID.
@@ -157,17 +157,24 @@ type Stream struct {
 	SessionKey   string
 	WorkspaceID  string
 
-	PendingPlan  string
-	LastSentPlan string
-	LastError    string
-	SentFinal    bool
-	ReviewFinal  bool
-	QuietWorking *turn.QuietWorkingCard
+	PendingPlan   string
+	LastSentPlan  string
+	SawPlanItem   bool
+	PlanItemID    string
+	PlanMarkdown  string
+	PlanCompleted bool
+	LastError     string
+	SentFinal     bool
+	ReviewFinal   bool
+	QuietWorking  *turn.QuietWorkingCard
 }
 
 // FlushResult captures the result of flushing a turn stream.
 type FlushResult struct {
 	SawFinal         bool
+	SawPlanItem      bool
+	PlanCompleted    bool
+	PlanMarkdown     string
 	LastError        string
 	WorkingMessageID string
 }
@@ -235,22 +242,33 @@ func (svc Service) RecordTurnError(threadID, turnID, message string) {
 // CompleteTurnItem processes a completed turn item, building and sending the
 // appropriate card, managing quiet working cards, and updating stream state.
 func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	_ = svc.CompleteTurnItemWithResult(ctx, threadID, turnID, itemID, item)
+}
+
+// CompleteTurnItemWithResult processes a completed turn item and returns the
+// merged final item payload after started/completed state has been reconciled.
+func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) turnitem.ProtocolItem {
 	if svc.app == nil {
-		return
+		return turnitem.ProtocolItem{}
 	}
 	svc.app.TurnStreamTurnLifecycle().BindPendingSubmissionTurn(threadID, turnID, true)
 	item = svc.app.TurnStreamRuntimeState().CompleteTurnItemState(threadID, turnID, itemID, item)
 	itemID = strings.TrimSpace(item.EffectiveID(itemID))
 	if svc.app.TurnStreamOutboundCards().CompleteStandaloneCompactItem(threadID, turnID, item) {
-		return
+		return item
 	}
 	sessionKey, sub := svc.app.TurnStreamSubmissionFinder().FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		return
+		return item
 	}
 	workspaceCwd := workspaceCwd(svc.app.Config(), sub.WorkspaceID)
 	rawItem := item.MergedRaw()
 	payload, hasPayload := buildTurnItemCardPayload(itemID, rawItem, workspaceCwd)
+	itemType := normalizeTurnItemType(firstNonEmpty(stringValue(rawItem["type"]), item.Type))
+	planMarkdown := ""
+	if itemType == "plan" {
+		planMarkdown = strings.TrimSpace(stringValue(rawItem["text"]))
+	}
 
 	var (
 		planText         string
@@ -267,6 +285,12 @@ func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemI
 	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
 	if strings.TrimSpace(threadID) != "" {
 		stream.ThreadID = threadID
+	}
+	if itemType == "plan" {
+		stream.SawPlanItem = true
+		stream.PlanItemID = itemID
+		stream.PlanMarkdown = planMarkdown
+		stream.PlanCompleted = true
 	}
 	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
 		planText = text
@@ -317,6 +341,7 @@ func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemI
 	if hasPayload && !skipPayload && (!quietModeEnabled(svc.feishuConfig()) || shouldDeliverTurnItemPayload(quietMode(svc.feishuConfig()), payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)) {
 		svc.app.TurnStreamOutboundCards().SendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
 	}
+	return item
 }
 
 // FlushTurnStream flushes the turn stream for the given turn, sending any
@@ -340,6 +365,9 @@ func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string)
 	tracker.Mu.Lock()
 	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
 	result.SawFinal = stream.SentFinal
+	result.SawPlanItem = stream.SawPlanItem
+	result.PlanCompleted = stream.PlanCompleted
+	result.PlanMarkdown = strings.TrimSpace(stream.PlanMarkdown)
 	result.LastError = stream.LastError
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
 	if stream.QuietWorking != nil && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {

@@ -53,9 +53,6 @@ var escapeMarkdownLinkLabel = applinkutil.EscapeMarkdownLinkLabel
 
 func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
 	if enablePreview {
 		if sub != nil {
 			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
@@ -87,7 +84,7 @@ func scheduleLocalFileLinkPatch(a *App, sub *state.Submission, messageID, title,
 		if managed && newFinalCardPatchService(a).updateFinalCardPatchBody(messageID, rewritten) {
 			return
 		}
-		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, title, color, showHeader, rewritten, nil, true)
+		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, rewritten, nil, true)
 		appendReplyCardFooter(card, footerLines)
 		patchCtx, patchCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer patchCancel()

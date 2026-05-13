@@ -46,6 +46,7 @@ type App interface {
 	BindStandaloneCompactTurn(threadID, turnID string) bool
 	FinishStandaloneCompactTurn(threadID, turnID, status string) bool
 	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
+	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult)
 	LogSessionState(event, sessionKey string, sess *state.Session)
 }
 
@@ -580,6 +581,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	if refreshedSess := st.Session(sessionKey); refreshedSess != nil {
 		updatedSess = refreshedSess
 	}
+	w.app.ProcessCodexPlanModeExitOnTurnCompleted(sessionKey, sub, threadID, turnID, status, flush)
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		slog.Debug("finishTurn scheduling next submission asynchronously",
 			"session_key", sessionKey,

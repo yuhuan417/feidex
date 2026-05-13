@@ -52,7 +52,10 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 		},
 		PrepareMentionText: prependAttentionMentionMarkdown,
 		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
-		BackendClaude:      backendClaude,
+		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
+			return contentCardTitleForSession(a, sessionKey, workspaceID, title)
+		},
+		BackendClaude: backendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {
 			return a.claude.ResolvePlanFeedback(pendingID, feedback)
 		},

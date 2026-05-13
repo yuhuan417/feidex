@@ -17,7 +17,7 @@ func renderStatusCard(a *App, sessionKey string) map[string]any {
 		{Text: commandLabel("刷新", "/status"), Type: "default", Value: map[string]any{"action": "menu.status", "session_key": sessionKey}},
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard("Status", "blue", menuCardBodyForBackend(configuredBackend(a), "menu.status", newBackendConfigurationService(a).statusCardBody(sess)), buttons)
+	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "Status"), "blue", menuCardBodyForBackendForSession(a, sessionKey, configuredBackend(a), "menu.status", newBackendConfigurationService(a).statusCardBody(sess)), buttons)
 }
 
 func commandStatus(a *App, msg *feishu.InboundMessage) error {

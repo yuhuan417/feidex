@@ -25,6 +25,7 @@ type Service struct {
 	// Feishu
 	SimpleStatusCard func(title, color, body string, buttons []feishu.Button) map[string]any
 	PatchCard        func(messageID string, card map[string]any) error
+	ContentCardTitle func(sessionKey, workspaceID, title string) string
 
 	// Backend adapter factory
 	AdapterForPending func(pending *state.PendingRequest) BackendAdapter

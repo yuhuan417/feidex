@@ -104,6 +104,10 @@ func (s menuActionService) completeMenuQuiet(action *feishu.CardAction, sessionK
 	return completeMenuCommand(s.app, action, sessionKey, "/quiet config", "menu.tools")
 }
 
+func (s menuActionService) completeMenuPlan(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return completeMenuCommand(s.app, action, sessionKey, "/plan", "menu.tools")
+}
+
 func (s menuActionService) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/usage", "menu.tools")
 }

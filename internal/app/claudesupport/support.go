@@ -119,6 +119,7 @@ type Service struct {
 	PatchCard          PatchCardFunc
 	PrepareMentionText PrepareMentionTextFunc
 	RenderFormCard     RenderFormCardFunc
+	ContentCardTitle   func(sessionKey, workspaceID, title string) string
 	BackendClaude      string
 	// Plan mode
 	ResolvePlanFeedback  ResolvePlanFeedbackFunc
@@ -442,7 +443,11 @@ func (s *Service) SendPlanModeCard(sub *state.Submission, requestID, sessionKey,
 	if requestKey == "" {
 		return fmt.Errorf("missing request id")
 	}
-	card := s.SimpleStatusCard("Claude 计划确认", "orange", s.PrepareMentionText(strings.TrimSpace(body), sub.UserID), []feishu.Button{
+	title := "Claude 计划确认"
+	if s.ContentCardTitle != nil {
+		title = s.ContentCardTitle(sessionKey, sub.WorkspaceID, title)
+	}
+	card := s.SimpleStatusCard(title, "orange", s.PrepareMentionText(strings.TrimSpace(body), sub.UserID), []feishu.Button{
 		{Text: "批准", Type: "primary", Value: map[string]any{"action": "pending_form.plan_approve", "request_id": requestKey}},
 		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "pending_form.plan_reject", "request_id": requestKey}},
 	})
@@ -479,7 +484,11 @@ func (s *Service) CompletePlanModeText(feedback string, pending *state.PendingRe
 	}
 	_ = s.FinalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
-		_ = s.PatchCard(pending.FeishuMsgID, s.SimpleStatusCard("计划反馈已提交", "green", ClaudePlanSubmittedBody(pending, feedback), nil))
+		title := "计划反馈已提交"
+		if s.ContentCardTitle != nil {
+			title = s.ContentCardTitle(pending.SessionKey, "", title)
+		}
+		_ = s.PatchCard(pending.FeishuMsgID, s.SimpleStatusCard(title, "green", ClaudePlanSubmittedBody(pending, feedback), nil))
 	}
 	return nil
 }
@@ -504,10 +513,14 @@ func (s *Service) CompletePlanApprove(requestID, userID string) (*CardActionResu
 		return &CardActionResult{ToastContent: "提交失败，请重试", ToastType: "warning"}, nil
 	}
 	_ = s.FinalizePendingReply(pending)
+	title := "计划已批准"
+	if s.ContentCardTitle != nil {
+		title = s.ContentCardTitle(pending.SessionKey, "", title)
+	}
 	return &CardActionResult{
 		ToastContent: "已批准",
 		ToastType:    "success",
-		CardMap:      s.SimpleStatusCard("计划已批准", "green", ClaudePlanSubmittedBody(pending, "Approve"), nil),
+		CardMap:      s.SimpleStatusCard(title, "green", ClaudePlanSubmittedBody(pending, "Approve"), nil),
 	}, nil
 }
 
@@ -524,9 +537,13 @@ func (s *Service) CompletePlanReject(requestID, userID string, cancelFn func(pen
 		return &CardActionResult{ToastContent: "提交失败，请重试", ToastType: "warning"}, nil
 	}
 	_ = s.FinalizePendingReply(pending)
+	title := "计划已拒绝"
+	if s.ContentCardTitle != nil {
+		title = s.ContentCardTitle(pending.SessionKey, "", title)
+	}
 	return &CardActionResult{
 		ToastContent: "已拒绝",
 		ToastType:    "success",
-		CardMap:      s.SimpleStatusCard("计划已拒绝", "grey", ClaudePlanCancelledBody(pending), nil),
+		CardMap:      s.SimpleStatusCard(title, "grey", ClaudePlanCancelledBody(pending), nil),
 	}, nil
 }

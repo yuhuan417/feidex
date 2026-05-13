@@ -20,6 +20,14 @@ func menuCardBodyForBackend(backend, action, body string) string {
 	return appmenuutil.MenuCardBodyForBackend(backend, action, body)
 }
 
+func menuCardBodyForSession(a *App, sessionKey, action, body string) string {
+	return menuCardBody(action, body)
+}
+
+func menuCardBodyForBackendForSession(a *App, sessionKey, backend, action, body string) string {
+	return menuCardBodyForBackend(backend, action, body)
+}
+
 func menuNodeLabelForBackend(action, label, backend string) string {
 	return appmenuutil.MenuNodeLabelForBackend(action, label, backend)
 }

@@ -97,6 +97,43 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	}
 }
 
+func TestTurnItemCardsPrefixWorkspaceAndPlan(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	if _, err := a.store.UpdateSession("sess-1", func(sess *state.Session) {
+		sess.ActiveThreadCollaborationMode = &state.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"}
+	}); err != nil {
+		t.Fatalf("UpdateSession(plan mode) error = %v", err)
+	}
+
+	replyCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnItemCardPayload{
+		ItemType:    "agent_message",
+		Title:       "最终答复",
+		Color:       "green",
+		SummaryText: "reply body",
+		IsFinalAnswer: true,
+	}, false)
+	if got := cardHeaderTitle(t, replyCard); got != "["+a.cfg.Workspaces[0].ID+"] [plan] 最终答复" {
+		t.Fatalf("reply item title = %q", got)
+	}
+	if body := cardMarkdownContent(t, replyCard); strings.Contains(body, "当前模式: plan") {
+		t.Fatalf("reply item body = %q, want no plan banner", body)
+	}
+
+	compactCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnItemCardPayload{
+		ItemType:    "command_execution",
+		Title:       "命令执行",
+		Color:       "blue",
+		SummaryText: "command body",
+	}, false)
+	if got := cardHeaderTitle(t, compactCard); got != "["+a.cfg.Workspaces[0].ID+"] [plan] 命令执行" {
+		t.Fatalf("compact item title = %q", got)
+	}
+	if body := cardMarkdownContent(t, compactCard); strings.Contains(body, "当前模式: plan") {
+		t.Fatalf("compact item body = %q, want no plan banner", body)
+	}
+}
+
 func TestTurnItemCardAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")

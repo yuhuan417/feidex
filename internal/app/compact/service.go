@@ -11,8 +11,8 @@ import (
 	appcore "feidex/internal/app/appcore"
 	apputil "feidex/internal/app/apputil"
 	"feidex/internal/app/sessionctx"
-	"feidex/internal/app/turnitem"
 	"feidex/internal/app/turn"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -35,6 +35,10 @@ type App interface {
 	Codex() appcore.CodexClient
 	// MenuCardBody formats a menu card body with breadcrumb navigation.
 	MenuCardBody(action, body string) string
+	// PlanModeTitleForSession decorates a session-scoped card title for plan mode.
+	PlanModeTitleForSession(sessionKey, title string) string
+	// ContentCardTitleForSession decorates a content card title for workspace and plan mode.
+	ContentCardTitleForSession(sessionKey, workspaceID, title string) string
 	// SessionStore returns the session persistence provider.
 	SessionStore() SessionStore
 	// HandleBackendCompactCommand dispatches /compact through the active
@@ -145,13 +149,13 @@ func CompactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {
 // RenderCompactPreparingCard builds the "preparing" card for compact action.
 func (s Service) RenderCompactPreparingCard(sessionKey string) map[string]any {
 	body := "正在请求当前线程上下文压缩，请稍候。\n\n这张卡片会自动刷新。"
-	return s.app.Feishu().SimpleStatusCard("压缩上下文", "blue", s.app.MenuCardBody("menu.tools", body), CompactMenuButtons(sessionKey, false))
+	return s.app.Feishu().SimpleStatusCard(s.contentCardTitle(sessionKey, "压缩上下文"), "blue", s.app.MenuCardBody("menu.tools", body), CompactMenuButtons(sessionKey, false))
 }
 
 // RenderCompactAcceptedCard builds the "accepted" card for compact action.
 func (s Service) RenderCompactAcceptedCard(sessionKey string) map[string]any {
 	body := "已提交 `/compact`。\n\n后续结果会通过正常消息流返回。"
-	return s.app.Feishu().SimpleStatusCard("压缩上下文", "green", s.app.MenuCardBody("menu.tools", body), CompactMenuButtons(sessionKey, false))
+	return s.app.Feishu().SimpleStatusCard(s.contentCardTitle(sessionKey, "压缩上下文"), "green", s.app.MenuCardBody("menu.tools", body), CompactMenuButtons(sessionKey, false))
 }
 
 // RenderCompactFailedCard builds the "failed" card for compact action.
@@ -160,7 +164,20 @@ func (s Service) RenderCompactFailedCard(sessionKey, errText string) map[string]
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return s.app.Feishu().SimpleStatusCard("压缩上下文", "orange", s.app.MenuCardBody("menu.tools", body), CompactMenuButtons(sessionKey, true))
+	return s.app.Feishu().SimpleStatusCard(s.contentCardTitle(sessionKey, "压缩上下文"), "orange", s.app.MenuCardBody("menu.tools", body), CompactMenuButtons(sessionKey, true))
+}
+
+func (s Service) contentCardTitle(sessionKey, title string) string {
+	if s.app == nil {
+		return title
+	}
+	workspaceID := ""
+	if store := s.app.SessionStore(); store != nil {
+		if sess := store.GetSession(sessionKey); sess != nil {
+			workspaceID = sess.WorkspaceID
+		}
+	}
+	return s.app.ContentCardTitleForSession(sessionKey, workspaceID, title)
 }
 
 // RunMenuCompactAction dispatches the compact menu action through the backend.

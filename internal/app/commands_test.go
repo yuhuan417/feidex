@@ -219,6 +219,7 @@ func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 		"/fast config":                       false,
 		"/plan":                              false,
 		"/plan on":                           false,
+		"/plan off":                          false,
 		"/thread":                            false,
 		"/thread list":                       false,
 		"/thread sandbox":                    false,
@@ -244,6 +245,7 @@ func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
 		"/review",
 		"/skills",
 		"/fast",
+		"/plan",
 		"/thread",
 		"/threads",
 		"/workspace sandbox",
@@ -277,6 +279,9 @@ func TestRenderHelpBodyFromRegistryForCodexBackend(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
+		"切换当前 thread 的 `plan` collaboration mode。",
+		"/plan on",
+		"/plan off",
 		"/workspace sandbox",
 		"/workspace policy",
 		"/workspace choose",
@@ -292,6 +297,7 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 		"/review",
 		"/skills",
 		"/fast config",
+		"/plan",
 		"/thread",
 		"/thread sandbox read-only",
 		"/thread policy never",

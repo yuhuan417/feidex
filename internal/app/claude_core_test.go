@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/pendingforms"
+	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -923,7 +923,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "approve-1"},
 	}, "approval.command.accept_session")
@@ -1014,7 +1014,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-1", "question_id": "q1", "answer": "Fast"},
 	})
@@ -1064,7 +1064,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-form-1"},
 		FormValue: map[string]any{
@@ -1237,11 +1237,18 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         "sess-1",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-1) error = %v", err)
+	}
 
 	pending := &state.PendingRequest{
 		ID:          "plan-1",
 		Backend:     backendClaude,
 		Kind:        claudePlanModePendingKind,
+		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		PayloadJSON: mustJSON(map[string]any{
@@ -1265,7 +1272,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched cards = %d, want 1", len(ff.patchedCards))
 	}
-	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "计划反馈已提交" {
+	if got := cardHeaderTitle(t, ff.patchedCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 计划反馈已提交" {
 		t.Fatalf("patched card title = %q", got)
 	}
 	body := cardMarkdownContent(t, ff.patchedCards[0])
@@ -1282,6 +1289,12 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         "sess-1",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-1) error = %v", err)
+	}
 
 	pending := &state.PendingRequest{
 		ID:          "plan-cancel-1",
@@ -1312,7 +1325,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 		t.Fatalf("cancel calls = %#v", claude.cancelCalls)
 	}
 	card, _ := resp.Card.Data.(map[string]any)
-	if got := cardHeaderTitle(t, card); got != "计划确认已取消" {
+	if got := cardHeaderTitle(t, card); got != "["+a.cfg.Workspaces[0].ID+"] 计划确认已取消" {
 		t.Fatalf("cancelled card title = %q", got)
 	}
 	body := cardMarkdownContent(t, card)

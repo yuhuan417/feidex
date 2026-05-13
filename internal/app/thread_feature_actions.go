@@ -39,18 +39,18 @@ func interruptStatusButtons(sessionKey, parentAction, targetTurnID string, inclu
 
 func renderInterruptPreparingCard(a *App, sessionKey, parentAction string) map[string]any {
 	return a.feishu.SimpleStatusCard(
-		"中断任务",
+		planModeTitleForSession(a, sessionKey, "中断任务"),
 		"blue",
-		menuCardBody(firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), "正在向 Claude 请求中断当前任务，请稍候。\n\n这张卡片会自动刷新。"),
+		menuCardBodyForSession(a, sessionKey, firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), "正在向 Claude 请求中断当前任务，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 	)
 }
 
 func renderInterruptResultCard(a *App, sessionKey, parentAction, text string) map[string]any {
 	return a.feishu.SimpleStatusCard(
-		"中断任务",
+		planModeTitleForSession(a, sessionKey, "中断任务"),
 		"green",
-		menuCardBody(firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), firstNonEmpty(strings.TrimSpace(text), "已请求中断当前任务。")),
+		menuCardBodyForSession(a, sessionKey, firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), firstNonEmpty(strings.TrimSpace(text), "已请求中断当前任务。")),
 		interruptStatusButtons(sessionKey, parentAction, "", false),
 	)
 }
@@ -61,9 +61,9 @@ func renderInterruptFailedCard(a *App, sessionKey, parentAction, targetTurnID, e
 		body += "\n\n错误: " + text
 	}
 	return a.feishu.SimpleStatusCard(
-		"中断任务",
+		planModeTitleForSession(a, sessionKey, "中断任务"),
 		"orange",
-		menuCardBody(firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), body),
+		menuCardBodyForSession(a, sessionKey, firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), body),
 		interruptStatusButtons(sessionKey, parentAction, targetTurnID, true),
 	)
 }

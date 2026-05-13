@@ -79,6 +79,10 @@ func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *state.Subm
 	return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 }
 
+func (a *App) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush appturnlifecycle.TurnStreamFlushResult) {
+	processCodexPlanModeExitOnTurnCompleted(a, sessionKey, sub, threadID, turnID, status, flush)
+}
+
 func (a *App) LogSessionState(event, sessionKey string, sess *state.Session) {
 	logSessionState(event, sessionKey, sess)
 }

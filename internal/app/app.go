@@ -216,7 +216,11 @@ func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
 }
 
 func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
-	return newSubmissionCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot)
+	if err := newSubmissionCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
+		return err
+	}
+	invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前已有新的提交，旧的计划确认已失效。")
+	return nil
 }
 
 func startNextSubmission(a *App, sessionKey string) error {
@@ -310,5 +314,5 @@ func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
 }
 
 func renderCommandMenuCard(a *App, sessionKey string) map[string]any {
-	return a.feishu.SimpleStatusCard("主菜单", "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(configuredBackend(a), sessionKey))
+	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "主菜单"), "blue", menuCardBodyForSession(a, sessionKey, "menu.root", "选择功能分组。"), renderRootMenuButtons(configuredBackend(a), sessionKey))
 }

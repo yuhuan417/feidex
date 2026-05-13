@@ -115,7 +115,13 @@ var registry = []Spec{
 		ID:       "plan",
 		Kind:     SpecKindCapability,
 		Backends: []string{appruntime.BackendCodex},
-		Commands: []CommandSpec{{ID: "plan", Names: []string{"/plan"}, HelpGroup: "常用工具", HelpEntries: []HelpCommandSpec{{Command: "/plan", Summary: "查看当前 thread 的 collaboration mode 状态。"}, {Command: "/plan on", Summary: "为当前 thread 开启 `plan` collaboration mode。"}, {Command: "/plan off", Summary: "关闭当前 thread 的 `plan` collaboration mode。"}}, Backends: map[string]CommandBackendSpec{appruntime.BackendClaude: {HideInHelp: true}}}},
+		Commands: []CommandSpec{{ID: "plan", Names: []string{"/plan"}, HelpGroup: "常用工具", HelpEntries: []HelpCommandSpec{{Command: "/plan", Summary: "切换当前 thread 的 `plan` collaboration mode。"}, {Command: "/plan on", Summary: "为当前 thread 开启 `plan` collaboration mode。"}, {Command: "/plan off", Summary: "关闭当前 thread 的 `plan` collaboration mode。"}}, Backends: map[string]CommandBackendSpec{appruntime.BackendClaude: {HideInHelp: true}}}},
+		MenuItems: []MenuItemSpec{
+			{GroupAction: "menu.tools", Action: "menu.plan", Label: "计划模式", Slash: "/plan", Kind: MenuItemDirect, IncludeParentAction: true},
+		},
+		ActionNames: []ActionName{
+			"menu.plan",
+		},
 	},
 	{
 		ID:       "menu.compact",

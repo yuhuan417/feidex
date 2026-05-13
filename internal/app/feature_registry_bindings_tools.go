@@ -83,6 +83,12 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			if actionName != "menu.plan" {
+				return nil, nil
+			}
+			return newMenuActionService(s.app).completeMenuPlan(action, actionSessionKey(action))
+		},
 	}
 	bindings["menu.compact"] = featureBinding{
 		Commands: map[string]featureCommandBinding{

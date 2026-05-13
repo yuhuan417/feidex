@@ -29,7 +29,7 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submiss
 	fallbackText := appendFooterText(prependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a, sub, sub.TurnID)), footerLines)
 	body := prependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
 	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
-	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, showHeader, body, nil, true)
+	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
 	appendReplyCardFooter(card, footerLines)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {

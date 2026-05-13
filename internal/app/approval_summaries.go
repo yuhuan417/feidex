@@ -12,6 +12,7 @@ func renderApprovalCard(a *App, _ string, sub *state.Submission, title, color, b
 	if sub != nil {
 		attentionUserID = sub.UserID
 	}
+	title = contentCardTitleForSubmission(a, sub, title)
 	return a.feishu.SimpleStatusCard(title, color, prependAttentionMentionMarkdown(strings.TrimSpace(body), attentionUserID), buttons)
 }
 

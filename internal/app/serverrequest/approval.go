@@ -95,7 +95,17 @@ func (s *Service) renderResolvedApprovalCard(pending *state.PendingRequest, acti
 		lines = append(lines, "", body)
 	}
 	color := approvalview.ApprovalDecisionColor(actionName)
-	return s.SimpleStatusCard("审批已处理", color, strings.Join(lines, "\n"), nil)
+	title := "审批已处理"
+	workspaceID := ""
+	if s.Session != nil && pending != nil {
+		if sess := s.Session(strings.TrimSpace(pending.SessionKey)); sess != nil {
+			workspaceID = strings.TrimSpace(sess.WorkspaceID)
+		}
+	}
+	if s.ContentCardTitle != nil {
+		title = s.ContentCardTitle(strings.TrimSpace(pending.SessionKey), workspaceID, title)
+	}
+	return s.SimpleStatusCard(title, color, strings.Join(lines, "\n"), nil)
 }
 
 // ResumeSubmissionAfterRequest resumes a submission if no other open
