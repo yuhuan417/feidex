@@ -2047,7 +2047,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		{ID: "command-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "命令审批\n`ls`\nneed approval"})},
 		{ID: "file-1", Kind: "file", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"})},
 		{ID: "perm-1", Kind: "permissions", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "权限审批\n需要写权限", "permissions": map[string]any{"mode": "write"}})},
-		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "q-1", Question: "Choose", Options: []pendingforms.ToolUserInputOption{{Label: "A"}, {Label: "B"}}}}})},
+		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "q-1", Question: "Choose", Options: []pendingforms.ToolUserInputOption{{Label: "A", Description: "First option"}, {Label: "B", Description: "Second option"}}}}})},
 	} {
 		if err := a.store.UpsertPending(req); err != nil {
 			t.Fatalf("UpsertPending(%s) error = %v", req.ID, err)
@@ -2196,6 +2196,13 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}
 	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Status != "replied" {
 		t.Fatalf("user input pending = %+v, want replied", pending)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected quick user input response card")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "A - First option") {
+		t.Fatalf("quick user input response card body = %q", got)
 	}
 
 	if got := appapprovalview.ApprovalDecisionText("approval.command.accept"); got != "已允许本次执行" {

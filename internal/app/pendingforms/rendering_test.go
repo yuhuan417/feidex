@@ -47,8 +47,11 @@ func TestRenderToolUserInputBodyAndParsingHelpers(t *testing.T) {
 
 func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 	question := ToolUserInputQuestion{
-		ID:      "mode",
-		Options: []ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+		ID: "mode",
+		Options: []ToolUserInputOption{
+			{Label: "Fast", Description: "Prioritize speed"},
+			{Label: "Safe", Description: "Prioritize safety"},
+		},
 	}
 	answers, err := ParseQuestionAnswers("fast", question)
 	if err != nil {
@@ -86,7 +89,10 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 
 	payload := ToolUserInputPayload{
 		Questions: []ToolUserInputQuestion{
-			{ID: "mode", Options: []ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
+			{ID: "mode", Options: []ToolUserInputOption{
+				{Label: "Fast", Description: "Prioritize speed"},
+				{Label: "Safe", Description: "Prioritize safety"},
+			}},
 			{ID: "note", IsSecret: true},
 		},
 	}
@@ -100,7 +106,7 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 	if len(modeAnswers) != 1 || modeAnswers[0] != "Safe" {
 		t.Fatalf("parsed mode answers = %+v, want Safe", modeAnswers)
 	}
-	if !strings.Contains(summary, "`mode`: Safe") || !strings.Contains(summary, "`note`: [redacted]") {
+	if !strings.Contains(summary, "`mode`: Safe - Prioritize safety") || !strings.Contains(summary, "`note`: [redacted]") {
 		t.Fatalf("summary = %q, want visible and redacted lines", summary)
 	}
 
@@ -119,13 +125,42 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 	}
 }
 
+func TestToolUserInputQuestionMarkdownShowsDetailedSingleSelectOptions(t *testing.T) {
+	q := ToolUserInputQuestion{
+		ID:       "mode",
+		Question: "Choose mode",
+		Options: []ToolUserInputOption{
+			{Label: "Fast", Description: "Prioritize speed"},
+			{Label: "Safe", Description: "Prioritize safety"},
+		},
+		IsOther: true,
+	}
+
+	body := ToolUserInputQuestionMarkdown(q, "Safe", nil, "custom fallback")
+	for _, want := range []string{
+		"单选题",
+		"选项:",
+		"1. Fast - Prioritize speed",
+		"2. Safe - Prioritize safety",
+		"当前选择: Safe - Prioritize safety",
+		"其它值: custom fallback",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("ToolUserInputQuestionMarkdown() = %q, missing %q", body, want)
+		}
+	}
+}
+
 func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 	payload := ToolUserInputPayload{
 		Questions: []ToolUserInputQuestion{
 			{
 				ID:       "mode",
 				Question: "Choose mode",
-				Options:  []ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+				Options: []ToolUserInputOption{
+					{Label: "Fast", Description: "Prioritize speed"},
+					{Label: "Safe", Description: "Prioritize safety"},
+				},
 			},
 			{
 				ID:       "note",
@@ -146,6 +181,14 @@ func TestRenderToolUserInputFormCardAndFormSelections(t *testing.T) {
 	selects := toolUserInputFormSelectsForTest(form)
 	if len(selects) != 1 || selects["mode"] == nil {
 		t.Fatalf("tool user input form selects = %+v, want mode select", selects)
+	}
+	options, _ := selects["mode"]["options"].([]map[string]any)
+	if len(options) != 2 {
+		t.Fatalf("mode options = %+v, want 2", options)
+	}
+	firstText, _ := options[0]["text"].(map[string]any)
+	if got, _ := firstText["content"].(string); got != "Fast - Prioritize speed" {
+		t.Fatalf("first option text = %q, want full label + description", got)
 	}
 	if got, _ := selects["mode"]["initial_option"].(string); got != "Safe" {
 		t.Fatalf("mode initial_option = %q, want Safe", got)

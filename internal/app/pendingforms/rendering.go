@@ -120,6 +120,7 @@ func RenderToolUserInputQuestionElements(q ToolUserInputQuestion, drafts FormDra
 				q,
 				ToolUserInputDraftValue(drafts, q.ID),
 				ToolUserInputMultiDraftValues(drafts, q.ID),
+				ToolUserInputDraftValue(drafts, ToolUserInputOtherFieldName(q)),
 			),
 		},
 	}
@@ -139,7 +140,7 @@ func RenderToolUserInputQuestionElements(q ToolUserInputQuestion, drafts FormDra
 
 // ToolUserInputQuestionMarkdown returns markdown describing a question and its
 // current draft state.
-func ToolUserInputQuestionMarkdown(q ToolUserInputQuestion, draftValue string, selected []string) string {
+func ToolUserInputQuestionMarkdown(q ToolUserInputQuestion, draftValue string, selected []string, otherValue string) string {
 	lines := []string{
 		"**" + apputil.FirstNonEmpty(strings.TrimSpace(q.Question), strings.TrimSpace(q.Header), strings.TrimSpace(q.ID)) + "**",
 		"`" + strings.TrimSpace(q.ID) + "`",
@@ -150,16 +151,27 @@ func ToolUserInputQuestionMarkdown(q ToolUserInputQuestion, draftValue string, s
 			mode = "多选"
 		}
 		lines = append(lines, mode+"题")
+		if !q.MultiSelect {
+			lines = append(lines, ToolUserInputQuestionOptionMarkdownLines(q)...)
+		}
 		if len(selected) > 0 {
-			lines = append(lines, "当前已选: `"+apputil.InlineCodeText(strings.Join(selected, ", "))+"`")
+			lines = append(lines, "当前已选: "+ToolUserInputSummaryText(q, selected, false))
 		} else if q.MultiSelect {
 			lines = append(lines, "当前已选: `-`")
 		} else if strings.TrimSpace(draftValue) != "" {
-			lines = append(lines, "当前选择: `"+apputil.InlineCodeText(strings.TrimSpace(draftValue))+"`")
+			lines = append(lines, "当前选择: "+ToolUserInputSummaryText(q, []string{strings.TrimSpace(draftValue)}, false))
 		}
 	}
 	if q.IsOther {
-		lines = append(lines, "可补充其它值。")
+		otherValue = strings.TrimSpace(otherValue)
+		switch {
+		case otherValue == "":
+			lines = append(lines, "可补充其它值。")
+		case q.IsSecret:
+			lines = append(lines, "其它值: [redacted]")
+		default:
+			lines = append(lines, "其它值: "+otherValue)
+		}
 	}
 	if q.IsSecret {
 		lines = append(lines, "敏感输入会在展示中打码。")
@@ -288,6 +300,52 @@ func ToolUserInputOptionText(opt ToolUserInputOption) string {
 	return label + " - " + desc
 }
 
+func ToolUserInputQuestionOptionMarkdownLines(q ToolUserInputQuestion) []string {
+	lines := make([]string, 0, len(q.Options)+1)
+	if len(q.Options) == 0 {
+		return lines
+	}
+	lines = append(lines, "选项:")
+	index := 1
+	for _, opt := range q.Options {
+		text := strings.TrimSpace(ToolUserInputOptionText(opt))
+		if text == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s", index, text))
+		index++
+	}
+	return lines
+}
+
+func ToolUserInputSummaryText(q ToolUserInputQuestion, answers []string, redact bool) string {
+	if redact {
+		return "[redacted]"
+	}
+	rendered := make([]string, 0, len(answers))
+	for _, answer := range answers {
+		answer = strings.TrimSpace(answer)
+		if answer == "" {
+			continue
+		}
+		rendered = append(rendered, ToolUserInputDisplayValue(q, answer))
+	}
+	return strings.Join(rendered, ", ")
+}
+
+func ToolUserInputDisplayValue(q ToolUserInputQuestion, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	for _, opt := range q.Options {
+		if strings.EqualFold(strings.TrimSpace(opt.Label), raw) {
+			return ToolUserInputOptionText(opt)
+		}
+	}
+	return raw
+}
+
 // ToolUserInputInitialOption returns the canonical option label matching raw, or "".
 func ToolUserInputInitialOption(q ToolUserInputQuestion, raw string) string {
 	raw = strings.TrimSpace(raw)
@@ -394,7 +452,7 @@ func BuildToolUserInputResponseFromSelections(payload ToolUserInputPayload, sele
 			return nil, "", fmt.Errorf("%s: %w", q.ID, err)
 		}
 		result["answers"].(map[string]any)[q.ID] = map[string]any{"answers": answers}
-		summaryLines = append(summaryLines, fmt.Sprintf("`%s`: %s", q.ID, SummarizeAnswers(answers, q.IsSecret)))
+		summaryLines = append(summaryLines, fmt.Sprintf("`%s`: %s", q.ID, ToolUserInputSummaryText(q, answers, q.IsSecret)))
 	}
 	return result, strings.Join(summaryLines, "\n"), nil
 }

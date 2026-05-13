@@ -280,7 +280,7 @@ func ClaudeQuestionAnswer(raw string, q pendingforms.ToolUserInputQuestion) (str
 	if err != nil {
 		return "", "", err
 	}
-	return strings.Join(answers, ", "), pendingforms.SummarizeAnswers(answers, q.IsSecret), nil
+	return strings.Join(answers, ", "), pendingforms.ToolUserInputSummaryText(q, answers, q.IsSecret), nil
 }
 
 // ClaudePlanSubmittedBody builds the card body text shown after a plan

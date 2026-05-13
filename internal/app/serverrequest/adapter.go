@@ -85,7 +85,7 @@ func (c codexAdapter) ReplyApproval(pending *state.PendingRequest, _ string, rep
 	return c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
-func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, _ ToolUserInputPayload, questionID, answer string) (string, error) {
+func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, questionID, answer string) (string, error) {
 	replyPayload := map[string]any{
 		"answers": map[string]any{
 			questionID: map[string]any{
@@ -93,7 +93,14 @@ func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, _ ToolU
 			},
 		},
 	}
-	return strings.TrimSpace(answer), c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
+	summary := strings.TrimSpace(answer)
+	for _, q := range payload.Questions {
+		if strings.TrimSpace(q.ID) == strings.TrimSpace(questionID) {
+			summary = pendingforms.ToolUserInputSummaryText(q, []string{answer}, q.IsSecret)
+			break
+		}
+	}
+	return summary, c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
 func (c codexAdapter) ReplyFormUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, selections map[string]string) (string, error) {
@@ -174,7 +181,14 @@ func (c claudeAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payloa
 	if err != nil {
 		return "", UIWarningError{Message: err.Error()}
 	}
-	return strings.TrimSpace(answer), c.client.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
+	summary := strings.TrimSpace(answer)
+	for _, q := range payload.Questions {
+		if strings.TrimSpace(q.ID) == strings.TrimSpace(questionID) {
+			summary = pendingforms.ToolUserInputSummaryText(q, []string{answer}, q.IsSecret)
+			break
+		}
+	}
+	return summary, c.client.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
 }
 
 func (c claudeAdapter) ReplyFormUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, selections map[string]string) (string, error) {
