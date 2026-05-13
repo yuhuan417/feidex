@@ -485,7 +485,6 @@ func (a *Adapter) startWSProbe(now time.Time, errCh chan<- error, reason string)
 	if !a.armWSProbe(now) {
 		return true
 	}
-	slog.Warn("feishu websocket liveness probe started", "reason", reason)
 	if err := a.writeWSPing(); err != nil {
 		a.failWSLoop(errCh, fmt.Errorf("%s: %w", reason, err))
 		return false
