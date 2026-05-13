@@ -16,7 +16,10 @@ import (
 )
 
 // prependAttentionMentionMarkdown is a local alias for the apputil helper.
-var prependAttentionMentionMarkdown = apputil.PrependAttentionMentionMarkdown
+var (
+	prependAttentionMentionMarkdown = apputil.PrependAttentionMentionMarkdown
+	firstNonEmpty                   = apputil.FirstNonEmpty
+)
 
 // ---------------------------------------------------------------------------
 // App interface — what the service needs from the host application
@@ -46,7 +49,7 @@ type App interface {
 	BindStandaloneCompactTurn(threadID, turnID string) bool
 	FinishStandaloneCompactTurn(threadID, turnID, status string) bool
 	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
-	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult)
+	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool
 	LogSessionState(event, sessionKey string, sess *state.Session)
 }
 
@@ -479,14 +482,6 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		)
 		terminalText = TurnCompletionTerminalText(sub.Status, flush.LastError)
 		attentionUserID = w.app.TurnStopAttentionUserID(sub, turnID)
-		if state.NormalizeSubmissionStatus(sub.Status) == state.SubmissionStatusCompleted && !flush.SawFinal {
-			w.app.SendEmptyFinalCardWithReuse(
-				context.Background(), sub,
-				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
-				reuseMessageID,
-			)
-			reuseMessageID = ""
-		}
 	}
 	if sess := st.Session(sessionKey); sess != nil {
 		w.app.LogSessionState("finishTurn before session cleanup", sessionKey, sess)
@@ -581,7 +576,27 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	if refreshedSess := st.Session(sessionKey); refreshedSess != nil {
 		updatedSess = refreshedSess
 	}
-	w.app.ProcessCodexPlanModeExitOnTurnCompleted(sessionKey, sub, threadID, turnID, status, flush)
+	planExitPromptSent := w.app.ProcessCodexPlanModeExitOnTurnCompleted(sessionKey, sub, threadID, turnID, status, flush)
+	if sub != nil && state.NormalizeSubmissionStatus(sub.Status) == state.SubmissionStatusCompleted && !flush.SawFinal && !planExitPromptSent {
+		if flush.ShouldUsePlanExitPrompt && strings.TrimSpace(flush.PlanMarkdown) != "" {
+			w.outboundCard().ReplaceTurnEventCardWithReuse(
+				context.Background(),
+				sub,
+				"计划更新",
+				"blue",
+				"计划:\n"+strings.TrimSpace(flush.PlanMarkdown),
+				"turn_plan",
+				"",
+				firstNonEmpty(strings.TrimSpace(flush.PlanMessageID), reuseMessageID),
+			)
+		} else {
+			w.app.SendEmptyFinalCardWithReuse(
+				context.Background(), sub,
+				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
+				reuseMessageID,
+			)
+		}
+	}
 	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
 		slog.Debug("finishTurn scheduling next submission asynchronously",
 			"session_key", sessionKey,

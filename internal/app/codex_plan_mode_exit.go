@@ -23,7 +23,7 @@ const (
 	codexPlanModeExitStayAction             = "codex_plan_mode.stay"
 	codexPlanModeExitPendingTitle           = "Implement this plan?"
 	codexPlanModeExitExpiredTitle           = "Plan confirmation expired"
-	codexPlanModeExitProcessingTitle        = "Implement this plan?"
+	codexPlanModeExitFollowupKind           = "turn_followup"
 )
 
 type codexPlanModeExitPayload struct {
@@ -81,13 +81,6 @@ func codexPlanModeExitPromptCard(a *App, sessionKey, workspaceID, planMarkdown, 
 		return nil
 	}
 	return a.feishu.SimpleStatusCard(codexPlanModeExitContentCardTitle(a, sessionKey, workspaceID, codexPlanModeExitPendingTitle), "orange", body, codexPlanModeExitPromptButtons(requestID))
-}
-
-func codexPlanModeExitProcessingCard(a *App, sessionKey, workspaceID, body string) map[string]any {
-	if a == nil || a.feishu == nil {
-		return nil
-	}
-	return a.feishu.SimpleStatusCard(codexPlanModeExitContentCardTitle(a, sessionKey, workspaceID, codexPlanModeExitProcessingTitle), "blue", strings.TrimSpace(firstNonEmpty(body, "Processing your choice...")), nil)
 }
 
 func codexPlanModeExitSuccessCard(a *App, sessionKey, workspaceID, title, body string) map[string]any {
@@ -193,18 +186,18 @@ func invalidateCodexPlanModeExitArtifactsForSession(a *App, sessionKey, reason s
 	}
 }
 
-func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *state.Submission, threadID, turnID, status string, flush turnStreamFlushResult) {
+func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *state.Submission, threadID, turnID, status string, flush turnStreamFlushResult) bool {
 	if a == nil || sub == nil {
-		return
+		return false
 	}
 	if configuredBackend(a) != backendCodex {
-		return
+		return false
 	}
 	if strings.TrimSpace(status) != state.SubmissionStatusCompleted.String() {
-		return
+		return false
 	}
-	if !flush.SawPlanItem || !flush.PlanCompleted {
-		return
+	if !flush.ShouldUsePlanExitPrompt {
+		return false
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
@@ -212,27 +205,27 @@ func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *sta
 	}
 	planMarkdown := strings.TrimSpace(flush.PlanMarkdown)
 	if sessionKey == "" || planMarkdown == "" {
-		return
+		return false
 	}
 	threadID = strings.TrimSpace(firstNonEmpty(threadID, sub.ThreadID))
 	turnID = strings.TrimSpace(firstNonEmpty(turnID, sub.TurnID))
 	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != threadID {
-		return
+		return false
 	}
 	if codexPlanModeExitSessionHasPlanExitBlockers(sess) {
-		return
+		return false
 	}
 	if open := codexPlanModeExitPendingRequest(a, sessionKey); open != nil {
-		return
+		return false
 	}
 	// Product rule: plan-exit confirmation is only offered at the terminal
 	// turn boundary. If another pending interaction exists now, do not defer
 	// and do not re-surface this plan later.
 	if codexPlanModeExitOtherOpenPendingExists(a, sessionKey, "") {
-		return
+		return false
 	}
-	if err := sendCodexPlanModeExitPrompt(a, sub, planMarkdown); err != nil {
+	if err := sendCodexPlanModeExitPrompt(a, sub, planMarkdown, strings.TrimSpace(flush.PlanMessageID)); err != nil {
 		slog.Warn("codex plan mode exit prompt delivery failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -240,10 +233,12 @@ func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *sta
 			"turn_id", turnID,
 			"error", err,
 		)
+		return false
 	}
+	return true
 }
 
-func sendCodexPlanModeExitPrompt(a *App, sub *state.Submission, planMarkdown string) error {
+func sendCodexPlanModeExitPrompt(a *App, sub *state.Submission, planMarkdown, reuseMessageID string) error {
 	if a == nil || a.feishu == nil || sub == nil {
 		return fmt.Errorf("plan mode exit prompt unavailable")
 	}
@@ -255,9 +250,18 @@ func sendCodexPlanModeExitPrompt(a *App, sub *state.Submission, planMarkdown str
 	if card == nil {
 		return fmt.Errorf("plan mode exit prompt unavailable")
 	}
-	msgID, err := a.feishu.ReplyCard(context.Background(), sub.TriggerMessageID, card, replyInThreadForSubmission(a, sub))
-	if err != nil {
-		return err
+	msgID := ""
+	reuseMessageID = strings.TrimSpace(reuseMessageID)
+	if reuseMessageID != "" {
+		if err := a.feishu.PatchCard(context.Background(), reuseMessageID, card); err == nil {
+			msgID = reuseMessageID
+		}
+	}
+	if msgID == "" {
+		msgID, err = a.feishu.ReplyCard(context.Background(), sub.TriggerMessageID, card, replyInThreadForSubmission(a, sub))
+		if err != nil {
+			return err
+		}
 	}
 	payload := codexPlanModeExitPayload{PlanMarkdown: strings.TrimSpace(planMarkdown)}
 	return a.State().SavePending(&state.PendingRequest{
@@ -299,36 +303,72 @@ func completeCodexPlanModeExit(a *App, action *feishu.CardAction, actionName str
 			Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"},
 		}, nil
 	}
-	return completeAsyncRenderedCardAction(
-		a,
-		action,
-		pending.SessionKey,
-		"正在处理计划确认",
-		codexPlanModeExitProcessingCard(a, pending.SessionKey, "", "正在处理你的选择，请稍候。"),
-		func() (*callback.CardActionTriggerResponse, error) {
-			return runCodexPlanModeExitAction(a, actionName, pending, action)
-		},
-		func(sessionKey, errText string) map[string]any {
-			return codexPlanModeExitFailureCard(a, pending.SessionKey, "", firstNonEmpty(strings.TrimSpace(errText), "Unable to process the plan confirmation."))
-		},
-		"codex plan mode exit patch failed",
-	)
+	if strings.TrimSpace(action.MessageID) == "" {
+		resp, _, err := runCodexPlanModeExitAction(a, actionName, pending, action)
+		return resp, err
+	}
+	runAsync(a, func() {
+		resp, followupSub, err := runCodexPlanModeExitAction(a, actionName, pending, action)
+		card := callbackResponseCard(resp)
+		if card == nil {
+			errText := callbackResponseToastText(resp)
+			if err != nil {
+				errText = err.Error()
+			}
+			card = codexPlanModeExitFailureCard(a, pending.SessionKey, "", firstNonEmpty(strings.TrimSpace(errText), "Unable to process the plan confirmation."))
+		}
+		if card == nil {
+			return
+		}
+		if sendErr := sendCodexPlanModeExitFollowupCard(a, pending, action, card, followupSub); sendErr != nil {
+			slog.Warn("codex plan mode exit follow-up delivery failed",
+				"session_key", pending.SessionKey,
+				"request_id", pending.ID,
+				"message_id", strings.TrimSpace(action.MessageID),
+				"error", sendErr,
+			)
+		}
+	})
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "正在处理计划确认"},
+	}, nil
 }
 
-func runCodexPlanModeExitAction(a *App, actionName string, pending *state.PendingRequest, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func sendCodexPlanModeExitFollowupCard(a *App, pending *state.PendingRequest, action *feishu.CardAction, card map[string]any, sub *state.Submission) error {
+	if a == nil || a.feishu == nil || pending == nil || card == nil {
+		return fmt.Errorf("plan mode exit follow-up unavailable")
+	}
+	messageID := strings.TrimSpace(pending.FeishuMsgID)
+	if messageID == "" && action != nil {
+		messageID = strings.TrimSpace(action.MessageID)
+	}
+	if messageID == "" {
+		return fmt.Errorf("plan mode exit follow-up message missing")
+	}
+	replyInThread := false
+	if sub != nil {
+		replyInThread = replyInThreadForSubmission(a, sub)
+	} else if sess := a.State().Session(strings.TrimSpace(pending.SessionKey)); sess != nil {
+		replyInThread = sess.ChatType == "group" && replyInThreadEnabled(a, sess.ChatType)
+	}
+	_, err := sendLocalTurnFollowupCard(context.Background(), a, messageID, card, replyInThread, sub, codexPlanModeExitFollowupKind)
+	return err
+}
+
+func runCodexPlanModeExitAction(a *App, actionName string, pending *state.PendingRequest, action *feishu.CardAction) (*callback.CardActionTriggerResponse, *state.Submission, error) {
 	if a == nil || pending == nil || action == nil {
-		return nil, fmt.Errorf("plan confirmation unavailable")
+		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	current := a.State().Pending(pending.ID)
 	if current == nil || current.Kind != codexPlanModeExitPendingKind || state.NormalizePendingRequestStatus(current.Status) != state.PendingRequestStatusPending {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	if current.OwnerUserID != "" && current.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个请求"},
-		}, nil
+		}, nil, nil
 	}
 	switch strings.TrimSpace(actionName) {
 	case codexPlanModeExitStayAction:
@@ -338,104 +378,112 @@ func runCodexPlanModeExitAction(a *App, actionName string, pending *state.Pendin
 	case codexPlanModeExitImplementCurrentAction:
 		return codexPlanModeExitImplementCurrent(a, current)
 	default:
-		return nil, fmt.Errorf("unsupported plan mode exit action %q", actionName)
+		return nil, nil, fmt.Errorf("unsupported plan mode exit action %q", actionName)
 	}
 }
 
-func codexPlanModeExitImplementCurrent(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, error) {
+func codexPlanModeExitImplementCurrent(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *state.Submission, error) {
 	if a == nil || pending == nil {
-		return nil, fmt.Errorf("plan confirmation unavailable")
+		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	sess := a.State().Session(pending.SessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(pending.ThreadID) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	if sessionHasActiveWork(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "当前还有其他任务在处理，请先完成它们"},
-		}, nil
+		}, nil, nil
 	}
 	planModeCleared, err := clearCodexPlanModeForSession(a, pending.SessionKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !planModeCleared {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	sub, err := createCodexPlanModeExitSubmission(a, pending, "Implement the plan.")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := startNextSubmission(a, pending.SessionKey); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	startedSub := a.State().Submission(sub.ID)
+	if startedSub == nil {
+		startedSub = sub
 	}
 	_ = a.State().UpdatePending(pending.ID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusResolved.String()
 	})
 	body := "Submitted `Implement the plan.` to the current thread."
-	if sub != nil && strings.TrimSpace(sub.ID) != "" {
-		body = body + "\n\nsubmission: `" + sub.ID + "`"
+	if startedSub != nil && strings.TrimSpace(startedSub.ID) != "" {
+		body = body + "\n\nsubmission: `" + startedSub.ID + "`"
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交实现指令"},
 		Card:  rawCard(codexPlanModeExitSuccessCard(a, pending.SessionKey, "", "Plan implementation started", body)),
-	}, nil
+	}, startedSub, nil
 }
 
-func codexPlanModeExitImplementFresh(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, error) {
+func codexPlanModeExitImplementFresh(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *state.Submission, error) {
 	if a == nil || pending == nil {
-		return nil, fmt.Errorf("plan confirmation unavailable")
+		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	sess := a.State().Session(pending.SessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(pending.ThreadID) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	if sessionHasActiveWork(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "当前还有其他任务在处理，请先完成它们"},
-		}, nil
+		}, nil, nil
 	}
 	wsID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
 	ws := firstNonEmptyWorkspace(a, wsID)
 	if ws == nil {
-		return nil, fmt.Errorf("workspace %q not found", wsID)
+		return nil, nil, fmt.Errorf("workspace %q not found", wsID)
 	}
 	binding, err := conversationBackend(a).StartWorkspaceThread(pending.SessionKey, sess, ws)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	planModeCleared, err := clearCodexPlanModeForSession(a, pending.SessionKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !planModeCleared {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	prompt := codexPlanModeExitFreshPrompt(strings.TrimSpace(codexPlanModeExitPlanMarkdownFromPending(pending)))
 	sub, err := createCodexPlanModeExitSubmission(a, pending, prompt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := startNextSubmission(a, pending.SessionKey); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	startedSub := a.State().Submission(sub.ID)
+	if startedSub == nil {
+		startedSub = sub
 	}
 	_ = a.State().UpdatePending(pending.ID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusResolved.String()
@@ -444,23 +492,23 @@ func codexPlanModeExitImplementFresh(a *App, pending *state.PendingRequest) (*ca
 	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
 		body += "\n\nthread: `" + binding.ThreadID + "`"
 	}
-	if sub != nil && strings.TrimSpace(sub.ID) != "" {
-		body += "\nsubmission: `" + sub.ID + "`"
+	if startedSub != nil && strings.TrimSpace(startedSub.ID) != "" {
+		body += "\nsubmission: `" + startedSub.ID + "`"
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已在新 thread 提交实现指令"},
 		Card:  rawCard(codexPlanModeExitSuccessCard(a, pending.SessionKey, "", "Fresh thread started", body)),
-	}, nil
+	}, startedSub, nil
 }
 
-func codexPlanModeExitStay(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, error) {
+func codexPlanModeExitStay(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *state.Submission, error) {
 	if a == nil || pending == nil {
-		return nil, fmt.Errorf("plan confirmation unavailable")
+		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	if current := a.State().Pending(pending.ID); current == nil || state.NormalizePendingRequestStatus(current.Status) != state.PendingRequestStatusPending {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请求已过期"},
-		}, nil
+		}, nil, nil
 	}
 	_ = a.State().UpdatePending(pending.ID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusResolved.String()
@@ -468,7 +516,7 @@ func codexPlanModeExitStay(a *App, pending *state.PendingRequest) (*callback.Car
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已保持 plan mode"},
 		Card:  rawCard(codexPlanModeExitSuccessCard(a, pending.SessionKey, "", "Plan mode kept", "Stayed in Plan mode.")),
-	}, nil
+	}, nil, nil
 }
 
 func createCodexPlanModeExitSubmission(a *App, pending *state.PendingRequest, inputText string) (*state.Submission, error) {

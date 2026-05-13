@@ -114,8 +114,12 @@ func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	}
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
-	if result := newTurnStreamService(a).flushTurnStream(context.Background(), "thread-1", "turn-1"); result != (turnStreamFlushResult{}) {
-		t.Fatalf("flushTurnStream(plan reuse) = %+v", result)
+	result := newTurnStreamService(a).flushTurnStream(context.Background(), "thread-1", "turn-1")
+	if result.SawFinal || result.SawPlanItem || result.PlanCompleted || result.PlanMarkdown != "" || result.LastError != "" || result.WorkingMessageID != "" || result.ShouldUsePlanExitPrompt {
+		t.Fatalf("flushTurnStream(plan reuse) unexpected flags = %+v", result)
+	}
+	if result.PlanMessageID != "reuse-plan" {
+		t.Fatalf("flushTurnStream(plan reuse) PlanMessageID = %q, want reuse-plan", result.PlanMessageID)
 	}
 	if newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] != nil {
 		t.Fatal("flushTurnStream(plan reuse) should clear stream")

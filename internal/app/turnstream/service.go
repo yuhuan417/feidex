@@ -159,6 +159,7 @@ type Stream struct {
 
 	PendingPlan   string
 	LastSentPlan  string
+	PlanMessageID string
 	SawPlanItem   bool
 	PlanItemID    string
 	PlanMarkdown  string
@@ -171,12 +172,14 @@ type Stream struct {
 
 // FlushResult captures the result of flushing a turn stream.
 type FlushResult struct {
-	SawFinal         bool
-	SawPlanItem      bool
-	PlanCompleted    bool
-	PlanMarkdown     string
-	LastError        string
-	WorkingMessageID string
+	SawFinal                bool
+	SawPlanItem             bool
+	PlanCompleted           bool
+	PlanMarkdown            string
+	PlanMessageID           string
+	ShouldUsePlanExitPrompt bool
+	LastError               string
+	WorkingMessageID        string
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +294,7 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 		stream.PlanItemID = itemID
 		stream.PlanMarkdown = planMarkdown
 		stream.PlanCompleted = true
+		skipPayload = true
 	}
 	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
 		planText = text
@@ -324,6 +328,9 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 		if stream.QuietWorking != nil {
 			itemBoundary = prepareStreamBoundaryLocked(stream)
 			itemReuseMessage = itemBoundary.ReuseMessageID
+			if itemType == "plan" {
+				stream.PlanMessageID = strings.TrimSpace(firstNonEmpty(itemBoundary.ReuseMessageID, itemBoundary.Op.MessageID, stream.PlanMessageID))
+			}
 		}
 	} else if quietWorkingCardEnabled(svc.feishuConfig()) {
 		workingUpdate = prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
@@ -332,7 +339,9 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 
 	svc.app.TurnStreamQuietCardExecutor().ExecuteQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		svc.app.TurnStreamOutboundCards().SendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
+		if msgID := strings.TrimSpace(svc.app.TurnStreamOutboundCards().SendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)); msgID != "" {
+			svc.rememberPlanMessageID(turnID, msgID)
+		}
 	}
 	svc.app.TurnStreamQuietCardExecutor().ExecuteQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
 	if quietWorkingCardEnabled(svc.feishuConfig()) {
@@ -368,6 +377,8 @@ func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string)
 	result.SawPlanItem = stream.SawPlanItem
 	result.PlanCompleted = stream.PlanCompleted
 	result.PlanMarkdown = strings.TrimSpace(stream.PlanMarkdown)
+	result.PlanMessageID = strings.TrimSpace(stream.PlanMessageID)
+	result.ShouldUsePlanExitPrompt = stream.SawPlanItem && stream.PlanCompleted && result.PlanMarkdown != ""
 	result.LastError = stream.LastError
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
 	if stream.QuietWorking != nil && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
@@ -385,7 +396,9 @@ func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string)
 
 	svc.app.TurnStreamQuietCardExecutor().ExecuteQuietWorkingCardOp(ctx, sub, planBoundary.Op)
 	if planText != "" {
-		svc.app.TurnStreamOutboundCards().SendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)
+		if msgID := strings.TrimSpace(svc.app.TurnStreamOutboundCards().SendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)); msgID != "" {
+			result.PlanMessageID = msgID
+		}
 	}
 	return result
 }
@@ -520,6 +533,23 @@ func (svc Service) CommitStreamQuietRender(turnID, messageID, body string) {
 		stream.QuietWorking.MessageID = messageID
 	}
 	stream.QuietWorking.RenderedBody = body
+}
+
+func (svc Service) rememberPlanMessageID(turnID, messageID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	messageID = strings.TrimSpace(messageID)
+	if turnID == "" || messageID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil {
+		stream.PlanMessageID = messageID
+	}
+	tracker.Mu.Unlock()
 }
 
 // ---------------------------------------------------------------------------
