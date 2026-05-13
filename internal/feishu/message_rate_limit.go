@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
 
@@ -169,7 +170,9 @@ func (a *Adapter) createMessage(ctx context.Context, req *larkim.CreateMessageRe
 	} else if delay > 0 {
 		slog.Debug("feishu outbound paced", "op", "send", "delay_ms", delay.Milliseconds())
 	}
-	resp, err := a.client.Im.Message.Create(ctx, req)
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.create", func(client *lark.Client) (*larkim.CreateMessageResp, error) {
+		return client.Im.Message.Create(ctx, req)
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 	}
@@ -182,7 +185,9 @@ func (a *Adapter) patchMessage(ctx context.Context, messageID string, req *larki
 	} else if delay > 0 {
 		slog.Debug("feishu outbound paced", "op", "patch", "message_id", strings.TrimSpace(messageID), "delay_ms", delay.Milliseconds())
 	}
-	resp, err := a.client.Im.Message.Patch(ctx, req)
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.patch", func(client *lark.Client) (*larkim.PatchMessageResp, error) {
+		return client.Im.Message.Patch(ctx, req)
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 	}

@@ -3,6 +3,7 @@ package feishu
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -181,19 +182,147 @@ func newHTTPBackedAdapter(t *testing.T) (*Adapter, *adapterMockAPI) {
 	t.Helper()
 
 	mock := &adapterMockAPI{}
-	client := lark.NewClient(
-		"app-id",
-		"app-secret",
-		lark.WithOpenBaseUrl("https://mock.feishu.test"),
-		lark.WithEnableTokenCache(true),
-		lark.WithHttpClient(&http.Client{Transport: adapterRoundTripper{api: mock}}),
-	)
+	cfg := config.FeishuConfig{AppID: "app-id", AppSecret: "app-secret"}
+	factory := func() *lark.Client {
+		return lark.NewClient(
+			cfg.AppID,
+			cfg.AppSecret,
+			lark.WithOpenBaseUrl("https://mock.feishu.test"),
+			lark.WithEnableTokenCache(true),
+			lark.WithTokenCache(sharedFeishuTokenCache),
+			lark.WithHttpClient(&http.Client{Transport: adapterRoundTripper{api: mock}}),
+		)
+	}
+	sharedFeishuTokenCache.clearTenantAccessTokens(cfg.AppID)
 	return &Adapter{
-		client:    client,
-		allowAll:  true,
-		seen:      map[string]time.Time{},
-		reactions: map[string]string{},
+		cfg:           cfg,
+		client:        factory(),
+		clientFactory: factory,
+		allowAll:      true,
+		seen:          map[string]time.Time{},
+		reactions:     map[string]string{},
 	}, mock
+}
+
+type tokenRefreshMockAPI struct {
+	mu            sync.Mutex
+	authCount     int
+	invalidByPath map[string]string
+	pathCount     map[string]int
+}
+
+func (m *tokenRefreshMockAPI) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.invalidByPath == nil {
+		m.invalidByPath = map[string]string{}
+	}
+	if m.pathCount == nil {
+		m.pathCount = map[string]int{}
+	}
+	m.pathCount[req.URL.Path]++
+
+	jsonResponse := func(status int, body string) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: status,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	}
+
+	switch req.URL.Path {
+	case "/open-apis/auth/v3/tenant_access_token/internal":
+		m.authCount++
+		return jsonResponse(http.StatusOK, fmt.Sprintf(`{"code":0,"tenant_access_token":"tenant-token-%d","expire":7200}`, m.authCount))
+	case "/open-apis/im/v1/messages/msg-retry/reply":
+		if m.shouldRejectLocked(req) {
+			return jsonResponse(http.StatusOK, `{"code":99991663,"msg":"Invalid access token for authorization. Please make a request with token attached."}`)
+		}
+		return jsonResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"message_id":"reply-retry"}}`)
+	case "/open-apis/im/v1/messages/msg-retry/reactions":
+		if m.shouldRejectLocked(req) {
+			return jsonResponse(http.StatusOK, `{"code":99991663,"msg":"Invalid access token for authorization. Please make a request with token attached."}`)
+		}
+		return jsonResponse(http.StatusOK, `{"code":0,"msg":"ok","data":{"reaction_id":"reaction-retry"}}`)
+	default:
+		return jsonResponse(http.StatusNotFound, `{"code":404,"msg":"not found"}`)
+	}
+}
+
+func (m *tokenRefreshMockAPI) shouldRejectLocked(req *http.Request) bool {
+	auth := strings.TrimSpace(req.Header.Get("Authorization"))
+	if auth == "" {
+		return true
+	}
+	if m.invalidByPath[req.URL.Path] == "" {
+		m.invalidByPath[req.URL.Path] = auth
+	}
+	return m.invalidByPath[req.URL.Path] == auth
+}
+
+func (m *tokenRefreshMockAPI) count(path string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pathCount[path]
+}
+
+func newTokenRefreshAdapter(t *testing.T) (*Adapter, *tokenRefreshMockAPI) {
+	t.Helper()
+	mock := &tokenRefreshMockAPI{}
+	cfg := config.FeishuConfig{AppID: "retry-app", AppSecret: "retry-secret"}
+	factory := func() *lark.Client {
+		return lark.NewClient(
+			cfg.AppID,
+			cfg.AppSecret,
+			lark.WithOpenBaseUrl("https://mock.feishu.test"),
+			lark.WithEnableTokenCache(true),
+			lark.WithTokenCache(sharedFeishuTokenCache),
+			lark.WithHttpClient(&http.Client{Transport: roundTripperFunc(mock.RoundTrip)}),
+		)
+	}
+	sharedFeishuTokenCache.clearTenantAccessTokens(cfg.AppID)
+	return &Adapter{
+		cfg:           cfg,
+		client:        factory(),
+		clientFactory: factory,
+		allowAll:      true,
+		seen:          map[string]time.Time{},
+		reactions:     map[string]string{},
+	}, mock
+}
+
+func TestAdapterRefreshesTenantTokenForReplyAndReaction(t *testing.T) {
+	a, mock := newTokenRefreshAdapter(t)
+	card := map[string]any{"elements": []map[string]any{{"tag": "markdown", "content": "body"}}}
+
+	id, err := a.ReplyCard(context.Background(), "msg-retry", card, true)
+	if err != nil {
+		t.Fatalf("ReplyCard() error = %v", err)
+	}
+	if id != "reply-retry" {
+		t.Fatalf("ReplyCard() id = %q, want reply-retry", id)
+	}
+	if got := mock.count("/open-apis/im/v1/messages/msg-retry/reply"); got < 2 {
+		t.Fatalf("reply requests = %d, want retry after invalid token", got)
+	}
+
+	if err := a.AddReaction(context.Background(), "msg-retry", "SMILE"); err != nil {
+		t.Fatalf("AddReaction() error = %v", err)
+	}
+	if got := a.reactions[reactionKey("msg-retry", "SMILE")]; got != "reaction-retry" {
+		t.Fatalf("stored reaction id = %q, want reaction-retry", got)
+	}
+	if got := mock.count("/open-apis/im/v1/messages/msg-retry/reactions"); got < 2 {
+		t.Fatalf("reaction requests = %d, want retry after invalid token", got)
+	}
+
+	mock.mu.Lock()
+	authCount := mock.authCount
+	mock.mu.Unlock()
+	if authCount < 3 {
+		t.Fatalf("tenant token fetches = %d, want refreshes for reply and reaction", authCount)
+	}
 }
 
 func TestAdapterOutboundMethodsAgainstHTTPAPI(t *testing.T) {

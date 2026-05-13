@@ -85,21 +85,23 @@ type BotMenuClick struct {
 }
 
 type Adapter struct {
-	cfg         config.FeishuConfig
-	client      *lark.Client
-	wsClient    *wsClientState
-	botOpenID   string
-	cancel      context.CancelFunc
-	allowSet    map[string]struct{}
-	allowAll    bool
-	startOnce   sync.Once
-	seenMu      sync.Mutex
-	seen        map[string]time.Time
-	paceMu      sync.Mutex
-	createPacer *requestPacer
-	patchPacer  *keyedRequestPacer
-	reactionMu  sync.Mutex
-	reactions   map[string]string
+	cfg           config.FeishuConfig
+	clientMu      sync.RWMutex
+	client        *lark.Client
+	clientFactory func() *lark.Client
+	wsClient      *wsClientState
+	botOpenID     string
+	cancel        context.CancelFunc
+	allowSet      map[string]struct{}
+	allowAll      bool
+	startOnce     sync.Once
+	seenMu        sync.Mutex
+	seen          map[string]time.Time
+	paceMu        sync.Mutex
+	createPacer   *requestPacer
+	patchPacer    *keyedRequestPacer
+	reactionMu    sync.Mutex
+	reactions     map[string]string
 
 	onMessage    func(*InboundMessage)
 	onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error)
@@ -169,12 +171,13 @@ func New(cfg config.FeishuConfig) *Adapter {
 		allowSet[v] = struct{}{}
 	}
 	return &Adapter{
-		cfg:       cfg,
-		client:    lark.NewClient(cfg.AppID, cfg.AppSecret),
-		allowSet:  allowSet,
-		allowAll:  allowAll,
-		seen:      map[string]time.Time{},
-		reactions: map[string]string{},
+		cfg:           cfg,
+		client:        newFeishuLarkClient(cfg),
+		clientFactory: func() *lark.Client { return newFeishuLarkClient(cfg) },
+		allowSet:      allowSet,
+		allowAll:      allowAll,
+		seen:          map[string]time.Time{},
+		reactions:     map[string]string{},
 	}
 }
 
@@ -468,12 +471,14 @@ func (a *Adapter) AddReaction(ctx context.Context, messageID, emojiType string) 
 		return nil
 	}
 	a.reactionMu.Unlock()
-	resp, err := a.client.Im.MessageReaction.Create(ctx, larkim.NewCreateMessageReactionReqBuilder().
-		MessageId(messageID).
-		Body(larkim.NewCreateMessageReactionReqBodyBuilder().
-			ReactionType(larkim.NewEmojiBuilder().EmojiType(emojiType).Build()).
-			Build()).
-		Build())
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message_reaction.create", func(client *lark.Client) (*larkim.CreateMessageReactionResp, error) {
+		return client.Im.MessageReaction.Create(ctx, larkim.NewCreateMessageReactionReqBuilder().
+			MessageId(messageID).
+			Body(larkim.NewCreateMessageReactionReqBodyBuilder().
+				ReactionType(larkim.NewEmojiBuilder().EmojiType(emojiType).Build()).
+				Build()).
+			Build())
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "add", "message_id", messageID, "emoji_type", emojiType)
@@ -509,10 +514,12 @@ func (a *Adapter) RemoveReaction(ctx context.Context, messageID, emojiType strin
 	if reactionID == "" {
 		return nil
 	}
-	resp, err := a.client.Im.MessageReaction.Delete(ctx, larkim.NewDeleteMessageReactionReqBuilder().
-		MessageId(messageID).
-		ReactionId(reactionID).
-		Build())
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message_reaction.delete", func(client *lark.Client) (*larkim.DeleteMessageReactionResp, error) {
+		return client.Im.MessageReaction.Delete(ctx, larkim.NewDeleteMessageReactionReqBuilder().
+			MessageId(messageID).
+			ReactionId(reactionID).
+			Build())
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu reaction failed", err, 0, "", "op", "remove", "message_id", messageID, "emoji_type", emojiType)
@@ -613,7 +620,9 @@ func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[stri
 			ReplyInThread(inThread).
 			Build()).
 		Build()
-	resp, err := a.client.Im.Message.Reply(ctx, req)
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.reply", func(client *lark.Client) (*larkim.ReplyMessageResp, error) {
+		return client.Im.Message.Reply(ctx, req)
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", "interactive", "reply_to", messageID)
@@ -693,7 +702,7 @@ func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[stri
 }
 
 func (a *Adapter) UrgentApp(ctx context.Context, messageID, userID string) error {
-	if a == nil || a.client == nil {
+	if a == nil || a.currentClient() == nil {
 		return fmt.Errorf("feishu adapter not initialized")
 	}
 	messageID = strings.TrimSpace(messageID)
@@ -708,7 +717,9 @@ func (a *Adapter) UrgentApp(ctx context.Context, messageID, userID string) error
 			UserIdList([]string{userID}).
 			Build()).
 		Build()
-	resp, err := a.client.Im.Message.UrgentApp(ctx, req)
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.urgent_app", func(client *lark.Client) (*larkim.UrgentAppMessageResp, error) {
+		return client.Im.Message.UrgentApp(ctx, req)
+	})
 	if err != nil {
 		return err
 	}
@@ -743,9 +754,11 @@ func (a *Adapter) replyLocalImage(ctx context.Context, messageID, path string, i
 	if err != nil {
 		return err
 	}
-	resp, err := a.client.Im.Image.Create(ctx, larkim.NewCreateImageReqBuilder().
-		Body(body).
-		Build())
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.image.create", func(client *lark.Client) (*larkim.CreateImageResp, error) {
+		return client.Im.Image.Create(ctx, larkim.NewCreateImageReqBuilder().
+			Body(body).
+			Build())
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.image.create", err))
@@ -773,9 +786,11 @@ func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path st
 	if err != nil {
 		return err
 	}
-	resp, err := a.client.Im.File.Create(ctx, larkim.NewCreateFileReqBuilder().
-		Body(body).
-		Build())
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.file.create", func(client *lark.Client) (*larkim.CreateFileResp, error) {
+		return client.Im.File.Create(ctx, larkim.NewCreateFileReqBuilder().
+			Body(body).
+			Build())
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.file.create", err))
@@ -801,7 +816,9 @@ func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, 
 			ReplyInThread(inThread).
 			Build()).
 		Build()
-	resp, err := a.client.Im.Message.Reply(ctx, req)
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.reply", func(client *lark.Client) (*larkim.ReplyMessageResp, error) {
+		return client.Im.Message.Reply(ctx, req)
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		logFeishuFailure("feishu outbound failed", err, 0, "", "op", "reply", "msg_type", msgType, "reply_to", messageID)
@@ -841,7 +858,9 @@ func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string,
 		FileKey(resourceKey).
 		Type(resourceTypeForAttachment(kind)).
 		Build()
-	resp, err := a.client.Im.MessageResource.Get(ctx, req)
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message_resource.get", func(client *lark.Client) (*larkim.GetMessageResourceResp, error) {
+		return client.Im.MessageResource.Get(ctx, req)
+	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
 		return "", "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.message_resource.get", err))
@@ -1339,17 +1358,19 @@ func (a *Adapter) resolveForwardedMessage(ctx context.Context, messageID string,
 }
 
 func (a *Adapter) fetchMessageByID(ctx context.Context, messageID string) (*larkim.Message, error) {
-	if a == nil || a.client == nil {
+	if a == nil || a.currentClient() == nil {
 		return nil, fmt.Errorf("feishu adapter not initialized")
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return nil, fmt.Errorf("message_id required")
 	}
-	resp, err := a.client.Im.Message.Get(ctx, larkim.NewGetMessageReqBuilder().
-		MessageId(messageID).
-		UserIdType(larkim.UserIdTypeGetMessageOpenId).
-		Build())
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.get", func(client *lark.Client) (*larkim.GetMessageResp, error) {
+		return client.Im.Message.Get(ctx, larkim.NewGetMessageReqBuilder().
+			MessageId(messageID).
+			UserIdType(larkim.UserIdTypeGetMessageOpenId).
+			Build())
+	})
 	if err != nil {
 		logFeishuFailure("feishu message get failed", err, 0, "", "message_id", messageID)
 		return nil, wrapPermissionIssue(err, permissionIssueFromDirectError("im.message.get", err))

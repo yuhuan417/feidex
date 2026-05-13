@@ -71,13 +71,13 @@ func (a *Adapter) CleanupArtifactsBefore(ctx context.Context, cutoff time.Time) 
 func (a *Adapter) ensureDriveArtifactStore() *DriveArtifactStore {
 	a.artifactMu.Lock()
 	defer a.artifactMu.Unlock()
-	if a.client == nil {
+	if a.currentClient() == nil {
 		return nil
 	}
 	if a.artifactStore != nil {
 		return a.artifactStore
 	}
-	a.artifactStore = NewDriveArtifactStore(NewLarkDrivePreviewAPI(a.client), ArtifactStoreConfig{
+	a.artifactStore = NewDriveArtifactStore(newAdapterDrivePreviewAPI(a), ArtifactStoreConfig{
 		RootFolderName: defaultArtifactRootFolderName,
 	})
 	return a.artifactStore

@@ -147,13 +147,13 @@ func (a *Adapter) CleanupLocalFileLinksBefore(ctx context.Context, cutoff time.T
 func (a *Adapter) ensureLocalFileLinkRewriter() *DriveLocalFileLinkRewriter {
 	a.artifactMu.Lock()
 	defer a.artifactMu.Unlock()
-	if a.client == nil {
+	if a.currentClient() == nil {
 		return nil
 	}
 	if a.localFileLinkRewriter != nil {
 		return a.localFileLinkRewriter
 	}
-	a.localFileLinkRewriter = NewDriveLocalFileLinkRewriter(NewLarkDrivePreviewAPI(a.client), LocalFileLinkConfig{
+	a.localFileLinkRewriter = NewDriveLocalFileLinkRewriter(newAdapterDrivePreviewAPI(a), LocalFileLinkConfig{
 		ProcessCWD:     a.localFileLinkProcessCWD,
 		RootFolderName: defaultPreviewRootFolderName,
 	})
@@ -545,7 +545,8 @@ func sanitizePreviewFileComponent(value string) string {
 }
 
 type larkDrivePreviewAPI struct {
-	client *lark.Client
+	client  *lark.Client
+	adapter *Adapter
 }
 
 func NewLarkDrivePreviewAPI(client *lark.Client) previewDriveAPI {
@@ -555,13 +556,33 @@ func NewLarkDrivePreviewAPI(client *lark.Client) previewDriveAPI {
 	return &larkDrivePreviewAPI{client: client}
 }
 
+func newAdapterDrivePreviewAPI(adapter *Adapter) previewDriveAPI {
+	if adapter == nil || adapter.currentClient() == nil {
+		return nil
+	}
+	return &larkDrivePreviewAPI{adapter: adapter}
+}
+
+func withLarkDrivePreviewRetry[T any](ctx context.Context, api *larkDrivePreviewAPI, name string, call func(*lark.Client) (T, error)) (T, error) {
+	if api != nil && api.adapter != nil {
+		return withFeishuTenantTokenRefreshRetry(ctx, api.adapter, name, call)
+	}
+	var zero T
+	if api == nil || api.client == nil {
+		return zero, fmt.Errorf("feishu drive api is not available")
+	}
+	return call(api.client)
+}
+
 func (a *larkDrivePreviewAPI) CreateFolder(ctx context.Context, name, parentToken string) (previewRemoteNode, error) {
-	resp, err := a.client.Drive.V1.File.CreateFolder(ctx, larkdrive.NewCreateFolderFileReqBuilder().
-		Body(larkdrive.NewCreateFolderFileReqBodyBuilder().
-			Name(name).
-			FolderToken(parentToken).
-			Build()).
-		Build())
+	resp, err := withLarkDrivePreviewRetry(ctx, a, "drive.file.create_folder", func(client *lark.Client) (*larkdrive.CreateFolderFileResp, error) {
+		return client.Drive.V1.File.CreateFolder(ctx, larkdrive.NewCreateFolderFileReqBuilder().
+			Body(larkdrive.NewCreateFolderFileReqBodyBuilder().
+				Name(name).
+				FolderToken(parentToken).
+				Build()).
+			Build())
+	})
 	if err != nil {
 		return previewRemoteNode{}, wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.create_folder", err))
 	}
@@ -584,36 +605,51 @@ func (a *larkDrivePreviewAPI) CreateFolder(ctx context.Context, name, parentToke
 }
 
 func (a *larkDrivePreviewAPI) ListFiles(ctx context.Context, folderToken string) ([]previewRemoteNode, error) {
-	builder := larkdrive.NewListFileReqBuilder().
-		PageSize(previewListPageSize).
-		OrderBy(larkdrive.OrderByCreatedTime).
-		Direction("DESC")
-	if strings.TrimSpace(folderToken) != "" {
-		builder.FolderToken(folderToken)
-	}
-	iterator, err := a.client.Drive.V1.File.ListByIterator(ctx, builder.Build())
-	if err != nil {
-		return nil, wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.list", err))
-	}
 	out := []previewRemoteNode{}
+	pageToken := ""
 	for {
-		ok, item, err := iterator.Next()
+		builder := larkdrive.NewListFileReqBuilder().
+			PageSize(previewListPageSize).
+			OrderBy(larkdrive.OrderByCreatedTime).
+			Direction("DESC")
+		if strings.TrimSpace(folderToken) != "" {
+			builder.FolderToken(folderToken)
+		}
+		if pageToken != "" {
+			builder.PageToken(pageToken)
+		}
+		resp, err := withLarkDrivePreviewRetry(ctx, a, "drive.file.list", func(client *lark.Client) (*larkdrive.ListFileResp, error) {
+			return client.Drive.V1.File.List(ctx, builder.Build())
+		})
 		if err != nil {
 			return nil, wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.list", err))
 		}
-		if !ok {
+		if !resp.Success() {
+			return nil, &driveAPIError{
+				Code:  resp.Code,
+				Msg:   resp.Msg,
+				Issue: permissionIssueFromCodeError("drive.file.list", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+			}
+		}
+		if resp.Data == nil || len(resp.Data.Files) == 0 {
 			break
 		}
-		if item == nil {
-			continue
+		for _, item := range resp.Data.Files {
+			if item == nil {
+				continue
+			}
+			out = append(out, previewRemoteNode{
+				Token:       stringPtrValue(item.Token),
+				URL:         stringPtrValue(item.Url),
+				Type:        stringPtrValue(item.Type),
+				Name:        stringPtrValue(item.Name),
+				CreatedTime: parseDriveNodeCreatedTime(stringPtrValue(item.CreatedTime)),
+			})
 		}
-		out = append(out, previewRemoteNode{
-			Token:       stringPtrValue(item.Token),
-			URL:         stringPtrValue(item.Url),
-			Type:        stringPtrValue(item.Type),
-			Name:        stringPtrValue(item.Name),
-			CreatedTime: parseDriveNodeCreatedTime(stringPtrValue(item.CreatedTime)),
-		})
+		if resp.Data.HasMore == nil || !*resp.Data.HasMore || strings.TrimSpace(stringPtrValue(resp.Data.NextPageToken)) == "" {
+			break
+		}
+		pageToken = stringPtrValue(resp.Data.NextPageToken)
 	}
 	return out, nil
 }
@@ -644,14 +680,16 @@ func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileN
 		return "", fmt.Errorf("file is too large: %s", localPath)
 	}
 
-	prepareResp, err := a.client.Drive.V1.File.UploadPrepare(ctx, larkdrive.NewUploadPrepareFileReqBuilder().
-		FileUploadInfo(larkdrive.NewFileUploadInfoBuilder().
-			FileName(fileName).
-			ParentType("explorer").
-			ParentNode(parentToken).
-			Size(int(info.Size())).
-			Build()).
-		Build())
+	prepareResp, err := withLarkDrivePreviewRetry(ctx, a, "drive.file.upload_prepare", func(client *lark.Client) (*larkdrive.UploadPrepareFileResp, error) {
+		return client.Drive.V1.File.UploadPrepare(ctx, larkdrive.NewUploadPrepareFileReqBuilder().
+			FileUploadInfo(larkdrive.NewFileUploadInfoBuilder().
+				FileName(fileName).
+				ParentType("explorer").
+				ParentNode(parentToken).
+				Size(int(info.Size())).
+				Build()).
+			Build())
+	})
 	if err != nil {
 		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_prepare", err))
 	}
@@ -690,14 +728,16 @@ func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileN
 		if n == 0 {
 			break
 		}
-		partResp, err := a.client.Drive.V1.File.UploadPart(ctx, larkdrive.NewUploadPartFileReqBuilder().
-			Body(larkdrive.NewUploadPartFileReqBodyBuilder().
-				UploadId(uploadID).
-				Seq(seq).
-				Size(n).
-				File(bytes.NewReader(buf[:n])).
-				Build()).
-			Build())
+		partResp, err := withLarkDrivePreviewRetry(ctx, a, "drive.file.upload_part", func(client *lark.Client) (*larkdrive.UploadPartFileResp, error) {
+			return client.Drive.V1.File.UploadPart(ctx, larkdrive.NewUploadPartFileReqBuilder().
+				Body(larkdrive.NewUploadPartFileReqBodyBuilder().
+					UploadId(uploadID).
+					Seq(seq).
+					Size(n).
+					File(bytes.NewReader(buf[:n])).
+					Build()).
+				Build())
+		})
 		if err != nil {
 			return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_part", err))
 		}
@@ -713,12 +753,14 @@ func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileN
 			break
 		}
 	}
-	finishResp, err := a.client.Drive.V1.File.UploadFinish(ctx, larkdrive.NewUploadFinishFileReqBuilder().
-		Body(larkdrive.NewUploadFinishFileReqBodyBuilder().
-			UploadId(uploadID).
-			BlockNum(uploadedBlocks).
-			Build()).
-		Build())
+	finishResp, err := withLarkDrivePreviewRetry(ctx, a, "drive.file.upload_finish", func(client *lark.Client) (*larkdrive.UploadFinishFileResp, error) {
+		return client.Drive.V1.File.UploadFinish(ctx, larkdrive.NewUploadFinishFileReqBuilder().
+			Body(larkdrive.NewUploadFinishFileReqBodyBuilder().
+				UploadId(uploadID).
+				BlockNum(uploadedBlocks).
+				Build()).
+			Build())
+	})
 	if err != nil {
 		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.upload_finish", err))
 	}
@@ -736,17 +778,19 @@ func (a *larkDrivePreviewAPI) UploadFile(ctx context.Context, parentToken, fileN
 }
 
 func (a *larkDrivePreviewAPI) QueryMetaURL(ctx context.Context, token, docType string) (string, error) {
-	resp, err := a.client.Drive.V1.Meta.BatchQuery(ctx, larkdrive.NewBatchQueryMetaReqBuilder().
-		MetaRequest(larkdrive.NewMetaRequestBuilder().
-			RequestDocs([]*larkdrive.RequestDoc{
-				larkdrive.NewRequestDocBuilder().
-					DocToken(token).
-					DocType(docType).
-					Build(),
-			}).
-			WithUrl(true).
-			Build()).
-		Build())
+	resp, err := withLarkDrivePreviewRetry(ctx, a, "drive.meta.batch_query", func(client *lark.Client) (*larkdrive.BatchQueryMetaResp, error) {
+		return client.Drive.V1.Meta.BatchQuery(ctx, larkdrive.NewBatchQueryMetaReqBuilder().
+			MetaRequest(larkdrive.NewMetaRequestBuilder().
+				RequestDocs([]*larkdrive.RequestDoc{
+					larkdrive.NewRequestDocBuilder().
+						DocToken(token).
+						DocType(docType).
+						Build(),
+				}).
+				WithUrl(true).
+				Build()).
+			Build())
+	})
 	if err != nil {
 		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("drive.meta.batch_query", err))
 	}
@@ -764,16 +808,18 @@ func (a *larkDrivePreviewAPI) QueryMetaURL(ctx context.Context, token, docType s
 }
 
 func (a *larkDrivePreviewAPI) GrantPermission(ctx context.Context, token, docType string, principal previewPrincipal) error {
-	resp, err := a.client.Drive.V1.PermissionMember.Create(ctx, larkdrive.NewCreatePermissionMemberReqBuilder().
-		Token(token).
-		Type(docType).
-		BaseMember(larkdrive.NewBaseMemberBuilder().
-			MemberType(principal.MemberType).
-			MemberId(principal.MemberID).
-			Perm(previewPermissionView).
-			Type(principal.Type).
-			Build()).
-		Build())
+	resp, err := withLarkDrivePreviewRetry(ctx, a, "drive.permission_member.create", func(client *lark.Client) (*larkdrive.CreatePermissionMemberResp, error) {
+		return client.Drive.V1.PermissionMember.Create(ctx, larkdrive.NewCreatePermissionMemberReqBuilder().
+			Token(token).
+			Type(docType).
+			BaseMember(larkdrive.NewBaseMemberBuilder().
+				MemberType(principal.MemberType).
+				MemberId(principal.MemberID).
+				Perm(previewPermissionView).
+				Type(principal.Type).
+				Build()).
+			Build())
+	})
 	if err != nil {
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("drive.permission_member.create", err))
 	}
@@ -788,10 +834,12 @@ func (a *larkDrivePreviewAPI) GrantPermission(ctx context.Context, token, docTyp
 }
 
 func (a *larkDrivePreviewAPI) DeleteFile(ctx context.Context, token, docType string) error {
-	resp, err := a.client.Drive.V1.File.Delete(ctx, larkdrive.NewDeleteFileReqBuilder().
-		FileToken(token).
-		Type(docType).
-		Build())
+	resp, err := withLarkDrivePreviewRetry(ctx, a, "drive.file.delete", func(client *lark.Client) (*larkdrive.DeleteFileResp, error) {
+		return client.Drive.V1.File.Delete(ctx, larkdrive.NewDeleteFileReqBuilder().
+			FileToken(token).
+			Type(docType).
+			Build())
+	})
 	if err != nil {
 		return wrapPermissionIssue(err, permissionIssueFromDirectError("drive.file.delete", err))
 	}
