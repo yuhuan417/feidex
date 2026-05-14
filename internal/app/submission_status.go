@@ -13,8 +13,9 @@ var turnCompletionTerminalText = appturnlifecycle.TurnCompletionTerminalText
 
 func prepareSubmissionCardMarkdown(a *App, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
+	text = linkifyInlineCodeURLs(text)
 	if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-		text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
+		text = neutralizeLocalMarkdownLinks(text, ws.Cwd)
 	}
 	return normalizeCardMarkdown(text)
 }

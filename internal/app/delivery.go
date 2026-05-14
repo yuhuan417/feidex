@@ -28,7 +28,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	enablePreview := strings.TrimSpace(kind) == "final_message"
 	if !enablePreview {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-			text = sanitizeLocalMarkdownLinks(text, ws.Cwd)
+			text = neutralizeLocalMarkdownLinks(text, ws.Cwd)
 		}
 	}
 	text = strings.TrimSpace(text)

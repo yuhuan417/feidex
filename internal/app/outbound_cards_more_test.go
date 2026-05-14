@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -108,5 +109,37 @@ func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t 
 	}
 	if strings.Contains(body, "`https://github.com/yuhuan417/feidex`") {
 		t.Fatalf("prepareReplyCardMarkdown(inline-code url) = %q, want no inline-code URL", body)
+	}
+}
+
+func TestPrepareSubmissionCardMarkdownLinkifiesInlineCodeURLsForContentCards(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &state.Submission{WorkspaceID: "default"}
+
+	body := prepareSubmissionCardMarkdown(a, sub, "授权链接：`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`")
+	if !strings.Contains(body, "[https://accounts.feishu.cn/oauth/v1/device/verify?x=1](https://accounts.feishu.cn/oauth/v1/device/verify?x=1)") {
+		t.Fatalf("prepareSubmissionCardMarkdown(inline-code url) = %q, want markdown link", body)
+	}
+	if strings.Contains(body, "`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`") {
+		t.Fatalf("prepareSubmissionCardMarkdown(inline-code url) = %q, want no inline-code URL", body)
+	}
+}
+
+func TestRenderContentCardsLinkifyInlineCodeURLs(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &state.Submission{WorkspaceID: "default"}
+
+	replyCard := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, "反馈中", "blue", true, "打开：`https://example.test/reply`", nil, false)
+	if body := cardMarkdownContent(t, replyCard); !strings.Contains(body, "[https://example.test/reply](https://example.test/reply)") {
+		t.Fatalf("reply content card body = %q, want clickable markdown link", body)
+	}
+
+	compactCard := cardRendererForApp(a).renderCompactMarkdownCard(sub, "工作中", "blue", "", "打开：`https://example.test/compact`", nil)
+	if body := cardMarkdownContent(t, compactCard); !strings.Contains(body, "[https://example.test/compact](https://example.test/compact)") {
+		t.Fatalf("compact content card body = %q, want clickable markdown link", body)
 	}
 }
