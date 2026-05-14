@@ -1051,7 +1051,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("resolved Claude answer = %q, want Fast", got)
 	}
 	cardData, _ := resp.Card.Data.(map[string]any)
-	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "Fast - Prioritize speed") {
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "Fast - Prioritize speed") || !strings.Contains(got, "Choose a mode") {
 		t.Fatalf("Claude quick user input response card body = %q", got)
 	}
 	pending := a.store.PendingByID("question-1")
@@ -1115,6 +1115,13 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	if pending == nil || pending.Status != "resolved" {
 		t.Fatalf("pending after form answer = %+v, want resolved", pending)
 	}
+	if resp.Card == nil {
+		t.Fatal("expected form user input response card")
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "Choose a mode") || !strings.Contains(got, "Provide secret") || !strings.Contains(got, "`q2`: [redacted]") {
+		t.Fatalf("Claude form user input response card body = %q", got)
+	}
 }
 
 func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
@@ -1161,6 +1168,9 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 	}
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched cards = %d, want 1", len(ff.patchedCards))
+	}
+	if got := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(got, "Choose a mode") || !strings.Contains(got, "Fast") {
+		t.Fatalf("patched Claude user input card = %q", got)
 	}
 }
 

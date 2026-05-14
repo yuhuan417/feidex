@@ -2207,7 +2207,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatal("expected quick user input response card")
 	}
 	cardData, _ = resp.Card.Data.(map[string]any)
-	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "A - First option") {
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "A - First option") || !strings.Contains(got, "Choose") {
 		t.Fatalf("quick user input response card body = %q", got)
 	}
 
@@ -2303,7 +2303,7 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 		t.Fatal("expected submitted status card")
 	}
 	cardData, _ := resp.Card.Data.(map[string]any)
-	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "`mode`: Safe") || !strings.Contains(got, "`secret`: [redacted]") {
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "`mode`: Safe") || !strings.Contains(got, "`secret`: [redacted]") || !strings.Contains(got, "Choose mode") || !strings.Contains(got, "Provide secret") {
 		t.Fatalf("form submitted card body = %q", got)
 	}
 }
@@ -2941,6 +2941,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 		ThreadID:    "thread-1",
 		TurnID:      "turn-1",
 		OwnerUserID: "user-1",
+		FeishuMsgID: "card-tool-form-1",
 		Status:      "pending",
 		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "choice"}}}),
 	}); err != nil {
@@ -2993,6 +2994,9 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}
 	if len(ff.patchedCards) == 0 {
 		t.Fatal("expected pending form completion to patch cards")
+	}
+	if got := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(got, "`choice`: option-a") || !strings.Contains(got, "请补充以下输入") {
+		t.Fatalf("patched tool user input card = %q", got)
 	}
 }
 

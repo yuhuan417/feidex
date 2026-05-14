@@ -12,6 +12,34 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func (s *Service) renderResolvedUserInputCard(pending *state.PendingRequest, payload ToolUserInputPayload, summary string) map[string]any {
+	original := ""
+	switch {
+	case len(payload.Questions) == 1 && strings.TrimSpace(pending.Kind) == "tool_request_user_input":
+		original = strings.TrimSpace(pendingforms.RenderToolUserInputQuickBody(payload.Questions[0]))
+	default:
+		original = strings.TrimSpace(pendingforms.RenderToolUserInputBody(payload))
+	}
+	lines := []string{"处理结果: 已提交"}
+	if strings.TrimSpace(summary) != "" {
+		lines = append(lines, strings.TrimSpace(summary))
+	}
+	if original != "" {
+		lines = append(lines, "", original)
+	}
+	title := "输入已提交"
+	workspaceID := ""
+	if s.Session != nil && pending != nil {
+		if sess := s.Session(strings.TrimSpace(pending.SessionKey)); sess != nil {
+			workspaceID = strings.TrimSpace(sess.WorkspaceID)
+		}
+	}
+	if s.ContentCardTitle != nil {
+		title = s.ContentCardTitle(strings.TrimSpace(pending.SessionKey), workspaceID, title)
+	}
+	return s.SimpleStatusCard(title, "green", strings.Join(lines, "\n"), nil)
+}
+
 // CompleteUserInputAnswer handles the user_input.answer card action.
 func (s *Service) CompleteUserInputAnswer(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action.ActionValue, "request_id")
@@ -59,7 +87,7 @@ func (s *Service) completeUserInputQuickAnswer(action *feishu.CardAction, pendin
 	_ = s.FinalizePendingReply(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
-		Card:  rawCard(s.SimpleStatusCard("已提交", "green", selectionSummary, nil)),
+		Card:  rawCard(s.renderResolvedUserInputCard(pending, payload, selectionSummary)),
 	}, nil
 }
 
@@ -90,7 +118,7 @@ func (s *Service) completeUserInputFormSubmit(action *feishu.CardAction, pending
 	_ = s.FinalizePendingReply(pending)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已提交"},
-		Card:  rawCard(s.SimpleStatusCard("已提交", "green", summary, nil)),
+		Card:  rawCard(s.renderResolvedUserInputCard(pending, payload, summary)),
 	}, nil
 }
 

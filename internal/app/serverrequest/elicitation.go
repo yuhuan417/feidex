@@ -140,7 +140,7 @@ func (s *Service) CompleteToolUserInputText(msg *feishu.InboundMessage, pending 
 	}
 	_ = s.FinalizePendingReply(pending)
 	if pending.FeishuMsgID != "" {
-		_ = s.PatchCard(pending.FeishuMsgID, s.SimpleStatusCard("已提交", "green", summary, nil))
+		_ = s.PatchCard(pending.FeishuMsgID, s.renderResolvedUserInputCard(pending, payload, summary))
 	}
 	return nil
 }
