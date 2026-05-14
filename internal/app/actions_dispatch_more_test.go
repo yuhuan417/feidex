@@ -109,6 +109,12 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		switch method {
 		case "model/list":
 			*out.(*codexrpc.ModelListResult) = models
+		case "collaborationMode/list":
+			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
+				Data: []codexrpc.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
+			}
 		case "thread/list":
 			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{
 				Data: []codexrpc.ThreadListEntry{
@@ -215,6 +221,10 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "model.config.select_model", "session_key": "sess-1"}, Option: "gpt-5", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "model.config.set_effort", "session_key": "sess-1", "reasoning_effort": "high"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "model.config.select_effort", "session_key": "sess-1"}, Option: "high", UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "model.plan_config.set_model", "session_key": "sess-1", "model_id": "gpt-5"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "model.plan_config.select_model", "session_key": "sess-1"}, Option: "gpt-5", UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "model.plan_config.set_effort", "session_key": "sess-1", "reasoning_effort": "high"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "model.plan_config.select_effort", "session_key": "sess-1"}, Option: "high", UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.interrupt", "session_key": "sess-1", "turn_id": "turn-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.new", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.new.takeover", "session_key": "sess-1", "workspace_id": "repo", "target_dir": t.TempDir()}, UserID: "user-1", ChatID: "chat-1"},

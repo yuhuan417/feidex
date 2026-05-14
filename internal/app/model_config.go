@@ -87,12 +87,24 @@ func (s modelConfigService) fetchModelList(ctx context.Context) (codexrpc.ModelL
 	return s.inner.FetchModelList(ctx)
 }
 
-func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
-	return s.inner.RenderModelConfigCard(result, sessionKey, menuAction)
+func (s modelConfigService) fetchPlanCollaborationModePreset(ctx context.Context) (*codexrpc.CollaborationModeMask, error) {
+	return s.inner.FetchPlanCollaborationModePreset(ctx)
+}
+
+func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+	return s.inner.RenderModelConfigCard(result, planPreset, sessionKey, menuAction)
 }
 
 func (s modelConfigService) updateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
 	return s.inner.UpdateGlobalModelConfig(mutate, result)
+}
+
+func (s modelConfigService) completeCodexPlanModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteCodexPlanModelSet(action, modelID)
+}
+
+func (s modelConfigService) completeCodexPlanReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteCodexPlanReasoningEffortSet(action, reasoningEffort)
 }
 
 func (s modelConfigService) commandCodexModel(msg *feishu.InboundMessage, args []string) error {

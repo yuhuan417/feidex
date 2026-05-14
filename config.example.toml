@@ -51,6 +51,8 @@ experimental_api = true
 service_name = "feidex"
 # model = "gpt-5.4"
 # reasoning_effort = "medium"
+# plan_model = "gpt-5.4"
+# plan_reasoning_effort = "medium"
 # app_server_dir = "/srv/shared-codex-dir"
 
 # ── Claude backend settings ──

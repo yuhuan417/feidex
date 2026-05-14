@@ -73,9 +73,10 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 			},
 		},
 		Codex: appbackend.ConfigurationCodexDeps{
-			FetchModelList:          newModelConfigService(app).fetchModelList,
-			UpdateGlobalModelConfig: newModelConfigService(app).updateGlobalModelConfig,
-			RenderModelConfigCard:   newModelConfigService(app).renderModelConfigCard,
+			FetchModelList:                   newModelConfigService(app).fetchModelList,
+			FetchPlanCollaborationModePreset: newModelConfigService(app).fetchPlanCollaborationModePreset,
+			UpdateGlobalModelConfig:          newModelConfigService(app).updateGlobalModelConfig,
+			RenderModelConfigCard:            newModelConfigService(app).renderModelConfigCard,
 		},
 	})
 	return backendConfigurationService{app: app, inner: inner}

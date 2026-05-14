@@ -355,6 +355,10 @@ Feidex 会把这些状态写进去：
   - Codex 全局模型
 - `reasoning_effort`
   - Codex 全局推理强度
+- `plan_model`
+  - Plan 模式专用模型；留空时跟随 default mode 的模型解析链路
+- `plan_reasoning_effort`
+  - Plan 模式专用推理强度；留空时跟随 app-server 的 plan preset，若 preset 未提供则不额外发送
 
 ### `[claude]`
 
@@ -644,6 +648,11 @@ Claude Code 后端配置：
 
 - `/plan` 作用在当前活动 thread，需要 `[codex].experimental_api = true`
 - 开启后，当前 thread 会切到 Codex 的 `plan` collaboration mode；session-scoped 内容卡标题会带 `[plan]` 前缀，便于和普通执行态区分
+- Plan 模式的模型和推理强度可单独通过 `/model` 配置：
+  - `/model plan`
+  - `/model plan set <model-id|default>`
+  - `/model plan effort <effort|default>`
+- `plan_model` 留空时跟随 default mode 的模型；`plan_reasoning_effort` 留空时跟随 plan preset
 - 当真正的 plan turn 完成并产出正式计划结果后，Feidex 会发送 `Implement this plan?` 确认卡，而不是直接退出 plan mode
 - 退出确认有三个动作：
   - `Yes, implement this plan`

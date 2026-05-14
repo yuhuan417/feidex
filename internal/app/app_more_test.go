@@ -3790,6 +3790,13 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 		case "model/list":
 			*out.(*codexrpc.ModelListResult) = models
 			return nil
+		case "collaborationMode/list":
+			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
+				Data: []codexrpc.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
+			}
+			return nil
 		case "thread/start":
 			result := out.(*codexrpc.ThreadStartResult)
 			result.Thread.ID = "thread-new"
@@ -3923,6 +3930,13 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 					},
 					IsDefault: true,
 				}},
+			}
+			return nil
+		case "collaborationMode/list":
+			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
+				Data: []codexrpc.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
 			}
 			return nil
 		case "thread/list":

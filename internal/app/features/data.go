@@ -265,7 +265,7 @@ var registry = []Spec{
 		ID:   "menu.model",
 		Kind: SpecKindCapability,
 		Commands: []CommandSpec{
-			{ID: "model", Names: []string{"/model"}, HelpGroup: "model", HelpEntries: []HelpCommandSpec{{Command: "/model", Summary: "打开模型选择与推理强度配置。"}, {Command: "/model set <model-id>", Summary: "直接设置全局 model。"}, {Command: "/model set default", Summary: "恢复全局默认 model。"}, {Command: "/model effort <effort>", Summary: "直接设置全局推理强度。"}, {Command: "/model effort default", Summary: "恢复默认推理强度。"}}},
+			{ID: "model", Names: []string{"/model"}, HelpGroup: "model", HelpEntries: []HelpCommandSpec{{Command: "/model", Summary: "打开模型选择与推理强度配置。"}, {Command: "/model set <model-id>", Summary: "直接设置全局 model。"}, {Command: "/model set default", Summary: "恢复全局默认 model。"}, {Command: "/model effort <effort>", Summary: "直接设置全局推理强度。"}, {Command: "/model effort default", Summary: "恢复默认推理强度。"}, {Command: "/model plan", Summary: "查看 Plan 模式的独立模型配置。"}, {Command: "/model plan set <model-id>", Summary: "直接设置 Plan 模式模型。"}, {Command: "/model plan set default", Summary: "让 Plan 模式模型恢复跟随 default mode。"}, {Command: "/model plan effort <effort>", Summary: "直接设置 Plan 模式推理强度。"}, {Command: "/model plan effort default", Summary: "让 Plan 模式推理强度恢复跟随 plan preset。"}}, Backends: map[string]CommandBackendSpec{appruntime.BackendClaude: {HelpEntries: []HelpCommandSpec{{Command: "/model", Summary: "打开模型选择与推理强度配置。"}, {Command: "/model set <model-id>", Summary: "直接设置默认 model。"}, {Command: "/model set default", Summary: "恢复默认 model。"}, {Command: "/model effort <effort>", Summary: "直接设置默认推理强度。"}, {Command: "/model effort default", Summary: "恢复默认推理强度。"}}}}},
 			{ID: "effort", Names: []string{"/effort"}, HelpGroup: "model", HelpEntries: []HelpCommandSpec{{Command: "/effort", Summary: "打开模型与推理强度配置。"}, {Command: "/effort <effort>", Summary: "直接设置全局推理强度。"}, {Command: "/effort default", Summary: "恢复默认推理强度。"}}},
 		},
 		Nodes: []MenuNode{
@@ -280,6 +280,10 @@ var registry = []Spec{
 			"model.config.select_model",
 			"model.config.set_effort",
 			"model.config.select_effort",
+			"model.plan_config.set_model",
+			"model.plan_config.select_model",
+			"model.plan_config.set_effort",
+			"model.plan_config.select_effort",
 		},
 	},
 	{

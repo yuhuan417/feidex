@@ -118,9 +118,17 @@
 - `/model`
 - `/model set <model-id|default>`
 - `/model effort <effort|default>`
+- `/model plan`
+- `/model plan set <model-id|default>`
+- `/model plan effort <effort|default>`
 - `/effort`
 
 Codex 路径仍基于 `model/list` 与 `config.Codex`。
+
+- `config.Codex.Model` / `ReasoningEffort` 控制 default mode
+- `config.Codex.PlanModel` / `PlanReasoningEffort` 控制 Plan 模式
+- `PlanModel` 留空时跟随 default mode 的模型解析链路
+- `PlanReasoningEffort` 留空时跟随 app-server 的 plan preset；若 preset 未提供则不额外发送
 
 ### Claude
 

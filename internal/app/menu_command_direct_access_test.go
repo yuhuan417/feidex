@@ -218,26 +218,36 @@ func TestCommandModelDirectSetAndEffort(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
-		if method != "model/list" {
-			t.Fatalf("unexpected codex method: %s", method)
-		}
-		*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{
-			Data: []codexrpc.ModelListEntry{
-				{
-					ID:                     "gpt-5",
-					Model:                  "gpt-5",
-					DisplayName:            "GPT-5",
-					DefaultReasoningEffort: "medium",
-					SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
-						{ReasoningEffort: "low"},
-						{ReasoningEffort: "medium"},
-						{ReasoningEffort: "high"},
+		switch method {
+		case "model/list":
+			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{
+				Data: []codexrpc.ModelListEntry{
+					{
+						ID:                     "gpt-5",
+						Model:                  "gpt-5",
+						DisplayName:            "GPT-5",
+						DefaultReasoningEffort: "medium",
+						SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+							{ReasoningEffort: "low"},
+							{ReasoningEffort: "medium"},
+							{ReasoningEffort: "high"},
+						},
+						IsDefault: true,
 					},
-					IsDefault: true,
 				},
-			},
+			}
+			return nil
+		case "collaborationMode/list":
+			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
+				Data: []codexrpc.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
+			}
+			return nil
+		default:
+			t.Fatalf("unexpected codex method: %s", method)
+			return nil
 		}
-		return nil
 	}
 
 	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, []string{"set", "gpt-5"}); err != nil {
@@ -258,6 +268,26 @@ func TestCommandModelDirectSetAndEffort(t *testing.T) {
 	}
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after effort set = %d, want 2", len(ff.replyCards))
+	}
+
+	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, []string{"plan", "set", "gpt-5"}); err != nil {
+		t.Fatalf("commandModel(plan set) error = %v", err)
+	}
+	if got := a.cfg.Codex.PlanModel; got != "gpt-5" {
+		t.Fatalf("plan model = %q, want gpt-5", got)
+	}
+	if len(ff.replyCards) != 3 {
+		t.Fatalf("reply card count after plan model set = %d, want 3", len(ff.replyCards))
+	}
+
+	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, []string{"plan", "effort", "high"}); err != nil {
+		t.Fatalf("commandModel(plan effort) error = %v", err)
+	}
+	if got := a.cfg.Codex.PlanReasoningEffort; got != "high" {
+		t.Fatalf("plan reasoning effort = %q, want high", got)
+	}
+	if len(ff.replyCards) != 4 {
+		t.Fatalf("reply card count after plan effort set = %d, want 4", len(ff.replyCards))
 	}
 
 	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, []string{"set", "missing"}); err != nil {

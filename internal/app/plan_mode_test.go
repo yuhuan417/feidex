@@ -97,6 +97,109 @@ func TestCommandPlanOnRejectsWhenExperimentalAPIDisabled(t *testing.T) {
 	}
 }
 
+func TestCommandPlanOnUsesConfiguredPlanModelAndEffort(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Codex.Model = "gpt-5.4"
+	a.cfg.Codex.PlanModel = "gpt-5.5"
+	a.cfg.Codex.PlanReasoningEffort = "high"
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+	}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "collaborationMode/list":
+			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
+				Data: []codexrpc.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
+			}
+			return nil
+		default:
+			t.Fatalf("unexpected codex Call method %q", method)
+			return nil
+		}
+	}
+
+	if err := commandPlan(a, msg, []string{"on"}); err != nil {
+		t.Fatalf("commandPlan(on) error = %v", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadCollaborationMode == nil {
+		t.Fatalf("session collaboration mode = %+v", sess)
+	}
+	if got := sess.ActiveThreadCollaborationMode.Model; got != "gpt-5.5" {
+		t.Fatalf("model = %q, want gpt-5.5", got)
+	}
+	if got := sess.ActiveThreadCollaborationMode.ReasoningEffort; got != "high" {
+		t.Fatalf("reasoning effort = %q, want high", got)
+	}
+}
+
+func TestCommandPlanOnLeavesReasoningEffortEmptyWithoutPresetOrOverride(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Codex.Model = "gpt-5.4"
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+	}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "collaborationMode/list":
+			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
+				Data: []codexrpc.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan")},
+				},
+			}
+			return nil
+		default:
+			t.Fatalf("unexpected codex Call method %q", method)
+			return nil
+		}
+	}
+
+	if err := commandPlan(a, msg, []string{"on"}); err != nil {
+		t.Fatalf("commandPlan(on) error = %v", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadCollaborationMode == nil {
+		t.Fatalf("session collaboration mode = %+v", sess)
+	}
+	if got := sess.ActiveThreadCollaborationMode.ReasoningEffort; got != "" {
+		t.Fatalf("reasoning effort = %q, want empty", got)
+	}
+}
+
 func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.cfg.Codex.Model = "gpt-5.4"

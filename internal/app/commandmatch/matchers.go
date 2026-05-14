@@ -80,12 +80,26 @@ func MatchModelCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true
 	}
-	if len(fields) != 3 {
-		return false
-	}
-	switch strings.TrimSpace(fields[1]) {
-	case "set", "effort":
-		return strings.TrimSpace(fields[2]) != ""
+	switch len(fields) {
+	case 2:
+		return strings.TrimSpace(fields[1]) == "plan"
+	case 3:
+		switch strings.TrimSpace(fields[1]) {
+		case "set", "effort":
+			return strings.TrimSpace(fields[2]) != ""
+		default:
+			return false
+		}
+	case 4:
+		if strings.TrimSpace(fields[1]) != "plan" {
+			return false
+		}
+		switch strings.TrimSpace(fields[2]) {
+		case "set", "effort":
+			return strings.TrimSpace(fields[3]) != ""
+		default:
+			return false
+		}
 	default:
 		return false
 	}

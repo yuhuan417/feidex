@@ -130,6 +130,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
 				},
+				Backends: map[string]func(fields []string) bool{
+					backendClaude: func(fields []string) bool {
+						return matchModelCommand(fields) && !(len(fields) >= 2 && strings.TrimSpace(fields[1]) == "plan")
+					},
+				},
 			},
 			"effort": {
 				Match: matchEffortCommand,
@@ -158,6 +163,22 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					reasoningEffort = ""
 				}
 				return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, reasoningEffort)
+			case "model.plan_config.set_model":
+				return newModelConfigService(s.app).completeCodexPlanModelSet(action, actionStringValue(action, "model_id"))
+			case "model.plan_config.select_model":
+				modelID := strings.TrimSpace(action.Option)
+				if modelID == modelConfigDefaultOptionValue {
+					modelID = ""
+				}
+				return newModelConfigService(s.app).completeCodexPlanModelSet(action, modelID)
+			case "model.plan_config.set_effort":
+				return newModelConfigService(s.app).completeCodexPlanReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
+			case "model.plan_config.select_effort":
+				reasoningEffort := strings.TrimSpace(action.Option)
+				if reasoningEffort == modelConfigDefaultOptionValue {
+					reasoningEffort = ""
+				}
+				return newModelConfigService(s.app).completeCodexPlanReasoningEffortSet(action, reasoningEffort)
 			default:
 				return nil, nil
 			}

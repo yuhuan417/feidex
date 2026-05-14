@@ -30,7 +30,7 @@ const DefaultOptionValue = "__default__"
 const ClaudeDefaultModelAlias = "sonnet"
 
 // ModelCommandUsage is the usage string for the /model command.
-const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default>"
+const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default> | /model plan | /model plan set <model-id|default> | /model plan effort <effort|default>"
 
 // EffortCommandUsage is the usage string for the /effort command.
 const EffortCommandUsage = "/effort | /effort <effort|default>"
@@ -66,6 +66,13 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func derefStringPtr(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
 
 func rawCard(card map[string]any) *callback.Card {
@@ -165,6 +172,22 @@ func ConfiguredGlobalReasoningEffort(cfg *config.Config) string {
 	return strings.TrimSpace(cfg.Codex.ReasoningEffort)
 }
 
+// ConfiguredPlanModel returns the globally configured plan-mode model ID, or empty string.
+func ConfiguredPlanModel(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Codex.PlanModel)
+}
+
+// ConfiguredPlanReasoningEffort returns the globally configured plan-mode reasoning effort, or empty string.
+func ConfiguredPlanReasoningEffort(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Codex.PlanReasoningEffort)
+}
+
 // DefaultModelEntry returns the default model from the result, or the first entry if none is marked default.
 func DefaultModelEntry(result codexrpc.ModelListResult) *codexrpc.ModelListEntry {
 	for i := range result.Data {
@@ -225,6 +248,32 @@ func EffectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.Model
 		effort = strings.TrimSpace(model.DefaultReasoningEffort)
 	}
 	return model, effort
+}
+
+// EffectivePlanConfiguredModelAndEffort resolves the effective plan-mode model and effort.
+func EffectivePlanConfiguredModelAndEffort(cfg *config.Config, result codexrpc.ModelListResult, preset *codexrpc.CollaborationModeMask) (model *codexrpc.ModelListEntry, effort string) {
+	switch planModel := ConfiguredPlanModel(cfg); {
+	case planModel != "":
+		model = FindModelEntry(result, planModel)
+	default:
+		model = FindModelEntry(result, ConfiguredGlobalModel(cfg))
+	}
+	effort = ConfiguredPlanReasoningEffort(cfg)
+	if effort == "" && preset != nil && preset.ReasoningEffort != nil {
+		effort = strings.TrimSpace(*preset.ReasoningEffort)
+	}
+	return model, effort
+}
+
+// FindPlanCollaborationModePreset returns the plan collaboration-mode preset.
+func FindPlanCollaborationModePreset(resp codexrpc.CollaborationModeListResponse) (*codexrpc.CollaborationModeMask, error) {
+	for i := range resp.Data {
+		mode := strings.TrimSpace(derefStringPtr(resp.Data[i].Mode))
+		if mode == "plan" {
+			return &resp.Data[i], nil
+		}
+	}
+	return nil, fmt.Errorf("当前 Codex app-server 未提供 `plan` collaboration mode")
 }
 
 // ModelCardActionRow builds a card action row element from buttons.
@@ -327,14 +376,28 @@ func (s ModelConfigService) FetchModelList(ctx context.Context) (codexrpc.ModelL
 	return result, nil
 }
 
+// FetchPlanCollaborationModePreset fetches the plan collaboration-mode preset.
+func (s ModelConfigService) FetchPlanCollaborationModePreset(ctx context.Context) (*codexrpc.CollaborationModeMask, error) {
+	client, err := s.RequireCodexClient()
+	if err != nil {
+		return nil, err
+	}
+	var result codexrpc.CollaborationModeListResponse
+	if err := client.Call(ctx, "collaborationMode/list", map[string]any{}, &result); err != nil {
+		return nil, err
+	}
+	return FindPlanCollaborationModePreset(result)
+}
+
 // RenderModelConfigCard renders the Codex model configuration card.
-func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
+func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	menuAction = strings.TrimSpace(menuAction)
 	if menuAction == "" {
 		menuAction = "menu.model"
 	}
 	cfg := s.GetConfig()
 	selectedModel, selectedEffort := EffectiveConfiguredModelAndEffort(cfg, result)
+	selectedPlanModel, selectedPlanEffort := EffectivePlanConfiguredModelAndEffort(cfg, result, planPreset)
 	modelName := "(default)"
 	modelDescription := ""
 	if selectedModel != nil {
@@ -343,6 +406,8 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}
 	modelValue := ConfiguredGlobalModel(cfg)
 	effortValue := ConfiguredGlobalReasoningEffort(cfg)
+	planModelValue := ConfiguredPlanModel(cfg)
+	planEffortValue := ConfiguredPlanReasoningEffort(cfg)
 	modelSource := "跟随 app-server 默认"
 	if modelValue != "" {
 		modelSource = "全局显式配置"
@@ -350,6 +415,28 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	effortSource := "跟随模型默认"
 	if effortValue != "" {
 		effortSource = "全局显式配置"
+	}
+	planModelSource := "跟随 default mode"
+	if planModelValue != "" {
+		planModelSource = "Plan 显式配置"
+	}
+	planEffortSource := "未设置"
+	switch {
+	case planEffortValue != "":
+		planEffortSource = "Plan 显式配置"
+	case planPreset != nil && planPreset.ReasoningEffort != nil && strings.TrimSpace(*planPreset.ReasoningEffort) != "":
+		planEffortSource = "跟随 plan preset"
+	}
+	planModelName := "(default)"
+	if selectedPlanModel != nil {
+		planModelName = firstNonEmpty(selectedPlanModel.DisplayName, selectedPlanModel.ID, selectedPlanModel.Model)
+	}
+	planPresetNotice := "Plan preset: 未提供 `reasoning_effort`，留空时不会额外发送。"
+	switch {
+	case cfg != nil && !cfg.Codex.ExperimentalAPI:
+		planPresetNotice = "Plan 模式需要 `[codex].experimental_api = true`。"
+	case planPreset != nil:
+		planPresetNotice = "Plan preset: 已从 app-server 读取，留空时跟随 preset。"
 	}
 
 	elements := []map[string]any{
@@ -432,6 +519,90 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 		effortOptions,
 		effortInitialOption,
 	))
+
+	elements = append(elements,
+		map[string]any{
+			"tag": "markdown",
+			"content": "Plan 模式模型: `" + planModelName + "`\n" +
+				"模型来源: " + planModelSource + "\n" +
+				"Plan 推理强度: `" + firstNonEmpty(selectedPlanEffort, "-") + "`\n" +
+				"推理来源: " + planEffortSource + "\n\n" +
+				planPresetNotice,
+		},
+		map[string]any{"tag": "markdown", "content": "选择 Plan 模式模型"},
+	)
+
+	planModelOptions := []cards.SelectStaticOption{{
+		Text: func() string {
+			if planModelValue == "" {
+				return "当前 · 跟随 default mode"
+			}
+			return "跟随 default mode"
+		}(),
+		Value: DefaultOptionValue,
+	}}
+	planModelInitialOption := DefaultOptionValue
+	if planModelValue != "" && selectedPlanModel != nil {
+		planModelInitialOption = selectedPlanModel.ID
+	}
+	for _, item := range result.Data {
+		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
+		if selectedPlanModel != nil && item.ID == selectedPlanModel.ID && planModelValue != "" {
+			label = "当前 · " + label
+		}
+		planModelOptions = append(planModelOptions, cards.SelectStaticOption{
+			Text:  label,
+			Value: item.ID,
+		})
+	}
+	elements = append(elements, cards.BuildSelectStaticElement(
+		"model_plan_config_select_model",
+		"选择 Plan 模式模型",
+		map[string]any{"action": "model.plan_config.select_model", "session_key": sessionKey, "menu_action": menuAction},
+		planModelOptions,
+		planModelInitialOption,
+	))
+
+	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择 Plan 模式推理强度"})
+	planEffortOptions := []cards.SelectStaticOption{{
+		Text: func() string {
+			switch {
+			case planEffortValue == "" && planEffortSource == "跟随 plan preset":
+				return "当前 · 跟随 plan preset"
+			case planEffortValue == "":
+				return "当前 · 留空"
+			default:
+				if planPreset != nil && planPreset.ReasoningEffort != nil && strings.TrimSpace(*planPreset.ReasoningEffort) != "" {
+					return "跟随 plan preset"
+				}
+				return "清除显式配置"
+			}
+		}(),
+		Value: DefaultOptionValue,
+	}}
+	planEffortInitialOption := DefaultOptionValue
+	if planEffortValue != "" {
+		planEffortInitialOption = selectedPlanEffort
+	}
+	if selectedPlanModel != nil {
+		for _, item := range selectedPlanModel.SupportedReasoningEfforts {
+			label := item.ReasoningEffort
+			if item.ReasoningEffort == selectedPlanEffort && planEffortValue != "" {
+				label = "当前 · " + label
+			}
+			planEffortOptions = append(planEffortOptions, cards.SelectStaticOption{
+				Text:  label,
+				Value: item.ReasoningEffort,
+			})
+		}
+	}
+	elements = append(elements, cards.BuildSelectStaticElement(
+		"model_plan_config_select_effort",
+		"选择 Plan 模式推理强度",
+		map[string]any{"action": "model.plan_config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
+		planEffortOptions,
+		planEffortInitialOption,
+	))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  "返回上一级",
@@ -460,14 +631,89 @@ func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexCon
 	mutate(&cfg.Codex)
 	cfg.Codex.Model = strings.TrimSpace(cfg.Codex.Model)
 	cfg.Codex.ReasoningEffort = strings.TrimSpace(cfg.Codex.ReasoningEffort)
+	cfg.Codex.PlanModel = strings.TrimSpace(cfg.Codex.PlanModel)
+	cfg.Codex.PlanReasoningEffort = strings.TrimSpace(cfg.Codex.PlanReasoningEffort)
 	selectedModel := FindModelEntry(result, cfg.Codex.Model)
 	if !ModelSupportsEffort(selectedModel, cfg.Codex.ReasoningEffort) {
 		cfg.Codex.ReasoningEffort = ""
+	}
+	selectedPlanModel, _ := EffectivePlanConfiguredModelAndEffort(cfg, result, nil)
+	if !ModelSupportsEffort(selectedPlanModel, cfg.Codex.PlanReasoningEffort) {
+		cfg.Codex.PlanReasoningEffort = ""
 	}
 	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
 		return err
 	}
 	return config.Save(s.GetCfgPath(), cfg)
+}
+
+func (s ModelConfigService) fetchPlanPresetForRender(ctx context.Context) *codexrpc.CollaborationModeMask {
+	cfg := s.GetConfig()
+	if cfg == nil || !cfg.Codex.ExperimentalAPI {
+		return nil
+	}
+	preset, err := s.FetchPlanCollaborationModePreset(ctx)
+	if err != nil {
+		return nil
+	}
+	return preset
+}
+
+// CompleteCodexPlanModelSet handles the plan-mode model selection card action.
+func (s ModelConfigService) CompleteCodexPlanModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := s.FetchModelList(ctx)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	modelID = strings.TrimSpace(modelID)
+	if modelID != "" && LookupModelEntry(result, modelID) == nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未找到 model: " + modelID}}, nil
+	}
+	if err := s.UpdateGlobalModelConfig(func(c *config.CodexConfig) {
+		c.PlanModel = modelID
+	}, result); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已更新 Plan 模式模型"},
+		Card:  rawCard(s.RenderModelConfigCard(result, s.fetchPlanPresetForRender(ctx), sessionKey, menuAction)),
+	}, nil
+}
+
+// CompleteCodexPlanReasoningEffortSet handles the plan-mode effort selection card action.
+func (s ModelConfigService) CompleteCodexPlanReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := s.FetchModelList(ctx)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	selectedPlanModel, _ := EffectivePlanConfiguredModelAndEffort(s.GetConfig(), result, nil)
+	reasoningEffort = strings.TrimSpace(reasoningEffort)
+	if reasoningEffort != "" && !ModelSupportsEffort(selectedPlanModel, reasoningEffort) {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "Plan 模式模型不支持这个推理强度"}}, nil
+	}
+	if err := s.UpdateGlobalModelConfig(func(c *config.CodexConfig) {
+		c.PlanReasoningEffort = reasoningEffort
+	}, result); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已更新 Plan 模式推理强度"},
+		Card:  rawCard(s.RenderModelConfigCard(result, s.fetchPlanPresetForRender(ctx), sessionKey, menuAction)),
+	}, nil
 }
 
 // CommandCodexModel handles the /model command for the Codex backend.
@@ -516,6 +762,32 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 				return err
 			}
 			return s.ReplyCommandActionResponse(msg, resp)
+		case "plan":
+			switch {
+			case len(args) == 1:
+			case len(args) == 3 && strings.TrimSpace(args[1]) == "set":
+				modelID := strings.TrimSpace(args[2])
+				if modelID == "default" || modelID == DefaultOptionValue {
+					modelID = ""
+				}
+				resp, err := s.CompleteCodexPlanModelSet(action, modelID)
+				if err != nil {
+					return err
+				}
+				return s.ReplyCommandActionResponse(msg, resp)
+			case len(args) == 3 && strings.TrimSpace(args[1]) == "effort":
+				effort := strings.TrimSpace(args[2])
+				if effort == "default" || effort == DefaultOptionValue {
+					effort = ""
+				}
+				resp, err := s.CompleteCodexPlanReasoningEffortSet(action, effort)
+				if err != nil {
+					return err
+				}
+				return s.ReplyCommandActionResponse(msg, resp)
+			default:
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
 		default:
 			return fmt.Errorf("usage: %s", ModelCommandUsage)
 		}
@@ -526,7 +798,8 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 	if err != nil {
 		return err
 	}
-	card := s.RenderModelConfigCard(result, sessionKey, "menu.model")
+	planPreset := s.fetchPlanPresetForRender(ctx)
+	card := s.RenderModelConfigCard(result, planPreset, sessionKey, "menu.model")
 	_, err = s.ReplyCard(context.Background(), msg.MessageID, card, s.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }

@@ -15,9 +15,11 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 			Level: " warning ",
 		},
 		Codex: CodexConfig{
-			AppServerDir:    "./codex-home",
-			Model:           " gpt-5 ",
-			ReasoningEffort: " high ",
+			AppServerDir:        "./codex-home",
+			Model:               " gpt-5 ",
+			ReasoningEffort:     " high ",
+			PlanModel:           " gpt-5-plan ",
+			PlanReasoningEffort: " low ",
 		},
 		Workspaces: []Workspace{
 			{
@@ -37,7 +39,7 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	if cfg.Codex.Transport != "stdio" {
 		t.Fatalf("Codex.Transport = %q, want stdio", cfg.Codex.Transport)
 	}
-	if cfg.Codex.Model != "gpt-5" || cfg.Codex.ReasoningEffort != "high" {
+	if cfg.Codex.Model != "gpt-5" || cfg.Codex.ReasoningEffort != "high" || cfg.Codex.PlanModel != "gpt-5-plan" || cfg.Codex.PlanReasoningEffort != "low" {
 		t.Fatalf("unexpected codex trimming result: %+v", cfg.Codex)
 	}
 	if !filepath.IsAbs(cfg.Codex.AppServerDir) || !strings.HasSuffix(cfg.Codex.AppServerDir, filepath.Join("workspace", "codex-home")) {

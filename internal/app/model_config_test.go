@@ -37,6 +37,33 @@ func TestEffectiveConfiguredModelAndEffortUsesCatalogDefaultsWhenUnset(t *testin
 	}
 }
 
+func TestEffectivePlanConfiguredModelAndEffortUsesPlanOverridesAndPreset(t *testing.T) {
+	cfg := config.Default()
+	cfg.Codex.Model = "global-model"
+	cfg.Codex.PlanModel = "plan-model"
+	result := codexrpc.ModelListResult{
+		Data: []codexrpc.ModelListEntry{
+			{
+				ID:        "global-model",
+				IsDefault: true,
+			},
+			{
+				ID: "plan-model",
+			},
+		},
+	}
+	presetEffort := "medium"
+	model, effort := modelconfig.EffectivePlanConfiguredModelAndEffort(cfg, result, &codexrpc.CollaborationModeMask{
+		ReasoningEffort: &presetEffort,
+	})
+	if model == nil || model.ID != "plan-model" {
+		t.Fatalf("unexpected plan model: %#v", model)
+	}
+	if effort != "medium" {
+		t.Fatalf("unexpected plan effort: %q", effort)
+	}
+}
+
 func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 	cfg := config.Default()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
@@ -64,6 +91,7 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 		},
 	}
 	a.cfg.Codex.ReasoningEffort = "medium"
+	a.cfg.Codex.PlanReasoningEffort = "medium"
 	if err := newModelConfigService(a).updateGlobalModelConfig(func(c *config.CodexConfig) {
 		c.Model = "model-b"
 	}, result); err != nil {
@@ -74,6 +102,9 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 	}
 	if a.cfg.Codex.ReasoningEffort != "" {
 		t.Fatalf("expected unsupported effort to be cleared, got %q", a.cfg.Codex.ReasoningEffort)
+	}
+	if a.cfg.Codex.PlanReasoningEffort != "" {
+		t.Fatalf("expected unsupported plan effort to be cleared, got %q", a.cfg.Codex.PlanReasoningEffort)
 	}
 }
 
@@ -112,6 +143,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg := config.Default()
 	a := &App{cfg: cfg}
+	presetEffort := "medium"
 	card := newModelConfigService(a).renderModelConfigCard(codexrpc.ModelListResult{
 		Data: []codexrpc.ModelListEntry{
 			{
@@ -125,9 +157,18 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 				IsDefault: true,
 			},
 		},
-	}, "sess-1", "menu.model")
-	if got := cardSelectStaticForTest(card); len(got) != 2 {
-		t.Fatalf("model config selects = %+v, want 2 select_static elements", got)
+	}, &codexrpc.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model")
+	if got := cardSelectStaticForTest(card); len(got) != 4 {
+		t.Fatalf("model config selects = %+v, want 4 select_static elements", got)
+	}
+	body := cardMarkdownContent(t, card)
+	for _, want := range []string{
+		"Plan 模式模型",
+		"跟随 plan preset",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("model config body missing %q: %q", want, body)
+		}
 	}
 }
 

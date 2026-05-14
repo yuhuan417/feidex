@@ -124,11 +124,11 @@ func resolvePlanModeForActiveThread(a *App) (*state.SessionCollaborationMode, er
 	if err := client.Call(ctx, "collaborationMode/list", map[string]any{}, &listResp); err != nil {
 		return nil, fmt.Errorf("读取 collaboration mode 列表失败: %w", err)
 	}
-	preset, err := findPlanCollaborationModePreset(listResp)
+	preset, err := modelconfig.FindPlanCollaborationModePreset(listResp)
 	if err != nil {
 		return nil, err
 	}
-	model, err := resolvePlanModeModel(ctx, a, client, preset)
+	model, effort, err := resolvePlanModeSettings(ctx, a, client, preset)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func resolvePlanModeForActiveThread(a *App) (*state.SessionCollaborationMode, er
 		Mode:  "plan",
 		Model: model,
 	}
-	if preset.ReasoningEffort != nil {
-		mode.ReasoningEffort = strings.TrimSpace(*preset.ReasoningEffort)
+	if strings.TrimSpace(effort) != "" {
+		mode.ReasoningEffort = strings.TrimSpace(effort)
 	}
 	return normalizeThreadCollaborationMode(mode), nil
 }
@@ -215,7 +215,7 @@ func resolveDefaultCodexCollaborationModeForSession(a *App, sess *state.Session)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	model, err := resolvePlanModeModel(ctx, a, client, nil)
+	model, _, err := resolvePlanModeSettings(ctx, a, client, nil)
 	if err != nil {
 		return nil, fmt.Errorf("无法解析 default collaboration mode model: %w", err)
 	}
@@ -395,41 +395,34 @@ func splitLeadingTitlePrefixes(title string) (prefixes []string, rest string) {
 	return prefixes, rest
 }
 
-func findPlanCollaborationModePreset(resp codexrpc.CollaborationModeListResponse) (*codexrpc.CollaborationModeMask, error) {
-	for i := range resp.Data {
-		mode := strings.TrimSpace(derefStringPtr(resp.Data[i].Mode))
-		if mode == "plan" {
-			return &resp.Data[i], nil
-		}
+func resolvePlanModeSettings(ctx context.Context, a *App, client CodexClient, preset *codexrpc.CollaborationModeMask) (model string, effort string, err error) {
+	model = strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.cfg))
+	if model == "" {
+		model = strings.TrimSpace(configuredGlobalModel(a.cfg))
 	}
-	return nil, fmt.Errorf("当前 Codex app-server 未提供 `plan` collaboration mode")
-}
-
-func resolvePlanModeModel(ctx context.Context, a *App, client CodexClient, preset *codexrpc.CollaborationModeMask) (string, error) {
-	if preset != nil {
-		if model := strings.TrimSpace(derefStringPtr(preset.Model)); model != "" {
-			return model, nil
-		}
+	effort = strings.TrimSpace(modelconfig.ConfiguredPlanReasoningEffort(a.cfg))
+	if effort == "" && preset != nil && preset.ReasoningEffort != nil {
+		effort = strings.TrimSpace(*preset.ReasoningEffort)
 	}
-	if model := strings.TrimSpace(configuredGlobalModel(a.cfg)); model != "" {
-		return model, nil
+	if model != "" {
+		return model, effort, nil
 	}
 	var result codexrpc.ModelListResult
 	if err := client.Call(ctx, "model/list", map[string]any{
 		"limit":         20,
 		"includeHidden": false,
 	}, &result); err != nil {
-		return "", fmt.Errorf("读取 model 列表失败: %w", err)
+		return "", "", fmt.Errorf("读取 model 列表失败: %w", err)
 	}
-	entry := modelconfig.DefaultModelEntry(result)
+	entry, resolvedEffort := modelconfig.EffectivePlanConfiguredModelAndEffort(a.cfg, result, preset)
 	if entry == nil {
-		return "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
+		return "", "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
 	}
-	model := firstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
+	model = firstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
 	if model == "" {
-		return "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
+		return "", "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
 	}
-	return model, nil
+	return model, resolvedEffort, nil
 }
 
 func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *codexrpc.CollaborationMode {

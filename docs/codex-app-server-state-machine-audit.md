@@ -167,6 +167,7 @@
   - `internal/app/codex_event_router.go:57-87` 消费 `turn/started` 和 `turn/completed`。
   - `internal/app/codex_event_router.go:88-97` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
   - `internal/app/turn_item_payload.go:21-67` 按 completed item 渲染最终内容。
+  - `internal/app/plan_mode.go` 会在 `/plan` 开启时为 `collaborationMode.mode=plan` 明确带上 model；reasoning effort 优先取本地 `codex.plan_reasoning_effort`，否则透传 app-server 的 plan preset，若 preset 未提供则保持为空。
   - `internal/app/turnstream/service.go` / `internal/app/server_request_delivery_scaffold.go` 维护 Quiet Mode `工作中` 卡的复用边界: 只有只包含 reasoning placeholder (`思考中...`) 的 `工作中` 卡可以被第一条实质 turn 内容复用；一旦 `工作中` 卡已经包含 command/file/search/tool progress，它自身就是实质内容，不得再被审批、final 或 terminal output patch 覆盖。
   - 对同一 turn，approval、tool user input、MCP elicitation、agent message、plan、final output、terminal status 都属于实质内容。若 approval 等 server request 复用了 reasoning-only `工作中` 卡，后续 final output 必须新发回复卡，不能继续 patch 这张已变成审批卡的消息。
   - 当本地已经看到了 final output，但后续缺失 `turn/completed`、导致 session 卡在 in-flight 时，`internal/app/codex_turn_recovery.go` 会在下一次 `enqueue` 或显式 `/stop` 时，通过 `thread/read(includeTurns=true)` 对账该 `turnId` 的服务端终态；只有确认 turn 已进入 `completed|failed|interrupted` 后，才复用现有 `finishTurn` 收口本地状态。
