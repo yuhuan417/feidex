@@ -113,6 +113,113 @@ func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 	}
 }
 
+func TestHandleCommandWorkspaceUseRejectsRunningTurn(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             "default",
+		ChatID:                  "chat",
+		ChatType:                "p2p",
+		OwnerUserID:             "user",
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: "default",
+		ActiveTurnID:            "turn-1",
+		ActiveSubmissionID:      "sub-1",
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	err := handleCommand(a, &feishu.InboundMessage{
+		MessageID: "m-1",
+		ChatID:    "chat",
+		ChatType:  "p2p",
+		UserID:    "user",
+	}, "/workspace use alt")
+	if err == nil || !strings.Contains(err.Error(), "当前任务仍在运行") {
+		t.Fatalf("handleCommand(/workspace use alt) error = %v, want running-turn block", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.WorkspaceID != "default" || sess.ActiveThreadID != "thread-1" || sess.ActiveThreadWorkspaceID != "default" {
+		t.Fatalf("session after blocked workspace switch = %+v", sess)
+	}
+	if selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "chat", "user")); selection != nil {
+		t.Fatalf("workspace selection session = %+v, want unchanged", selection)
+	}
+}
+
+func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	sessionKey := "feishu:p2p:chat:user"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             "default",
+		ChatID:                  "chat",
+		ChatType:                "p2p",
+		OwnerUserID:             "user",
+		ActiveThreadID:          "thread-old",
+		ActiveThreadWorkspaceID: "default",
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:            "plan",
+			Model:           "gpt-5.4",
+			ReasoningEffort: "high",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+	markSessionThreadLive(a, sessionKey, "thread-old")
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{
+				Data: []codexrpc.ThreadListEntry{
+					{ID: "thread-alt-new", UpdatedAt: 20, Name: "Alt Thread", Preview: "Alt Preview", Cwd: a.cfg.Workspaces[1].Cwd},
+				},
+			}
+		case "thread/resume":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-new"
+			result.Thread.Name = "Alt Thread"
+			result.Thread.Preview = "Alt Preview"
+		default:
+			t.Fatalf("unexpected codex method: %s", method)
+		}
+		return nil
+	}
+
+	if err := handleCommand(a, &feishu.InboundMessage{
+		MessageID: "m-1",
+		ChatID:    "chat",
+		ChatType:  "p2p",
+		UserID:    "user",
+	}, "/workspace use alt"); err != nil {
+		t.Fatalf("handleCommand(/workspace use alt) error = %v", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("session after workspace switch = %+v", sess)
+	}
+	if sess.ActiveThreadCollaborationMode != nil {
+		t.Fatalf("plan mode after workspace switch = %+v, want nil", sess.ActiveThreadCollaborationMode)
+	}
+	if sessionHasLiveThread(a, sessionKey, "thread-old") {
+		t.Fatal("expected old live thread binding to be cleared")
+	}
+	selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "chat", "user"))
+	if selection == nil || selection.WorkspaceID != "alt" {
+		t.Fatalf("workspace selection session = %+v, want alt", selection)
+	}
+	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "已切换工作区到 alt") || !strings.Contains(ff.replyTexts[0], "已自动恢复该工作区最近使用的线程") {
+		t.Fatalf("workspace switch reply = %+v", ff.replyTexts)
+	}
+}
+
 func TestIsLocalCommand(t *testing.T) {
 	cases := map[string]bool{
 		"/menu":                      true,

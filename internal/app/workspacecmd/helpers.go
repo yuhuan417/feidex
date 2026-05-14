@@ -99,18 +99,39 @@ func setSelectedWorkspaceForSession(app appcore.AppConfig, sess *state.Session, 
 	return appcore.SetWorkspaceSelectionForSession(app, sess, workspaceID)
 }
 
-func sessionCanRetargetWorkspace(sess *state.Session, hasInFlight bool) bool {
+type workspaceSwitchSessionService interface {
+	SaveSession(sess *state.Session) error
+	SwitchSessionWorkspace(sess *state.Session, workspaceID string)
+	ClearSessionLiveThread(sessionKey string)
+}
+
+const (
+	workspaceSwitchActiveWorkBlockedText = "当前任务仍在运行，请先等待结束或中断后再切换工作区"
+	workspaceSwitchPendingWorkBlockedText = "当前还有待处理消息，请先处理完成后再切换工作区"
+)
+
+func workspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string {
 	if sess == nil {
-		return true
+		return ""
 	}
 	if hasInFlight {
-		return false
+		return workspaceSwitchActiveWorkBlockedText
 	}
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		return false
+		return workspaceSwitchPendingWorkBlockedText
 	}
-	if strings.TrimSpace(sess.ActiveThreadID) != "" || strings.TrimSpace(sess.ActiveThreadWorkspaceID) != "" {
-		return false
+	return ""
+}
+
+func sessionCanRetargetWorkspace(sess *state.Session, hasInFlight bool) bool {
+	return workspaceSwitchBlockedReason(sess, hasInFlight) == ""
+}
+
+func applyWorkspaceSwitch(s workspaceSwitchSessionService, sessionKey string, sess *state.Session, workspaceID string) error {
+	if s == nil || sess == nil {
+		return nil
 	}
-	return len(sess.BackendThreads) == 0
+	s.ClearSessionLiveThread(strings.TrimSpace(sessionKey))
+	s.SwitchSessionWorkspace(sess, workspaceID)
+	return s.SaveSession(sess)
 }

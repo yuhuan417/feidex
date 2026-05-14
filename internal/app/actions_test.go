@@ -87,7 +87,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 	}
 }
 
-func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
+func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 	store, err := state.Open(t.TempDir() + "/state.json")
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -114,8 +114,8 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
-	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
-		t.Fatalf("expected success toast, got %#v", resp)
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("expected warning toast, got %#v", resp)
 	}
 	sess := a.store.GetSession("sess-1")
 	if sess == nil {
@@ -130,9 +130,8 @@ func TestCompleteWorkspaceUsePreservesRunningTurnLineage(t *testing.T) {
 	if sess.ActiveTurnID != "turn-1" || sess.ActiveSubmissionID != "sub-1" {
 		t.Fatalf("expected turn lineage preserved, got %#v", sess)
 	}
-	selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "c-1", "u-1"))
-	if selection == nil || selection.WorkspaceID != "alt" {
-		t.Fatalf("workspace selection session = %+v, want alt", selection)
+	if selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "c-1", "u-1")); selection != nil {
+		t.Fatalf("workspace selection session = %+v, want unchanged", selection)
 	}
 }
 
@@ -179,6 +178,72 @@ func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
 		t.Fatalf("session after workspace resume = %+v", sess)
+	}
+}
+
+func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-1",
+		WorkspaceID:             "default",
+		OwnerUserID:             "u-1",
+		ChatID:                  "c-1",
+		ChatType:                "p2p",
+		ActiveThreadID:          "thread-old",
+		ActiveThreadWorkspaceID: "default",
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:            "plan",
+			Model:           "gpt-5.4",
+			ReasoningEffort: "high",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+	markSessionThreadLive(a, "sess-1", "thread-old")
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{
+				Data: []codexrpc.ThreadListEntry{
+					{ID: "thread-alt-new", UpdatedAt: 20, Name: "Alt Thread", Preview: "Alt Preview", Cwd: a.cfg.Workspaces[1].Cwd},
+				},
+			}
+		case "thread/resume":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-new"
+			result.Thread.Name = "Alt Thread"
+			result.Thread.Preview = "Alt Preview"
+		default:
+			t.Fatalf("unexpected method: %s", method)
+		}
+		return nil
+	}
+
+	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	if err != nil {
+		t.Fatalf("completeWorkspaceUse: %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("expected success toast, got %#v", resp)
+	}
+	a.waitAsync()
+
+	sess := a.store.GetSession("sess-1")
+	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("session after workspace switch = %+v", sess)
+	}
+	if sess.ActiveThreadCollaborationMode != nil {
+		t.Fatalf("plan mode after workspace switch = %+v, want nil", sess.ActiveThreadCollaborationMode)
+	}
+	if sessionHasLiveThread(a, "sess-1", "thread-old") {
+		t.Fatal("expected old live thread binding to be cleared")
+	}
+	selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "c-1", "u-1"))
+	if selection == nil || selection.WorkspaceID != "alt" {
+		t.Fatalf("workspace selection session = %+v, want alt", selection)
 	}
 }
 
@@ -267,6 +332,64 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 	sess := a.store.GetSession("sess-1")
 	if sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadID != "thread-alt-fresh" || sess.ActiveThreadWorkspaceID != "alt" {
 		t.Fatalf("session after workspace fallback = %+v", sess)
+	}
+}
+
+func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     "sess-1",
+		WorkspaceID:             "default",
+		OwnerUserID:             "u-1",
+		ChatID:                  "c-1",
+		ChatType:                "p2p",
+		ActiveThreadID:          "thread-old",
+		ActiveThreadWorkspaceID: "default",
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:  "plan",
+			Model: "gpt-5.4",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+	markSessionThreadLive(a, "sess-1", "thread-old")
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			return context.DeadlineExceeded
+		default:
+			t.Fatalf("unexpected method: %s", method)
+			return nil
+		}
+	}
+
+	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	if err != nil {
+		t.Fatalf("completeWorkspaceUse: %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("expected success toast, got %#v", resp)
+	}
+	a.waitAsync()
+
+	sess := a.store.GetSession("sess-1")
+	if sess == nil {
+		t.Fatal("expected session to exist")
+	}
+	if sess.WorkspaceID != "alt" || sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != "" {
+		t.Fatalf("session after binding failure = %+v", sess)
+	}
+	if sess.ActiveThreadCollaborationMode != nil {
+		t.Fatalf("plan mode after binding failure = %+v, want nil", sess.ActiveThreadCollaborationMode)
+	}
+	if sessionHasLiveThread(a, "sess-1", "thread-old") {
+		t.Fatal("expected old live thread binding to be cleared")
 	}
 }
 

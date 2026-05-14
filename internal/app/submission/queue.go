@@ -627,15 +627,6 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	appState := a.SubmissionQueueAppState()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	if !sessionctx.CanResumeThreadForSubmission(sess, sub) {
-		if strings.TrimSpace(sess.ActiveThreadID) != "" {
-			slog.Debug("dropping session thread lineage for new submission",
-				"session_key", sessionKey,
-				"submission_id", sub.ID,
-				"submission_workspace_id", sub.WorkspaceID,
-				"active_thread_id", sess.ActiveThreadID,
-				"active_thread_workspace_id", sess.ActiveThreadWorkspaceID,
-			)
-		}
 		threadID = ""
 		sessionctx.ClearThreadContext(sess)
 	}

@@ -115,23 +115,15 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		if sess == nil {
 			sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
+		if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
+			return fmt.Errorf("%s", reason)
+		}
 		if err := setSelectedWorkspaceForMessage(s.App, msg, ws.ID); err != nil {
 			return err
 		}
-		retargeted := sessionCanRetargetWorkspace(sess, s.SessionHasInFlight(sess))
 		reply := "已切换工作区到 " + ws.ID
-		if retargeted {
-			s.SwitchSessionWorkspace(sess, ws.ID)
-			if err := s.SaveSession(sess); err != nil {
-				return err
-			}
-		}
-		if s.SessionHasInFlight(sess) {
-			reply += s.BackendWorkspaceSwitchInFlightNotice()
-			return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
-		}
-		if !retargeted {
-			return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		if err := applyWorkspaceSwitch(s, sessionKey, sess, ws.ID); err != nil {
+			return err
 		}
 		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {

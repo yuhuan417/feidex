@@ -123,6 +123,13 @@ func (s *ManagementService) WorkspaceByIDAndCWD(workspaceID, targetDir string) *
 
 // CreateWorkspaceAndSwitch creates a new workspace and switches to it.
 func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
+	sess := s.GetSession(sessionKey)
+	if sess == nil {
+		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
+	}
+	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
+		return fmt.Errorf("%s", reason)
+	}
 	s.App.ConfigMu().Lock()
 	if config.FindWorkspace(s.App.Config(), id) != nil {
 		s.App.ConfigMu().Unlock()
@@ -148,21 +155,13 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	}
 	ws := config.FindWorkspace(s.App.Config(), id)
 	s.App.ConfigMu().Unlock()
-	sess := s.GetSession(sessionKey)
-	if sess == nil {
-		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
-	}
 	if err := appcore.SetWorkspaceSelection(s.App, chatType, chatID, userID, id); err != nil {
 		return err
 	}
-	retargeted := sessionCanRetargetWorkspace(sess, s.SessionHasInFlight(sess))
-	if retargeted {
-		s.SwitchSessionWorkspace(sess, id)
-		if err := s.SaveSession(sess); err != nil {
-			return err
-		}
+	if err := applyWorkspaceSwitch(s, sessionKey, sess, id); err != nil {
+		return err
 	}
-	if retargeted && !s.SessionHasInFlight(sess) && ws != nil {
+	if ws != nil {
 		s.runAsyncThreadBinding(sessionKey, id, ws)
 	}
 	return nil
@@ -435,15 +434,16 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 	if sess == nil {
 		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
+	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: reason}}, nil
+	}
 	if err := setSelectedWorkspaceForSession(s.App, sess, workspaceID); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	retargeted := sessionCanRetargetWorkspace(sess, s.SessionHasInFlight(sess))
-	if retargeted {
-		s.SwitchSessionWorkspace(sess, workspaceID)
-		_ = s.SaveSession(sess)
+	if err := applyWorkspaceSwitch(s, sessionKey, sess, workspaceID); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if retargeted && !s.SessionHasInFlight(sess) {
+	if ws != nil {
 		s.runAsyncThreadBinding(sessionKey, workspaceID, ws)
 	}
 	return &callback.CardActionTriggerResponse{
@@ -461,6 +461,24 @@ func (s *ManagementService) runAsyncThreadBinding(sessionKey, workspaceID string
 	runner(func() {
 		sess := s.GetSession(sessionKey)
 		if sess == nil {
+			s.OnAsyncDone()
+			return
+		}
+		if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
+			slog.Debug("workspace action thread binding skipped",
+				"session_key", sessionKey,
+				"workspace_id", workspaceID,
+				"reason", reason,
+			)
+			s.OnAsyncDone()
+			return
+		}
+		if strings.TrimSpace(sess.WorkspaceID) != strings.TrimSpace(workspaceID) {
+			s.OnAsyncDone()
+			return
+		}
+		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(workspaceID) {
+			s.OnAsyncDone()
 			return
 		}
 		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)

@@ -32,11 +32,9 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 	sessionKey := makeSessionKey(a, msg)
 	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		logPlanModeCommandState(a, "plan command rejected", sessionKey, "missing_active_thread", sess)
 		return fmt.Errorf("当前没有活动线程，无法配置 plan mode")
 	}
 	currentMode := normalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
-	logPlanModeCommandState(a, "plan command received", sessionKey, strings.Join(args, " "), sess)
 	switch {
 	case len(args) == 0 && currentMode != nil && strings.EqualFold(currentMode.Mode, "plan"):
 		defaultMode, err := resolveDefaultCodexCollaborationModeForSession(a, sess)
@@ -47,7 +45,6 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		logPlanModeCommandState(a, "plan command saved", sessionKey, "toggle_off", a.State().Session(sessionKey))
 		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", replyInThreadEnabled(a, msg.ChatType))
 	case len(args) == 0:
@@ -59,7 +56,6 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		logPlanModeCommandState(a, "plan command saved", sessionKey, "toggle_on", a.State().Session(sessionKey))
 		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, renderPlanModeStatusText(mode), replyInThreadEnabled(a, msg.ChatType))
 	case strings.TrimSpace(args[0]) == "off":
@@ -71,7 +67,6 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		logPlanModeCommandState(a, "plan command saved", sessionKey, "off", a.State().Session(sessionKey))
 		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", replyInThreadEnabled(a, msg.ChatType))
 	default:
@@ -83,7 +78,6 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		logPlanModeCommandState(a, "plan command saved", sessionKey, "on", a.State().Session(sessionKey))
 		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, renderPlanModeStatusText(mode), replyInThreadEnabled(a, msg.ChatType))
 	}
@@ -153,18 +147,6 @@ func planModeForSession(a *App, sessionKey string) *state.SessionCollaborationMo
 	return normalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
 }
 
-func logPlanModeCommandState(a *App, event, sessionKey, action string, sess *state.Session) {
-	backend := configuredBackend(a)
-	slog.Debug(event,
-		"action", strings.TrimSpace(action),
-		"session_key", strings.TrimSpace(sessionKey),
-		"backend", backend,
-		"active_thread_id", sessionActiveThreadIDForLog(sess),
-		"active_collaboration_mode", sessionCollaborationModeLogValue(sessionActiveCollaborationModeForLog(sess)),
-		"backend_snapshot_collaboration_mode", sessionCollaborationModeLogValue(sessionBackendCollaborationModeForLog(sess, backend)),
-	)
-}
-
 func sessionActiveThreadIDForLog(sess *state.Session) string {
 	if sess == nil {
 		return ""
@@ -188,18 +170,6 @@ func sessionBackendCollaborationModeForLog(sess *state.Session, backend string) 
 		return nil
 	}
 	return snapshot.CollaborationMode
-}
-
-func sessionCollaborationModeLogValue(mode *state.SessionCollaborationMode) any {
-	mode = normalizeThreadCollaborationMode(mode)
-	if mode == nil {
-		return nil
-	}
-	return map[string]string{
-		"mode":             mode.Mode,
-		"model":            mode.Model,
-		"reasoning_effort": mode.ReasoningEffort,
-	}
 }
 
 func resolveDefaultCodexCollaborationModeForSession(a *App, sess *state.Session) (*state.SessionCollaborationMode, error) {
@@ -427,35 +397,13 @@ func resolvePlanModeSettings(ctx context.Context, a *App, client CodexClient, pr
 
 func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *codexrpc.CollaborationMode {
 	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
-		slog.Debug("turn start collaboration mode skipped",
-			"reason", "missing_app_session_or_thread",
-			"session_key", strings.TrimSpace(sessionKey),
-			"thread_id", strings.TrimSpace(threadID),
-		)
 		return nil
 	}
 	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		slog.Debug("turn start collaboration mode skipped",
-			"reason", "session_missing_or_thread_mismatch",
-			"session_key", strings.TrimSpace(sessionKey),
-			"thread_id", strings.TrimSpace(threadID),
-			"session_active_thread_id", sessionActiveThreadIDForLog(sess),
-			"active_collaboration_mode", sessionCollaborationModeLogValue(sessionActiveCollaborationModeForLog(sess)),
-			"backend_snapshot_collaboration_mode", sessionCollaborationModeLogValue(sessionBackendCollaborationModeForLog(sess, configuredBackend(a))),
-		)
 		return nil
 	}
-	mode := codexCollaborationModeFromState(sess.ActiveThreadCollaborationMode)
-	slog.Debug("turn start collaboration mode resolved",
-		"session_key", strings.TrimSpace(sessionKey),
-		"thread_id", strings.TrimSpace(threadID),
-		"backend", configuredBackend(a),
-		"included", mode != nil,
-		"active_collaboration_mode", sessionCollaborationModeLogValue(sess.ActiveThreadCollaborationMode),
-		"backend_snapshot_collaboration_mode", sessionCollaborationModeLogValue(sessionBackendCollaborationModeForLog(sess, configuredBackend(a))),
-	)
-	return mode
+	return codexCollaborationModeFromState(sess.ActiveThreadCollaborationMode)
 }
 
 func codexCollaborationModeFromState(mode *state.SessionCollaborationMode) *codexrpc.CollaborationMode {

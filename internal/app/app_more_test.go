@@ -3305,7 +3305,6 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	targetSessionKey := "feishu:group:chat-1:root:root-msg"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
@@ -3327,9 +3326,6 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 		TurnID:     "turn-old",
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink(target) error = %v", err)
-	}
-	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, targetSessionKey, "alt"); err != nil {
-		t.Fatalf("completeWorkspaceUse() error = %v", err)
 	}
 
 	steerAttempts := 0
@@ -3414,8 +3410,8 @@ func TestHandleFeishuMessageUsesSelectedWorkspaceForNewGroupRoots(t *testing.T) 
 		}
 	}
 
-	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, rootASessionKey, "alt"); err != nil {
-		t.Fatalf("completeWorkspaceUse(root-a -> alt) error = %v", err)
+	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"}, "alt"); err != nil {
+		t.Fatalf("setWorkspaceSelectionForMessage(group -> alt) error = %v", err)
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{
@@ -3434,8 +3430,8 @@ func TestHandleFeishuMessageUsesSelectedWorkspaceForNewGroupRoots(t *testing.T) 
 		MessageID:     "root-b",
 		RootMessageID: "root-b",
 	})
-	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, rootBSessionKey, "default"); err != nil {
-		t.Fatalf("completeWorkspaceUse(root-b -> default) error = %v", err)
+	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"}, "default"); err != nil {
+		t.Fatalf("setWorkspaceSelectionForMessage(group -> default) error = %v", err)
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{
@@ -3494,8 +3490,8 @@ func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T)
 		t.Fatalf("UpsertSession(p2p active) error = %v", err)
 	}
 
-	if _, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "alt"); err != nil {
-		t.Fatalf("completeWorkspaceUse() error = %v", err)
+	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}, "alt"); err != nil {
+		t.Fatalf("setWorkspaceSelectionForMessage() error = %v", err)
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{
