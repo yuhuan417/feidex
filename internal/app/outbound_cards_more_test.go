@@ -95,3 +95,18 @@ func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) 
 		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want no duplicate local-path neutralization", body)
 	}
 }
+
+func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &state.Submission{WorkspaceID: "default"}
+
+	body := prepareReplyCardMarkdown(a, nil, sub, "卡片链接：`https://github.com/yuhuan417/feidex`", true)
+	if !strings.Contains(body, "[https://github.com/yuhuan417/feidex](https://github.com/yuhuan417/feidex)") {
+		t.Fatalf("prepareReplyCardMarkdown(inline-code url) = %q, want markdown link", body)
+	}
+	if strings.Contains(body, "`https://github.com/yuhuan417/feidex`") {
+		t.Fatalf("prepareReplyCardMarkdown(inline-code url) = %q, want no inline-code URL", body)
+	}
+}

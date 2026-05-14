@@ -47,6 +47,8 @@ var normalizeLocalFilePreviewTargets = applinkutil.NormalizeLocalFilePreviewTarg
 
 var linkifyInlineCodeLocalFileRefsLine = applinkutil.LinkifyInlineCodeLocalFileRefsLine
 
+var linkifyInlineCodeURLs = applinkutil.LinkifyInlineCodeURLs
+
 var rangeWithinAny = applinkutil.RangeWithinAny
 
 var escapeMarkdownLinkLabel = applinkutil.EscapeMarkdownLinkLabel
@@ -54,6 +56,7 @@ var escapeMarkdownLinkLabel = applinkutil.EscapeMarkdownLinkLabel
 func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)
 	if enablePreview {
+		text = linkifyInlineCodeURLs(text)
 		if sub != nil {
 			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 				text = neutralizeLocalMarkdownLinks(text, ws.Cwd)

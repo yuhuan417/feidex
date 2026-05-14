@@ -35,3 +35,27 @@ func TestNormalizeLocalFilePreviewTargetsLinkifiesInlineCodeRefs(t *testing.T) {
 		t.Fatalf("NormalizeLocalFilePreviewTargets() = %q, want fenced code content preserved", got)
 	}
 }
+
+func TestLinkifyInlineCodeURLsLinkifiesRemoteURLsOutsideFences(t *testing.T) {
+	got := LinkifyInlineCodeURLs(strings.Join([]string{
+		"Visit `https://example.com/docs?q=1` now.",
+		"[keep](https://example.com/guide)",
+		"`/tmp/not-a-url` should stay as code.",
+		"```md",
+		"`https://example.com/in-fence` should stay untouched inside fences.",
+		"```",
+	}, "\n"))
+
+	if !strings.Contains(got, "Visit [https://example.com/docs?q=1](https://example.com/docs?q=1) now.") {
+		t.Fatalf("LinkifyInlineCodeURLs() = %q, want inline-code URL converted to markdown link", got)
+	}
+	if !strings.Contains(got, "[keep](https://example.com/guide)") {
+		t.Fatalf("LinkifyInlineCodeURLs() = %q, want existing markdown link preserved", got)
+	}
+	if !strings.Contains(got, "`/tmp/not-a-url` should stay as code.") {
+		t.Fatalf("LinkifyInlineCodeURLs() = %q, want non-URL inline code preserved", got)
+	}
+	if !strings.Contains(got, "`https://example.com/in-fence` should stay untouched inside fences.") {
+		t.Fatalf("LinkifyInlineCodeURLs() = %q, want fenced code content preserved", got)
+	}
+}
