@@ -67,6 +67,7 @@ Feidex 需要对齐的是这三个动作的语义，而不是必须复用 TUI �
 本地状态变化:
 
 - 先把 `sess.ActiveThreadCollaborationMode` 写成 `mode=default`，让下一次同 thread 的 `turn/start` 显式覆盖服务端保存的 `mode=plan` 默认值。
+- 这个 `mode=default` 必须同时恢复普通 model 和普通 reasoning effort；`turn/start.params.collaborationMode` 会覆盖顶层 model/effort，如果只传 default mode + model，后续 turn 会退回服务端默认推理强度。
 - 再把实现 submission 加入当前 session 队列并启动。
 
 ### 2. `Yes, clear context and implement`

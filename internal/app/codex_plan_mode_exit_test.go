@@ -352,6 +352,42 @@ func TestClearCodexPlanModeForSessionStoresDefaultCollaborationMode(t *testing.T
 	}
 }
 
+func TestClearCodexPlanModeForSessionRestoresConfiguredDefaultEffort(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Codex.Model = "gpt-5.4"
+	a.cfg.Codex.ReasoningEffort = "xhigh"
+	sessionKey := "sess-1"
+	if err := a.State().SaveSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:            "plan",
+			Model:           "gpt-5.5",
+			ReasoningEffort: "xhigh",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("SaveSession() error = %v", err)
+	}
+
+	cleared, err := clearCodexPlanModeForSession(a, sessionKey)
+	if err != nil {
+		t.Fatalf("clearCodexPlanModeForSession() error = %v", err)
+	}
+	if !cleared {
+		t.Fatal("clearCodexPlanModeForSession() cleared = false, want true")
+	}
+	mode := codexCollaborationModeForTurnStart(a, sessionKey, "thread-1")
+	if mode == nil || mode.Mode != "default" || mode.Settings.Model != "gpt-5.4" {
+		t.Fatalf("turn/start collaboration mode after clear = %+v, want default gpt-5.4", mode)
+	}
+	if mode.Settings.ReasoningEffort == nil || *mode.Settings.ReasoningEffort != "xhigh" {
+		t.Fatalf("reasoning effort after clear = %+v, want xhigh", mode.Settings.ReasoningEffort)
+	}
+}
+
 func seedPlanExitActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *state.Submission {
 	t.Helper()
 	sub := seedActiveSubmission(t, a, sessionKey, threadID, turnID)

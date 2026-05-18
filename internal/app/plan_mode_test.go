@@ -326,6 +326,122 @@ func TestCommandPlanOffStoresDefaultModeWhenActiveModeMissing(t *testing.T) {
 	}
 }
 
+func TestCommandPlanOffStoresConfiguredDefaultModelAndEffort(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.cfg.Codex.Model = "gpt-5.4"
+	a.cfg.Codex.ReasoningEffort = "xhigh"
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+	}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:            "plan",
+			Model:           "gpt-5.5",
+			ReasoningEffort: "xhigh",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
+		t.Fatalf("unexpected codex call during plan off: %s", method)
+		return nil
+	}
+
+	if err := commandPlan(a, msg, []string{"off"}); err != nil {
+		t.Fatalf("commandPlan(off) error = %v", err)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadCollaborationMode == nil {
+		t.Fatalf("session collaboration mode after off = %+v", sess)
+	}
+	if got := sess.ActiveThreadCollaborationMode.Mode; got != "default" {
+		t.Fatalf("mode after off = %q, want default", got)
+	}
+	if got := sess.ActiveThreadCollaborationMode.Model; got != "gpt-5.4" {
+		t.Fatalf("model after off = %q, want gpt-5.4", got)
+	}
+	if got := sess.ActiveThreadCollaborationMode.ReasoningEffort; got != "xhigh" {
+		t.Fatalf("reasoning effort after off = %q, want xhigh", got)
+	}
+	if len(ff.replyTexts) != 1 || ff.replyTexts[0] != "当前 thread 已关闭 `plan` collaboration mode。" {
+		t.Fatalf("replyTexts after off = %+v", ff.replyTexts)
+	}
+}
+
+func TestCommandPlanOffDoesNotReuseConfiguredPlanModelAsDefault(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Codex.PlanModel = "gpt-5.5"
+	a.cfg.Codex.ReasoningEffort = "xhigh"
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+	}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:            "plan",
+			Model:           "gpt-5.5",
+			ReasoningEffort: "xhigh",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "model/list":
+			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{
+				Data: []codexrpc.ModelListEntry{{
+					ID:                     "gpt-5.4",
+					IsDefault:              true,
+					DefaultReasoningEffort: "medium",
+					SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+						{ReasoningEffort: "medium"},
+						{ReasoningEffort: "xhigh"},
+					},
+				}},
+			}
+			return nil
+		default:
+			t.Fatalf("unexpected codex call during plan off: %s", method)
+			return nil
+		}
+	}
+
+	if err := commandPlan(a, msg, []string{"off"}); err != nil {
+		t.Fatalf("commandPlan(off) error = %v", err)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadCollaborationMode == nil {
+		t.Fatalf("session collaboration mode after off = %+v", sess)
+	}
+	if got := sess.ActiveThreadCollaborationMode.Model; got != "gpt-5.4" {
+		t.Fatalf("model after off = %q, want gpt-5.4", got)
+	}
+	if got := sess.ActiveThreadCollaborationMode.ReasoningEffort; got != "xhigh" {
+		t.Fatalf("reasoning effort after off = %q, want xhigh", got)
+	}
+}
+
 func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -426,6 +542,55 @@ func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t 
 	}
 	if mode.Settings.DeveloperInstructions != nil {
 		t.Fatalf("developer instructions = %+v, want nil", mode.Settings.DeveloperInstructions)
+	}
+}
+
+func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMode(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Codex.ReasoningEffort = "xhigh"
+	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+			Mode:  "default",
+			Model: "gpt-5.4",
+		},
+		Status: state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var captured map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/start" {
+			t.Fatalf("unexpected method %q", method)
+		}
+		captured = params.(map[string]any)
+		*out.(*codexrpc.TurnStartResult) = codexrpc.TurnStartResult{}
+		out.(*codexrpc.TurnStartResult).Turn.ID = "turn-1"
+		return nil
+	}
+
+	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
+		ID:        "sub-1",
+		InputText: "hello",
+	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "")
+	if err != nil {
+		t.Fatalf("startSubmissionTurn() error = %v", err)
+	}
+	mode, ok := captured["collaborationMode"].(*codexrpc.CollaborationMode)
+	if !ok || mode == nil {
+		t.Fatalf("collaborationMode = %#v, want *codexrpc.CollaborationMode", captured["collaborationMode"])
+	}
+	if mode.Mode != "default" || mode.Settings.Model != "gpt-5.4" {
+		t.Fatalf("collaboration mode = %+v, want default gpt-5.4", mode)
+	}
+	if mode.Settings.ReasoningEffort == nil || *mode.Settings.ReasoningEffort != "xhigh" {
+		t.Fatalf("reasoning effort = %+v, want xhigh", mode.Settings.ReasoningEffort)
 	}
 }
 
