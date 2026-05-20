@@ -67,7 +67,7 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	second := "I'll temporarily revert the tooltip changes, commit the blur fix, then re-apply and commit the tooltip."
 
 	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: first})
-	runtime.service.HandleToolComplete(session, claudecli.ToolCompleteEvent{
+	runtime.service.HandleToolStarted(session, claudecli.ToolStartedEvent{
 		TurnNumber: 1,
 		ID:         "tool-1",
 		Name:       "Read",
@@ -118,7 +118,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		},
 	}
 
-	runtime.service.HandleToolComplete(session, claudecli.ToolCompleteEvent{
+	runtime.service.HandleToolStarted(session, claudecli.ToolStartedEvent{
 		TurnNumber: 1,
 		ID:         "tool-1",
 		Name:       "Read",
@@ -144,7 +144,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		t.Fatalf("assistant reply body = %q, want first reply", body)
 	}
 
-	runtime.service.HandleToolComplete(session, claudecli.ToolCompleteEvent{
+	runtime.service.HandleToolStarted(session, claudecli.ToolStartedEvent{
 		TurnNumber: 1,
 		ID:         "tool-2",
 		Name:       "TaskUpdate",

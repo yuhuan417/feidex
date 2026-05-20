@@ -327,6 +327,61 @@ done
 	}
 }
 
+func TestStartStdioIncludesMCPPublicationArgsAndEnv(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.log")
+	envPath := filepath.Join(dir, "env.log")
+	scriptPath := filepath.Join(dir, "codex-rpc.sh")
+	script := fmt.Sprintf(`#!/bin/sh
+printf '%%s\n' "$@" > %q
+printf '%%s' "$FEIDEX_MCP_TOKEN_TEST" > %q
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '%%s\n' '{"id":1,"result":{"userAgent":"ua","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+    *'"method":"initialized"'*)
+      exit 0
+      ;;
+  esac
+done
+`, argsPath, envPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	client := New(config.CodexConfig{Command: scriptPath})
+	client.SetMCPServerPublication("feidex-send", "http://127.0.0.1:12345/mcp", "FEIDEX_MCP_TOKEN_TEST", "secret-token")
+	if err := client.Start(context.Background(), true); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	argsBytes, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("ReadFile(argsPath) error = %v", err)
+	}
+	argsText := string(argsBytes)
+	for _, want := range []string{
+		"app-server",
+		"-c",
+		`mcp_servers.feidex-send.url="http://127.0.0.1:12345/mcp"`,
+		`mcp_servers.feidex-send.bearer_token_env_var="FEIDEX_MCP_TOKEN_TEST"`,
+	} {
+		if !strings.Contains(argsText, want) {
+			t.Fatalf("args log = %q, want %q", argsText, want)
+		}
+	}
+
+	envBytes, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("ReadFile(envPath) error = %v", err)
+	}
+	if got := strings.TrimSpace(string(envBytes)); got != "secret-token" {
+		t.Fatalf("env token = %q, want secret-token", got)
+	}
+}
+
 func TestStartKeepsProcessAliveAfterStartupContextCancel(t *testing.T) {
 	dir := t.TempDir()
 	pidPath := filepath.Join(dir, "app-server.pid")

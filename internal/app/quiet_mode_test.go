@@ -82,6 +82,22 @@ func TestShouldDeliverTurnItemPayloadInQuietSupportsClaudeTodoWrite(t *testing.T
 	}
 }
 
+func TestShouldDeliverTurnItemPayloadInQuietSupportsMCPLifecycle(t *testing.T) {
+	payload := turnItemCardPayload{
+		ItemType:         "mcp_tool_call",
+		ProtocolItemType: "mcp_tool_call",
+	}
+	if shouldDeliverTurnItemPayloadInQuiet(config.QuietModeProgress, payload) {
+		t.Fatal("expected MCP payload to stay folded into the progress card")
+	}
+	if !shouldDeliverTurnItemPayloadInQuiet(config.QuietModeNormal, payload) {
+		t.Fatal("expected MCP payload to be visible in normal mode")
+	}
+	if shouldDeliverTurnItemPayloadInQuiet(config.QuietModeFinal, payload) {
+		t.Fatal("expected MCP payload to be hidden in final mode")
+	}
+}
+
 func TestUpdateQuietModePersistsConfig(t *testing.T) {
 	cfg := config.Default()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")

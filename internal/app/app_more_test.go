@@ -272,6 +272,9 @@ type fakeFeishuClient struct {
 	replyCardErr              error
 	sendCardErr               error
 	patchCardErr              error
+	replyLocalAttachmentErr   error
+	replyLocalImageErr        error
+	replyLocalVideoErr        error
 	rewriteLocalFileLinksErr  error
 	addReactionErr            error
 	removeReactionErr         error
@@ -292,6 +295,9 @@ type fakeFeishuClient struct {
 	patchedCards              []map[string]any
 	replyCardInThread         []bool
 	replyTextWithIDs          []string
+	replyLocalAttachmentCalls []string
+	replyLocalImageCalls      []string
+	replyLocalVideoCalls      []string
 	replyCardID               string
 	replyCardIDs              []string
 	replyTextIDs              []string
@@ -439,6 +445,27 @@ func (f *fakeFeishuClient) PatchCard(_ context.Context, _ string, card map[strin
 	defer f.mu.Unlock()
 	f.patchedCards = append(f.patchedCards, cloneTestCard(card))
 	return f.patchCardErr
+}
+
+func (f *fakeFeishuClient) ReplyLocalAttachment(_ context.Context, _ string, path string, _ bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replyLocalAttachmentCalls = append(f.replyLocalAttachmentCalls, path)
+	return f.replyLocalAttachmentErr
+}
+
+func (f *fakeFeishuClient) ReplyLocalImage(_ context.Context, _ string, path string, _ bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replyLocalImageCalls = append(f.replyLocalImageCalls, path)
+	return f.replyLocalImageErr
+}
+
+func (f *fakeFeishuClient) ReplyLocalVideo(_ context.Context, _ string, path string, _ bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replyLocalVideoCalls = append(f.replyLocalVideoCalls, path)
+	return f.replyLocalVideoErr
 }
 
 func (f *fakeFeishuClient) DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error) {

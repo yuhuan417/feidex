@@ -482,7 +482,7 @@ func TestAdapterFileAndDownloadValidationErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat(large) error = %v", err)
 	}
-	if err := a.replyLocalUploadedFile(context.Background(), "msg-1", large, info, false); err == nil || !strings.Contains(err.Error(), "30MB") {
+	if err := a.replyLocalUploadedFile(context.Background(), "msg-1", large, info, "file", false); err == nil || !strings.Contains(err.Error(), "30MB") {
 		t.Fatalf("replyLocalUploadedFile(large) error = %v, want size limit", err)
 	}
 

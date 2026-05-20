@@ -49,6 +49,7 @@ type SessionState struct {
 	Ctx         context.Context
 	Cancel      context.CancelFunc
 	StartedAt   time.Time
+	MCPCleanup  func()
 
 	Mu                sync.Mutex
 	SessionID         string
@@ -104,6 +105,8 @@ type LifecycleDeps struct {
 }
 
 type TurnStreamDeps struct {
+	NoteTurnItemStarted            func(threadID, turnID string, item turnitem.ProtocolItem)
+	UpdateInFlightTurnItem         func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
 	RecordTurnError                func(threadID, turnID, message string)
 	CompleteTurnItem               func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
 	PrepareTurnStreamQuietBoundary func(turnID string) (reuseMessageID string)
@@ -147,15 +150,16 @@ type PermissionDeps struct {
 }
 
 type Deps struct {
-	App         App
-	Cfg         config.ClaudeConfig
-	Lifecycle   LifecycleDeps
-	TurnStream  TurnStreamDeps
-	Usage       UsageDeps
-	Delivery    DeliveryDeps
-	Interactive InteractiveDeps
-	Lookup      LookupDeps
-	Permission  PermissionDeps
+	App                    App
+	Cfg                    config.ClaudeConfig
+	Lifecycle              LifecycleDeps
+	TurnStream             TurnStreamDeps
+	Usage                  UsageDeps
+	Delivery               DeliveryDeps
+	Interactive            InteractiveDeps
+	Lookup                 LookupDeps
+	Permission             PermissionDeps
+	PrepareClaudeMCPConfig func(sessionKey string) (configPath string, env []string, cleanup func(), err error)
 }
 
 // Service provides Claude CLI session management. All exported methods
@@ -671,6 +675,9 @@ func (s *Service) ResetSession(sessionKey string) error {
 		return nil
 	}
 	state.Cancel()
+	if state.MCPCleanup != nil {
+		state.MCPCleanup()
+	}
 	return state.Session.Stop()
 }
 
@@ -838,10 +845,18 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		Turns:       map[int]*TurnState{},
 	}
 	permissionMode := s.permissionModeForSession(ctx, sessionKey, ws, runtimeCfg)
+	mcpConfigPath, mcpEnv, mcpCleanup, err := s.prepareClaudeMCPConfig(sessionKey)
+	if err != nil {
+		cancel()
+		return "", err
+	}
+	state.MCPCleanup = mcpCleanup
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(apputil.FirstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
 		claudecli.WithWorkDir(ws.Cwd),
 		claudecli.WithModel(model),
+		claudecli.WithEnv(mcpEnv),
+		claudecli.WithMCPConfigPath(mcpConfigPath),
 		claudecli.WithPermissionMode(permissionMode),
 		claudecli.WithStderrHandler(func(buf []byte) {
 			text := strings.TrimSpace(string(buf))
@@ -891,6 +906,9 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 	state.Session = session
 
 	if err := session.Start(sessionCtx); err != nil {
+		if state.MCPCleanup != nil {
+			state.MCPCleanup()
+		}
 		cancel()
 		return "", err
 	}
@@ -934,6 +952,13 @@ func (s *Service) permissionModeForSession(ctx context.Context, sessionKey strin
 
 func (s *Service) effectivePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	return s.EffectivePermissionMode(sess, ws, cfg)
+}
+
+func (s *Service) prepareClaudeMCPConfig(sessionKey string) (string, []string, func(), error) {
+	if s == nil || s.deps.PrepareClaudeMCPConfig == nil {
+		return "", nil, nil, nil
+	}
+	return s.deps.PrepareClaudeMCPConfig(strings.TrimSpace(sessionKey))
 }
 
 // ---------------------------------------------------------------------------
@@ -1015,6 +1040,8 @@ func (s *Service) runSession(state *SessionState) {
 			s.HandleTextEvent(state, e)
 		case claudecli.ThinkingEvent:
 			s.HandleThinkingEvent(state, e)
+		case claudecli.ToolStartedEvent:
+			s.HandleToolStarted(state, e)
 		case claudecli.ToolCompleteEvent:
 			s.HandleToolComplete(state, e)
 		case claudecli.TurnCompleteEvent:
@@ -1108,7 +1135,7 @@ func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent
 	state.Mu.Unlock()
 }
 
-func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCompleteEvent) {
+func (s *Service) HandleToolStarted(state *SessionState, event claudecli.ToolStartedEvent) {
 	state.Mu.Lock()
 	if planFilePath := PlanFilePathFromTool(event.Name, event.Input); planFilePath != "" {
 		state.LastPlanFilePath = planFilePath
@@ -1116,20 +1143,62 @@ func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCo
 	threadID := strings.TrimSpace(state.SessionID)
 	turn := state.Turns[event.TurnNumber]
 	state.Mu.Unlock()
-	if IsInternalTool(event.Name) {
+	if IsInternalTool(event.Name) || turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
-	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
+	if turnitem.ClassifyDynamicTool(strings.TrimSpace(event.Name)) != turnitem.DynamicToolMCPCategory {
+		item := turnitem.NewProtocolItemWithID(strings.TrimSpace(event.ID), map[string]any{
+			"type":   "dynamic_tool_call",
+			"id":     strings.TrimSpace(event.ID),
+			"tool":   strings.TrimSpace(event.Name),
+			"status": "completed",
+			"input":  event.Input,
+		})
+		s.CompleteTurnItemPayload(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 		return
 	}
-	item := map[string]any{
+	item := turnitem.NewProtocolItemWithID(strings.TrimSpace(event.ID), map[string]any{
+		"type":   "dynamic_tool_call",
+		"id":     strings.TrimSpace(event.ID),
+		"tool":   strings.TrimSpace(event.Name),
+		"status": "in_progress",
+		"input":  event.Input,
+	})
+	s.NoteTurnItemStarted(threadID, turn.TurnID, item)
+	s.UpdateInFlightTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+}
+
+func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCompleteEvent) {
+	state.Mu.Lock()
+	threadID := strings.TrimSpace(state.SessionID)
+	turn := state.Turns[event.TurnNumber]
+	state.Mu.Unlock()
+	if IsInternalTool(event.Name) || turn == nil || strings.TrimSpace(turn.TurnID) == "" {
+		return
+	}
+	if turnitem.ClassifyDynamicTool(strings.TrimSpace(event.Name)) != turnitem.DynamicToolMCPCategory {
+		return
+	}
+	item := turnitem.NewProtocolItemWithID(strings.TrimSpace(event.ID), map[string]any{
 		"type":   "dynamic_tool_call",
 		"id":     strings.TrimSpace(event.ID),
 		"tool":   strings.TrimSpace(event.Name),
 		"status": "completed",
 		"input":  event.Input,
+	})
+	s.CompleteTurnItemPayload(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+}
+
+func (s *Service) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
+	if s != nil && s.deps.TurnStream.NoteTurnItemStarted != nil {
+		s.deps.TurnStream.NoteTurnItemStarted(threadID, turnID, item)
 	}
-	s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+}
+
+func (s *Service) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	if s != nil && s.deps.TurnStream.UpdateInFlightTurnItem != nil {
+		s.deps.TurnStream.UpdateInFlightTurnItem(ctx, threadID, turnID, itemID, item)
+	}
 }
 
 func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCompleteEvent) {

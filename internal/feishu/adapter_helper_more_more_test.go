@@ -80,7 +80,7 @@ func TestAdapterUploadNilKeyErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat(file) error = %v", err)
 	}
-	if err := a.replyLocalUploadedFile(context.Background(), "msg-1", filePath, info, false); err == nil {
+	if err := a.replyLocalUploadedFile(context.Background(), "msg-1", filePath, info, "file", false); err == nil {
 		t.Fatal("expected replyLocalUploadedFile nil key to fail")
 	}
 }

@@ -59,6 +59,9 @@ type FeishuClient interface {
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 	SendCard(context.Context, string, map[string]any) (string, error)
 	PatchCard(context.Context, string, map[string]any) error
+	ReplyLocalAttachment(context.Context, string, string, bool) error
+	ReplyLocalImage(context.Context, string, string, bool) error
+	ReplyLocalVideo(context.Context, string, string, bool) error
 	DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error)
 	ResolveMergeForward(context.Context, string, []string) (string, []feishu.Attachment, error)
 	ShareLocalFile(context.Context, feishu.SharedFileRequest) (feishu.SharedFileResult, error)

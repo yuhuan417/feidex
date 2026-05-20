@@ -592,20 +592,52 @@ func (a *Adapter) SendText(ctx context.Context, chatID, text string) error {
 }
 
 func (a *Adapter) ReplyLocalFile(ctx context.Context, messageID, path string, inThread bool) error {
-	info, err := os.Stat(path)
+	info, err := validateLocalRegularFile(path)
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("path %q is not a regular file", path)
-	}
-	if info.Size() <= 0 {
-		return fmt.Errorf("path %q is empty", path)
-	}
 	if isSupportedReplyImage(path, info) {
-		return a.replyLocalImage(ctx, messageID, path, inThread)
+		return a.ReplyLocalImage(ctx, messageID, path, inThread)
 	}
-	return a.replyLocalUploadedFile(ctx, messageID, path, info, inThread)
+	return a.ReplyLocalAttachment(ctx, messageID, path, inThread)
+}
+
+func (a *Adapter) ReplyLocalAttachment(ctx context.Context, messageID, path string, inThread bool) error {
+	info, err := validateLocalRegularFile(path)
+	if err != nil {
+		return err
+	}
+	return a.replyLocalUploadedFile(ctx, messageID, path, info, "file", inThread)
+}
+
+func (a *Adapter) ReplyLocalImage(ctx context.Context, messageID, path string, inThread bool) error {
+	if _, err := validateLocalRegularFile(path); err != nil {
+		return err
+	}
+	if !isSupportedReplyImage(path, mustStatLocalFile(path)) {
+		return fmt.Errorf("path %q is not a supported Feishu inline image", path)
+	}
+	return a.replyLocalImage(ctx, messageID, path, inThread)
+}
+
+func (a *Adapter) ReplyLocalVideo(ctx context.Context, messageID, path string, inThread bool) error {
+	info, err := validateLocalRegularFile(path)
+	if err != nil {
+		return err
+	}
+	if info.Size() > 30*1024*1024 {
+		return fmt.Errorf("path %q exceeds Feishu 30MB file upload limit", path)
+	}
+	if strings.ToLower(filepath.Ext(path)) != ".mp4" {
+		return fmt.Errorf("path %q must be an .mp4 file for Feishu video messages", path)
+	}
+	fileKey, err := a.uploadLocalFile(ctx, path, "mp4")
+	if err != nil {
+		return err
+	}
+	content, _ := (&larkim.MessageMedia{FileKey: fileKey}).String()
+	_, err = a.replyMessageDetailed(ctx, messageID, "media", content, inThread)
+	return err
 }
 
 func (a *Adapter) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
@@ -774,17 +806,27 @@ func (a *Adapter) replyLocalImage(ctx context.Context, messageID, path string, i
 	return err
 }
 
-func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path string, info fs.FileInfo, inThread bool) error {
+func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path string, info fs.FileInfo, msgType string, inThread bool) error {
 	if info.Size() > 30*1024*1024 {
 		return fmt.Errorf("path %q exceeds Feishu 30MB file upload limit", path)
 	}
+	fileKey, err := a.uploadLocalFile(ctx, path, detectUploadFileType(path))
+	if err != nil {
+		return err
+	}
+	content, _ := (&larkim.MessageFile{FileKey: fileKey}).String()
+	_, err = a.replyMessageDetailed(ctx, messageID, msgType, content, inThread)
+	return err
+}
+
+func (a *Adapter) uploadLocalFile(ctx context.Context, path, fileType string) (string, error) {
 	body, err := larkim.NewCreateFilePathReqBodyBuilder().
-		FileType(detectUploadFileType(path)).
+		FileType(fileType).
 		FileName(filepath.Base(path)).
 		FilePath(path).
 		Build()
 	if err != nil {
-		return err
+		return "", err
 	}
 	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.file.create", func(client *lark.Client) (*larkim.CreateFileResp, error) {
 		return client.Im.File.Create(ctx, larkim.NewCreateFileReqBuilder().
@@ -793,17 +835,15 @@ func (a *Adapter) replyLocalUploadedFile(ctx context.Context, messageID, path st
 	})
 	if err != nil {
 		a.noteOutboundTransportFailure(err)
-		return wrapPermissionIssue(err, permissionIssueFromDirectError("im.file.create", err))
+		return "", wrapPermissionIssue(err, permissionIssueFromDirectError("im.file.create", err))
 	}
 	if !resp.Success() || resp.Data == nil || resp.Data.FileKey == nil || strings.TrimSpace(*resp.Data.FileKey) == "" {
-		return wrapPermissionIssue(
+		return "", wrapPermissionIssue(
 			fmt.Errorf("feishu file upload failed code=%d msg=%s", resp.Code, resp.Msg),
 			permissionIssueFromCodeError("im.file.create", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
 		)
 	}
-	content, _ := (&larkim.MessageFile{FileKey: *resp.Data.FileKey}).String()
-	_, err = a.replyMessageDetailed(ctx, messageID, "file", content, inThread)
-	return err
+	return strings.TrimSpace(*resp.Data.FileKey), nil
 }
 
 func (a *Adapter) replyMessageDetailed(ctx context.Context, messageID, msgType, content string, inThread bool) (string, error) {
@@ -1727,6 +1767,25 @@ func isSupportedReplyImage(path string, info os.FileInfo) bool {
 	default:
 		return false
 	}
+}
+
+func validateLocalRegularFile(path string) (fs.FileInfo, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("path %q is not a regular file", path)
+	}
+	if info.Size() <= 0 {
+		return nil, fmt.Errorf("path %q is empty", path)
+	}
+	return info, nil
+}
+
+func mustStatLocalFile(path string) fs.FileInfo {
+	info, _ := os.Stat(path)
+	return info
 }
 
 func detectUploadFileType(path string) string {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -51,6 +52,7 @@ type toolState struct {
 	ID        string
 	Name      string
 	Input     map[string]any
+	Started   bool
 	Completed bool
 }
 
@@ -93,6 +95,9 @@ func (s *Session) Start(ctx context.Context) error {
 	cmd := exec.Command(command, args...)
 	if s.cfg.WorkDir != "" {
 		cmd.Dir = s.cfg.WorkDir
+	}
+	if len(s.cfg.Env) > 0 {
+		cmd.Env = append(os.Environ(), s.cfg.Env...)
 	}
 
 	stdin, err := cmd.StdinPipe()
@@ -451,6 +456,9 @@ func (s *Session) cliArgs() []string {
 	if s.cfg.ForkSession {
 		args = append(args, "--fork-session")
 	}
+	if strings.TrimSpace(s.cfg.MCPConfigPath) != "" {
+		args = append(args, "--mcp-config", strings.TrimSpace(s.cfg.MCPConfigPath))
+	}
 	args = append(args, "--include-partial-messages")
 	return args
 }
@@ -534,6 +542,8 @@ func (s *Session) handleLine(line []byte) {
 		s.handleStreamMessage(value)
 	case wireAssistantMessage:
 		s.handleAssistantMessage(value)
+	case wireUserMessage:
+		s.handleUserMessage(value)
 	case wireResultMessage:
 		s.handleResultMessage(value)
 	case wireControlRequest:
@@ -641,7 +651,7 @@ func (s *Session) handleAssistantMessage(msg wireAssistantMessage) {
 				s.emit(ThinkingEvent{TurnNumber: turnNumber, Thinking: thinking, FullThinking: thinking})
 			}
 		case wireToolUseBlock:
-			s.completeToolFromAssistant(turnNumber, value)
+			s.startToolFromAssistant(turnNumber, value)
 		}
 		i++
 	}
@@ -675,7 +685,7 @@ func assistantBlockSeenKey(messageID, blockType string, index int, content strin
 	return fmt.Sprintf("%s:%s:%d:%s", messageID, strings.TrimSpace(blockType), index, content)
 }
 
-func (s *Session) completeToolFromAssistant(turnNumber int, block wireToolUseBlock) {
+func (s *Session) startToolFromAssistant(turnNumber int, block wireToolUseBlock) {
 	input := copyMap(block.Input)
 
 	s.mu.Lock()
@@ -687,23 +697,85 @@ func (s *Session) completeToolFromAssistant(turnNumber int, block wireToolUseBlo
 	if turn.Tools == nil {
 		turn.Tools = map[string]*toolState{}
 	}
-	if tool := turn.Tools[block.ID]; tool != nil && tool.Completed {
+	if tool := turn.Tools[block.ID]; tool != nil && tool.Started {
 		s.mu.Unlock()
 		return
 	}
 	turn.Tools[block.ID] = &toolState{
-		ID:        block.ID,
-		Name:      block.Name,
-		Input:     input,
-		Completed: true,
+		ID:      block.ID,
+		Name:    block.Name,
+		Input:   input,
+		Started: true,
 	}
 	s.mu.Unlock()
 
-	s.emit(ToolCompleteEvent{
+	s.emit(ToolStartedEvent{
 		TurnNumber: turnNumber,
 		ID:         block.ID,
 		Name:       block.Name,
 		Input:      copyMap(input),
+		Timestamp:  time.Now(),
+	})
+}
+
+func (s *Session) handleUserMessage(msg wireUserMessage) {
+	role := strings.TrimSpace(msg.Message.Role)
+	if role != "" && role != "user" {
+		return
+	}
+
+	blocks, ok, err := msg.Message.Content.AsBlocks()
+	if err != nil {
+		s.emitError(err, "parse_user_message")
+		return
+	}
+	if !ok || len(blocks) == 0 {
+		return
+	}
+	for _, raw := range blocks {
+		result, ok := raw.(wireToolResultBlock)
+		if !ok {
+			continue
+		}
+		s.completeToolFromResult(result)
+	}
+}
+
+func (s *Session) completeToolFromResult(block wireToolResultBlock) {
+	toolUseID := strings.TrimSpace(block.ToolUseID)
+	if toolUseID == "" {
+		return
+	}
+
+	s.mu.Lock()
+	var (
+		turnNumber int
+		name       string
+		input      map[string]any
+	)
+	for _, turn := range s.turns {
+		if turn == nil || turn.Tools == nil {
+			continue
+		}
+		tool := turn.Tools[toolUseID]
+		if tool == nil || tool.Completed {
+			continue
+		}
+		tool.Completed = true
+		turnNumber = turn.Number
+		name = tool.Name
+		input = copyMap(tool.Input)
+		break
+	}
+	s.mu.Unlock()
+	if turnNumber == 0 {
+		return
+	}
+	s.emit(ToolCompleteEvent{
+		TurnNumber: turnNumber,
+		ID:         toolUseID,
+		Name:       name,
+		Input:      input,
 		Timestamp:  time.Now(),
 	})
 }

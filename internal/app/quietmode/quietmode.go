@@ -113,6 +113,9 @@ func ShouldDeliverTurnItemPayload(mode config.QuietMode, itemType, protocolItemT
 	if ShouldDeliverTurnItem(mode, itemType, isFinalAnswer) {
 		return true
 	}
+	if IsMCPToolPayload(itemType, protocolItemType, toolName) {
+		return mode == config.QuietModeNormal
+	}
 	if !IsClaudeTodoToolPayload(protocolItemType, toolName) {
 		return false
 	}
@@ -128,3 +131,14 @@ func IsClaudeTodoToolPayload(protocolItemType, toolName string) bool {
 	return turnitem.NormalizeTurnItemType(protocolItemType) == "dynamic_tool_call" && strings.TrimSpace(toolName) == "TodoWrite"
 }
 
+func IsMCPToolPayload(itemType, protocolItemType, toolName string) bool {
+	switch turnitem.NormalizeTurnItemType(protocolItemType) {
+	case "mcp_tool_call":
+		return true
+	case "dynamic_tool_call":
+		if turnitem.ClassifyDynamicTool(strings.TrimSpace(toolName)) == turnitem.DynamicToolMCPCategory {
+			return true
+		}
+	}
+	return turnitem.NormalizeTurnItemType(itemType) == "mcp_tool_call"
+}

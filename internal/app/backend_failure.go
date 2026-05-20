@@ -16,6 +16,10 @@ type codexErrorAware interface {
 	SetErrorHandler(func(error))
 }
 
+type codexMCPAware interface {
+	SetMCPServerPublication(name, url, bearerTokenEnvVar, bearerToken string)
+}
+
 func configureCodexClientRuntime(a *App, client CodexClient) {
 	if client == nil {
 		return
@@ -29,6 +33,16 @@ func configureCodexClientRuntime(a *App, client CodexClient) {
 			a.handleCodexTransportError(client, err)
 		})
 	}
+	publishMCPToCodexClient(a, client)
+}
+
+func publishMCPToCodexClient(a *App, client CodexClient) {
+	aware, ok := client.(codexMCPAware)
+	if !ok {
+		return
+	}
+	pub := currentMCPPublication(a)
+	aware.SetMCPServerPublication(feidexMCPServerID, pub.URL, feidexMCPBearerEnvName, pub.Token)
 }
 
 func (a *App) handleCodexTransportError(client CodexClient, err error) {

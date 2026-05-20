@@ -29,6 +29,10 @@ type CodexEventRouter struct {
 	// CompleteTurnItem completes a turn item.
 	CompleteTurnItem func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
 
+	// UpdateInFlightTurnItem projects a started/progress item snapshot without
+	// closing its lifecycle.
+	UpdateInFlightTurnItem func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
+
 	// UpdatePendingPlan updates the pending plan for a turn.
 	UpdatePendingPlan func(turnID, plan string)
 
@@ -103,6 +107,8 @@ func (r *CodexEventRouter) HandleNotification(method string, params json.RawMess
 		r.handleItemStarted(params)
 	case "item/completed":
 		r.handleItemCompleted(params)
+	case "item/mcpToolCall/progress":
+		r.handleMCPToolCallProgress(params)
 	case "turn/plan/updated":
 		r.handleTurnPlanUpdated(params)
 	case "turn/started":
@@ -175,6 +181,28 @@ func (r *CodexEventRouter) handleItemCompleted(params json.RawMessage) {
 	if r.CompleteTurnItem != nil {
 		r.CompleteTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, turnitem.NewProtocolItemWithID(p.ItemID, p.Item))
 	}
+}
+
+func (r *CodexEventRouter) handleMCPToolCallProgress(params json.RawMessage) {
+	var p struct {
+		ThreadID string `json:"threadId"`
+		TurnID   string `json:"turnId"`
+		ItemID   string `json:"itemId"`
+		Message  string `json:"message"`
+	}
+	if json.Unmarshal(params, &p) != nil {
+		return
+	}
+	if strings.TrimSpace(p.ItemID) == "" || strings.TrimSpace(p.Message) == "" || r.UpdateInFlightTurnItem == nil {
+		return
+	}
+	item := turnitem.NewProtocolItemWithID(p.ItemID, map[string]any{
+		"id":      p.ItemID,
+		"type":    "mcp_tool_call",
+		"status":  "in_progress",
+		"message": strings.TrimSpace(p.Message),
+	})
+	r.UpdateInFlightTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, item)
 }
 
 func (r *CodexEventRouter) handleTurnPlanUpdated(params json.RawMessage) {

@@ -37,6 +37,8 @@ type SessionConfig struct {
 	Model                      string
 	Effort                     string
 	WorkDir                    string
+	Env                        []string
+	MCPConfigPath              string
 	PermissionMode             PermissionMode
 	DangerouslySkipPermissions bool
 	CLIPath                    string
@@ -70,6 +72,14 @@ func WithEffort(effort string) SessionOption {
 
 func WithWorkDir(dir string) SessionOption {
 	return func(c *SessionConfig) { c.WorkDir = strings.TrimSpace(dir) }
+}
+
+func WithEnv(env []string) SessionOption {
+	return func(c *SessionConfig) { c.Env = append([]string(nil), env...) }
+}
+
+func WithMCPConfigPath(path string) SessionOption {
+	return func(c *SessionConfig) { c.MCPConfigPath = strings.TrimSpace(path) }
 }
 
 func WithPermissionMode(mode PermissionMode) SessionOption {
@@ -153,6 +163,7 @@ const (
 	EventTypeTurnStarted
 	EventTypeText
 	EventTypeThinking
+	EventTypeToolStarted
 	EventTypeToolComplete
 	EventTypeTurnComplete
 	EventTypeError
@@ -189,6 +200,16 @@ type ThinkingEvent struct {
 }
 
 func (e ThinkingEvent) Type() EventType { return EventTypeThinking }
+
+type ToolStartedEvent struct {
+	TurnNumber int
+	ID         string
+	Name       string
+	Input      map[string]any
+	Timestamp  time.Time
+}
+
+func (e ToolStartedEvent) Type() EventType { return EventTypeToolStarted }
 
 type ToolCompleteEvent struct {
 	TurnNumber int

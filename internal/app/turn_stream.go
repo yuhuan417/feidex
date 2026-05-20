@@ -102,6 +102,10 @@ func (s turnStreamService) completeTurnItemPayload(ctx context.Context, threadID
 	s.service.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
 }
 
+func (s turnStreamService) updateInFlightTurnItemPayload(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	s.service.UpdateInFlightTurnItem(ctx, threadID, turnID, itemID, item)
+}
+
 func (s turnStreamService) flushTurnStream(ctx context.Context, threadID, turnID string) turnStreamFlushResult {
 	return s.service.FlushTurnStream(ctx, threadID, turnID)
 }

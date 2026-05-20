@@ -33,6 +33,8 @@ func ClassifyDynamicTool(toolName string) DynamicToolCategory {
 		return DynamicToolMCPCategory
 	}
 	switch toolName {
+	case "feishu_send_im_file", "feishu_send_im_image", "feishu_send_im_video":
+		return DynamicToolMCPCategory
 	case "Read", "Edit", "Write", "NotebookEdit", "Glob", "Grep":
 		return DynamicToolCodeCategory
 	case "Bash", "KillShell":
@@ -209,6 +211,10 @@ func DisplayToolName(toolName string) string {
 		return strings.Trim(parts[1]+"/"+parts[2], "/")
 	}
 	return toolName
+}
+
+func BuildQuietMCPToolProgressLines(toolName string, input any, workspaceCwd string) []string {
+	return buildMCPToolProgressLines(toolName, input, workspaceCwd)
 }
 
 func QuietDisplayFileName(path string) string {

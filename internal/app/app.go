@@ -50,6 +50,7 @@ type App struct {
 	frontendMessageTraffic int
 	backendSwitching       bool
 	backendSwitchTarget    string
+	mcp                    *feidexMCPService
 
 	liveThreads *liveThreadTracker
 
@@ -128,13 +129,19 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 }
 
 func (a *App) Start(ctx context.Context) error {
+	if err := startMCPService(a, ctx); err != nil {
+		return err
+	}
 	if err := startBackend(a, ctx); err != nil {
+		_ = stopMCPService(a, context.Background())
 		return err
 	}
 	startInboundDeduperLoop(a, ctx)
 	recoverSharedRuntimeState(a)
 	recoverFrontendRuntimeState(a)
 	if err := startFrontend(a, ctx); err != nil {
+		_ = currentBackendRuntimeHandle(a).close()
+		_ = stopMCPService(a, context.Background())
 		return err
 	}
 	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
@@ -148,7 +155,12 @@ func (a *App) Stop(ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	return currentBackendRuntimeHandle(a).close()
+	backendErr := currentBackendRuntimeHandle(a).close()
+	mcpErr := stopMCPService(a, ctx)
+	if backendErr != nil {
+		return backendErr
+	}
+	return mcpErr
 }
 
 func runAsync(a *App, fn func()) {

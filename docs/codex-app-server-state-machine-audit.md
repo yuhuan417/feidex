@@ -162,6 +162,7 @@
   - `internal/app/app.go:177-221` 发送 `turn/start`。
   - `internal/app/submission_queue.go:248-305` 和 `internal/app/turn_lifecycle.go:10-122` 会处理返回的 `turn.id` 以及 `turn/started`。
   - `internal/app/codex_event_router.go` 现在同时消费 `item/started` 与 `item/completed`。
+  - `internal/app/backend/codex_event_router.go` 额外消费 `item/mcpToolCall/progress`，并把它视为已 started item 的 in-flight 更新，而不是独立终态。
   - `internal/app/turn_item_state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
   - `internal/app/turnitem/payload.go:30-36` 会把 `item(type=plan)` 当成普通 completed item 渲染成计划文本；这条线属于 plan mode item 生命周期。
   - `internal/app/codex_event_router.go:57-87` 消费 `turn/started` 和 `turn/completed`。
@@ -176,6 +177,7 @@
 - 差异点:
   - `item/agentMessage/delta`、`item/plan/delta`、`item/commandExecution/outputDelta`、`item/fileChange/outputDelta` 等流式通知被明确视为非目标能力，并通过 opt-out 退订。
   - `item/started` 已经接入，因此 tool approval / file change 这类需要前置 item 上下文的流程，已经不再只依赖 completed item。
+  - `item/mcpToolCall/progress` 已接入，但只用于更新 started MCP item 的中间展示；真正收口仍然只认对应 `item/completed`。
   - 当前产品以 started/completed 为唯一 item 消费边界，因此 `item(type=plan)` 只消费最终 completed item，不消费 `item/plan/delta`。
   - `turn/plan/updated` 仍然保留，但它只是 checklist 展示通道；不要把它和 `/plan` collaboration mode 或 `item(type=plan)` 混为一谈。
   - 主协议边界仍然是 `turn/completed`；`thread/read` 对账只用于 missed notification 后的本地恢复，不把 final item 本身当作终态。
@@ -553,6 +555,7 @@
   - `internal/app/codex_event_router.go:148-149` / `215-240` 有 form/url 两种处理。
   - `internal/app/elicitation_forms.go` 与 `internal/app/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一等待 `serverRequest/resolved` 才最终 resolve 并恢复 submission。
+  - 本次新增 MCP send tool 只复用独立的本地 MCP HTTP server，不改动 `mcpServer/elicitation/request` 的 pending / reply / resolved 契约。
 - 差异点:
   - 无。
 - 修改建议:

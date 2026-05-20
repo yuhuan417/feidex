@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,6 +25,7 @@ type Client struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
+	mcp    mcpServerPublication
 
 	nextID    atomic.Int64
 	writeMu   sync.Mutex
@@ -64,6 +66,13 @@ type notificationEnvelope struct {
 	Params json.RawMessage `json:"params"`
 }
 
+type mcpServerPublication struct {
+	Name             string
+	URL              string
+	BearerTokenEnv   string
+	BearerTokenValue string
+}
+
 func New(cfg config.CodexConfig) *Client {
 	if cfg.Command == "" {
 		cfg.Command = "codex"
@@ -79,6 +88,17 @@ func New(cfg config.CodexConfig) *Client {
 func (c *Client) SetHandlers(onNotification func(string, json.RawMessage), onRequest func(RequestEnvelope)) {
 	c.onNotification = onNotification
 	c.onRequest = onRequest
+}
+
+func (c *Client) SetMCPServerPublication(name, url, bearerTokenEnvVar, bearerToken string) {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	c.mcp = mcpServerPublication{
+		Name:             strings.TrimSpace(name),
+		URL:              strings.TrimSpace(url),
+		BearerTokenEnv:   strings.TrimSpace(bearerTokenEnvVar),
+		BearerTokenValue: strings.TrimSpace(bearerToken),
+	}
 }
 
 func (c *Client) SetErrorHandler(onError func(error)) {
@@ -251,7 +271,14 @@ func (c *Client) readLoop() {
 }
 
 func (c *Client) startStdio() error {
-	c.cmd = exec.Command(c.cfg.Command, "app-server")
+	args := []string{"app-server"}
+	if mcpArgs, mcpEnv := c.mcpLaunchArgs(); len(mcpArgs) > 0 || len(mcpEnv) > 0 {
+		args = append(args, mcpArgs...)
+		c.cmd = exec.Command(c.cfg.Command, args...)
+		c.cmd.Env = append(os.Environ(), mcpEnv...)
+	} else {
+		c.cmd = exec.Command(c.cfg.Command, args...)
+	}
 	if dir := strings.TrimSpace(c.cfg.AppServerDir); dir != "" {
 		c.cmd.Dir = dir
 	}
@@ -278,6 +305,21 @@ func (c *Client) startStdio() error {
 	go c.waitLoop()
 	go c.readLoop()
 	return nil
+}
+
+func (c *Client) mcpLaunchArgs() ([]string, []string) {
+	c.stateMu.Lock()
+	pub := c.mcp
+	c.stateMu.Unlock()
+	if strings.TrimSpace(pub.Name) == "" || strings.TrimSpace(pub.URL) == "" || strings.TrimSpace(pub.BearerTokenEnv) == "" || strings.TrimSpace(pub.BearerTokenValue) == "" {
+		return nil, nil
+	}
+	args := []string{
+		"-c", fmt.Sprintf("mcp_servers.%s.url=%s", pub.Name, strconv.Quote(pub.URL)),
+		"-c", fmt.Sprintf("mcp_servers.%s.bearer_token_env_var=%s", pub.Name, strconv.Quote(pub.BearerTokenEnv)),
+	}
+	env := []string{pub.BearerTokenEnv + "=" + pub.BearerTokenValue}
+	return args, env
 }
 
 func (c *Client) waitLoop() {

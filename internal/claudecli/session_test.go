@@ -79,6 +79,7 @@ func TestSessionCLIArgs(t *testing.T) {
 	session := NewSession(
 		WithModel("sonnet"),
 		WithEffort("max"),
+		WithMCPConfigPath("/tmp/mcp.json"),
 		WithPermissionMode(PermissionModePlan),
 		WithDangerouslySkipPermissions(),
 		WithDisablePlugins(),
@@ -103,6 +104,7 @@ func TestSessionCLIArgs(t *testing.T) {
 		"--system-prompt", "system prompt",
 		"--resume", "session-123",
 		"--fork-session",
+		"--mcp-config", "/tmp/mcp.json",
 		"--include-partial-messages",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -437,7 +439,7 @@ func TestSessionDeduplicatesRepeatedAssistantTextForSameMessageBlock(t *testing.
 	assertNoExtraSessionEvents(t, session.Events())
 }
 
-func TestSessionEmitsToolCompleteFromAssistantMessage(t *testing.T) {
+func TestSessionEmitsToolStartedFromAssistantMessage(t *testing.T) {
 	session := NewSession()
 	session.current = &turnState{
 		Number:        1,
@@ -457,9 +459,54 @@ func TestSessionEmitsToolCompleteFromAssistantMessage(t *testing.T) {
 		},
 	})
 
+	event := readToolStartedEvent(t, session.Events())
+	if event.ID != "tool-1" || event.Name != "Edit" {
+		t.Fatalf("ToolStartedEvent = %#v", event)
+	}
+	if got := event.Input["file_path"]; got != "demo.go" {
+		t.Fatalf("ToolStartedEvent input = %#v", event.Input)
+	}
+	assertNoExtraSessionEvents(t, session.Events())
+}
+
+func TestSessionEmitsToolCompleteFromUserToolResult(t *testing.T) {
+	session := NewSession()
+	session.current = &turnState{
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
+	}
+	session.turns[1] = session.current
+
+	session.handleAssistantMessage(wireAssistantMessage{
+		Type: "assistant",
+		Message: wireMessageContent{
+			ID:   "msg-1",
+			Role: "assistant",
+			Content: wireFlexibleContent{
+				raw: []byte(`[{"type":"tool_use","id":"tool-1","name":"Edit","input":{"file_path":"demo.go"}}]`),
+			},
+		},
+	})
+	readToolStartedEvent(t, session.Events())
+
+	session.handleUserMessage(wireUserMessage{
+		Type: "user",
+		Message: wireMessageContent{
+			ID:   "msg-2",
+			Role: "user",
+			Content: wireFlexibleContent{
+				raw: []byte(`[{"type":"tool_result","tool_use_id":"tool-1","content":"done","is_error":false}]`),
+			},
+		},
+	})
+
 	event := readToolCompleteEvent(t, session.Events())
 	if event.ID != "tool-1" || event.Name != "Edit" {
 		t.Fatalf("ToolCompleteEvent = %#v", event)
+	}
+	if got := event.Input["file_path"]; got != "demo.go" {
+		t.Fatalf("ToolCompleteEvent input = %#v", event.Input)
 	}
 	assertNoExtraSessionEvents(t, session.Events())
 }
@@ -551,6 +598,21 @@ func readToolCompleteEvent(t *testing.T, events <-chan Event) ToolCompleteEvent 
 		t.Fatal("expected ToolCompleteEvent")
 	}
 	return ToolCompleteEvent{}
+}
+
+func readToolStartedEvent(t *testing.T, events <-chan Event) ToolStartedEvent {
+	t.Helper()
+	select {
+	case raw := <-events:
+		event, ok := raw.(ToolStartedEvent)
+		if !ok {
+			t.Fatalf("event = %#v, want ToolStartedEvent", raw)
+		}
+		return event
+	default:
+		t.Fatal("expected ToolStartedEvent")
+	}
+	return ToolStartedEvent{}
 }
 
 func readTextEvent(t *testing.T, events <-chan Event) TextEvent {

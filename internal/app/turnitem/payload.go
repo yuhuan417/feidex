@@ -197,9 +197,10 @@ func SummarizeGenericTurnItem(itemType string, item map[string]any, workspaceCwd
 		tool := strings.TrimSpace(StringValue(item["tool"]))
 		status := strings.TrimSpace(StringValue(item["status"]))
 		toolName := strings.Trim(strings.TrimSpace(server+"/"+tool), "/")
-		summaryLines = append(summaryLines, SummarizeToolCallSummaryLines(toolName, item["input"], workspaceCwd)...)
+		input := ToolCallInput(item)
+		summaryLines = append(summaryLines, SummarizeToolCallSummaryLines(toolName, input, workspaceCwd)...)
 		summaryLines = append(summaryLines, SummarizeToolCallStatusLine(status))
-		detail := SummarizeToolCallDetail(toolName, item["input"], item)
+		detail := SummarizeToolCallDetail(toolName, input, item)
 		return strings.TrimSpace(strings.Join(TrimmedNonEmptyStrings(summaryLines), "\n")), detail
 	case "dynamic_tool_call":
 		tool := strings.TrimSpace(StringValue(item["tool"]))
@@ -413,6 +414,19 @@ func ToolInputMap(input any) map[string]any {
 		out[iter.Key().String()] = iter.Value().Interface()
 	}
 	return out
+}
+
+func ToolCallInput(item map[string]any) any {
+	if len(item) == 0 {
+		return nil
+	}
+	if input, ok := item["input"]; ok && input != nil {
+		return input
+	}
+	if input, ok := item["arguments"]; ok && input != nil {
+		return input
+	}
+	return nil
 }
 
 func ToolInputSequence(value any) []any {

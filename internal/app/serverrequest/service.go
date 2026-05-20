@@ -52,6 +52,8 @@ type BackendAdapter interface {
 	ReplyQuickUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, questionID, answer string) (string, error)
 	ReplyFormUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, selections map[string]string) (string, error)
 	ReplyTextUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, text string) (string, error)
+	ReplyElicitationAction(pending *state.PendingRequest, action string) error
+	ReplyElicitationContent(pending *state.PendingRequest, content map[string]any) error
 	ReplyElicitationForm(pending *state.PendingRequest, payload ElicitationFormPayload, text string) (string, error)
 	ReplyElicitationURL(pending *state.PendingRequest, actionName string) (string, error)
 	CancelPending(pending *state.PendingRequest) error

@@ -13,6 +13,12 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 	"user_input.toggle_multi": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.ServerRequestService().CompleteUserInputMultiToggle(action)
 	},
+	"elicitation_form.answer": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.ServerRequestService().CompleteElicitationFormAnswer(action)
+	},
+	"elicitation_form.toggle_multi": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return s.app.ServerRequestService().CompleteElicitationMultiToggle(action)
+	},
 	"approval.command.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.ServerRequestService().CompleteApprovalAction(action, "approval.command.accept")
 	},

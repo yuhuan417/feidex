@@ -252,6 +252,41 @@ func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemI
 	_ = svc.CompleteTurnItemWithResult(ctx, threadID, turnID, itemID, item)
 }
 
+// UpdateInFlightTurnItem projects a started or progress item snapshot without
+// closing the underlying item lifecycle state.
+func (svc Service) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	if svc.app == nil {
+		return
+	}
+	svc.app.TurnStreamTurnLifecycle().BindPendingSubmissionTurn(threadID, turnID, true)
+	itemID = strings.TrimSpace(item.EffectiveID(itemID))
+	sessionKey, sub := svc.app.TurnStreamSubmissionFinder().FindSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return
+	}
+	workspaceCwd := workspaceCwd(svc.app.Config(), sub.WorkspaceID)
+	rawItem := item.MergedRaw()
+	payload, hasPayload := buildTurnItemCardPayload(itemID, rawItem, workspaceCwd)
+
+	var workingUpdate turn.QuietWorkingCardOp
+	if quietWorkingCardEnabled(svc.feishuConfig()) && hasPayload && !IsQuietBoundaryTurnPayload(payload) {
+		tracker := svc.Tracker()
+		tracker.Mu.Lock()
+		stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+		if strings.TrimSpace(threadID) != "" {
+			stream.ThreadID = threadID
+		}
+		workingUpdate = prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
+		tracker.Mu.Unlock()
+	}
+	if quietWorkingCardEnabled(svc.feishuConfig()) {
+		svc.app.TurnStreamQuietCardExecutor().ExecuteQuietWorkingCardOp(ctx, sub, workingUpdate)
+	}
+	if hasPayload && (!quietModeEnabled(svc.feishuConfig()) || shouldDeliverTurnItemPayload(quietMode(svc.feishuConfig()), payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)) {
+		svc.app.TurnStreamOutboundCards().SendTurnItemCardWithReuse(ctx, sub, payload, "")
+	}
+}
+
 // CompleteTurnItemWithResult processes a completed turn item and returns the
 // merged final item payload after started/completed state has been reconciled.
 func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) turnitem.ProtocolItem {

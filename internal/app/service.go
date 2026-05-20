@@ -45,11 +45,15 @@ func NewService(cfg *config.Config, cfgPath string) (*Service, error) {
 func (s *Service) Start(ctx context.Context) error {
 	started := make([]*App, 0, len(s.apps))
 	for _, app := range s.apps {
-		if err := startBackend(app, ctx); err != nil {
+		if err := startMCPService(app, ctx); err != nil {
 			_ = stopApps(ctx, started)
 			return err
 		}
 		started = append(started, app)
+		if err := startBackend(app, ctx); err != nil {
+			_ = stopApps(ctx, started)
+			return err
+		}
 	}
 	for _, app := range s.apps {
 		startInboundDeduperLoop(app, ctx)

@@ -405,6 +405,15 @@ type wireToolUseBlock struct {
 
 func (b wireToolUseBlock) blockType() string { return b.Type }
 
+type wireToolResultBlock struct {
+	Type          string         `json:"type"`
+	ToolUseID     string         `json:"tool_use_id"`
+	IsError       bool           `json:"is_error,omitempty"`
+	ToolUseResult map[string]any `json:"tool_use_result,omitempty"`
+}
+
+func (b wireToolResultBlock) blockType() string { return b.Type }
+
 func parseWireContentBlock(raw json.RawMessage) (wireContentBlock, error) {
 	var base struct {
 		Type string `json:"type"`
@@ -421,6 +430,9 @@ func parseWireContentBlock(raw json.RawMessage) (wireContentBlock, error) {
 		return block, json.Unmarshal(raw, &block)
 	case "tool_use":
 		var block wireToolUseBlock
+		return block, json.Unmarshal(raw, &block)
+	case "tool_result":
+		var block wireToolResultBlock
 		return block, json.Unmarshal(raw, &block)
 	default:
 		return nil, fmt.Errorf("unknown content block type: %s", base.Type)

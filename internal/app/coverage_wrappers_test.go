@@ -207,6 +207,15 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 	if err := client.PatchCard(context.Background(), "msg-1", map[string]any{"k": "v"}); err != nil || len(base.patchedCards) != 1 {
 		t.Fatalf("PatchCard() error = %v, patched=%d", err, len(base.patchedCards))
 	}
+	if err := client.ReplyLocalAttachment(context.Background(), "msg-1", "/tmp/file.txt", false); err != nil || len(base.replyLocalAttachmentCalls) != 1 {
+		t.Fatalf("ReplyLocalAttachment() error = %v, calls=%v", err, base.replyLocalAttachmentCalls)
+	}
+	if err := client.ReplyLocalImage(context.Background(), "msg-1", "/tmp/image.png", false); err != nil || len(base.replyLocalImageCalls) != 1 {
+		t.Fatalf("ReplyLocalImage() error = %v, calls=%v", err, base.replyLocalImageCalls)
+	}
+	if err := client.ReplyLocalVideo(context.Background(), "msg-1", "/tmp/video.mp4", false); err != nil || len(base.replyLocalVideoCalls) != 1 {
+		t.Fatalf("ReplyLocalVideo() error = %v, calls=%v", err, base.replyLocalVideoCalls)
+	}
 	if path, name, err := client.DownloadMessageResource(context.Background(), "msg-1", feishu.Attachment{Kind: "file"}, "/tmp"); err != nil || path != "/tmp/file" || name != "file.txt" {
 		t.Fatalf("DownloadMessageResource() = %q %q %v", path, name, err)
 	}
@@ -282,6 +291,15 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	}
 	if err := capture.PatchCard(context.Background(), "msg-1", map[string]any{"k3": "v3"}); err != nil || capture.Card == nil {
 		t.Fatalf("PatchCard() = card:%v err:%v", capture.Card, err)
+	}
+	if err := capture.ReplyLocalAttachment(context.Background(), "msg-1", "/tmp/file.txt", false); err != nil || len(base.replyLocalAttachmentCalls) != 1 {
+		t.Fatalf("ReplyLocalAttachment() = %v calls=%v", err, base.replyLocalAttachmentCalls)
+	}
+	if err := capture.ReplyLocalImage(context.Background(), "msg-1", "/tmp/image.png", false); err != nil || len(base.replyLocalImageCalls) != 1 {
+		t.Fatalf("ReplyLocalImage() = %v calls=%v", err, base.replyLocalImageCalls)
+	}
+	if err := capture.ReplyLocalVideo(context.Background(), "msg-1", "/tmp/video.mp4", false); err != nil || len(base.replyLocalVideoCalls) != 1 {
+		t.Fatalf("ReplyLocalVideo() = %v calls=%v", err, base.replyLocalVideoCalls)
 	}
 	if path, name, err := capture.DownloadMessageResource(context.Background(), "msg-1", feishu.Attachment{Kind: "file"}, "/tmp"); err != nil || path != "/tmp/file" || name != "name.txt" {
 		t.Fatalf("DownloadMessageResource() = %q %q %v", path, name, err)

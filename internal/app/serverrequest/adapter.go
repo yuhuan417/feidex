@@ -57,6 +57,12 @@ func (u unsupportedAdapter) ReplyFormUserInput(*state.PendingRequest, ToolUserIn
 func (u unsupportedAdapter) ReplyTextUserInput(*state.PendingRequest, ToolUserInputPayload, string) (string, error) {
 	return "", u.err()
 }
+func (u unsupportedAdapter) ReplyElicitationAction(*state.PendingRequest, string) error {
+	return u.err()
+}
+func (u unsupportedAdapter) ReplyElicitationContent(*state.PendingRequest, map[string]any) error {
+	return u.err()
+}
 func (u unsupportedAdapter) ReplyElicitationForm(*state.PendingRequest, ElicitationFormPayload, string) (string, error) {
 	return "", u.err()
 }
@@ -119,15 +125,29 @@ func (c codexAdapter) ReplyTextUserInput(pending *state.PendingRequest, payload 
 	return summary, c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
+func (c codexAdapter) ReplyElicitationAction(pending *state.PendingRequest, action string) error {
+	action = strings.TrimSpace(action)
+	switch action {
+	case "accept", "decline", "cancel":
+		return c.client.Reply(pendingRequestIDRaw(pending), map[string]any{"action": action})
+	default:
+		return fmt.Errorf("unsupported elicitation action %q", action)
+	}
+}
+
+func (c codexAdapter) ReplyElicitationContent(pending *state.PendingRequest, content map[string]any) error {
+	return c.client.Reply(pendingRequestIDRaw(pending), map[string]any{
+		"action":  "accept",
+		"content": content,
+	})
+}
+
 func (c codexAdapter) ReplyElicitationForm(pending *state.PendingRequest, payload ElicitationFormPayload, text string) (string, error) {
 	content, summary, err := pendingforms.ParseElicitationFormResponse(strings.TrimSpace(text), payload)
 	if err != nil {
 		return "", err
 	}
-	return summary, c.client.Reply(pendingRequestIDRaw(pending), map[string]any{
-		"action":  "accept",
-		"content": content,
-	})
+	return summary, c.ReplyElicitationContent(pending, content)
 }
 
 func (c codexAdapter) ReplyElicitationURL(pending *state.PendingRequest, actionName string) (string, error) {
@@ -138,7 +158,7 @@ func (c codexAdapter) ReplyElicitationURL(pending *state.PendingRequest, actionN
 	case "elicitation_url.decline":
 		decision = "decline"
 	}
-	return decision, c.client.Reply(pendingRequestIDRaw(pending), map[string]any{"action": decision})
+	return decision, c.ReplyElicitationAction(pending, decision)
 }
 
 func (c codexAdapter) CancelPending(pending *state.PendingRequest) error {
@@ -205,6 +225,14 @@ func (c claudeAdapter) ReplyTextUserInput(pending *state.PendingRequest, payload
 		return "", err
 	}
 	return summary, c.client.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
+}
+
+func (claudeAdapter) ReplyElicitationAction(*state.PendingRequest, string) error {
+	return fmt.Errorf("claude backend does not support elicitation form replies")
+}
+
+func (claudeAdapter) ReplyElicitationContent(*state.PendingRequest, map[string]any) error {
+	return fmt.Errorf("claude backend does not support elicitation form replies")
 }
 
 func (claudeAdapter) ReplyElicitationForm(*state.PendingRequest, ElicitationFormPayload, string) (string, error) {

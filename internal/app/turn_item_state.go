@@ -128,6 +128,28 @@ func (s runtimeStateService) clearTurnItemStates(turnID string) {
 	}
 }
 
+func (s runtimeStateService) updateInFlightTurnItemPayload(threadID, turnID, itemID string, overlay map[string]any) turnitem.ProtocolItem {
+	if s.app == nil {
+		return turnitem.NewProtocolItemWithID(itemID, overlay)
+	}
+	key := turnItemStateKey(turnID, itemID)
+	if key == "" {
+		return turnitem.NewProtocolItemWithID(itemID, overlay)
+	}
+	tracker := s.turnItemTracker()
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	state := tracker.Items[key]
+	if state == nil {
+		return turnitem.NewProtocolItemWithID(itemID, overlay)
+	}
+	if strings.TrimSpace(threadID) != "" {
+		state.ThreadID = strings.TrimSpace(threadID)
+	}
+	state.Started = turnitem.NewProtocolItemWithID(itemID, mergeJSONMaps(state.Started.MergedRaw(), overlay))
+	return turnitem.NewProtocolItemWithID(itemID, mergeJSONMaps(state.Started.MergedRaw(), state.Completed.MergedRaw()))
+}
+
 func (s runtimeStateService) mergeRequestPayloadWithTurnItem(threadID, turnID, itemID string, payload map[string]any) map[string]any {
 	snapshot := s.turnItemSnapshotPayload(threadID, turnID, itemID)
 	if snapshot.Raw == nil && snapshot.ID == "" && snapshot.Type == "" {

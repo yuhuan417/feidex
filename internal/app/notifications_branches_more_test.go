@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -21,6 +23,25 @@ func TestHandleNotificationAdditionalBranches(t *testing.T) {
 
 	if len(ff.replyCards) == 0 && len(ff.replyTextWithIDs) == 0 {
 		t.Fatal("expected completed/failed notifications to deliver output")
+	}
+}
+
+func TestHandleNotificationMCPToolProgressUpdatesWorkingCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"mcp-1","type":"mcpToolCall","server":"feidex-send","tool":"feishu_send_im_file","status":"inProgress","arguments":{"path":"`+filepath.Join(workspace, "artifact.txt")+`"}}}`))
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("replyCards after mcp start = %d, want 1", len(ff.replyCards))
+	}
+	handleNotification(a, "item/mcpToolCall/progress", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"mcp-1","message":"uploading artifact"}`))
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patchedCards after mcp progress = %d, want 1", len(ff.patchedCards))
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "uploading artifact") {
+		t.Fatalf("patched MCP working card body = %q", body)
 	}
 }
 

@@ -711,7 +711,18 @@ func NormalizeToolUserInputSelection(raw any) (string, bool) {
 // RenderElicitationFormBody builds a markdown body describing an elicitation form.
 func RenderElicitationFormBody(payload ElicitationFormPayload) string {
 	lines := []string{payload.Message, "", "请直接回复下一条消息提交表单。"}
-	if properties, _ := payload.Schema["properties"].(map[string]any); len(properties) > 0 {
+	if spec, err := ParseElicitationSchema(payload.Schema); err == nil {
+		for _, field := range spec.Fields {
+			lines = append(lines, "")
+			lines = append(lines, fmt.Sprintf("%s%s", apputil.FirstNonEmpty(strings.TrimSpace(field.Title), strings.TrimSpace(field.Name)), RequiredMarker(field.Required)))
+			if strings.TrimSpace(field.Description) != "" {
+				lines = append(lines, strings.TrimSpace(field.Description))
+			}
+			if details := elicitationFieldDetailLines(field); len(details) > 0 {
+				lines = append(lines, details...)
+			}
+		}
+	} else if properties, _ := payload.Schema["properties"].(map[string]any); len(properties) > 0 {
 		keys := SortedMapKeys(properties)
 		required := RequiredSet(payload.Schema)
 		for _, key := range keys {
@@ -737,32 +748,39 @@ func RenderElicitationFormBody(payload ElicitationFormPayload) string {
 // ParseElicitationFormResponse parses a structured text response into content
 // and a summary string.
 func ParseElicitationFormResponse(text string, payload ElicitationFormPayload) (map[string]any, string, error) {
-	properties, _ := payload.Schema["properties"].(map[string]any)
-	if len(properties) == 0 {
-		return nil, "", fmt.Errorf("empty elicitation schema")
+	spec, err := ParseElicitationSchema(payload.Schema)
+	if err != nil {
+		return nil, "", err
 	}
 	answerMap := ParseStructuredLines(text)
-	required := RequiredSet(payload.Schema)
 	content := map[string]any{}
-	summaryLines := make([]string, 0, len(properties))
-	for _, key := range SortedMapKeys(properties) {
-		field, _ := properties[key].(map[string]any)
-		raw := strings.TrimSpace(answerMap[key])
-		if raw == "" && len(properties) == 1 && len(answerMap) == 0 {
+	summaryLines := make([]string, 0, len(spec.Fields))
+	for _, field := range spec.Fields {
+		raw := strings.TrimSpace(answerMap[field.Name])
+		provided := raw != ""
+		if raw == "" && len(spec.Fields) == 1 && len(answerMap) == 0 {
 			raw = text
+			provided = strings.TrimSpace(text) != ""
 		}
-		if raw == "" {
-			if required[key] {
-				return nil, "", fmt.Errorf("%s: answer is required", key)
+		if field.Kind == ElicitationFieldMultiSelect {
+			values, summary, include, err := normalizeElicitationMultiValue(field, SplitAnswerParts(raw), provided)
+			if err != nil {
+				return nil, "", fmt.Errorf("%s: %w", field.Name, err)
+			}
+			if include {
+				content[field.Name] = values
+				summaryLines = append(summaryLines, fmt.Sprintf("`%s`: %s", field.Name, summary))
 			}
 			continue
 		}
-		value, summary, err := ParseElicitationFieldValue(raw, field)
+		value, summary, include, err := normalizeElicitationTextValue(field, raw, provided)
 		if err != nil {
-			return nil, "", fmt.Errorf("%s: %w", key, err)
+			return nil, "", fmt.Errorf("%s: %w", field.Name, err)
 		}
-		content[key] = value
-		summaryLines = append(summaryLines, fmt.Sprintf("`%s`: %s", key, summary))
+		if include {
+			content[field.Name] = value
+			summaryLines = append(summaryLines, fmt.Sprintf("`%s`: %s", field.Name, summary))
+		}
 	}
 	return content, strings.Join(summaryLines, "\n"), nil
 }
@@ -814,9 +832,15 @@ func ParseElicitationFieldValue(raw string, field map[string]any) (any, string, 
 // RequiredSet returns the set of required field names from a schema.
 func RequiredSet(schema map[string]any) map[string]bool {
 	required := map[string]bool{}
-	values, _ := schema["required"].([]any)
-	for _, v := range values {
-		if s, ok := v.(string); ok {
+	switch values := schema["required"].(type) {
+	case []any:
+		for _, v := range values {
+			if s, ok := v.(string); ok {
+				required[s] = true
+			}
+		}
+	case []string:
+		for _, s := range values {
 			required[s] = true
 		}
 	}

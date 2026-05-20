@@ -108,6 +108,18 @@ func (c *CommandCaptureClient) PatchCard(_ context.Context, _ string, card map[s
 	return nil
 }
 
+func (c *CommandCaptureClient) ReplyLocalAttachment(ctx context.Context, messageID, path string, inThread bool) error {
+	return c.Base.ReplyLocalAttachment(ctx, messageID, path, inThread)
+}
+
+func (c *CommandCaptureClient) ReplyLocalImage(ctx context.Context, messageID, path string, inThread bool) error {
+	return c.Base.ReplyLocalImage(ctx, messageID, path, inThread)
+}
+
+func (c *CommandCaptureClient) ReplyLocalVideo(ctx context.Context, messageID, path string, inThread bool) error {
+	return c.Base.ReplyLocalVideo(ctx, messageID, path, inThread)
+}
+
 func (c *CommandCaptureClient) DownloadMessageResource(ctx context.Context, messageID string, attachment feishu.Attachment, targetDir string) (string, string, error) {
 	return c.Base.DownloadMessageResource(ctx, messageID, attachment, targetDir)
 }
@@ -311,6 +323,30 @@ func (n *NotifyingFeishuClient) PatchCard(ctx context.Context, messageID string,
 	err := n.Base.PatchCard(ctx, messageID, card)
 	if err != nil {
 		n.NotifyPermissionIssue(NotifyTarget{MessageID: messageID}, err)
+	}
+	return err
+}
+
+func (n *NotifyingFeishuClient) ReplyLocalAttachment(ctx context.Context, messageID, path string, inThread bool) error {
+	err := n.Base.ReplyLocalAttachment(ctx, messageID, path, inThread)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{MessageID: messageID, InThread: inThread}, err)
+	}
+	return err
+}
+
+func (n *NotifyingFeishuClient) ReplyLocalImage(ctx context.Context, messageID, path string, inThread bool) error {
+	err := n.Base.ReplyLocalImage(ctx, messageID, path, inThread)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{MessageID: messageID, InThread: inThread}, err)
+	}
+	return err
+}
+
+func (n *NotifyingFeishuClient) ReplyLocalVideo(ctx context.Context, messageID, path string, inThread bool) error {
+	err := n.Base.ReplyLocalVideo(ctx, messageID, path, inThread)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{MessageID: messageID, InThread: inThread}, err)
 	}
 	return err
 }

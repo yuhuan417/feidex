@@ -44,6 +44,12 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		TurnStream: appclauderuntime.TurnStreamDeps{
+			NoteTurnItemStarted: func(threadID, turnID string, item turnitem.ProtocolItem) {
+				newRuntimeStateService(app).noteTurnItemStartedPayload(threadID, turnID, item)
+			},
+			UpdateInFlightTurnItem: func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+				newTurnStreamService(app).updateInFlightTurnItemPayload(ctx, threadID, turnID, itemID, item)
+			},
 			RecordTurnError: func(threadID, turnID, message string) {
 				newTurnStreamService(app).recordTurnError(threadID, turnID, message)
 			},
@@ -130,6 +136,9 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			QuietWorkingCardEnabled: func() bool {
 				return quietWorkingCardEnabled(feishuConfig(app))
 			},
+		},
+		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {
+			return prepareClaudeMCPConfig(app, sessionKey)
 		},
 	})
 

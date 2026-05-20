@@ -153,6 +153,13 @@ func BuildWorkingCardLines(itemID string, item map[string]any, workspaceCwd stri
 		return WorkingItemKey(itemID), buildQuietFileChangeLines(item)
 	case "web_search":
 		return WorkingItemKey(itemID), BuildQuietWebSearchLines(item)
+	case "mcp_tool_call":
+		toolName := strings.Trim(strings.TrimSpace(turnitem.StringValue(item["server"]))+"/"+strings.TrimSpace(turnitem.StringValue(item["tool"])), "/")
+		lines := turnitem.BuildQuietMCPToolProgressLines(toolName, turnitem.ToolCallInput(item), workspaceCwd)
+		if message := strings.TrimSpace(turnitem.StringValue(item["message"])); message != "" {
+			lines = append(lines, message)
+		}
+		return WorkingItemKey(itemID), lines
 	case "dynamic_tool_call":
 		return WorkingItemKey(itemID), turnitem.BuildClaudeQuietDynamicToolLines(turnitem.StringValue(item["tool"]), item["input"], workspaceCwd)
 	case "context_compaction":

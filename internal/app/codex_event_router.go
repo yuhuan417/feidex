@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	appapproval "feidex/internal/app/approval"
 	appbackend "feidex/internal/app/backend"
 	apppendingforms "feidex/internal/app/pendingforms"
-	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -31,9 +31,18 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	router.NoteTurnItemStarted = func(threadID, turnID string, item turnitem.ProtocolItem) {
 		newRuntimeStateService(a).noteTurnItemStartedPayload(threadID, turnID, item)
 		noteStandaloneCompactItemStarted(a, threadID, turnID, item.MergedRaw())
+		if normalizeTurnItemType(item.Type) == "mcp_tool_call" {
+			newTurnStreamService(a).updateInFlightTurnItemPayload(context.Background(), threadID, turnID, item.EffectiveID(""), item)
+		}
 	}
 	router.CompleteTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 		newTurnStreamService(a).completeTurnItemPayload(ctx, threadID, turnID, itemID, item)
+	}
+	router.UpdateInFlightTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+		snapshot := newRuntimeStateService(a).updateInFlightTurnItemPayload(threadID, turnID, itemID, item.MergedRaw())
+		if quietWorkingCardEnabled(feishuConfig(a)) {
+			newTurnStreamService(a).updateInFlightTurnItemPayload(ctx, threadID, turnID, itemID, snapshot)
+		}
 	}
 	router.UpdatePendingPlan = func(turnID, plan string) {
 		newTurnStreamService(a).updatePendingPlan(turnID, plan)
