@@ -80,6 +80,8 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 	var updates [][]string
 	commandRunner = func(_ context.Context, name string, args ...string) (string, string, error) {
 		switch {
+		case name == "claude" && len(args) == 1 && args[0] == "--version":
+			return "2.1.138 (Claude Code)", "", nil
 		case name == "claude" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Check for updates and install if available", "", nil
 		case name == "claude" && len(args) == 1 && args[0] == "update":
@@ -89,9 +91,12 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 			return "", "", errors.New("unexpected command")
 		}
 	}
-	latestVersionLookup = func(_ context.Context, packageName string) (string, error) {
+	latestVersionLookup = func(_ context.Context, packageName, userAgent string) (string, error) {
 		if packageName != "@anthropic-ai/claude-code" {
 			t.Fatalf("latest package = %q, want @anthropic-ai/claude-code", packageName)
+		}
+		if userAgent != "claude-cli/2.1.138 (external, cli)" {
+			t.Fatalf("latest User-Agent = %q, want claude-cli/2.1.138 (external, cli)", userAgent)
 		}
 		return "2.1.139", nil
 	}

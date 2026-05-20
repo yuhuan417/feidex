@@ -15,6 +15,7 @@ import (
 
 const packageName = "@openai/codex"
 const selfUpdateTargetLatest = "latest"
+const userAgentProduct = "codex_cli_rs"
 
 type Probe struct {
 	Command         string
@@ -40,8 +41,8 @@ var commandRunner = func(ctx context.Context, name string, args ...string) (stri
 	return strings.TrimSpace(string(output)), "", nil
 }
 
-var latestVersionLookup = func(ctx context.Context, packageName string) (string, error) {
-	return npmregistry.LatestVersion(ctx, nil, packageName)
+var latestVersionLookup = func(ctx context.Context, packageName, userAgent string) (string, error) {
+	return npmregistry.LatestVersion(ctx, nil, packageName, userAgent)
 }
 
 func New(command string) *Manager {
@@ -99,7 +100,7 @@ func (m *Manager) LatestVersion(ctx context.Context) (string, error) {
 	if _, err := m.selfUpdateCommand(ctx); err != nil {
 		return "", fmt.Errorf("检查 Codex 自升级命令失败: %w", err)
 	}
-	version, err := latestVersionLookup(ctx, packageName)
+	version, err := latestVersionLookup(ctx, packageName, m.userAgent(ctx))
 	if err != nil {
 		return "", fmt.Errorf("查询 Codex 最新版本失败: %w", err)
 	}
@@ -152,6 +153,22 @@ func (m *Manager) selfUpdateCommand(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("当前 Codex CLI 不支持 `update` 自升级命令: %s", firstNonEmpty(stderr, err.Error()))
 	}
 	return "update", nil
+}
+
+func (m *Manager) userAgent(ctx context.Context) string {
+	version, err := m.currentVersion(ctx)
+	if err != nil {
+		return userAgentProduct
+	}
+	return codexUserAgent(version)
+}
+
+func codexUserAgent(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return userAgentProduct
+	}
+	return userAgentProduct + "/" + version
 }
 
 func packageFromCommandPath(commandPath, expectedPackageName string) (string, string, bool) {

@@ -19,7 +19,7 @@ type HTTPDoer interface {
 }
 
 // LatestVersion returns the version tagged "latest" for an npm package.
-func LatestVersion(ctx context.Context, client HTTPDoer, packageName string) (string, error) {
+func LatestVersion(ctx context.Context, client HTTPDoer, packageName, userAgent string) (string, error) {
 	packageName = strings.TrimSpace(packageName)
 	if packageName == "" {
 		return "", fmt.Errorf("missing package name")
@@ -36,6 +36,9 @@ func LatestVersion(ctx context.Context, client HTTPDoer, packageName string) (st
 		return "", err
 	}
 	req.Header.Set("Accept", "application/json")
+	if userAgent = strings.TrimSpace(userAgent); userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

@@ -80,6 +80,8 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 	var updates [][]string
 	commandRunner = func(_ context.Context, name string, args ...string) (string, string, error) {
 		switch {
+		case name == "codex" && len(args) == 1 && args[0] == "--version":
+			return "codex-cli 0.132.0", "", nil
 		case name == "codex" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Update Codex to the latest version", "", nil
 		case name == "codex" && len(args) == 1 && args[0] == "update":
@@ -89,9 +91,12 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 			return "", "", errors.New("unexpected command")
 		}
 	}
-	latestVersionLookup = func(_ context.Context, packageName string) (string, error) {
+	latestVersionLookup = func(_ context.Context, packageName, userAgent string) (string, error) {
 		if packageName != "@openai/codex" {
 			t.Fatalf("latest package = %q, want @openai/codex", packageName)
+		}
+		if userAgent != "codex_cli_rs/0.132.0" {
+			t.Fatalf("latest User-Agent = %q, want codex_cli_rs/0.132.0", userAgent)
 		}
 		return "0.133.0", nil
 	}
