@@ -241,6 +241,7 @@ func TestReadLoopTransportFailureNotifiesAndFailsPendingCalls(t *testing.T) {
 }
 
 func TestStartStdioInitializesClient(t *testing.T) {
+	stubCodexCommandVersion(t, "")
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "rpc.log")
 	scriptPath := filepath.Join(dir, "codex-rpc.sh")
@@ -283,9 +284,19 @@ done
 	if !strings.Contains(logText, `"method":"initialize"`) || !strings.Contains(logText, `"method":"initialized"`) {
 		t.Fatalf("stdio log = %q, want initialize and initialized messages", logText)
 	}
+	if !strings.Contains(logText, `"name":"codex_cli_rs"`) {
+		t.Fatalf("stdio log = %q, want standard Codex CLI clientInfo", logText)
+	}
+	if strings.Contains(logText, `"name":"feidex"`) {
+		t.Fatalf("stdio log = %q, should not identify as feidex clientInfo", logText)
+	}
+	if got := client.UserAgent(); got != "ua" {
+		t.Fatalf("UserAgent() = %q, want ua", got)
+	}
 }
 
 func TestStartStdioUsesConfiguredAppServerDir(t *testing.T) {
+	stubCodexCommandVersion(t, "")
 	dir := t.TempDir()
 	workDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
@@ -328,6 +339,7 @@ done
 }
 
 func TestStartStdioIncludesMCPPublicationArgsAndEnv(t *testing.T) {
+	stubCodexCommandVersion(t, "")
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.log")
 	envPath := filepath.Join(dir, "env.log")
@@ -383,6 +395,7 @@ done
 }
 
 func TestStartKeepsProcessAliveAfterStartupContextCancel(t *testing.T) {
+	stubCodexCommandVersion(t, "")
 	dir := t.TempDir()
 	pidPath := filepath.Join(dir, "app-server.pid")
 	scriptPath := filepath.Join(dir, "codex-rpc.sh")
@@ -423,6 +436,7 @@ done
 }
 
 func TestStartCleansUpProcessWhenInitializationContextTimesOut(t *testing.T) {
+	stubCodexCommandVersion(t, "")
 	dir := t.TempDir()
 	pidPath := filepath.Join(dir, "app-server.pid")
 	scriptPath := filepath.Join(dir, "codex-rpc.sh")
@@ -467,6 +481,17 @@ func TestStartRejectsRemovedWebSocketTransport(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "stdio only") {
 		t.Fatalf("Start(removed websocket url) error = %v, want stdio-only failure", err)
 	}
+}
+
+func stubCodexCommandVersion(t *testing.T, version string) {
+	t.Helper()
+	prev := codexCommandVersionLookup
+	codexCommandVersionLookup = func(context.Context, string) string {
+		return version
+	}
+	t.Cleanup(func() {
+		codexCommandVersionLookup = prev
+	})
 }
 
 func TestCloseClosesStdinWhenNoProcess(t *testing.T) {

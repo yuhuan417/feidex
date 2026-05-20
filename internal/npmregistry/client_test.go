@@ -22,8 +22,8 @@ func TestLatestVersionQueriesEscapedPackageLatestEndpoint(t *testing.T) {
 		if got := req.URL.EscapedPath(); got != "/@openai%2Fcodex/latest" {
 			t.Fatalf("path = %q, want escaped package latest endpoint", got)
 		}
-		if got := req.Header.Get("User-Agent"); got != "codex_cli_rs/0.132.0" {
-			t.Fatalf("User-Agent = %q, want codex_cli_rs/0.132.0", got)
+		if got := req.Header.Get("User-Agent"); got != "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)" {
+			t.Fatalf("User-Agent = %q, want standard Codex CLI User-Agent", got)
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -32,7 +32,7 @@ func TestLatestVersionQueriesEscapedPackageLatestEndpoint(t *testing.T) {
 		}, nil
 	})}
 
-	version, err := LatestVersion(context.Background(), client, "@openai/codex", "codex_cli_rs/0.132.0")
+	version, err := LatestVersion(context.Background(), client, "@openai/codex", "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)")
 	if err != nil {
 		t.Fatalf("LatestVersion() error = %v", err)
 	}
@@ -49,7 +49,7 @@ func TestLatestVersionRejectsMissingVersion(t *testing.T) {
 		}, nil
 	})}
 
-	if _, err := LatestVersion(context.Background(), client, "@openai/codex", "codex_cli_rs/0.132.0"); err == nil {
+	if _, err := LatestVersion(context.Background(), client, "@openai/codex", "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)"); err == nil {
 		t.Fatal("LatestVersion() error = nil, want missing version error")
 	}
 }

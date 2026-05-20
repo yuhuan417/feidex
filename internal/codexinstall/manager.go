@@ -7,15 +7,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
+	"time"
 
+	"feidex/internal/codexcli"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/npmregistry"
 )
 
 const packageName = "@openai/codex"
 const selfUpdateTargetLatest = "latest"
-const userAgentProduct = "codex_cli_rs"
 
 type Probe struct {
 	Command         string
@@ -44,6 +46,8 @@ var commandRunner = func(ctx context.Context, name string, args ...string) (stri
 var latestVersionLookup = func(ctx context.Context, packageName, userAgent string) (string, error) {
 	return npmregistry.LatestVersion(ctx, nil, packageName, userAgent)
 }
+
+var appServerUserAgentLookup = lookupCodexAppServerUserAgent
 
 func New(command string) *Manager {
 	command = strings.TrimSpace(command)
@@ -100,7 +104,11 @@ func (m *Manager) LatestVersion(ctx context.Context) (string, error) {
 	if _, err := m.selfUpdateCommand(ctx); err != nil {
 		return "", fmt.Errorf("检查 Codex 自升级命令失败: %w", err)
 	}
-	version, err := latestVersionLookup(ctx, packageName, m.userAgent(ctx))
+	userAgent, err := m.userAgent(ctx)
+	if err != nil {
+		return "", fmt.Errorf("读取 Codex 标准 User-Agent 失败: %w", err)
+	}
+	version, err := latestVersionLookup(ctx, packageName, userAgent)
 	if err != nil {
 		return "", fmt.Errorf("查询 Codex 最新版本失败: %w", err)
 	}
@@ -136,7 +144,7 @@ func (m *Manager) currentVersion(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("读取当前版本失败: %s", firstNonEmpty(stderr, err.Error()))
 	}
-	version := parseCodexVersion(stdout)
+	version := codexcli.ParseVersion(stdout)
 	if version == "" {
 		return "", fmt.Errorf("解析当前版本失败: %q", strings.TrimSpace(stdout))
 	}
@@ -155,20 +163,34 @@ func (m *Manager) selfUpdateCommand(ctx context.Context) (string, error) {
 	return "update", nil
 }
 
-func (m *Manager) userAgent(ctx context.Context) string {
-	version, err := m.currentVersion(ctx)
-	if err != nil {
-		return userAgentProduct
+func (m *Manager) userAgent(ctx context.Context) (string, error) {
+	command := "codex"
+	if m != nil && strings.TrimSpace(m.command) != "" {
+		command = strings.TrimSpace(m.command)
 	}
-	return codexUserAgent(version)
+	return appServerUserAgentLookup(ctx, command)
 }
 
-func codexUserAgent(version string) string {
-	version = strings.TrimSpace(version)
-	if version == "" {
-		return userAgentProduct
+func lookupCodexAppServerUserAgent(ctx context.Context, command string) (string, error) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		command = "codex"
 	}
-	return userAgentProduct + "/" + version
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	client := codexrpc.New(config.CodexConfig{Command: command})
+	if err := client.Start(probeCtx, false); err != nil {
+		return "", err
+	}
+	defer func() { _ = client.Close() }()
+	userAgent := strings.TrimSpace(client.UserAgent())
+	if userAgent == "" {
+		return "", fmt.Errorf("codex initialize response missing userAgent")
+	}
+	return userAgent, nil
 }
 
 func packageFromCommandPath(commandPath, expectedPackageName string) (string, string, bool) {
@@ -206,16 +228,6 @@ func readPackageManifest(path string) (string, string, error) {
 		return "", "", err
 	}
 	return strings.TrimSpace(payload.Name), strings.TrimSpace(payload.Version), nil
-}
-
-func parseCodexVersion(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	versionPattern := regexp.MustCompile(`\bv?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b`)
-	version := versionPattern.FindString(raw)
-	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 func parseJSONMaybeString(raw string) (string, error) {

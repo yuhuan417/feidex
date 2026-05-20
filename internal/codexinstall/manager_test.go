@@ -3,8 +3,10 @@ package codexinstall
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -72,16 +74,16 @@ func TestManagerProbeRejectsMissingCommand(t *testing.T) {
 func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 	prevRunner := commandRunner
 	prevLatestLookup := latestVersionLookup
+	prevUserAgentLookup := appServerUserAgentLookup
 	defer func() {
 		commandRunner = prevRunner
 		latestVersionLookup = prevLatestLookup
+		appServerUserAgentLookup = prevUserAgentLookup
 	}()
 
 	var updates [][]string
 	commandRunner = func(_ context.Context, name string, args ...string) (string, string, error) {
 		switch {
-		case name == "codex" && len(args) == 1 && args[0] == "--version":
-			return "codex-cli 0.132.0", "", nil
 		case name == "codex" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Update Codex to the latest version", "", nil
 		case name == "codex" && len(args) == 1 && args[0] == "update":
@@ -91,12 +93,18 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 			return "", "", errors.New("unexpected command")
 		}
 	}
+	appServerUserAgentLookup = func(_ context.Context, command string) (string, error) {
+		if command != "codex" {
+			t.Fatalf("User-Agent command = %q, want codex", command)
+		}
+		return "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)", nil
+	}
 	latestVersionLookup = func(_ context.Context, packageName, userAgent string) (string, error) {
 		if packageName != "@openai/codex" {
 			t.Fatalf("latest package = %q, want @openai/codex", packageName)
 		}
-		if userAgent != "codex_cli_rs/0.132.0" {
-			t.Fatalf("latest User-Agent = %q, want codex_cli_rs/0.132.0", userAgent)
+		if userAgent != "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)" {
+			t.Fatalf("latest User-Agent = %q, want standard Codex CLI User-Agent", userAgent)
 		}
 		return "0.133.0", nil
 	}
@@ -117,5 +125,49 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 	}
 	if err := manager.InstallVersion(context.Background(), "1.2.3"); err == nil {
 		t.Fatal("InstallVersion(specific version) should fail")
+	}
+}
+
+func TestLookupCodexAppServerUserAgentUsesInitializeResponse(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "rpc.log")
+	scriptPath := filepath.Join(tempDir, "codex-rpc.sh")
+	const wantUserAgent = "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)"
+	script := fmt.Sprintf(`#!/bin/sh
+logfile=%q
+while IFS= read -r line; do
+  printf '%%s\n' "$line" >> "$logfile"
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '%%s\n' '{"id":1,"result":{"userAgent":"%s","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+    *'"method":"initialized"'*)
+      exit 0
+      ;;
+  esac
+done
+`, logPath, wantUserAgent)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	got, err := lookupCodexAppServerUserAgent(context.Background(), scriptPath)
+	if err != nil {
+		t.Fatalf("lookupCodexAppServerUserAgent() error = %v", err)
+	}
+	if got != wantUserAgent {
+		t.Fatalf("lookupCodexAppServerUserAgent() = %q, want %q", got, wantUserAgent)
+	}
+
+	logBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile(logPath) error = %v", err)
+	}
+	logText := string(logBytes)
+	if !strings.Contains(logText, `"method":"initialize"`) {
+		t.Fatalf("rpc log = %q, want initialize", logText)
+	}
+	if !strings.Contains(logText, `"name":"codex_cli_rs"`) {
+		t.Fatalf("rpc log = %q, want standard Codex CLI clientInfo", logText)
 	}
 }

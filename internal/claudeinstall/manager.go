@@ -100,7 +100,11 @@ func (m *Manager) LatestVersion(ctx context.Context) (string, error) {
 	if _, err := m.selfUpdateCommand(ctx); err != nil {
 		return "", fmt.Errorf("检查 Claude 自升级命令失败: %w", err)
 	}
-	version, err := latestVersionLookup(ctx, packageName, m.userAgent(ctx))
+	userAgent, err := m.userAgent(ctx)
+	if err != nil {
+		return "", fmt.Errorf("读取 Claude 标准 User-Agent 失败: %w", err)
+	}
+	version, err := latestVersionLookup(ctx, packageName, userAgent)
 	if err != nil {
 		return "", fmt.Errorf("查询 Claude 最新版本失败: %w", err)
 	}
@@ -155,18 +159,18 @@ func (m *Manager) selfUpdateCommand(ctx context.Context) (string, error) {
 	return "update", nil
 }
 
-func (m *Manager) userAgent(ctx context.Context) string {
+func (m *Manager) userAgent(ctx context.Context) (string, error) {
 	version, err := m.currentVersion(ctx)
 	if err != nil {
-		return claudeUserAgent("")
+		return "", err
 	}
-	return claudeUserAgent(version)
+	return claudeUserAgent(version), nil
 }
 
 func claudeUserAgent(version string) string {
 	version = strings.TrimSpace(version)
 	if version == "" {
-		return userAgentProduct + " (external, cli)"
+		return ""
 	}
 	return userAgentProduct + "/" + version + " (external, cli)"
 }

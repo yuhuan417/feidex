@@ -16,7 +16,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"feidex/internal/codexcli"
 	"feidex/internal/config"
+)
+
+const (
+	codexClientInfoName    = "codex_cli_rs"
+	codexClientInfoTitle   = "Codex CLI"
+	versionProbeMaxWait    = 2 * time.Second
+	versionProbeMaxOutSize = 64 * 1024
 )
 
 type Client struct {
@@ -35,6 +43,7 @@ type Client struct {
 	closing   bool
 	exitErr   error
 	waitDone  chan struct{}
+	userAgent string
 	errorOnce sync.Once
 
 	onNotification func(string, json.RawMessage)
@@ -43,6 +52,8 @@ type Client struct {
 }
 
 var nextClientID atomic.Uint64
+
+var codexCommandVersionLookup = lookupCodexCommandVersion
 
 type responseEnvelope struct {
 	ID     int64           `json:"id"`
@@ -133,11 +144,7 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 		PlatformOS     string `json:"platformOs"`
 	}
 	if err := c.Call(ctx, "initialize", map[string]any{
-		"clientInfo": map[string]any{
-			"name":    "feidex",
-			"title":   "Feidex Feishu Middleware",
-			"version": "0.1.0",
-		},
+		"clientInfo": c.clientInfo(ctx),
 		"capabilities": map[string]any{
 			"experimentalApi": experimentalAPI,
 			"optOutNotificationMethods": []string{
@@ -153,6 +160,9 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 	}, &initResp); err != nil {
 		return err
 	}
+	c.stateMu.Lock()
+	c.userAgent = strings.TrimSpace(initResp.UserAgent)
+	c.stateMu.Unlock()
 	if err := c.Notify("initialized", map[string]any{}); err != nil {
 		return err
 	}
@@ -162,6 +172,55 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 		"pid", c.pid(),
 	)
 	return nil
+}
+
+func (c *Client) clientInfo(ctx context.Context) map[string]any {
+	info := map[string]any{
+		"name":  codexClientInfoName,
+		"title": codexClientInfoTitle,
+	}
+	if version := c.commandVersion(ctx); version != "" {
+		info["version"] = version
+	}
+	return info
+}
+
+func (c *Client) commandVersion(ctx context.Context) string {
+	if c == nil {
+		return ""
+	}
+	command := strings.TrimSpace(c.cfg.Command)
+	if command == "" {
+		command = "codex"
+	}
+	return codexCommandVersionLookup(ctx, command)
+}
+
+func lookupCodexCommandVersion(ctx context.Context, command string) string {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		command = "codex"
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	versionCtx, cancel := context.WithTimeout(ctx, versionProbeMaxWait)
+	defer cancel()
+	cmd := exec.CommandContext(versionCtx, command, "--version")
+	output, err := cmd.CombinedOutput()
+	if err != nil || len(output) > versionProbeMaxOutSize {
+		return ""
+	}
+	return codexcli.ParseVersion(string(output))
+}
+
+func (c *Client) UserAgent() string {
+	if c == nil {
+		return ""
+	}
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	return c.userAgent
 }
 
 func (c *Client) Close() error {
