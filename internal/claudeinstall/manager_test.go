@@ -30,7 +30,7 @@ func TestManagerProbeDetectsSupportedSelfUpdateCommand(t *testing.T) {
 		switch {
 		case name == "claude" && len(args) == 1 && args[0] == "--version":
 			return "2.1.138 (Claude Code)", "", nil
-		case name == "claude" && len(args) == 2 && args[0] == "help" && args[1] == "update":
+		case name == "claude" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Check for updates and install if available", "", nil
 		default:
 			return "", "", errors.New("unexpected command")
@@ -71,12 +71,16 @@ func TestManagerProbeRejectsMissingCommand(t *testing.T) {
 
 func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 	prevRunner := commandRunner
-	defer func() { commandRunner = prevRunner }()
+	prevLatestLookup := latestVersionLookup
+	defer func() {
+		commandRunner = prevRunner
+		latestVersionLookup = prevLatestLookup
+	}()
 
 	var updates [][]string
 	commandRunner = func(_ context.Context, name string, args ...string) (string, string, error) {
 		switch {
-		case name == "claude" && len(args) == 2 && args[0] == "help" && args[1] == "update":
+		case name == "claude" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Check for updates and install if available", "", nil
 		case name == "claude" && len(args) == 1 && args[0] == "update":
 			updates = append(updates, append([]string(nil), args...))
@@ -85,13 +89,19 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 			return "", "", errors.New("unexpected command")
 		}
 	}
+	latestVersionLookup = func(_ context.Context, packageName string) (string, error) {
+		if packageName != "@anthropic-ai/claude-code" {
+			t.Fatalf("latest package = %q, want @anthropic-ai/claude-code", packageName)
+		}
+		return "2.1.139", nil
+	}
 
 	manager := New("claude")
 	version, err := manager.LatestVersion(context.Background())
 	if err != nil {
 		t.Fatalf("LatestVersion() error = %v", err)
 	}
-	if version != selfUpdateTargetLatest {
+	if version != "2.1.139" {
 		t.Fatalf("LatestVersion() = %q", version)
 	}
 	if err := manager.InstallVersion(context.Background(), selfUpdateTargetLatest); err != nil {

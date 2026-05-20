@@ -30,7 +30,7 @@ func TestManagerProbeDetectsSupportedSelfUpdateCommand(t *testing.T) {
 		switch {
 		case name == "codex" && len(args) == 1 && args[0] == "--version":
 			return "WARNING: ignored\ncodex-cli 0.132.0", "", nil
-		case name == "codex" && len(args) == 2 && args[0] == "help" && args[1] == "update":
+		case name == "codex" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Update Codex to the latest version", "", nil
 		default:
 			return "", "", errors.New("unexpected command")
@@ -71,12 +71,16 @@ func TestManagerProbeRejectsMissingCommand(t *testing.T) {
 
 func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 	prevRunner := commandRunner
-	defer func() { commandRunner = prevRunner }()
+	prevLatestLookup := latestVersionLookup
+	defer func() {
+		commandRunner = prevRunner
+		latestVersionLookup = prevLatestLookup
+	}()
 
 	var updates [][]string
 	commandRunner = func(_ context.Context, name string, args ...string) (string, string, error) {
 		switch {
-		case name == "codex" && len(args) == 2 && args[0] == "help" && args[1] == "update":
+		case name == "codex" && len(args) == 2 && args[0] == "update" && args[1] == "--help":
 			return "Update Codex to the latest version", "", nil
 		case name == "codex" && len(args) == 1 && args[0] == "update":
 			updates = append(updates, append([]string(nil), args...))
@@ -85,13 +89,19 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 			return "", "", errors.New("unexpected command")
 		}
 	}
+	latestVersionLookup = func(_ context.Context, packageName string) (string, error) {
+		if packageName != "@openai/codex" {
+			t.Fatalf("latest package = %q, want @openai/codex", packageName)
+		}
+		return "0.133.0", nil
+	}
 
 	manager := New("codex")
 	version, err := manager.LatestVersion(context.Background())
 	if err != nil {
 		t.Fatalf("LatestVersion() error = %v", err)
 	}
-	if version != selfUpdateTargetLatest {
+	if version != "0.133.0" {
 		t.Fatalf("LatestVersion() = %q", version)
 	}
 	if err := manager.InstallVersion(context.Background(), selfUpdateTargetLatest); err != nil {

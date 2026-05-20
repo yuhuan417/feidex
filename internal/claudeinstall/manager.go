@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"feidex/internal/npmregistry"
 )
 
 const packageName = "@anthropic-ai/claude-code"
@@ -36,6 +38,10 @@ var commandRunner = func(ctx context.Context, name string, args ...string) (stri
 		return "", strings.TrimSpace(string(output)), err
 	}
 	return strings.TrimSpace(string(output)), "", nil
+}
+
+var latestVersionLookup = func(ctx context.Context, packageName string) (string, error) {
+	return npmregistry.LatestVersion(ctx, nil, packageName)
 }
 
 func New(command string) *Manager {
@@ -93,7 +99,11 @@ func (m *Manager) LatestVersion(ctx context.Context) (string, error) {
 	if _, err := m.selfUpdateCommand(ctx); err != nil {
 		return "", fmt.Errorf("检查 Claude 自升级命令失败: %w", err)
 	}
-	return selfUpdateTargetLatest, nil
+	version, err := latestVersionLookup(ctx, packageName)
+	if err != nil {
+		return "", fmt.Errorf("查询 Claude 最新版本失败: %w", err)
+	}
+	return strings.TrimSpace(version), nil
 }
 
 func (m *Manager) InstallVersion(ctx context.Context, version string) error {
@@ -137,7 +147,7 @@ func (m *Manager) selfUpdateCommand(ctx context.Context) (string, error) {
 	if m != nil && strings.TrimSpace(m.command) != "" {
 		command = strings.TrimSpace(m.command)
 	}
-	_, stderr, err := commandRunner(ctx, command, "help", "update")
+	_, stderr, err := commandRunner(ctx, command, "update", "--help")
 	if err != nil {
 		return "", fmt.Errorf("当前 Claude CLI 不支持 `update` 自升级命令: %s", firstNonEmpty(stderr, err.Error()))
 	}

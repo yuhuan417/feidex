@@ -54,7 +54,7 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 
 	update("installing", "正在运行 Claude 自升级命令 `"+firstNonEmpty(probe.Command, "claude")+" "+updateCommand+"`")
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
-	err = manager.InstallVersion(ctx, targetVersion)
+	err = manager.InstallVersion(ctx, cliSelfUpdateInstallTarget)
 	cancel()
 	if err != nil {
 		finalize("failed", "Claude 自升级失败，未自动回滚: "+err.Error())

@@ -9,6 +9,8 @@ import (
 	"feidex/internal/feishu"
 )
 
+const cliSelfUpdateInstallTarget = "latest"
+
 // newCodexUpgradeService builds a codexruntime.UpgradeService with
 // all callbacks wired to *App dependencies.
 func newCodexUpgradeService(a *App) appcodexruntime.UpgradeService {
@@ -85,7 +87,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 
 	update("installing", "正在运行 Codex 自升级命令 `"+firstNonEmpty(probe.Command, "codex")+" "+updateCommand+"`")
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
-	err = manager.InstallVersion(ctx, targetVersion)
+	err = manager.InstallVersion(ctx, cliSelfUpdateInstallTarget)
 	cancel()
 	if err != nil {
 		finalize("failed", "Codex 自升级失败，未自动回滚: "+err.Error())

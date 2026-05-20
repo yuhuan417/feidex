@@ -120,7 +120,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 			UpdateCommand:  "update",
 			Supported:      true,
 		},
-		latest: "latest",
+		latest: "1.1.0",
 	}
 	origManager := newCodexInstallManager
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
@@ -135,7 +135,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `latest`", "升级方式: `codex update`", "失败处理: 不自动回滚"} {
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `1.1.0`", "升级方式: `codex update`", "失败处理: 不自动回滚"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
 		}
@@ -210,13 +210,13 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "latest",
+		TargetVersion:   "1.1.0",
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "latest",
+		TargetVersion:  "1.1.0",
 		UpdateCommand:  "update",
 	})
 
@@ -289,13 +289,13 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "latest",
+		TargetVersion:   "1.1.0",
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "latest",
+		TargetVersion:  "1.1.0",
 		UpdateCommand:  "update",
 	})
 
@@ -814,7 +814,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 			UpdateCommand:  "update",
 			Supported:      true,
 		},
-		latest: "latest",
+		latest: "2.1.139",
 	}
 	origManager := newClaudeInstallManager
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
@@ -829,7 +829,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `latest`", "升级方式: `claude update`", "失败处理: 不自动回滚"} {
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `2.1.139`", "升级方式: `claude update`", "失败处理: 不自动回滚"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
 		}
@@ -897,13 +897,13 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "latest",
+		TargetVersion:   "2.1.139",
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "latest",
+		TargetVersion:  "2.1.139",
 		UpdateCommand:  "update",
 	})
 
@@ -958,13 +958,13 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "latest",
+		TargetVersion:   "2.1.139",
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "latest",
+		TargetVersion:  "2.1.139",
 		UpdateCommand:  "update",
 	})
 
