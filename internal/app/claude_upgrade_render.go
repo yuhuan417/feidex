@@ -1,11 +1,20 @@
 package app
 
 import (
+	"strings"
 	"time"
 
 	"feidex/internal/app/upgraderender"
 	"feidex/internal/state"
 )
+
+func claudeUpgradeTargetMatchesCurrent(currentVersion, targetVersion string) bool {
+	targetVersion = strings.TrimSpace(targetVersion)
+	if targetVersion == "" || strings.EqualFold(targetVersion, "latest") {
+		return false
+	}
+	return strings.TrimSpace(currentVersion) == targetVersion
+}
 
 func (s upgradeRenderService) renderClaudeUpgradeStatusCard(sessionKey string, view claudeUpgradeView, latestChecked bool) map[string]any {
 	return upgraderender.RenderClaudeUpgradeStatusCard(s.app.feishu, sessionKey, claudeViewToUpgraderender(view), latestChecked)
@@ -13,7 +22,7 @@ func (s upgradeRenderService) renderClaudeUpgradeStatusCard(sessionKey string, v
 
 func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID string, view claudeUpgradeView) (map[string]any, string, error) {
 	uv := claudeViewToUpgraderender(view)
-	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || view.Probe.CurrentVersion == view.LatestVersion {
+	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || claudeUpgradeTargetMatchesCurrent(view.Probe.CurrentVersion, view.LatestVersion) {
 		return upgraderender.RenderClaudeUpgradeStatusCard(s.app.feishu, sessionKey, uv, true), "", nil
 	}
 	requestID, err := s.app.State().NextLocalID("claude-upgrade")
@@ -25,7 +34,7 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 		TargetVersion:  view.LatestVersion,
 		Command:        view.Probe.Command,
 		CommandPath:    view.Probe.CommandPath,
-		NPMPath:        view.Probe.NPMPath,
+		UpdateCommand:  view.Probe.UpdateCommand,
 	}
 	if err := s.app.State().SavePending(&state.PendingRequest{
 		ID:          requestID,
@@ -39,11 +48,11 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 	}); err != nil {
 		return nil, "", err
 	}
-	return upgraderender.RenderClaudeUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion), requestID, nil
+	return upgraderender.RenderClaudeUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
 }
 
 func (s upgradeRenderService) renderClaudeUpgradeConfirmCard(sessionKey, requestID string, payload claudeUpgradePendingPayload) map[string]any {
-	return upgraderender.RenderClaudeUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion)
+	return upgraderender.RenderClaudeUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand)
 }
 
 func (s upgradeRenderService) renderClaudeUpgradePreparingCard(sessionKey, body string) map[string]any {

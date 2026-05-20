@@ -349,7 +349,7 @@ var registry = []Spec{
 	{
 		ID:       "menu.codex_upgrade",
 		Kind:     SpecKindCapability,
-		Commands: []CommandSpec{{ID: "codex", Names: []string{"/codex"}, HelpGroup: "system", HelpEntries: []HelpCommandSpec{{Command: "/codex", Summary: "查看本机 Codex CLI 的安装与升级状态。"}, {Command: "/codex check", Summary: "检查 npm 官方最新稳定版。"}, {Command: "/codex upgrade", Summary: "准备升级到 npm 官方最新稳定版，并支持 smoke test 失败自动回滚。"}, {Command: "/codex restart", Summary: "在空闲态原地重启 Codex runtime，适合刷新新安装的 Skill。"}}}},
+		Commands: []CommandSpec{{ID: "codex", Names: []string{"/codex"}, HelpGroup: "system", HelpEntries: []HelpCommandSpec{{Command: "/codex", Summary: "查看本机 Codex CLI 的安装与升级状态。"}, {Command: "/codex check", Summary: "检查 Codex CLI 自升级命令。"}, {Command: "/codex upgrade", Summary: "通过 Codex CLI 自带升级命令更新，并做 runtime smoke test。"}, {Command: "/codex restart", Summary: "在空闲态原地重启 Codex runtime，适合刷新新安装的 Skill。"}}}},
 		Nodes: []MenuNode{
 			{Action: "menu.codex_upgrade", Label: "Codex 管理", Parent: "menu.group.backend"},
 		},
@@ -363,7 +363,7 @@ var registry = []Spec{
 	{
 		ID:       "menu.claude_upgrade",
 		Kind:     SpecKindCapability,
-		Commands: []CommandSpec{{ID: "claude", Names: []string{"/claude"}, HelpGroup: "system", HelpEntries: []HelpCommandSpec{{Command: "/claude", Summary: "查看本机 Claude CLI 的安装与升级状态。"}, {Command: "/claude check", Summary: "检查 npm 官方最新稳定版。"}, {Command: "/claude upgrade", Summary: "准备升级到 npm 官方最新稳定版，失败自动回滚。"}, {Command: "/claude restart", Summary: "在空闲态原地重启 Claude runtime。"}}}},
+		Commands: []CommandSpec{{ID: "claude", Names: []string{"/claude"}, HelpGroup: "system", HelpEntries: []HelpCommandSpec{{Command: "/claude", Summary: "查看本机 Claude CLI 的安装与升级状态。"}, {Command: "/claude check", Summary: "检查 Claude CLI 自升级命令。"}, {Command: "/claude upgrade", Summary: "通过 Claude CLI 自带升级命令更新，并做 runtime smoke test。"}, {Command: "/claude restart", Summary: "在空闲态原地重启 Claude runtime。"}}}},
 		Nodes: []MenuNode{
 			{Action: "menu.claude_upgrade", Label: "Claude 管理", Parent: "menu.group.backend"},
 		},

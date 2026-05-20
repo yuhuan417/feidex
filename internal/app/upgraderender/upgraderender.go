@@ -51,7 +51,7 @@ type CodexUpgradeView struct {
 
 func RenderClaudeInstallSource(probe claudeinstall.Probe) string {
 	if probe.Supported || strings.TrimSpace(probe.CurrentVersion) != "" {
-		return "npm global"
+		return "Claude CLI"
 	}
 	return "-"
 }
@@ -70,10 +70,10 @@ func RenderClaudeUpgradeAvailability(view ClaudeUpgradeView, latestChecked bool)
 		return "`检查失败`"
 	case strings.TrimSpace(view.LatestVersion) == "":
 		return "`未知`"
-	case strings.TrimSpace(view.LatestVersion) == strings.TrimSpace(view.Probe.CurrentVersion):
+	case !strings.EqualFold(strings.TrimSpace(view.LatestVersion), "latest") && strings.TrimSpace(view.LatestVersion) == strings.TrimSpace(view.Probe.CurrentVersion):
 		return "`已是最新`"
 	default:
-		return "`可升级`"
+		return "`可执行自升级`"
 	}
 }
 
@@ -176,7 +176,7 @@ func ClaudeUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button
 				},
 			},
 			feishu.Button{
-				Text: "升级到最新稳定版",
+				Text: "运行自升级",
 				Type: "primary",
 				Value: map[string]any{
 					"action":      "claude_upgrade.prepare",
@@ -210,7 +210,7 @@ func ClaudeUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button
 
 func RenderCodexInstallSource(probe codexinstall.Probe) string {
 	if probe.Supported || strings.TrimSpace(probe.CurrentVersion) != "" {
-		return "npm global"
+		return "Codex CLI"
 	}
 	return "-"
 }
@@ -229,10 +229,10 @@ func RenderCodexUpgradeAvailability(view CodexUpgradeView, latestChecked bool) s
 		return "`检查失败`"
 	case strings.TrimSpace(view.LatestVersion) == "":
 		return "`未知`"
-	case strings.TrimSpace(view.LatestVersion) == strings.TrimSpace(view.Probe.CurrentVersion):
+	case !strings.EqualFold(strings.TrimSpace(view.LatestVersion), "latest") && strings.TrimSpace(view.LatestVersion) == strings.TrimSpace(view.Probe.CurrentVersion):
 		return "`已是最新`"
 	default:
-		return "`可升级`"
+		return "`可执行自升级`"
 	}
 }
 
@@ -335,7 +335,7 @@ func CodexUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button 
 				},
 			},
 			feishu.Button{
-				Text: "升级到最新稳定版",
+				Text: "运行自升级",
 				Type: "primary",
 				Value: map[string]any{
 					"action":      "codex_upgrade.prepare",

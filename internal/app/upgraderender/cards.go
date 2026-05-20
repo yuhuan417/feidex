@@ -25,6 +25,12 @@ type PendingSaver interface {
 // Codex card rendering
 // ---------------------------------------------------------------------------
 
+func codexUpdateCommandText(command, updateCommand string) string {
+	command = apputil.FirstNonEmpty(strings.TrimSpace(command), "codex")
+	updateCommand = apputil.FirstNonEmpty(strings.TrimSpace(updateCommand), "update")
+	return command + " " + updateCommand
+}
+
 func RenderCodexUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view CodexUpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
 	restart := view.Restart
@@ -32,7 +38,7 @@ func RenderCodexUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view 
 		"command: `" + apputil.FirstNonEmpty(view.Probe.Command, "codex") + "`",
 		"解析路径: `" + apputil.FirstNonEmpty(view.Probe.CommandPath, "-") + "`",
 		"安装来源: `" + RenderCodexInstallSource(view.Probe) + "`",
-		"npm: `" + apputil.FirstNonEmpty(view.Probe.NPMPath, "-") + "`",
+		"自升级命令: `" + codexUpdateCommandText(view.Probe.Command, view.Probe.UpdateCommand) + "`",
 		"当前版本: `" + apputil.FirstNonEmpty(view.Probe.CurrentVersion, "-") + "`",
 	}
 	if strings.TrimSpace(view.Probe.Reason) != "" {
@@ -41,20 +47,20 @@ func RenderCodexUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view 
 	if latestChecked {
 		switch {
 		case strings.TrimSpace(view.LatestVersion) != "":
-			lines = append(lines, "最新稳定版: `"+view.LatestVersion+"`")
+			lines = append(lines, "目标版本: `"+view.LatestVersion+"`")
 		case strings.TrimSpace(view.LatestError) != "":
-			lines = append(lines, "最新稳定版: 检查失败", "错误: "+view.LatestError)
+			lines = append(lines, "目标版本: 检查失败", "错误: "+view.LatestError)
 		default:
-			lines = append(lines, "最新稳定版: `-`")
+			lines = append(lines, "目标版本: `-`")
 		}
 	} else {
-		lines = append(lines, "最新稳定版: `未检查`")
+		lines = append(lines, "目标版本: `未检查`")
 	}
 	lines = append(lines,
 		"状态: "+RenderCodexUpgradeAvailability(view, latestChecked),
 		"runtime: "+RenderCodexUpgradeRuntimeLine(view),
 		"smoke test: `initialize + model/list`",
-		"回滚策略: `npm reinstall previous version`",
+		"回滚策略: `不自动回滚`",
 	)
 	if snapshot.Running {
 		lines = append(lines,
@@ -113,13 +119,13 @@ func RenderCodexUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view 
 	return r.SimpleStatusCard(title, color, body, CodexUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
 }
 
-func RenderCodexUpgradeConfirmCard(r StatusCardRenderer, sessionKey, requestID string, currentVersion, targetVersion string) map[string]any {
+func RenderCodexUpgradeConfirmCard(r StatusCardRenderer, sessionKey, requestID string, currentVersion, targetVersion, updateCommand string) map[string]any {
 	lines := []string{
 		"当前版本: `" + apputil.FirstNonEmpty(currentVersion, "-") + "`",
 		"目标版本: `" + apputil.FirstNonEmpty(targetVersion, "-") + "`",
-		"升级方式: `npm i -g @openai/codex@" + strings.TrimSpace(targetVersion) + "`",
+		"升级方式: `" + codexUpdateCommandText("codex", updateCommand) + "`",
 		"验证方式: `initialize + model/list`",
-		"失败处理: 自动回滚到 `" + apputil.FirstNonEmpty(currentVersion, "-") + "`",
+		"失败处理: 不自动回滚；验证失败会保留旧 runtime",
 		"开始条件: 当前不得有活动任务或待处理审批/表单",
 	}
 	buttons := []feishu.Button{
@@ -239,6 +245,12 @@ func RenderCodexRestartOperationCard(r StatusCardRenderer, sessionKey string, sn
 // Claude card rendering
 // ---------------------------------------------------------------------------
 
+func claudeUpdateCommandText(command, updateCommand string) string {
+	command = apputil.FirstNonEmpty(strings.TrimSpace(command), "claude")
+	updateCommand = apputil.FirstNonEmpty(strings.TrimSpace(updateCommand), "update")
+	return command + " " + updateCommand
+}
+
 func RenderClaudeUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view ClaudeUpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
 	restart := view.Restart
@@ -246,7 +258,7 @@ func RenderClaudeUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view
 		"command: `" + apputil.FirstNonEmpty(view.Probe.Command, "claude") + "`",
 		"解析路径: `" + apputil.FirstNonEmpty(view.Probe.CommandPath, "-") + "`",
 		"安装来源: `" + RenderClaudeInstallSource(view.Probe) + "`",
-		"npm: `" + apputil.FirstNonEmpty(view.Probe.NPMPath, "-") + "`",
+		"自升级命令: `" + claudeUpdateCommandText(view.Probe.Command, view.Probe.UpdateCommand) + "`",
 		"当前版本: `" + apputil.FirstNonEmpty(view.Probe.CurrentVersion, "-") + "`",
 	}
 	if strings.TrimSpace(view.Probe.Reason) != "" {
@@ -255,20 +267,20 @@ func RenderClaudeUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view
 	if latestChecked {
 		switch {
 		case strings.TrimSpace(view.LatestVersion) != "":
-			lines = append(lines, "最新稳定版: `"+view.LatestVersion+"`")
+			lines = append(lines, "目标版本: `"+view.LatestVersion+"`")
 		case strings.TrimSpace(view.LatestError) != "":
-			lines = append(lines, "最新稳定版: 检查失败", "错误: "+view.LatestError)
+			lines = append(lines, "目标版本: 检查失败", "错误: "+view.LatestError)
 		default:
-			lines = append(lines, "最新稳定版: `-`")
+			lines = append(lines, "目标版本: `-`")
 		}
 	} else {
-		lines = append(lines, "最新稳定版: `未检查`")
+		lines = append(lines, "目标版本: `未检查`")
 	}
 	lines = append(lines,
 		"状态: "+RenderClaudeUpgradeAvailability(view, latestChecked),
 		"runtime: "+RenderClaudeUpgradeRuntimeLine(view),
 		"smoke test: `start + init`",
-		"回滚策略: `npm reinstall previous version`",
+		"回滚策略: `不自动回滚`",
 	)
 	if snapshot.Running {
 		lines = append(lines,
@@ -327,12 +339,12 @@ func RenderClaudeUpgradeStatusCard(r StatusCardRenderer, sessionKey string, view
 	return r.SimpleStatusCard(title, color, body, ClaudeUpgradeStatusButtons(sessionKey, snapshot.Running || restart.Running))
 }
 
-func RenderClaudeUpgradeConfirmCard(r StatusCardRenderer, sessionKey, requestID string, currentVersion, targetVersion string) map[string]any {
+func RenderClaudeUpgradeConfirmCard(r StatusCardRenderer, sessionKey, requestID string, currentVersion, targetVersion, updateCommand string) map[string]any {
 	lines := []string{
 		"当前版本: `" + apputil.FirstNonEmpty(currentVersion, "-") + "`",
 		"目标版本: `" + apputil.FirstNonEmpty(targetVersion, "-") + "`",
-		"升级方式: `npm i -g @anthropic-ai/claude-code@" + strings.TrimSpace(targetVersion) + "`",
-		"失败处理: 自动回滚到 `" + apputil.FirstNonEmpty(currentVersion, "-") + "`",
+		"升级方式: `" + claudeUpdateCommandText("claude", updateCommand) + "`",
+		"失败处理: 不自动回滚；验证失败会保留旧 runtime",
 		"开始条件: 当前不得有活动任务或待处理审批/表单",
 	}
 	buttons := []feishu.Button{

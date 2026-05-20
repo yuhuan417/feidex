@@ -21,11 +21,11 @@ func (s backendUpgradeService) completeClaudeUpgradeRefresh(action *feishu.CardA
 }
 
 func (s backendUpgradeService) completeClaudeUpgradeCheck(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return newBackendUpgradeService(s.app).completeClaudeUpgradeAsyncAction(action, "/claude check", "正在检查最新稳定版", "正在检查最新稳定版，请稍候。")
+	return newBackendUpgradeService(s.app).completeClaudeUpgradeAsyncAction(action, "/claude check", "正在检查 Claude 自升级命令", "正在检查 Claude 自升级命令，请稍候。")
 }
 
 func (s backendUpgradeService) completeClaudeUpgradePrepare(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return newBackendUpgradeService(s.app).completeClaudeUpgradeAsyncAction(action, "/claude upgrade", "正在准备升级确认", "正在准备升级确认，请稍候。")
+	return newBackendUpgradeService(s.app).completeClaudeUpgradeAsyncAction(action, "/claude upgrade", "正在准备自升级确认", "正在准备自升级确认，请稍候。")
 }
 
 func (s backendUpgradeService) completeClaudeRestartRun(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

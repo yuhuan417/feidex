@@ -2,22 +2,22 @@ package runtime
 
 import "time"
 
-// ClaudeUpgradePendingPayload describes a pending Claude npm upgrade.
+// ClaudeUpgradePendingPayload describes a pending Claude self-upgrade.
 type ClaudeUpgradePendingPayload struct {
 	CurrentVersion string `json:"current_version"`
 	TargetVersion  string `json:"target_version"`
 	Command        string `json:"command"`
 	CommandPath    string `json:"command_path"`
-	NPMPath        string `json:"npm_path"`
+	UpdateCommand  string `json:"update_command"`
 }
 
-// CodexUpgradePendingPayload describes a pending Codex npm upgrade.
+// CodexUpgradePendingPayload describes a pending Codex self-upgrade.
 type CodexUpgradePendingPayload struct {
 	CurrentVersion string `json:"current_version"`
 	TargetVersion  string `json:"target_version"`
 	Command        string `json:"command"`
 	CommandPath    string `json:"command_path"`
-	NPMPath        string `json:"npm_path"`
+	UpdateCommand  string `json:"update_command"`
 }
 
 // ClaudeHistoryRecord represents a single entry in a Claude session transcript.

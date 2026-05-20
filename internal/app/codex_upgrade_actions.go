@@ -21,11 +21,11 @@ func (s backendUpgradeService) completeCodexUpgradeRefresh(action *feishu.CardAc
 }
 
 func (s backendUpgradeService) completeCodexUpgradeCheck(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return newBackendUpgradeService(s.app).completeCodexUpgradeAsyncAction(action, "/codex check", "正在检查最新稳定版", "正在检查最新稳定版，请稍候。")
+	return newBackendUpgradeService(s.app).completeCodexUpgradeAsyncAction(action, "/codex check", "正在检查 Codex 自升级命令", "正在检查 Codex 自升级命令，请稍候。")
 }
 
 func (s backendUpgradeService) completeCodexUpgradePrepare(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return newBackendUpgradeService(s.app).completeCodexUpgradeAsyncAction(action, "/codex upgrade", "正在准备升级确认", "正在准备升级确认，请稍候。")
+	return newBackendUpgradeService(s.app).completeCodexUpgradeAsyncAction(action, "/codex upgrade", "正在准备自升级确认", "正在准备自升级确认，请稍候。")
 }
 
 func (s backendUpgradeService) completeCodexRestartRun(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

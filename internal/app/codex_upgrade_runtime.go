@@ -6,7 +6,6 @@ import (
 	"time"
 
 	appcodexruntime "feidex/internal/app/codexruntime"
-	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/feishu"
 )
 
@@ -56,30 +55,79 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 			snapshot.Message = message
 		},
 	)
-	appmaintenance.RunUpgradeWorkflow(appmaintenance.UpgradeWorkflow{
-		PackageName:    "@openai/codex",
-		BackendName:    "Codex",
-		CurrentVersion: payload.CurrentVersion,
-		TargetVersion:  payload.TargetVersion,
-		Probe: func(ctx context.Context) (appmaintenance.UpgradeProbe, error) {
-			probe, err := manager.Probe(ctx)
-			return appmaintenance.UpgradeProbe{Supported: probe.Supported, Reason: probe.Reason, CurrentVersion: probe.CurrentVersion}, err
-		},
-		InstallVersion:    manager.InstallVersion,
-		SmokeTest:         s.codexSmokeTest,
-		RefreshRuntime:    s.refreshCodexRuntimeAfterMaintenance,
-		RuntimeBusyReason: newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason,
-		RecordVersions: func(previousVersion, targetVersion string) {
-			newMaintenanceStateService(s.app).UpdateCodexUpgrade(func(snapshot *backendUpgradeSnapshot) {
-				snapshot.CurrentVersion = previousVersion
-				snapshot.PreviousVersion = previousVersion
-				snapshot.TargetVersion = targetVersion
-				snapshot.LatestVersion = targetVersion
-			})
-		},
-		Update:   func(phase, message string) { update(phase, message) },
-		Finalize: finalize,
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	probe, err := manager.Probe(ctx)
+	cancel()
+	if err != nil {
+		finalize("failed", "升级前检查失败: "+err.Error())
+		return
+	}
+	if !probe.Supported {
+		finalize("failed", "当前环境不支持 Codex 自升级: "+firstNonEmpty(probe.Reason, "unknown"))
+		return
+	}
+	previousVersion := firstNonEmpty(probe.CurrentVersion, payload.CurrentVersion)
+	targetVersion := firstNonEmpty(payload.TargetVersion, "latest")
+	updateCommand := firstNonEmpty(probe.UpdateCommand, payload.UpdateCommand, "update")
+	newMaintenanceStateService(s.app).UpdateCodexUpgrade(func(snapshot *backendUpgradeSnapshot) {
+		snapshot.CurrentVersion = previousVersion
+		snapshot.PreviousVersion = previousVersion
+		snapshot.TargetVersion = targetVersion
+		snapshot.LatestVersion = targetVersion
 	})
+	if reason := newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+		finalize("failed", "升级前检查失败: "+reason)
+		return
+	}
+
+	update("installing", "正在运行 Codex 自升级命令 `"+firstNonEmpty(probe.Command, "codex")+" "+updateCommand+"`")
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	err = manager.InstallVersion(ctx, targetVersion)
+	cancel()
+	if err != nil {
+		finalize("failed", "Codex 自升级失败，未自动回滚: "+err.Error())
+		return
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	afterProbe, probeErr := manager.Probe(ctx)
+	cancel()
+	installedVersion := previousVersion
+	if probeErr == nil {
+		installedVersion = firstNonEmpty(afterProbe.CurrentVersion, installedVersion)
+	}
+	if strings.TrimSpace(installedVersion) != "" {
+		newMaintenanceStateService(s.app).UpdateCodexUpgrade(func(snapshot *backendUpgradeSnapshot) {
+			snapshot.TargetVersion = installedVersion
+			snapshot.LatestVersion = installedVersion
+		})
+	}
+	if probeErr != nil {
+		finalize("failed", "Codex 自升级后版本检查失败，未自动回滚: "+probeErr.Error())
+		return
+	}
+
+	update("smoke_testing", "正在验证 Codex runtime")
+	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+	switched, err := newBackendUpgradeService(s.app).refreshCodexRuntimeAfterMaintenance(ctx)
+	cancel()
+	if err != nil {
+		finalize("failed", "Codex 自升级后 runtime 验证失败，未自动回滚: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(installedVersion) != "" && strings.TrimSpace(installedVersion) == strings.TrimSpace(previousVersion) {
+		if switched {
+			finalize("success", "Codex 已是最新版本 `"+installedVersion+"`，runtime 已重新验证")
+			return
+		}
+		finalize("success", "Codex 已是最新版本 `"+installedVersion+"`；当前 frontend 未启用 Codex backend")
+		return
+	}
+	if switched {
+		finalize("success", "Codex 自升级成功，已切换到 `"+firstNonEmpty(installedVersion, targetVersion)+"`")
+		return
+	}
+	finalize("success", "Codex 自升级成功，已验证 `"+firstNonEmpty(installedVersion, targetVersion)+"` 可用；当前 frontend 未启用 Codex backend")
 }
 
 func (s backendUpgradeService) codexSmokeTest(ctx context.Context) error {

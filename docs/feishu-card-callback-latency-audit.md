@@ -116,7 +116,7 @@
 | Action | 重流程来源 | 当前保护方式 |
 | --- | --- | --- |
 | `menu.upgrade` | 查远端 release | 先返回 preparing card，后台执行 |
-| `codex_upgrade.check` | `npm view @openai/codex version --json` | 先返回 preparing card，后台执行 |
+| `codex_upgrade.check` | 探测 `codex update` 自升级命令 | 先返回 preparing card，后台执行 |
 | `codex_upgrade.prepare` | 同上 | 先返回 preparing card，后台执行 |
 | `workspace.clone.submit` | 后台 `git clone` | 回调只做 preflight 和状态切换 |
 | `path_picker.confirm` `download_file` 分支 | 真实飞书 `ShareLocalFile` | 回调先返回，后台分享并 patch card |
@@ -177,7 +177,7 @@
 | --- | --- | --- |
 | `menu.compact` | Claude 的 `/compact` 是长流程 | 回调先返回 preparing card，后台再入队提交给 Claude |
 | `menu.claude_upgrade` | Claude 本机状态读取 | 先返回 preparing card，后台执行 |
-| `claude_upgrade.check` | `npm view @anthropic-ai/claude-code version --json` | 先返回 preparing card，后台执行 |
+| `claude_upgrade.check` | 探测 `claude update` 自升级命令 | 先返回 preparing card，后台执行 |
 | `claude_upgrade.prepare` | 同上 | 先返回 preparing card，后台执行 |
 | `workspace.use.select` | Claude 新工作区需启动 CLI 子进程 | `CompleteWorkspaceUse` 回调先返回，thread binding 异步执行 |
 | `workspace.use.existing` | 同上 | 同上 |

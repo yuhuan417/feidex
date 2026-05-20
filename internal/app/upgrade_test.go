@@ -16,12 +16,13 @@ import (
 )
 
 type fakeCodexInstallManager struct {
-	probe       codexinstall.Probe
-	probeErr    error
-	latest      string
-	latestErr   error
-	installErrs map[string]error
-	installs    []string
+	probe              codexinstall.Probe
+	probeErr           error
+	latest             string
+	latestErr          error
+	installErrs        map[string]error
+	installs           []string
+	postInstallVersion string
 }
 
 func (f *fakeCodexInstallManager) Probe(context.Context) (codexinstall.Probe, error) {
@@ -35,7 +36,12 @@ func (f *fakeCodexInstallManager) LatestVersion(context.Context) (string, error)
 func (f *fakeCodexInstallManager) InstallVersion(_ context.Context, version string) error {
 	f.installs = append(f.installs, version)
 	if f.installErrs != nil {
-		return f.installErrs[version]
+		if err := f.installErrs[version]; err != nil {
+			return err
+		}
+	}
+	if f.postInstallVersion != "" {
+		f.probe.CurrentVersion = f.postInstallVersion
 	}
 	return nil
 }
@@ -46,8 +52,8 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}
@@ -64,7 +70,7 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"当前版本: `1.0.0`", "最新稳定版: `未检查`", "状态: `等待检查`"} {
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `未检查`", "自升级命令: `codex update`", "状态: `等待检查`"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("status card body = %q, want %q", body, want)
 		}
@@ -77,10 +83,9 @@ func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
 			Supported:      false,
-			Reason:         "当前 codex 所属安装目录与 npm global prefix 不一致",
+			Reason:         "当前 Codex CLI 不支持 `update` 自升级命令",
 		},
 	}
 	origManager := newCodexInstallManager
@@ -96,7 +101,7 @@ func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 codex 所属安装目录与 npm global prefix 不一致"} {
+	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 Codex CLI 不支持 `update` 自升级命令"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("status card body = %q, want %q", body, want)
 		}
@@ -109,11 +114,11 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
-		latest: "1.1.0",
+		latest: "latest",
 	}
 	origManager := newCodexInstallManager
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
@@ -128,7 +133,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `1.1.0`", "失败处理: 自动回滚到 `1.0.0`"} {
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `latest`", "升级方式: `codex update`", "失败处理: 不自动回滚"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
 		}
@@ -171,10 +176,11 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
+		postInstallVersion: "1.1.0",
 	}
 	origManager := newCodexInstallManager
 	origClient := newCodexClient
@@ -202,16 +208,17 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "1.1.0",
+		TargetVersion:   "latest",
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "1.1.0",
+		TargetVersion:  "latest",
+		UpdateCommand:  "update",
 	})
 
-	if got := manager.installs; len(got) != 1 || got[0] != "1.1.0" {
+	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
 	}
 	_, liveClosed := fc.statusSnapshot()
@@ -243,42 +250,32 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	}
 }
 
-func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
+func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	manager := &fakeCodexInstallManager{
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
+		postInstallVersion: "1.1.0",
 	}
 	origManager := newCodexInstallManager
 	origClient := newCodexClient
 	var smoke *fakeCodexClient
-	var rollbackSmoke *fakeCodexClient
-	runCount := 0
 	newCodexInstallManager = func(string) codexInstallManager { return manager }
 	newCodexClient = func(config config.CodexConfig) CodexClient {
-		runCount++
 		client := &fakeCodexClient{
 			callHook: func(_ context.Context, method string, _ any, out any) error {
 				if method != "model/list" {
 					t.Fatalf("unexpected smoke method: %s", method)
 				}
-				if runCount == 1 {
-					return errString("boom")
-				}
-				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
-				return nil
+				return errString("boom")
 			},
 		}
-		if runCount == 1 {
-			smoke = client
-		} else {
-			rollbackSmoke = client
-		}
+		smoke = client
 		return client
 	}
 	defer func() {
@@ -290,21 +287,22 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "1.1.0",
+		TargetVersion:   "latest",
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", codexUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "1.1.0",
+		TargetVersion:  "latest",
+		UpdateCommand:  "update",
 	})
 
-	if got := manager.installs; len(got) != 2 || got[0] != "1.1.0" || got[1] != "1.0.0" {
+	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
 	}
 	_, liveClosed := fc.statusSnapshot()
 	if liveClosed {
-		t.Fatal("live codex runtime should not be closed when upgrade rolls back")
+		t.Fatal("live codex runtime should not be closed when self-upgrade validation fails")
 	}
 	_, smokeClosed := false, false
 	if smoke != nil {
@@ -313,28 +311,21 @@ func TestRunCodexUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after failed validation", smoke)
 	}
-	_, rollbackClosed := false, false
-	if rollbackSmoke != nil {
-		_, rollbackClosed = rollbackSmoke.statusSnapshot()
-	}
-	if rollbackSmoke == nil || !rollbackClosed {
-		t.Fatalf("rollback smoke runtime = %+v, want closed after rollback validation", rollbackSmoke)
-	}
 	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
 	snapshot := newMaintenanceStateService(a).CodexUpgradeState()
-	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
+	if snapshot.Running || snapshot.Result != "failed" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
 	patchedCards := ff.patchedCardsSnapshot()
 	if len(patchedCards) == 0 {
-		t.Fatal("expected rollback progress cards to be patched")
+		t.Fatal("expected failure progress cards to be patched")
 	}
 	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
-	if !strings.Contains(body, "结果: `rolled_back`") {
-		t.Fatalf("rollback patched card body = %q", body)
+	if !strings.Contains(body, "结果: `failed`") {
+		t.Fatalf("failed patched card body = %q", body)
 	}
 }
 
@@ -344,8 +335,8 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}
@@ -420,8 +411,8 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}
@@ -489,8 +480,8 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 		probe: codexinstall.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}
@@ -639,12 +630,13 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 }
 
 type fakeClaudeInstallManager struct {
-	probe       claudeinstall.Probe
-	probeErr    error
-	latest      string
-	latestErr   error
-	installErrs map[string]error
-	installs    []string
+	probe              claudeinstall.Probe
+	probeErr           error
+	latest             string
+	latestErr          error
+	installErrs        map[string]error
+	installs           []string
+	postInstallVersion string
 }
 
 func (f *fakeClaudeInstallManager) Probe(context.Context) (claudeinstall.Probe, error) {
@@ -658,7 +650,12 @@ func (f *fakeClaudeInstallManager) LatestVersion(context.Context) (string, error
 func (f *fakeClaudeInstallManager) InstallVersion(_ context.Context, version string) error {
 	f.installs = append(f.installs, version)
 	if f.installErrs != nil {
-		return f.installErrs[version]
+		if err := f.installErrs[version]; err != nil {
+			return err
+		}
+	}
+	if f.postInstallVersion != "" {
+		f.probe.CurrentVersion = f.postInstallVersion
 	}
 	return nil
 }
@@ -669,8 +666,8 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}
@@ -687,7 +684,7 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"当前版本: `1.0.0`", "最新稳定版: `未检查`", "状态: `等待检查`", "smoke test: `start + init`"} {
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `未检查`", "自升级命令: `claude update`", "状态: `等待检查`", "smoke test: `start + init`"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("status card body = %q, want %q", body, want)
 		}
@@ -700,10 +697,9 @@ func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
 			Supported:      false,
-			Reason:         "当前 claude 所属安装目录与 npm global prefix 不一致",
+			Reason:         "当前 Claude CLI 不支持 `update` 自升级命令",
 		},
 	}
 	origManager := newClaudeInstallManager
@@ -719,7 +715,7 @@ func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 claude 所属安装目录与 npm global prefix 不一致"} {
+	for _, want := range []string{"状态: `不支持自动升级`", "原因: 当前 Claude CLI 不支持 `update` 自升级命令"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("status card body = %q, want %q", body, want)
 		}
@@ -732,11 +728,11 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
-		latest: "1.1.0",
+		latest: "latest",
 	}
 	origManager := newClaudeInstallManager
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
@@ -751,7 +747,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 		t.Fatalf("replyCards = %d, want 1", len(replyCards))
 	}
 	body := cardMarkdownContent(t, replyCards[0])
-	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `1.1.0`", "失败处理: 自动回滚到 `1.0.0`"} {
+	for _, want := range []string{"当前版本: `1.0.0`", "目标版本: `latest`", "升级方式: `claude update`", "失败处理: 不自动回滚"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("confirm card body = %q, want %q", body, want)
 		}
@@ -800,10 +796,11 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
+		postInstallVersion: "1.1.0",
 	}
 	origManager := newClaudeInstallManager
 	origSmoke := runClaudeSmokeTest
@@ -818,16 +815,17 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "1.1.0",
+		TargetVersion:   "latest",
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "1.1.0",
+		TargetVersion:  "latest",
+		UpdateCommand:  "update",
 	})
 
-	if got := manager.installs; len(got) != 1 || got[0] != "1.1.0" {
+	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
 	}
 	if !claude.closed {
@@ -847,7 +845,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	}
 }
 
-func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
+func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -857,21 +855,17 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
+		postInstallVersion: "1.1.0",
 	}
 	origManager := newClaudeInstallManager
 	origSmoke := runClaudeSmokeTest
-	smokeRuns := 0
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
 	runClaudeSmokeTest = func(_ *App, _ context.Context) error {
-		smokeRuns++
-		if smokeRuns == 1 {
-			return errString("boom")
-		}
-		return nil
+		return errString("boom")
 	}
 	defer func() {
 		newClaudeInstallManager = origManager
@@ -882,32 +876,33 @@ func TestRunClaudeUpgradeOperationRollbackAfterSmokeFailure(t *testing.T) {
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
-		TargetVersion:   "1.1.0",
+		TargetVersion:   "latest",
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
 	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", claudeUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
-		TargetVersion:  "1.1.0",
+		TargetVersion:  "latest",
+		UpdateCommand:  "update",
 	})
 
-	if got := manager.installs; len(got) != 2 || got[0] != "1.1.0" || got[1] != "1.0.0" {
+	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
 	}
 	if claude.closed {
-		t.Fatal("live Claude runtime should not be closed when upgrade rolls back before promotion")
+		t.Fatal("live Claude runtime should not be closed when self-upgrade validation fails")
 	}
 	snapshot := newMaintenanceStateService(a).ClaudeUpgradeState()
-	if snapshot.Running || snapshot.Result != "rolled_back" || snapshot.CurrentVersion != "1.0.0" {
+	if snapshot.Running || snapshot.Result != "failed" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
 	patchedCards := ff.patchedCardsSnapshot()
 	if len(patchedCards) == 0 {
-		t.Fatal("expected rollback progress cards to be patched")
+		t.Fatal("expected failure progress cards to be patched")
 	}
 	body := cardMarkdownContent(t, patchedCards[len(patchedCards)-1])
-	if !strings.Contains(body, "结果: `rolled_back`") {
-		t.Fatalf("rollback patched card body = %q", body)
+	if !strings.Contains(body, "结果: `failed`") {
+		t.Fatalf("failed patched card body = %q", body)
 	}
 }
 
@@ -921,8 +916,8 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}
@@ -977,8 +972,8 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		probe: claudeinstall.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
-			NPMPath:        "/usr/bin/npm",
 			CurrentVersion: "1.0.0",
+			UpdateCommand:  "update",
 			Supported:      true,
 		},
 	}

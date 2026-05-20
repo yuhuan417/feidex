@@ -7,19 +7,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 const packageName = "@anthropic-ai/claude-code"
+const selfUpdateTargetLatest = "latest"
 
 type Probe struct {
 	Command         string
 	CommandPath     string
 	RealCommandPath string
-	NPMPath         string
-	NPMRoot         string
 	PackagePath     string
 	CurrentVersion  string
+	UpdateCommand   string
 	Supported       bool
 	Reason          string
 }
@@ -51,11 +52,6 @@ func (m *Manager) Probe(ctx context.Context) (Probe, error) {
 		command = strings.TrimSpace(m.command)
 	}
 	probe := Probe{Command: command}
-	if command != "claude" {
-		probe.Reason = "当前只支持默认 `claude` 命令"
-		return probe, nil
-	}
-
 	commandPath, err := exec.LookPath(command)
 	if err != nil {
 		probe.Reason = "未找到 claude 命令"
@@ -72,124 +68,80 @@ func (m *Manager) Probe(ctx context.Context) (Probe, error) {
 		probe.CurrentVersion = commandVersion
 	}
 
-	npmPath, err := exec.LookPath("npm")
-	if err != nil {
-		probe.Reason = "未找到 npm 命令"
-		return probe, nil
-	}
-	probe.NPMPath = npmPath
-
-	npmRoot, err := m.npmRoot(ctx)
-	if err != nil {
-		probe.Reason = err.Error()
-		return probe, nil
-	}
-	probe.NPMRoot = npmRoot
-	npmPackageDir := filepath.Join(npmRoot, filepath.FromSlash(packageName))
-	npmPackagePath := filepath.Join(npmPackageDir, "package.json")
-	if commandPackageFound && !pathWithinRoot(npmPackageDir, probe.RealCommandPath) {
-		probe.Reason = "当前 claude 所属安装目录与 npm global prefix 不一致"
-		return probe, nil
-	}
-
 	version, err := m.currentVersion(ctx)
 	if err != nil {
 		probe.Reason = err.Error()
 		return probe, nil
 	}
 	if version == "" {
-		probe.Reason = "npm global 未安装 " + packageName
+		probe.Reason = "无法读取 claude 当前版本"
 		return probe, nil
 	}
 	probe.CurrentVersion = firstNonEmpty(probe.CurrentVersion, version)
-	if strings.TrimSpace(probe.PackagePath) == "" {
-		probe.PackagePath = npmPackagePath
-	}
-	if _, statErr := os.Stat(npmPackagePath); statErr != nil {
-		probe.Reason = "npm global 的 " + packageName + " 安装目录不可用"
+
+	updateCommand, err := m.selfUpdateCommand(ctx)
+	if err != nil {
+		probe.Reason = err.Error()
 		return probe, nil
 	}
-	if !pathWithinRoot(npmPackageDir, probe.RealCommandPath) {
-		probe.Reason = "当前 claude 不是 npm global 的 " + packageName
-		return probe, nil
-	}
-	probe.PackagePath = npmPackagePath
+	probe.UpdateCommand = updateCommand
 	probe.Supported = true
 	return probe, nil
 }
 
 func (m *Manager) LatestVersion(ctx context.Context) (string, error) {
-	stdout, stderr, err := commandRunner(ctx, "npm", "view", packageName, "version", "--json")
-	if err != nil {
-		return "", fmt.Errorf("查询最新版本失败: %s", firstNonEmpty(stderr, err.Error()))
+	if _, err := m.selfUpdateCommand(ctx); err != nil {
+		return "", fmt.Errorf("检查 Claude 自升级命令失败: %w", err)
 	}
-	version, parseErr := parseJSONMaybeString(stdout)
-	if parseErr != nil {
-		return "", fmt.Errorf("解析最新版本失败: %w", parseErr)
-	}
-	return strings.TrimSpace(version), nil
+	return selfUpdateTargetLatest, nil
 }
 
 func (m *Manager) InstallVersion(ctx context.Context, version string) error {
 	version = strings.TrimSpace(version)
-	if version == "" {
-		return fmt.Errorf("missing version")
+	if version != "" && version != selfUpdateTargetLatest {
+		return fmt.Errorf("Claude 自升级不支持指定版本 %q", version)
 	}
-	spec := packageName + "@" + version
-	_, stderr, err := commandRunner(ctx, "npm", "i", "-g", spec)
+	command := "claude"
+	if m != nil && strings.TrimSpace(m.command) != "" {
+		command = strings.TrimSpace(m.command)
+	}
+	updateCommand, err := m.selfUpdateCommand(ctx)
 	if err != nil {
-		return fmt.Errorf("安装 %s 失败: %s", spec, firstNonEmpty(stderr, err.Error()))
+		return err
+	}
+	_, stderr, err := commandRunner(ctx, command, updateCommand)
+	if err != nil {
+		return fmt.Errorf("运行 `%s %s` 失败: %s", command, updateCommand, firstNonEmpty(stderr, err.Error()))
 	}
 	return nil
 }
 
 func (m *Manager) currentVersion(ctx context.Context) (string, error) {
-	stdout, stderr, err := commandRunner(ctx, "npm", "ls", "-g", packageName, "--json", "--depth=0")
-	if err != nil && strings.TrimSpace(stdout) == "" {
+	command := "claude"
+	if m != nil && strings.TrimSpace(m.command) != "" {
+		command = strings.TrimSpace(m.command)
+	}
+	stdout, stderr, err := commandRunner(ctx, command, "--version")
+	if err != nil {
 		return "", fmt.Errorf("读取当前版本失败: %s", firstNonEmpty(stderr, err.Error()))
 	}
-	var payload struct {
-		Dependencies map[string]struct {
-			Version string `json:"version"`
-		} `json:"dependencies"`
+	version := parseClaudeVersion(stdout)
+	if version == "" {
+		return "", fmt.Errorf("解析当前版本失败: %q", strings.TrimSpace(stdout))
 	}
-	if unmarshalErr := json.Unmarshal([]byte(stdout), &payload); unmarshalErr != nil {
-		if strings.TrimSpace(stdout) == "" {
-			return "", fmt.Errorf("读取当前版本失败: %s", firstNonEmpty(stderr, err.Error()))
-		}
-		return "", fmt.Errorf("解析当前版本失败: %w", unmarshalErr)
-	}
-	if payload.Dependencies == nil {
-		return "", nil
-	}
-	return strings.TrimSpace(payload.Dependencies[packageName].Version), nil
+	return version, nil
 }
 
-func (m *Manager) npmRoot(ctx context.Context) (string, error) {
-	stdout, stderr, err := commandRunner(ctx, "npm", "root", "-g")
+func (m *Manager) selfUpdateCommand(ctx context.Context) (string, error) {
+	command := "claude"
+	if m != nil && strings.TrimSpace(m.command) != "" {
+		command = strings.TrimSpace(m.command)
+	}
+	_, stderr, err := commandRunner(ctx, command, "help", "update")
 	if err != nil {
-		return "", fmt.Errorf("查询 npm global root 失败: %s", firstNonEmpty(stderr, err.Error()))
+		return "", fmt.Errorf("当前 Claude CLI 不支持 `update` 自升级命令: %s", firstNonEmpty(stderr, err.Error()))
 	}
-	root := strings.TrimSpace(stdout)
-	if root == "" {
-		return "", fmt.Errorf("查询 npm global root 失败: empty output")
-	}
-	return filepath.Clean(root), nil
-}
-
-func pathWithinRoot(root, candidate string) bool {
-	root = filepath.Clean(strings.TrimSpace(root))
-	candidate = filepath.Clean(strings.TrimSpace(candidate))
-	if root == "" || candidate == "" {
-		return false
-	}
-	if root == string(filepath.Separator) {
-		return filepath.IsAbs(candidate)
-	}
-	if root == candidate {
-		return true
-	}
-	return strings.HasPrefix(candidate, root+string(filepath.Separator))
+	return "update", nil
 }
 
 func packageFromCommandPath(commandPath, expectedPackageName string) (string, string, bool) {
@@ -227,6 +179,16 @@ func readPackageManifest(path string) (string, string, error) {
 		return "", "", err
 	}
 	return strings.TrimSpace(payload.Name), strings.TrimSpace(payload.Version), nil
+}
+
+func parseClaudeVersion(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	versionPattern := regexp.MustCompile(`\bv?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b`)
+	version := versionPattern.FindString(raw)
+	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 func parseJSONMaybeString(raw string) (string, error) {

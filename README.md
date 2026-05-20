@@ -594,17 +594,17 @@ Claude Code 后端配置：
 - `/codex`
   - 检查 Codex CLI 安装/升级状态
 - `/codex check`
-  - 查询 npm 最新 Codex CLI 版本
+  - 检查 Codex CLI 自升级命令是否可用
 - `/codex upgrade`
-  - 升级 Codex CLI（失败自动回退）
+  - 通过 Codex CLI 自带升级命令更新，并做 runtime smoke test
 - `/codex restart`
   - 重启 Codex 运行时（空闲时）
 - `/claude`
   - 检查 Claude CLI 安装/升级状态
 - `/claude check`
-  - 查询 npm 最新 Claude CLI 版本
+  - 检查 Claude CLI 自升级命令是否可用
 - `/claude upgrade`
-  - 升级 Claude CLI（含 smoke test，失败自动回退）
+  - 通过 Claude CLI 自带升级命令更新，并做 runtime smoke test
 - `/claude restart`
   - 重启 Claude 运行时（空闲时）
 - `/session`

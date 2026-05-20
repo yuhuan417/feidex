@@ -20,7 +20,7 @@ func newBackendUpgradeService(app *App) backendUpgradeService {
 }
 
 const (
-	codexUpgradePendingKind  = "codex_npm_upgrade"
+	codexUpgradePendingKind  = "codex_self_upgrade"
 	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade | /codex restart"
 )
 

@@ -1,11 +1,20 @@
 package app
 
 import (
+	"strings"
 	"time"
 
 	"feidex/internal/app/upgraderender"
 	"feidex/internal/state"
 )
+
+func codexUpgradeTargetMatchesCurrent(currentVersion, targetVersion string) bool {
+	targetVersion = strings.TrimSpace(targetVersion)
+	if targetVersion == "" || strings.EqualFold(targetVersion, "latest") {
+		return false
+	}
+	return strings.TrimSpace(currentVersion) == targetVersion
+}
 
 type upgradeRenderService struct {
 	app *App
@@ -21,7 +30,7 @@ func (s upgradeRenderService) renderCodexUpgradeStatusCard(sessionKey string, vi
 
 func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID string, view codexUpgradeView) (map[string]any, string, error) {
 	uv := codexViewToUpgraderender(view)
-	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || view.Probe.CurrentVersion == view.LatestVersion {
+	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || codexUpgradeTargetMatchesCurrent(view.Probe.CurrentVersion, view.LatestVersion) {
 		return upgraderender.RenderCodexUpgradeStatusCard(s.app.feishu, sessionKey, uv, true), "", nil
 	}
 	requestID, err := s.app.State().NextLocalID("codex-upgrade")
@@ -33,7 +42,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 		TargetVersion:  view.LatestVersion,
 		Command:        view.Probe.Command,
 		CommandPath:    view.Probe.CommandPath,
-		NPMPath:        view.Probe.NPMPath,
+		UpdateCommand:  view.Probe.UpdateCommand,
 	}
 	if err := s.app.State().SavePending(&state.PendingRequest{
 		ID:          requestID,
@@ -47,11 +56,11 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 	}); err != nil {
 		return nil, "", err
 	}
-	return upgraderender.RenderCodexUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion), requestID, nil
+	return upgraderender.RenderCodexUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
 }
 
 func (s upgradeRenderService) renderCodexUpgradeConfirmCard(sessionKey, requestID string, payload codexUpgradePendingPayload) map[string]any {
-	return upgraderender.RenderCodexUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion)
+	return upgraderender.RenderCodexUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand)
 }
 
 func (s upgradeRenderService) renderCodexUpgradePreparingCard(sessionKey, body string) map[string]any {

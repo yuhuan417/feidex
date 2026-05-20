@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	claudeUpgradePendingKind  = "claude_npm_upgrade"
+	claudeUpgradePendingKind  = "claude_self_upgrade"
 	claudeUpgradeCommandUsage = "usage: /claude | /claude check | /claude upgrade | /claude restart"
 )
 
