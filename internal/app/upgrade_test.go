@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appstate "feidex/internal/state"
 )
 
 type fakeCodexInstallManager struct {
@@ -626,6 +628,86 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	current, ok := currentCodexClient(a).(*fakeCodexClient)
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+	}
+}
+
+func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-refresh-thread-recovery"
+	workspaceID := a.cfg.Workspaces[0].ID
+	if err := a.store.UpsertSession(&appstate.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             workspaceID,
+		ActiveThreadID:          "thread-old",
+		ActiveThreadWorkspaceID: workspaceID,
+		ActiveThreadName:        "Old",
+		Status:                  appstate.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	markSessionThreadLive(a, sessionKey, "thread-old")
+
+	origClient := newCodexClient
+	var promoted *fakeCodexClient
+	var calls []string
+	newCodexClient = func(config.CodexConfig) CodexClient {
+		promoted = &fakeCodexClient{
+			callHook: func(_ context.Context, method string, params any, out any) error {
+				calls = append(calls, method)
+				switch method {
+				case "model/list":
+					out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+					return nil
+				case "thread/resume":
+					paramMap := params.(map[string]any)
+					if got := paramMap["threadId"]; got != "thread-old" {
+						t.Fatalf("thread/resume threadId = %v, want thread-old", got)
+					}
+					return errors.New("thread not found")
+				case "thread/start":
+					result := out.(*codexrpc.ThreadStartResult)
+					result.Thread.ID = "thread-new"
+					result.Thread.Name = "Recovered"
+					result.Thread.Preview = "preview"
+					return nil
+				default:
+					t.Fatalf("unexpected promoted method: %s", method)
+					return nil
+				}
+			},
+		}
+		return promoted
+	}
+	defer func() { newCodexClient = origClient }()
+
+	switched, err := newBackendUpgradeService(a).refreshCodexRuntimeAfterMaintenance(context.Background())
+	if err != nil {
+		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
+	}
+	if !switched {
+		t.Fatal("refreshCodexRuntimeAfterMaintenance() did not switch runtime")
+	}
+	_, liveClosed := fc.statusSnapshot()
+	if !liveClosed {
+		t.Fatal("old runtime should be closed")
+	}
+	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	if !ok || current != promoted {
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+	}
+	wantCalls := []string{"model/list", "thread/resume", "thread/start"}
+	if strings.Join(calls, ",") != strings.Join(wantCalls, ",") {
+		t.Fatalf("promoted calls = %+v, want %+v", calls, wantCalls)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveThreadWorkspaceID != workspaceID || sess.Status != appstate.SessionStatusIdle.String() {
+		t.Fatalf("session after runtime refresh = %+v, want recovered thread-new idle", sess)
+	}
+	if sessionHasLiveThread(a, sessionKey, "thread-old") {
+		t.Fatal("old thread should not remain marked live")
+	}
+	if !sessionHasLiveThread(a, sessionKey, "thread-new") {
+		t.Fatal("recovered thread should be marked live")
 	}
 }
 

@@ -37,6 +37,9 @@ func newCodexUpgradeService(a *App) appcodexruntime.UpgradeService {
 		ReplaceClient: func(next appcodexruntime.CodexClient) appcodexruntime.CodexClient {
 			return replaceCodexClient(a, next)
 		},
+		RecoverFrontendRuntimeState: func() {
+			recoverFrontendRuntimeState(a)
+		},
 	}
 }
 

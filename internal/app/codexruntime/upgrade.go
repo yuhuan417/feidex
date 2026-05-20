@@ -33,6 +33,10 @@ type UpgradeService struct {
 
 	// ReplaceClient replaces the current Codex client.
 	ReplaceClient func(next CodexClient) CodexClient
+
+	// RecoverFrontendRuntimeState rebuilds frontend-scoped thread bindings after
+	// the runtime client has been replaced.
+	RecoverFrontendRuntimeState func()
 }
 
 // NewUpgradeService creates a new UpgradeService.
@@ -108,6 +112,9 @@ func (s UpgradeService) RefreshRuntimeAfterMaintenance(ctx context.Context) (boo
 			}
 		}
 		s.ReplaceClient(next)
+		if s.RecoverFrontendRuntimeState != nil {
+			s.RecoverFrontendRuntimeState()
+		}
 		return true, nil
 	}
 	_ = next.Close()
