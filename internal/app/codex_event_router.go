@@ -56,6 +56,12 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	router.OnThreadTokenUsageUpdated = func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 		onThreadTokenUsageUpdated(a, threadID, turnID, usage)
 	}
+	router.OnThreadGoalUpdated = func(note codexrpc.ThreadGoalUpdatedNotification) {
+		onThreadGoalUpdated(a, note)
+	}
+	router.OnThreadGoalCleared = func(note codexrpc.ThreadGoalClearedNotification) {
+		onThreadGoalCleared(a, note)
+	}
 	router.FailStandaloneCompactTurn = func(threadID, turnID, message string) bool {
 		return failStandaloneCompactTurn(a, threadID, turnID, message)
 	}

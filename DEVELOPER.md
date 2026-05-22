@@ -10,6 +10,14 @@ Feidex is not a general chat bot. It is a bridge between Feishu message flows an
 - Feishu-side interaction remains thread-aware and approval-safe.
 - Codex-side protocol handling stays explicit and conservative.
 - Build, release, and upgrade flows stay reproducible.
+- Backend-driven protocol work, such as active Codex goal continuations that
+  arrive as `turn/started` without a local `turn/start`, must be represented in
+  local session/submission state before later turn items are rendered.
+- Active Codex goal continuation turns must create a fresh Feishu outbound root
+  card that names the goal objective, then use that message ID as the synthetic
+  submission trigger/root/reply anchor for the rest of that turn.
+- Goal management/status cards are control surfaces only. Do not bind Codex turn
+  replies to a `/goal` status, edit, replace, pause, resume, or clear card.
 
 ## Core Contracts
 

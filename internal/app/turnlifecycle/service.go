@@ -47,6 +47,7 @@ type App interface {
 	SessionHasActiveWork(sess *state.Session) bool
 	SessionShouldStartNextSubmissionAsync(sess *state.Session) bool
 	BindStandaloneCompactTurn(threadID, turnID string) bool
+	BindGoalContinuationTurn(threadID, turnID string) bool
 	FinishStandaloneCompactTurn(threadID, turnID, status string) bool
 	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
 	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool
@@ -260,6 +261,9 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 		return
 	}
 	if w.app.BindStandaloneCompactTurn(threadID, turnID) {
+		return
+	}
+	if w.app.BindGoalContinuationTurn(threadID, turnID) {
 		return
 	}
 

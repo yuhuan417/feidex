@@ -34,6 +34,9 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	if !commandHandlesLocallyForBackend(spec, backend, fields) {
 		return enqueuePassthroughCommand(a, msg, raw)
 	}
+	if spec.HandleRaw != nil {
+		return spec.HandleRaw(a, msg, raw, fields[1:])
+	}
 	return spec.Handle(a, msg, fields[1:])
 }
 

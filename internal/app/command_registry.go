@@ -13,6 +13,7 @@ type localCommandSpec struct {
 	Names       []string
 	IsLocal     func(fields []string) bool
 	Handle      func(a *App, msg *feishu.InboundMessage, args []string) error
+	HandleRaw   func(a *App, msg *feishu.InboundMessage, raw string, args []string) error
 	HelpGroup   string
 	HelpEntries []helpCommandSpec
 	Backends    map[string]localCommandBackendSpec
@@ -33,6 +34,8 @@ var matchBackendCommand = appcommandmatch.MatchBackendCommand
 var commandArgInSet = appcommandmatch.CommandArgInSet
 
 var matchReviewCommand = appcommandmatch.MatchReviewCommand
+
+var matchGoalCommand = appcommandmatch.MatchGoalCommand
 
 var matchHistoryCommand = appcommandmatch.MatchHistoryCommand
 

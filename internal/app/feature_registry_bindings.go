@@ -11,9 +11,10 @@ import (
 )
 
 type featureCommandBinding struct {
-	Match    func(fields []string) bool
-	Handle   func(a *App, msg *feishu.InboundMessage, args []string) error
-	Backends map[string]func(fields []string) bool
+	Match     func(fields []string) bool
+	Handle    func(a *App, msg *feishu.InboundMessage, args []string) error
+	HandleRaw func(a *App, msg *feishu.InboundMessage, raw string, args []string) error
+	Backends  map[string]func(fields []string) bool
 }
 
 type featureBinding struct {
@@ -97,6 +98,7 @@ func buildLocalCommandSpecs() []localCommandSpec {
 				Names:       append([]string(nil), command.Names...),
 				IsLocal:     commandBinding.Match,
 				Handle:      commandBinding.Handle,
+				HandleRaw:   commandBinding.HandleRaw,
 				HelpGroup:   strings.TrimSpace(command.HelpGroup),
 				HelpEntries: append([]helpCommandSpec(nil), command.HelpEntries...),
 				Backends:    buildLocalCommandBackendPolicies(feature, command, commandBinding),

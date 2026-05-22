@@ -302,6 +302,7 @@ type fakeFeishuClient struct {
 	replyCardIDs              []string
 	replyTextIDs              []string
 	sendCardID                string
+	sendCardIDs               []string
 	localFileLinkStatePath    string
 	localFileLinkProcessCWD   string
 	rewriteLocalFileLinksOut  string
@@ -434,6 +435,11 @@ func (f *fakeFeishuClient) SendCard(_ context.Context, chatID string, card map[s
 	defer f.mu.Unlock()
 	f.sendCardChatIDs = append(f.sendCardChatIDs, chatID)
 	f.sendCards = append(f.sendCards, cloneTestCard(card))
+	if len(f.sendCardIDs) > 0 {
+		id := f.sendCardIDs[0]
+		f.sendCardIDs = f.sendCardIDs[1:]
+		return id, f.sendCardErr
+	}
 	if f.sendCardID == "" {
 		f.sendCardID = "send-card-id"
 	}
@@ -1925,27 +1931,29 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
 		labelByAction[actionName] = label
 	}
-	if indicatorByAction["menu.quiet"] != true || indicatorByAction["menu.plan"] || indicatorByAction["menu.history"] != true || indicatorByAction["menu.usage"] != true {
+	if indicatorByAction["menu.quiet"] != true || indicatorByAction["menu.plan"] || indicatorByAction["menu.goal"] || indicatorByAction["menu.history"] != true || indicatorByAction["menu.usage"] != true {
 		t.Fatalf("expected tools submenu indicators, got %#v", indicatorByAction)
 	}
-	if indicatorByAction["menu.interrupt"] || indicatorByAction["menu.download"] || indicatorByAction["menu.compact"] {
+	if indicatorByAction["menu.interrupt"] || indicatorByAction["menu.download"] || indicatorByAction["menu.compact"] || indicatorByAction["menu.goal"] {
 		t.Fatalf("direct tools commands should not show submenu indicator, got %#v", indicatorByAction)
 	}
-	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.plan"], "/plan") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
+	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.plan"], "/plan") || !strings.Contains(labelByAction["menu.goal"], "/goal") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
 		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
 	}
-	quietIndex, planIndex, compactIndex := -1, -1, -1
+	quietIndex, planIndex, goalIndex, compactIndex := -1, -1, -1, -1
 	for i, actionName := range actionOrder {
 		switch actionName {
 		case "menu.quiet":
 			quietIndex = i
 		case "menu.plan":
 			planIndex = i
+		case "menu.goal":
+			goalIndex = i
 		case "menu.compact":
 			compactIndex = i
 		}
 	}
-	if !(quietIndex >= 0 && planIndex > quietIndex && compactIndex > planIndex) {
+	if !(quietIndex >= 0 && planIndex > quietIndex && goalIndex > planIndex && compactIndex > goalIndex) {
 		t.Fatalf("unexpected tools order: %#v", actionOrder)
 	}
 	lastToolsText, _ := contextActions[len(contextActions)-1]["text"].(map[string]any)["content"].(string)
@@ -4054,7 +4062,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 		t.Fatal("expected help card to be sent")
 	}
 	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
-	for _, want := range []string{"/help", "/history", "/skills", "/debug", "/debug logs", "/download", "/fork", "/compact", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade dev", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64", "$skill-name <内容>"} {
+	for _, want := range []string{"/help", "/history", "/skills", "/debug", "/debug logs", "/download", "/fork", "/compact", "/goal", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade dev", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64", "$skill-name <内容>"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("help body missing %q: %q", want, body)
 		}

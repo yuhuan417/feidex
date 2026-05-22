@@ -3,6 +3,7 @@ package app
 import (
 	"feidex/internal/app/debugviewcmd"
 	appreviewcmd "feidex/internal/app/reviewcmd"
+	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -88,6 +89,43 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				return nil, nil
 			}
 			return newMenuActionService(s.app).completeMenuPlan(action, actionSessionKey(action))
+		},
+	}
+	bindings["goal"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"goal": {
+				Match: matchGoalCommand,
+				HandleRaw: func(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
+					return commandGoalRaw(a, msg, raw, args)
+				},
+				Backends: map[string]func(fields []string) bool{
+					backendClaude: nil,
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := actionSessionKey(action)
+			goalSvc := newGoalService(s.app)
+			switch actionName {
+			case "menu.goal":
+				return goalSvc.CompleteMenuGoal(action, sessionKey)
+			case "goal.pause":
+				return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusPaused)
+			case "goal.resume":
+				return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusActive)
+			case "goal.clear":
+				return goalSvc.CompleteGoalClearAction(action)
+			case "goal.edit":
+				return goalSvc.CompleteGoalEditAction(action)
+			case "goal.replace.confirm":
+				return goalSvc.CompleteGoalReplaceConfirm(action)
+			case "goal.replace.cancel":
+				return goalSvc.CompleteGoalReplaceCancel(action)
+			case "goal.edit.submit":
+				return goalSvc.CompleteGoalEditSubmit(action)
+			default:
+				return nil, nil
+			}
 		},
 	}
 	bindings["menu.compact"] = featureBinding{

@@ -65,6 +65,10 @@ func MatchReviewCommand(fields []string) bool {
 	}
 }
 
+func MatchGoalCommand(fields []string) bool {
+	return len(fields) >= 1
+}
+
 func MatchHistoryCommand(fields []string) bool {
 	if len(fields) == 1 {
 		return true

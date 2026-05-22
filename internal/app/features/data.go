@@ -124,6 +124,25 @@ var registry = []Spec{
 		},
 	},
 	{
+		ID:       "goal",
+		Kind:     SpecKindCapability,
+		Backends: []string{appruntime.BackendCodex},
+		Commands: []CommandSpec{{ID: "goal", Names: []string{"/goal"}, HelpGroup: "常用工具", HelpEntries: []HelpCommandSpec{{Command: "/goal", Summary: "查看或创建当前 thread 的长期任务目标。"}, {Command: "/goal <objective>", Summary: "设置长期任务目标。"}, {Command: "/goal pause", Summary: "暂停当前 goal。"}, {Command: "/goal resume", Summary: "恢复当前 goal。"}, {Command: "/goal clear", Summary: "清除当前 goal。"}, {Command: "/goal edit", Summary: "编辑当前 goal。"}}, Backends: map[string]CommandBackendSpec{appruntime.BackendClaude: {HideInHelp: true}}}},
+		MenuItems: []MenuItemSpec{
+			{GroupAction: "menu.tools", Action: "menu.goal", Label: "任务目标", Slash: "/goal", Kind: MenuItemDirect, IncludeParentAction: true},
+		},
+		ActionNames: []ActionName{
+			"menu.goal",
+			"goal.pause",
+			"goal.resume",
+			"goal.clear",
+			"goal.edit",
+			"goal.replace.confirm",
+			"goal.replace.cancel",
+			"goal.edit.submit",
+		},
+	},
+	{
 		ID:       "menu.compact",
 		Kind:     SpecKindCapability,
 		Commands: []CommandSpec{{ID: "compact", Names: []string{"/compact"}, HelpGroup: "常用工具", HelpEntries: []HelpCommandSpec{{Command: "/compact", Summary: "压缩当前线程的上下文，减少上下文占用。"}}, Backends: map[string]CommandBackendSpec{appruntime.BackendClaude: {HelpEntries: []HelpCommandSpec{{Command: "/compact", Summary: "压缩当前会话的上下文，减少上下文占用。"}}}}}},

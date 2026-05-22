@@ -45,6 +45,12 @@ type CodexEventRouter struct {
 	// OnThreadTokenUsageUpdated handles token usage updates.
 	OnThreadTokenUsageUpdated func(threadID, turnID string, usage codexrpc.ThreadTokenUsage)
 
+	// OnThreadGoalUpdated handles thread goal updates.
+	OnThreadGoalUpdated func(note codexrpc.ThreadGoalUpdatedNotification)
+
+	// OnThreadGoalCleared handles thread goal clears.
+	OnThreadGoalCleared func(note codexrpc.ThreadGoalClearedNotification)
+
 	// FailStandaloneCompactTurn fails a standalone compact turn.
 	// Returns true if the error was handled.
 	FailStandaloneCompactTurn func(threadID, turnID, message string) bool
@@ -117,6 +123,10 @@ func (r *CodexEventRouter) HandleNotification(method string, params json.RawMess
 		r.handleTurnCompleted(params)
 	case "thread/tokenUsage/updated":
 		r.handleThreadTokenUsageUpdated(params)
+	case "thread/goal/updated":
+		r.handleThreadGoalUpdated(params)
+	case "thread/goal/cleared":
+		r.handleThreadGoalCleared(params)
 	case "error":
 		r.handleError(params)
 	case "serverRequest/resolved":
@@ -271,6 +281,26 @@ func (r *CodexEventRouter) handleThreadTokenUsageUpdated(params json.RawMessage)
 	}
 	if r.OnThreadTokenUsageUpdated != nil {
 		r.OnThreadTokenUsageUpdated(p.ThreadID, p.TurnID, p.TokenUsage)
+	}
+}
+
+func (r *CodexEventRouter) handleThreadGoalUpdated(params json.RawMessage) {
+	var p codexrpc.ThreadGoalUpdatedNotification
+	if json.Unmarshal(params, &p) != nil {
+		return
+	}
+	if r.OnThreadGoalUpdated != nil {
+		r.OnThreadGoalUpdated(p)
+	}
+}
+
+func (r *CodexEventRouter) handleThreadGoalCleared(params json.RawMessage) {
+	var p codexrpc.ThreadGoalClearedNotification
+	if json.Unmarshal(params, &p) != nil {
+		return
+	}
+	if r.OnThreadGoalCleared != nil {
+		r.OnThreadGoalCleared(p)
 	}
 }
 

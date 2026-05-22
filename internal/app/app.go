@@ -69,6 +69,7 @@ type appTrackers struct {
 	finalCardPatches    *finalCardPatchTracker
 	pendingSkills       *appskillscmd.PendingSkillTracker
 	maintenanceTrackers backend.TrackerMap
+	goals               *goalTracker
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {

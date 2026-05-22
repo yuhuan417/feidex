@@ -71,6 +71,10 @@ func (a *App) BindStandaloneCompactTurn(threadID, turnID string) bool {
 	return bindStandaloneCompactTurn(a, threadID, turnID)
 }
 
+func (a *App) BindGoalContinuationTurn(threadID, turnID string) bool {
+	return newGoalService(a).BindGoalContinuationTurn(threadID, turnID)
+}
+
 func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool {
 	return finishStandaloneCompactTurn(a, threadID, turnID, status)
 }

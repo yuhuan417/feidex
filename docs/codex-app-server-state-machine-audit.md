@@ -18,6 +18,8 @@
 - `internal/app/pending_forms.go`
 - `internal/app/elicitation_forms.go`
 - `internal/app/compact.go`
+- `internal/app/goal.go`
+- `internal/codexrpc/goal.go`
 - `tmp/appserver-schema/`
 
 ## 审计口径
@@ -68,6 +70,7 @@
 | `SM-22` | `PermissionsApproval` |
 | `SM-23` | `McpElicitationRequest` |
 | `SM-24` | `SkillsCatalogLifecycle` |
+| `SM-25` | `ThreadGoalLifecycle` |
 
 ## 状态机到测试映射
 
@@ -90,6 +93,7 @@
 | `SM-14` | `review/start` payload、review item 生命周期、final 渲染、持久化历史 | `internal/app/review_critical_test.go`、`internal/app/review_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_review_test.go` |
 | `SM-22` | permissions approval 的 payload、reply、resolved 恢复契约 | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go`、`internal/app/app_more_test.go` |
 | `SM-23` | MCP elicitation 的 url/form pending、reply、resolved 恢复契约 | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go`、`internal/app/app_more_test.go`、`internal/app/server_request_reply_error_test.go` |
+| `SM-25` | thread goal 的 set/get/clear 请求、goal 通知缓存，以及 active goal 产生的 orphan turn 绑定 | `internal/app/goal_test.go`、`internal/codexrpc/goal_test.go` |
 
 ## 逐项审计
 
@@ -581,3 +585,29 @@
   - 该能力与当前场景无关，因此不纳入实现范围。
 - 修改建议:
   - 暂不实现；仅当后续产品明确需要浏览、刷新或管理 skills catalog 时，再补齐 `skills/list` / `skills/changed`。
+
+### SM-25 `ThreadGoalLifecycle`
+
+- 结论: `兼容实现`
+- OpenAI / 本地 Codex 原始要求:
+  - 协议名与约束: `thread/goal/set` 为 materialized thread 创建或更新单个持久 goal，返回当前 goal，并在状态变化时发出 `thread/goal/updated`。
+  - 协议名与约束: `thread/goal/get` 读取当前 goal；没有 goal 时返回 `goal: null`。
+  - 协议名与约束: `thread/goal/clear` 清除当前 goal，返回是否实际移除，并在状态变化时发出 `thread/goal/cleared`。
+  - schema 原始定义: `ThreadGoalSetParams.tokenBudget` 是 optional nullable number；省略表示不改，`null` 表示清空预算，number 表示设置预算。
+  - 通知原始定义: `thread/goal/updated` 包含完整 `goal`，`thread/goal/cleared` 只包含 `threadId`。
+  - 协议节点: `thread/goal/set|get|clear -> response`；goal 状态变化时 `thread/goal/updated|cleared`；active goal 可能由后端主动继续并发出没有本地 `turn/start` 对应的 `turn/started`。
+  - 来源: `/home/yuhuan/codex/codex-rs/app-server/README.md`、`/home/yuhuan/codex/codex-rs/app-server-protocol/src/protocol/v2/thread.rs`
+- 我们当前实现:
+  - `internal/codexrpc/goal.go` 定义 `ThreadGoal`、goal 请求/响应/通知类型，并用 `NullableInt64` 表达 optional nullable `tokenBudget`。
+  - `internal/app/goal.go` 通过 `/goal` 暴露 get/set/pause/resume/clear/edit；`/goal <objective>` 不解析 `--tokens`，整段尾部文本按 objective 发送；无参数 `/goal` 在没有当前 goal 时渲染 objective 输入表单，提交后创建 active goal。
+  - `internal/app/features/data.go` 把 `任务目标` 加入常用工具菜单，并保留直接 `/goal` 命令入口；Claude backend 隐藏并 passthrough。
+  - `internal/app/codex_event_router.go` / `internal/app/backend/codex_event_router.go` 消费 `thread/goal/updated` 和 `thread/goal/cleared`，更新 frontend 内存 tracker。
+  - `internal/app/turnlifecycle/service.go` 在普通 pending submission 和 standalone compact 都未绑定时，尝试用 active goal tracker 将 orphan `turn/started` 合成为本地 `kind=goal` submission，并绑定 `threadId + turnId`，后续 item/turn 仍沿用标准 turn 生命周期。
+  - goal continuation 绑定前会先主动发送一张新的 Feishu outbound card，header 简洁显示 goal continuation 的 `Turn #N` 和 objective，正文只显示耗时与 token 统计；返回的 message ID 作为合成 submission 的 `TriggerMessageID`、唯一 source root，以及后续 turn item 的回复锚点。
+  - `/goal` status/set/edit/replace/pause/resume/clear 产生的管理卡只记录 session/chat 上下文，不记录 message ID；Codex turn 输出永远不能回复到 goal 管理卡。
+- 差异点:
+  - v1 Feishu UI 不提供设置或清空 token budget 的命令参数；edit 只会保留已有 budget。协议类型已支持 explicit null，后续如果 UI 暴露预算清除，不需要改 wire type。
+  - active goal continuation 的本地 submission 是 Feidex 合成的展示/状态锚点，不对应本地 `turn/start` 请求；它只在 tracker 里存在 active goal 且同 thread session 空闲时创建，避免抢占正在进行的本地工作。由于每个后台驱动 continuation 没有 Feishu inbound，Feidex 必须为每个 continuation turn 创建新的 outbound 根消息，不能复用此前用户 inbound、session root 或任何 goal 管理卡；这同样适用于设置新 goal 后的第一个 turn。
+  - goal tracker 是进程内缓存；重启后只有用户再次 `/goal` 或收到 goal 通知才会恢复 active goal 观察。
+- 修改建议:
+  - 保持 v1 实现即可；若后续需要跨重启自动接管 active goal continuation，应把 goal tracker 持久化或在启动/resume 时对活跃 thread 执行 `thread/goal/get`。
