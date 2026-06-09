@@ -17,10 +17,7 @@ import (
 	"rsc.io/qr"
 )
 
-const (
-	accountsBaseURL = "https://accounts.feishu.cn"
-	openBaseURL     = "https://open.feishu.cn"
-)
+const accountsBaseURL = "https://accounts.feishu.cn"
 
 type FeishuSetupMode string
 
@@ -36,6 +33,7 @@ type FeishuSetupOptions struct {
 	AppPair    string
 	AppID      string
 	AppSecret  string
+	Domain     string
 	Timeout    time.Duration
 	QRImage    string
 	FrontendID string
@@ -92,6 +90,11 @@ func SetupFeishu(mode FeishuSetupMode, opts FeishuSetupOptions) error {
 		}
 	}
 
+	domain, err := normalizeFeishuDomain(opts.Domain)
+	if err != nil {
+		return err
+	}
+
 	appID := strings.TrimSpace(opts.AppID)
 	appSecret := strings.TrimSpace(opts.AppSecret)
 	if strings.TrimSpace(opts.AppPair) != "" {
@@ -106,12 +109,15 @@ func SetupFeishu(mode FeishuSetupMode, opts FeishuSetupOptions) error {
 		if appID == "" || appSecret == "" {
 			return errors.New("bind mode requires --app or --app-id/--app-secret")
 		}
-		if err := validateFeishuCredentials(appID, appSecret); err != nil {
+		if err := validateFeishuCredentials(appID, appSecret, domain); err != nil {
 			return err
 		}
 	case FeishuSetupNew:
 		if appID != "" || appSecret != "" {
 			return errors.New("new mode does not accept existing credentials")
+		}
+		if domain == FeishuDomainLark {
+			return errors.New("new mode (QR self-registration) is only supported for the feishu domain; for lark, create the app at open.larksuite.com and use `feishu bind --domain lark`")
 		}
 		appID, appSecret, err = runRegistrationFlow(opts.Timeout, opts.QRImage)
 		if err != nil {
@@ -123,12 +129,13 @@ func SetupFeishu(mode FeishuSetupMode, opts FeishuSetupOptions) error {
 
 	frontendID := strings.TrimSpace(opts.FrontendID)
 	if frontendID != "" {
-		if err := saveToFrontend(cfg, frontendID, appID, appSecret, strings.TrimSpace(opts.Backend)); err != nil {
+		if err := saveToFrontend(cfg, frontendID, appID, appSecret, domain, strings.TrimSpace(opts.Backend)); err != nil {
 			return err
 		}
 	} else {
 		cfg.Feishu.AppID = appID
 		cfg.Feishu.AppSecret = appSecret
+		cfg.Feishu.Domain = domain
 	}
 	if err := Save(cfgPath, cfg); err != nil {
 		return err
@@ -142,7 +149,7 @@ func SetupFeishu(mode FeishuSetupMode, opts FeishuSetupOptions) error {
 	return nil
 }
 
-func saveToFrontend(cfg *Config, id, appID, appSecret, backend string) error {
+func saveToFrontend(cfg *Config, id, appID, appSecret, domain, backend string) error {
 	if strings.Contains(id, ":") {
 		return fmt.Errorf("frontend id %q must not contain ':'", id)
 	}
@@ -156,6 +163,7 @@ func saveToFrontend(cfg *Config, id, appID, appSecret, backend string) error {
 	if idx >= 0 {
 		cfg.Frontends[idx].AppID = appID
 		cfg.Frontends[idx].AppSecret = appSecret
+		cfg.Frontends[idx].Domain = domain
 		if backend != "" {
 			cfg.Frontends[idx].Backend = backend
 		}
@@ -173,6 +181,7 @@ func saveToFrontend(cfg *Config, id, appID, appSecret, backend string) error {
 	fc := FrontendConfig{ID: id}
 	fc.AppID = appID
 	fc.AppSecret = appSecret
+	fc.Domain = domain
 	if backend != "" {
 		fc.Backend = backend
 	}
@@ -196,12 +205,16 @@ func loadOrCreateConfig(path, workspaceID string) (*Config, error) {
 	return cfg, Save(path, cfg)
 }
 
-func validateFeishuCredentials(appID, appSecret string) error {
+func validateFeishuCredentials(appID, appSecret, domain string) error {
+	base := feishuOpenBaseURL
+	if domain == FeishuDomainLark {
+		base = larkOpenBaseURL
+	}
 	payload, _ := json.Marshal(map[string]string{
 		"app_id":     appID,
 		"app_secret": appSecret,
 	})
-	req, err := http.NewRequest(http.MethodPost, openBaseURL+"/open-apis/auth/v3/tenant_access_token/internal", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, base+"/open-apis/auth/v3/tenant_access_token/internal", bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}

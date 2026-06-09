@@ -116,14 +116,26 @@ func TestValidateFeishuCredentialsAndRegistrationCall(t *testing.T) {
 		}
 		return testHTTPResponse(`{"ok":true}`), nil
 	}))
-	if err := validateFeishuCredentials("app", "secret"); err != nil {
+	if err := validateFeishuCredentials("app", "secret", FeishuDomainFeishu); err != nil {
 		t.Fatalf("validateFeishuCredentials(success) error = %v", err)
+	}
+
+	var larkHost string
+	withDefaultTransport(t, setupRoundTripper(func(req *http.Request) (*http.Response, error) {
+		larkHost = req.URL.Host
+		return testHTTPResponse(`{"code":0,"tenant_access_token":"token"}`), nil
+	}))
+	if err := validateFeishuCredentials("app", "secret", FeishuDomainLark); err != nil {
+		t.Fatalf("validateFeishuCredentials(lark) error = %v", err)
+	}
+	if larkHost != "open.larksuite.com" {
+		t.Fatalf("lark domain hit host %q, want open.larksuite.com", larkHost)
 	}
 
 	withDefaultTransport(t, setupRoundTripper(func(req *http.Request) (*http.Response, error) {
 		return testHTTPResponse(`{"code":999,"msg":"bad creds"}`), nil
 	}))
-	if err := validateFeishuCredentials("app", "secret"); err == nil {
+	if err := validateFeishuCredentials("app", "secret", FeishuDomainFeishu); err == nil {
 		t.Fatal("expected invalid credentials to fail")
 	}
 

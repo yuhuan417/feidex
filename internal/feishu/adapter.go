@@ -296,7 +296,7 @@ func (a *Adapter) fetchWSEndpointURL(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, lark.FeishuBaseUrl+larkws.GenEndpointUri, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.cfg.OpenBaseURL()+larkws.GenEndpointUri, bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}
@@ -1846,7 +1846,7 @@ func (a *Adapter) fetchBotOpenID() string {
 		"app_id":     a.cfg.AppID,
 		"app_secret": a.cfg.AppSecret,
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.cfg.OpenBaseURL()+"/open-apis/auth/v3/tenant_access_token/internal", strings.NewReader(string(body)))
 	if err != nil {
 		return ""
 	}
@@ -1863,7 +1863,7 @@ func (a *Adapter) fetchBotOpenID() string {
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil || tokenResp.Code != 0 || tokenResp.TenantAccessToken == "" {
 		return ""
 	}
-	infoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://open.feishu.cn/open-apis/bot/v3/info", nil)
+	infoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, a.cfg.OpenBaseURL()+"/open-apis/bot/v3/info", nil)
 	if err != nil {
 		return ""
 	}

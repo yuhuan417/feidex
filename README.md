@@ -16,7 +16,7 @@
 
 ## 特性亮点
 
-- **飞书接入** —— 单聊 / 群聊（可配置仅 `@bot` 响应）、回复树内会话连续性，单进程可跑多个 bot（`[[frontend]]`）
+- **飞书接入** —— 单聊 / 群聊（可配置仅 `@bot` 响应）、回复树内会话连续性，单进程可跑多个 bot（`[[frontend]]`）；也支持 Lark 国际版（`domain` 切换）
 - **双后端** —— Codex（thread/turn）与 Claude（session/conversation）并存，`/backend` 在线切换无需重启
 - **会话与队列** —— 新消息排队、回复消息 steer 到当前 turn、失败自动回退、暂存附件、auto-retry
 - **审批与表单** —— 命令 / 文件变更 / 权限审批，`request_user_input` 表单与手机友好的 quick-card
@@ -31,7 +31,7 @@
 
 - Go 1.23+（按 [go.mod](go.mod) 为准）
 - 已安装 `codex` CLI，并且 `codex app-server` 可启动
-- 一个可用的飞书应用 `app_id / app_secret`
+- 一个可用的飞书应用 `app_id / app_secret`（也支持 Lark 国际版，设 `domain = "lark"`，详见[配置参考](docs/configuration.md#区域--region飞书-vs-lark)）
 
 ### 可选
 
