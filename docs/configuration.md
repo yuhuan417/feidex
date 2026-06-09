@@ -121,6 +121,22 @@ feidex feishu bind --app app_id:app_secret --domain lark
 - `feidex feishu new` 的二维码自助注册流程只对 `feishu` 域名可用。Lark 国际版请在 [open.larksuite.com](https://open.larksuite.com) 后台创建应用，再用 `feishu bind --domain lark` 绑定凭据。
 - `domain` 只影响 Open Platform 接口域名，不改变任何会话 / 命令 / 卡片行为。
 
+### 创建应用与机器人（官方文档）
+
+| 区域 | 开发者后台 | 创建机器人指南 |
+| --- | --- | --- |
+| 飞书 | [open.feishu.cn/app](https://open.feishu.cn/app) | [5 分钟开发机器人](https://open.feishu.cn/document/home/develop-a-bot-in-5-minutes/introduction) |
+| Lark | [open.larksuite.com/app](https://open.larksuite.com/app) | [Develop a bot in 5 minutes](https://open.larksuite.com/document/home/develop-a-bot-in-5-minutes/introduction) |
+
+接入 Feidex 时，在后台需要：
+
+- 启用 **机器人 / Bot** 能力（卡片菜单/审批需要 **消息卡片**）
+- **事件与回调**订阅方式选 **长连接 / persistent connection**（无需公网回调 URL），并订阅 `im.message.receive_v1`、卡片回调 `card.action.trigger`
+- **权限 scopes** 至少 `im:message`、`im:message:send_as_bot`；用附件/下载再加 `im:resource`、`drive:drive`
+- 配置改动后**创建并发布版本**才生效
+
+> 提示：消息相关 scope 不全时，长连接能建立但**收不到消息事件**（连得上却不回复）。若 bot 不响应，优先核对上面的消息权限并重新发布。
+
 ## `[codex]`
 
 - `command`
