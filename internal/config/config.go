@@ -35,6 +35,7 @@ type FeishuConfig struct {
 	AutoRetry           bool      `toml:"codex_auto_retry"`
 	AppID               string    `toml:"app_id"`
 	AppSecret           string    `toml:"app_secret"`
+	Domain              string    `toml:"domain"`
 	AllowFrom           []string  `toml:"allow_from"`
 	DebugAllowFrom      []string  `toml:"debug_allow_from"`
 	GroupAtOnly         bool      `toml:"group_at_only"`
@@ -100,6 +101,25 @@ const (
 	RuntimeBackendClaude = "claude"
 	DefaultFrontendID    = "default"
 )
+
+// Feishu/Lark Open Platform domains. The Go SDK is shared between the two
+// products; only the Open Platform base URL differs.
+const (
+	FeishuDomainFeishu = "feishu"
+	FeishuDomainLark   = "lark"
+
+	feishuOpenBaseURL = "https://open.feishu.cn"
+	larkOpenBaseURL   = "https://open.larksuite.com"
+)
+
+// OpenBaseURL returns the Open Platform base URL for the configured domain.
+// Defaults to Feishu (open.feishu.cn) when domain is unset.
+func (c FeishuConfig) OpenBaseURL() string {
+	if c.Domain == FeishuDomainLark {
+		return larkOpenBaseURL
+	}
+	return feishuOpenBaseURL
+}
 
 func Default() *Config {
 	return &Config{
@@ -299,12 +319,30 @@ func normalizeFeishuConfig(cfg *FeishuConfig) error {
 	default:
 		return fmt.Errorf("unsupported feishu.backend %q; must be unset, %q, or %q", cfg.Backend, RuntimeBackendCodex, RuntimeBackendClaude)
 	}
+	domain, err := normalizeFeishuDomain(cfg.Domain)
+	if err != nil {
+		return err
+	}
+	cfg.Domain = domain
 	quietMode, err := ParseQuietMode(cfg.Quiet)
 	if err != nil {
 		quietMode = QuietModeNormal
 	}
 	cfg.Quiet = quietMode
 	return nil
+}
+
+// normalizeFeishuDomain canonicalizes a domain value to FeishuDomainFeishu or
+// FeishuDomainLark. An empty value defaults to Feishu.
+func normalizeFeishuDomain(domain string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(domain)) {
+	case "", FeishuDomainFeishu:
+		return FeishuDomainFeishu, nil
+	case FeishuDomainLark:
+		return FeishuDomainLark, nil
+	default:
+		return "", fmt.Errorf("unsupported feishu.domain %q; must be unset, %q, or %q", domain, FeishuDomainFeishu, FeishuDomainLark)
+	}
 }
 
 func firstNonEmptyString(values ...string) string {

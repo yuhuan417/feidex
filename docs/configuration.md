@@ -73,7 +73,10 @@ Feidex 会把这些状态写进去：
 ## `[feishu]`
 
 - `app_id` / `app_secret`
-  - 飞书应用凭据
+  - 飞书应用凭据（Lark 国际版同样适用）
+- `domain`
+  - Open Platform 区域，决定接口域名：`feishu`（默认，`open.feishu.cn`）或 `lark`（国际版，`open.larksuite.com`）
+  - 默认即飞书，无需设置；仅 Lark 国际版需要。详见下文 [区域 / Region（飞书 vs Lark）](#区域--region飞书-vs-lark)
 - `allow_from`
   - 允许的用户列表；空表示不限制
 - `debug_allow_from`
@@ -88,6 +91,51 @@ Feidex 会把这些状态写进去：
   - 群聊是否在线程内回复
 - `quiet`
   - Quiet 模式默认值，默认 `progress`
+
+## 区域 / Region（飞书 vs Lark）
+
+飞书（国内版）与 Lark（国际版）共用同一套 SDK，只是 Open Platform 域名不同。Feidex 用 `[feishu].domain` 切换：
+
+| `domain` | Open Platform 域名 | 适用 |
+| --- | --- | --- |
+| `feishu`（默认） | `open.feishu.cn` | 飞书（国内版） |
+| `lark` | `open.larksuite.com` | Lark（国际版） |
+
+```toml
+[feishu]
+domain = "lark"
+app_id = "cli_xxx"
+app_secret = "sec_xxx"
+```
+
+多前端时，`domain` 同样可写在每个 `[[frontend]]` 下，互不影响。
+
+绑定 Lark 应用：
+
+```bash
+feidex feishu bind --app app_id:app_secret --domain lark
+```
+
+注意：
+
+- `feidex feishu new` 的二维码自助注册流程只对 `feishu` 域名可用。Lark 国际版请在 [open.larksuite.com](https://open.larksuite.com) 后台创建应用，再用 `feishu bind --domain lark` 绑定凭据。
+- `domain` 只影响 Open Platform 接口域名，不改变任何会话 / 命令 / 卡片行为。
+
+### 创建应用与机器人（官方文档）
+
+| 区域 | 开发者后台 | 创建机器人指南 |
+| --- | --- | --- |
+| 飞书 | [open.feishu.cn/app](https://open.feishu.cn/app) | [5 分钟开发机器人](https://open.feishu.cn/document/home/develop-a-bot-in-5-minutes/introduction) |
+| Lark | [open.larksuite.com/app](https://open.larksuite.com/app) | [Develop a bot in 5 minutes](https://open.larksuite.com/document/home/develop-a-bot-in-5-minutes/introduction) |
+
+接入 Feidex 时，在后台需要：
+
+- 启用 **机器人 / Bot** 能力（卡片菜单/审批需要 **消息卡片**）
+- **事件与回调**订阅方式选 **长连接 / persistent connection**（无需公网回调 URL），并订阅 `im.message.receive_v1`、卡片回调 `card.action.trigger`
+- **权限 scopes** 至少 `im:message`、`im:message:send_as_bot`；用附件/下载再加 `im:resource`、`drive:drive`
+- 配置改动后**创建并发布版本**才生效
+
+> 提示：消息相关 scope 不全时，长连接能建立但**收不到消息事件**（连得上却不回复）。若 bot 不响应，优先核对上面的消息权限并重新发布。
 
 ## `[codex]`
 

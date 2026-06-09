@@ -9,6 +9,9 @@ level = "info"
 # Leave unset to get an interactive backend-chooser card on first message.
 [feishu]
 # backend = ""
+# domain selects the Open Platform endpoint:
+#   "feishu" (default) -> open.feishu.cn   |   "lark" -> open.larksuite.com
+# domain = "feishu"
 app_id = "cli_xxx"
 app_secret = "sec_xxx"
 allow_from = []
