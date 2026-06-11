@@ -144,8 +144,12 @@ Next steps:
   2. Start it:
        feidex serve --config config.toml
 
-Note: the systemd daemon and /upgrade self-upgrade are Linux-only;
-on Windows run `feidex serve` directly (e.g. as a scheduled task or service).
+  3. Or run it in the background as a daemon (Task Scheduler, no admin needed):
+       feidex daemon install --config config.toml
+       feidex daemon status
+
+Note: /upgrade self-upgrade is Linux-only; to update on Windows, re-run this
+installer. The daemon runs within your login session (stops at sign-out).
 
 Docs: https://github.com/$Repo#readme
 "@ | Write-Host

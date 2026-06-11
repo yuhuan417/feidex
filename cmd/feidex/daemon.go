@@ -4,8 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"runtime"
+	"strings"
+	"time"
 
 	"feidex/internal/buildinfo"
 	"feidex/internal/config"
@@ -295,6 +299,15 @@ func tailDaemonLogFile(path string, lines int, follow bool) int {
 		fmt.Fprintf(os.Stderr, "stat log file: %v\n", err)
 		return 1
 	}
+	// Windows has no `tail` binary; use a built-in tail there. On Unix the
+	// system `tail` stays the default so behavior is unchanged.
+	if runtime.GOOS == "windows" {
+		if err := goTailFile(path, lines, follow, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "tail failed: %v\n", err)
+			return 1
+		}
+		return 0
+	}
 	tailArgs := []string{"-n", fmt.Sprintf("%d", lines)}
 	if follow {
 		tailArgs = append(tailArgs, "-f")
@@ -308,6 +321,54 @@ func tailDaemonLogFile(path string, lines int, follow bool) int {
 		return 1
 	}
 	return 0
+}
+
+// goTailFile prints the last n lines of a file and, when follow is set, keeps
+// printing appended content until interrupted. It is a minimal cross-platform
+// stand-in for `tail -n N [-f]`, used on Windows where `tail` is absent.
+func goTailFile(path string, n int, follow bool, out io.Writer) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	// A trailing newline yields a final empty element; drop it so counts match.
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	start := 0
+	if n >= 0 && len(lines) > n {
+		start = len(lines) - n
+	}
+	for _, line := range lines[start:] {
+		fmt.Fprintln(out, line)
+	}
+	if !follow {
+		return nil
+	}
+	offset := int64(len(data))
+	for {
+		time.Sleep(time.Second)
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		if _, err := f.Seek(offset, io.SeekStart); err != nil {
+			f.Close()
+			return err
+		}
+		buf, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			return err
+		}
+		if len(buf) > 0 {
+			if _, err := out.Write(buf); err != nil {
+				return err
+			}
+			offset += int64(len(buf))
+		}
+	}
 }
 
 func daemonUpgradeRunner(args []string) int {
