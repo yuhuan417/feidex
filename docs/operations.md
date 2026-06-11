@@ -48,7 +48,7 @@ irm https://raw.githubusercontent.com/yuhuan417/feidex/main/install.ps1 | iex
 
 ## Daemon 模式
 
-Feidex 支持 Linux 用户态 systemd daemon。
+Feidex 支持把自己作为后台守护进程常驻：Linux 用 systemd 用户服务，macOS 用 launchd 用户级 LaunchAgent。两者命令一致，平台差异由 `feidex daemon` 自动处理。
 
 命令：
 
@@ -73,16 +73,33 @@ feidex daemon uninstall
 - `start` / `stop` / `restart` / `status` / `uninstall`
   - 也默认读取当前目录的 `config.toml`，按其中的 `[daemon].service_name` 选择实例
 - `logs`
-  - 通过 `journalctl --user -u <service>.service` 查看当前 daemon 日志
+  - Linux：通过 `journalctl --user -u <service>.service` 查看
+  - macOS：tail launchd 写入的日志文件（见下文 macOS 小节）
   - `-n` 控制输出行数，`-f` 持续跟随
-  - 依赖 Linux/systemd journald
 - `upgrade-runner`
   - 内部升级 runner，不需要手动调用
+
+### Linux（systemd 用户服务）
+
+- unit 文件写在 `~/.config/systemd/user/<service>.service`
+- `install` 默认尝试为当前用户开启 linger（开机/登出后仍运行）；不想改这个设置用 `--disable-linger`
+- 日志由 journald 管理，`feidex daemon logs` 走 `journalctl`
+
+### macOS（launchd LaunchAgent）
+
+- plist 写在 `~/Library/LaunchAgents/<service>.plist`，通过 `launchctl bootstrap` / `bootout` / `kickstart` 管理
+- `RunAtLoad` + `KeepAlive`：登录后自动启动、崩溃自动拉起
+- 日志：launchd 把 stdout/stderr 写到 `~/Library/Logs/feidex/<service>.log`，`feidex daemon logs` 直接 tail 该文件
+- `enable-linger` 在 macOS 上是 no-op（LaunchAgent 登录即起）。**开机即起（免登录）需要 root 级 LaunchDaemon，当前不支持**
+- 若二进制是从浏览器下载被 Gatekeeper 隔离，先 `xattr -d com.apple.quarantine <binary>`（用 `install.sh` 经 curl 安装则无此问题）
+
+> macOS daemon 仅负责常驻；`/upgrade` 自升级仍为 Linux 专属（见[自动升级](#自动升级)），macOS 升级请用 [install.sh](#一键安装脚本) 重新安装。
 
 对应实现见：
 
 - [daemon.go](../cmd/feidex/daemon.go)
 - [manager.go](../internal/daemon/manager.go)
+- [systemd_linux.go](../internal/daemon/systemd_linux.go) / [launchd_darwin.go](../internal/daemon/launchd_darwin.go)
 
 ## 自动升级
 

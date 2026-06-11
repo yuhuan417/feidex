@@ -251,8 +251,19 @@ func daemonLogs(args []string) int {
 		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		return 1
 	}
-	unitName := daemon.NormalizeServiceName(cfg.Daemon.ServiceName) + ".service"
+	mgr, err := newDaemonManager(cfg.Daemon.ServiceName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "daemon manager: %v\n", err)
+		return 1
+	}
 
+	// Platforms that log to a file (macOS launchd) are tailed directly;
+	// Linux logs live in systemd journald and are read with journalctl.
+	if logFile := mgr.LogFile(); logFile != "" {
+		return tailDaemonLogFile(logFile, *lines, *follow)
+	}
+
+	unitName := daemon.NormalizeServiceName(cfg.Daemon.ServiceName) + ".service"
 	if _, err := exec.LookPath("journalctl"); err != nil {
 		fmt.Fprintf(os.Stderr, "journalctl not found; daemon logs are managed by systemd journald on Linux\n")
 		fmt.Fprintf(os.Stderr, "You can view logs manually with: journalctl --user -u %s\n", unitName)
@@ -269,6 +280,31 @@ func daemonLogs(args []string) int {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "journalctl failed: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func tailDaemonLogFile(path string, lines int, follow bool) int {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "log file not found yet: %s\n", path)
+			fmt.Fprintln(os.Stderr, "(it appears once the daemon has started and produced output)")
+			return 1
+		}
+		fmt.Fprintf(os.Stderr, "stat log file: %v\n", err)
+		return 1
+	}
+	tailArgs := []string{"-n", fmt.Sprintf("%d", lines)}
+	if follow {
+		tailArgs = append(tailArgs, "-f")
+	}
+	tailArgs = append(tailArgs, path)
+	cmd := exec.Command("tail", tailArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "tail failed: %v\n", err)
 		return 1
 	}
 	return 0

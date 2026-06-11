@@ -28,6 +28,7 @@ type fakeUpgradeManager struct {
 func (m *fakeUpgradeManager) Install(Config) error { return nil }
 func (m *fakeUpgradeManager) Uninstall() error     { return nil }
 func (m *fakeUpgradeManager) Platform() string     { return "test" }
+func (m *fakeUpgradeManager) LogFile() string      { return "" }
 func (m *fakeUpgradeManager) Restart() error       { return nil }
 func (m *fakeUpgradeManager) Start() error {
 	m.mu.Lock()

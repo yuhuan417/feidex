@@ -43,6 +43,7 @@ type fakeManager struct {
 	restartErr error
 	removeErr  error
 	platform   string
+	logFile    string
 	installCfg daemon.Config
 	calls      []string
 }
@@ -83,6 +84,10 @@ func (f *fakeManager) Platform() string {
 		return f.platform
 	}
 	return "test"
+}
+
+func (f *fakeManager) LogFile() string {
+	return f.logFile
 }
 
 func withCapturedOutput(t *testing.T, fn func()) (stdout string, stderr string) {

@@ -33,6 +33,10 @@ type Manager interface {
 	Restart() error
 	Status() (*Status, error)
 	Platform() string
+	// LogFile returns the path the daemon's stdout/stderr is written to, or
+	// "" when logs are managed by the platform log system (e.g. systemd
+	// journald on Linux). The CLI tails this file when it is non-empty.
+	LogFile() string
 }
 
 func NewManager(serviceName string) (Manager, error) {
