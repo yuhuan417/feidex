@@ -34,14 +34,16 @@
 
 ### 可选
 
-- **Go 1.23+**（按 [go.mod](go.mod) 为准）：仅[从源码构建](#从源码构建)时需要；用[一键安装](#一键安装推荐linux--macos)下载预编译二进制则不需要
+- **Go 1.23+**（按 [go.mod](go.mod) 为准）：仅[从源码构建](#从源码构建)时需要；用[一键安装](#一键安装推荐)下载预编译二进制则不需要
 - Linux + systemd 用户服务：如果你希望 Feidex 长驻后台并支持自升级，推荐使用 [daemon 模式](docs/operations.md#daemon-模式)
 
 ## 快速开始
 
-### 一键安装（推荐，Linux / macOS）
+### 一键安装（推荐）
 
-下载对应平台的 release 二进制、校验 SHA-256、装到 PATH，无需 Go 工具链：
+下载对应平台的 release 二进制、校验 SHA-256、装到 PATH，无需 Go 工具链。
+
+#### Linux / macOS
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash
@@ -52,6 +54,14 @@ curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | 
 curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash -s -- --dev
 curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash -s -- --version v0.222.0 --bin-dir /usr/local/bin
 ```
+
+#### Windows（PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/yuhuan417/feidex/main/install.ps1 | iex
+```
+
+> Windows 上 `feidex serve` 可直接运行；systemd daemon 与 `/upgrade` 自升级为 Linux 专属。
 
 安装选项见 [安装脚本](docs/operations.md#一键安装脚本)。
 
