@@ -39,19 +39,37 @@
 
 ## 快速开始
 
+### 一键安装（推荐，Linux / macOS）
+
+下载对应平台的 release 二进制、校验 SHA-256、装到 PATH，无需 Go 工具链：
+
 ```bash
-# 1. 构建
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash
+```
+
+```bash
+# 装开发版 / 指定版本 / 自定义目录：
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash -s -- --dev
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash -s -- --version v0.222.0 --bin-dir /usr/local/bin
+```
+
+安装选项见 [安装脚本](docs/operations.md#一键安装脚本)。
+
+### 从源码构建
+
+```bash
 mkdir -p bin
 go build -o bin/feidex ./cmd/feidex
+```
 
-# 2. 准备配置
+### 配置并启动
+
+```bash
+# 准备配置（也可用 `feidex feishu setup` 走二维码授权；字段说明见「文档 → 配置参考」）
 cp config.example.toml config.toml
-#    按需编辑 config.toml；也可用 `feidex feishu setup` 走二维码授权
-#    最小配置与字段说明见「文档 → 配置参考」
 
-# 3. 启动
-./bin/feidex serve --config config.toml
-# 或直接：./bin/feidex
+# 启动
+feidex serve --config config.toml
 ```
 
 飞书应用的创建与绑定（`feidex feishu setup / new / bind`）见 [配置参考 · 飞书接入命令](docs/configuration.md#飞书接入命令)。

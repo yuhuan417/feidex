@@ -1,8 +1,42 @@
 # 运行与升级
 
-本文覆盖 daemon 模式、自动升级与发布流程。配置见 [配置参考](configuration.md)。
+本文覆盖一键安装、daemon 模式、自动升级与发布流程。配置见 [配置参考](configuration.md)。
 
 > 工程层面的部署约束以 [DEVELOPER.md](../DEVELOPER.md) 的 Deployment Notes / Build And Release Requirements 为准。
+
+## 一键安装脚本
+
+`install.sh` 从 GitHub Release 下载对应平台的二进制、校验 `sha256sums.txt`、装到 PATH，无需 Go 工具链。仅支持 Linux / macOS（amd64 / arm64）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash
+```
+
+选项（写在 `| bash -s --` 之后）：
+
+- `--version <vX.Y.Z>`
+  - 安装指定版本（默认最新 release）
+- `--dev`
+  - 安装最新开发版（`dev-latest` prerelease）
+- `--bin-dir <dir>`
+  - 安装目录（默认 `~/.local/bin`）
+- `--repo <owner/name>`
+  - 指定来源仓库（默认 `yuhuan417/feidex`）
+- `--no-modify-path`
+  - 不自动把安装目录写进 shell profile
+- `-h` / `--help`
+  - 显示帮助
+
+环境变量等价：`FEIDEX_VERSION`、`FEIDEX_REPO`、`FEIDEX_BIN_DIR`。
+
+行为：
+
+- 按 `uname` 识别 OS/架构，自动选 `feidex-linux-amd64` / `feidex-linux-aarch64` / `feidex-darwin-amd64` / `feidex-darwin-arm64`
+- 强制校验 SHA-256（与 release 的 `sha256sums.txt` 比对，不一致即中止）
+- 原子替换（可重复执行以升级；二进制正被占用时也安全）
+- 安装目录不在 PATH 时，提示或写入 shell profile（`--no-modify-path` 可关闭）
+
+> Windows 或离线环境请用 [手动安装 release 包](#release-资产) 或[从源码构建](../README.md#从源码构建)。安装后日常升级也可用 `/upgrade`（见[自动升级](#自动升级)）。
 
 ## Daemon 模式
 
