@@ -29,12 +29,12 @@
 
 ### 必需
 
-- Go 1.23+（按 [go.mod](go.mod) 为准）
 - 已安装 `codex` CLI，并且 `codex app-server` 可启动
 - 一个可用的飞书应用 `app_id / app_secret`（也支持 Lark 国际版，设 `domain = "lark"`，详见[配置参考](docs/configuration.md#区域--region飞书-vs-lark)）
 
 ### 可选
 
+- **Go 1.23+**（按 [go.mod](go.mod) 为准）：仅[从源码构建](#从源码构建)时需要；用[一键安装](#一键安装推荐linux--macos)下载预编译二进制则不需要
 - Linux + systemd 用户服务：如果你希望 Feidex 长驻后台并支持自升级，推荐使用 [daemon 模式](docs/operations.md#daemon-模式)
 
 ## 快速开始
@@ -56,6 +56,8 @@ curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | 
 安装选项见 [安装脚本](docs/operations.md#一键安装脚本)。
 
 ### 从源码构建
+
+需要 Go 1.23+（按 [go.mod](go.mod) 为准）：
 
 ```bash
 mkdir -p bin
