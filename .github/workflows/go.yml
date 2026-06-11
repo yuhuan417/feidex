@@ -30,6 +30,11 @@ jobs:
       - name: Test
         run: go test -v ./...
 
+      - name: Cross-build (Windows)
+        run: |
+          GOOS=windows GOARCH=amd64 go build ./...
+          GOOS=windows GOARCH=arm64 go build ./...
+
   release-dev-linux:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: ci
@@ -66,7 +71,9 @@ jobs:
             "linux:amd64:feidex-linux-amd64" \
             "linux:arm64:feidex-linux-aarch64" \
             "darwin:amd64:feidex-darwin-amd64" \
-            "darwin:arm64:feidex-darwin-arm64"; do
+            "darwin:arm64:feidex-darwin-arm64" \
+            "windows:amd64:feidex-windows-amd64.exe" \
+            "windows:arm64:feidex-windows-arm64.exe"; do
             IFS=':' read -r GOOS GOARCH ASSET <<<"${target}"
             CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
               go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
@@ -80,6 +87,8 @@ jobs:
           tar -C dist -czf dist/feidex-linux-aarch64.tar.gz feidex-linux-aarch64
           tar -C dist -czf dist/feidex-darwin-amd64.tar.gz feidex-darwin-amd64
           tar -C dist -czf dist/feidex-darwin-arm64.tar.gz feidex-darwin-arm64
+          (cd dist && zip -q feidex-windows-amd64.zip feidex-windows-amd64.exe)
+          (cd dist && zip -q feidex-windows-arm64.zip feidex-windows-arm64.exe)
           sha256sum \
             dist/feidex-linux-amd64 \
             dist/feidex-linux-amd64.tar.gz \
@@ -89,6 +98,10 @@ jobs:
             dist/feidex-darwin-amd64.tar.gz \
             dist/feidex-darwin-arm64 \
             dist/feidex-darwin-arm64.tar.gz \
+            dist/feidex-windows-amd64.exe \
+            dist/feidex-windows-amd64.zip \
+            dist/feidex-windows-arm64.exe \
+            dist/feidex-windows-arm64.zip \
             > dist/sha256sums.txt
 
       - name: Move dev-latest tag
@@ -121,6 +134,10 @@ jobs:
             dist/feidex-darwin-amd64.tar.gz
             dist/feidex-darwin-arm64
             dist/feidex-darwin-arm64.tar.gz
+            dist/feidex-windows-amd64.exe
+            dist/feidex-windows-amd64.zip
+            dist/feidex-windows-arm64.exe
+            dist/feidex-windows-arm64.zip
             dist/sha256sums.txt
 
   release-linux:
@@ -146,7 +163,9 @@ jobs:
             "linux:amd64:feidex-linux-amd64" \
             "linux:arm64:feidex-linux-aarch64" \
             "darwin:amd64:feidex-darwin-amd64" \
-            "darwin:arm64:feidex-darwin-arm64"; do
+            "darwin:arm64:feidex-darwin-arm64" \
+            "windows:amd64:feidex-windows-amd64.exe" \
+            "windows:arm64:feidex-windows-arm64.exe"; do
             IFS=':' read -r GOOS GOARCH ASSET <<<"${target}"
             CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
               go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
@@ -160,6 +179,8 @@ jobs:
           tar -C dist -czf dist/feidex-linux-aarch64.tar.gz feidex-linux-aarch64
           tar -C dist -czf dist/feidex-darwin-amd64.tar.gz feidex-darwin-amd64
           tar -C dist -czf dist/feidex-darwin-arm64.tar.gz feidex-darwin-arm64
+          (cd dist && zip -q feidex-windows-amd64.zip feidex-windows-amd64.exe)
+          (cd dist && zip -q feidex-windows-arm64.zip feidex-windows-arm64.exe)
           sha256sum \
             dist/feidex-linux-amd64 \
             dist/feidex-linux-amd64.tar.gz \
@@ -169,6 +190,10 @@ jobs:
             dist/feidex-darwin-amd64.tar.gz \
             dist/feidex-darwin-arm64 \
             dist/feidex-darwin-arm64.tar.gz \
+            dist/feidex-windows-amd64.exe \
+            dist/feidex-windows-amd64.zip \
+            dist/feidex-windows-arm64.exe \
+            dist/feidex-windows-arm64.zip \
             > dist/sha256sums.txt
 
       - name: Publish GitHub release assets
@@ -186,4 +211,8 @@ jobs:
             dist/feidex-darwin-amd64.tar.gz
             dist/feidex-darwin-arm64
             dist/feidex-darwin-arm64.tar.gz
+            dist/feidex-windows-amd64.exe
+            dist/feidex-windows-amd64.zip
+            dist/feidex-windows-arm64.exe
+            dist/feidex-windows-arm64.zip
             dist/sha256sums.txt

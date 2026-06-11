@@ -6,37 +6,45 @@
 
 ## 一键安装脚本
 
-`install.sh` 从 GitHub Release 下载对应平台的二进制、校验 `sha256sums.txt`、装到 PATH，无需 Go 工具链。仅支持 Linux / macOS（amd64 / arm64）。
+从 GitHub Release 下载对应平台的二进制、校验 `sha256sums.txt`、装到 PATH，无需 Go 工具链。支持 Linux / macOS / Windows（amd64 / arm64）。
+
+Linux / macOS（`install.sh`）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash
 ```
 
-选项（写在 `| bash -s --` 之后）：
+Windows（`install.ps1`，PowerShell）：
 
-- `--version <vX.Y.Z>`
+```powershell
+irm https://raw.githubusercontent.com/yuhuan417/feidex/main/install.ps1 | iex
+```
+
+选项（`install.sh` 写在 `| bash -s --` 之后；`install.ps1` 用 PowerShell 参数 `-Version` / `-Dev` / `-BinDir` / `-Repo` / `-NoModifyPath`）：
+
+- `--version <vX.Y.Z>` / `-Version`
   - 安装指定版本（默认最新 release）
-- `--dev`
+- `--dev` / `-Dev`
   - 安装最新开发版（`dev-latest` prerelease）
-- `--bin-dir <dir>`
-  - 安装目录（默认 `~/.local/bin`）
-- `--repo <owner/name>`
+- `--bin-dir <dir>` / `-BinDir`
+  - 安装目录（`install.sh` 默认 `~/.local/bin`；`install.ps1` 默认 `%LOCALAPPDATA%\Programs\feidex`）
+- `--repo <owner/name>` / `-Repo`
   - 指定来源仓库（默认 `yuhuan417/feidex`）
-- `--no-modify-path`
-  - 不自动把安装目录写进 shell profile
+- `--no-modify-path` / `-NoModifyPath`
+  - 不自动把安装目录写进 PATH（shell profile / 用户 PATH）
 - `-h` / `--help`
-  - 显示帮助
+  - 显示帮助（仅 `install.sh`）
 
 环境变量等价：`FEIDEX_VERSION`、`FEIDEX_REPO`、`FEIDEX_BIN_DIR`。
 
 行为：
 
-- 按 `uname` 识别 OS/架构，自动选 `feidex-linux-amd64` / `feidex-linux-aarch64` / `feidex-darwin-amd64` / `feidex-darwin-arm64`
+- 识别 OS/架构，自动选对应资产：`feidex-linux-amd64` / `feidex-linux-aarch64` / `feidex-darwin-amd64` / `feidex-darwin-arm64` / `feidex-windows-amd64.exe` / `feidex-windows-arm64.exe`
 - 强制校验 SHA-256（与 release 的 `sha256sums.txt` 比对，不一致即中止）
 - 原子替换（可重复执行以升级；二进制正被占用时也安全）
-- 安装目录不在 PATH 时，提示或写入 shell profile（`--no-modify-path` 可关闭）
+- 安装目录不在 PATH 时，提示或写入 PATH（`--no-modify-path` / `-NoModifyPath` 可关闭）
 
-> Windows 或离线环境请用 [手动安装 release 包](#release-资产) 或[从源码构建](../README.md#从源码构建)。安装后日常升级也可用 `/upgrade`（见[自动升级](#自动升级)）。
+> Windows 上 `feidex serve` 可直接运行；但 [Daemon 模式](#daemon-模式)与 `/upgrade` [自动升级](#自动升级)为 Linux 专属。离线环境请用 [手动安装 release 包](#release-资产) 或[从源码构建](../README.md#从源码构建)。
 
 ## Daemon 模式
 
