@@ -30,6 +30,12 @@ func (m *systemdManager) Platform() string {
 	return "systemd (user)"
 }
 
+// LogFile returns "" because logs are captured by systemd journald; the CLI
+// reads them with journalctl rather than tailing a file.
+func (m *systemdManager) LogFile() string {
+	return ""
+}
+
 func (m *systemdManager) Install(cfg Config) error {
 	unitPath := m.unitPath()
 	if err := os.MkdirAll(filepath.Dir(unitPath), 0o755); err != nil {
