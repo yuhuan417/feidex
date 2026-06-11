@@ -61,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | 
 irm https://raw.githubusercontent.com/yuhuan417/feidex/main/install.ps1 | iex
 ```
 
-> Windows 上 `feidex serve` 可直接运行；systemd daemon 与 `/upgrade` 自升级为 Linux 专属。
+> Windows 上 `feidex serve` 可直接运行，[daemon 模式](docs/operations.md#daemon-模式)也已支持（计划任务，免管理员）；仅 `/upgrade` 自升级为 Linux 专属。
 
 安装选项见 [安装脚本](docs/operations.md#一键安装脚本)。
 

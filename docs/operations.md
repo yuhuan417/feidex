@@ -44,11 +44,11 @@ irm https://raw.githubusercontent.com/yuhuan417/feidex/main/install.ps1 | iex
 - 原子替换（可重复执行以升级；二进制正被占用时也安全）
 - 安装目录不在 PATH 时，提示或写入 PATH（`--no-modify-path` / `-NoModifyPath` 可关闭）
 
-> Windows 上 `feidex serve` 可直接运行；但 [Daemon 模式](#daemon-模式)与 `/upgrade` [自动升级](#自动升级)为 Linux 专属。离线环境请用 [手动安装 release 包](#release-资产) 或[从源码构建](../README.md#从源码构建)。
+> Windows 上 `feidex serve` 可直接运行，[Daemon 模式](#daemon-模式)也已支持（计划任务，免管理员）；但 `/upgrade` [自动升级](#自动升级)仍为 Linux 专属。离线环境请用 [手动安装 release 包](#release-资产) 或[从源码构建](../README.md#从源码构建)。
 
 ## Daemon 模式
 
-Feidex 支持把自己作为后台守护进程常驻：Linux 用 systemd 用户服务，macOS 用 launchd 用户级 LaunchAgent。两者命令一致，平台差异由 `feidex daemon` 自动处理。
+Feidex 支持把自己作为后台守护进程常驻：Linux 用 systemd 用户服务，macOS 用 launchd 用户级 LaunchAgent，Windows 用计划任务（Task Scheduler，免管理员）。三者命令一致，平台差异由 `feidex daemon` 自动处理。
 
 命令：
 
@@ -74,7 +74,7 @@ feidex daemon uninstall
   - 也默认读取当前目录的 `config.toml`，按其中的 `[daemon].service_name` 选择实例
 - `logs`
   - Linux：通过 `journalctl --user -u <service>.service` 查看
-  - macOS：tail launchd 写入的日志文件（见下文 macOS 小节）
+  - macOS / Windows：tail 守护进程写入的日志文件（见下文对应小节）
   - `-n` 控制输出行数，`-f` 持续跟随
 - `upgrade-runner`
   - 内部升级 runner，不需要手动调用
@@ -95,11 +95,23 @@ feidex daemon uninstall
 
 > macOS daemon 仅负责常驻；`/upgrade` 自升级仍为 Linux 专属（见[自动升级](#自动升级)），macOS 升级请用 [install.sh](#一键安装脚本) 重新安装。
 
+### Windows（Task Scheduler 计划任务）
+
+- **全程免管理员**：创建的是当前用户的计划任务，不需要 UAC 提权，也不需要保存密码
+- 任务名即 `<service>`（默认 `feidex`），用 `schtasks` 创建/删除/启停；安装时写一份任务 XML（`%LOCALAPPDATA%\feidex\<service>-task.xml`）
+- 触发器为「登录时」（at-logon），主体为 `InteractiveToken` + `LeastPrivilege`：登录即起、崩溃自动重启（任务设置 `RestartOnFailure`）
+- 任务动作通过 `wscript.exe` 拉起一个无窗口启动器（`%LOCALAPPDATA%\feidex\<service>-launch.vbs`），所以**不会弹出黑色命令行窗口**；启动器把 `feidex serve` 的 stdout/stderr 追加写到 `%LOCALAPPDATA%\feidex\<service>.log`
+- 日志：`feidex daemon logs` 直接 tail 上面那个日志文件（Windows 无 `tail`，由内置实现）
+- `enable-linger` 在 Windows 上是 no-op。**与 macOS LaunchAgent 一致，daemon 仅在该用户登录会话内运行；注销即停止**。注销后仍运行需要 Windows 服务或保存账户凭据，会引入提权/密码成本，当前刻意不做
+- 运行状态用 PowerShell `Get-ScheduledTask` 的 `State` 判定（语言无关，避免 `schtasks` 本地化文案）
+
+> Windows daemon 同样仅负责常驻；`/upgrade` 自升级仍为 Linux 专属（见[自动升级](#自动升级)），Windows 升级请用 [install.ps1](#一键安装脚本) 重新安装。
+
 对应实现见：
 
 - [daemon.go](../cmd/feidex/daemon.go)
 - [manager.go](../internal/daemon/manager.go)
-- [systemd_linux.go](../internal/daemon/systemd_linux.go) / [launchd_darwin.go](../internal/daemon/launchd_darwin.go)
+- [systemd_linux.go](../internal/daemon/systemd_linux.go) / [launchd_darwin.go](../internal/daemon/launchd_darwin.go) / [schtasks_windows.go](../internal/daemon/schtasks_windows.go)
 
 ## 自动升级
 
