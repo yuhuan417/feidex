@@ -167,6 +167,7 @@ func (f *fakeDaemonManagerForApp) Status() (*daemon.Status, error) {
 	return f.status, f.err
 }
 func (f *fakeDaemonManagerForApp) Platform() string { return "test" }
+func (f *fakeDaemonManagerForApp) LogFile() string  { return "" }
 
 func (f *fakeCodexClient) SetHandlers(onNotification func(string, json.RawMessage), onRequest func(codexrpc.RequestEnvelope)) {
 	f.mu.Lock()
