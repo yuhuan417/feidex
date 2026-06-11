@@ -29,29 +29,49 @@
 
 ### 必需
 
-- Go 1.23+（按 [go.mod](go.mod) 为准）
 - 已安装 `codex` CLI，并且 `codex app-server` 可启动
 - 一个可用的飞书应用 `app_id / app_secret`（也支持 Lark 国际版，设 `domain = "lark"`，详见[配置参考](docs/configuration.md#区域--region飞书-vs-lark)）
 
 ### 可选
 
+- **Go 1.23+**（按 [go.mod](go.mod) 为准）：仅[从源码构建](#从源码构建)时需要；用[一键安装](#一键安装推荐linux--macos)下载预编译二进制则不需要
 - Linux + systemd 用户服务：如果你希望 Feidex 长驻后台并支持自升级，推荐使用 [daemon 模式](docs/operations.md#daemon-模式)
 
 ## 快速开始
 
+### 一键安装（推荐，Linux / macOS）
+
+下载对应平台的 release 二进制、校验 SHA-256、装到 PATH，无需 Go 工具链：
+
 ```bash
-# 1. 构建
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash
+```
+
+```bash
+# 装开发版 / 指定版本 / 自定义目录：
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash -s -- --dev
+curl -fsSL https://raw.githubusercontent.com/yuhuan417/feidex/main/install.sh | bash -s -- --version v0.222.0 --bin-dir /usr/local/bin
+```
+
+安装选项见 [安装脚本](docs/operations.md#一键安装脚本)。
+
+### 从源码构建
+
+需要 Go 1.23+（按 [go.mod](go.mod) 为准）：
+
+```bash
 mkdir -p bin
 go build -o bin/feidex ./cmd/feidex
+```
 
-# 2. 准备配置
+### 配置并启动
+
+```bash
+# 准备配置（也可用 `feidex feishu setup` 走二维码授权；字段说明见「文档 → 配置参考」）
 cp config.example.toml config.toml
-#    按需编辑 config.toml；也可用 `feidex feishu setup` 走二维码授权
-#    最小配置与字段说明见「文档 → 配置参考」
 
-# 3. 启动
-./bin/feidex serve --config config.toml
-# 或直接：./bin/feidex
+# 启动
+feidex serve --config config.toml
 ```
 
 飞书应用的创建与绑定（`feidex feishu setup / new / bind`）见 [配置参考 · 飞书接入命令](docs/configuration.md#飞书接入命令)。
