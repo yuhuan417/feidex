@@ -348,6 +348,35 @@ func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
 	}
 }
 
+func TestCompleteClaudeModelSetRejectsMessageTraffic(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	newRuntimeStateService(a).beginFrontendMessageTraffic()
+	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
+
+	resp, err := newModelConfigService(a).completeClaudeModelSet(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": "feishu:p2p:chat:user",
+			"menu_action": "menu.model",
+		},
+	}, "opus")
+	if err != nil {
+		t.Fatalf("completeClaudeModelSet() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "error" || !strings.Contains(resp.Toast.Content, "当前仍有消息处理中") {
+		t.Fatalf("completeClaudeModelSet() response = %#v", resp)
+	}
+	if got := a.cfg.Claude.Model; got == "opus" {
+		t.Fatalf("Claude model changed despite message traffic: %q", got)
+	}
+	if len(claude.updatedConfigs) != 0 {
+		t.Fatalf("updated Claude configs = %+v, want none", claude.updatedConfigs)
+	}
+}
+
 func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude

@@ -145,8 +145,9 @@ type ModelConfigService struct {
 	HandleBackendModelCommand        func(msg *feishu.InboundMessage, args []string) error
 
 	// Menu helper callbacks.
-	FormatMenuBody            func(action, body string) string
-	FrontendIdleBlockedReason func() string
+	FormatMenuBody                                  func(action, body string) string
+	FrontendIdleBlockedReason                       func() string
+	FrontendIdleBlockedReasonIgnoringCurrentMessage func() string
 
 	// Card action response callback.
 	ReplyCommandActionResponse func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
@@ -900,14 +901,28 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 // EnsureClaudeRuntimeConfigChangeSafe checks that the frontend is idle before
 // allowing a Claude model/effort configuration change.
 func (s ModelConfigService) EnsureClaudeRuntimeConfigChangeSafe() error {
-	if reason := strings.TrimSpace(s.FrontendIdleBlockedReason()); reason != "" {
-		return fmt.Errorf("Claude model / effort 只能在当前 frontend 空闲时切换: %s", reason)
+	return s.ensureClaudeRuntimeConfigChangeSafe(false)
+}
+
+func (s ModelConfigService) ensureClaudeRuntimeConfigChangeSafe(ignoreCurrentMessage bool) error {
+	blockedReason := s.FrontendIdleBlockedReason
+	if ignoreCurrentMessage && s.FrontendIdleBlockedReasonIgnoringCurrentMessage != nil {
+		blockedReason = s.FrontendIdleBlockedReasonIgnoringCurrentMessage
+	}
+	if blockedReason != nil {
+		if reason := strings.TrimSpace(blockedReason()); reason != "" {
+			return fmt.Errorf("Claude model / effort 只能在当前 frontend 空闲时切换: %s", reason)
+		}
 	}
 	return nil
 }
 
 // UpdateClaudeModelConfig persists a Claude config mutation and hot-reloads.
 func (s ModelConfigService) UpdateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
+	return s.updateClaudeModelConfig(mutate, false)
+}
+
+func (s ModelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeConfig), ignoreCurrentMessage bool) error {
 	cfg := s.GetConfig()
 	if cfg == nil {
 		return fmt.Errorf("nil config")
@@ -916,7 +931,7 @@ func (s ModelConfigService) UpdateClaudeModelConfig(mutate func(*config.ClaudeCo
 	if strings.TrimSpace(cfgPath) == "" {
 		return fmt.Errorf("missing config path")
 	}
-	if err := s.EnsureClaudeRuntimeConfigChangeSafe(); err != nil {
+	if err := s.ensureClaudeRuntimeConfigChangeSafe(ignoreCurrentMessage); err != nil {
 		return err
 	}
 	mu := s.GetConfigMu()
@@ -967,15 +982,19 @@ func (s ModelConfigService) HotApplyClaudeEffortToCurrentSession(sessionKey, eff
 
 // CompleteClaudeModelSet handles the Claude model selection card action.
 func (s ModelConfigService) CompleteClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	return s.completeClaudeModelSet(action, modelID, false)
+}
+
+func (s ModelConfigService) completeClaudeModelSet(action *feishu.CardAction, modelID string, ignoreCurrentMessage bool) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
 	menuAction := actionStringValue(action, "menu_action")
 	if strings.TrimSpace(menuAction) == "" {
 		menuAction = "menu.model"
 	}
 	model := NormalizeClaudeModelValue(modelID)
-	if err := s.UpdateClaudeModelConfig(func(c *config.ClaudeConfig) {
+	if err := s.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Model = model
-	}); err != nil {
+	}, ignoreCurrentMessage); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	toastType := "success"
@@ -994,6 +1013,10 @@ func (s ModelConfigService) CompleteClaudeModelSet(action *feishu.CardAction, mo
 
 // CompleteClaudeEffortSet handles the Claude effort selection card action.
 func (s ModelConfigService) CompleteClaudeEffortSet(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+	return s.completeClaudeEffortSet(action, effort, false)
+}
+
+func (s ModelConfigService) completeClaudeEffortSet(action *feishu.CardAction, effort string, ignoreCurrentMessage bool) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
 	menuAction := actionStringValue(action, "menu_action")
 	if strings.TrimSpace(menuAction) == "" {
@@ -1003,9 +1026,9 @@ func (s ModelConfigService) CompleteClaudeEffortSet(action *feishu.CardAction, e
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	if err := s.UpdateClaudeModelConfig(func(c *config.ClaudeConfig) {
+	if err := s.updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Effort = normalized
-	}); err != nil {
+	}, ignoreCurrentMessage); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	toastType := "success"
@@ -1043,7 +1066,7 @@ func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args 
 			if len(args) != 2 {
 				return fmt.Errorf("usage: %s", ModelCommandUsage)
 			}
-			resp, err := s.CompleteClaudeModelSet(action, strings.TrimSpace(args[1]))
+			resp, err := s.completeClaudeModelSet(action, strings.TrimSpace(args[1]), true)
 			if err != nil {
 				return err
 			}
@@ -1056,7 +1079,7 @@ func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args 
 			if effort == "default" || effort == DefaultOptionValue {
 				effort = ""
 			}
-			resp, err := s.CompleteClaudeEffortSet(action, effort)
+			resp, err := s.completeClaudeEffortSet(action, effort, true)
 			if err != nil {
 				return err
 			}

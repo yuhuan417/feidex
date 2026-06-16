@@ -348,6 +348,53 @@ func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 	}
 }
 
+func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "/model set deepseek-v4-pro"}
+	newRuntimeStateService(a).beginFrontendMessageTraffic()
+	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
+
+	if err := handleCommand(a, msg, msg.Text); err != nil {
+		t.Fatalf("handleCommand(/model set raw Claude model) error = %v", err)
+	}
+	if got := a.cfg.Claude.Model; got != "deepseek-v4-pro" {
+		t.Fatalf("Claude model = %q, want deepseek-v4-pro", got)
+	}
+	if len(claude.updatedConfigs) != 1 || claude.updatedConfigs[0].Model != "deepseek-v4-pro" {
+		t.Fatalf("updated Claude configs = %+v", claude.updatedConfigs)
+	}
+}
+
+func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "/model set deepseek-v4-pro"}
+	rss := newRuntimeStateService(a)
+	rss.beginFrontendMessageTraffic()
+	defer rss.finishFrontendMessageTraffic()
+	rss.beginFrontendMessageTraffic()
+	defer rss.finishFrontendMessageTraffic()
+
+	if err := handleCommand(a, msg, msg.Text); err != nil {
+		t.Fatalf("handleCommand(/model set raw Claude model) error = %v", err)
+	}
+	if got := a.cfg.Claude.Model; got == "deepseek-v4-pro" {
+		t.Fatalf("Claude model changed despite concurrent traffic: %q", got)
+	}
+	if len(claude.updatedConfigs) != 0 {
+		t.Fatalf("updated Claude configs = %+v, want none", claude.updatedConfigs)
+	}
+}
+
 func TestCommandHistoryDirectDetail(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}

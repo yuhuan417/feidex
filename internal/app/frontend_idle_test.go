@@ -204,3 +204,29 @@ func TestFrontendIdleStateNilApp(t *testing.T) {
 		t.Fatal("frontendIsIdle(nil) = true, want false")
 	}
 }
+
+func TestFrontendIdleIgnoringCurrentMessage(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("Open(store) error = %v", err)
+	}
+	a := &App{
+		cfg:        config.Default(),
+		store:      store,
+		frontendID: "frontend-a",
+	}
+	rss := newRuntimeStateService(a)
+
+	rss.beginFrontendMessageTraffic()
+	if got := frontendIdleBlockedReason(a); got != "当前仍有消息处理中" {
+		t.Fatalf("frontendIdleBlockedReason() = %q, want message traffic block", got)
+	}
+	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a); got != "" {
+		t.Fatalf("frontendIdleBlockedReasonIgnoringCurrentMessage() = %q, want idle", got)
+	}
+
+	rss.beginFrontendMessageTraffic()
+	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a); got != "当前仍有消息处理中" {
+		t.Fatalf("frontendIdleBlockedReasonIgnoringCurrentMessage() with concurrent traffic = %q, want message traffic block", got)
+	}
+}

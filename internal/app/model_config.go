@@ -76,6 +76,9 @@ func newModelConfigService(app *App) modelConfigService {
 			FrontendIdleBlockedReason: func() string {
 				return frontendIdleBlockedReason(app)
 			},
+			FrontendIdleBlockedReasonIgnoringCurrentMessage: func() string {
+				return frontendIdleBlockedReasonIgnoringCurrentMessage(app)
+			},
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 				return replyCommandActionResponse(app, msg, resp)
 			},

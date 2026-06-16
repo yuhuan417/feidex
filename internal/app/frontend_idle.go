@@ -11,6 +11,14 @@ func frontendIsIdle(a *App) bool {
 }
 
 func frontendIdleBlockedReason(a *App) string {
+	return frontendIdleBlockedReasonWithMessageTrafficAllowance(a, 0)
+}
+
+func frontendIdleBlockedReasonIgnoringCurrentMessage(a *App) string {
+	return frontendIdleBlockedReasonWithMessageTrafficAllowance(a, 1)
+}
+
+func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessageTraffic int) string {
 	if a == nil {
 		return "app not initialized"
 	}
@@ -22,7 +30,7 @@ func frontendIdleBlockedReason(a *App) string {
 			return runtime.idleMaintenanceBlockedReason()
 		}
 	}
-	if newRuntimeStateService(a).frontendMessageTrafficCount() > 0 {
+	if newRuntimeStateService(a).frontendMessageTrafficCount() > allowedMessageTraffic {
 		return "当前仍有消息处理中"
 	}
 	for _, sess := range a.State().Sessions() {
