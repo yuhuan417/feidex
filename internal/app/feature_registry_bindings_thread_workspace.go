@@ -155,6 +155,10 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					modelID = ""
 				}
 				return newBackendConfigurationService(s.app).completeGlobalModelSet(action, modelID)
+			case "model.config.add_option":
+				return newBackendConfigurationService(s.app).completeClaudeModelOptionAdd(action)
+			case "model.config.remove_option":
+				return newBackendConfigurationService(s.app).completeClaudeModelOptionRemove(action)
 			case "model.config.set_effort":
 				return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 			case "model.config.select_effort":

@@ -135,11 +135,14 @@ Codex 路径仍基于 `model/list` 与 `config.Codex`。
 - `/model`
 - `/model set <model-id|default>`
 - `/model effort <effort|default>`
+- `/model option add <model-id>`
+- `/model option remove <model-id>`
 - `/effort`
 
 Claude 路径已经是本地能力，不再需要降级成“不可用”结论。
 
-- UI picker 提供常用别名和当前自定义 model。
+- UI picker 提供常用别名、用户配置的候选 model 和当前自定义 model。
+- 用户配置候选 model 可直接在飞书 `/model` 卡片中添加/移除；这只影响下拉候选列表，不切换当前 model。
 - 任意 raw model 仍可直接用 `/model set <model-id>`。
 - 切换 model / effort 必须在当前 frontend 空闲时进行。
 - 切换成功后会立即更新 runtime 配置，并重置当前 frontend 的 Claude 会话。

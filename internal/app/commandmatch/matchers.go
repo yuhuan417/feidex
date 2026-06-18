@@ -95,6 +95,14 @@ func MatchModelCommand(fields []string) bool {
 			return false
 		}
 	case 4:
+		if strings.TrimSpace(fields[1]) == "option" {
+			switch strings.TrimSpace(fields[2]) {
+			case "add", "remove", "delete", "rm":
+				return strings.TrimSpace(fields[3]) != ""
+			default:
+				return false
+			}
+		}
 		if strings.TrimSpace(fields[1]) != "plan" {
 			return false
 		}

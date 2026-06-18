@@ -176,13 +176,14 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg := config.Default()
 	cfg.Feishu.Backend = backendClaude
 	cfg.Claude.Model = "mimo-v2-pro"
+	cfg.Claude.ModelOptions = []string{"deepseek-v4-pro", "mimo-v2-pro"}
 	cfg.Claude.Effort = "high"
 	a := &App{cfg: cfg, backend: backendClaude}
 
 	card := newModelConfigService(a).renderClaudeModelConfigCard("sess-1", "menu.model")
 	selects := cardSelectStaticForTest(card)
-	if len(selects) != 2 {
-		t.Fatalf("claude model config selects = %+v, want 2 select_static elements", selects)
+	if len(selects) != 3 {
+		t.Fatalf("claude model config selects = %+v, want 3 select_static elements", selects)
 	}
 
 	options, _ := selects[0]["options"].([]map[string]any)
@@ -191,7 +192,7 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		value, _ := option["value"].(string)
 		values[value] = true
 	}
-	for _, want := range []string{"sonnet", "opus", "haiku", "mimo-v2-pro"} {
+	for _, want := range []string{"sonnet", "opus", "haiku", "deepseek-v4-pro", "mimo-v2-pro"} {
 		if !values[want] {
 			t.Fatalf("claude model picker missing %q: %+v", want, options)
 		}
@@ -201,11 +202,96 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	for _, want := range []string{
 		"当前 backend: `claude`",
 		"/model set <model-id>",
+		"管理候选模型",
 		"frontend 空闲",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("claude model config body missing %q: %q", want, body)
 		}
+	}
+	inputs := modelConfigFormInputsForTest(t, card)
+	if inputs["model_id"] == nil {
+		t.Fatalf("Claude model option add input missing: %+v", inputs)
+	}
+	if got := modelConfigFormCountForTest(t, card); got != 1 {
+		t.Fatalf("Claude model config form count = %d, want 1", got)
+	}
+}
+
+func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+	sessionKey := "feishu:p2p:chat:user"
+
+	resp, err := newModelConfigService(a).completeClaudeModelOptionAdd(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": sessionKey,
+			"menu_action": "menu.model",
+		},
+		FormValue: map[string]any{"model_id": " deepseek-v4-pro "},
+	})
+	if err != nil {
+		t.Fatalf("completeClaudeModelOptionAdd() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeClaudeModelOptionAdd() response = %#v", resp)
+	}
+	if got := a.cfg.Claude.ModelOptions; len(got) != 1 || got[0] != "deepseek-v4-pro" {
+		t.Fatalf("Claude model options after add = %+v", got)
+	}
+	if len(claude.updatedConfigs) != 0 {
+		t.Fatalf("updated Claude runtime configs = %+v, want none for option add", claude.updatedConfigs)
+	}
+	loaded, err := config.Load(a.cfgPath)
+	if err != nil {
+		t.Fatalf("Load(config) error = %v", err)
+	}
+	if got := loaded.Claude.ModelOptions; len(got) != 1 || got[0] != "deepseek-v4-pro" {
+		t.Fatalf("persisted Claude model options = %+v", got)
+	}
+
+	resp, err = newModelConfigService(a).completeClaudeModelOptionRemove(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": sessionKey,
+			"menu_action": "menu.model",
+		},
+		FormValue: map[string]any{"model_id": "deepseek-v4-pro"},
+	})
+	if err != nil {
+		t.Fatalf("completeClaudeModelOptionRemove() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeClaudeModelOptionRemove() response = %#v", resp)
+	}
+	if got := a.cfg.Claude.ModelOptions; len(got) != 0 {
+		t.Fatalf("Claude model options after remove = %+v", got)
+	}
+}
+
+func TestCompleteClaudeModelOptionRemoveUsesSelectInputValue(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Claude.ModelOptions = []string{"deepseek-v4-pro"}
+
+	resp, err := newModelConfigService(a).completeClaudeModelOptionRemove(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": "feishu:p2p:chat:user",
+			"menu_action": "menu.model",
+		},
+		InputValue: "deepseek-v4-pro",
+	})
+	if err != nil {
+		t.Fatalf("completeClaudeModelOptionRemove() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeClaudeModelOptionRemove() response = %#v", resp)
+	}
+	if got := a.cfg.Claude.ModelOptions; len(got) != 0 {
+		t.Fatalf("Claude model options after remove = %+v", got)
 	}
 }
 
@@ -223,6 +309,40 @@ func TestStatusCardBodyUsesClaudeModelAndEffortOnClaudeBackend(t *testing.T) {
 	if !strings.Contains(body, "Claude effort: `max`") {
 		t.Fatalf("status body missing Claude effort: %q", body)
 	}
+}
+
+func modelConfigFormInputsForTest(t *testing.T, card map[string]any) map[string]map[string]any {
+	t.Helper()
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	inputs := map[string]map[string]any{}
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag != "form" {
+			continue
+		}
+		formElements, _ := elem["elements"].([]map[string]any)
+		for _, formElem := range formElements {
+			if tag, _ := formElem["tag"].(string); tag != "input" {
+				continue
+			}
+			name, _ := formElem["name"].(string)
+			inputs[name] = formElem
+		}
+	}
+	return inputs
+}
+
+func modelConfigFormCountForTest(t *testing.T, card map[string]any) int {
+	t.Helper()
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	count := 0
+	for _, elem := range elements {
+		if tag, _ := elem["tag"].(string); tag == "form" {
+			count++
+		}
+	}
+	return count
 }
 
 func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {

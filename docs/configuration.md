@@ -32,6 +32,7 @@ service_name = "feidex"
 # [claude]
 # command = "claude"
 # model = "sonnet"
+# model_options = ["deepseek-v4-pro"]
 # permission_mode = "default"
 
 [daemon]
@@ -166,6 +167,11 @@ Claude Code 后端配置：
   - Claude CLI 路径，默认 `claude`
 - `model`
   - 模型名称，默认 `sonnet`（可选 `opus`、`haiku`）
+- `model_options`
+  - Claude `/model` 下拉框里的额外候选模型名列表
+  - 推荐直接在飞书里维护：打开 `/model` 卡片，在“管理候选模型”里添加或移除
+  - 也可以用命令：`/model option add <model-id>`、`/model option remove <model-id>`
+  - 只影响候选列表，不会切换当前模型；真正切换仍用 `/model set <model-id>` 或卡片下拉选择
 - `effort`
   - reasoning effort：`low`、`medium`、`high`、`xhigh`、`max`（留空 = 自动）
 - `permission_mode`

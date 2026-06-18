@@ -115,6 +115,7 @@
   - 查看当前 thread 的累计 token usage
 - `/model`
   - 打开模型选择与推理强度配置
+  - Claude 后端可在卡片中添加/移除候选 model；也可用 `/model option add <model-id>`、`/model option remove <model-id>`
 - `/fast`
   - 配置当前 thread 的 service tier
 - `/debug`

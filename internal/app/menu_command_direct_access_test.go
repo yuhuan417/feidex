@@ -348,6 +348,35 @@ func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 	}
 }
 
+func TestCommandModelOptionAddAndRemoveForClaude(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	claude := &fakeClaudeCore{}
+	a.claude = claude
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	newRuntimeStateService(a).beginFrontendMessageTraffic()
+	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
+
+	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, []string{"option", "add", "deepseek-v4-pro"}); err != nil {
+		t.Fatalf("commandModel(option add) error = %v", err)
+	}
+	if got := a.cfg.Claude.ModelOptions; len(got) != 1 || got[0] != "deepseek-v4-pro" {
+		t.Fatalf("Claude model options after add = %+v", got)
+	}
+	if len(claude.updatedConfigs) != 0 {
+		t.Fatalf("updated Claude configs after option add = %+v, want none", claude.updatedConfigs)
+	}
+
+	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, []string{"option", "remove", "deepseek-v4-pro"}); err != nil {
+		t.Fatalf("commandModel(option remove) error = %v", err)
+	}
+	if got := a.cfg.Claude.ModelOptions; len(got) != 0 {
+		t.Fatalf("Claude model options after remove = %+v", got)
+	}
+}
+
 func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude

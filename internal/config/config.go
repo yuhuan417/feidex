@@ -72,14 +72,15 @@ type CodexConfig struct {
 }
 
 type ClaudeConfig struct {
-	Command                    string `toml:"command"`
-	Model                      string `toml:"model"`
-	Effort                     string `toml:"effort"`
-	PermissionMode             string `toml:"permission_mode"`
-	DangerouslySkipPermissions bool   `toml:"dangerously_skip_permissions"`
-	DisablePlugins             bool   `toml:"disable_plugins"`
-	SystemPrompt               string `toml:"system_prompt"`
-	PermissionPromptToolStdio  bool   `toml:"permission_prompt_tool_stdio"`
+	Command                    string   `toml:"command"`
+	Model                      string   `toml:"model"`
+	ModelOptions               []string `toml:"model_options"`
+	Effort                     string   `toml:"effort"`
+	PermissionMode             string   `toml:"permission_mode"`
+	DangerouslySkipPermissions bool     `toml:"dangerously_skip_permissions"`
+	DisablePlugins             bool     `toml:"disable_plugins"`
+	SystemPrompt               string   `toml:"system_prompt"`
+	PermissionPromptToolStdio  bool     `toml:"permission_prompt_tool_stdio"`
 }
 
 type DaemonConfig struct {
@@ -203,6 +204,7 @@ func (c *Config) Normalize(baseDir string) error {
 	if c.Claude.Model == "" {
 		c.Claude.Model = "sonnet"
 	}
+	c.Claude.ModelOptions = normalizeStringList(c.Claude.ModelOptions)
 	claudeEffort, err := NormalizeClaudeEffort(c.Claude.Effort)
 	if err != nil {
 		return err
@@ -430,6 +432,23 @@ func Save(path string, cfg *Config) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+func normalizeStringList(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func FindWorkspace(cfg *Config, id string) *Workspace {

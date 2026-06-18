@@ -102,6 +102,27 @@ func TestNormalizeClaudeEffort(t *testing.T) {
 	}
 }
 
+func TestNormalizeClaudeModelOptions(t *testing.T) {
+	cfg := &Config{
+		Claude: ClaudeConfig{
+			ModelOptions: []string{" deepseek-v4-pro ", "", "mimo-v2-pro", "deepseek-v4-pro"},
+		},
+		Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+	}
+	if err := cfg.Normalize(t.TempDir()); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+	want := []string{"deepseek-v4-pro", "mimo-v2-pro"}
+	if len(cfg.Claude.ModelOptions) != len(want) {
+		t.Fatalf("Claude.ModelOptions = %+v, want %+v", cfg.Claude.ModelOptions, want)
+	}
+	for i := range want {
+		if cfg.Claude.ModelOptions[i] != want[i] {
+			t.Fatalf("Claude.ModelOptions = %+v, want %+v", cfg.Claude.ModelOptions, want)
+		}
+	}
+}
+
 func TestNormalizeRejectsClaudeAutoPermissionMode(t *testing.T) {
 	cases := []struct {
 		name string

@@ -62,6 +62,9 @@ service_name = "feidex"
 [claude]
 command = "claude"
 model = "sonnet"
+# Extra model ids shown in the Claude /model picker. You can also manage this
+# from Feishu with /model option add <model-id> or the /model card.
+# model_options = ["deepseek-v4-pro"]
 # effort = "medium"
 permission_mode = "default"
 permission_prompt_tool_stdio = true

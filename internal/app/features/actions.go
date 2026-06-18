@@ -42,6 +42,8 @@ const (
 	ActionMenuWorkspace               ActionName = "menu.workspace"
 	ActionModelConfigSelectEffort     ActionName = "model.config.select_effort"
 	ActionModelConfigSelectModel      ActionName = "model.config.select_model"
+	ActionModelConfigAddOption        ActionName = "model.config.add_option"
+	ActionModelConfigRemoveOption     ActionName = "model.config.remove_option"
 	ActionModelPlanConfigSelectEffort ActionName = "model.plan_config.select_effort"
 	ActionModelPlanConfigSelectModel  ActionName = "model.plan_config.select_model"
 	ActionModelConfigSetEffort        ActionName = "model.config.set_effort"

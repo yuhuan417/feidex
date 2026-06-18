@@ -31,6 +31,14 @@ func (s modelConfigService) completeClaudeModelSet(action *feishu.CardAction, mo
 	return s.inner.CompleteClaudeModelSet(action, modelID)
 }
 
+func (s modelConfigService) completeClaudeModelOptionAdd(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteClaudeModelOptionAdd(action)
+}
+
+func (s modelConfigService) completeClaudeModelOptionRemove(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteClaudeModelOptionRemove(action)
+}
+
 func (s modelConfigService) completeClaudeEffortSet(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
 	return s.inner.CompleteClaudeEffortSet(action, effort)
 }

@@ -68,6 +68,12 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 			CompleteModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 				return newModelConfigService(app).completeClaudeModelSet(action, modelID)
 			},
+			CompleteModelOptionAdd: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+				return newModelConfigService(app).completeClaudeModelOptionAdd(action)
+			},
+			CompleteModelOptionRemove: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+				return newModelConfigService(app).completeClaudeModelOptionRemove(action)
+			},
 			CompleteEffortSet: func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
 				return newModelConfigService(app).completeClaudeEffortSet(action, effort)
 			},
@@ -120,6 +126,14 @@ func (s backendConfigurationService) renderModelMenuCard(sessionKey string) map[
 
 func (s backendConfigurationService) completeGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	return s.inner.CompleteGlobalModelSet(action, modelID)
+}
+
+func (s backendConfigurationService) completeClaudeModelOptionAdd(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteClaudeModelOptionAdd(action)
+}
+
+func (s backendConfigurationService) completeClaudeModelOptionRemove(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteClaudeModelOptionRemove(action)
 }
 
 func (s backendConfigurationService) completeGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
