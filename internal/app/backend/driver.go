@@ -77,9 +77,11 @@ type WorkspacePermissionCommandRequest struct {
 	ShowWorkspaceSandboxMenu           func(msg *feishu.InboundMessage) error
 	ShowWorkspacePolicyMenu            func(msg *feishu.InboundMessage) error
 	ShowWorkspacePermissionModeMenu    func(msg *feishu.InboundMessage) error
+	ShowWorkspaceMultiAgentMenu        func(msg *feishu.InboundMessage) error
 	CompleteWorkspaceSandboxSet        func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error)
 	CompleteWorkspacePolicySet         func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error)
 	CompleteWorkspacePermissionModeSet func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error)
+	CompleteWorkspaceMultiAgentSet     func(action *feishu.CardAction, sessionKey, workspaceID, mode string) (*callback.CardActionTriggerResponse, error)
 	ReplyCommandActionResponse         func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
 	CommandActionFromMessage           func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction
 }
@@ -92,9 +94,11 @@ type ConversationPermissionCommandRequest struct {
 	ShowConversationSandboxMenu           func(msg *feishu.InboundMessage) error
 	ShowConversationPolicyMenu            func(msg *feishu.InboundMessage) error
 	ShowConversationPermissionModeMenu    func(msg *feishu.InboundMessage) error
+	ShowConversationMultiAgentMenu        func(msg *feishu.InboundMessage) error
 	CompleteConversationSandboxSet        func(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error)
 	CompleteConversationPolicySet         func(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error)
 	CompleteConversationPermissionModeSet func(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error)
+	CompleteConversationMultiAgentSet     func(action *feishu.CardAction, sessionKey, threadID, mode string) (*callback.CardActionTriggerResponse, error)
 	ReplyCommandActionResponse            func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
 	CommandActionFromMessage              func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction
 }
@@ -115,6 +119,7 @@ type WorkspacePermissionUpdateDeps struct {
 	UpdateWorkspaceDefaults func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error)
 	RenderSandboxMenu       func(sessionKey string) (map[string]any, error)
 	RenderPolicyMenu        func(sessionKey string) (map[string]any, error)
+	RenderMultiAgentMenu    func(sessionKey string) (map[string]any, error)
 }
 
 type WorkspacePermissionModeUpdateDeps struct {
@@ -126,10 +131,11 @@ type WorkspacePermissionModeUpdateDeps struct {
 }
 
 type ConversationPermissionUpdateDeps struct {
-	Session           func(sessionKey string) *state.Session
-	SaveSession       func(sess *state.Session) error
-	RenderSandboxMenu func(sessionKey string) (map[string]any, error)
-	RenderPolicyMenu  func(sessionKey string) (map[string]any, error)
+	Session              func(sessionKey string) *state.Session
+	SaveSession          func(sess *state.Session) error
+	RenderSandboxMenu    func(sessionKey string) (map[string]any, error)
+	RenderPolicyMenu     func(sessionKey string) (map[string]any, error)
+	RenderMultiAgentMenu func(sessionKey string) (map[string]any, error)
 }
 
 type ConversationPermissionModeUpdateDeps struct {
@@ -154,6 +160,8 @@ type PermissionDriver interface {
 	CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode string, deps WorkspacePermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error)
+	RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
+	CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	HandleConversationCommand(req ConversationPermissionCommandRequest) error
 	RenderConversationSandboxMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error)
 	RenderConversationPolicyMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error)
@@ -161,6 +169,8 @@ type PermissionDriver interface {
 	CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode string, deps ConversationPermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error)
+	RenderConversationMultiAgentMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error)
+	CompleteConversationMultiAgentSet(sessionKey, threadID, mode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 }
 
 type Driver interface {

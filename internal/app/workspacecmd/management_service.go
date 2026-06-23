@@ -407,6 +407,16 @@ func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction
 	})
 }
 
+// CompleteWorkspaceMultiAgentSet handles multi-agent mode setting.
+func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAction, sessionKey, workspaceID, mode string) (*callback.CardActionTriggerResponse, error) {
+	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode, appbackend.WorkspacePermissionUpdateDeps{
+		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		RenderSandboxMenu:       s.renderSandboxMenuCard,
+		RenderPolicyMenu:        s.renderPolicyMenuCard,
+		RenderMultiAgentMenu:    s.renderMultiAgentMenuCard,
+	})
+}
+
 func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
 	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
 		App:                     s.App,
@@ -829,6 +839,11 @@ func (s *ManagementService) CompleteWorkspacePolicyMenu(action *feishu.CardActio
 	return s.CompleteMenuCommand(action, sessionKey, "/workspace policy", "menu.workspace")
 }
 
+// CompleteWorkspaceMultiAgentMenu handles multi-agent menu action.
+func (s *ManagementService) CompleteWorkspaceMultiAgentMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.CompleteMenuCommand(action, sessionKey, "/workspace multiagent", "menu.workspace")
+}
+
 // CompleteClaudeWorkspacePermissionMenu handles Claude workspace permission menu action.
 func (s *ManagementService) CompleteClaudeWorkspacePermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return s.CompleteMenuCommand(action, sessionKey, "/workspace permissions", "menu.workspace")
@@ -967,6 +982,14 @@ func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string
 // renderPolicyMenuCard is a helper that re-renders the policy menu card.
 func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]any, error) {
 	return appbackend.DriverForApp(s.App).Permission().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.App,
+		FormatMenuBody: s.FormatMenuBody,
+	})
+}
+
+// renderMultiAgentMenuCard is a helper that re-renders the multi-agent menu card.
+func (s *ManagementService) renderMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
+	return appbackend.DriverForApp(s.App).Permission().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
 		App:            s.App,
 		FormatMenuBody: s.FormatMenuBody,
 	})

@@ -170,6 +170,7 @@ type (
 	RenderWorkspaceMenuCardFn          func(sessionKey string) map[string]any
 	RenderWorkspaceSandboxMenuCardFn   func(sessionKey string) (map[string]any, error)
 	RenderWorkspacePolicyMenuCardFn    func(sessionKey string) (map[string]any, error)
+	RenderWorkspaceMultiAgentMenuCardFn func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteMenuCardFn    func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteConfirmCardFn func(sessionKey, workspaceID string) (map[string]any, error)
 )
@@ -248,6 +249,7 @@ type ConfigRenderDeps struct {
 	RenderChooseMenuCard          RenderWorkspaceMenuCardFn
 	RenderSandboxMenuCard         RenderWorkspaceSandboxMenuCardFn
 	RenderPolicyMenuCard          RenderWorkspacePolicyMenuCardFn
+	RenderMultiAgentMenuCard      RenderWorkspaceMultiAgentMenuCardFn
 	RenderDeleteMenuCard          RenderWorkspaceDeleteMenuCardFn
 	RenderDeleteConfirmCard       RenderWorkspaceDeleteConfirmCardFn
 	RenderCloneSwitchExistingCard func(sessionKey, workspaceID, targetDir string) map[string]any
@@ -499,6 +501,12 @@ func (s ConfigService) RenderPolicyMenuCard(sessionKey string) (map[string]any, 
 		return nil, nil
 	}
 	return s.deps.Render.RenderPolicyMenuCard(sessionKey)
+}
+func (s ConfigService) RenderMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
+	if s.deps.Render.RenderMultiAgentMenuCard == nil {
+		return nil, nil
+	}
+	return s.deps.Render.RenderMultiAgentMenuCard(sessionKey)
 }
 func (s ConfigService) RenderDeleteMenuCard(sessionKey string) (map[string]any, error) {
 	if s.deps.Render.RenderDeleteMenuCard == nil {

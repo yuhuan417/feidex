@@ -144,6 +144,14 @@ func (d unsupportedPermissionDriver) CompleteWorkspacePermissionModeSet(sessionK
 	return unsupportedBackendActionResponse(d.rawKind), nil
 }
 
+func (d unsupportedPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
+	return nil, unsupportedBackendError(d.rawKind)
+}
+
+func (d unsupportedPermissionDriver) CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
+	return unsupportedBackendActionResponse(d.rawKind), nil
+}
+
 func (d unsupportedPermissionDriver) HandleConversationCommand(req ConversationPermissionCommandRequest) error {
 	return unsupportedBackendError(d.rawKind)
 }
@@ -169,5 +177,13 @@ func (d unsupportedPermissionDriver) CompleteConversationPolicySet(sessionKey, t
 }
 
 func (d unsupportedPermissionDriver) CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode string, deps ConversationPermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
+	return unsupportedBackendActionResponse(d.rawKind), nil
+}
+
+func (d unsupportedPermissionDriver) RenderConversationMultiAgentMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
+	return nil, unsupportedBackendError(d.rawKind)
+}
+
+func (d unsupportedPermissionDriver) CompleteConversationMultiAgentSet(sessionKey, threadID, mode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	return unsupportedBackendActionResponse(d.rawKind), nil
 }

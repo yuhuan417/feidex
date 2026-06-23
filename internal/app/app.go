@@ -253,7 +253,7 @@ func buildTurnSandboxPolicy(mode string) map[string]any {
 	}
 }
 
-func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error) {
+func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}
@@ -278,6 +278,9 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 	if strings.TrimSpace(serviceTier) != "" {
 		turnParams["serviceTier"] = strings.TrimSpace(serviceTier)
 	}
+	if strings.TrimSpace(multiAgentMode) != "" {
+		turnParams["multiAgentMode"] = strings.TrimSpace(multiAgentMode)
+	}
 	if collaborationMode := codexCollaborationModeForTurnStart(a, sessionKey, threadID); collaborationMode != nil {
 		turnParams["collaborationMode"] = collaborationMode
 	}
@@ -289,6 +292,7 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 		"sandbox_mode", sandboxMode,
 		"reasoning_effort", reasoningEffort,
 		"model", model,
+		"multi_agent_mode", multiAgentMode,
 		"collaboration_mode", turnParams["collaborationMode"],
 	)
 	client, err := requireCodexClient(a)

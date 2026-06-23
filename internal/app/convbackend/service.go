@@ -387,12 +387,14 @@ func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[st
 	currentThreadID := "-"
 	currentThreadSandbox := "-"
 	currentThreadPolicy := "-"
+	currentThreadMultiAgent := "-"
 	if sess != nil {
 		currentLabel = currentThreadLabel(sess)
 		if strings.TrimSpace(sess.ActiveThreadID) != "" {
 			currentThreadID = strings.TrimSpace(sess.ActiveThreadID)
 			currentThreadSandbox = renderThreadSettingValue(sess.ActiveThreadSandboxMode, workspace.SandboxMode)
 			currentThreadPolicy = renderThreadSettingValue(sess.ActiveThreadApprovalPolicy, workspace.ApprovalPolicy)
+			currentThreadMultiAgent = renderThreadSettingValue(sess.ActiveThreadMultiAgentMode, workspace.MultiAgentMode)
 		}
 	}
 	backend := appcore.ConfiguredBackend(app)
@@ -406,6 +408,7 @@ func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[st
 		"workspace: `" + workspace.ID + "`",
 		"current thread sandbox: " + currentThreadSandbox,
 		"current thread policy: " + currentThreadPolicy,
+		"current thread multi-agent: " + currentThreadMultiAgent,
 		"list scope: " + scopeLabel,
 		fmt.Sprintf("list count: `%d`", len(items)),
 	}
@@ -416,7 +419,7 @@ func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[st
 	}
 	hasActiveThread := sess != nil && strings.TrimSpace(sess.ActiveThreadID) != ""
 	if !hasActiveThread {
-		lines = append(lines, "", "no active thread, so /thread fork, /thread sandbox, /thread policy are not shown.")
+		lines = append(lines, "", "no active thread, so /thread fork, /thread sandbox, /thread policy, /thread multiagent are not shown.")
 	}
 	buttons := []feishu.Button{
 		{
@@ -441,7 +444,7 @@ func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[st
 				},
 			},
 			feishu.Button{
-				Text: submenuCommandLabel("configure sandbox", "/thread sandbox"),
+				Text: submenuCommandLabel("配置沙箱", "/thread sandbox"),
 				Type: "default",
 				Value: map[string]any{
 					"action":      "thread.sandbox.menu",
@@ -449,10 +452,18 @@ func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[st
 				},
 			},
 			feishu.Button{
-				Text: submenuCommandLabel("configure policy", "/thread policy"),
+				Text: submenuCommandLabel("配置策略", "/thread policy"),
 				Type: "default",
 				Value: map[string]any{
 					"action":      "thread.policy.menu",
+					"session_key": sessionKey,
+				},
+			},
+			feishu.Button{
+				Text: submenuCommandLabel("配置多智能体模式", "/thread multiagent"),
+				Type: "default",
+				Value: map[string]any{
+					"action":      "thread.multiagent.menu",
 					"session_key": sessionKey,
 				},
 			},

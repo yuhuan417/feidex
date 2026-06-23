@@ -44,6 +44,7 @@ func forkCodexActiveConversation(a *App, sessionKey string, sess *state.Session,
 		"cwd":            ws.Cwd,
 		"approvalPolicy": effectiveThreadApprovalPolicy(sess, ws),
 		"sandbox":        effectiveThreadSandboxMode(sess, ws),
+		"multiAgentMode": effectiveThreadMultiAgentMode(sess, ws),
 	}
 	if serviceTier := effectiveThreadServiceTier(sess); strings.TrimSpace(serviceTier) != "" {
 		params["serviceTier"] = strings.TrimSpace(serviceTier)

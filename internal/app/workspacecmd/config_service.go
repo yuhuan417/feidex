@@ -65,7 +65,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
 		return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
-	if args[0] == "permissions" || args[0] == "sandbox" || args[0] == "policy" {
+	if args[0] == "permissions" || args[0] == "sandbox" || args[0] == "policy" || args[0] == "multiagent" {
 		return appbackend.DriverForApp(s.App).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
 			Message:    msg,
 			Args:       args,
@@ -90,6 +90,9 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 				_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 				return err
 			},
+			ShowWorkspaceMultiAgentMenu: func(msg *feishu.InboundMessage) error {
+				return s.ShowWorkspaceMultiAgentMenu(msg)
+			},
 			CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 				return mgmt.CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
 			},
@@ -98,6 +101,9 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 			},
 			CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
 				return mgmt.CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
+			},
+			CompleteWorkspaceMultiAgentSet: func(action *feishu.CardAction, sessionKey, workspaceID, mode string) (*callback.CardActionTriggerResponse, error) {
+				return mgmt.CompleteWorkspaceMultiAgentSet(action, sessionKey, workspaceID, mode)
 			},
 			ReplyCommandActionResponse: s.ReplyCommandActionResponse,
 			CommandActionFromMessage:   s.CommandActionFromMessage,
@@ -175,6 +181,16 @@ func (s *ConfigService) ShowWorkspaceSandboxMenu(msg *feishu.InboundMessage) err
 // ShowWorkspacePolicyMenu shows the policy configuration menu.
 func (s *ConfigService) ShowWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
 	card, err := s.RenderPolicyMenuCard(appcore.MakeSessionKey(s.App, msg))
+	if err != nil {
+		return err
+	}
+	_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	return err
+}
+
+// ShowWorkspaceMultiAgentMenu shows the multi-agent mode configuration menu.
+func (s *ConfigService) ShowWorkspaceMultiAgentMenu(msg *feishu.InboundMessage) error {
+	card, err := s.RenderMultiAgentMenuCard(appcore.MakeSessionKey(s.App, msg))
 	if err != nil {
 		return err
 	}

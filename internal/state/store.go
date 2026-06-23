@@ -48,6 +48,7 @@ type storedSession struct {
 	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
 	ActiveThreadSandboxMode       string                          `json:"active_thread_sandbox_mode"`
+	ActiveThreadMultiAgentMode    string                          `json:"active_thread_multi_agent_mode,omitempty"`
 	ActiveClaudePermissionMode    string                          `json:"active_claude_permission_mode,omitempty"`
 	ActiveThreadServiceTier       string                          `json:"active_thread_service_tier,omitempty"`
 	ActiveThreadCollaborationMode *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
@@ -74,6 +75,7 @@ type SessionBackendThread struct {
 	WorkspaceID          string                    `json:"workspace_id,omitempty"`
 	ApprovalPolicy       string                    `json:"approval_policy,omitempty"`
 	SandboxMode          string                    `json:"sandbox_mode,omitempty"`
+	MultiAgentMode       string                    `json:"multi_agent_mode,omitempty"`
 	ClaudePermissionMode string                    `json:"claude_permission_mode,omitempty"`
 	ServiceTier          string                    `json:"service_tier,omitempty"`
 	CollaborationMode    *SessionCollaborationMode `json:"collaboration_mode,omitempty"`
@@ -95,6 +97,7 @@ type Session struct {
 	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
 	ActiveThreadSandboxMode       string                          `json:"active_thread_sandbox_mode"`
+	ActiveThreadMultiAgentMode    string                          `json:"active_thread_multi_agent_mode,omitempty"`
 	ActiveClaudePermissionMode    string                          `json:"active_claude_permission_mode,omitempty"`
 	ActiveThreadServiceTier       string                          `json:"active_thread_service_tier,omitempty"`
 	ActiveThreadCollaborationMode *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
@@ -636,6 +639,7 @@ func storedSessionFromSession(sess *Session) *storedSession {
 		ActiveThreadWorkspaceID:       cp.ActiveThreadWorkspaceID,
 		ActiveThreadApprovalPolicy:    cp.ActiveThreadApprovalPolicy,
 		ActiveThreadSandboxMode:       cp.ActiveThreadSandboxMode,
+		ActiveThreadMultiAgentMode:    cp.ActiveThreadMultiAgentMode,
 		ActiveClaudePermissionMode:    cp.ActiveClaudePermissionMode,
 		ActiveThreadServiceTier:       cp.ActiveThreadServiceTier,
 		ActiveThreadCollaborationMode: cloneSessionCollaborationMode(cp.ActiveThreadCollaborationMode),
@@ -660,6 +664,7 @@ func sessionFromStored(sess *storedSession) *Session {
 		ActiveThreadWorkspaceID:       sess.ActiveThreadWorkspaceID,
 		ActiveThreadApprovalPolicy:    sess.ActiveThreadApprovalPolicy,
 		ActiveThreadSandboxMode:       sess.ActiveThreadSandboxMode,
+		ActiveThreadMultiAgentMode:    sess.ActiveThreadMultiAgentMode,
 		ActiveClaudePermissionMode:    sess.ActiveClaudePermissionMode,
 		ActiveThreadServiceTier:       sess.ActiveThreadServiceTier,
 		ActiveThreadCollaborationMode: cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode),
@@ -768,6 +773,7 @@ func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendTh
 	thread.WorkspaceID = strings.TrimSpace(thread.WorkspaceID)
 	thread.ApprovalPolicy = strings.TrimSpace(thread.ApprovalPolicy)
 	thread.SandboxMode = strings.TrimSpace(thread.SandboxMode)
+	thread.MultiAgentMode = strings.TrimSpace(thread.MultiAgentMode)
 	thread.ClaudePermissionMode = strings.TrimSpace(thread.ClaudePermissionMode)
 	thread.ServiceTier = normalizeStoredServiceTier(thread.ServiceTier)
 	thread.CollaborationMode = normalizeSessionCollaborationMode(thread.CollaborationMode)

@@ -74,6 +74,7 @@ type WorkspaceActionValue struct {
 	WorkspaceID    string
 	SandboxMode    string
 	ApprovalPolicy string
+	MultiAgentMode string
 	Mode           string
 }
 
@@ -91,6 +92,9 @@ func (v WorkspaceActionValue) Map() map[string]any {
 	if value := strings.TrimSpace(v.ApprovalPolicy); value != "" {
 		out["approval_policy"] = value
 	}
+	if value := strings.TrimSpace(v.MultiAgentMode); value != "" {
+		out["multi_agent_mode"] = value
+	}
 	if value := strings.TrimSpace(v.Mode); value != "" {
 		out["mode"] = value
 	}
@@ -103,6 +107,7 @@ type ThreadActionValue struct {
 	ThreadID       string
 	SandboxMode    string
 	ApprovalPolicy string
+	MultiAgentMode string
 	Mode           string
 	ServiceTier    string
 }
@@ -120,6 +125,9 @@ func (v ThreadActionValue) Map() map[string]any {
 	}
 	if value := strings.TrimSpace(v.ApprovalPolicy); value != "" {
 		out["approval_policy"] = value
+	}
+	if value := strings.TrimSpace(v.MultiAgentMode); value != "" {
+		out["multi_agent_mode"] = value
 	}
 	if value := strings.TrimSpace(v.Mode); value != "" {
 		out["mode"] = value

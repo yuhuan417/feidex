@@ -155,8 +155,8 @@ func (a submissionAppAdapter) SubmissionQueueClearSubmissionProcessingReactions(
 func (a submissionAppAdapter) SubmissionQueueIsReviewSubmission(sub *state.Submission) bool {
 	return appreviewcmd.IsReviewSubmission(sub)
 }
-func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error) {
-	return startSubmissionTurn(a.app, ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort)
+func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
+	return startSubmissionTurn(a.app, ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
 }
 func (a submissionAppAdapter) SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
 	return appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a.app), ctx, threadID, sub)

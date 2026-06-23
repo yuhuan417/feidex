@@ -475,7 +475,7 @@ func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
-	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "")
+	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
 	if err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
@@ -526,7 +526,7 @@ func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t 
 	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
-	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "")
+	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
 	if err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
@@ -578,7 +578,7 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
-	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "")
+	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
 	if err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
@@ -622,7 +622,7 @@ func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
-	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "")
+	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
 	if err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}

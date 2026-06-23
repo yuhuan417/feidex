@@ -140,6 +140,15 @@ func ApprovalPolicyOptions() []SettingOption {
 	}
 }
 
+// MultiAgentModeOptions returns the available multi-agent mode options.
+func MultiAgentModeOptions() []SettingOption {
+	return []SettingOption{
+		{Value: "explicitRequestOnly", Label: "explicit request only"},
+		{Value: "proactive", Label: "proactive"},
+		{Value: "none", Label: "none"},
+	}
+}
+
 // ParseCloneArgs parses /workspace clone arguments into repo URL, workspace ID, and parent dir.
 func ParseCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err error) {
 	if len(args) < 2 || strings.TrimSpace(args[0]) != "clone" {

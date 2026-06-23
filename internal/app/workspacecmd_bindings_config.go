@@ -63,6 +63,9 @@ func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 			RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
 				return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey)
 			},
+			RenderMultiAgentMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderServiceInner(a).RenderWorkspaceMultiAgentMenuCard(sessionKey)
+			},
 			RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
 				return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey)
 			},

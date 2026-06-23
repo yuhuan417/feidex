@@ -3097,10 +3097,10 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("buildTurnSandboxPolicy(bad) = %+v, want nil", got)
 	}
 
-	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
+	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
 	}
-	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", ""); err == nil {
+	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
@@ -3154,7 +3154,7 @@ func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
 		return nil
 	}
 	sub := &state.Submission{ID: "sub-1", InputText: "hello"}
-	if _, err := startSubmissionTurn(a, context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", ""); err != nil {
+	if _, err := startSubmissionTurn(a, context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", "", ""); err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
 	if gotParams == nil {
@@ -4334,7 +4334,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		}
 	}
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "no active thread, so /thread fork, /thread sandbox, /thread policy are not shown.") {
+	if !strings.Contains(body, "no active thread, so /thread fork, /thread sandbox, /thread policy, /thread multiagent are not shown.") {
 		t.Fatalf("thread card body = %q, want missing-active-thread hint", body)
 	}
 }

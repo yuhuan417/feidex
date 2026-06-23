@@ -29,7 +29,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	ThreadCommandUsage        = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY]"
+	ThreadCommandUsage        = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY] | /thread multiagent [MODE]"
 	ClaudeSessionCommandUsage = "/session | /session list [all] | /session new | /session fork | /session resume SESSION_ID | /session permissions [MODE|inherit]"
 )
 
@@ -440,7 +440,7 @@ func (s *Service) CommandThread(msg *feishu.InboundMessage, args []string) error
 			return err
 		}
 		return s.app.ReplyCommandActionResponse(msg, resp)
-	case "sandbox", "policy":
+	case "sandbox", "policy", "multiagent":
 		return appbackend.DriverForApp(s.app).Permission().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
 			Message:    msg,
 			Args:       args,
@@ -454,11 +454,17 @@ func (s *Service) CommandThread(msg *feishu.InboundMessage, args []string) error
 			ShowConversationPolicyMenu: func(msg *feishu.InboundMessage) error {
 				return s.ShowThreadPolicyMenu(msg)
 			},
+			ShowConversationMultiAgentMenu: func(msg *feishu.InboundMessage) error {
+				return s.ShowThreadMultiAgentMenu(msg)
+			},
 			CompleteConversationSandboxSet: func(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 				return s.CompleteThreadSandboxSet(action, sessionKey, threadID, sandboxMode)
 			},
 			CompleteConversationPolicySet: func(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
 				return s.CompleteThreadPolicySet(action, sessionKey, threadID, approvalPolicy)
+			},
+			CompleteConversationMultiAgentSet: func(action *feishu.CardAction, sessionKey, threadID, mode string) (*callback.CardActionTriggerResponse, error) {
+				return s.CompleteThreadMultiAgentSet(action, sessionKey, threadID, mode)
 			},
 			ReplyCommandActionResponse: s.app.ReplyCommandActionResponse,
 			CommandActionFromMessage:   CommandActionFromMessage,
@@ -641,6 +647,26 @@ func (s *Service) RenderThreadPolicyMenuCard(sessionKey string) (map[string]any,
 	})
 }
 
+// ShowThreadMultiAgentMenu shows the multi-agent mode configuration menu.
+func (s *Service) ShowThreadMultiAgentMenu(msg *feishu.InboundMessage) error {
+	card, err := s.RenderThreadMultiAgentMenuCard(appcore.MakeSessionKey(s.app, msg))
+	if err != nil {
+		return err
+	}
+	_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	return err
+}
+
+// RenderThreadMultiAgentMenuCard renders the multi-agent mode configuration menu card.
+func (s *Service) RenderThreadMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
+	return appbackend.DriverForApp(s.app).Permission().RenderConversationMultiAgentMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+		App:            s.app,
+		Session:        s.app.ThreadMenuAppState().Session,
+		FormatMenuBody: s.app.MenuCardBody,
+		CommandLabel:   s.app.CommandLabel,
+	})
+}
+
 // ---------------------------------------------------------------------------
 // Card action completers (from thread_feature_actions.go)
 // ---------------------------------------------------------------------------
@@ -692,6 +718,11 @@ func (s *Service) CompleteThreadPolicyMenu(action *feishu.CardAction, sessionKey
 	return s.app.CompleteMenuCommand(action, sessionKey, "/thread policy", "menu.thread")
 }
 
+// CompleteThreadMultiAgentMenu handles the "thread.multiagent.menu" card action.
+func (s *Service) CompleteThreadMultiAgentMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.CompleteMenuCommand(action, sessionKey, "/thread multiagent", "menu.thread")
+}
+
 // CompleteClaudeSessionPermissionMenu handles the session permission menu card action.
 func (s *Service) CompleteClaudeSessionPermissionMenu(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return s.app.CompleteMenuCommand(action, sessionKey, "/session permissions", "menu.thread")
@@ -721,6 +752,23 @@ func (s *Service) CompleteThreadPolicySet(action *feishu.CardAction, sessionKey,
 		},
 		RenderPolicyMenu: func(sessionKey string) (map[string]any, error) {
 			return s.RenderThreadPolicyMenuCard(sessionKey)
+		},
+	})
+}
+
+// CompleteThreadMultiAgentSet handles the "thread.multiagent.set" card action.
+func (s *Service) CompleteThreadMultiAgentSet(action *feishu.CardAction, sessionKey, threadID, mode string) (*callback.CardActionTriggerResponse, error) {
+	return appbackend.DriverForApp(s.app).Permission().CompleteConversationMultiAgentSet(sessionKey, threadID, mode, appbackend.ConversationPermissionUpdateDeps{
+		Session:     s.app.ThreadMenuAppState().Session,
+		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadSandboxMenuCard(sessionKey)
+		},
+		RenderPolicyMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadPolicyMenuCard(sessionKey)
+		},
+		RenderMultiAgentMenu: func(sessionKey string) (map[string]any, error) {
+			return s.RenderThreadMultiAgentMenuCard(sessionKey)
 		},
 	})
 }

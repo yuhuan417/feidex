@@ -95,6 +95,10 @@ func effectiveThreadServiceTier(sess *state.Session) string {
 	return sessionctx.EffectiveServiceTier(sess)
 }
 
+func effectiveThreadMultiAgentMode(sess *state.Session, ws *config.Workspace) string {
+	return sessionctx.EffectiveMultiAgentMode(sess, ws)
+}
+
 func normalizeClaudePermissionModeValue(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":

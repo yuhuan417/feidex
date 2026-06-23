@@ -153,6 +153,7 @@ func (codexPermissionDriver) AppendWorkspaceSummaryLines(_ PermissionApp, lines 
 	return append(lines,
 		"默认 sandbox: `"+currentWS.SandboxMode+"`",
 		"默认 policy: `"+currentWS.ApprovalPolicy+"`",
+		"默认 multi-agent: `"+currentWS.MultiAgentMode+"`",
 	)
 }
 
@@ -184,6 +185,11 @@ func (codexPermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu.
 			Type:  "default",
 			Value: cardactions.MenuActionValue{Action: "workspace.policy.menu", SessionKey: sessionKey}.Map(),
 		},
+		{
+			Text:  submenuCommandLabel("配置多智能体模式", "/workspace multiagent"),
+			Type:  "default",
+			Value: cardactions.MenuActionValue{Action: "workspace.multiagent.menu", SessionKey: sessionKey}.Map(),
+		},
 	}
 }
 
@@ -198,30 +204,39 @@ func (claudePermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu
 func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, sess *state.Session, ws *config.Workspace) []string {
 	workspaceSandbox := "-"
 	workspacePolicy := "-"
+	workspaceMultiAgent := "-"
 	effectiveSandbox := "-"
 	effectivePolicy := "-"
+	effectiveMultiAgent := "-"
 	if ws != nil {
 		workspaceSandbox = firstNonEmpty(ws.SandboxMode, "-")
 		workspacePolicy = firstNonEmpty(ws.ApprovalPolicy, "-")
+		workspaceMultiAgent = firstNonEmpty(ws.MultiAgentMode, "-")
 		effectiveSandbox = appsessionctx.EffectiveSandboxMode(sess, ws)
 		effectivePolicy = appsessionctx.EffectiveApprovalPolicy(sess, ws)
+		effectiveMultiAgent = appsessionctx.EffectiveMultiAgentMode(sess, ws)
 	}
 	threadSandbox := appthreadview.RenderThreadSettingValue("", "")
 	threadPolicy := appthreadview.RenderThreadSettingValue("", "")
+	threadMultiAgent := appthreadview.RenderThreadSettingValue("", "")
 	threadServiceTier := "-"
 	if sess != nil {
 		threadSandbox = appthreadview.RenderThreadSettingValue(sess.ActiveThreadSandboxMode, "")
 		threadPolicy = appthreadview.RenderThreadSettingValue(sess.ActiveThreadApprovalPolicy, "")
+		threadMultiAgent = appthreadview.RenderThreadSettingValue(sess.ActiveThreadMultiAgentMode, "")
 		threadServiceTier = appruntime.RenderServiceTierValue(sess.ActiveThreadServiceTier)
 	}
 	return append(lines,
 		"workspace sandbox: `"+workspaceSandbox+"`",
 		"workspace policy: `"+workspacePolicy+"`",
+		"workspace multi-agent: `"+workspaceMultiAgent+"`",
 		"thread sandbox: "+threadSandbox,
 		"thread policy: "+threadPolicy,
+		"thread multi-agent: "+threadMultiAgent,
 		"thread service tier: "+threadServiceTier,
 		"生效 sandbox: `"+effectiveSandbox+"`",
 		"生效 policy: `"+effectivePolicy+"`",
+		"生效 multi-agent: `"+effectiveMultiAgent+"`",
 	)
 }
 
@@ -279,6 +294,22 @@ func (d codexPermissionDriver) HandleWorkspaceCommand(req WorkspacePermissionCom
 			return fmt.Errorf("workspace not found")
 		}
 		resp, err := req.CompleteWorkspacePolicySet(req.CommandActionFromMessage(req.Message, nil), req.SessionKey, ws.ID, strings.TrimSpace(req.Args[1]))
+		if err != nil {
+			return err
+		}
+		return req.ReplyCommandActionResponse(req.Message, resp)
+	case "multiagent":
+		if len(req.Args) == 1 {
+			return req.ShowWorkspaceMultiAgentMenu(req.Message)
+		}
+		if len(req.Args) != 2 {
+			return fmt.Errorf("usage: /workspace multiagent [MODE]")
+		}
+		_, _, ws := req.CurrentWorkspace(req.Message)
+		if ws == nil {
+			return fmt.Errorf("workspace not found")
+		}
+		resp, err := req.CompleteWorkspaceMultiAgentSet(req.CommandActionFromMessage(req.Message, nil), req.SessionKey, ws.ID, strings.TrimSpace(req.Args[1]))
 		if err != nil {
 			return err
 		}
@@ -343,8 +374,24 @@ func (d codexPermissionDriver) HandleConversationCommand(req ConversationPermiss
 			return err
 		}
 		return req.ReplyCommandActionResponse(req.Message, resp)
+	case "multiagent":
+		if len(req.Args) == 1 {
+			return req.ShowConversationMultiAgentMenu(req.Message)
+		}
+		if len(req.Args) != 2 {
+			return fmt.Errorf("usage: /thread multiagent [MODE]")
+		}
+		_, _, _, threadID, err := req.CurrentThread(req.Message)
+		if err != nil {
+			return err
+		}
+		resp, err := req.CompleteConversationMultiAgentSet(req.CommandActionFromMessage(req.Message, nil), req.SessionKey, threadID, strings.TrimSpace(req.Args[1]))
+		if err != nil {
+			return err
+		}
+		return req.ReplyCommandActionResponse(req.Message, resp)
 	default:
-		return fmt.Errorf("usage: /thread sandbox [MODE] | /thread policy [POLICY]")
+		return fmt.Errorf("usage: /thread sandbox [MODE] | /thread policy [POLICY] | /thread multiagent [MODE]")
 	}
 }
 
@@ -446,6 +493,46 @@ func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps
 	return deps.App.Feishu().SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
 }
 
+func (d codexPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
+	if deps.App == nil {
+		return nil, fmt.Errorf("app not configured")
+	}
+	_, ws, err := currentWorkspaceForDriver(deps.App, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+	body := "配置当前工作区默认 multi-agent mode。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.MultiAgentMode + "`"
+	buttons := make([]feishu.Button, 0, len(appworkspace.MultiAgentModeOptions())+1)
+	for _, opt := range appworkspace.MultiAgentModeOptions() {
+		btnType := "default"
+		label := opt.Label
+		if opt.Value == ws.MultiAgentMode {
+			btnType = "primary"
+			label = "当前 · " + label
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: cardactions.WorkspaceActionValue{
+				Action:         "workspace.multiagent.set",
+				SessionKey:     sessionKey,
+				WorkspaceID:    ws.ID,
+				MultiAgentMode: opt.Value,
+			}.Map(),
+		})
+	}
+	buttons = append(buttons, feishu.Button{
+		Text:  commandLabel("返回工作区", "/workspace"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
+	})
+	bodyText := body
+	if deps.FormatMenuBody != nil {
+		bodyText = deps.FormatMenuBody("workspace.multiagent.menu", body)
+	}
+	return deps.App.Feishu().SimpleStatusCard("配置 Multi-Agent Mode", "blue", bodyText, buttons), nil
+}
+
 func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
 	if deps.App == nil || deps.App.Config() == nil {
 		return nil, fmt.Errorf("app not configured")
@@ -525,6 +612,10 @@ func (d claudePermissionDriver) RenderWorkspacePolicyMenu(string, WorkspacePermi
 	return nil, fmt.Errorf("当前 backend 不支持 /workspace policy")
 }
 
+func (d claudePermissionDriver) RenderWorkspaceMultiAgentMenu(string, WorkspacePermissionRenderDeps) (map[string]any, error) {
+	return nil, fmt.Errorf("当前 backend 不支持 /workspace multiagent")
+}
+
 func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := false
 	for _, opt := range appworkspace.SandboxOptions() {
@@ -577,6 +668,32 @@ func (d codexPermissionDriver) CompleteWorkspacePolicySet(sessionKey, workspaceI
 	}, nil
 }
 
+func (d codexPermissionDriver) CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
+	valid := false
+	for _, opt := range appworkspace.MultiAgentModeOptions() {
+		if opt.Value == mode {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持 multi-agent mode"}}, nil
+	}
+	if _, err := deps.UpdateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
+		w.MultiAgentMode = mode
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	card, err := deps.RenderMultiAgentMenu(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已更新 multi-agent mode"},
+		Card:  RawCard(card),
+	}, nil
+}
+
 func (d claudePermissionDriver) CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode string, deps WorkspacePermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	mode := ""
 	warning := ""
@@ -622,6 +739,10 @@ func (d claudePermissionDriver) CompleteWorkspaceSandboxSet(string, string, stri
 
 func (d claudePermissionDriver) CompleteWorkspacePolicySet(string, string, string, WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /workspace policy"}}, nil
+}
+
+func (d claudePermissionDriver) CompleteWorkspaceMultiAgentSet(string, string, string, WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /workspace multiagent"}}, nil
 }
 
 func (d codexPermissionDriver) CompleteWorkspacePermissionModeSet(string, string, string, WorkspacePermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
@@ -720,6 +841,52 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 	return deps.App.Feishu().SimpleStatusCard("配置 Thread Policy", "blue", body, buttons), nil
 }
 
+func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
+	if deps.App == nil || deps.Session == nil {
+		return nil, fmt.Errorf("app not configured")
+	}
+	sess := deps.Session(sessionKey)
+	workspaceID := appcore.DefaultWorkspaceID(deps.App)
+	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+		workspaceID = sess.WorkspaceID
+	}
+	ws := config.FindWorkspace(deps.App.Config(), workspaceID)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return nil, fmt.Errorf("当前没有活动线程")
+	}
+	threadID := strings.TrimSpace(sess.ActiveThreadID)
+	current := appsessionctx.EffectiveMultiAgentMode(sess, ws)
+	body := "配置当前 thread 默认 multi-agent mode。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
+	buttons := make([]feishu.Button, 0, len(appworkspace.MultiAgentModeOptions())+1)
+	for _, opt := range appworkspace.MultiAgentModeOptions() {
+		btnType := "default"
+		label := opt.Label
+		if opt.Value == current {
+			btnType = "primary"
+			label = "当前 · " + label
+		}
+		buttons = append(buttons, feishu.Button{
+			Text: label,
+			Type: btnType,
+			Value: cardactions.ThreadActionValue{
+				Action:         "thread.multiagent.set",
+				SessionKey:     sessionKey,
+				ThreadID:       threadID,
+				MultiAgentMode: opt.Value,
+			}.Map(),
+		})
+	}
+	buttons = append(buttons, feishu.Button{
+		Text:  deps.CommandLabel("返回 thread", "/thread"),
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
+	})
+	if deps.FormatMenuBody != nil {
+		body = deps.FormatMenuBody("thread.multiagent.menu", body)
+	}
+	return deps.App.Feishu().SimpleStatusCard("配置 Thread Multi-Agent Mode", "blue", body, buttons), nil
+}
+
 func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
 	if deps.App == nil || deps.Session == nil || deps.App.Config() == nil {
 		return nil, fmt.Errorf("app not configured")
@@ -801,6 +968,10 @@ func (d claudePermissionDriver) RenderConversationPolicyMenu(string, Conversatio
 	return nil, fmt.Errorf("当前 backend 不支持 /thread policy")
 }
 
+func (d claudePermissionDriver) RenderConversationMultiAgentMenu(string, ConversationPermissionRenderDeps) (map[string]any, error) {
+	return nil, fmt.Errorf("当前 backend 不支持 /thread multiagent")
+}
+
 func (d codexPermissionDriver) RenderConversationPermissionModeMenu(string, ConversationPermissionRenderDeps) (map[string]any, error) {
 	return nil, fmt.Errorf("当前 backend 不支持 /session permissions")
 }
@@ -863,6 +1034,35 @@ func (d codexPermissionDriver) CompleteConversationPolicySet(sessionKey, threadI
 	}, nil
 }
 
+func (d codexPermissionDriver) CompleteConversationMultiAgentSet(sessionKey, threadID, mode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
+	valid := false
+	for _, opt := range appworkspace.MultiAgentModeOptions() {
+		if opt.Value == mode {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持 multi-agent mode"}}, nil
+	}
+	sess := deps.Session(sessionKey)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
+	}
+	sess.ActiveThreadMultiAgentMode = mode
+	if err := deps.SaveSession(sess); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	card, err := deps.RenderMultiAgentMenu(sessionKey)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已更新 thread multi-agent mode"},
+		Card:  RawCard(card),
+	}, nil
+}
+
 func (d claudePermissionDriver) CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode string, deps ConversationPermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	sess := deps.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
@@ -909,6 +1109,10 @@ func (d claudePermissionDriver) CompleteConversationSandboxSet(string, string, s
 
 func (d claudePermissionDriver) CompleteConversationPolicySet(string, string, string, ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /thread policy"}}, nil
+}
+
+func (d claudePermissionDriver) CompleteConversationMultiAgentSet(string, string, string, ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /thread multiagent"}}, nil
 }
 
 func (d codexPermissionDriver) CompleteConversationPermissionModeSet(string, string, string, ConversationPermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {

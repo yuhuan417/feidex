@@ -64,7 +64,7 @@ type App interface {
 
 	// Backend-specific start hooks.
 	SubmissionQueueIsReviewSubmission(sub *state.Submission) bool
-	SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort string) (string, error)
+	SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error)
 	SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error)
 	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams
 	SubmissionQueueRequireCodexClient() (appcore.CodexClient, error)
@@ -645,7 +645,8 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	effectiveApprovalPolicy := sessionctx.EffectiveApprovalPolicy(sess, ws)
 	effectiveSandboxMode := sessionctx.EffectiveSandboxMode(sess, ws)
 	effectiveServiceTier := sessionctx.EffectiveServiceTier(sess)
-	if threadID == "" {
+		effectiveMultiAgentMode := sessionctx.EffectiveMultiAgentMode(sess, ws)
+		if threadID == "" {
 		client, err := a.SubmissionQueueRequireCodexClient()
 		if err != nil {
 			s.HandleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
@@ -717,7 +718,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	if a.SubmissionQueueIsReviewSubmission(sub) {
 		turnID, turnErr = a.SubmissionQueueStartSubmissionReview(turnCtx, threadID, sub)
 	} else {
-		turnID, turnErr = a.SubmissionQueueStartSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort)
+		turnID, turnErr = a.SubmissionQueueStartSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort, effectiveMultiAgentMode)
 	}
 	turnCancel()
 	if turnErr != nil {

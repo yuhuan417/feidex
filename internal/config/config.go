@@ -94,6 +94,7 @@ type Workspace struct {
 	Model                string `toml:"model"`
 	ApprovalPolicy       string `toml:"approval_policy"`
 	SandboxMode          string `toml:"sandbox_mode"`
+	MultiAgentMode       string `toml:"multi_agent_mode"`
 	ClaudePermissionMode string `toml:"claude_permission_mode"`
 }
 
@@ -283,6 +284,9 @@ func (c *Config) Normalize(baseDir string) error {
 		}
 		if ws.SandboxMode == "" {
 			ws.SandboxMode = "workspace-write"
+		}
+		if ws.MultiAgentMode == "" {
+			ws.MultiAgentMode = "explicitRequestOnly"
 		}
 		ws.ClaudePermissionMode = normalizeOptionalClaudePermissionMode(ws.ClaudePermissionMode)
 		if ws.ClaudePermissionMode != "" && !isSupportedClaudePermissionMode(ws.ClaudePermissionMode) {

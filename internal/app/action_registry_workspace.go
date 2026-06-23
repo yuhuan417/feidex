@@ -70,6 +70,12 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 	"workspace.permission_mode.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspacePermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "mode"))
 	},
+	"workspace.multiagent.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceMultiAgentMenu(action, actionSessionKey(action))
+	},
+	"workspace.multiagent.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceMultiAgentSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "multi_agent_mode"))
+	},
 	"thread.sandbox.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return appthreadmenu.NewService(s.app).CompleteThreadSandboxMenu(action, actionSessionKey(action))
 	},
@@ -84,6 +90,12 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 	},
 	"thread.policy.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return appthreadmenu.NewService(s.app).CompleteThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
+	},
+	"thread.multiagent.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return appthreadmenu.NewService(s.app).CompleteThreadMultiAgentMenu(action, actionSessionKey(action))
+	},
+	"thread.multiagent.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return appthreadmenu.NewService(s.app).CompleteThreadMultiAgentSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "multi_agent_mode"))
 	},
 	"thread.permission_mode.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return appthreadmenu.NewService(s.app).CompleteClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))

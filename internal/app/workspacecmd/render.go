@@ -499,6 +499,14 @@ func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[st
 	})
 }
 
+// RenderWorkspaceMultiAgentMenuCard renders the multi-agent mode configuration menu card.
+func (s *RenderService) RenderWorkspaceMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
+	return appbackend.DriverForApp(s.App).Permission().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.App,
+		FormatMenuBody: s.FormatMenuBody,
+	})
+}
+
 // RenderWorkspaceDeleteMenuCard renders the workspace delete menu card.
 func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
 	currentID := selectedWorkspaceIDForSession(s.App, s.GetSession(sessionKey))

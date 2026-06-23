@@ -163,6 +163,16 @@ func EffectiveServiceTier(sess *state.Session) string {
 	return ""
 }
 
+func EffectiveMultiAgentMode(sess *state.Session, ws *config.Workspace) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
+		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
+	}
+	if ws != nil && strings.TrimSpace(ws.MultiAgentMode) != "" {
+		return strings.TrimSpace(ws.MultiAgentMode)
+	}
+	return "explicitRequestOnly"
+}
+
 // Workspace switching
 
 func SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
