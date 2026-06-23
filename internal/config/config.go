@@ -154,6 +154,7 @@ func Default() *Config {
 				Model:                "",
 				ApprovalPolicy:       "on-request",
 				SandboxMode:          "workspace-write",
+				MultiAgentMode:       "explicitRequestOnly",
 				ClaudePermissionMode: "",
 			},
 		},

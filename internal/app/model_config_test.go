@@ -133,6 +133,9 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		"thread service tier: -",
 		"生效 sandbox: `read-only`",
 		"生效 policy: `untrusted`",
+		"workspace multi-agent: `explicitRequestOnly`",
+		"thread multi-agent: -",
+		"生效 multi-agent: `explicitRequestOnly`",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected %q in status body, got %q", want, body)
