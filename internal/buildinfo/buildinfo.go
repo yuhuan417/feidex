@@ -2,7 +2,7 @@ package buildinfo
 
 import "strings"
 
-var Version = "0.1.0"
+var Version = "0.226.0"
 
 func CurrentVersion() string {
 	version := strings.TrimSpace(Version)
