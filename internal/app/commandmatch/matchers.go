@@ -135,7 +135,7 @@ func MatchThreadCommand(fields []string) bool {
 		return len(fields) == 2
 	case "resume":
 		return len(fields) == 3
-	case "sandbox", "policy":
+	case "sandbox", "policy", "multiagent":
 		return len(fields) == 2 || len(fields) == 3
 	default:
 		return false
@@ -207,7 +207,7 @@ func MatchWorkspaceCommand(fields []string) bool {
 		return len(fields) == 2
 	case "delete":
 		return len(fields) == 2 || len(fields) == 3
-	case "sandbox", "policy", "permissions":
+	case "sandbox", "policy", "permissions", "multiagent":
 		return len(fields) == 2 || len(fields) == 3
 	case "clone":
 		_, _, _, err := appworkspace.ParseCloneArgs(fields[1:])
