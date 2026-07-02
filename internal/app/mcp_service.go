@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"feidex/internal/app/sessionctx"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/state"
 )
@@ -338,6 +339,7 @@ func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[str
 	defer tracker.Mu.Unlock()
 
 	var match *feidexMCPToolContext
+	requiresSessionKey := false
 	for _, itemState := range tracker.Items {
 		if itemState == nil || itemState.Status != "started" {
 			continue
@@ -350,10 +352,14 @@ func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[str
 				continue
 			}
 		case "dynamic_tool_call":
-			if strings.TrimSpace(sessionKey) == "" || turnitem.ClassifyDynamicTool(strings.TrimSpace(firstNonEmpty(stringValue(item["tool"]), itemState.Started.ToolName))) != turnitem.DynamicToolMCPCategory {
+			if turnitem.ClassifyDynamicTool(strings.TrimSpace(firstNonEmpty(stringValue(item["tool"]), itemState.Started.ToolName))) != turnitem.DynamicToolMCPCategory {
 				continue
 			}
 			if !matchesClaudeMCPToolCall(item, toolName, canonicalArgs) {
+				continue
+			}
+			if strings.TrimSpace(sessionKey) == "" {
+				requiresSessionKey = true
 				continue
 			}
 		default:
@@ -376,6 +382,79 @@ func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[str
 			ItemID:     strings.TrimSpace(itemState.ItemID),
 			Submission: sub,
 		}
+	}
+	if match != nil {
+		return match
+	}
+	if requiresSessionKey {
+		return nil
+	}
+	if strings.TrimSpace(sessionKey) != "" {
+		return s.resolveToolContextFromSession(sessionKey)
+	}
+	return s.resolveOnlyActiveToolContext()
+}
+
+func (s *feidexMCPService) resolveToolContextFromSession(sessionKey string) *feidexMCPToolContext {
+	if s == nil || s.app == nil || s.app.store == nil {
+		return nil
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return nil
+	}
+	sess := s.app.store.GetSession(sessionKey)
+	return s.resolveToolContextFromSessionSnapshot(sess)
+}
+
+func (s *feidexMCPService) resolveOnlyActiveToolContext() *feidexMCPToolContext {
+	if s == nil || s.app == nil || s.app.store == nil {
+		return nil
+	}
+	var match *feidexMCPToolContext
+	for _, sess := range s.app.store.AllSessions() {
+		ctx := s.resolveToolContextFromSessionSnapshot(sess)
+		if ctx == nil {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = ctx
+	}
+	return match
+}
+
+func (s *feidexMCPService) resolveToolContextFromSessionSnapshot(sess *state.Session) *feidexMCPToolContext {
+	if s == nil || s.app == nil || s.app.store == nil || sess == nil {
+		return nil
+	}
+	sessionctx.EnsureActiveOperations(sess)
+	var match *feidexMCPToolContext
+	for _, op := range sess.ActiveOperations {
+		submissionID := strings.TrimSpace(op.SubmissionID)
+		if submissionID == "" {
+			continue
+		}
+		sub := s.app.store.GetSubmission(submissionID)
+		if sub == nil || sub.Finalized || state.NormalizeSubmissionStatus(sub.Status) != state.SubmissionStatusRunning {
+			continue
+		}
+		if strings.TrimSpace(sub.TriggerMessageID) == "" {
+			continue
+		}
+		threadID := firstNonEmpty(strings.TrimSpace(op.ThreadID), strings.TrimSpace(sub.ThreadID), strings.TrimSpace(sess.ActiveThreadID))
+		turnID := firstNonEmpty(strings.TrimSpace(op.TurnID), strings.TrimSpace(sub.TurnID), strings.TrimSpace(sess.ActiveTurnID))
+		ctx := &feidexMCPToolContext{
+			SessionKey: strings.TrimSpace(sess.Key),
+			ThreadID:   threadID,
+			TurnID:     turnID,
+			Submission: sub,
+		}
+		if match != nil {
+			return nil
+		}
+		match = ctx
 	}
 	return match
 }

@@ -182,3 +182,99 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 		t.Fatalf("replyLocalAttachmentCalls = %v, want none", got)
 	}
 }
+
+func TestFeidexMCPFallsBackToSessionActiveSubmission(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sessionKey := "sess-1"
+	seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
+	path := filepath.Join(t.TempDir(), "artifact.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	svc, err := newFeidexMCPService(a)
+	if err != nil {
+		t.Fatalf("newFeidexMCPService() error = %v", err)
+	}
+	rec := performMCPHTTPRequest(t, svc.handler, svc.token, sessionKey, `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tools/call code = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"isError":true`) {
+		t.Fatalf("tools/call body unexpectedly failed: %s", rec.Body.String())
+	}
+	if got := ff.replyLocalAttachmentCalls; len(got) != 1 || got[0] != path {
+		t.Fatalf("replyLocalAttachmentCalls = %v, want [%s]", got, path)
+	}
+}
+
+func TestFeidexMCPFallsBackToOnlyActiveSubmissionWithoutSessionKey(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	path := filepath.Join(t.TempDir(), "artifact.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	svc, err := newFeidexMCPService(a)
+	if err != nil {
+		t.Fatalf("newFeidexMCPService() error = %v", err)
+	}
+	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tools/call code = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"isError":true`) {
+		t.Fatalf("tools/call body unexpectedly failed: %s", rec.Body.String())
+	}
+	if got := ff.replyLocalAttachmentCalls; len(got) != 1 || got[0] != path {
+		t.Fatalf("replyLocalAttachmentCalls = %v, want [%s]", got, path)
+	}
+}
+
+func TestFeidexMCPFallbackWithoutSessionKeyFailsClosedWhenMultipleActiveSubmissions(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	path := filepath.Join(t.TempDir(), "artifact.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                "sess-2",
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-2",
+		ActiveTurnID:       "turn-2",
+		ActiveSubmissionID: "sub-2",
+		OwnerUserID:        "user-1",
+		ChatID:             "chat-1",
+		ChatType:           "group",
+		Status:             state.SessionStatusTurnInProgress.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession(second) error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-2",
+		SessionKey:       "sess-2",
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "thread-2",
+		TurnID:           "turn-2",
+		UserID:           "user-1",
+		ChatID:           "chat-1",
+		TriggerMessageID: "trigger-2",
+		Status:           state.SubmissionStatusRunning.String(),
+	}); err != nil {
+		t.Fatalf("CreateSubmission(second) error = %v", err)
+	}
+
+	svc, err := newFeidexMCPService(a)
+	if err != nil {
+		t.Fatalf("newFeidexMCPService() error = %v", err)
+	}
+	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
+	if !strings.Contains(rec.Body.String(), `"isError":true`) {
+		t.Fatalf("expected ambiguity to fail closed, got body=%s", rec.Body.String())
+	}
+	if got := ff.replyLocalAttachmentCalls; len(got) != 0 {
+		t.Fatalf("replyLocalAttachmentCalls = %v, want none", got)
+	}
+}
