@@ -42,7 +42,15 @@ func BuildTurnItemCardPayload(itemID string, item map[string]any, workspaceCwd s
 	case "agent_message":
 		text := FirstNonEmpty(ExtractTurnItemText(item, "content", "output_text"), StringValue(item["text"]))
 		payload.SummaryText = strings.TrimSpace(text)
-		payload.IsFinalAnswer = strings.TrimSpace(StringValue(item["phase"])) == "final_answer"
+		switch strings.TrimSpace(StringValue(item["phase"])) {
+		case "commentary":
+			payload.IsFinalAnswer = false
+		default:
+			// Codex providers do not always emit phase; historically agent messages
+			// were final answers, so keep legacy final-card behavior unless the
+			// provider explicitly marks the message as commentary.
+			payload.IsFinalAnswer = true
+		}
 	case "entered_review_mode":
 		payload.SummaryText = "已进入 review 模式。"
 	case "exited_review_mode":

@@ -37,8 +37,16 @@ func TestBuildTurnItemCardPayload(t *testing.T) {
 		"content": []any{
 			map[string]any{"type": "output_text", "text": "final text"},
 		},
-	}, ""); !ok || got.ItemType != "agent_message" || got.SummaryText != "final text" || got.IsFinalAnswer {
+	}, ""); !ok || got.ItemType != "agent_message" || got.SummaryText != "final text" || !got.IsFinalAnswer {
 		t.Fatalf("BuildTurnItemCardPayload(agent message) = %#v / %v", got, ok)
+	}
+
+	if got, ok := BuildTurnItemCardPayload("item-commentary", map[string]any{
+		"type":  "agent_message",
+		"text":  "working note",
+		"phase": "commentary",
+	}, ""); !ok || got.IsFinalAnswer || got.SummaryText != "working note" {
+		t.Fatalf("BuildTurnItemCardPayload(commentary agent message) = %#v / %v", got, ok)
 	}
 
 	if got, ok := BuildTurnItemCardPayload("item-final", map[string]any{

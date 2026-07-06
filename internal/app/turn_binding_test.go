@@ -87,6 +87,34 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 	}
 }
 
+func TestLegacyAgentMessageWithoutPhaseIsFinalAndNotReplayedOnCompletion(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now())
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+		"type": "agent_message",
+		"text": "legacy final",
+	})
+
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply cards after phase-less agent message = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, "最终答复") {
+		t.Fatalf("phase-less agent message title = %q, want final answer", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "legacy final") {
+		t.Fatalf("phase-less agent message body = %q, want final text", body)
+	}
+
+	finishTurn(a, "thread-1", "turn-1", "completed")
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("expected no empty final replay on completion, got %d cards", len(ff.replyCards))
+	}
+}
+
 func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
