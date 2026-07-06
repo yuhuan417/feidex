@@ -37,7 +37,7 @@ func TestBuildTurnItemCardPayload(t *testing.T) {
 		"content": []any{
 			map[string]any{"type": "output_text", "text": "final text"},
 		},
-	}, ""); !ok || got.ItemType != "agent_message" || got.SummaryText != "final text" || !got.IsFinalAnswer {
+	}, ""); !ok || got.ItemType != "agent_message" || got.SummaryText != "final text" || got.IsFinalAnswer || got.MessagePhase != "" {
 		t.Fatalf("BuildTurnItemCardPayload(agent message) = %#v / %v", got, ok)
 	}
 
@@ -45,7 +45,7 @@ func TestBuildTurnItemCardPayload(t *testing.T) {
 		"type":  "agent_message",
 		"text":  "working note",
 		"phase": "commentary",
-	}, ""); !ok || got.IsFinalAnswer || got.SummaryText != "working note" {
+	}, ""); !ok || got.IsFinalAnswer || got.SummaryText != "working note" || got.MessagePhase != "commentary" {
 		t.Fatalf("BuildTurnItemCardPayload(commentary agent message) = %#v / %v", got, ok)
 	}
 
@@ -53,7 +53,7 @@ func TestBuildTurnItemCardPayload(t *testing.T) {
 		"type":  "agent_message",
 		"text":  "final text",
 		"phase": "final_answer",
-	}, ""); !ok || !got.IsFinalAnswer || got.SummaryText != "final text" {
+	}, ""); !ok || !got.IsFinalAnswer || got.SummaryText != "final text" || got.MessagePhase != "final_answer" {
 		t.Fatalf("BuildTurnItemCardPayload(final answer) = %#v / %v", got, ok)
 	}
 

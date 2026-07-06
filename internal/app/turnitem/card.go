@@ -7,6 +7,7 @@ type CardPayload struct {
 	ItemType         string `json:"item_type"`
 	ProtocolItemType string `json:"protocol_item_type"`
 	ToolName         string `json:"tool_name"`
+	MessagePhase     string `json:"message_phase"`
 	Title            string `json:"title"`
 	Color            string `json:"color"`
 	SummaryText      string `json:"summary_text"`

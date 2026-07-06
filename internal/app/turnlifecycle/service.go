@@ -44,6 +44,7 @@ type App interface {
 	RunAsync(fn func())
 	TurnStopAttentionUserID(sub *state.Submission, turnID string) string
 	SendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string
+	SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string
 	SessionHasActiveWork(sess *state.Session) bool
 	SessionShouldStartNextSubmissionAsync(sess *state.Session) bool
 	BindStandaloneCompactTurn(threadID, turnID string) bool
@@ -592,6 +593,13 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 				"turn_plan",
 				"",
 				firstNonEmpty(strings.TrimSpace(flush.PlanMessageID), reuseMessageID),
+			)
+		} else if strings.TrimSpace(flush.FinalText) != "" {
+			w.app.SendFinalMessagesWithReuse(
+				context.Background(), sub,
+				strings.TrimSpace(flush.FinalText),
+				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
+				strings.TrimSpace(flush.FinalReuseMessageID),
 			)
 		} else {
 			w.app.SendEmptyFinalCardWithReuse(

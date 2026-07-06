@@ -157,17 +157,20 @@ type Stream struct {
 	SessionKey   string
 	WorkspaceID  string
 
-	PendingPlan   string
-	LastSentPlan  string
-	PlanMessageID string
-	SawPlanItem   bool
-	PlanItemID    string
-	PlanMarkdown  string
-	PlanCompleted bool
-	LastError     string
-	SentFinal     bool
-	ReviewFinal   bool
-	QuietWorking  *turn.QuietWorkingCard
+	PendingPlan             string
+	LastSentPlan            string
+	PlanMessageID           string
+	SawPlanItem             bool
+	PlanItemID              string
+	PlanMarkdown            string
+	PlanCompleted           bool
+	LastError               string
+	SentFinal               bool
+	FinalMessageID          string
+	FinalCandidate          turnitem.CardPayload
+	FinalCandidateMessageID string
+	ReviewFinal             bool
+	QuietWorking            *turn.QuietWorkingCard
 	// QuietWorkingReuseBlocked is set when a substantive card was sent after
 	// the current working card. In that case later final/agent output must not
 	// patch the older working card because it would reorder the visible thread.
@@ -184,6 +187,8 @@ type FlushResult struct {
 	ShouldUsePlanExitPrompt bool
 	LastError               string
 	WorkingMessageID        string
+	FinalText               string
+	FinalReuseMessageID     string
 }
 
 // ---------------------------------------------------------------------------
@@ -313,13 +318,15 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 	}
 
 	var (
-		planText         string
-		planBoundary     turn.QuietWorkingBoundary
-		itemBoundary     turn.QuietWorkingBoundary
-		workingUpdate    turn.QuietWorkingCardOp
-		planReuseMessage string
-		itemReuseMessage string
-		skipPayload      bool
+		planText                 string
+		planBoundary             turn.QuietWorkingBoundary
+		itemBoundary             turn.QuietWorkingBoundary
+		workingUpdate            turn.QuietWorkingCardOp
+		planReuseMessage         string
+		itemReuseMessage         string
+		rememberFinalMessage     bool
+		rememberCandidateMessage bool
+		skipPayload              bool
 	)
 
 	tracker := svc.Tracker()
@@ -354,16 +361,26 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 			if payload.IsFinalAnswer {
 				stream.SentFinal = true
 				stream.ReviewFinal = true
+				itemReuseMessage = strings.TrimSpace(stream.FinalMessageID)
+				rememberFinalMessage = true
 			}
 		case "agent_message":
 			if stream.ReviewFinal {
 				skipPayload = true
 			} else if payload.IsFinalAnswer {
 				stream.SentFinal = true
+				itemReuseMessage = strings.TrimSpace(stream.FinalMessageID)
+				rememberFinalMessage = true
+			} else if strings.TrimSpace(turnitem.ReplyTurnItemCardBody(payload)) != "" {
+				stream.FinalCandidate = payload
+				stream.FinalCandidateMessageID = ""
+				rememberCandidateMessage = true
 			}
 		default:
 			if payload.IsFinalAnswer {
 				stream.SentFinal = true
+				itemReuseMessage = strings.TrimSpace(stream.FinalMessageID)
+				rememberFinalMessage = true
 			}
 		}
 	}
@@ -372,7 +389,7 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 			reuseBlocked := stream.QuietWorkingReuseBlocked
 			itemBoundary = prepareStreamBoundaryLocked(stream)
 			stream.QuietWorkingReuseBlocked = false
-			if !reuseBlocked {
+			if !reuseBlocked && strings.TrimSpace(itemReuseMessage) == "" {
 				itemReuseMessage = itemBoundary.ReuseMessageID
 			}
 			if itemType == "plan" {
@@ -399,7 +416,12 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 		svc.app.TurnStreamQuietCardExecutor().ExecuteQuietWorkingCardOp(ctx, sub, workingUpdate)
 	}
 	if hasPayload && !skipPayload && (!quietModeEnabled(svc.feishuConfig()) || shouldDeliverTurnItemPayload(quietMode(svc.feishuConfig()), payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)) {
-		svc.app.TurnStreamOutboundCards().SendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
+		messageID := svc.app.TurnStreamOutboundCards().SendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
+		if rememberFinalMessage {
+			svc.rememberFinalMessageID(turnID, messageID)
+		} else if rememberCandidateMessage {
+			svc.rememberFinalCandidateMessageID(turnID, itemID, messageID)
+		}
 	}
 	return item
 }
@@ -431,6 +453,10 @@ func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string)
 	result.PlanMessageID = strings.TrimSpace(stream.PlanMessageID)
 	result.ShouldUsePlanExitPrompt = stream.SawPlanItem && stream.PlanCompleted && result.PlanMarkdown != ""
 	result.LastError = stream.LastError
+	if !stream.SentFinal {
+		result.FinalText = strings.TrimSpace(turnitem.ReplyTurnItemCardBody(stream.FinalCandidate))
+		result.FinalReuseMessageID = strings.TrimSpace(stream.FinalCandidateMessageID)
+	}
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
 	reuseBlocked := stream.QuietWorkingReuseBlocked
 	if stream.QuietWorking != nil && stream.QuietWorking.IsReasoningOnly() && !reuseBlocked && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
@@ -650,6 +676,41 @@ func (svc Service) rememberPlanMessageID(turnID, messageID string) {
 	tracker.Mu.Lock()
 	if stream := tracker.Streams[turnID]; stream != nil {
 		stream.PlanMessageID = messageID
+	}
+	tracker.Mu.Unlock()
+}
+
+func (svc Service) rememberFinalMessageID(turnID, messageID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	messageID = strings.TrimSpace(messageID)
+	if turnID == "" || messageID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil {
+		stream.FinalMessageID = messageID
+	}
+	tracker.Mu.Unlock()
+}
+
+func (svc Service) rememberFinalCandidateMessageID(turnID, itemID, messageID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	itemID = strings.TrimSpace(itemID)
+	messageID = strings.TrimSpace(messageID)
+	if turnID == "" || itemID == "" || messageID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil && strings.TrimSpace(stream.FinalCandidate.ItemID) == itemID {
+		stream.FinalCandidateMessageID = messageID
 	}
 	tracker.Mu.Unlock()
 }

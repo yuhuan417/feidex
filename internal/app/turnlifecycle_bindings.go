@@ -63,6 +63,19 @@ func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submis
 	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, reuseMessageID)
 }
 
+func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string {
+	reuseIDs := []string(nil)
+	if reuseMessageID != "" {
+		reuseIDs = []string{reuseMessageID}
+	}
+	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, replyInThreadForSubmission(a, sub), reuseIDs)
+	ids := make([]string, 0, len(results))
+	for _, result := range results {
+		ids = append(ids, result.MessageID)
+	}
+	return ids
+}
+
 func (a *App) SessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
 	return sessionShouldStartNextSubmissionAsync(sess)
 }
