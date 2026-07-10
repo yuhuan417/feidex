@@ -6,7 +6,7 @@
 
 ## 快照
 
-- root `internal/app` 当前保留 `89` 个测试文件，共 `27,405` 行。
+- root `internal/app` 当前保留 `89` 个测试文件，共 `27,538` 行。
 - root 测试仍然是“少量必须留在组合根的测试”，而不是默认的 feature-local 单元测试落点。
 - owner-local 纯测试已经继续下沉到 `submission`、`serverrequest`、`delivery`、`pathpick`、`workspacecmd`、`servicetiercmd`、`features`、`attachments`、`cards`、`usageview`、`turnitem`、`turn` 等子包。
 

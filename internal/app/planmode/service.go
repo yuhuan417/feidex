@@ -1,43 +1,90 @@
-package app
+package planmode
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
+	"feidex/internal/app/appcore"
 	"feidex/internal/app/modelconfig"
+	appruntime "feidex/internal/app/runtime"
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
-const planCommandUsage = "/plan | /plan on | /plan off"
+const (
+	CommandUsage = "/plan | /plan on | /plan off"
+	BackendCodex = appruntime.BackendCodex
+)
 
-func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
+type CodexClient interface {
+	Call(ctx context.Context, method string, params any, out any) error
+}
+
+type StateProvider interface {
+	Session(key string) *state.Session
+	SaveSession(sess *state.Session) error
+	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	Pending(id string) *state.PendingRequest
+	PendingRequests() []*state.PendingRequest
+	SavePending(req *state.PendingRequest) error
+	UpdatePending(id string, mutate func(*state.PendingRequest)) error
+	NextLocalID(prefix string) (string, error)
+	CreateSubmission(sub *state.Submission) (string, error)
+	QueueSubmission(sessionKey, submissionID string) error
+	Submission(id string) *state.Submission
+}
+
+type App interface {
+	Config() *config.Config
+	ConfigMu() *sync.RWMutex
+	Backend() string
+	FrontendID() string
+	FrontendConfigIndex() int
+	Store() *state.Store
+	State() StateProvider
+	Feishu() appcore.FeishuClient
+	CodexClient() (CodexClient, error)
+	MakeSessionKey(msg *feishu.InboundMessage) string
+	ReplyInThreadEnabled(chatType string) bool
+	SessionHasActiveWork(sess *state.Session) bool
+	ActionStringValue(action *feishu.CardAction, key string) string
+	RunAsync(fn func())
+	ReplyInThreadForSubmission(sub *state.Submission) bool
+	SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *state.Submission, kind string) (string, error)
+	StartNextSubmission(sessionKey string) error
+	StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+}
+
+func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 1 {
-		return fmt.Errorf("usage: %s", planCommandUsage)
+		return fmt.Errorf("usage: %s", CommandUsage)
 	}
 	if len(args) == 1 {
 		switch strings.TrimSpace(args[0]) {
 		case "on", "off":
 		default:
-			return fmt.Errorf("usage: %s", planCommandUsage)
+			return fmt.Errorf("usage: %s", CommandUsage)
 		}
 	}
 	if a == nil || msg == nil {
 		return nil
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.MakeSessionKey(msg)
 	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return fmt.Errorf("当前没有活动线程，无法配置 plan mode")
 	}
-	currentMode := normalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
+	currentMode := NormalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
 	switch {
 	case len(args) == 0 && currentMode != nil && strings.EqualFold(currentMode.Mode, "plan"):
-		defaultMode, err := resolveDefaultCodexCollaborationModeForSession(a, sess)
+		defaultMode, err := ResolveDefaultCodexCollaborationModeForSession(a, sess)
 		if err != nil {
 			return err
 		}
@@ -45,10 +92,10 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", replyInThreadEnabled(a, msg.ChatType))
+		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
+		return a.Feishu().ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	case len(args) == 0:
-		mode, err := resolvePlanModeForActiveThread(a)
+		mode, err := ResolvePlanModeForActiveThread(a)
 		if err != nil {
 			return err
 		}
@@ -56,10 +103,10 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, renderPlanModeStatusText(mode), replyInThreadEnabled(a, msg.ChatType))
+		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
+		return a.Feishu().ReplyText(context.Background(), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	case strings.TrimSpace(args[0]) == "off":
-		defaultMode, err := resolveDefaultCodexCollaborationModeForSession(a, sess)
+		defaultMode, err := ResolveDefaultCodexCollaborationModeForSession(a, sess)
 		if err != nil {
 			return err
 		}
@@ -67,10 +114,10 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", replyInThreadEnabled(a, msg.ChatType))
+		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
+		return a.Feishu().ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	default:
-		mode, err := resolvePlanModeForActiveThread(a)
+		mode, err := ResolvePlanModeForActiveThread(a)
 		if err != nil {
 			return err
 		}
@@ -78,13 +125,13 @@ func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 		if err := a.State().SaveSession(sess); err != nil {
 			return err
 		}
-		invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, renderPlanModeStatusText(mode), replyInThreadEnabled(a, msg.ChatType))
+		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
+		return a.Feishu().ReplyText(context.Background(), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	}
 }
 
-func renderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
-	mode = normalizeThreadCollaborationMode(mode)
+func RenderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
+	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return "当前 thread 未开启 `plan` collaboration mode。"
 	}
@@ -100,14 +147,14 @@ func renderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
 	return strings.Join(lines, "\n")
 }
 
-func resolvePlanModeForActiveThread(a *App) (*state.SessionCollaborationMode, error) {
+func ResolvePlanModeForActiveThread(a App) (*state.SessionCollaborationMode, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
-	if !a.cfg.Codex.ExperimentalAPI {
+	if a.Config() == nil || !a.Config().Codex.ExperimentalAPI {
 		return nil, fmt.Errorf("当前 Codex runtime 未启用 experimental API，`/plan` 不可用")
 	}
-	client, err := requireCodexClient(a)
+	client, err := a.CodexClient()
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +180,10 @@ func resolvePlanModeForActiveThread(a *App) (*state.SessionCollaborationMode, er
 	if strings.TrimSpace(effort) != "" {
 		mode.ReasoningEffort = strings.TrimSpace(effort)
 	}
-	return normalizeThreadCollaborationMode(mode), nil
+	return NormalizeThreadCollaborationMode(mode), nil
 }
 
-func planModeForSession(a *App, sessionKey string) *state.SessionCollaborationMode {
+func PlanModeForSession(a App, sessionKey string) *state.SessionCollaborationMode {
 	if a == nil || strings.TrimSpace(sessionKey) == "" {
 		return nil
 	}
@@ -144,7 +191,7 @@ func planModeForSession(a *App, sessionKey string) *state.SessionCollaborationMo
 	if sess == nil {
 		return nil
 	}
-	return normalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
+	return NormalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
 }
 
 func sessionActiveThreadIDForLog(sess *state.Session) string {
@@ -172,14 +219,14 @@ func sessionBackendCollaborationModeForLog(sess *state.Session, backend string) 
 	return snapshot.CollaborationMode
 }
 
-func resolveDefaultCodexCollaborationModeForSession(a *App, sess *state.Session) (*state.SessionCollaborationMode, error) {
+func ResolveDefaultCodexCollaborationModeForSession(a App, sess *state.Session) (*state.SessionCollaborationMode, error) {
 	if mode := defaultCodexCollaborationModeForSession(a, sess); mode != nil {
 		return mode, nil
 	}
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
-	client, err := requireCodexClient(a)
+	client, err := a.CodexClient()
 	if err != nil {
 		return nil, err
 	}
@@ -196,17 +243,17 @@ func resolveDefaultCodexCollaborationModeForSession(a *App, sess *state.Session)
 	if strings.TrimSpace(effort) != "" {
 		mode.ReasoningEffort = strings.TrimSpace(effort)
 	}
-	return normalizeThreadCollaborationMode(mode), nil
+	return NormalizeThreadCollaborationMode(mode), nil
 }
 
-func defaultCodexCollaborationModeForSession(a *App, sess *state.Session) *state.SessionCollaborationMode {
+func defaultCodexCollaborationModeForSession(a App, sess *state.Session) *state.SessionCollaborationMode {
 	model := ""
 	effort := ""
-	if a != nil && a.cfg != nil {
-		model = strings.TrimSpace(configuredGlobalModel(a.cfg))
-		effort = strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.cfg))
+	if a != nil && a.Config() != nil {
+		model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
+		effort = strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.Config()))
 	}
-	if mode := normalizeThreadCollaborationMode(sessionActiveCollaborationModeForLog(sess)); mode != nil && strings.EqualFold(mode.Mode, "default") {
+	if mode := NormalizeThreadCollaborationMode(sessionActiveCollaborationModeForLog(sess)); mode != nil && strings.EqualFold(mode.Mode, "default") {
 		if model == "" {
 			model = strings.TrimSpace(mode.Model)
 		}
@@ -214,7 +261,7 @@ func defaultCodexCollaborationModeForSession(a *App, sess *state.Session) *state
 			effort = strings.TrimSpace(mode.ReasoningEffort)
 		}
 	}
-	if mode := normalizeThreadCollaborationMode(sessionBackendCollaborationModeForLog(sess, backendCodex)); mode != nil && strings.EqualFold(mode.Mode, "default") {
+	if mode := NormalizeThreadCollaborationMode(sessionBackendCollaborationModeForLog(sess, BackendCodex)); mode != nil && strings.EqualFold(mode.Mode, "default") {
 		if model == "" {
 			model = strings.TrimSpace(mode.Model)
 		}
@@ -222,19 +269,19 @@ func defaultCodexCollaborationModeForSession(a *App, sess *state.Session) *state
 			effort = strings.TrimSpace(mode.ReasoningEffort)
 		}
 	}
-	if mode := normalizeThreadCollaborationMode(sessionActiveCollaborationModeForLog(sess)); mode != nil && canReuseCollaborationModeModelForDefault(a, mode) {
+	if mode := NormalizeThreadCollaborationMode(sessionActiveCollaborationModeForLog(sess)); mode != nil && canReuseCollaborationModeModelForDefault(a, mode) {
 		if model == "" {
 			model = strings.TrimSpace(mode.Model)
 		}
 	}
 	if model == "" {
-		if mode := normalizeThreadCollaborationMode(sessionBackendCollaborationModeForLog(sess, backendCodex)); mode != nil && canReuseCollaborationModeModelForDefault(a, mode) {
+		if mode := NormalizeThreadCollaborationMode(sessionBackendCollaborationModeForLog(sess, BackendCodex)); mode != nil && canReuseCollaborationModeModelForDefault(a, mode) {
 			model = strings.TrimSpace(mode.Model)
 		}
 	}
 	if model == "" {
 		slog.Debug("plan mode disable could not build default collaboration mode",
-			"backend", configuredBackend(a),
+			"backend", appcore.ConfiguredBackend(a),
 			"active_thread_id", sessionActiveThreadIDForLog(sess),
 		)
 		return nil
@@ -246,52 +293,44 @@ func defaultCodexCollaborationModeForSession(a *App, sess *state.Session) *state
 	if strings.TrimSpace(effort) != "" {
 		mode.ReasoningEffort = strings.TrimSpace(effort)
 	}
-	return normalizeThreadCollaborationMode(mode)
+	return NormalizeThreadCollaborationMode(mode)
 }
 
-func canReuseCollaborationModeModelForDefault(a *App, mode *state.SessionCollaborationMode) bool {
-	mode = normalizeThreadCollaborationMode(mode)
+func canReuseCollaborationModeModelForDefault(a App, mode *state.SessionCollaborationMode) bool {
+	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return false
 	}
 	if !strings.EqualFold(mode.Mode, "plan") {
 		return true
 	}
-	if a == nil || a.cfg == nil {
+	if a == nil || a.Config() == nil {
 		return true
 	}
-	return strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.cfg)) == ""
+	return strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.Config())) == ""
 }
 
-func (a *App) PlanModeTitleForSession(sessionKey, title string) string {
-	return planModeTitleForSession(a, sessionKey, title)
-}
-
-func planModeTitleForSession(a *App, sessionKey, title string) string {
+func PlanModeTitleForSession(a App, sessionKey, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return ""
 	}
 	title = sessionWorkspaceTitleForSession(a, sessionKey, title)
-	mode := planModeForSession(a, sessionKey)
+	mode := PlanModeForSession(a, sessionKey)
 	if mode == nil || !strings.EqualFold(mode.Mode, "plan") {
 		return title
 	}
 	return prependTitlePrefix(title, "[plan]")
 }
 
-func (a *App) ContentCardTitleForSession(sessionKey, workspaceID, title string) string {
-	return contentCardTitleForSession(a, sessionKey, workspaceID, title)
-}
-
-func contentCardTitleForSubmission(a *App, sub *state.Submission, title string) string {
+func ContentCardTitleForSubmission(a App, sub *state.Submission, title string) string {
 	if sub == nil {
 		return strings.TrimSpace(title)
 	}
-	return contentCardTitleForSession(a, sub.SessionKey, sub.WorkspaceID, title)
+	return ContentCardTitleForSession(a, sub.SessionKey, sub.WorkspaceID, title)
 }
 
-func contentCardTitleForSession(a *App, sessionKey, workspaceID, title string) string {
+func ContentCardTitleForSession(a App, sessionKey, workspaceID, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return ""
@@ -303,7 +342,7 @@ func contentCardTitleForSession(a *App, sessionKey, workspaceID, title string) s
 		}
 	}
 	planMode := false
-	if mode := planModeForSession(a, sessionKey); mode != nil {
+	if mode := PlanModeForSession(a, sessionKey); mode != nil {
 		planMode = strings.EqualFold(mode.Mode, "plan")
 	}
 	return normalizeContentCardTitle(title, workspaceID, planMode)
@@ -346,7 +385,7 @@ func titlePrefixAlreadyPresent(prefixes []string, candidate string) bool {
 	return false
 }
 
-func sessionWorkspaceTitleForSession(a *App, sessionKey, title string) string {
+func sessionWorkspaceTitleForSession(a App, sessionKey, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" || a == nil || strings.TrimSpace(sessionKey) == "" {
 		return title
@@ -407,12 +446,12 @@ func splitLeadingTitlePrefixes(title string) (prefixes []string, rest string) {
 	return prefixes, rest
 }
 
-func resolvePlanModeSettings(ctx context.Context, a *App, client CodexClient, preset *codexrpc.CollaborationModeMask) (model string, effort string, err error) {
-	model = strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.cfg))
+func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, preset *codexrpc.CollaborationModeMask) (model string, effort string, err error) {
+	model = strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.Config()))
 	if model == "" {
-		model = strings.TrimSpace(configuredGlobalModel(a.cfg))
+		model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
 	}
-	effort = strings.TrimSpace(modelconfig.ConfiguredPlanReasoningEffort(a.cfg))
+	effort = strings.TrimSpace(modelconfig.ConfiguredPlanReasoningEffort(a.Config()))
 	if effort == "" && preset != nil && preset.ReasoningEffort != nil {
 		effort = strings.TrimSpace(*preset.ReasoningEffort)
 	}
@@ -426,20 +465,20 @@ func resolvePlanModeSettings(ctx context.Context, a *App, client CodexClient, pr
 	}, &result); err != nil {
 		return "", "", fmt.Errorf("读取 model 列表失败: %w", err)
 	}
-	entry, resolvedEffort := modelconfig.EffectivePlanConfiguredModelAndEffort(a.cfg, result, preset)
+	entry, resolvedEffort := modelconfig.EffectivePlanConfiguredModelAndEffort(a.Config(), result, preset)
 	if entry == nil {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
 	}
-	model = firstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
+	model = appcore.FirstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
 	if model == "" {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
 	}
 	return model, resolvedEffort, nil
 }
 
-func resolveDefaultCollaborationModeSettings(ctx context.Context, a *App, client CodexClient) (model string, effort string, err error) {
-	model = strings.TrimSpace(configuredGlobalModel(a.cfg))
-	effort = strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.cfg))
+func resolveDefaultCollaborationModeSettings(ctx context.Context, a App, client CodexClient) (model string, effort string, err error) {
+	model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
+	effort = strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.Config()))
 	if model != "" {
 		return model, effort, nil
 	}
@@ -450,11 +489,11 @@ func resolveDefaultCollaborationModeSettings(ctx context.Context, a *App, client
 	}, &result); err != nil {
 		return "", "", fmt.Errorf("读取 model 列表失败: %w", err)
 	}
-	entry, resolvedEffort := modelconfig.EffectiveConfiguredModelAndEffort(a.cfg, result)
+	entry, resolvedEffort := modelconfig.EffectiveConfiguredModelAndEffort(a.Config(), result)
 	if entry == nil {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法恢复 default collaboration mode")
 	}
-	model = firstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
+	model = appcore.FirstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
 	if model == "" {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法恢复 default collaboration mode")
 	}
@@ -464,7 +503,7 @@ func resolveDefaultCollaborationModeSettings(ctx context.Context, a *App, client
 	return model, effort, nil
 }
 
-func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *codexrpc.CollaborationMode {
+func CodexCollaborationModeForTurnStart(a App, sessionKey, threadID string) *codexrpc.CollaborationMode {
 	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return nil
 	}
@@ -472,12 +511,12 @@ func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *co
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return nil
 	}
-	mode := defaultCollaborationModeWithConfiguredEffort(a, sess.ActiveThreadCollaborationMode)
-	return codexCollaborationModeFromState(mode)
+	mode := DefaultCollaborationModeWithConfiguredEffort(a, sess.ActiveThreadCollaborationMode)
+	return CodexCollaborationModeFromState(mode)
 }
 
-func codexCollaborationModeFromState(mode *state.SessionCollaborationMode) *codexrpc.CollaborationMode {
-	mode = normalizeThreadCollaborationMode(mode)
+func CodexCollaborationModeFromState(mode *state.SessionCollaborationMode) *codexrpc.CollaborationMode {
+	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return nil
 	}
@@ -495,24 +534,24 @@ func codexCollaborationModeFromState(mode *state.SessionCollaborationMode) *code
 	}
 }
 
-func defaultCollaborationModeWithConfiguredEffort(a *App, mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
-	mode = normalizeThreadCollaborationMode(mode)
+func DefaultCollaborationModeWithConfiguredEffort(a App, mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil || !strings.EqualFold(mode.Mode, "default") || strings.TrimSpace(mode.ReasoningEffort) != "" {
 		return mode
 	}
-	if a == nil || a.cfg == nil {
+	if a == nil || a.Config() == nil {
 		return mode
 	}
-	effort := strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.cfg))
+	effort := strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.Config()))
 	if effort == "" {
 		return mode
 	}
 	cp := *mode
 	cp.ReasoningEffort = effort
-	return normalizeThreadCollaborationMode(&cp)
+	return NormalizeThreadCollaborationMode(&cp)
 }
 
-func normalizeThreadCollaborationMode(mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+func NormalizeThreadCollaborationMode(mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
 	if mode == nil {
 		return nil
 	}

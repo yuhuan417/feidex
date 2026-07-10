@@ -149,7 +149,7 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "已设置 goal") {
 		t.Fatalf("/goal objective replyTexts = %#v, want concise text ack", ff.replyTexts)
 	}
-	if anchor, ok := goalTrackerForApp(a).anchor("thread-1"); !ok || anchor.MessageID != "" {
+	if anchor, ok := goalTrackerForApp(a).Anchor("thread-1"); !ok || anchor.MessageID != "" {
 		t.Fatalf("goal management card should not become a turn reply anchor, got %+v / %v", anchor, ok)
 	}
 
@@ -251,7 +251,7 @@ func TestCommandGoalWithoutCurrentGoalRendersCreateForm(t *testing.T) {
 	if setParams[0].Status == nil || *setParams[0].Status != codexrpc.ThreadGoalStatusActive {
 		t.Fatalf("create submit status = %#v", setParams[0].Status)
 	}
-	if anchor, ok := goalTrackerForApp(a).anchor("thread-1"); !ok || anchor.MessageID != "" {
+	if anchor, ok := goalTrackerForApp(a).Anchor("thread-1"); !ok || anchor.MessageID != "" {
 		t.Fatalf("goal create card should not become a turn reply anchor, got %+v / %v", anchor, ok)
 	}
 }
@@ -459,7 +459,7 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	ff.sendCardIDs = []string{"goal-turn-root-1", "goal-turn-root-2"}
 
 	handleNotification(a, "thread/goal/updated", json.RawMessage(`{"threadId":"thread-1","goal":{"threadId":"thread-1","objective":"keep going","status":"active","tokenBudget":null,"tokensUsed":0,"timeUsedSeconds":0,"createdAt":1,"updatedAt":2}}`))
-	if goal, ok := goalTrackerForApp(a).activeGoal("thread-1"); !ok || goal.Objective != "keep going" {
+	if goal, ok := goalTrackerForApp(a).ActiveGoal("thread-1"); !ok || goal.Objective != "keep going" {
 		t.Fatalf("active goal after notification = %+v / %v", goal, ok)
 	}
 
@@ -525,7 +525,7 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	}
 
 	handleNotification(a, "thread/goal/cleared", json.RawMessage(`{"threadId":"thread-1"}`))
-	if goal, ok := goalTrackerForApp(a).activeGoal("thread-1"); ok {
+	if goal, ok := goalTrackerForApp(a).ActiveGoal("thread-1"); ok {
 		t.Fatalf("goal should be cleared, got %+v", goal)
 	}
 }

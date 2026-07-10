@@ -1,4 +1,4 @@
-package app
+package goalcmd
 
 import (
 	"context"
@@ -19,20 +19,54 @@ import (
 )
 
 const (
-	goalCommandUsage          = "/goal | /goal <objective> | /goal pause | /goal resume | /goal clear | /goal edit"
-	goalMaxObjectiveRunes     = 4000
-	goalSubmissionKind        = "goal"
-	goalContinuationInputText = "[goal continuation]"
+	CommandUsage          = "/goal | /goal <objective> | /goal pause | /goal resume | /goal clear | /goal edit"
+	MaxObjectiveRunes     = 4000
+	SubmissionKind        = "goal"
+	ContinuationInputText = "[goal continuation]"
 )
 
-type goalTracker struct {
+type CodexClient interface {
+	Call(ctx context.Context, method string, params any, out any) error
+}
+
+type StateProvider interface {
+	Session(key string) *state.Session
+	Sessions() []*state.Session
+	SaveSession(sess *state.Session) error
+	CreateSubmission(sub *state.Submission) (string, error)
+	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	DeleteSubmission(id string)
+}
+
+type App interface {
+	State() StateProvider
+	Feishu() appcore.FeishuClient
+	CodexClient() (CodexClient, error)
+	Tracker() *Tracker
+	MakeSessionKey(msg *feishu.InboundMessage) string
+	ReplyInThreadEnabled(chatType string) bool
+	MenuCardBodyForSession(sessionKey, action, body string) string
+	ActionStringValue(action *feishu.CardAction, key string) string
+	ActionSessionKey(action *feishu.CardAction) string
+	CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, fallbackAction string) (*callback.CardActionTriggerResponse, error)
+	DefaultWorkspaceID() string
+	SessionBelongsToFrontend(sessionKey string) bool
+	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
+	MarkTurnStartedAt(turnID string, startedAt time.Time)
+	RecordSubmissionSourceLinks(sub *state.Submission)
+	RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string)
+	NoteTurnStarted(sessionKey string, sub *state.Submission)
+	MarkSessionThreadLive(sessionKey, threadID string)
+}
+
+type Tracker struct {
 	mu                 sync.Mutex
 	goals              map[string]codexrpc.ThreadGoal
-	anchors            map[string]goalAnchor
+	anchors            map[string]Anchor
 	continuationCounts map[string]int
 }
 
-type goalAnchor struct {
+type Anchor struct {
 	SessionKey string
 	ThreadID   string
 	MessageID  string
@@ -41,15 +75,15 @@ type goalAnchor struct {
 	UserID     string
 }
 
-func newGoalTracker() *goalTracker {
-	return &goalTracker{
+func NewTracker() *Tracker {
+	return &Tracker{
 		goals:              map[string]codexrpc.ThreadGoal{},
-		anchors:            map[string]goalAnchor{},
+		anchors:            map[string]Anchor{},
 		continuationCounts: map[string]int{},
 	}
 }
 
-func (t *goalTracker) noteGoal(goal codexrpc.ThreadGoal) {
+func (t *Tracker) NoteGoal(goal codexrpc.ThreadGoal) {
 	if t == nil {
 		return
 	}
@@ -65,7 +99,7 @@ func (t *goalTracker) noteGoal(goal codexrpc.ThreadGoal) {
 	t.goals[threadID] = goal
 }
 
-func (t *goalTracker) clearGoal(threadID string) {
+func (t *Tracker) ClearGoal(threadID string) {
 	if t == nil {
 		return
 	}
@@ -79,7 +113,7 @@ func (t *goalTracker) clearGoal(threadID string) {
 	delete(t.continuationCounts, threadID)
 }
 
-func (t *goalTracker) activeGoal(threadID string) (codexrpc.ThreadGoal, bool) {
+func (t *Tracker) ActiveGoal(threadID string) (codexrpc.ThreadGoal, bool) {
 	if t == nil {
 		return codexrpc.ThreadGoal{}, false
 	}
@@ -93,7 +127,7 @@ func (t *goalTracker) activeGoal(threadID string) (codexrpc.ThreadGoal, bool) {
 	return goal, ok && goal.Status == codexrpc.ThreadGoalStatusActive
 }
 
-func (t *goalTracker) recordAnchor(anchor goalAnchor) {
+func (t *Tracker) RecordAnchor(anchor Anchor) {
 	if t == nil {
 		return
 	}
@@ -106,12 +140,12 @@ func (t *goalTracker) recordAnchor(anchor goalAnchor) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.anchors == nil {
-		t.anchors = map[string]goalAnchor{}
+		t.anchors = map[string]Anchor{}
 	}
 	t.anchors[anchor.ThreadID] = anchor
 }
 
-func (t *goalTracker) recordContext(anchor goalAnchor) {
+func (t *Tracker) RecordContext(anchor Anchor) {
 	if t == nil {
 		return
 	}
@@ -124,23 +158,23 @@ func (t *goalTracker) recordContext(anchor goalAnchor) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.anchors == nil {
-		t.anchors = map[string]goalAnchor{}
+		t.anchors = map[string]Anchor{}
 	}
 	if existing, ok := t.anchors[anchor.ThreadID]; ok {
-		anchor.ChatID = firstNonEmpty(strings.TrimSpace(anchor.ChatID), strings.TrimSpace(existing.ChatID))
-		anchor.ChatType = firstNonEmpty(strings.TrimSpace(anchor.ChatType), strings.TrimSpace(existing.ChatType))
-		anchor.UserID = firstNonEmpty(strings.TrimSpace(anchor.UserID), strings.TrimSpace(existing.UserID))
+		anchor.ChatID = appcore.FirstNonEmpty(strings.TrimSpace(anchor.ChatID), strings.TrimSpace(existing.ChatID))
+		anchor.ChatType = appcore.FirstNonEmpty(strings.TrimSpace(anchor.ChatType), strings.TrimSpace(existing.ChatType))
+		anchor.UserID = appcore.FirstNonEmpty(strings.TrimSpace(anchor.UserID), strings.TrimSpace(existing.UserID))
 	}
 	t.anchors[anchor.ThreadID] = anchor
 }
 
-func (t *goalTracker) anchor(threadID string) (goalAnchor, bool) {
+func (t *Tracker) Anchor(threadID string) (Anchor, bool) {
 	if t == nil {
-		return goalAnchor{}, false
+		return Anchor{}, false
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
-		return goalAnchor{}, false
+		return Anchor{}, false
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -148,7 +182,7 @@ func (t *goalTracker) anchor(threadID string) (goalAnchor, bool) {
 	return anchor, ok
 }
 
-func (t *goalTracker) nextContinuationOrdinal(threadID string) int {
+func (t *Tracker) NextContinuationOrdinal(threadID string) int {
 	if t == nil {
 		return 0
 	}
@@ -165,34 +199,20 @@ func (t *goalTracker) nextContinuationOrdinal(threadID string) int {
 	return t.continuationCounts[threadID]
 }
 
-func goalTrackerForApp(a *App) *goalTracker {
-	if a == nil {
-		return nil
-	}
-	if a.trackers.goals == nil {
-		a.trackers.goals = newGoalTracker()
-	}
-	return a.trackers.goals
+type Service struct {
+	app App
 }
 
-func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
-	return newGoalService(a).CommandGoal(msg, raw, args)
+func NewService(a App) Service {
+	return Service{app: a}
 }
 
-type goalService struct {
-	app *App
-}
-
-func newGoalService(a *App) goalService {
-	return goalService{app: a}
-}
-
-func (s goalService) CommandGoal(msg *feishu.InboundMessage, raw string, args []string) error {
+func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []string) error {
 	a := s.app
 	if a == nil || msg == nil {
 		return nil
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.MakeSessionKey(msg)
 	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return fmt.Errorf("当前没有活动 Codex thread，无法使用 /goal；先发送一条普通消息或恢复一个 thread")
@@ -234,7 +254,7 @@ func (s goalService) CommandGoal(msg *feishu.InboundMessage, raw string, args []
 			return s.replyGoalCard(msg, sessionKey, threadID, nil)
 		}
 		card := s.renderGoalEditCard(sessionKey, threadID, *goal)
-		_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
+		_, err = a.Feishu().ReplyCard(context.Background(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 		s.recordContext(sessionKey, threadID, msg)
 		return err
 	default:
@@ -248,7 +268,7 @@ func (s goalService) CommandGoal(msg *feishu.InboundMessage, raw string, args []
 		}
 		if existing != nil && shouldConfirmBeforeReplacingGoal(*existing) {
 			card := s.renderGoalReplaceConfirmCard(sessionKey, threadID, *existing, objective)
-			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
+			_, err := a.Feishu().ReplyCard(context.Background(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 			s.recordContext(sessionKey, threadID, msg)
 			return err
 		}
@@ -264,12 +284,12 @@ func (s goalService) CommandGoal(msg *feishu.InboundMessage, raw string, args []
 	}
 }
 
-func (s goalService) replyGoalSetText(msg *feishu.InboundMessage, sessionKey, threadID string) error {
-	if s.app == nil || s.app.feishu == nil || msg == nil {
+func (s Service) replyGoalSetText(msg *feishu.InboundMessage, sessionKey, threadID string) error {
+	if s.app == nil || s.app.Feishu() == nil || msg == nil {
 		return nil
 	}
 	s.recordContext(sessionKey, threadID, msg)
-	return s.app.feishu.ReplyText(context.Background(), msg.MessageID, "已设置 goal。", replyInThreadEnabled(s.app, msg.ChatType))
+	return s.app.Feishu().ReplyText(context.Background(), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
 }
 
 func goalCommandTail(raw string, args []string) string {
@@ -288,10 +308,10 @@ func goalIsSingleControlWord(tail, word string) bool {
 func validateGoalObjective(objective string) error {
 	objective = strings.TrimSpace(objective)
 	if objective == "" {
-		return fmt.Errorf("goal objective must not be empty\n\nusage: %s", goalCommandUsage)
+		return fmt.Errorf("goal objective must not be empty\n\nusage: %s", CommandUsage)
 	}
-	if count := len([]rune(objective)); count > goalMaxObjectiveRunes {
-		return fmt.Errorf("goal objective is too long: %d characters. Limit: %d characters. Put longer instructions in a file and refer to that file in the goal", count, goalMaxObjectiveRunes)
+	if count := len([]rune(objective)); count > MaxObjectiveRunes {
+		return fmt.Errorf("goal objective is too long: %d characters. Limit: %d characters. Put longer instructions in a file and refer to that file in the goal", count, MaxObjectiveRunes)
 	}
 	return nil
 }
@@ -323,8 +343,8 @@ func editedGoalStatus(status codexrpc.ThreadGoalStatus) codexrpc.ThreadGoalStatu
 	}
 }
 
-func (s goalService) threadGoalGet(threadID string) (*codexrpc.ThreadGoal, error) {
-	client, err := requireCodexClient(s.app)
+func (s Service) threadGoalGet(threadID string) (*codexrpc.ThreadGoal, error) {
+	client, err := s.app.CodexClient()
 	if err != nil {
 		return nil, err
 	}
@@ -335,19 +355,19 @@ func (s goalService) threadGoalGet(threadID string) (*codexrpc.ThreadGoal, error
 		return nil, err
 	}
 	if resp.Goal == nil {
-		goalTrackerForApp(s.app).clearGoal(threadID)
+		s.app.Tracker().ClearGoal(threadID)
 		return nil, nil
 	}
-	goalTrackerForApp(s.app).noteGoal(*resp.Goal)
+	s.app.Tracker().NoteGoal(*resp.Goal)
 	return resp.Goal, nil
 }
 
-func (s goalService) threadGoalSetStatus(threadID string, status codexrpc.ThreadGoalStatus) (*codexrpc.ThreadGoal, error) {
+func (s Service) threadGoalSetStatus(threadID string, status codexrpc.ThreadGoalStatus) (*codexrpc.ThreadGoal, error) {
 	return s.threadGoalSetObjective(threadID, "", status, nil)
 }
 
-func (s goalService) threadGoalSetObjective(threadID, objective string, status codexrpc.ThreadGoalStatus, tokenBudget *int64) (*codexrpc.ThreadGoal, error) {
-	client, err := requireCodexClient(s.app)
+func (s Service) threadGoalSetObjective(threadID, objective string, status codexrpc.ThreadGoalStatus, tokenBudget *int64) (*codexrpc.ThreadGoal, error) {
+	client, err := s.app.CodexClient()
 	if err != nil {
 		return nil, err
 	}
@@ -369,12 +389,12 @@ func (s goalService) threadGoalSetObjective(threadID, objective string, status c
 	if err := client.Call(ctx, "thread/goal/set", params, &resp); err != nil {
 		return nil, err
 	}
-	goalTrackerForApp(s.app).noteGoal(resp.Goal)
+	s.app.Tracker().NoteGoal(resp.Goal)
 	return &resp.Goal, nil
 }
 
-func (s goalService) threadGoalClear(threadID string) (bool, error) {
-	client, err := requireCodexClient(s.app)
+func (s Service) threadGoalClear(threadID string) (bool, error) {
+	client, err := s.app.CodexClient()
 	if err != nil {
 		return false, err
 	}
@@ -384,7 +404,7 @@ func (s goalService) threadGoalClear(threadID string) (bool, error) {
 	if err := client.Call(ctx, "thread/goal/clear", map[string]any{"threadId": strings.TrimSpace(threadID)}, &resp); err != nil {
 		return false, err
 	}
-	goalTrackerForApp(s.app).clearGoal(threadID)
+	s.app.Tracker().ClearGoal(threadID)
 	return resp.Cleared, nil
 }
 
@@ -409,14 +429,14 @@ func goalFriendlyError(action string, err error) string {
 	}
 }
 
-func (s goalService) replyGoalCard(msg *feishu.InboundMessage, sessionKey, threadID string, goal *codexrpc.ThreadGoal) error {
+func (s Service) replyGoalCard(msg *feishu.InboundMessage, sessionKey, threadID string, goal *codexrpc.ThreadGoal) error {
 	card := s.renderGoalCard(sessionKey, threadID, goal)
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	_, err := s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
 
-func (s goalService) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey, threadID string, cleared bool) error {
+func (s Service) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey, threadID string, cleared bool) error {
 	body := "当前 thread 没有 goal。"
 	color := "grey"
 	title := "Goal"
@@ -425,26 +445,26 @@ func (s goalService) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey
 		color = "green"
 		title = "Goal cleared"
 	}
-	card := s.app.feishu.SimpleStatusCard(title, color, menuCardBodyForSession(s.app, sessionKey, "menu.goal", body), goalBackButtons(sessionKey))
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	card := s.app.Feishu().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))
+	_, err := s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
 
-func (s goalService) renderGoalCard(sessionKey, threadID string, goal *codexrpc.ThreadGoal) map[string]any {
+func (s Service) renderGoalCard(sessionKey, threadID string, goal *codexrpc.ThreadGoal) map[string]any {
 	if goal == nil {
 		return s.renderGoalCreateCard(sessionKey, threadID)
 	}
 	body := renderGoalBody(*goal)
-	return s.app.feishu.SimpleStatusCard("Goal "+goalStatusLabel(goal.Status), goalStatusColor(goal.Status), menuCardBodyForSession(s.app, sessionKey, "menu.goal", body), goalButtons(sessionKey, threadID, goal.Status))
+	return s.app.Feishu().SimpleStatusCard("Goal "+goalStatusLabel(goal.Status), goalStatusColor(goal.Status), s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalButtons(sessionKey, threadID, goal.Status))
 }
 
-func (s goalService) renderGoalSavedCard(goal *codexrpc.ThreadGoal) map[string]any {
+func (s Service) renderGoalSavedCard(goal *codexrpc.ThreadGoal) map[string]any {
 	lines := []string{"已设置 goal。"}
 	if goal != nil && strings.TrimSpace(goal.Objective) != "" {
 		lines = append(lines, "objective: "+strings.TrimSpace(goal.Objective))
 	}
-	return s.app.feishu.SimpleStatusCard("Goal set", "green", strings.Join(lines, "\n"), nil)
+	return s.app.Feishu().SimpleStatusCard("Goal set", "green", strings.Join(lines, "\n"), nil)
 }
 
 func renderGoalBody(goal codexrpc.ThreadGoal) string {
@@ -581,7 +601,7 @@ func goalButtons(sessionKey, threadID string, status codexrpc.ThreadGoalStatus) 
 	return buttons
 }
 
-func (s goalService) renderGoalReplaceConfirmCard(sessionKey, threadID string, existing codexrpc.ThreadGoal, objective string) map[string]any {
+func (s Service) renderGoalReplaceConfirmCard(sessionKey, threadID string, existing codexrpc.ThreadGoal, objective string) map[string]any {
 	body := strings.Join([]string{
 		"当前 thread 已有未完成 goal。",
 		"",
@@ -591,7 +611,7 @@ func (s goalService) renderGoalReplaceConfirmCard(sessionKey, threadID string, e
 		"新 goal:",
 		strings.TrimSpace(objective),
 	}, "\n")
-	return s.app.feishu.SimpleStatusCard("Replace goal?", "orange", menuCardBodyForSession(s.app, sessionKey, "menu.goal", body), []feishu.Button{
+	return s.app.Feishu().SimpleStatusCard("Replace goal?", "orange", s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), []feishu.Button{
 		{
 			Text: "替换当前 goal",
 			Type: "danger",
@@ -616,7 +636,7 @@ func (s goalService) renderGoalReplaceConfirmCard(sessionKey, threadID string, e
 	})
 }
 
-func (s goalService) renderGoalEditCard(sessionKey, threadID string, goal codexrpc.ThreadGoal) map[string]any {
+func (s Service) renderGoalEditCard(sessionKey, threadID string, goal codexrpc.ThreadGoal) map[string]any {
 	status := editedGoalStatus(goal.Status)
 	value := map[string]any{
 		"action":      "goal.edit.submit",
@@ -648,7 +668,7 @@ type goalObjectiveFormOptions struct {
 	SubmitValue      map[string]any
 }
 
-func (s goalService) renderGoalCreateCard(sessionKey, threadID string) map[string]any {
+func (s Service) renderGoalCreateCard(sessionKey, threadID string) map[string]any {
 	return s.renderGoalObjectiveFormCard(goalObjectiveFormOptions{
 		Title:        "Create goal",
 		Body:         "当前 thread 没有 goal。输入 objective 创建 active goal。",
@@ -664,11 +684,11 @@ func (s goalService) renderGoalCreateCard(sessionKey, threadID string) map[strin
 	})
 }
 
-func (s goalService) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) map[string]any {
+func (s Service) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) map[string]any {
 	card := appcards.NewMarkdownBodyCard(opts.Title, "blue")
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
-		"content": menuCardBodyForSession(s.app, opts.SessionKey, "menu.goal", opts.Body),
+		"content": s.app.MenuCardBodyForSession(opts.SessionKey, "menu.goal", opts.Body),
 	})
 	objectiveInput := map[string]any{
 		"tag":         "input",
@@ -681,7 +701,7 @@ func (s goalService) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) 
 	}
 	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
-			Text:  firstNonEmpty(opts.SubmitText, "保存"),
+			Text:  appcore.FirstNonEmpty(opts.SubmitText, "保存"),
 			Type:  "primary",
 			Name:  "goal_edit_submit",
 			Value: opts.SubmitValue,
@@ -690,7 +710,7 @@ func (s goalService) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) 
 			Text:  "取消",
 			Type:  "default",
 			Name:  "goal_edit_cancel",
-			Value: map[string]any{"action": firstNonEmpty(opts.CancelAction, "menu.goal"), "session_key": opts.SessionKey},
+			Value: map[string]any{"action": appcore.FirstNonEmpty(opts.CancelAction, "menu.goal"), "session_key": opts.SessionKey},
 		},
 	})
 	if len(buttonRows) > 0 {
@@ -720,11 +740,15 @@ func markFirstButtonAsSubmit(row map[string]any) {
 	elements[0]["form_action_type"] = "submit"
 }
 
-func (s goalService) CompleteMenuGoal(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/goal", "menu.tools")
+func rawCard(card map[string]any) *callback.Card {
+	return &callback.Card{Type: "raw", Data: card}
 }
 
-func (s goalService) CompleteGoalStatusAction(action *feishu.CardAction, status codexrpc.ThreadGoalStatus) (*callback.CardActionTriggerResponse, error) {
+func (s Service) CompleteMenuGoal(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	return s.app.CompleteMenuCommand(action, sessionKey, "/goal", "menu.tools")
+}
+
+func (s Service) CompleteGoalStatusAction(action *feishu.CardAction, status codexrpc.ThreadGoalStatus) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, threadID, err := s.goalActionSessionThread(action)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -740,7 +764,7 @@ func (s goalService) CompleteGoalStatusAction(action *feishu.CardAction, status 
 	}, nil
 }
 
-func (s goalService) CompleteGoalClearAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s Service) CompleteGoalClearAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, threadID, err := s.goalActionSessionThread(action)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -760,7 +784,7 @@ func (s goalService) CompleteGoalClearAction(action *feishu.CardAction) (*callba
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: goalClearedToast(cleared)},
-		Card:  rawCard(s.app.feishu.SimpleStatusCard(title, color, menuCardBodyForSession(s.app, sessionKey, "menu.goal", body), goalBackButtons(sessionKey))),
+		Card:  rawCard(s.app.Feishu().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))),
 	}, nil
 }
 
@@ -771,7 +795,7 @@ func goalClearedToast(cleared bool) string {
 	return "当前没有 goal"
 }
 
-func (s goalService) CompleteGoalEditAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s Service) CompleteGoalEditAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, threadID, err := s.goalActionSessionThread(action)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -793,12 +817,12 @@ func (s goalService) CompleteGoalEditAction(action *feishu.CardAction) (*callbac
 	}, nil
 }
 
-func (s goalService) CompleteGoalReplaceConfirm(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s Service) CompleteGoalReplaceConfirm(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, threadID, err := s.goalActionSessionThread(action)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	objective := actionStringValue(action, "objective")
+	objective := s.app.ActionStringValue(action, "objective")
 	if err := validateGoalObjective(objective); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -816,7 +840,7 @@ func (s goalService) CompleteGoalReplaceConfirm(action *feishu.CardAction) (*cal
 	}, nil
 }
 
-func (s goalService) CompleteGoalReplaceCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s Service) CompleteGoalReplaceCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, threadID, err := s.goalActionSessionThread(action)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -832,7 +856,7 @@ func (s goalService) CompleteGoalReplaceCancel(action *feishu.CardAction) (*call
 	}, nil
 }
 
-func (s goalService) CompleteGoalEditSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s Service) CompleteGoalEditSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, threadID, err := s.goalActionSessionThread(action)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -841,12 +865,12 @@ func (s goalService) CompleteGoalEditSubmit(action *feishu.CardAction) (*callbac
 	if err := validateGoalObjective(objective); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	status := codexrpc.ThreadGoalStatus(actionStringValue(action, "status"))
+	status := codexrpc.ThreadGoalStatus(s.app.ActionStringValue(action, "status"))
 	if status == "" {
 		status = codexrpc.ThreadGoalStatusActive
 	}
 	var tokenBudget *int64
-	if rawBudget := actionStringValue(action, "token_budget"); rawBudget != "" {
+	if rawBudget := s.app.ActionStringValue(action, "token_budget"); rawBudget != "" {
 		value, err := strconv.ParseInt(rawBudget, 10, 64)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "goal token budget 参数损坏"}}, nil
@@ -864,9 +888,9 @@ func (s goalService) CompleteGoalEditSubmit(action *feishu.CardAction) (*callbac
 	}, nil
 }
 
-func (s goalService) goalActionSessionThread(action *feishu.CardAction) (string, string, error) {
-	sessionKey := actionSessionKey(action)
-	threadID := actionStringValue(action, "thread_id")
+func (s Service) goalActionSessionThread(action *feishu.CardAction) (string, string, error) {
+	sessionKey := s.app.ActionSessionKey(action)
+	threadID := s.app.ActionStringValue(action, "thread_id")
 	if sessionKey == "" || threadID == "" {
 		return "", "", fmt.Errorf("goal 操作参数缺失")
 	}
@@ -898,21 +922,21 @@ func goalFormStringValue(action *feishu.CardAction, key string) string {
 	}
 }
 
-func (s goalService) recordContext(sessionKey, threadID string, msg *feishu.InboundMessage) {
-	anchor := goalAnchor{SessionKey: sessionKey, ThreadID: threadID}
+func (s Service) recordContext(sessionKey, threadID string, msg *feishu.InboundMessage) {
+	anchor := Anchor{SessionKey: sessionKey, ThreadID: threadID}
 	if msg != nil {
 		anchor.ChatID = strings.TrimSpace(msg.ChatID)
 		anchor.ChatType = strings.TrimSpace(msg.ChatType)
 		anchor.UserID = strings.TrimSpace(msg.UserID)
 	}
-	goalTrackerForApp(s.app).recordContext(anchor)
+	s.app.Tracker().RecordContext(anchor)
 }
 
-func (s goalService) recordContextFromAction(action *feishu.CardAction, sessionKey, threadID string) {
+func (s Service) recordContextFromAction(action *feishu.CardAction, sessionKey, threadID string) {
 	if action == nil {
 		return
 	}
-	goalTrackerForApp(s.app).recordContext(goalAnchor{
+	s.app.Tracker().RecordContext(Anchor{
 		SessionKey: sessionKey,
 		ThreadID:   threadID,
 		ChatID:     strings.TrimSpace(action.ChatID),
@@ -920,21 +944,21 @@ func (s goalService) recordContextFromAction(action *feishu.CardAction, sessionK
 	})
 }
 
-func onThreadGoalUpdated(a *App, note codexrpc.ThreadGoalUpdatedNotification) {
-	goalTrackerForApp(a).noteGoal(note.Goal)
+func OnThreadGoalUpdated(a App, note codexrpc.ThreadGoalUpdatedNotification) {
+	a.Tracker().NoteGoal(note.Goal)
 }
 
-func onThreadGoalCleared(a *App, note codexrpc.ThreadGoalClearedNotification) {
-	goalTrackerForApp(a).clearGoal(note.ThreadID)
+func OnThreadGoalCleared(a App, note codexrpc.ThreadGoalClearedNotification) {
+	a.Tracker().ClearGoal(note.ThreadID)
 }
 
-func (s goalService) BindGoalContinuationTurn(threadID, turnID string) bool {
+func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	if threadID == "" || turnID == "" {
 		return false
 	}
-	goal, ok := goalTrackerForApp(s.app).activeGoal(threadID)
+	goal, ok := s.app.Tracker().ActiveGoal(threadID)
 	if !ok {
 		return false
 	}
@@ -950,7 +974,7 @@ func (s goalService) BindGoalContinuationTurn(threadID, turnID string) bool {
 		return false
 	}
 	triggerMessageID := anchor.MessageID
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(s.app))
+	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.app.DefaultWorkspaceID())
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          workspaceID,
@@ -961,8 +985,8 @@ func (s goalService) BindGoalContinuationTurn(threadID, turnID string) bool {
 		TriggerMessageID:     triggerMessageID,
 		SourceMessageIDs:     goalUniqueNonEmpty([]string{triggerMessageID}),
 		SourceRootMessageIDs: goalUniqueNonEmpty([]string{triggerMessageID}),
-		InputText:            goalContinuationInputText,
-		Kind:                 goalSubmissionKind,
+		InputText:            ContinuationInputText,
+		Kind:                 SubmissionKind,
 		Status:               state.SubmissionStatusRunning.String(),
 	}
 	id, err := s.app.State().CreateSubmission(sub)
@@ -987,49 +1011,49 @@ func (s goalService) BindGoalContinuationTurn(threadID, turnID string) bool {
 		s.app.State().DeleteSubmission(id)
 		return false
 	}
-	newRuntimeStateService(s.app).BindTurnSubmission(threadID, turnID, sessionKey, id)
-	newRuntimeStateService(s.app).MarkTurnStartedAt(turnID, time.Now())
-	newReplyContinuationService(s.app).RecordSubmissionSourceLinks(sub)
-	newReplyContinuationService(s.app).RecordRootTurnBinding(triggerMessageID, sessionKey, threadID, turnID)
-	newTurnStreamService(s.app).NoteTurnStarted(sessionKey, sub)
-	markSessionThreadLive(s.app, sessionKey, threadID)
+	s.app.BindTurnSubmission(threadID, turnID, sessionKey, id)
+	s.app.MarkTurnStartedAt(turnID, time.Now())
+	s.app.RecordSubmissionSourceLinks(sub)
+	s.app.RecordRootTurnBinding(triggerMessageID, sessionKey, threadID, turnID)
+	s.app.NoteTurnStarted(sessionKey, sub)
+	s.app.MarkSessionThreadLive(sessionKey, threadID)
 	return true
 }
 
-func (s goalService) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *state.Session, goal codexrpc.ThreadGoal) (goalAnchor, bool) {
-	if s.app == nil || s.app.feishu == nil || sess == nil {
-		return goalAnchor{}, false
+func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *state.Session, goal codexrpc.ThreadGoal) (Anchor, bool) {
+	if s.app == nil || s.app.Feishu() == nil || sess == nil {
+		return Anchor{}, false
 	}
-	anchor := goalAnchor{
+	anchor := Anchor{
 		SessionKey: sessionKey,
 		ThreadID:   threadID,
 		ChatID:     strings.TrimSpace(sess.ChatID),
 		ChatType:   strings.TrimSpace(sess.ChatType),
 		UserID:     strings.TrimSpace(sess.OwnerUserID),
 	}
-	if recorded, ok := goalTrackerForApp(s.app).anchor(threadID); ok {
-		anchor.ChatID = firstNonEmpty(anchor.ChatID, strings.TrimSpace(recorded.ChatID))
-		anchor.ChatType = firstNonEmpty(anchor.ChatType, strings.TrimSpace(recorded.ChatType))
-		anchor.UserID = firstNonEmpty(anchor.UserID, strings.TrimSpace(recorded.UserID))
+	if recorded, ok := s.app.Tracker().Anchor(threadID); ok {
+		anchor.ChatID = appcore.FirstNonEmpty(anchor.ChatID, strings.TrimSpace(recorded.ChatID))
+		anchor.ChatType = appcore.FirstNonEmpty(anchor.ChatType, strings.TrimSpace(recorded.ChatType))
+		anchor.UserID = appcore.FirstNonEmpty(anchor.UserID, strings.TrimSpace(recorded.UserID))
 	}
 	if anchor.ChatID == "" {
-		return goalAnchor{}, false
+		return Anchor{}, false
 	}
-	ordinal := goalTrackerForApp(s.app).nextContinuationOrdinal(threadID)
+	ordinal := s.app.Tracker().NextContinuationOrdinal(threadID)
 	card := s.renderGoalContinuationCard(sessionKey, threadID, turnID, goal, ordinal)
-	messageID, err := s.app.feishu.SendCard(context.Background(), anchor.ChatID, card)
+	messageID, err := s.app.Feishu().SendCard(context.Background(), anchor.ChatID, card)
 	if err != nil {
-		return goalAnchor{}, false
+		return Anchor{}, false
 	}
 	anchor.MessageID = strings.TrimSpace(messageID)
 	if anchor.MessageID == "" {
-		return goalAnchor{}, false
+		return Anchor{}, false
 	}
-	goalTrackerForApp(s.app).recordAnchor(anchor)
+	s.app.Tracker().RecordAnchor(anchor)
 	return anchor, true
 }
 
-func (s goalService) renderGoalContinuationCard(_, _, _ string, goal codexrpc.ThreadGoal, ordinal int) map[string]any {
+func (s Service) renderGoalContinuationCard(_, _, _ string, goal codexrpc.ThreadGoal, ordinal int) map[string]any {
 	card := appcards.NewMarkdownBodyCard(renderGoalContinuationTitle(goal, ordinal), "blue")
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
@@ -1068,14 +1092,14 @@ func formatGoalTokenProgress(goal codexrpc.ThreadGoal) string {
 	return used + " / " + formatGoalTokens(*goal.TokenBudget)
 }
 
-func (s goalService) findGoalContinuationSession(threadID string) (string, *state.Session) {
-	if anchor, ok := goalTrackerForApp(s.app).anchor(threadID); ok {
+func (s Service) findGoalContinuationSession(threadID string) (string, *state.Session) {
+	if anchor, ok := s.app.Tracker().Anchor(threadID); ok {
 		if sess := s.app.State().Session(anchor.SessionKey); sess != nil && strings.TrimSpace(sess.ActiveThreadID) == threadID {
 			return anchor.SessionKey, sess
 		}
 	}
 	for _, sess := range s.app.State().Sessions() {
-		if sess == nil || !sessionBelongsToFrontend(s.app, sess.Key) {
+		if sess == nil || !s.app.SessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) == threadID {

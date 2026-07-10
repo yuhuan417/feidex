@@ -1,4 +1,4 @@
-package app
+package mcpbridge
 
 import (
 	"context"
@@ -23,24 +23,53 @@ import (
 )
 
 const (
-	feidexMCPServerID       = "feidex-send"
-	feidexMCPBearerEnvName  = "FEIDEX_MCP_TOKEN"
-	feidexMCPProtocol       = "2025-03-26"
-	feidexMCPPath           = "/mcp"
-	feidexMCPSessionKeyName = "session_key"
+	ServerID       = "feidex-send"
+	BearerEnvName  = "FEIDEX_MCP_TOKEN"
+	Protocol       = "2025-03-26"
+	Path           = "/mcp"
+	SessionKeyName = "session_key"
 
-	feidexSendIMFileToolName  = "feishu_send_im_file"
-	feidexSendIMImageToolName = "feishu_send_im_image"
-	feidexSendIMVideoToolName = "feishu_send_im_video"
+	SendIMFileToolName  = "feishu_send_im_file"
+	SendIMImageToolName = "feishu_send_im_image"
+	SendIMVideoToolName = "feishu_send_im_video"
 )
 
-type feidexMCPPublication struct {
+type Publication struct {
 	URL   string
 	Token string
 }
 
-type feidexMCPService struct {
-	app *App
+type FeishuClient interface {
+	ReplyLocalAttachment(context.Context, string, string, bool) error
+	ReplyLocalImage(context.Context, string, string, bool) error
+	ReplyLocalVideo(context.Context, string, string, bool) error
+}
+
+type StateProvider interface {
+	GetSession(string) *state.Session
+	AllSessions() []*state.Session
+	GetSubmission(string) *state.Submission
+}
+
+type StartedTurnItem struct {
+	ThreadID string
+	TurnID   string
+	ItemID   string
+	Type     string
+	ToolName string
+	Raw      map[string]any
+}
+
+type App interface {
+	Feishu() FeishuClient
+	State() StateProvider
+	StartedTurnItems() []StartedTurnItem
+	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
+	ReplyInThreadForSubmission(sub *state.Submission) bool
+}
+
+type Service struct {
+	app App
 
 	mu      sync.Mutex
 	server  *http.Server
@@ -68,13 +97,13 @@ type mcpJSONRPCError struct {
 	Message string `json:"message"`
 }
 
-type feidexMCPToolDefinition struct {
+type toolDefinition struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 }
 
-type feidexMCPToolContext struct {
+type toolContext struct {
 	SessionKey string
 	ThreadID   string
 	TurnID     string
@@ -82,55 +111,31 @@ type feidexMCPToolContext struct {
 	Submission *state.Submission
 }
 
-func startMCPService(a *App, ctx context.Context) error {
-	if a == nil {
-		return nil
-	}
-	if a.mcp != nil {
-		return nil
-	}
-	svc, err := newFeidexMCPService(a)
-	if err != nil {
-		return err
-	}
-	if err := svc.Start(ctx); err != nil {
-		return err
-	}
-	a.mcp = svc
-	publishMCPToCodexClient(a, currentCodexClient(a))
-	return nil
-}
-
-func stopMCPService(a *App, ctx context.Context) error {
-	if a == nil || a.mcp == nil {
-		return nil
-	}
-	svc := a.mcp
-	a.mcp = nil
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return svc.Stop(ctx)
-}
-
-func currentMCPPublication(a *App) feidexMCPPublication {
-	if a == nil || a.mcp == nil {
-		return feidexMCPPublication{}
-	}
-	return a.mcp.Publication()
-}
-
-func newFeidexMCPService(a *App) (*feidexMCPService, error) {
+func NewService(a App) (*Service, error) {
 	token, err := randomToken(24)
 	if err != nil {
 		return nil, err
 	}
-	svc := &feidexMCPService{app: a, token: token}
+	svc := &Service{app: a, token: token}
 	svc.handler = http.HandlerFunc(svc.serveHTTP)
 	return svc, nil
 }
 
-func (s *feidexMCPService) Start(_ context.Context) error {
+func (s *Service) Handler() http.Handler {
+	if s == nil {
+		return nil
+	}
+	return s.handler
+}
+
+func (s *Service) Token() string {
+	if s == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.token)
+}
+
+func (s *Service) Start(_ context.Context) error {
 	if s == nil {
 		return nil
 	}
@@ -141,7 +146,7 @@ func (s *feidexMCPService) Start(_ context.Context) error {
 	server := &http.Server{Handler: s.handler, ReadHeaderTimeout: 5 * time.Second}
 	s.mu.Lock()
 	s.server = server
-	s.url = "http://" + ln.Addr().String() + feidexMCPPath
+	s.url = "http://" + ln.Addr().String() + Path
 	s.mu.Unlock()
 	go func() {
 		_ = server.Serve(ln)
@@ -149,7 +154,7 @@ func (s *feidexMCPService) Start(_ context.Context) error {
 	return nil
 }
 
-func (s *feidexMCPService) Stop(ctx context.Context) error {
+func (s *Service) Stop(ctx context.Context) error {
 	if s == nil {
 		return nil
 	}
@@ -163,19 +168,19 @@ func (s *feidexMCPService) Stop(ctx context.Context) error {
 	return server.Shutdown(ctx)
 }
 
-func (s *feidexMCPService) Publication() feidexMCPPublication {
+func (s *Service) Publication() Publication {
 	if s == nil {
-		return feidexMCPPublication{}
+		return Publication{}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return feidexMCPPublication{
+	return Publication{
 		URL:   strings.TrimSpace(s.url),
 		Token: strings.TrimSpace(s.token),
 	}
 }
 
-func (s *feidexMCPService) serveHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Service) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if s == nil {
 		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
 		return
@@ -211,18 +216,18 @@ func (s *feidexMCPService) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		sessionID, _ = randomToken(12)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Mcp-Protocol-Version", feidexMCPProtocol)
+	w.Header().Set("Mcp-Protocol-Version", Protocol)
 	w.Header().Set("Mcp-Session-Id", sessionID)
 
 	switch strings.TrimSpace(req.Method) {
 	case "initialize":
 		writeMCPJSONResult(w, req.ID, map[string]any{
-			"protocolVersion": feidexMCPProtocol,
+			"protocolVersion": Protocol,
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
 			"serverInfo": map[string]any{
-				"name":    feidexMCPServerID,
+				"name":    ServerID,
 				"version": "dev",
 			},
 		})
@@ -230,10 +235,10 @@ func (s *feidexMCPService) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	case "tools/list":
 		writeMCPJSONResult(w, req.ID, map[string]any{
-			"tools": feidexMCPToolDefinitions(),
+			"tools": toolDefinitions(),
 		})
 	case "tools/call":
-		result, callErr := s.handleToolsCall(req.Params, strings.TrimSpace(r.URL.Query().Get(feidexMCPSessionKeyName)))
+		result, callErr := s.handleToolsCall(req.Params, strings.TrimSpace(r.URL.Query().Get(SessionKeyName)))
 		if callErr != nil {
 			writeMCPJSONResult(w, req.ID, map[string]any{
 				"content": []map[string]any{{
@@ -259,54 +264,57 @@ func (s *feidexMCPService) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type feidexMCPToolError struct {
+type toolError struct {
 	Code      string
 	Message   string
 	Retryable bool
 }
 
-func (s *feidexMCPService) handleToolsCall(raw json.RawMessage, sessionKey string) (map[string]any, *feidexMCPToolError) {
+func (s *Service) handleToolsCall(raw json.RawMessage, sessionKey string) (map[string]any, *toolError) {
 	var params struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
 	}
 	if err := json.Unmarshal(raw, &params); err != nil {
-		return nil, &feidexMCPToolError{Code: "invalid_params", Message: "invalid tools/call params"}
+		return nil, &toolError{Code: "invalid_params", Message: "invalid tools/call params"}
 	}
 	toolName := strings.TrimSpace(params.Name)
 	if toolName == "" {
-		return nil, &feidexMCPToolError{Code: "tool_required", Message: "tool name is required"}
+		return nil, &toolError{Code: "tool_required", Message: "tool name is required"}
 	}
 	if params.Arguments == nil {
 		params.Arguments = map[string]any{}
 	}
 	ctx := s.resolveToolContext(toolName, params.Arguments, sessionKey)
 	if ctx == nil || ctx.Submission == nil {
-		return nil, &feidexMCPToolError{Code: "tool_context_not_found", Message: "could not resolve an active Feishu conversation for this MCP tool call", Retryable: true}
+		return nil, &toolError{Code: "tool_context_not_found", Message: "could not resolve an active Feishu conversation for this MCP tool call", Retryable: true}
 	}
-	path := strings.TrimSpace(stringValue(params.Arguments["path"]))
+	path := strings.TrimSpace(turnitem.StringValue(params.Arguments["path"]))
 	if path == "" {
-		return nil, &feidexMCPToolError{Code: "path_required", Message: "path is required"}
+		return nil, &toolError{Code: "path_required", Message: "path is required"}
 	}
 	if _, err := validateToolLocalFile(path); err != nil {
 		return nil, err
 	}
-	inThread := replyInThreadForSubmission(s.app, ctx.Submission)
+	if s == nil || s.app == nil || s.app.Feishu() == nil {
+		return nil, &toolError{Code: "send_failed", Message: "Feishu sender unavailable", Retryable: true}
+	}
+	inThread := s.app.ReplyInThreadForSubmission(ctx.Submission)
 	switch toolName {
-	case feidexSendIMFileToolName:
-		if err := s.app.feishu.ReplyLocalAttachment(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
-			return nil, &feidexMCPToolError{Code: "send_failed", Message: err.Error(), Retryable: true}
+	case SendIMFileToolName:
+		if err := s.app.Feishu().ReplyLocalAttachment(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
+			return nil, &toolError{Code: "send_failed", Message: err.Error(), Retryable: true}
 		}
-	case feidexSendIMImageToolName:
-		if err := s.app.feishu.ReplyLocalImage(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
-			return nil, &feidexMCPToolError{Code: "send_failed", Message: err.Error(), Retryable: true}
+	case SendIMImageToolName:
+		if err := s.app.Feishu().ReplyLocalImage(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
+			return nil, &toolError{Code: "send_failed", Message: err.Error(), Retryable: true}
 		}
-	case feidexSendIMVideoToolName:
-		if err := s.app.feishu.ReplyLocalVideo(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
-			return nil, &feidexMCPToolError{Code: "send_failed", Message: err.Error(), Retryable: true}
+	case SendIMVideoToolName:
+		if err := s.app.Feishu().ReplyLocalVideo(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
+			return nil, &toolError{Code: "send_failed", Message: err.Error(), Retryable: true}
 		}
 	default:
-		return nil, &feidexMCPToolError{Code: "unknown_tool", Message: "unknown tool"}
+		return nil, &toolError{Code: "unknown_tool", Message: "unknown tool"}
 	}
 	result := map[string]any{
 		"tool":        toolName,
@@ -325,34 +333,24 @@ func (s *feidexMCPService) handleToolsCall(raw json.RawMessage, sessionKey strin
 	}, nil
 }
 
-func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[string]any, sessionKey string) *feidexMCPToolContext {
+func (s *Service) resolveToolContext(toolName string, arguments map[string]any, sessionKey string) *toolContext {
 	if s == nil || s.app == nil {
-		return nil
-	}
-	tracker := newRuntimeStateService(s.app).turnItemTracker()
-	if tracker == nil {
 		return nil
 	}
 	canonicalArgs := canonicalMCPArguments(arguments)
 
-	tracker.Mu.Lock()
-	defer tracker.Mu.Unlock()
-
-	var match *feidexMCPToolContext
+	var match *toolContext
 	requiresSessionKey := false
-	for _, itemState := range tracker.Items {
-		if itemState == nil || itemState.Status != "started" {
-			continue
-		}
-		item := itemState.Started.MergedRaw()
-		itemType := normalizeTurnItemType(firstNonEmpty(stringValue(item["type"]), itemState.Started.Type))
+	for _, itemState := range s.app.StartedTurnItems() {
+		item := turnitem.CloneJSONMap(itemState.Raw)
+		itemType := turnitem.NormalizeTurnItemType(turnitem.FirstNonEmpty(turnitem.StringValue(item["type"]), itemState.Type))
 		switch itemType {
 		case "mcp_tool_call":
 			if !matchesCodexMCPToolCall(item, toolName, canonicalArgs) {
 				continue
 			}
 		case "dynamic_tool_call":
-			if turnitem.ClassifyDynamicTool(strings.TrimSpace(firstNonEmpty(stringValue(item["tool"]), itemState.Started.ToolName))) != turnitem.DynamicToolMCPCategory {
+			if turnitem.ClassifyDynamicTool(strings.TrimSpace(turnitem.FirstNonEmpty(turnitem.StringValue(item["tool"]), itemState.ToolName))) != turnitem.DynamicToolMCPCategory {
 				continue
 			}
 			if !matchesClaudeMCPToolCall(item, toolName, canonicalArgs) {
@@ -365,7 +363,7 @@ func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[str
 		default:
 			continue
 		}
-		foundSessionKey, sub := newSubmissionQueueServiceFromApp(s.app).FindSubmissionByTurn(itemState.ThreadID, itemState.TurnID)
+		foundSessionKey, sub := s.app.FindSubmissionByTurn(itemState.ThreadID, itemState.TurnID)
 		if sub == nil {
 			continue
 		}
@@ -375,7 +373,7 @@ func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[str
 		if match != nil {
 			return nil
 		}
-		match = &feidexMCPToolContext{
+		match = &toolContext{
 			SessionKey: foundSessionKey,
 			ThreadID:   strings.TrimSpace(itemState.ThreadID),
 			TurnID:     strings.TrimSpace(itemState.TurnID),
@@ -395,24 +393,24 @@ func (s *feidexMCPService) resolveToolContext(toolName string, arguments map[str
 	return s.resolveOnlyActiveToolContext()
 }
 
-func (s *feidexMCPService) resolveToolContextFromSession(sessionKey string) *feidexMCPToolContext {
-	if s == nil || s.app == nil || s.app.store == nil {
+func (s *Service) resolveToolContextFromSession(sessionKey string) *toolContext {
+	if s == nil || s.app == nil || s.app.State() == nil {
 		return nil
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
 		return nil
 	}
-	sess := s.app.store.GetSession(sessionKey)
+	sess := s.app.State().GetSession(sessionKey)
 	return s.resolveToolContextFromSessionSnapshot(sess)
 }
 
-func (s *feidexMCPService) resolveOnlyActiveToolContext() *feidexMCPToolContext {
-	if s == nil || s.app == nil || s.app.store == nil {
+func (s *Service) resolveOnlyActiveToolContext() *toolContext {
+	if s == nil || s.app == nil || s.app.State() == nil {
 		return nil
 	}
-	var match *feidexMCPToolContext
-	for _, sess := range s.app.store.AllSessions() {
+	var match *toolContext
+	for _, sess := range s.app.State().AllSessions() {
 		ctx := s.resolveToolContextFromSessionSnapshot(sess)
 		if ctx == nil {
 			continue
@@ -425,27 +423,27 @@ func (s *feidexMCPService) resolveOnlyActiveToolContext() *feidexMCPToolContext 
 	return match
 }
 
-func (s *feidexMCPService) resolveToolContextFromSessionSnapshot(sess *state.Session) *feidexMCPToolContext {
-	if s == nil || s.app == nil || s.app.store == nil || sess == nil {
+func (s *Service) resolveToolContextFromSessionSnapshot(sess *state.Session) *toolContext {
+	if s == nil || s.app == nil || s.app.State() == nil || sess == nil {
 		return nil
 	}
 	sessionctx.EnsureActiveOperations(sess)
-	var match *feidexMCPToolContext
+	var match *toolContext
 	for _, op := range sess.ActiveOperations {
 		submissionID := strings.TrimSpace(op.SubmissionID)
 		if submissionID == "" {
 			continue
 		}
-		sub := s.app.store.GetSubmission(submissionID)
+		sub := s.app.State().GetSubmission(submissionID)
 		if sub == nil || sub.Finalized || state.NormalizeSubmissionStatus(sub.Status) != state.SubmissionStatusRunning {
 			continue
 		}
 		if strings.TrimSpace(sub.TriggerMessageID) == "" {
 			continue
 		}
-		threadID := firstNonEmpty(strings.TrimSpace(op.ThreadID), strings.TrimSpace(sub.ThreadID), strings.TrimSpace(sess.ActiveThreadID))
-		turnID := firstNonEmpty(strings.TrimSpace(op.TurnID), strings.TrimSpace(sub.TurnID), strings.TrimSpace(sess.ActiveTurnID))
-		ctx := &feidexMCPToolContext{
+		threadID := turnitem.FirstNonEmpty(strings.TrimSpace(op.ThreadID), strings.TrimSpace(sub.ThreadID), strings.TrimSpace(sess.ActiveThreadID))
+		turnID := turnitem.FirstNonEmpty(strings.TrimSpace(op.TurnID), strings.TrimSpace(sub.TurnID), strings.TrimSpace(sess.ActiveTurnID))
+		ctx := &toolContext{
 			SessionKey: strings.TrimSpace(sess.Key),
 			ThreadID:   threadID,
 			TurnID:     turnID,
@@ -460,18 +458,18 @@ func (s *feidexMCPService) resolveToolContextFromSessionSnapshot(sess *state.Ses
 }
 
 func matchesCodexMCPToolCall(item map[string]any, toolName, canonicalArgs string) bool {
-	if normalizeMCPToolName(stringValue(item["tool"])) != normalizeMCPToolName(toolName) {
+	if normalizeMCPToolName(turnitem.StringValue(item["tool"])) != normalizeMCPToolName(toolName) {
 		return false
 	}
-	server := normalizeMCPServerName(stringValue(item["server"]))
-	if server != "" && server != normalizeMCPServerName(feidexMCPServerID) {
+	server := normalizeMCPServerName(turnitem.StringValue(item["server"]))
+	if server != "" && server != normalizeMCPServerName(ServerID) {
 		return false
 	}
 	return canonicalMCPArguments(turnitem.ToolCallInput(item)) == canonicalArgs
 }
 
 func matchesClaudeMCPToolCall(item map[string]any, toolName, canonicalArgs string) bool {
-	return normalizeMCPToolName(firstNonEmpty(stringValue(item["tool"]), stringValue(item["toolName"]))) == normalizeMCPToolName(toolName) &&
+	return normalizeMCPToolName(turnitem.FirstNonEmpty(turnitem.StringValue(item["tool"]), turnitem.StringValue(item["toolName"]))) == normalizeMCPToolName(toolName) &&
 		canonicalMCPArguments(turnitem.ToolCallInput(item)) == canonicalArgs
 }
 
@@ -500,36 +498,36 @@ func canonicalMCPArguments(value any) string {
 	return string(raw)
 }
 
-func validateToolLocalFile(path string) (os.FileInfo, *feidexMCPToolError) {
+func validateToolLocalFile(path string) (os.FileInfo, *toolError) {
 	info, err := os.Stat(path)
 	switch {
 	case os.IsNotExist(err):
-		return nil, &feidexMCPToolError{Code: "file_not_found", Message: "path does not exist"}
+		return nil, &toolError{Code: "file_not_found", Message: "path does not exist"}
 	case err != nil:
-		return nil, &feidexMCPToolError{Code: "file_access_failed", Message: err.Error(), Retryable: true}
+		return nil, &toolError{Code: "file_access_failed", Message: err.Error(), Retryable: true}
 	case !info.Mode().IsRegular():
-		return nil, &feidexMCPToolError{Code: "invalid_file_path", Message: "path must point to a regular file"}
+		return nil, &toolError{Code: "invalid_file_path", Message: "path must point to a regular file"}
 	case info.Size() <= 0:
-		return nil, &feidexMCPToolError{Code: "empty_file", Message: "path must point to a non-empty file"}
+		return nil, &toolError{Code: "empty_file", Message: "path must point to a non-empty file"}
 	default:
 		return info, nil
 	}
 }
 
-func feidexMCPToolDefinitions() []feidexMCPToolDefinition {
-	return []feidexMCPToolDefinition{
+func toolDefinitions() []toolDefinition {
+	return []toolDefinition{
 		{
-			Name:        feidexSendIMFileToolName,
+			Name:        SendIMFileToolName,
 			Description: "Send a local file to the Feishu conversation that started the current turn as a downloadable file attachment.",
 			InputSchema: singlePathToolSchema("Existing local file path to send as a Feishu file attachment"),
 		},
 		{
-			Name:        feidexSendIMImageToolName,
+			Name:        SendIMImageToolName,
 			Description: "Send a local image to the Feishu conversation that started the current turn as an inline image message.",
 			InputSchema: singlePathToolSchema("Existing local image path to send as a Feishu inline image"),
 		},
 		{
-			Name:        feidexSendIMVideoToolName,
+			Name:        SendIMVideoToolName,
 			Description: "Send a local .mp4 file to the Feishu conversation that started the current turn as an inline video message.",
 			InputSchema: singlePathToolSchema("Existing local .mp4 path to send as a Feishu inline video"),
 		},
@@ -594,23 +592,22 @@ func randomToken(n int) (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func prepareClaudeMCPConfig(a *App, sessionKey string) (string, []string, func(), error) {
-	pub := currentMCPPublication(a)
+func PrepareClaudeConfig(dataDir string, pub Publication, sessionKey string) (string, []string, func(), error) {
 	if strings.TrimSpace(pub.URL) == "" || strings.TrimSpace(pub.Token) == "" {
 		return "", nil, nil, nil
 	}
-	configURL, err := appendQueryParam(pub.URL, feidexMCPSessionKeyName, sessionKey)
+	configURL, err := appendQueryParam(pub.URL, SessionKeyName, sessionKey)
 	if err != nil {
 		return "", nil, nil, err
 	}
-	path := filepath.Join(a.cfg.DataDir, "runtime", "claude-mcp-"+hashedSessionKey(sessionKey)+".json")
+	path := filepath.Join(strings.TrimSpace(dataDir), "runtime", "claude-mcp-"+hashedSessionKey(sessionKey)+".json")
 	payload := map[string]any{
 		"mcpServers": map[string]any{
-			feidexMCPServerID: map[string]any{
+			ServerID: map[string]any{
 				"type": "http",
 				"url":  configURL,
 				"headers": map[string]string{
-					"Authorization": "Bearer ${" + feidexMCPBearerEnvName + "}",
+					"Authorization": "Bearer ${" + BearerEnvName + "}",
 				},
 			},
 		},
@@ -621,7 +618,7 @@ func prepareClaudeMCPConfig(a *App, sessionKey string) (string, []string, func()
 	cleanup := func() {
 		_ = os.Remove(path)
 	}
-	return path, []string{feidexMCPBearerEnvName + "=" + strings.TrimSpace(pub.Token)}, cleanup, nil
+	return path, []string{BearerEnvName + "=" + strings.TrimSpace(pub.Token)}, cleanup, nil
 }
 
 func appendQueryParam(rawURL, key, value string) (string, error) {

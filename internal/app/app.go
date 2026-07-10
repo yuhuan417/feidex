@@ -11,6 +11,7 @@ import (
 
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/backend"
+	"feidex/internal/app/goalcmd"
 	"feidex/internal/app/serverrequest"
 	appskillscmd "feidex/internal/app/skillscmd"
 	"feidex/internal/app/turnbinding"
@@ -69,7 +70,7 @@ type appTrackers struct {
 	finalCardPatches    *finalCardPatchTracker
 	pendingSkills       *appskillscmd.PendingSkillTracker
 	maintenanceTrackers backend.TrackerMap
-	goals               *goalTracker
+	goals               *goalcmd.Tracker
 }
 
 func New(cfg *config.Config, cfgPath string) (*App, error) {

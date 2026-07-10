@@ -88,7 +88,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.plan" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuPlan(action, actionSessionKey(action))
+			return completeMenuPlanAsync(s.app, action, actionSessionKey(action))
 		},
 	}
 	bindings["goal"] = featureBinding{
@@ -105,24 +105,37 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
-			goalSvc := newGoalService(s.app)
 			switch actionName {
 			case "menu.goal":
-				return goalSvc.CompleteMenuGoal(action, sessionKey)
+				return completeMenuGoalAsync(s.app, action, sessionKey)
 			case "goal.pause":
-				return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusPaused)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusPaused)
+				})
 			case "goal.resume":
-				return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusActive)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusActive)
+				})
 			case "goal.clear":
-				return goalSvc.CompleteGoalClearAction(action)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在清除 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalClearAction(action)
+				})
 			case "goal.edit":
-				return goalSvc.CompleteGoalEditAction(action)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在打开 goal 编辑", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalEditAction(action)
+				})
 			case "goal.replace.confirm":
-				return goalSvc.CompleteGoalReplaceConfirm(action)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在替换 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalReplaceConfirm(action)
+				})
 			case "goal.replace.cancel":
-				return goalSvc.CompleteGoalReplaceCancel(action)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保留当前 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalReplaceCancel(action)
+				})
 			case "goal.edit.submit":
-				return goalSvc.CompleteGoalEditSubmit(action)
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保存 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalEditSubmit(action)
+				})
 			default:
 				return nil, nil
 			}

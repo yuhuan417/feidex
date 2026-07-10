@@ -83,6 +83,30 @@ Allowed dependencies: `review`, lower `internal/app/*` packages plus `config`, `
 
 Must not: import `internal/app`, own generic submission-queue policy, or bypass `review` package target helpers.
 
+### `internal/app/goalcmd`
+
+Responsibility: `/goal` command behavior, goal cards/forms, thread-goal RPC calls, in-memory goal tracker, and active-goal continuation binding policy behind root lifecycle hooks.
+
+Allowed dependencies: lower `internal/app/*` packages plus `state`, `feishu`, `codexrpc`, and Go standard library.
+
+Must not: import `internal/app`, bind Feishu root cards without the injected lifecycle callbacks, or weaken the state-machine audit rules for active goal continuations.
+
+### `internal/app/mcpbridge`
+
+Responsibility: the local Feidex MCP HTTP bridge, tool-call context resolution, Feishu local file/image/video send tool definitions, and Claude MCP config file generation.
+
+Allowed dependencies: lower `internal/app/*` packages plus `state` and Go standard library.
+
+Must not: import `internal/app`, read root runtime trackers directly, or decide frontend/backend publication policy outside injected dependencies.
+
+### `internal/app/planmode`
+
+Responsibility: Codex `/plan` collaboration-mode configuration, title decoration helpers, plan-exit confirmation cards, and post-plan implementation/fresh-thread flow behind root lifecycle hooks.
+
+Allowed dependencies: lower `internal/app/*` packages plus `config`, `state`, `feishu`, `codexrpc`, and Go standard library.
+
+Must not: import `internal/app`, own generic command/action registries, or change plan item / turn lifecycle semantics without updating the state-machine audit.
+
 ### `internal/app/upgradecmd`
 
 Responsibility: upgrade command orchestration and upgrade card flows, including local-binary upgrade picker / staging logic.
@@ -154,7 +178,7 @@ Every remaining root `package app` file should fit exactly one of these buckets:
 - bootstrap / composition: `app.go`, `service.go`, `deps.go`, `accessors.go`, `app_deps.go`, `health.go`
 - routing / entrypoints: `feishu_event_router.go`, `notifications.go`, `commands.go`, `command_registry.go`, `menu_*.go`, `action_registry*.go`, `feature_registry_bindings*.go`
 - protocol-sensitive orchestration: `submission_queue.go`, `submission_workflow.go`, `submission_start_guard.go`, `turn_lifecycle.go`, `turn_stream.go`, `turn_binding.go`, `server_request_state.go`, `pending_inputs.go`, `claude_runtime.go`, `codex_*recovery.go`, `compact.go`
-- minimal glue: `*_bindings.go`, `backend_selection.go`, `backend_runtime*.go`, `review_bindings.go`, `workspacecmd_bindings*.go`, `maintenance_bindings.go`
+- minimal glue: `*_bindings.go`, `backend_selection.go`, `backend_runtime*.go`, `review_bindings.go`, `workspacecmd_bindings*.go`, `maintenance_bindings.go`, `goal_bindings.go`, `mcp_bindings.go`, `plan_mode_bindings.go`
 
 Files that are only alias-only placeholders, comment-only migration stubs, or dead compatibility shims do not belong in root `app`.
 
@@ -175,3 +199,4 @@ These areas still have acceptable root glue, but they are the first places to ke
 - review / history / debug / upgrade bindings
 - backend runtime / maintenance / recovery glue
 - oversized binding files such as `submission_bindings.go`, `serverrequest_bindings.go`, and `convbackend_bindings.go`
+- goal / MCP / plan-mode bindings, if they start accumulating owner-local rendering or protocol-neutral helpers

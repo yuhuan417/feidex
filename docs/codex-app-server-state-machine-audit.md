@@ -22,7 +22,11 @@
 - `internal/app/pendingforms/elicitation_form.go`
 - `internal/app/approval/permission_summary.go`
 - `internal/app/compact.go`
-- `internal/app/goal.go`
+- `internal/app/goal_bindings.go`
+- `internal/app/goalcmd/service.go`
+- `internal/app/plan_mode_bindings.go`
+- `internal/app/planmode/service.go`
+- `internal/app/planmode/exit.go`
 - `internal/app/skillscmd/service.go`
 - `internal/app/skills/skills.go`
 - `internal/codexrpc/goal.go`
@@ -180,7 +184,7 @@
   - `internal/app/codex_event_router.go` 消费 `turn/started` 和 `turn/completed`。
   - `internal/app/codex_event_router.go` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
   - `internal/app/turnitem/payload.go` 按 completed item 渲染最终内容。
-  - `internal/app/plan_mode.go` 会在 `/plan` 开启时为 `collaborationMode.mode=plan` 明确带上 model；reasoning effort 优先取本地 `codex.plan_reasoning_effort`，否则透传 app-server 的 plan preset，若 preset 未提供则保持为空。
+  - `internal/app/planmode/service.go` 通过 `internal/app/plan_mode_bindings.go` 接入 `/plan`，开启时为 `collaborationMode.mode=plan` 明确带上 model；reasoning effort 优先取本地 `codex.plan_reasoning_effort`，否则透传 app-server 的 plan preset，若 preset 未提供则保持为空。
   - `/plan off` 或 plan-exit 的当前 thread 实现路径会把本地 mode 写回 `collaborationMode.mode=default`，并带上普通 `codex.reasoning_effort`；因为 `collaborationMode` 会覆盖 `turn/start` 顶层 model/effort，default mode 不能丢掉已配置的普通推理强度。
   - `internal/app/turnstream/service.go` / `internal/app/server_request_delivery_scaffold.go` 维护 Quiet Mode `工作中` 卡的复用边界: 只有只包含 reasoning placeholder (`思考中...`) 的 `工作中` 卡可以被第一条实质 turn 内容复用；一旦 `工作中` 卡已经包含 command/file/search/tool progress，它自身就是实质内容，不得再被审批、final 或 terminal output patch 覆盖。
   - 对同一 turn，approval、tool user input、MCP elicitation、agent message、plan、final output、terminal status 都属于实质内容。若 approval 等 server request 复用了 reasoning-only `工作中` 卡，后续 final output 必须新发回复卡，不能继续 patch 这张已变成审批卡的消息。
@@ -613,7 +617,7 @@
   - 来源: `/home/yuhuan/codex/codex-rs/app-server/README.md`、`/home/yuhuan/codex/codex-rs/app-server-protocol/src/protocol/v2/thread.rs`
 - 我们当前实现:
   - `internal/codexrpc/goal.go` 定义 `ThreadGoal`、goal 请求/响应/通知类型，并用 `NullableInt64` 表达 optional nullable `tokenBudget`。
-  - `internal/app/goal.go` 通过 `/goal` 暴露 get/set/pause/resume/clear/edit；`/goal <objective>` 不解析 `--tokens`，整段尾部文本按 objective 发送；无参数 `/goal` 在没有当前 goal 时渲染 objective 输入表单，提交后创建 active goal。
+  - `internal/app/goalcmd/service.go` 通过 `internal/app/goal_bindings.go` 接入 `/goal`，暴露 get/set/pause/resume/clear/edit；`/goal <objective>` 不解析 `--tokens`，整段尾部文本按 objective 发送；无参数 `/goal` 在没有当前 goal 时渲染 objective 输入表单，提交后创建 active goal。
   - `internal/app/features/data.go` 把 `任务目标` 加入常用工具菜单，并保留直接 `/goal` 命令入口；Claude backend 隐藏并 passthrough。
   - `internal/app/codex_event_router.go` / `internal/app/backend/codex_event_router.go` 消费 `thread/goal/updated` 和 `thread/goal/cleared`，更新 frontend 内存 tracker。
   - `internal/app/turnlifecycle/service.go` 在普通 pending submission 和 standalone compact 都未绑定时，尝试用 active goal tracker 将 orphan `turn/started` 合成为本地 `kind=goal` submission，并绑定 `threadId + turnId`，后续 item/turn 仍沿用标准 turn 生命周期。

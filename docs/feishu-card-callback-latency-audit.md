@@ -17,6 +17,11 @@
 - `internal/app/action_registry_pending.go`
 - `internal/app/feature_registry_bindings_tools.go`
 - `internal/app/feature_registry_bindings_thread_workspace.go`
+- `internal/app/goal_bindings.go`
+- `internal/app/goalcmd/service.go`
+- `internal/app/plan_mode_bindings.go`
+- `internal/app/planmode/service.go`
+- `internal/app/planmode/exit.go`
 - `internal/app/reviewcmd/async_menu.go`
 - `internal/app/reviewcmd/service.go`
 - `internal/app/review/git.go`
@@ -121,12 +126,15 @@
 | `menu.upgrade` | 查远端 release | 先返回 preparing card，后台执行 |
 | `codex_upgrade.check` | 探测 `codex update` 自升级命令 | 先返回 preparing card，后台执行 |
 | `codex_upgrade.prepare` | 同上 | 先返回 preparing card，后台执行 |
+| `menu.plan` | 可能调用 Codex `collaborationMode/list` / `model/list` | 先返回 toast，后台执行原 `/plan` 命令并 patch 原卡或发送文本结果 |
+| `menu.goal` | 调用 Codex `thread/goal/get` | 先返回 toast，后台执行原 `/goal` 命令并 patch 原卡或发送文本结果 |
+| `goal.pause` / `goal.resume` / `goal.clear` / `goal.edit` / `goal.replace.*` / `goal.edit.submit` | 调用 Codex `thread/goal/get|set|clear` | 先返回 toast，后台执行原 action 逻辑；若原结果是 card，则 patch 原卡，若原结果是 text/toast，则发送文本结果 |
 | `workspace.clone.submit` | 后台 `git clone` | 回调只做 preflight 和状态切换 |
 | `path_picker.confirm` `download_file` 分支 | 真实飞书 `ShareLocalFile` | 回调先返回，后台分享并 patch card |
 
 已覆盖的关键 async guard:
 
-- `internal/app/card_action_async_test.go` 覆盖 `upgrade.dev`、`menu.review.uncommitted`、`menu.review.base`、`review.base.select`、`review.form.submit`、Claude `menu.interrupt`。
+- `internal/app/card_action_async_test.go` 覆盖 `upgrade.dev`、`menu.review.uncommitted`、`menu.review.base`、`review.base.select`、`review.form.submit`、`menu.plan`、`goal.*`、Claude `menu.interrupt`。
 - `internal/app/compact_more_test.go` 覆盖 compact callback 先返回 preparing card。
 
 ### 轻路径/排除
@@ -252,6 +260,7 @@
 - 某个动作是否从同步执行改成了异步包装
 - Claude 某类 control-response 是否从本地 pending 投递改成了显式 CLI 往返
 - `review`、`upgrade`、`download`、`clone`、`compact`、`interrupt` 的执行边界发生变化
+- `goal`、`plan` 这类 Codex RPC-backed card action 是否仍保持 fast toast ack + async patch/text 结果
 
 ## 最终收口
 
@@ -272,6 +281,9 @@
   - `menu.upgrade`
   - `codex_upgrade.check`
   - `codex_upgrade.prepare`
+  - `menu.plan`
+  - `menu.goal`
+  - `goal.*`
 - Claude:
   - 上述通用项全部继承
   - `menu.interrupt`

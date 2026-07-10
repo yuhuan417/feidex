@@ -2,17 +2,20 @@ package app
 
 import (
 	"context"
-	appreview "feidex/internal/app/review"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	appreview "feidex/internal/app/review"
 	"feidex/internal/codexrpc"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func waitForPatchedCard(t *testing.T, ff *fakeFeishuClient) map[string]any {
@@ -26,6 +29,136 @@ func waitForPatchedCard(t *testing.T, ff *fakeFeishuClient) map[string]any {
 		t.Fatal("expected asynchronous card patch")
 	}
 	return patchedCards[len(patchedCards)-1]
+}
+
+func callActionWithTimeout(t *testing.T, fn func() (*callback.CardActionTriggerResponse, error)) (*callback.CardActionTriggerResponse, error) {
+	t.Helper()
+	type result struct {
+		resp *callback.CardActionTriggerResponse
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		resp, err := fn()
+		done <- result{resp: resp, err: err}
+	}()
+	select {
+	case res := <-done:
+		return res.resp, res.err
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("card action did not return before background work completed")
+		return nil, nil
+	}
+}
+
+func TestCompleteMenuPlanReturnsToastOnlyAndPatchesAsync(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.cfg.Codex.ExperimentalAPI = true
+	a.cfg.Codex.Model = "gpt-test"
+	msg := &feishu.InboundMessage{MessageID: "msg-plan", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := seedGoalTestSession(t, a, msg, "thread-1")
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var closeStarted sync.Once
+	modePlan := "plan"
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method != "collaborationMode/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		closeStarted.Do(func() { close(started) })
+		<-release
+		out.(*codexrpc.CollaborationModeListResponse).Data = []codexrpc.CollaborationModeMask{{
+			Name: "Plan",
+			Mode: &modePlan,
+		}}
+		return nil
+	}
+
+	resp, err := callActionWithTimeout(t, func() (*callback.CardActionTriggerResponse, error) {
+		return completeMenuPlanAsync(a, &feishu.CardAction{
+			UserID:      msg.UserID,
+			ChatID:      msg.ChatID,
+			MessageID:   msg.MessageID,
+			ActionValue: map[string]any{"session_key": sessionKey},
+		}, sessionKey)
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" || resp.Card != nil {
+		t.Fatalf("completeMenuPlanAsync() = %#v, %v; want info toast without card", resp, err)
+	}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background plan RPC did not start")
+	}
+	if patched := ff.patchedCardsSnapshot(); len(patched) != 0 {
+		t.Fatalf("patched cards before plan RPC release = %+v, want none", patched)
+	}
+	close(release)
+
+	_ = waitForPatchedCard(t, ff)
+	sess := a.State().Session(sessionKey)
+	if mode := normalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode); mode == nil || mode.Mode != "plan" {
+		t.Fatalf("session collaboration mode = %+v, want plan", sess.ActiveThreadCollaborationMode)
+	}
+}
+
+func TestCompleteGoalActionReturnsToastOnlyAndPatchesAsync(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "msg-goal", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := seedGoalTestSession(t, a, msg, "thread-1")
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var closeStarted sync.Once
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/goal/set" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		closeStarted.Do(func() { close(started) })
+		<-release
+		p := params.(codexrpc.ThreadGoalSetParams)
+		status := codexrpc.ThreadGoalStatusPaused
+		if p.Status != nil {
+			status = *p.Status
+		}
+		out.(*codexrpc.ThreadGoalSetResponse).Goal = testThreadGoal(p.ThreadID, "keep going", status)
+		return nil
+	}
+
+	resp, err := callActionWithTimeout(t, func() (*callback.CardActionTriggerResponse, error) {
+		return completeGoalRenderedActionAsync(a, &feishu.CardAction{
+			UserID:      msg.UserID,
+			ChatID:      msg.ChatID,
+			MessageID:   msg.MessageID,
+			ActionValue: map[string]any{"session_key": sessionKey, "thread_id": "thread-1"},
+		}, sessionKey, "正在更新 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+			return goalSvc.CompleteGoalStatusAction(&feishu.CardAction{
+				UserID:      msg.UserID,
+				ChatID:      msg.ChatID,
+				MessageID:   msg.MessageID,
+				ActionValue: map[string]any{"session_key": sessionKey, "thread_id": "thread-1"},
+			}, codexrpc.ThreadGoalStatusPaused)
+		})
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" || resp.Card != nil {
+		t.Fatalf("completeGoalRenderedActionAsync() = %#v, %v; want info toast without card", resp, err)
+	}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background goal RPC did not start")
+	}
+	if patched := ff.patchedCardsSnapshot(); len(patched) != 0 {
+		t.Fatalf("patched cards before goal RPC release = %+v, want none", patched)
+	}
+	close(release)
+
+	patched := waitForPatchedCard(t, ff)
+	body := cardMarkdownContent(t, patched)
+	if !strings.Contains(body, "paused") || !strings.Contains(body, "keep going") {
+		t.Fatalf("patched goal body = %q, want paused goal card", body)
+	}
 }
 
 func TestCompleteUpgradeDevReturnsPreparingCardAndPatchesAsync(t *testing.T) {

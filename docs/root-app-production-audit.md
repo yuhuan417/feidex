@@ -6,8 +6,8 @@
 
 ## 快照
 
-- root `internal/app` 当前有 `147` 个非 test Go 文件，共 `16,523` 行。
-- `internal/app` 当前有 `59` 个直接子包。
+- root `internal/app` 当前有 `146` 个非 test Go 文件，共 `14,246` 行。
+- `internal/app` 当前有 `62` 个直接子包。
 - root 仍然非空是刻意设计：frontend-scoped lifecycle、Feishu 入口和 Codex app-server 协议敏感编排仍由 root 持有。
 
 ## 允许保留在 root 的 4 类文件
@@ -59,10 +59,6 @@
 - `turn_binding.go`
 - `server_request_state.go`
 - `pending_inputs.go`
-- `goal.go`
-- `mcp_service.go`
-- `plan_mode.go`
-- `codex_plan_mode_exit.go`
 - `claude_runtime.go`
 - `codex_turn_recovery.go`
 - `codex_runtime_recovery.go`
@@ -86,6 +82,9 @@
 - `maintenance_bindings.go`
 - `finalcardpatch_bindings.go`
 - `replycontinuation_bindings.go`
+- `goal_bindings.go`
+- `mcp_bindings.go`
+- `plan_mode_bindings.go`
 
 保留原因:
 
@@ -97,19 +96,17 @@
 
 截至 2026-07-10，行数最多的一批 root 生产文件是:
 
-- `goal.go` — 1097 行
-- `mcp_service.go` — 670 行
-- `codex_plan_mode_exit.go` — 602 行
-- `plan_mode.go` — 534 行
-- `app.go` — 335 行
+- `app.go` — 336 行
 - `submission_bindings.go` — 313 行
 - `claude_upgrade_runtime.go` — 299 行
 - `serverrequest_bindings.go` — 261 行
-- `feature_registry_bindings_tools.go` — 245 行
+- `feature_registry_bindings_tools.go` — 258 行
+- `plan_mode_bindings.go` — 257 行
 - `convbackend_bindings.go` — 229 行
 - `menu_actions.go` — 227 行
 - `codex_upgrade_runtime.go` — 222 行
 - `feature_registry_bindings_thread_workspace.go` — 216 行
+- `goal_bindings.go` — 209 行
 - `claude_support.go` — 197 行
 - `feishu_event_router.go` — 193 行
 - `feature_registry_bindings.go` — 190 行
@@ -127,7 +124,7 @@
 - workspace / path-picker: owner-local validation、rendering、flow helper 继续压到 `workspacecmd`、`workspace`、`pathpick`
 - upgrade / review / history / debug: 纯 command / form / render helper 优先压到 `upgradecmd`、`reviewcmd`、`historycmd`、`debugviewcmd`
 - backend runtime / maintenance / recovery: owner-local backend 逻辑优先放到 `backend`、`convbackend`、`clauderuntime`、`codexruntime`、`maintenance`
-- goal / MCP / plan-mode exit: 若继续增长，优先抽出 owner-local validation、rendering 和 protocol-neutral helper，root 只保留 frontend-scoped lifecycle 与 Codex app-server 绑定点
+- goal / MCP / plan-mode: owner 逻辑已在 `goalcmd`、`mcpbridge`、`planmode`，root bindings 若继续增长，必须优先把逻辑压回 owner package
 - 大型 binding 文件: 如果 binding 文件开始吸收新的业务决策，而不是保持薄委托，就视为结构回退
 
 ## Guardrails

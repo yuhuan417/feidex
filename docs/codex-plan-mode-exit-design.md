@@ -354,7 +354,7 @@ turn stream / lifecycle:
 - `internal/app/action_registry_pending.go`
 - `internal/app/serverrequest_bindings.go`
 - `internal/app/card_action_async.go`
-- 新增一个 Codex plan-mode 专用文件，例如 `internal/app/codex_plan_mode_exit.go`
+- `internal/app/planmode/exit.go` 和 root `internal/app/plan_mode_bindings.go`
 
 thread / submission 调度:
 
