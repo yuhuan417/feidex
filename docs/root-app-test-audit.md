@@ -1,12 +1,12 @@
 # Root `internal/app` 测试现状
 
-更新时间: 2026-04-29
+更新时间: 2026-07-10
 
 这份文档记录 root `internal/app` 测试的当前保留理由，不再沿用历史 Phase 叙述。目标很简单：说明为什么这些测试还在 root，以及今后什么测试不应该再回到 root。
 
 ## 快照
 
-- root `internal/app` 当前保留 `84` 个测试文件。
+- root `internal/app` 当前保留 `89` 个测试文件，共 `27,405` 行。
 - root 测试仍然是“少量必须留在组合根的测试”，而不是默认的 feature-local 单元测试落点。
 - owner-local 纯测试已经继续下沉到 `submission`、`serverrequest`、`delivery`、`pathpick`、`workspacecmd`、`servicetiercmd`、`features`、`attachments`、`cards`、`usageview`、`turnitem`、`turn` 等子包。
 
@@ -26,6 +26,7 @@
 - `frontend_idle_test.go`
 - `inbound_deduper_test.go`
 - `service_more_test.go`
+- `actions_dispatch_more_test.go`
 
 ### 2. Registry / Direct-Access Contract Tests
 
@@ -65,6 +66,8 @@
 - `history_more_test.go`
 - `claude_core_test.go`
 - `skills_test.go`
+- `mcp_service_test.go`
+- `plan_mode_test.go`
 
 ### 4. State-Machine Guard Tests
 
@@ -84,6 +87,8 @@
 - `submission_queue_claude_test.go`
 - `steer_more_test.go`
 - `turn_binding_test.go`
+- `goal_test.go`
+- `codex_plan_mode_exit_test.go`
 
 ## root 中剩余的测试辅助文件
 

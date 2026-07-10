@@ -1,6 +1,6 @@
 # Codex App Server 状态机审计
 
-审计时间: 2026-04-16
+审计时间: 2026-07-10
 
 官方来源:
 - `https://developers.openai.com/codex/app-server`
@@ -8,18 +8,25 @@
 本地对照来源:
 - `internal/codexrpc/client.go`
 - `internal/app/codex_event_router.go`
+- `internal/app/backend/codex_event_router.go`
 - `internal/app/app.go`
 - `internal/app/submission_queue.go`
 - `internal/app/turn_lifecycle.go`
-- `internal/app/approval_actions.go`
 - `internal/app/approval_summaries.go`
+- `internal/app/serverrequest/approval.go`
+- `internal/app/serverrequest/user_input.go`
+- `internal/app/serverrequest/elicitation.go`
+- `internal/app/serverrequest/adapter.go`
 - `internal/app/tool_user_input_forms.go`
-- `internal/app/user_input_actions.go`
-- `internal/app/pending_forms.go`
-- `internal/app/elicitation_forms.go`
+- `internal/app/submission/pending_forms.go`
+- `internal/app/pendingforms/elicitation_form.go`
+- `internal/app/approval/permission_summary.go`
 - `internal/app/compact.go`
 - `internal/app/goal.go`
+- `internal/app/skillscmd/service.go`
+- `internal/app/skills/skills.go`
 - `internal/codexrpc/goal.go`
+- `internal/codexrpc/skills.go`
 - `tmp/appserver-schema/`
 
 ## 审计口径
@@ -93,6 +100,7 @@
 | `SM-14` | `review/start` payload、review item 生命周期、final 渲染、持久化历史 | `internal/app/review_critical_test.go`、`internal/app/review_test.go`、`internal/app/protocol_business_logic_test.go`、`internal/codexrpc/integration_live_review_test.go` |
 | `SM-22` | permissions approval 的 payload、reply、resolved 恢复契约 | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go`、`internal/app/app_more_test.go` |
 | `SM-23` | MCP elicitation 的 url/form pending、reply、resolved 恢复契约 | `internal/app/state_machine_contracts_test.go`、`internal/app/notifications_branches_more_test.go`、`internal/app/app_more_test.go`、`internal/app/server_request_reply_error_test.go` |
+| `SM-24` | skills/list payload、forceReload、pending/explicit skill input resolution | `internal/app/skills_test.go`、`internal/codexrpc/skills_test.go` |
 | `SM-25` | thread goal 的 set/get/clear 请求、goal 通知缓存，以及 active goal 产生的 orphan turn 绑定 | `internal/app/goal_test.go`、`internal/codexrpc/goal_test.go` |
 
 ## 逐项审计
@@ -106,7 +114,7 @@
   - 协议节点: `initialize -> initialized`
   - 来源: OpenAI 官方页面 `Initialization`
 - 我们当前实现:
-  - `internal/codexrpc/client.go:89-123` 在 transport 启动后立即发送 `initialize`，收到响应后立刻发送 `initialized`。
+  - `internal/codexrpc/client.go` 在 transport 启动后立即发送 `initialize`，收到响应后立刻发送 `initialized`。
 - 差异点:
   - 无。
 - 修改建议:
@@ -122,7 +130,7 @@
   - 协议节点: `initialize.params.capabilities.experimentalApi`、`initialize.params.capabilities.optOutNotificationMethods`
   - 来源: OpenAI 官方页面 `Initialization`
 - 我们当前实现:
-  - `internal/codexrpc/client.go:113-119` 会在 `initialize` 的 `capabilities` 中声明 `experimentalApi` 与 `optOutNotificationMethods`。
+  - `internal/codexrpc/client.go` 会在 `initialize` 的 `capabilities` 中声明 `experimentalApi` 与 `optOutNotificationMethods`。
 - 差异点:
   - 无。
 - 修改建议:
@@ -139,11 +147,11 @@
   - 协议节点: `thread/start|thread/resume|thread/fork -> thread/started -> thread lifecycle notifications...`
   - 来源: OpenAI 官方页面 `Lifecycle overview`, `Thread methods`, `Notifications`
 - 我们当前实现:
-  - `internal/app/submission_queue.go:193-225` 发 `thread/start`。
-  - `internal/app/thread_feature_actions.go:132-156` 发 `thread/resume`。
-  - `internal/app/fork.go:57-90` 发 `thread/fork`。
+  - `internal/app/submission_queue.go` 发 `thread/start`。
+  - `internal/app/thread_feature_actions.go` 发 `thread/resume`。
+  - `internal/app/fork.go` 发 `thread/fork`。
   - 上述三条主链路都直接使用 RPC response 中返回的 thread 信息更新本地 session。
-  - `internal/app/codex_event_router.go:28-133` 没有 `thread/started`、`thread/archived`、`thread/unarchived`、`thread/closed`、`thread/status/changed` 的处理分支。
+  - `internal/app/codex_event_router.go` 没有 `thread/started`、`thread/archived`、`thread/unarchived`、`thread/closed`、`thread/status/changed` 的处理分支。
 - 差异点:
   - thread bootstrap 主链路可用，本地 thread 上下文由请求响应直接驱动，而不是等待后续 `thread/started` 通知。
   - thread 生命周期通知整体未接入，但当前场景也不要求做跨客户端 thread 状态同步。
@@ -163,21 +171,21 @@
   - 协议节点: `turn/start -> turn/started -> item/started -> item/.../delta* -> item/completed -> turn/completed`
   - 来源: OpenAI 官方页面 `Lifecycle overview`, `Turn methods`, `Notifications`
 - 我们当前实现:
-  - `internal/app/app.go:177-221` 发送 `turn/start`。
-  - `internal/app/submission_queue.go:248-305` 和 `internal/app/turn_lifecycle.go:10-122` 会处理返回的 `turn.id` 以及 `turn/started`。
+  - `internal/app/app.go` 发送 `turn/start`。
+  - `internal/app/submission_queue.go` 和 `internal/app/turn_lifecycle.go` 会处理返回的 `turn.id` 以及 `turn/started`。
   - `internal/app/codex_event_router.go` 现在同时消费 `item/started` 与 `item/completed`。
   - `internal/app/backend/codex_event_router.go` 额外消费 `item/mcpToolCall/progress`，并把它视为已 started item 的 in-flight 更新，而不是独立终态。
   - `internal/app/turn_item_state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
-  - `internal/app/turnitem/payload.go:30-36` 会把 `item(type=plan)` 当成普通 completed item 渲染成计划文本；这条线属于 plan mode item 生命周期。
-  - `internal/app/codex_event_router.go:57-87` 消费 `turn/started` 和 `turn/completed`。
-  - `internal/app/codex_event_router.go:88-97` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
-  - `internal/app/turn_item_payload.go:21-67` 按 completed item 渲染最终内容。
+  - `internal/app/turnitem/payload.go` 会把 `item(type=plan)` 当成普通 completed item 渲染成计划文本；这条线属于 plan mode item 生命周期。
+  - `internal/app/codex_event_router.go` 消费 `turn/started` 和 `turn/completed`。
+  - `internal/app/codex_event_router.go` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
+  - `internal/app/turnitem/payload.go` 按 completed item 渲染最终内容。
   - `internal/app/plan_mode.go` 会在 `/plan` 开启时为 `collaborationMode.mode=plan` 明确带上 model；reasoning effort 优先取本地 `codex.plan_reasoning_effort`，否则透传 app-server 的 plan preset，若 preset 未提供则保持为空。
   - `/plan off` 或 plan-exit 的当前 thread 实现路径会把本地 mode 写回 `collaborationMode.mode=default`，并带上普通 `codex.reasoning_effort`；因为 `collaborationMode` 会覆盖 `turn/start` 顶层 model/effort，default mode 不能丢掉已配置的普通推理强度。
   - `internal/app/turnstream/service.go` / `internal/app/server_request_delivery_scaffold.go` 维护 Quiet Mode `工作中` 卡的复用边界: 只有只包含 reasoning placeholder (`思考中...`) 的 `工作中` 卡可以被第一条实质 turn 内容复用；一旦 `工作中` 卡已经包含 command/file/search/tool progress，它自身就是实质内容，不得再被审批、final 或 terminal output patch 覆盖。
   - 对同一 turn，approval、tool user input、MCP elicitation、agent message、plan、final output、terminal status 都属于实质内容。若 approval 等 server request 复用了 reasoning-only `工作中` 卡，后续 final output 必须新发回复卡，不能继续 patch 这张已变成审批卡的消息。
   - 当本地已经看到了 final output，但后续缺失 `turn/completed`、导致 session 卡在 in-flight 时，`internal/app/codex_turn_recovery.go` 会在下一次 `enqueue` 或显式 `/stop` 时，通过 `thread/read(includeTurns=true)` 对账该 `turnId` 的服务端终态；只有确认 turn 已进入 `completed|failed|interrupted` 后，才复用现有 `finishTurn` 收口本地状态。
-  - `internal/codexrpc/client.go:113-125` 通过 `optOutNotificationMethods` 明确退订当前不接入的 item delta 通知。
+  - `internal/codexrpc/client.go` 通过 `optOutNotificationMethods` 明确退订当前不接入的 item delta 通知。
 - 差异点:
   - `item/agentMessage/delta`、`item/plan/delta`、`item/commandExecution/outputDelta`、`item/fileChange/outputDelta` 等流式通知被明确视为非目标能力，并通过 opt-out 退订。
   - `item/started` 已经接入，因此 tool approval / file change 这类需要前置 item 上下文的流程，已经不再只依赖 completed item。
@@ -199,8 +207,8 @@
   - 协议节点: `turn/steer(expectedTurnId=...) -> same turn lifecycle`
   - 来源: OpenAI 官方页面 `Turn methods`
 - 我们当前实现:
-  - `internal/app/steer.go:127-137` 和 `internal/app/thread_menu.go:306-320` 都会带 `expectedTurnId`。
-  - steer 后续沿用 started/completed 两阶段处理，流式 delta 不接入，并依赖 `internal/codexrpc/client.go:113-125` 中的 opt-out 退订相关通知。
+  - `internal/app/replycontinuation_bindings.go` 和 `internal/app/convbackend/helpers.go` 都会在 reply steer 路径带 `expectedTurnId`。
+  - steer 后续沿用 started/completed 两阶段处理，流式 delta 不接入，并依赖 `internal/codexrpc/client.go` 中的 opt-out 退订相关通知。
 - 差异点:
   - 请求形状正确。
   - 当前不展示 steer 期间的流式中间态，但这部分已明确不纳入实现范围。
@@ -217,8 +225,8 @@
   - 协议节点: `turn/interrupt -> turn/completed(status=interrupted)`
   - 来源: OpenAI 官方页面 `Turn methods`, `Notifications`
 - 我们当前实现:
-  - `internal/app/thread_menu.go:281-303` 发送 `turn/interrupt`。
-  - `internal/app/turn_lifecycle.go:150-156` 在 `turn/completed` 时把 `interrupted` 作为最终状态写回。
+  - `internal/app/threadmenu/service.go` / `internal/app/backend/actions.go` 发送 `turn/interrupt` 或 backend-specific interrupt。
+  - `internal/app/turn_lifecycle.go` 在 `turn/completed` 时把 `interrupted` 作为最终状态写回。
 - 差异点:
   - 无。
 - 修改建议:
@@ -234,8 +242,8 @@
   - 协议节点: `error -> turn/completed(status=failed)`
   - 来源: OpenAI 官方页面 `Notifications`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go:101-122` 记录 `error`。
-  - `internal/app/turn_lifecycle.go:150-156` 最终仍在 `turn/completed` 处 finalize。
+  - `internal/app/codex_event_router.go` 记录 `error`。
+  - `internal/app/turn_lifecycle.go` 最终仍在 `turn/completed` 处 finalize。
 - 差异点:
   - 无。
 - 修改建议:
@@ -251,9 +259,9 @@
   - 协议节点: `thread/compact/start -> turn/started -> item/started(type=contextCompaction) -> item/completed -> turn/completed`
   - 来源: OpenAI 官方页面 `Thread methods`, `Notifications`
 - 我们当前实现:
-  - `internal/app/compact.go:43-69` 发送 `thread/compact/start`。
-  - `internal/app/turn_lifecycle.go:45-46` / `internal/app/compact.go:72-100` 用 `turn/started` 和 `item/started(type=contextCompaction)` 绑定 standalone compact turn。
-  - `internal/app/turn_stream.go:49-57` / `internal/app/compact.go:102-180` 用 `item/completed(type=contextCompaction)` 收口 standalone compact turn，后续 `turn/completed` 只做兜底。
+  - `internal/app/compact.go` 发送 `thread/compact/start`。
+  - `internal/app/turn_lifecycle.go` / `internal/app/compact.go` 用 `turn/started` 和 `item/started(type=contextCompaction)` 绑定 standalone compact turn。
+  - `internal/app/turn_stream.go` / `internal/app/compact.go` 用 `item/completed(type=contextCompaction)` 收口 standalone compact turn，后续 `turn/completed` 只做兜底。
 - 差异点:
   - 无。主流程已经按文档迁移到 `contextCompaction` item 生命周期，且不再处理 deprecated `thread/compacted`。
 - 修改建议:
@@ -272,7 +280,7 @@
 - 我们当前实现:
   - `internal/app/codex_event_router.go` 会先接 `item/started`，再处理 `item/commandExecution/requestApproval`。
   - `internal/app/turn_item_state.go` 会把 started item 和 request payload 合并，审批卡片不再丢失 command item 上的上下文。
-  - `internal/app/approval_actions.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并且只在 reply 成功后把本地请求推进到 `replied`。
+  - `internal/app/serverrequest/approval.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并且只在 reply 成功后把本地请求推进到 `replied`。
   - `internal/app/server_request_state.go` 把 `serverRequest/resolved` 作为唯一 `resolved` 边界，并在同 turn 其他 open request 清空后才恢复 submission。
   - `internal/app/server_request_delivery_scaffold.go` 会优先把审批卡投递到同一 Feishu 回复上下文；如果当前 turn 只有 reasoning-only `工作中` 卡，审批卡可以 patch 复用该占位卡。复用后该消息已经是实质审批内容，后续 final output 不能再 patch 它。
   - `internal/app/codex_event_router.go` 仍会在最终 `item/completed` 时收口 item。
@@ -304,8 +312,8 @@
 - 我们当前实现:
   - `internal/app/codex_event_router.go` 会先接 `item/started(fileChange)`，再处理 `item/fileChange/requestApproval`。
   - `internal/app/turn_item_state.go` 会把 started item 上的 `changes` 合并进审批请求，文件审批卡片可从 started item 补齐缺失文件列表。
-  - `internal/app/file_approval_summary.go` 会显式渲染请求里的 `grantRoot`，避免文件列表存在时该字段被摘要逻辑吞掉。
-  - `internal/app/approval_actions.go` 和 `internal/app/server_request_state.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并改成 `pending -> replied -> resolved`，等待 `serverRequest/resolved` 再最终收口。
+  - `internal/app/approval/summary.go` 会显式渲染请求里的 `grantRoot`，避免文件列表存在时该字段被摘要逻辑吞掉。
+  - `internal/app/serverrequest/approval.go` 和 `internal/app/server_request_state.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并改成 `pending -> replied -> resolved`，等待 `serverRequest/resolved` 再最终收口。
   - `internal/app/codex_event_router.go` 仍会在最终 `item/completed` 时收口 item。
 - 差异点:
   - 无。
@@ -321,8 +329,8 @@
   - 协议节点: `item/tool/requestUserInput -> client response -> serverRequest/resolved`
   - 来源: OpenAI 官方页面 `API overview`, `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go:201-213` 收到 request 后发送 UI。
-  - `internal/app/user_input_actions.go`、`internal/app/tool_user_input_forms.go`、`internal/app/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
+  - `internal/app/codex_event_router.go` 收到 request 后发送 UI。
+  - `internal/app/serverrequest/user_input.go`、`internal/app/tool_user_input_forms.go`、`internal/app/submission/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一把 `serverRequest/resolved` 当作唯一 `resolved` 边界，并负责恢复 submission。
 - 差异点:
   - 无。
@@ -355,7 +363,7 @@
   - 协议节点: `item/started(dynamicToolCall) -> item/tool/call -> client result -> item/completed`
   - 来源: OpenAI 官方页面 `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go:136-152` 没有 `item/tool/call` 分支，默认直接 `ReplyError(... unsupported server request)`。
+  - `internal/app/codex_event_router.go` 没有 `item/tool/call` 分支，默认直接 `ReplyError(... unsupported server request)`。
 - 差异点:
   - 当前将该状态机视为 experimental 范围外能力，不纳入实现范围。
   - 因此 `item/tool/call` 仍会被拒绝，`item/started(dynamicToolCall)` 也没有单独接入层。
@@ -372,8 +380,8 @@
   - 协议节点: `review/start -> thread/started? -> turn/started -> item/started(enteredReviewMode) -> ... -> item/completed(exitedReviewMode) -> turn/completed`
   - 来源: OpenAI 官方页面 `Turn methods`, `Notifications`
 - 我们当前实现:
-  - `internal/app/review.go` 已调用 `review/start`，并固定使用 `delivery = inline`。
-  - `internal/app/turn_item_payload.go` 已消费 `enteredReviewMode` / `exitedReviewMode`；其中 `exitedReviewMode.review` 会被统一走最终答复渲染路径。
+  - `internal/app/reviewcmd/service.go` / `internal/app/review_bindings.go` 已调用 `review/start`，并固定使用 `delivery = inline`。
+  - `internal/app/turnitem/payload.go` 已消费 `enteredReviewMode` / `exitedReviewMode`；其中 `exitedReviewMode.review` 会被统一走最终答复渲染路径。
   - `internal/app/turn_stream.go` 在收到 review final 后会抑制 trailing `agentMessage`，避免 review 结果重复投递。
   - `internal/app/review_critical_test.go` 已覆盖 review target 解析、`review/start` payload、selector payload 更新。
   - `internal/app/review_test.go` 已覆盖 `exitedReviewMode` 最终渲染，以及 `review/start` response turn id 与后续 `turn/started` turn id 不一致时，客户端仍保持 response turn id 绑定。
@@ -534,10 +542,10 @@
   - 协议节点: `item/permissions/requestApproval -> client decision -> serverRequest/resolved`
   - 来源: `tmp/appserver-schema/ServerRequest.json`、`tmp/appserver-schema/codex_app_server_protocol.schemas.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go:144-199` 会接住请求并展示卡片。
-  - `internal/app/approval_actions.go:48-60` 会回 `permissions` 和 `scope`。
+  - `internal/app/codex_event_router.go` 会接住请求并展示卡片。
+  - `internal/app/serverrequest/approval.go` 会回 `permissions` 和 `scope`。
   - `internal/app/server_request_state.go` 已把 permissions approval 纳入 `pending -> replied -> resolved` 两阶段状态机，并等待 `serverRequest/resolved` 再恢复 submission。
-  - `internal/app/permission_summary.go` 会显式渲染 `RequestPermissionProfile.fileSystem` / `network` 结构，并兼容旧字段摘要。
+  - `internal/app/approval/permission_summary.go` 会显式渲染 `RequestPermissionProfile.fileSystem` / `network` 结构，并兼容旧字段摘要。
 - 差异点:
   - 无。
 - 修改建议:
@@ -556,8 +564,8 @@
   - 协议节点: `mcpServer/elicitation/request -> client response -> serverRequest/resolved`
   - 来源: `tmp/appserver-schema/ServerRequest.json`、`tmp/appserver-schema/codex_app_server_protocol.schemas.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go:148-149` / `215-240` 有 form/url 两种处理。
-  - `internal/app/elicitation_forms.go` 与 `internal/app/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
+  - `internal/app/codex_event_router.go` 有 form/url 两种处理。
+  - `internal/app/serverrequest/elicitation.go` 与 `internal/app/submission/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一等待 `serverRequest/resolved` 才最终 resolve 并恢复 submission。
   - 本次新增 MCP send tool 只复用独立的本地 MCP HTTP server，不改动 `mcpServer/elicitation/request` 的 pending / reply / resolved 契约。
 - 差异点:
@@ -567,7 +575,7 @@
 
 ### SM-24 `SkillsCatalogLifecycle`
 
-- 结论: `暂不实现`
+- 结论: `兼容实现`
 - OpenAI 原始要求:
   - 官方页面/Schema 原始协议名与约束: `skills/list`
   - schema 原始定义: `forceReload` 为 true 时应绕过缓存并重新扫描 skills。
@@ -577,14 +585,20 @@
   - 协议节点: `skills/list -> response`；本地 skill 文件变化时 `skills/changed -> skills/list(refresh)`
   - 来源: `tmp/appserver-schema/ClientRequest.json`、`tmp/appserver-schema/ServerNotification.json`、`tmp/appserver-schema/v2/SkillsListParams.json`
 - 我们当前实现:
-  - 没有 `skills/list` 对应 client 调用。
-  - `internal/app/codex_event_router.go` 没有 `skills/changed` 通知分支。
-  - `internal/app/history.go` 仅在 `/history` 里把 `thread/read` 返回的 `userMessage.content[type=skill]` 显示为 `[skill] ...`，不等同于 skill catalog 管理。
+  - `internal/codexrpc/skills.go` 定义 `SkillsListResult`、`SkillsListEntry`、`SkillMetadata` 等 response 类型。
+  - `internal/app/skillscmd/service.go` 的 `/skills` 会按当前 workspace cwd 调用 `skills/list`；`/skills reload` 和 `skills.reload` 会带 `forceReload=true`。
+  - `skills.select` 会重新读取当前 cwd 的 skills，拒绝 disabled skill，并把选中的 skill 存为当前 session 的 pending skill。
+  - `ResolveSubmissionSkill` 支持 `$skill-name <内容>` 显式前缀和 pending skill；最终 `turn/start` input 会把 `type=skill` 放在文本输入前，并在创建 submission 后消费 pending skill。
+  - `internal/app/features/data.go` 把 `/skills`、`/skills reload`、`$skill-name <内容>` 和 `menu.skills` 作为 Codex-only 本地能力暴露；Claude backend 隐藏并 passthrough。
+  - `internal/app/codex_event_router.go` 仍没有 `skills/changed` 通知分支。
+  - `internal/app/apphistory/history.go` 会在 `/history` 里把 `thread/read` 返回的 `userMessage.content[type=skill]` 显示为 `[skill] ...`。
 - 差异点:
-  - 当前不会主动读取 skill catalog，也不会在 skill 文件变化后刷新 catalog。
-  - 该能力与当前场景无关，因此不纳入实现范围。
+  - 当前没有客户端侧 skills catalog 长期缓存，也不会在收到 `skills/changed` 时主动刷新已打开的 skills 卡片；当前 UX 依赖用户重新打开 `/skills` 或显式 `/skills reload`。
+  - `perCwdExtraUserRoots` 当前没有配置或 UI 入口。
+  - 这些差异不影响当前“浏览当前 workspace skills、选择下一条消息 skill、显式 skill prefix”的主路径。
 - 修改建议:
-  - 暂不实现；仅当后续产品明确需要浏览、刷新或管理 skills catalog 时，再补齐 `skills/list` / `skills/changed`。
+  - 若后续需要 skill 文件变更后自动刷新已打开卡片，应消费 `skills/changed`，记录最近一次 list 参数，并 patch 受影响的 `menu.skills` 卡片。
+  - 若后续需要跨 cwd 追加 user-scoped skill roots，应补配置、UI 和 `perCwdExtraUserRoots` payload 测试。
 
 ### SM-25 `ThreadGoalLifecycle`
 

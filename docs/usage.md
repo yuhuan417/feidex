@@ -134,6 +134,12 @@
   - 为当前 Codex thread 开启 `plan` collaboration mode
 - `/plan off`
   - 关闭当前 Codex thread 的 `plan` collaboration mode
+- `/goal`
+  - 查看或创建当前 Codex thread 的长期任务目标
+- `/goal <objective>`
+  - 设置当前 Codex thread 的长期任务目标
+- `/goal pause` / `/goal resume` / `/goal clear` / `/goal edit`
+  - 暂停、恢复、清除或编辑当前 thread goal
 - `/thread`
   - 打开 thread 菜单
 - `/thread list`
@@ -253,6 +259,15 @@
   - `No, stay in Plan mode`
     - 保持当前 thread 继续处于 plan mode
 - `/plan off` 或再次切换 `/plan` 时，会清掉当前 thread 的 plan mode；旧的计划确认卡会随之失效
+
+## Thread Goal（Codex only）
+
+- `/goal` 作用在当前活动 Codex thread；如果当前没有已保存的 active thread，需要先发送一条普通消息或恢复一个 thread
+- `/goal` 会读取当前 thread goal；没有 goal 时会打开 objective 输入卡
+- `/goal <objective>` 会创建或更新 active goal；如果当前已有未完成 goal，会先要求确认替换
+- `/goal pause`、`/goal resume`、`/goal clear`、`/goal edit` 分别用于暂停、恢复、清除和编辑当前 goal
+- 命令行入口当前不解析 token budget 参数；编辑卡会保留已有 token budget
+- goal 管理卡只是控制面。后端主动继续 active goal 时，Feidex 会为该 continuation turn 新发一张根卡作为回复锚点，不会把 turn 输出回复到 `/goal` 管理卡上
 
 ## 审批卡片
 

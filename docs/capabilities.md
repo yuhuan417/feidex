@@ -1,6 +1,6 @@
 # Feidex Backend Capability Matrix
 
-> 更新时间: 2026-04-28
+> 更新时间: 2026-07-10
 >
 > 口径:
 > - 只描述“当前 frontend 已选定 backend，且不在维护模式”时的正常行为。
@@ -14,6 +14,9 @@
 - `internal/app/menu_specs.go`
 - `internal/app/menu_actions.go`
 - `internal/app/conversation_terms.go`
+- `internal/app/features/data.go`
+- `internal/app/feature_registry_bindings_tools.go`
+- `internal/app/action_registry_workspace.go`
 - `internal/app/backendcaps/capability.go`
 - `internal/app/backend/driver.go`
 - `internal/app/backend/permission_driver.go`
@@ -22,12 +25,14 @@
 - `internal/app/claude_session_catalog.go`
 - `internal/app/claude_model_config.go`
 - `internal/app/claude_permission_config.go`
-- `internal/app/workspace_menu.go`
+- `internal/app/workspacecmd/service.go`
 - `internal/app/commands_test.go`
 - `internal/app/menu_command_direct_access_test.go`
 - `internal/app/claude_history_test.go`
 - `internal/app/claude_session_catalog_test.go`
 - `internal/app/model_config_test.go`
+- `internal/app/goal_test.go`
+- `internal/app/plan_mode_test.go`
 - `internal/app/app_more_test.go`
 
 ## 总规则
@@ -56,6 +61,8 @@
 | `/history` | 本地入口，backend 特化 | 本地入口，backend 特化 | Codex 读 `thread/read`；Claude 读本地 session transcript。 |
 | `/usage` | 本地入口，backend 特化 | 本地入口，backend 特化 | 两端都可用，但来源不同。 |
 | `/model`、`/effort` | 本地入口，backend 特化 | 本地入口，backend 特化 | Codex 配 `config.Codex`；Claude 配 `config.Claude` 并立即重置当前 frontend 的 Claude 会话。 |
+| `/plan` | 本地处理 | 非本地 | Codex thread 的 `plan` collaboration mode。 |
+| `/goal` | 本地处理 | 非本地 | Codex persisted thread goal 管理和 active goal continuation 锚点。 |
 | `/compact` | 本地处理 | 本地入口，Claude passthrough | Codex 走 `thread/compact/start`；Claude 会把原始 `/compact` 文本提交给 Claude backend。 |
 | `/review` | 本地处理 | 非本地 | Claude 不再把它当本地命令；手动输入时会原样提交给 Claude。 |
 | `/skills` | 本地处理 | 非本地 | Claude 侧没有本地 skills 发现/选择 UI。 |
@@ -180,6 +187,8 @@ Claude 当前不暴露 Codex 风格的 sandbox / approval policy 菜单与命令
 ## 菜单与帮助现在的真实状态
 
 - Claude 的 `/help` 已经不会再展示这些本地能力:
+  - `/plan`
+  - `/goal`
   - `/review`
   - `/skills`
   - `/fast`
@@ -195,7 +204,7 @@ Claude 当前不暴露 Codex 风格的 sandbox / approval policy 菜单与命令
   - `/session permissions`
   - `/workspace permissions`
 - Claude 的菜单卡也已经按 backend 过滤:
-  - 常用工具卡不再显示 `review`、`skills`
+  - 常用工具卡不再显示 `plan`、`goal`、`review`、`skills`
   - 模型卡保留 `/model`，移除 `/fast`
   - 会话卡显示 `/session ...`、`/session permissions`
   - 工作区卡显示 `/workspace permissions`，不显示 `sandbox/policy`
@@ -207,6 +216,12 @@ Claude 当前不暴露 Codex 风格的 sandbox / approval policy 菜单与命令
 ### 仅 Codex 本地拥有
 
 - `/review ...`
+- `/plan`
+- `/plan on`
+- `/plan off`
+- `/goal`
+- `/goal <objective>`
+- `/goal pause` / `/goal resume` / `/goal clear` / `/goal edit`
 - `/skills`
 - `/skills reload`
 - `$skill-name <内容>` 的发现 / 选择链路
@@ -227,7 +242,7 @@ Claude 当前不暴露 Codex 风格的 sandbox / approval policy 菜单与命令
 
 ### 1. “不是本地能力”不等于“不能输入”
 
-在 Claude backend 下，`/review`、`/skills`、`/fast config`、`/thread`、`/workspace sandbox`、`/workspace policy` 这类命令不会作为 Feidex 本地命令处理，但如果用户手动输入，Feidex 会把原始文本作为普通 prompt 提交给 Claude。
+在 Claude backend 下，`/plan`、`/goal`、`/review`、`/skills`、`/fast config`、`/thread`、`/workspace sandbox`、`/workspace policy` 这类命令不会作为 Feidex 本地命令处理，但如果用户手动输入，Feidex 会把原始文本作为普通 prompt 提交给 Claude。
 
 这意味着:
 

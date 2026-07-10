@@ -25,11 +25,16 @@
 - [internal/app/turn_item_state.go](/home/yuhuan/feidex/internal/app/turn_item_state.go)
 - [internal/config/config.go](/home/yuhuan/feidex/internal/config/config.go)
 - [internal/state/store.go](/home/yuhuan/feidex/internal/state/store.go)
-- [internal/app/workspace_threads.go](/home/yuhuan/feidex/internal/app/workspace_threads.go)
-- [internal/app/history.go](/home/yuhuan/feidex/internal/app/history.go)
-- [internal/app/review.go](/home/yuhuan/feidex/internal/app/review.go)
+- [internal/app/threadmenu/service.go](/home/yuhuan/feidex/internal/app/threadmenu/service.go)
+- [internal/app/workspacecmd/thread_service.go](/home/yuhuan/feidex/internal/app/workspacecmd/thread_service.go)
+- [internal/app/convbackend/service.go](/home/yuhuan/feidex/internal/app/convbackend/service.go)
+- [internal/app/historycmd/service.go](/home/yuhuan/feidex/internal/app/historycmd/service.go)
+- [internal/app/apphistory/history.go](/home/yuhuan/feidex/internal/app/apphistory/history.go)
+- [internal/app/reviewcmd/service.go](/home/yuhuan/feidex/internal/app/reviewcmd/service.go)
+- [internal/app/review_bindings.go](/home/yuhuan/feidex/internal/app/review_bindings.go)
 - [internal/app/compact.go](/home/yuhuan/feidex/internal/app/compact.go)
-- [internal/app/skills.go](/home/yuhuan/feidex/internal/app/skills.go)
+- [internal/app/skillscmd/service.go](/home/yuhuan/feidex/internal/app/skillscmd/service.go)
+- [internal/app/skills/skills.go](/home/yuhuan/feidex/internal/app/skills/skills.go)
 - [claude-cli-protocol/protocol/docs/PROTOCOL_SPECIFICATION.md](/home/yuhuan/feidex/claude-cli-protocol/protocol/docs/PROTOCOL_SPECIFICATION.md)
 - [claude-cli-protocol/sdks/golang/protocol/messages.go](/home/yuhuan/feidex/claude-cli-protocol/sdks/golang/protocol/messages.go)
 - [claude-cli-protocol/sdks/golang/protocol/stream.go](/home/yuhuan/feidex/claude-cli-protocol/sdks/golang/protocol/stream.go)
@@ -206,7 +211,7 @@ internal/
 - [internal/codexrpc](/home/yuhuan/feidex/internal/codexrpc) 不应该继续直接暴露到 `internal/app`。
 - Claude backend 最好也有一层“原始协议客户端”和“一层产品 adapter”分离，这样后续协议漂移时影响面更小。
 - [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go) 最终应演进成 backend-neutral router，而不是继续硬编码 Codex 方法名。
-- `internal/backend/extensions.go` 这类层不是可选装饰，而是防止“最后只剩交集能力”的关键结构。
+- `internal/app/features/data.go` / `internal/app/feature_registry_bindings.go` 这类能力注册层不是可选装饰，而是防止“最后只剩交集能力”的关键结构。
 
 ### backend-neutral 契约
 
@@ -384,11 +389,16 @@ McpElicitation
 
 - [internal/app/deps.go](/home/yuhuan/feidex/internal/app/deps.go)
 - [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go)
-- [internal/app/workspace_threads.go](/home/yuhuan/feidex/internal/app/workspace_threads.go)
-- [internal/app/history.go](/home/yuhuan/feidex/internal/app/history.go)
-- [internal/app/review.go](/home/yuhuan/feidex/internal/app/review.go)
+- [internal/app/threadmenu/service.go](/home/yuhuan/feidex/internal/app/threadmenu/service.go)
+- [internal/app/workspacecmd/thread_service.go](/home/yuhuan/feidex/internal/app/workspacecmd/thread_service.go)
+- [internal/app/convbackend/service.go](/home/yuhuan/feidex/internal/app/convbackend/service.go)
+- [internal/app/historycmd/service.go](/home/yuhuan/feidex/internal/app/historycmd/service.go)
+- [internal/app/apphistory/history.go](/home/yuhuan/feidex/internal/app/apphistory/history.go)
+- [internal/app/reviewcmd/service.go](/home/yuhuan/feidex/internal/app/reviewcmd/service.go)
+- [internal/app/review_bindings.go](/home/yuhuan/feidex/internal/app/review_bindings.go)
 - [internal/app/compact.go](/home/yuhuan/feidex/internal/app/compact.go)
-- [internal/app/skills.go](/home/yuhuan/feidex/internal/app/skills.go)
+- [internal/app/skillscmd/service.go](/home/yuhuan/feidex/internal/app/skillscmd/service.go)
+- [internal/app/skills/skills.go](/home/yuhuan/feidex/internal/app/skills/skills.go)
 - [internal/app/model_config.go](/home/yuhuan/feidex/internal/app/model_config.go)
 
 建议做法:

@@ -1,12 +1,12 @@
 # Root `internal/app` 生产文件现状
 
-更新时间: 2026-04-29
+更新时间: 2026-07-10
 
 这份文档记录 root `internal/app` 的当前快照，不再沿用 Phase 编号。规范边界以 [docs/app-package-boundaries.md](/home/yuhuan/feidex/docs/app-package-boundaries.md) 和 [docs/backend-layering.md](/home/yuhuan/feidex/docs/backend-layering.md) 为准；本文只回答“目前哪些生产文件还留在 root，为什么”。
 
 ## 快照
 
-- root `internal/app` 当前有 `143` 个非 test Go 文件，共 `13,111` 行。
+- root `internal/app` 当前有 `147` 个非 test Go 文件，共 `16,523` 行。
 - `internal/app` 当前有 `59` 个直接子包。
 - root 仍然非空是刻意设计：frontend-scoped lifecycle、Feishu 入口和 Codex app-server 协议敏感编排仍由 root 持有。
 
@@ -59,6 +59,10 @@
 - `turn_binding.go`
 - `server_request_state.go`
 - `pending_inputs.go`
+- `goal.go`
+- `mcp_service.go`
+- `plan_mode.go`
+- `codex_plan_mode_exit.go`
 - `claude_runtime.go`
 - `codex_turn_recovery.go`
 - `codex_runtime_recovery.go`
@@ -91,21 +95,28 @@
 
 ## 当前仍偏重的 root 文件
 
-截至 2026-04-29，行数最多的一批 root 生产文件是:
+截至 2026-07-10，行数最多的一批 root 生产文件是:
 
+- `goal.go` — 1097 行
+- `mcp_service.go` — 670 行
+- `codex_plan_mode_exit.go` — 602 行
+- `plan_mode.go` — 534 行
+- `app.go` — 335 行
 - `submission_bindings.go` — 313 行
-- `app.go` — 310 行
-- `serverrequest_bindings.go` — 257 行
-- `claude_upgrade_runtime.go` — 251 行
+- `claude_upgrade_runtime.go` — 299 行
+- `serverrequest_bindings.go` — 261 行
+- `feature_registry_bindings_tools.go` — 245 行
 - `convbackend_bindings.go` — 229 行
-- `menu_actions.go` — 223 行
-- `claude_support.go` — 194 行
+- `menu_actions.go` — 227 行
+- `codex_upgrade_runtime.go` — 222 行
+- `feature_registry_bindings_thread_workspace.go` — 216 行
+- `claude_support.go` — 197 行
 - `feishu_event_router.go` — 193 行
-- `accessors.go` — 193 行
-- `feature_registry_bindings_thread_workspace.go` — 191 行
-- `feature_registry_bindings.go` — 188 行
+- `feature_registry_bindings.go` — 190 行
+- `accessors.go` — 190 行
 - `path_picker_actions.go` — 186 行
-- `feature_registry_bindings_tools.go` — 186 行
+- `turn_item_state.go` — 184 行
+- `backend_failure.go` — 184 行
 
 这些文件目前仍可接受，但如果后续改动继续在这些文件里堆 owner-local helper 或渲染逻辑，就属于边界回退。
 
@@ -116,6 +127,7 @@
 - workspace / path-picker: owner-local validation、rendering、flow helper 继续压到 `workspacecmd`、`workspace`、`pathpick`
 - upgrade / review / history / debug: 纯 command / form / render helper 优先压到 `upgradecmd`、`reviewcmd`、`historycmd`、`debugviewcmd`
 - backend runtime / maintenance / recovery: owner-local backend 逻辑优先放到 `backend`、`convbackend`、`clauderuntime`、`codexruntime`、`maintenance`
+- goal / MCP / plan-mode exit: 若继续增长，优先抽出 owner-local validation、rendering 和 protocol-neutral helper，root 只保留 frontend-scoped lifecycle 与 Codex app-server 绑定点
 - 大型 binding 文件: 如果 binding 文件开始吸收新的业务决策，而不是保持薄委托，就视为结构回退
 
 ## Guardrails

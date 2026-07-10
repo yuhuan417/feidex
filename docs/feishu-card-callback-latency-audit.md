@@ -1,6 +1,6 @@
 # 飞书卡片回调延迟审计
 
-> 更新时间: 2026-04-26
+> 更新时间: 2026-07-10
 >
 > 目的:
 > - 收口当前 Feidex 的飞书卡片回调延迟风险集合。
@@ -9,26 +9,30 @@
 
 主要代码来源:
 
-- `internal/app/actions.go`
-- `internal/app/menu_command_bridge.go`
+- `internal/app/card_action_async.go`
+- `internal/app/menu_actions.go`
 - `internal/app/action_registry_menu.go`
 - `internal/app/action_registry_workspace.go`
 - `internal/app/action_registry_maintenance.go`
 - `internal/app/action_registry_pending.go`
-- `internal/app/review.go`
-- `internal/app/review_forms.go`
-- `internal/app/review_git.go`
-- `internal/app/download.go`
+- `internal/app/feature_registry_bindings_tools.go`
+- `internal/app/feature_registry_bindings_thread_workspace.go`
+- `internal/app/reviewcmd/async_menu.go`
+- `internal/app/reviewcmd/service.go`
+- `internal/app/review/git.go`
+- `internal/app/delivery/download.go`
 - `internal/app/path_picker_actions.go`
-- `internal/app/upgrade.go`
-- `internal/app/codex_upgrade.go`
-- `internal/app/claude_upgrade.go`
+- `internal/app/upgradecmd/service.go`
+- `internal/app/backend_maintenance_scaffold.go`
+- `internal/app/codex_upgrade_actions.go`
+- `internal/app/claude_upgrade_actions.go`
 - `internal/app/compact.go`
-- `internal/app/thread_menu.go`
-- `internal/app/workspace_feature_actions.go`
-- `internal/app/workspace_creation_clone.go`
+- `internal/app/threadmenu/service.go`
+- `internal/app/workspace/clone.go`
+- `internal/app/workspacecmd/management_service.go`
 - `internal/app/claude_runtime.go`
-- `internal/app/backend_server_request_adapter.go`
+- `internal/app/backend/actions.go`
+- `internal/app/serverrequest/adapter.go`
 - `internal/claudecli/session.go`
 
 ## 审计范围
@@ -96,30 +100,34 @@
 
 ### 同步风险
 
-| Action | 风险来源 | 当前结论 |
-| --- | --- | --- |
-| `menu.review.uncommitted` | 同步 `git rev-parse` + `git status` | 保留在风险集合 |
-| `menu.review.base` | 同步列 branch，走 `git for-each-ref` | 保留在风险集合 |
-| `menu.review.commit` | 同步列 commit，走 `git log` | 保留在风险集合 |
-| `review.base.select` | 重新列 branch | 保留在风险集合 |
-| `review.commit.select` | 可能重新列 commit 以补 title | 保留在风险集合 |
-| `review.form.submit` | `base` 模式会跑 `rev-parse/status/diff`；`commit` 模式会跑 `rev-parse/log -1` | 保留在风险集合 |
-| `upgrade.dev` | 同步查远端 release | 明确按长操作处理 |
+截至 2026-07-10，当前没有已知仍在 Codex 卡片 callback 同步 ack 路径执行 `git`、远端 network 或真实飞书 API 的动作。
 
 补充说明:
 
-- `review.form.submit` 的 `custom` 模式不碰 `git`，不在这条风险里。
-- 这组 `review.*` 不一定每次都慢，但明显受仓库规模和本地磁盘状态影响，因此继续保守纳入风险集合。
+- 下面 `review.*` / `upgrade.dev` 仍然是重流程，但已经有 preparing card + async patch 保护。
+- 这些异步保护依赖真实卡片回调带 `MessageID`；无 `MessageID` 的测试/命令式 fallback 可以同步执行，不属于 `dispatchCardAction()` 的正常 ack 路径。
 
 ### 重流程但已异步保护
 
 | Action | 重流程来源 | 当前保护方式 |
 | --- | --- | --- |
+| `menu.review.uncommitted` | `git rev-parse` + `git status` | `ReviewCompleteAsyncCommandAction` 先返回 preparing card，后台执行并 patch |
+| `menu.review.base` | 列 branch，走 `git for-each-ref` | `ReviewCompleteAsyncCommandAction` 先返回 preparing card，后台执行并 patch |
+| `menu.review.commit` | 列 commit，走 `git log` | `ReviewCompleteAsyncCommandAction` 先返回 preparing card，后台执行并 patch |
+| `review.base.select` | 重新列 branch | `ReviewCompleteAsyncRenderedCardAction` 先返回 preparing card，后台刷新并 patch |
+| `review.commit.select` | 可能重新列 commit 以补 title | `ReviewCompleteAsyncRenderedCardAction` 先返回 preparing card，后台刷新并 patch |
+| `review.form.submit` 的 `base` / `commit` 模式 | `base` 模式会跑 `rev-parse/status/diff`；`commit` 模式会跑 `rev-parse/log -1` | `ReviewCompleteAsyncRenderedCardAction` 先返回 preparing card，后台启动 review 并 patch |
+| `upgrade.dev` | 查远端 release | `completeAsyncCommandAction` 先返回 preparing card，后台执行并 patch |
 | `menu.upgrade` | 查远端 release | 先返回 preparing card，后台执行 |
 | `codex_upgrade.check` | 探测 `codex update` 自升级命令 | 先返回 preparing card，后台执行 |
 | `codex_upgrade.prepare` | 同上 | 先返回 preparing card，后台执行 |
 | `workspace.clone.submit` | 后台 `git clone` | 回调只做 preflight 和状态切换 |
 | `path_picker.confirm` `download_file` 分支 | 真实飞书 `ShareLocalFile` | 回调先返回，后台分享并 patch card |
+
+已覆盖的关键 async guard:
+
+- `internal/app/card_action_async_test.go` 覆盖 `upgrade.dev`、`menu.review.uncommitted`、`menu.review.base`、`review.base.select`、`review.form.submit`、Claude `menu.interrupt`。
+- `internal/app/compact_more_test.go` 覆盖 compact callback 先返回 preparing card。
 
 ### 轻路径/排除
 
@@ -145,11 +153,11 @@
 补充说明:
 
 - 这条”已确认快路径”只适用于 `Codex` 本地路径。
-- `workspace.*` 系列动作的 thread binding 已异步化（2026-04-26），适用于所有 backend。
+- `workspace.*` 系列动作的 thread binding 当前保持异步化，适用于所有 backend。
 
 ## Claude
 
-`Claude` 侧继承上面所有通用风险项:
+`Claude` 侧继承上面所有通用重流程项的异步保护要求:
 
 - `review.*`
 - `upgrade.dev`
@@ -162,19 +170,18 @@
 
 ### 同步风险
 
-| Action | 风险来源 | 当前结论 |
-| --- | --- | --- |
-| `menu.interrupt` | 会同步调用 Claude runtime `Interrupt()` | 当前按“可能长”保守纳入风险集合 |
+截至 2026-07-10，当前没有已知仍在 Claude 卡片 callback 同步 ack 路径执行长 runtime / CLI 往返的动作。
 
 补充说明:
 
-- `menu.interrupt` 最终会走 Claude runtime，再由活跃 CLI session 发送 interrupt control request。
-- 它不属于“明确的后台异步包装动作”，因此先按风险集合保守收口。
+- `menu.interrupt` 最终仍会走 Claude runtime，再由活跃 CLI session 发送 interrupt control request；但当前已通过 `CompleteAsyncCommandAction` 先返回 preparing card。
+- Codex backend 的 `menu.interrupt` 走本地 `turn/interrupt` 控制路径，仍按快路径处理。
 
 ### 重流程但已异步保护
 
 | Action | 重流程来源 | 当前保护方式 |
 | --- | --- | --- |
+| `menu.interrupt` | Claude runtime `Interrupt()` / CLI control request | 先返回 preparing card，后台执行 `/stop` 并 patch |
 | `menu.compact` | Claude 的 `/compact` 是长流程 | 回调先返回 preparing card，后台再入队提交给 Claude |
 | `menu.claude_upgrade` | Claude 本机状态读取 | 先返回 preparing card，后台执行 |
 | `claude_upgrade.check` | 探测 `claude update` 自升级命令 | 先返回 preparing card，后台执行 |
@@ -248,9 +255,11 @@
 
 ## 最终收口
 
-截至 2026-04-26，当前最需要持续盯住的飞书卡片回调 timeout 集合是:
+截至 2026-07-10，当前没有已知仍未异步保护的重型卡片 callback。
 
-- Codex:
+当前最需要持续 guard 的集合是“业务很重，但必须保持 fast ack -> async work -> patch”的动作:
+
+- Codex / 通用:
   - `menu.review.uncommitted`
   - `menu.review.base`
   - `menu.review.commit`
@@ -258,17 +267,25 @@
   - `review.commit.select`
   - `review.form.submit` 的 `base` / `commit` 模式
   - `upgrade.dev`
+  - `workspace.clone.submit`
+  - `path_picker.confirm` 的 `download_file` 分支
+  - `menu.upgrade`
+  - `codex_upgrade.check`
+  - `codex_upgrade.prepare`
 - Claude:
   - 上述通用项全部继承
   - `menu.interrupt`
-  - `menu.compact` 作为长流程必须保持异步保护
+  - `menu.compact`
+  - `menu.claude_upgrade`
+  - `claude_upgrade.check`
+  - `claude_upgrade.prepare`
 
-已确认可从 timeout 重点集合排除的典型路径:
+已确认按轻路径或本地控制路径处理的典型动作:
 
 - Claude 的 `approval.*`
 - `user_input.answer`
 - `pending_form.cancel` 在 Claude question / plan 这类 pending 上
-- 只做本地 probe 的 `menu.codex_upgrade` / `codex_upgrade.refresh` / `menu.claude_upgrade` / `claude_upgrade.refresh`
+- 只做本地 probe 的 `menu.codex_upgrade` / `codex_upgrade.refresh` / `claude_upgrade.refresh`
 - 用户已确认的 Codex 本地快路径:
   - `menu.model`
   - `model.config.*`
