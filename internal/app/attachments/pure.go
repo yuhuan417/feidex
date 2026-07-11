@@ -87,6 +87,8 @@ func AttachmentPrompt(attachment state.SubmissionAttachment) string {
 		return fmt.Sprintf("User attached image: %s", path)
 	case "audio":
 		return fmt.Sprintf("User attached audio file (not transcribed): %s", path)
+	case "media":
+		return fmt.Sprintf("User attached video file: %s", path)
 	default:
 		return fmt.Sprintf("User attached %s: %s", strings.TrimSpace(attachment.Kind), path)
 	}
@@ -127,6 +129,8 @@ func AttachmentPreview(attachment state.SubmissionAttachment) string {
 		return "[文件] " + name
 	case "audio":
 		return "[音频] " + name
+	case "media":
+		return "[视频] " + name
 	default:
 		return "[" + strings.TrimSpace(attachment.Kind) + "] " + name
 	}

@@ -885,7 +885,7 @@ func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string,
 		return "", "", fmt.Errorf("missing message id for message resource download")
 	}
 	kind := strings.TrimSpace(attachment.Kind)
-	if kind != "image" && kind != "file" && kind != "audio" {
+	if kind != "image" && kind != "file" && kind != "audio" && kind != "media" {
 		return "", "", fmt.Errorf("unsupported attachment kind %q", attachment.Kind)
 	}
 	resourceKey := strings.TrimSpace(attachment.ResourceKey)
@@ -1120,6 +1120,13 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		attachment, ok := extractAudioAttachment(msg.Content)
 		if !ok {
 			slog.Warn("feishu audio message missing file key")
+			return nil
+		}
+		attachments = append(attachments, attachmentWithSource(attachment, out.MessageID))
+	case "media":
+		attachment, ok := extractMediaAttachment(msg.Content)
+		if !ok {
+			slog.Warn("feishu media message missing file key")
 			return nil
 		}
 		attachments = append(attachments, attachmentWithSource(attachment, out.MessageID))
@@ -1464,6 +1471,12 @@ func (a *Adapter) resolveFetchedMessage(ctx context.Context, msg *larkim.Message
 			return "", nil, fmt.Errorf("invalid forwarded audio message %s", messageID)
 		}
 		return "", []Attachment{attachmentWithSource(attachment, messageID)}, nil
+	case "media":
+		attachment, ok := extractMediaAttachment(content)
+		if !ok {
+			return "", nil, fmt.Errorf("invalid forwarded media message %s", messageID)
+		}
+		return "", []Attachment{attachmentWithSource(attachment, messageID)}, nil
 	case "merge_forward":
 		if depth >= mergeForwardMaxDepth {
 			return "Forwarded messages (nested merge depth limit reached).", nil, nil
@@ -1537,6 +1550,20 @@ func extractAudioAttachment(raw *string) (Attachment, bool) {
 		return Attachment{}, false
 	}
 	return Attachment{Kind: "audio", ResourceKey: strings.TrimSpace(body.FileKey)}, true
+}
+
+func extractMediaAttachment(raw *string) (Attachment, bool) {
+	if raw == nil {
+		return Attachment{}, false
+	}
+	var body larkim.MessageMedia
+	if err := json.Unmarshal([]byte(*raw), &body); err != nil {
+		return Attachment{}, false
+	}
+	if strings.TrimSpace(body.FileKey) == "" {
+		return Attachment{}, false
+	}
+	return Attachment{Kind: "media", ResourceKey: strings.TrimSpace(body.FileKey)}, true
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -1746,6 +1773,9 @@ func defaultAttachmentExt(kind string) string {
 	}
 	if kind == "audio" {
 		return ".opus"
+	}
+	if kind == "media" {
+		return ".mp4"
 	}
 	return ".bin"
 }
