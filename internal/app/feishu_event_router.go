@@ -88,6 +88,9 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		startMergeForwardPrefetch(a, msg)
 		return nil
 	}
+	if handled, err := newBindingService(a).gatePendingGroupMessage(msg); handled || err != nil {
+		return err
+	}
 	if !hasConfiguredBackend(a) {
 		if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
 			return nil

@@ -37,17 +37,10 @@ func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID str
 	}
 	cfg := feishuConfig(a)
 	bindings := a.State().AgentBindingsForChat("group", chatID)
-	activeBindings := make([]*state.AgentBinding, 0, len(bindings))
-	for _, binding := range bindings {
-		if binding == nil || !strings.EqualFold(strings.TrimSpace(binding.Status), state.AgentBindingStatusActive.String()) {
-			continue
-		}
-		activeBindings = append(activeBindings, binding)
-	}
 
 	// Preserve the existing @-only behavior for chats that have not entered
-	// binding mode yet, including pending onboarding bindings.
-	if len(activeBindings) == 0 {
+	// binding mode yet.
+	if len(bindings) == 0 {
 		return mentionedSelf || (mentionedEveryone && cfg != nil && cfg.RespondToAtEveryone)
 	}
 	if mentionedSelf {
@@ -57,7 +50,7 @@ func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID str
 	// the local primary binding.
 	if mentionedAny || mentionedEveryone {
 		if mentionedEveryone && cfg != nil && cfg.RespondToAtEveryone {
-			return hasPrimaryBinding(activeBindings)
+			return hasPrimaryBinding(bindings)
 		}
 		return false
 	}
@@ -69,7 +62,7 @@ func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID str
 		}
 		return false
 	}
-	return hasPrimaryBinding(activeBindings)
+	return hasPrimaryBinding(bindings)
 }
 
 func hasLocalGroupMessageLink(a *App, messageIDs ...string) bool {

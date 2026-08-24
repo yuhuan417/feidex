@@ -23,8 +23,8 @@ func TestCommandBindCreatesAndUpdatesLocalGroupBinding(t *testing.T) {
 	if binding == nil {
 		t.Fatal("/bind did not create pending binding")
 	}
-	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" || binding.Primary {
-		t.Fatalf("initial binding = %+v, want pending without workspace/primary", binding)
+	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" || !binding.Primary {
+		t.Fatalf("initial binding = %+v, want pending primary without workspace", binding)
 	}
 	if len(ff.replyCardsSnapshot()) != 1 {
 		t.Fatalf("reply cards after status = %d, want 1", len(ff.replyCardsSnapshot()))
@@ -62,6 +62,135 @@ func TestCommandBindCreatesAndUpdatesLocalGroupBinding(t *testing.T) {
 	}
 	if a.cfg.Codex.Model != "" || a.cfg.Codex.ReasoningEffort != "" {
 		t.Fatalf("/bind should not mutate global codex config: %+v", a.cfg.Codex)
+	}
+}
+
+func TestCommandBindDefaultsOnlyFirstLocalBindingToPrimary(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: wrapFeishuClient(&fakeFeishuClient{})}
+
+	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
+	if err := newBindingService(a).commandBind(msgA, nil); err != nil {
+		t.Fatalf("bot-a /bind error = %v", err)
+	}
+	msgB := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-b", UserID: "user-1"}
+	if err := newBindingService(b).commandBind(msgB, nil); err != nil {
+		t.Fatalf("bot-b /bind error = %v", err)
+	}
+
+	bindingA := a.State().AgentBinding(defaultBindingID("bot-a", "group", "chat-primary"))
+	bindingB := b.State().AgentBinding(defaultBindingID("bot-b", "group", "chat-primary"))
+	if bindingA == nil || !bindingA.Primary {
+		t.Fatalf("bot-a binding = %+v, want primary", bindingA)
+	}
+	if bindingB == nil || bindingB.Primary {
+		t.Fatalf("bot-b binding = %+v, want non-primary", bindingB)
+	}
+
+	if err := newBindingService(b).commandBind(msgB, []string{"primary", "on"}); err != nil {
+		t.Fatalf("bot-b /bind primary on error = %v", err)
+	}
+	bindingA = a.State().AgentBinding(defaultBindingID("bot-a", "group", "chat-primary"))
+	bindingB = b.State().AgentBinding(defaultBindingID("bot-b", "group", "chat-primary"))
+	if bindingA == nil || bindingA.Primary {
+		t.Fatalf("bot-a binding after bot-b primary = %+v, want demoted", bindingA)
+	}
+	if bindingB == nil || !bindingB.Primary {
+		t.Fatalf("bot-b binding after primary = %+v, want primary", bindingB)
+	}
+}
+
+func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.frontendID = "bot-a"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:         "binding-pending",
+		FrontendID: "bot-a",
+		ChatID:     "chat-pending",
+		ChatType:   "group",
+		Status:     state.AgentBindingStatusPending.String(),
+		Primary:    true,
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+
+	var methods []string
+	var turnInputs []map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		methods = append(methods, method)
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-pending"
+			return nil
+		case "turn/start":
+			if got, ok := params.(map[string]any); ok {
+				turnInputs, _ = got["input"].([]map[string]any)
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-pending"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	original := &feishu.InboundMessage{
+		MessageID:     "orig-1",
+		ChatID:        "chat-pending",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "please inspect this project",
+		RootMessageID: "orig-1",
+	}
+	a.HandleFeishuMessage(original)
+	if len(methods) != 0 {
+		t.Fatalf("pending binding should not start backend calls, got %+v", methods)
+	}
+	if sess := a.State().Session(makeSessionKey(a, original)); sess != nil {
+		t.Fatalf("pending binding should not create prompt session, got %+v", sess)
+	}
+	binding := agentBindingForChat(a, "group", "chat-pending")
+	if binding == nil || binding.PendingMessage == nil || binding.PendingMessage.Text != original.Text || binding.PendingMessage.MessageID != "orig-1" {
+		t.Fatalf("pending message = %+v on binding %+v", func() *state.AgentBindingPendingMessage {
+			if binding == nil {
+				return nil
+			}
+			return binding.PendingMessage
+		}(), binding)
+	}
+	if cards := ff.replyCardsSnapshot(); len(cards) != 1 || !strings.Contains(cardMarkdownContent(t, cards[0]), "已暂存原消息") {
+		t.Fatalf("binding prompt cards = %+v", cards)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "bind-1",
+		ChatID:        "chat-pending",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "/bind use default",
+		RootMessageID: "bind-1",
+		MentionedSelf: true,
+	})
+
+	if len(methods) != 2 || methods[0] != "thread/start" || methods[1] != "turn/start" {
+		t.Fatalf("backend calls after binding = %+v, want replay thread/start then turn/start", methods)
+	}
+	if len(turnInputs) != 1 || turnInputs[0]["text"] != original.Text {
+		t.Fatalf("replayed turn inputs = %+v, want original text", turnInputs)
+	}
+	binding = agentBindingForChat(a, "group", "chat-pending")
+	if binding == nil || binding.Status != state.AgentBindingStatusActive.String() || binding.WorkspaceID != "default" || binding.PendingMessage != nil {
+		t.Fatalf("binding after replay = %+v", binding)
+	}
+	sess := a.State().Session(makeSessionKey(a, original))
+	if sess == nil || sess.BindingID != "binding-pending" || sess.WorkspaceID != "default" || sess.ActiveSubmissionID == "" {
+		t.Fatalf("session after replay = %+v", sess)
+	}
+	sub := a.State().Submission(sess.ActiveSubmissionID)
+	if sub == nil || sub.InputText != original.Text || sub.TriggerMessageID != "orig-1" || sub.BindingID != "binding-pending" {
+		t.Fatalf("replayed submission = %+v", sub)
 	}
 }
 

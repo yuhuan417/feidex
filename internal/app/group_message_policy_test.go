@@ -95,6 +95,18 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	if shouldAcceptGroupMessage(a, "chat-2", "", "", false, false, false) {
 		t.Fatal("pending binding accepted an unmentioned message")
 	}
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:       "binding-pending-primary",
+		ChatID:   "chat-3",
+		ChatType: "group",
+		Status:   state.AgentBindingStatusPending.String(),
+		Primary:  true,
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding(pending primary) error = %v", err)
+	}
+	if !shouldAcceptGroupMessage(a, "chat-3", "", "", false, false, false) {
+		t.Fatal("pending primary binding rejected an unmentioned message")
+	}
 }
 
 func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {

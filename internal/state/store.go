@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 8
+const currentSnapshotVersion = 9
 
 type Store struct {
 	path    string
@@ -75,23 +75,54 @@ type FrontendCardNotification struct {
 // AgentBinding maps a local frontend/bot to one logical chat project.
 // WorkspaceID and the optional model settings refer to this local instance.
 type AgentBinding struct {
-	ID                      string `json:"id"`
-	FrontendID              string `json:"frontend_id"`
-	ChatID                  string `json:"chat_id"`
-	ChatType                string `json:"chat_type"`
-	Component               string `json:"component"`
-	WorkspaceID             string `json:"workspace_id"`
-	ModelOverride           string `json:"model_override,omitempty"`
-	ReasoningEffortOverride string `json:"reasoning_effort_override,omitempty"`
-	ServiceTierOverride     string `json:"service_tier_override,omitempty"`
-	SandboxModeOverride     string `json:"sandbox_mode_override,omitempty"`
-	ApprovalPolicyOverride  string `json:"approval_policy_override,omitempty"`
-	MultiAgentModeOverride  string `json:"multi_agent_mode_override,omitempty"`
-	ClaudePermissionMode    string `json:"claude_permission_mode,omitempty"`
-	Primary                 bool   `json:"primary,omitempty"`
-	Status                  string `json:"status"`
-	CreatedAt               int64  `json:"created_at"`
-	UpdatedAt               int64  `json:"updated_at"`
+	ID                      string                      `json:"id"`
+	FrontendID              string                      `json:"frontend_id"`
+	ChatID                  string                      `json:"chat_id"`
+	ChatType                string                      `json:"chat_type"`
+	Component               string                      `json:"component"`
+	WorkspaceID             string                      `json:"workspace_id"`
+	ModelOverride           string                      `json:"model_override,omitempty"`
+	ReasoningEffortOverride string                      `json:"reasoning_effort_override,omitempty"`
+	ServiceTierOverride     string                      `json:"service_tier_override,omitempty"`
+	SandboxModeOverride     string                      `json:"sandbox_mode_override,omitempty"`
+	ApprovalPolicyOverride  string                      `json:"approval_policy_override,omitempty"`
+	MultiAgentModeOverride  string                      `json:"multi_agent_mode_override,omitempty"`
+	ClaudePermissionMode    string                      `json:"claude_permission_mode,omitempty"`
+	Primary                 bool                        `json:"primary,omitempty"`
+	PendingMessage          *AgentBindingPendingMessage `json:"pending_message,omitempty"`
+	Status                  string                      `json:"status"`
+	CreatedAt               int64                       `json:"created_at"`
+	UpdatedAt               int64                       `json:"updated_at"`
+}
+
+// AgentBindingPendingMessage stores one inbound group message while a binding
+// is waiting for a local workspace. It is replayed after binding activation.
+type AgentBindingPendingMessage struct {
+	SessionKey             string                          `json:"session_key,omitempty"`
+	MessageID              string                          `json:"message_id"`
+	ChatID                 string                          `json:"chat_id"`
+	ChatType               string                          `json:"chat_type"`
+	UserID                 string                          `json:"user_id"`
+	UserName               string                          `json:"user_name,omitempty"`
+	ChatName               string                          `json:"chat_name,omitempty"`
+	Text                   string                          `json:"text,omitempty"`
+	RootMessageID          string                          `json:"root_message_id,omitempty"`
+	ParentMessageID        string                          `json:"parent_message_id,omitempty"`
+	ThreadID               string                          `json:"thread_id,omitempty"`
+	Attachments            []AgentBindingPendingAttachment `json:"attachments,omitempty"`
+	MergeForwardMessageIDs []string                        `json:"merge_forward_message_ids,omitempty"`
+	ExpandedMergeForward   bool                            `json:"expanded_merge_forward,omitempty"`
+	MentionedOpenIDs       []string                        `json:"mentioned_open_ids,omitempty"`
+	MentionedEveryone      bool                            `json:"mentioned_everyone,omitempty"`
+	MentionedSelf          bool                            `json:"mentioned_self,omitempty"`
+	CreatedAt              int64                           `json:"created_at,omitempty"`
+	StoredAt               int64                           `json:"stored_at,omitempty"`
+}
+
+type AgentBindingPendingAttachment struct {
+	Kind            string `json:"kind,omitempty"`
+	ResourceKey     string `json:"resource_key,omitempty"`
+	SourceMessageID string `json:"source_message_id,omitempty"`
 }
 
 type SessionBackendThread struct {
@@ -724,7 +755,19 @@ func cloneAgentBinding(binding *AgentBinding) *AgentBinding {
 		return nil
 	}
 	cp := *binding
+	cp.PendingMessage = cloneAgentBindingPendingMessage(binding.PendingMessage)
 	normalizeAgentBindingValues(&cp)
+	return &cp
+}
+
+func cloneAgentBindingPendingMessage(msg *AgentBindingPendingMessage) *AgentBindingPendingMessage {
+	if msg == nil {
+		return nil
+	}
+	cp := *msg
+	cp.Attachments = append([]AgentBindingPendingAttachment(nil), msg.Attachments...)
+	cp.MergeForwardMessageIDs = append([]string(nil), msg.MergeForwardMessageIDs...)
+	cp.MentionedOpenIDs = append([]string(nil), msg.MentionedOpenIDs...)
 	return &cp
 }
 
@@ -767,11 +810,64 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	binding.ApprovalPolicyOverride = strings.TrimSpace(binding.ApprovalPolicyOverride)
 	binding.MultiAgentModeOverride = strings.TrimSpace(binding.MultiAgentModeOverride)
 	binding.ClaudePermissionMode = strings.TrimSpace(binding.ClaudePermissionMode)
+	binding.PendingMessage = normalizeAgentBindingPendingMessage(binding.PendingMessage)
 	binding.Status = NormalizeAgentBindingStatus(binding.Status).String()
 	if binding.UpdatedAt == 0 && binding.CreatedAt != 0 {
 		binding.UpdatedAt = binding.CreatedAt
 	}
 	return before != *binding
+}
+
+func normalizeAgentBindingPendingMessage(msg *AgentBindingPendingMessage) *AgentBindingPendingMessage {
+	if msg == nil {
+		return nil
+	}
+	cp := cloneAgentBindingPendingMessage(msg)
+	cp.SessionKey = strings.TrimSpace(cp.SessionKey)
+	cp.MessageID = strings.TrimSpace(cp.MessageID)
+	cp.ChatID = strings.TrimSpace(cp.ChatID)
+	cp.ChatType = strings.ToLower(strings.TrimSpace(cp.ChatType))
+	cp.UserID = strings.TrimSpace(cp.UserID)
+	cp.UserName = strings.TrimSpace(cp.UserName)
+	cp.ChatName = strings.TrimSpace(cp.ChatName)
+	cp.RootMessageID = strings.TrimSpace(cp.RootMessageID)
+	cp.ParentMessageID = strings.TrimSpace(cp.ParentMessageID)
+	cp.ThreadID = strings.TrimSpace(cp.ThreadID)
+	cp.MergeForwardMessageIDs = normalizeStringSlice(cp.MergeForwardMessageIDs)
+	cp.MentionedOpenIDs = normalizeStringSlice(cp.MentionedOpenIDs)
+	attachments := make([]AgentBindingPendingAttachment, 0, len(cp.Attachments))
+	for _, attachment := range cp.Attachments {
+		attachment.Kind = strings.TrimSpace(attachment.Kind)
+		attachment.ResourceKey = strings.TrimSpace(attachment.ResourceKey)
+		attachment.SourceMessageID = strings.TrimSpace(attachment.SourceMessageID)
+		if attachment.Kind == "" && attachment.ResourceKey == "" && attachment.SourceMessageID == "" {
+			continue
+		}
+		attachments = append(attachments, attachment)
+	}
+	cp.Attachments = attachments
+	if cp.MessageID == "" && strings.TrimSpace(cp.Text) == "" && len(cp.Attachments) == 0 && len(cp.MergeForwardMessageIDs) == 0 {
+		return nil
+	}
+	return cp
+}
+
+func normalizeStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func normalizeAgentBindings(src map[string]*AgentBinding) map[string]*AgentBinding {

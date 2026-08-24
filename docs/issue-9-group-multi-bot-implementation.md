@@ -2,7 +2,7 @@
 
 状态: issue 9 实现完成；跨实例共享配置、BotProfile 继承、多人输入队列和群公告状态条是独立后续 issue
 
-更新时间: 2026-08-23
+更新时间: 2026-08-24
 
 本文是 issue 9 的实现约束和进度记录。它描述当前代码应该遵守的语义，并明确区分本 issue 已完成范围与独立后续 issue。
 
@@ -157,6 +157,8 @@ Binding lookup 不能参与 SessionKey 生成。
 
 当前实现对已有 Session 的行为是：如果 Session 已经有 BindingID，则沿用该 ID；如果没有，则在入队时从当前 chat 的本地 binding 补齐。Binding 记录本身按 ID 动态查找，因此修改 binding 的 workspace / model / runtime override 会影响后续提交的 effective config；已经在运行中的 turn 不被中途改写，已有 active backend thread 仍按现有 thread 生命周期收口。
 
+pending binding 不能创建普通 prompt submission。pending/missing binding 收到当前 bot 应处理的普通群消息时，必须先暂存原始 `InboundMessage` 并展示 binding/onboarding 卡片；只有 binding 成功激活并解析出本机 workspace 后，才用原始 message id、root message id、user、文本和附件元数据重放该输入。
+
 ### 3.3 Workspace resolution
 
 有 BindingID 且 binding 配置了 workspace 时，binding workspace 优先。
@@ -175,7 +177,9 @@ Binding lookup 不能参与 SessionKey 生成。
 - 回复当前 bot 已发送消息：通过 frontend-scoped MessageLink 接收。
 - `@everyone`：沿用 `RespondToAtEveryone` 配置，并要求本地 primary binding 才能作为默认处理者。
 
-pending binding 仍允许直接 `@` 当前 bot，以便完成 onboarding；未完成 onboarding 前不会接收普通未 `@` 消息。
+pending binding 仍允许直接 `@` 当前 bot，以便完成 onboarding；如果 pending binding 已是 primary，也会作为本机默认 bot 接收普通未 `@` 消息。但 pending 状态只允许进入 binding gate：它会暂存原始消息并展示 workspace 绑定入口，不能把消息直接投递给 Codex/Claude。绑定成功后，暂存的原始消息会自动重放。
+
+创建或激活当前群的第一个本机 binding 时，会自动把该 binding 设为 primary；后续同一 Feidex 实例里的其他 frontend/bot 不会自动抢 primary。用户也可以显式执行 `@Bot /bind primary on`，这会把当前 bot 设为本机 primary，并清掉同一实例内其他 bot 在该群的 primary 标记。不同机器之间没有共享 binding 状态，因此跨机器的 primary 选择仍需要用户明确指定。
 
 ### 3.5 Backend state machine
 
@@ -193,7 +197,7 @@ pending binding 仍允许直接 `@` 当前 bot，以便完成 onboarding；未�
 
 - [x] 新增 `AgentBinding` 状态模型。
 - [x] binding 持久化、frontend scope、chat 查询、删除和深拷贝。
-- [x] snapshot version 从 6 迁移到 8。
+- [x] snapshot version 从 6 迁移到 9。
 - [x] Session 持久化 `BindingID` 元数据。
 - [x] Submission 创建时固化 `BindingID` 元数据（Submission 当前仍是运行时状态，不写入 snapshot）。
 - [x] 群消息路由支持 primary / direct mention / local reply link。
@@ -207,6 +211,7 @@ pending binding 仍允许直接 `@` 当前 bot，以便完成 onboarding；未�
 - [x] workspace 选择、model、effort、fast 和 workspace runtime 设置的旧菜单按钮，在 binding mode 下同样写入当前 bot 的 binding。
 - [x] 删除本机 workspace 配置时，如果仍被当前 frontend 的群 binding 引用，会阻止删除并提示先切换 binding。
 - [x] binding 级 model / effort / service tier / sandbox / approval policy / multi-agent / Claude permission mode 已参与 Codex 和 Claude 的 effective config 解析。
+- [x] pending/missing binding 收到普通群消息时先暂存原始消息并展示 binding 卡，绑定成功后自动重放原始消息；pending 状态不会创建普通 submission。
 - [x] `/menu` 增加“当前 Bot”入口，当前 bot 的 binding、workspace、model 和 fast 配置可以从菜单进入；菜单不提供 bot selector，也不做跨 bot handoff。
 - [x] 增加 state、appstate、群消息策略、workspace 解析、binding service、binding-scoped command/action、effective config 和菜单测试。
 - [x] `go test ./...` 已通过。
@@ -239,7 +244,8 @@ pending binding 仍允许直接 `@` 当前 bot，以便完成 onboarding；未�
 - `/bind use` 绑定本机已有 workspace，并把 binding 激活。
 - `/bind new` 创建本机 workspace 配置并绑定当前群。
 - `/bind clone` clone 仓库、创建本机 workspace 配置并绑定当前群。
-- workspace 未绑定前，该 binding 保持 pending；pending binding 只接受明确 `@Bot` 的 onboarding 命令，不接收未 `@` 的普通群消息。
+- workspace 未绑定前，该 binding 保持 pending；pending binding 收到当前 bot 应处理的普通消息时，只会进入 binding/onboarding 流程并暂存原始消息，不会直接回复业务内容或创建 submission。
+- 绑定成功后，Feidex 会自动用暂存的原始消息继续处理输入；如果后续又有新的普通消息到达同一个 pending binding，会以最后一条暂存消息为准。
 - 该流程只修改当前机器的本地 binding，不要求其他机器共享 workspace 配置。
 
 菜单入口：`/menu` -> `当前 Bot` -> `群内 Binding /bind`。菜单只作用于生成这张卡片的 bot，不显示 bot 列表。

@@ -49,7 +49,10 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已绑定本机 workspace `"+updated.WorkspaceID+"`。")
+		if err := s.replyBindingUpdated(msg, "已绑定本机 workspace `"+updated.WorkspaceID+"`。"); err != nil {
+			return err
+		}
+		return s.replayPendingBindingMessage(updated)
 	case "new":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /bind new WORKSPACE_ID CWD")
@@ -63,7 +66,10 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已创建并绑定本机 workspace `"+updated.WorkspaceID+"`。")
+		if err := s.replyBindingUpdated(msg, "已创建并绑定本机 workspace `"+updated.WorkspaceID+"`。"); err != nil {
+			return err
+		}
+		return s.replayPendingBindingMessage(updated)
 	case "clone":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: /bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
@@ -76,7 +82,10 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已 clone 并绑定本机 workspace `"+updated.WorkspaceID+"`。\n\ncwd: `"+targetDir+"`")
+		if err := s.replyBindingUpdated(msg, "已 clone 并绑定本机 workspace `"+updated.WorkspaceID+"`。\n\ncwd: `"+targetDir+"`"); err != nil {
+			return err
+		}
+		return s.replayPendingBindingMessage(updated)
 	case "component":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /bind component NAME|default")
@@ -190,6 +199,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
+	s.replayPendingBindingMessageAsync(updated)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已绑定 workspace " + updated.WorkspaceID},
 		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
@@ -213,6 +223,7 @@ func (s bindingService) ensureBindingForMessage(msg *feishu.InboundMessage) (*st
 		FrontendID: s.app.FrontendID(),
 		ChatID:     chatID,
 		ChatType:   chatType,
+		Primary:    !hasAnyPrimaryBindingForChat(s.app, chatType, chatID),
 		Status:     state.AgentBindingStatusPending.String(),
 	}
 	if err := s.app.State().SaveAgentBinding(binding); err != nil {
@@ -243,6 +254,9 @@ func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, wo
 	}
 	return s.updateBinding(binding, func(current *state.AgentBinding) {
 		current.WorkspaceID = workspaceID
+		if !current.Primary && !hasAnyPrimaryBindingForChatExcluding(s.app, current.ChatType, current.ChatID, current.ID) {
+			current.Primary = true
+		}
 		current.Status = state.AgentBindingStatusActive.String()
 	})
 }
@@ -260,6 +274,11 @@ func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*
 	}
 	if err := s.app.State().SaveAgentBinding(&current); err != nil {
 		return nil, err
+	}
+	if current.Primary {
+		if err := clearOtherPrimaryBindingsForChat(s.app, current.ChatType, current.ChatID, current.ID); err != nil {
+			return nil, err
+		}
 	}
 	updated := s.app.State().AgentBinding(current.ID)
 	if updated == nil {
@@ -369,6 +388,19 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"Claude permissions: " + renderOptionalBacktick(binding.ClaudePermissionMode),
 		"\n常用命令：`/bind use WORKSPACE_ID`、`/bind new WORKSPACE_ID CWD`、`/bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/bind primary on|off`、`/bind model MODEL|default`、`/bind effort EFFORT|default`。",
 	}
+	if binding.PendingMessage != nil {
+		preview := truncate(strings.TrimSpace(binding.PendingMessage.Text), 80)
+		if preview == "" && len(binding.PendingMessage.Attachments) > 0 {
+			preview = fmt.Sprintf("%d 个附件", len(binding.PendingMessage.Attachments))
+		}
+		if preview == "" {
+			preview = binding.PendingMessage.MessageID
+		}
+		lines = append(lines, "\n已暂存原消息，绑定 workspace 成功后会继续处理: `"+preview+"`")
+	}
+	if !hasAnyPrimaryBindingForChat(s.app, binding.ChatType, binding.ChatID) {
+		lines = append(lines, "\n注意: 本机状态里这个群还没有 primary bot；未 `@` 的普通群消息不会被任何本机 bot 接收。使用 `@Bot /bind primary on` 设置当前 bot 为 primary。")
+	}
 	buttons := []feishu.Button{}
 	if config.FindWorkspace(s.app.cfg, "default") != nil {
 		buttons = append(buttons, feishu.Button{Text: "绑定 default", Type: "default", Value: map[string]any{"action": "bind.use", "session_key": sessionKey, "workspace_id": "default"}})
@@ -411,14 +443,65 @@ func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, bind
 	return s.app.feishu.SimpleStatusCard("选择 Binding Workspace", "blue", menuCardBody("menu.binding", strings.Join(lines, "\n")), buttons)
 }
 
+func hasAnyPrimaryBindingForChat(a *App, chatType, chatID string) bool {
+	return hasAnyPrimaryBindingForChatExcluding(a, chatType, chatID, "")
+}
+
+func hasAnyPrimaryBindingForChatExcluding(a *App, chatType, chatID, excludeID string) bool {
+	chatType = strings.ToLower(strings.TrimSpace(chatType))
+	chatID = strings.TrimSpace(chatID)
+	excludeID = strings.TrimSpace(excludeID)
+	if a == nil || a.Store() == nil || chatID == "" {
+		return false
+	}
+	for _, binding := range a.Store().AllAgentBindings() {
+		if binding == nil || strings.TrimSpace(binding.ID) == excludeID {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(binding.ChatType)) != chatType || strings.TrimSpace(binding.ChatID) != chatID {
+			continue
+		}
+		if binding.Primary {
+			return true
+		}
+	}
+	return false
+}
+
+func clearOtherPrimaryBindingsForChat(a *App, chatType, chatID, keepID string) error {
+	chatType = strings.ToLower(strings.TrimSpace(chatType))
+	chatID = strings.TrimSpace(chatID)
+	keepID = strings.TrimSpace(keepID)
+	if a == nil || a.Store() == nil || chatID == "" || keepID == "" {
+		return nil
+	}
+	for _, binding := range a.Store().AllAgentBindings() {
+		if binding == nil || strings.TrimSpace(binding.ID) == keepID || !binding.Primary {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(binding.ChatType)) != chatType || strings.TrimSpace(binding.ChatID) != chatID {
+			continue
+		}
+		binding.Primary = false
+		if err := a.Store().UpsertAgentBinding(binding); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func renderCurrentBotMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.current_bot")
 	body := spec.Description
 	if chatType, chatID, _, _ := currentBotMenuContext(sessionKey); chatType == "group" && chatID != "" {
 		if binding := agentBindingForChat(a, chatType, chatID); binding != nil {
 			body += "\n\n当前 binding: `" + binding.Status + "`"
+			body += "\nprimary: `" + onOffLabel(binding.Primary) + "`"
 			body += "\nworkspace: " + renderOptionalBacktick(binding.WorkspaceID)
 			body += "\ncomponent: " + renderOptionalBacktick(binding.Component)
+			if !hasAnyPrimaryBindingForChat(a, chatType, chatID) {
+				body += "\n注意: 本机状态里这个群还没有 primary bot。"
+			}
 		}
 	}
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForSession(a, sessionKey, spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))

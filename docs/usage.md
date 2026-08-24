@@ -99,6 +99,8 @@
 
 群聊中的菜单作用域规则：没有本地 binding 的老群继续沿用旧命令语义；一旦当前 bot 在该群通过 `/bind` 建立了本地 binding，`/workspace use`、`/workspace sandbox/policy/multiagent/permissions`、`/model set`、`/model effort`、`/effort`、`/fast` 以及对应菜单按钮都会写入当前 bot 的群内 binding，不会切换无作用域的 session workspace 或全局模型配置。要操作另一个 bot，必须明确 `@Bot /menu` 或 `@Bot /bind`，菜单里不提供 bot 选择列表或跨 bot handoff。
 
+pending binding 还没有 workspace，不能执行普通输入。当前 bot 收到应处理的普通群消息时，会先暂存原始消息并展示 binding 入口；用户完成 `/bind use`、`/bind new` 或 `/bind clone` 后，原始消息会自动继续处理。
+
 ### 本地 slash 命令
 
 - `/menu`
@@ -114,7 +116,7 @@
 - `/bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]`
   - clone 仓库创建本机 workspace 并绑定到当前群
 - `/bind component NAME|default` / `/bind primary on|off`
-  - 设置当前 bot 在本群的组件说明和 primary 路由标记
+  - 设置当前 bot 在本群的组件说明和 primary 路由标记；本机第一个 binding 会默认成为 primary，跨机器 primary 需要显式指定
 - `/bind model MODEL|default` / `/bind effort EFFORT|default` / `/bind fast fast|default|off`
   - 设置当前 bot 在本群的模型、推理强度和 service tier 覆盖
 - `/bind sandbox MODE|default` / `/bind policy POLICY|default` / `/bind multiagent MODE|default` / `/bind permissions MODE|default`

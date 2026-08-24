@@ -31,6 +31,21 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 		MultiAgentModeOverride:  " proactive ",
 		ClaudePermissionMode:    " acceptEdits ",
 		Primary:                 true,
+		PendingMessage: &AgentBindingPendingMessage{
+			SessionKey:       " feishu:frontend:frontend-a:group:chat-1:root:msg-1 ",
+			MessageID:        " msg-1 ",
+			ChatID:           " chat-1 ",
+			ChatType:         " GROUP ",
+			UserID:           " user-1 ",
+			Text:             "original prompt",
+			RootMessageID:    " msg-1 ",
+			MentionedOpenIDs: []string{" bot-a ", ""},
+			Attachments: []AgentBindingPendingAttachment{{
+				Kind:            " image ",
+				ResourceKey:     " img-key ",
+				SourceMessageID: " msg-1 ",
+			}},
+		},
 	}
 	if err := store.UpsertAgentBinding(binding); err != nil {
 		t.Fatalf("UpsertAgentBinding() error = %v", err)
@@ -53,10 +68,16 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 	if saved.CreatedAt == 0 || saved.UpdatedAt == 0 {
 		t.Fatalf("binding timestamps = %+v", saved)
 	}
+	if saved.PendingMessage == nil || saved.PendingMessage.ChatType != "group" || saved.PendingMessage.Text != "original prompt" || len(saved.PendingMessage.MentionedOpenIDs) != 1 || len(saved.PendingMessage.Attachments) != 1 {
+		t.Fatalf("saved pending message = %+v", saved.PendingMessage)
+	}
 
 	saved.WorkspaceID = "changed-through-return-value"
+	saved.PendingMessage.Text = "changed-through-return-value"
 	if got := store.GetAgentBinding("binding-a"); got == nil || got.WorkspaceID != "workspace-a" {
 		t.Fatalf("GetAgentBinding() returned shared state: %+v", got)
+	} else if got.PendingMessage == nil || got.PendingMessage.Text != "original prompt" {
+		t.Fatalf("GetAgentBinding() returned shared pending message: %+v", got.PendingMessage)
 	}
 
 	if err := store.UpsertAgentBinding(&AgentBinding{
@@ -90,7 +111,7 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(reopen) error = %v", err)
 	}
-	if got := reopened.GetScopedAgentBinding("frontend-a", "binding-a"); got == nil || got.WorkspaceID != "workspace-a" {
+	if got := reopened.GetScopedAgentBinding("frontend-a", "binding-a"); got == nil || got.WorkspaceID != "workspace-a" || got.PendingMessage == nil || got.PendingMessage.Text != "original prompt" {
 		t.Fatalf("reopened binding = %+v", got)
 	}
 	if got := reopened.GetScopedAgentBinding("frontend-b", "binding-a"); got != nil {
