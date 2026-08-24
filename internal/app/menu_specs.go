@@ -129,9 +129,21 @@ func renderRootMenuButtons(backend, sessionKey string) []feishu.Button {
 			return menuItemVisibleForBackend(spec, backend)
 		},
 		func(action, backend string) bool {
+			if !menuGroupVisibleForSession(action, sessionKey) {
+				return false
+			}
 			return groupHasVisibleMenuItems(action, backend)
 		},
 	)
+}
+
+func menuGroupVisibleForSession(action, sessionKey string) bool {
+	switch strings.TrimSpace(action) {
+	case "menu.current_bot":
+		return isGroupSessionKey(sessionKey)
+	default:
+		return true
+	}
 }
 
 func renderGroupMenuButtons(backend, groupAction, sessionKey string) []feishu.Button {

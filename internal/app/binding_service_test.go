@@ -322,6 +322,12 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 
 func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	a, _, _ := newTestApp(t)
+	p2pRoot := renderCommandMenuCard(a, "feishu:frontend:default:p2p:chat-1:user-1")
+	p2pLabels := cardButtonLabelsByAction(p2pRoot)
+	if got := p2pLabels["menu.current_bot"]; got != "" {
+		t.Fatalf("p2p root menu labels = %+v, want no current bot", p2pLabels)
+	}
+
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	root := renderCommandMenuCard(a, sessionKey)
 	labels := cardButtonLabelsByAction(root)

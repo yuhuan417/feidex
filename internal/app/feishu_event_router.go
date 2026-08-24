@@ -123,7 +123,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		}
 	}
 	if !msg.ExpandedMergeForward && strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
-		if isLocalCommandForBackend(configuredBackend(a), strings.TrimSpace(msg.Text)) {
+		if isLocalCommandForMessage(configuredBackend(a), msg, strings.TrimSpace(msg.Text)) {
 			if err := handleCommand(a, msg, strings.TrimSpace(msg.Text)); err != nil {
 				return err
 			}

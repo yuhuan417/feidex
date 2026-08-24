@@ -66,6 +66,18 @@ func isLocalCommandForBackend(backend, raw string) bool {
 	return commandHandlesLocallyForBackend(spec, backend, fields)
 }
 
+func isLocalCommandForMessage(backend string, msg *feishu.InboundMessage, raw string) bool {
+	raw = strings.TrimSpace(raw)
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return false
+	}
+	if fields[0] == "/bind" && (msg == nil || strings.TrimSpace(msg.ChatType) != "group") {
+		return false
+	}
+	return isLocalCommandForBackend(backend, raw)
+}
+
 func isLocalCommand(raw string) bool {
 	return isLocalCommandForBackend(backendCodex, raw)
 }

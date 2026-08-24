@@ -142,6 +142,41 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	}
 }
 
+func TestP2PBindSlashPassesThroughToBackend(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	var methods []string
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		methods = append(methods, method)
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-bind-p2p"
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-bind-p2p"
+		}
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-bind-p2p", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "/bind"}
+	if err := newFeishuEventRouter(a).processMessage(msg); err != nil {
+		t.Fatalf("processMessage(/bind p2p) error = %v", err)
+	}
+	if len(ff.replyTextsSnapshot()) != 0 {
+		t.Fatalf("p2p /bind should not be handled as local command error, replies=%+v", ff.replyTextsSnapshot())
+	}
+	if len(methods) != 2 || methods[0] != "thread/start" || methods[1] != "turn/start" {
+		t.Fatalf("p2p /bind backend methods = %+v, want thread/start then turn/start", methods)
+	}
+	sess := a.store.GetSession("feishu:p2p:chat:user")
+	if sess == nil || sess.ActiveThreadID != "thread-bind-p2p" || sess.ActiveTurnID != "turn-bind-p2p" {
+		t.Fatalf("p2p /bind session = %+v", sess)
+	}
+	if sub := a.store.GetSubmission(sess.ActiveSubmissionID); sub == nil || sub.InputText != "/bind" {
+		t.Fatalf("p2p /bind submission = %+v, want passthrough input", sub)
+	}
+}
+
 func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	a, _, fc := newTestApp(t)
 
