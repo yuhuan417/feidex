@@ -4,6 +4,7 @@ package workspacecmd
 
 import (
 	"context"
+	"strings"
 
 	"feidex/internal/app/appcore"
 	appworkspace "feidex/internal/app/workspace"
@@ -47,6 +48,7 @@ const (
 var (
 	SandboxOptions               = appworkspace.SandboxOptions
 	ApprovalPolicyOptions        = appworkspace.ApprovalPolicyOptions
+	MultiAgentModeOptions        = appworkspace.MultiAgentModeOptions
 	ParseCloneArgs               = appworkspace.ParseCloneArgs
 	NewPayloadFromPending        = appworkspace.NewPayloadFromPending
 	ClonePayloadFromPending      = appworkspace.ClonePayloadFromPending
@@ -167,12 +169,13 @@ type (
 
 // Render callbacks.
 type (
-	RenderWorkspaceMenuCardFn          func(sessionKey string) map[string]any
-	RenderWorkspaceSandboxMenuCardFn   func(sessionKey string) (map[string]any, error)
-	RenderWorkspacePolicyMenuCardFn    func(sessionKey string) (map[string]any, error)
+	RenderWorkspaceMenuCardFn           func(sessionKey string) map[string]any
+	RenderWorkspaceSandboxMenuCardFn    func(sessionKey string) (map[string]any, error)
+	RenderWorkspacePolicyMenuCardFn     func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceMultiAgentMenuCardFn func(sessionKey string) (map[string]any, error)
-	RenderWorkspaceDeleteMenuCardFn    func(sessionKey string) (map[string]any, error)
-	RenderWorkspaceDeleteConfirmCardFn func(sessionKey, workspaceID string) (map[string]any, error)
+	RenderWorkspaceDeleteMenuCardFn     func(sessionKey string) (map[string]any, error)
+	RenderWorkspaceDeleteConfirmCardFn  func(sessionKey, workspaceID string) (map[string]any, error)
+	WorkspaceIDForSessionFn             func(sessionKey string, sess *state.Session) string
 )
 
 // ---------------------------------------------------------------------------
@@ -306,12 +309,13 @@ type ManagementDeps struct {
 }
 
 type RenderDeps struct {
-	App        App
-	State      StateDeps
-	Backend    BackendConfigDeps
-	Formatting FormattingDeps
-	PathPicker PathPickerDeps
-	Management RenderManagementDeps
+	App                   App
+	State                 StateDeps
+	Backend               BackendConfigDeps
+	Formatting            FormattingDeps
+	PathPicker            PathPickerDeps
+	Management            RenderManagementDeps
+	WorkspaceIDForSession WorkspaceIDForSessionFn
 }
 
 type ThreadServiceDeps struct {
@@ -817,6 +821,14 @@ func (s RenderService) GetSession(key string) *state.Session {
 	}
 	return s.deps.State.GetSession(key)
 }
+
+func (s RenderService) WorkspaceIDForSession(sessionKey string, sess *state.Session) string {
+	if s.deps.WorkspaceIDForSession != nil {
+		return strings.TrimSpace(s.deps.WorkspaceIDForSession(sessionKey, sess))
+	}
+	return selectedWorkspaceIDForSession(s.App, sess)
+}
+
 func (s RenderService) BackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
 	if s.deps.Backend.BackendWorkspaceSummaryLines == nil {
 		return lines

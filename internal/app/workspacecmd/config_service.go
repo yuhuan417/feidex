@@ -241,7 +241,7 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 				continue
 			}
 			if strings.TrimSpace(binding.WorkspaceID) == workspaceID {
-				return fmt.Errorf("workspace %q 仍被群 binding %q 使用，请先在群聊中用 /bind use 切换", workspaceID, binding.ID)
+				return fmt.Errorf("workspace %q 仍被某个群里的当前 Bot 工作区配置使用，请先在对应群聊中用 /workspace use 切换", workspaceID)
 			}
 		}
 	}

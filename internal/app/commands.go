@@ -19,7 +19,7 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	if spec == nil {
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
-	if !hasConfiguredBackend(a) && fields[0] != "/backend" && fields[0] != "/bind" {
+	if !hasConfiguredBackend(a) && !commandAllowedWithoutBackend(msg, fields[0]) {
 		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
 	backend := configuredBackend(a)
@@ -38,6 +38,17 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 		return spec.HandleRaw(a, msg, raw, fields[1:])
 	}
 	return spec.Handle(a, msg, fields[1:])
+}
+
+func commandAllowedWithoutBackend(msg *feishu.InboundMessage, name string) bool {
+	switch strings.TrimSpace(name) {
+	case "/backend":
+		return true
+	case "/workspace", "/primary":
+		return isGroupMessage(msg)
+	default:
+		return false
+	}
 }
 
 func enqueuePassthroughCommand(a *App, msg *feishu.InboundMessage, raw string) error {
@@ -72,7 +83,7 @@ func isLocalCommandForMessage(backend string, msg *feishu.InboundMessage, raw st
 	if len(fields) == 0 {
 		return false
 	}
-	if fields[0] == "/bind" && (msg == nil || strings.TrimSpace(msg.ChatType) != "group") {
+	if fields[0] == "/primary" && (msg == nil || strings.TrimSpace(msg.ChatType) != "group") {
 		return false
 	}
 	return isLocalCommandForBackend(backend, raw)
@@ -126,5 +137,5 @@ func renderHelpCard(a *App, sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "帮助说明"), "blue", menuCardBody("menu.help", renderHelpBodyFromRegistry(configuredBackend(a))), buttons)
+	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "帮助说明"), "blue", menuCardBody("menu.help", renderHelpBodyForSession(configuredBackend(a), sessionKey)), buttons)
 }

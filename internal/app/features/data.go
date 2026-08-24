@@ -8,7 +8,6 @@ import (
 
 var helpGroupOrder = []string{
 	"常用工具",
-	"binding",
 	"model",
 	"thread",
 	"workspace",
@@ -56,34 +55,20 @@ var registry = []Spec{
 	{
 		ID:   "menu.current_bot",
 		Kind: SpecKindSection,
-		Nodes: []MenuNode{
-			{Action: "menu.current_bot", Label: "当前 Bot", Parent: "menu.root"},
-		},
-		MenuGroup: &MenuGroupSpec{Action: "menu.current_bot", Label: "当前 Bot", Description: "当前 bot 在本群内的本机 binding、workspace 和运行参数。", ShowInRoot: true},
-		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.current_bot", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
-			{GroupAction: "menu.current_bot", Action: "menu.workspace", Label: "Binding Workspace", Slash: "/workspace", Kind: MenuItemSubmenu},
-			{GroupAction: "menu.current_bot", Action: "menu.model", Label: "Binding 模型", Slash: "/model", Kind: MenuItemSubmenu},
-			{GroupAction: "menu.current_bot", Action: "menu.fast", Label: "Binding 响应速度", Slash: "/fast config", Kind: MenuItemSubmenu},
+		Commands: []CommandSpec{
+			{ID: "primary", Names: []string{"/primary"}},
 		},
 		ActionNames: []ActionName{
 			"menu.current_bot",
 		},
 	},
 	{
-		ID:       "menu.binding",
-		Kind:     SpecKindCapability,
-		Commands: []CommandSpec{{ID: "bind", Names: []string{"/bind"}, HelpGroup: "binding", HelpEntries: []HelpCommandSpec{{Command: "/bind", Summary: "查看或创建当前 bot 在本群的 binding。"}, {Command: "/bind use WORKSPACE_ID", Summary: "将当前 bot 在本群的 binding 指向本机已有 workspace。"}, {Command: "/bind new WORKSPACE_ID CWD", Summary: "创建本机 workspace 并绑定到当前群。"}, {Command: "/bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]", Summary: "clone 仓库创建本机 workspace 并绑定到当前群。"}, {Command: "/bind component NAME|default", Summary: "设置当前 bot 在本群的组件说明，例如 client/server。"}, {Command: "/bind primary on|off", Summary: "设置当前 bot 是否接收本群未明确 @ 的消息。"}, {Command: "/bind model MODEL|default", Summary: "设置当前 bot 在本群的 model 覆盖。"}, {Command: "/bind effort EFFORT|default", Summary: "设置当前 bot 在本群的推理强度覆盖。"}}}},
-		Nodes: []MenuNode{
-			{Action: "menu.binding", Label: "群内 Binding", Parent: "menu.current_bot"},
-		},
-		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.current_bot", Action: "menu.binding", Label: "群内 Binding", Slash: "/bind", Kind: MenuItemSubmenu},
-		},
+		ID:   "menu.current_workspace",
+		Kind: SpecKindSection,
 		ActionNames: []ActionName{
-			"menu.binding",
-			"bind.choose",
-			"bind.use",
+			"menu.current_workspace",
+			"current_workspace.choose",
+			"current_workspace.use",
 		},
 	},
 	{

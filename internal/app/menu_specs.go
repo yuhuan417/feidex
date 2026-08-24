@@ -140,7 +140,7 @@ func renderRootMenuButtons(backend, sessionKey string) []feishu.Button {
 func menuGroupVisibleForSession(action, sessionKey string) bool {
 	switch strings.TrimSpace(action) {
 	case "menu.current_bot":
-		return isGroupSessionKey(sessionKey)
+		return false
 	default:
 		return true
 	}

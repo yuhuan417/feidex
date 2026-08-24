@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"feidex/internal/app/appcore"
 	apppathpick "feidex/internal/app/pathpick"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
@@ -40,6 +41,15 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 				}
 				return "."
 			},
+		},
+		WorkspaceIDForSession: func(sessionKey string, sess *state.Session) string {
+			if isGroupSessionKey(sessionKey) {
+				if binding := bindingForSessionKey(a, sessionKey); binding != nil {
+					return strings.TrimSpace(binding.WorkspaceID)
+				}
+				return ""
+			}
+			return appcore.ResolveWorkspaceSelectionForSession(a, sess)
 		},
 	})
 }

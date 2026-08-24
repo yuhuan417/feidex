@@ -24,7 +24,7 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 	},
 	"workspace.new": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace new", "menu.binding")
+			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace new", "menu.workspace")
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceNew(action, actionSessionKey(action))
 	},
@@ -33,7 +33,7 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 	},
 	"workspace.clone": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace clone", "menu.binding")
+			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace clone", "menu.workspace")
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceClone(action, actionSessionKey(action))
 	},
@@ -50,33 +50,42 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceCloneCancel(action)
 	},
 	"workspace.clone.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		if newBindingService(s.app).isGroupWorkspacePending(action, "workspace_clone") {
+			return newBindingService(s.app).completeBindingWorkspaceCloneSubmit(action)
+		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceCloneSubmit(action)
 	},
 	"workspace.new.pickdir": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceNewPickDir(action)
 	},
 	"workspace.new.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		if newBindingService(s.app).isGroupWorkspacePending(action, "workspace_new") {
+			return newBindingService(s.app).completeBindingWorkspaceNewSubmit(action)
+		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceNewSubmit(action)
 	},
 	"workspace.sandbox.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-			return newBindingService(s.app).completeMenuBinding(action, actionSessionKey(action))
+			return newBindingService(s.app).completeBindingWorkspaceSettingMenu(action, actionSessionKey(action), "sandbox")
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceSandboxMenu(action, actionSessionKey(action))
 	},
 	"workspace.policy.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-			return newBindingService(s.app).completeMenuBinding(action, actionSessionKey(action))
+			return newBindingService(s.app).completeBindingWorkspaceSettingMenu(action, actionSessionKey(action), "policy")
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspacePolicyMenu(action, actionSessionKey(action))
 	},
 	"workspace.permission_mode.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-			return newBindingService(s.app).completeMenuBinding(action, actionSessionKey(action))
+			return newBindingService(s.app).completeBindingWorkspaceSettingMenu(action, actionSessionKey(action), "permissions")
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteClaudeWorkspacePermissionMenu(action, actionSessionKey(action))
 	},
 	"workspace.delete.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "群聊中不能删除本机 workspace，请私聊该 Bot 使用 /workspace delete"}}, nil
+		}
 		return newWorkspaceConfigServiceInner(s.app).CompleteWorkspaceDeleteMenu(actionSessionKey(action))
 	},
 	"workspace.delete.prompt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -105,7 +114,7 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 	},
 	"workspace.multiagent.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-			return newBindingService(s.app).completeMenuBinding(action, actionSessionKey(action))
+			return newBindingService(s.app).completeBindingWorkspaceSettingMenu(action, actionSessionKey(action), "multiagent")
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceMultiAgentMenu(action, actionSessionKey(action))
 	},

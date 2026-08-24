@@ -117,17 +117,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			if actionName != "menu.workspace" {
 				return nil, false
 			}
-			if groupBindingSessionScopeActive(a, sessionKey) {
-				return newBindingService(a).renderBindingWorkspaceChooseCard(sessionKey, bindingForSessionKey(a, sessionKey)), true
-			}
 			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.workspace" {
 				return nil, nil
-			}
-			if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
-				return newBindingService(s.app).completeBindingWorkspaceChoose(action, actionSessionKey(action))
 			}
 			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace", "menu.root")
 		},
@@ -169,7 +163,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}
-					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前 Bot 配置"}, Card: rawCard(svc.renderBindingStatusCard(sessionKey, binding))}, nil
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内模型配置"}, Card: rawCard(svc.renderBindingStatusCard(sessionKey, binding))}, nil
 				case "model.config.set_model":
 					return svc.completeBindingModelSet(action, sessionKey, actionStringValue(action, "model_id"))
 				case "model.config.select_model":
@@ -262,7 +256,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}
-					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前 Bot 配置"}, Card: rawCard(svc.renderBindingStatusCard(sessionKey, binding))}, nil
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内响应速度配置"}, Card: rawCard(svc.renderBindingStatusCard(sessionKey, binding))}, nil
 				case "service_tier.set":
 					return svc.completeBindingServiceTierSet(action, sessionKey, actionStringValue(action, "service_tier"))
 				}

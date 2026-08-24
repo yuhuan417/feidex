@@ -142,38 +142,19 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	}
 }
 
-func TestP2PBindSlashPassesThroughToBackend(t *testing.T) {
-	a, ff, fc := newTestApp(t)
-	var methods []string
-	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
-		methods = append(methods, method)
-		switch method {
-		case "thread/start":
-			result := out.(*codexrpc.ThreadStartResult)
-			result.Thread.ID = "thread-bind-p2p"
-		case "turn/start":
-			result := out.(*codexrpc.TurnStartResult)
-			result.Turn.ID = "turn-bind-p2p"
-		}
-		return nil
+func TestRemovedBindSlashIsNotRegisteredAsLocalCommand(t *testing.T) {
+	removed := "/" + "bind"
+	if spec := findLocalCommandSpec(removed); spec != nil {
+		t.Fatalf("removed command still registered: %+v", spec)
 	}
-
-	msg := &feishu.InboundMessage{MessageID: "m-bind-p2p", ChatID: "chat", ChatType: "p2p", UserID: "user", Text: "/bind"}
-	if err := newFeishuEventRouter(a).processMessage(msg); err != nil {
-		t.Fatalf("processMessage(/bind p2p) error = %v", err)
+	if isLocalCommandForBackend(backendCodex, removed) {
+		t.Fatal("removed command should not be local on Codex")
 	}
-	if len(ff.replyTextsSnapshot()) != 0 {
-		t.Fatalf("p2p /bind should not be handled as local command error, replies=%+v", ff.replyTextsSnapshot())
+	if isLocalCommandForBackend(backendClaude, removed) {
+		t.Fatal("removed command should not be local on Claude")
 	}
-	if len(methods) != 2 || methods[0] != "thread/start" || methods[1] != "turn/start" {
-		t.Fatalf("p2p /bind backend methods = %+v, want thread/start then turn/start", methods)
-	}
-	sess := a.store.GetSession("feishu:p2p:chat:user")
-	if sess == nil || sess.ActiveThreadID != "thread-bind-p2p" || sess.ActiveTurnID != "turn-bind-p2p" {
-		t.Fatalf("p2p /bind session = %+v", sess)
-	}
-	if sub := a.store.GetSubmission(sess.ActiveSubmissionID); sub == nil || sub.InputText != "/bind" {
-		t.Fatalf("p2p /bind submission = %+v, want passthrough input", sub)
+	if commandAllowedWithoutBackend(&feishu.InboundMessage{ChatType: "group", ChatID: "chat"}, removed) {
+		t.Fatal("removed command should not bypass backend selection")
 	}
 }
 

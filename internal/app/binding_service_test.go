@@ -11,17 +11,17 @@ import (
 	"feidex/internal/state"
 )
 
-func TestCommandBindCreatesAndUpdatesLocalGroupBinding(t *testing.T) {
+func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
-	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-issue-9", MessageID: "msg-bind", UserID: "user-1"}
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-issue-9", MessageID: "msg-workspace", UserID: "user-1"}
 
-	if err := newBindingService(a).commandBind(msg, nil); err != nil {
-		t.Fatalf("/bind status error = %v", err)
+	if err := newBindingService(a).commandWorkspace(msg, nil); err != nil {
+		t.Fatalf("/workspace status error = %v", err)
 	}
 	binding := agentBindingForChat(a, "group", "chat-issue-9")
 	if binding == nil {
-		t.Fatal("/bind did not create pending binding")
+		t.Fatal("/workspace did not create pending group config")
 	}
 	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" || !binding.Primary {
 		t.Fatalf("initial binding = %+v, want pending primary without workspace", binding)
@@ -30,21 +30,22 @@ func TestCommandBindCreatesAndUpdatesLocalGroupBinding(t *testing.T) {
 		t.Fatalf("reply cards after status = %d, want 1", len(ff.replyCardsSnapshot()))
 	}
 
-	commands := [][]string{
-		{"use", "default"},
-		{"component", "client"},
-		{"primary", "on"},
-		{"model", "gpt-5-binding"},
-		{"effort", "high"},
-		{"fast", "fast"},
-		{"sandbox", "read-only"},
-		{"policy", "never"},
-		{"multiagent", "proactive"},
-		{"permissions", "acceptEdits"},
+	commands := []string{
+		"/workspace use default",
+		"/primary on",
+		"/model set gpt-5-binding",
+		"/model effort high",
+		"/fast fast",
+		"/workspace sandbox read-only",
+		"/workspace policy never",
+		"/workspace multiagent proactive",
+		"/workspace permissions acceptEdits",
 	}
-	for _, args := range commands {
-		if err := newBindingService(a).commandBind(msg, args); err != nil {
-			t.Fatalf("/bind %s error = %v", strings.Join(args, " "), err)
+	for _, raw := range commands {
+		msg.Text = raw
+		msg.MessageID = strings.ReplaceAll(strings.TrimPrefix(raw, "/"), " ", "-")
+		if err := handleCommand(a, msg, raw); err != nil {
+			t.Fatalf("handleCommand(%q) error = %v", raw, err)
 		}
 	}
 	binding = agentBindingForChat(a, "group", "chat-issue-9")
@@ -54,29 +55,29 @@ func TestCommandBindCreatesAndUpdatesLocalGroupBinding(t *testing.T) {
 	if binding.Status != state.AgentBindingStatusActive.String() || binding.WorkspaceID != "default" {
 		t.Fatalf("activated binding = %+v", binding)
 	}
-	if !binding.Primary || binding.Component != "client" || binding.ModelOverride != "gpt-5-binding" || binding.ReasoningEffortOverride != "high" {
+	if !binding.Primary || binding.Component != "" || binding.ModelOverride != "gpt-5-binding" || binding.ReasoningEffortOverride != "high" {
 		t.Fatalf("binding user overrides = %+v", binding)
 	}
 	if binding.ServiceTierOverride != "fast" || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" || binding.MultiAgentModeOverride != "proactive" || binding.ClaudePermissionMode != "acceptEdits" {
 		t.Fatalf("binding runtime overrides = %+v", binding)
 	}
 	if a.cfg.Codex.Model != "" || a.cfg.Codex.ReasoningEffort != "" {
-		t.Fatalf("/bind should not mutate global codex config: %+v", a.cfg.Codex)
+		t.Fatalf("group commands should not mutate global codex config: %+v", a.cfg.Codex)
 	}
 }
 
-func TestCommandBindDefaultsOnlyFirstLocalBindingToPrimary(t *testing.T) {
+func TestWorkspaceDefaultsOnlyFirstLocalGroupConfigToPrimary(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
 	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: wrapFeishuClient(&fakeFeishuClient{})}
 
 	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
-	if err := newBindingService(a).commandBind(msgA, nil); err != nil {
-		t.Fatalf("bot-a /bind error = %v", err)
+	if err := newBindingService(a).commandWorkspace(msgA, nil); err != nil {
+		t.Fatalf("bot-a /workspace error = %v", err)
 	}
 	msgB := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-b", UserID: "user-1"}
-	if err := newBindingService(b).commandBind(msgB, nil); err != nil {
-		t.Fatalf("bot-b /bind error = %v", err)
+	if err := newBindingService(b).commandWorkspace(msgB, nil); err != nil {
+		t.Fatalf("bot-b /workspace error = %v", err)
 	}
 
 	bindingA := a.State().AgentBinding(defaultBindingID("bot-a", "group", "chat-primary"))
@@ -88,8 +89,8 @@ func TestCommandBindDefaultsOnlyFirstLocalBindingToPrimary(t *testing.T) {
 		t.Fatalf("bot-b binding = %+v, want non-primary", bindingB)
 	}
 
-	if err := newBindingService(b).commandBind(msgB, []string{"primary", "on"}); err != nil {
-		t.Fatalf("bot-b /bind primary on error = %v", err)
+	if err := newBindingService(b).commandPrimary(msgB, []string{"on"}); err != nil {
+		t.Fatalf("bot-b /primary on error = %v", err)
 	}
 	bindingA = a.State().AgentBinding(defaultBindingID("bot-a", "group", "chat-primary"))
 	bindingB = b.State().AgentBinding(defaultBindingID("bot-b", "group", "chat-primary"))
@@ -169,7 +170,7 @@ func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 		ChatID:        "chat-pending",
 		ChatType:      "group",
 		UserID:        "user-1",
-		Text:          "/bind use default",
+		Text:          "/workspace use default",
 		RootMessageID: "bind-1",
 		MentionedSelf: true,
 	})
@@ -194,13 +195,13 @@ func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 	}
 }
 
-func TestCommandBindNewCreatesWorkspaceAndActivatesBinding(t *testing.T) {
+func TestWorkspaceNewCreatesWorkspaceAndActivatesGroupConfig(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-new", MessageID: "msg-new", UserID: "user-1"}
 	cwd := t.TempDir() + "/client"
 
-	if err := newBindingService(a).commandBind(msg, []string{"new", "client-x", cwd}); err != nil {
-		t.Fatalf("/bind new error = %v", err)
+	if err := newBindingService(a).commandWorkspace(msg, []string{"new", "client-x", cwd}); err != nil {
+		t.Fatalf("/workspace new error = %v", err)
 	}
 	if ws := findWorkspaceForTest(a, "client-x"); ws == nil || ws.Cwd != cwd {
 		t.Fatalf("created workspace = %+v", ws)
@@ -322,6 +323,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 
 func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	a, _, _ := newTestApp(t)
+	a.frontendID = "default"
 	p2pRoot := renderCommandMenuCard(a, "feishu:frontend:default:p2p:chat-1:user-1")
 	p2pLabels := cardButtonLabelsByAction(p2pRoot)
 	if got := p2pLabels["menu.current_bot"]; got != "" {
@@ -331,17 +333,44 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
 	root := renderCommandMenuCard(a, sessionKey)
 	labels := cardButtonLabelsByAction(root)
-	if got := labels["menu.current_bot"]; !strings.Contains(got, "当前 Bot") {
-		t.Fatalf("root menu labels = %+v, want current bot", labels)
+	if got := labels["menu.current_bot"]; got != "" {
+		t.Fatalf("group root menu labels = %+v, want no current bot", labels)
 	}
-	currentBot := renderCurrentBotMenu(a, sessionKey)
-	currentLabels := cardButtonLabelsByAction(currentBot)
-	if got := currentLabels["menu.binding"]; !strings.Contains(got, "/bind") {
-		t.Fatalf("current bot labels = %+v, want /bind", currentLabels)
+	if got := labels["menu.workspace"]; !strings.Contains(got, "工作区管理") {
+		t.Fatalf("group root menu labels = %+v, want workspace management", labels)
 	}
-	body := cardMarkdownContent(t, currentBot)
-	if strings.Contains(body, "target_bot") || strings.Contains(body, "选择 Bot") {
-		t.Fatalf("current bot menu should not expose bot selector: %q", body)
+	workspaceMenu := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+	menuLabels := cardButtonLabelsByAction(workspaceMenu)
+	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.delete.menu"} {
+		if got := menuLabels[wantAction]; got == "" {
+			t.Fatalf("workspace menu labels = %+v, want action %q", menuLabels, wantAction)
+		}
+	}
+	for _, oldAction := range []string{"menu.current_bot", "menu.binding", "bind.choose", "bind.use", "current_workspace.choose", "current_workspace.use"} {
+		if got := menuLabels[oldAction]; got != "" {
+			t.Fatalf("workspace menu exposed old action %q as %q", oldAction, got)
+		}
+	}
+	body := cardMarkdownContent(t, workspaceMenu)
+	if strings.Contains(body, "target_bot") || strings.Contains(body, "选择 Bot") || strings.Contains(strings.ToLower(body), "binding") || strings.Contains(body, "component") {
+		t.Fatalf("workspace menu should not expose bot selector or old binding terms: %q", body)
+	}
+
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("default", "group", "chat-1"), FrontendID: "default", ChatType: "group", ChatID: "chat-1", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	workspaceCard := newBindingService(a).renderBindingStatusCard(sessionKey, agentBindingForChat(a, "group", "chat-1"))
+	workspaceLabels := cardButtonLabelsByAction(workspaceCard)
+	for _, oldAction := range []string{"menu.current_bot", "menu.binding", "bind.choose", "bind.use", "current_workspace.choose", "current_workspace.use"} {
+		if got := workspaceLabels[oldAction]; got != "" {
+			t.Fatalf("workspace card exposed old action %q as %q", oldAction, got)
+		}
+	}
+	if got := workspaceLabels["workspace.use.existing"]; !strings.Contains(got, "default") {
+		t.Fatalf("workspace card labels = %+v, want workspace.use.existing", workspaceLabels)
+	}
+	if got := workspaceLabels["menu.workspace"]; !strings.Contains(got, "工作区") {
+		t.Fatalf("workspace card labels = %+v, want menu.workspace", workspaceLabels)
 	}
 }
 
@@ -356,8 +385,9 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "server", Cwd: t.TempDir(), SandboxMode: "workspace-write", ApprovalPolicy: "on-request", MultiAgentMode: "explicitRequestOnly"})
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-bind-cmd", MessageID: "msg-bind-cmd", UserID: "user-1"}
-	if err := newBindingService(a).commandBind(msg, []string{"use", "default"}); err != nil {
-		t.Fatalf("/bind use default error = %v", err)
+	msg.Text = "/workspace use default"
+	if err := handleCommand(a, msg, msg.Text); err != nil {
+		t.Fatalf("/workspace use default error = %v", err)
 	}
 	commands := []string{
 		"/workspace use server",
@@ -392,6 +422,66 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 	}
 	if ws := findWorkspaceForTest(a, "default"); ws == nil || ws.SandboxMode != "workspace-write" || ws.ApprovalPolicy != "on-request" || ws.MultiAgentMode != "explicitRequestOnly" {
 		t.Fatalf("workspace defaults changed = %+v", ws)
+	}
+}
+
+func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	a.backend = ""
+	a.cfg.Feishu.Backend = ""
+
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-no-backend", MessageID: "msg-workspace", UserID: "user-1", Text: "/workspace"}
+	if err := handleCommand(a, msg, msg.Text); err != nil {
+		t.Fatalf("group /workspace without backend error = %v", err)
+	}
+	binding := agentBindingForChat(a, "group", "chat-no-backend")
+	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() || !binding.Primary {
+		t.Fatalf("binding after group /workspace without backend = %+v", binding)
+	}
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want 1", len(cards))
+	}
+	body := cardMarkdownContent(t, cards[0])
+	if strings.Contains(strings.ToLower(body), "binding") || strings.Contains(body, "component") || strings.Contains(body, "当前 frontend 还没有设置 backend") {
+		t.Fatalf("group workspace card leaked old/onboarding terms: %q", body)
+	}
+	if !strings.Contains(body, "工作区管理") || !strings.Contains(body, "当前工作区: (未配置)") {
+		t.Fatalf("group workspace card body = %q, want workspace management card", body)
+	}
+
+	p2pMsg := &feishu.InboundMessage{ChatType: "p2p", ChatID: "p2p-no-backend", MessageID: "msg-p2p", UserID: "user-1", Text: "/workspace"}
+	if err := handleCommand(a, p2pMsg, p2pMsg.Text); err != nil {
+		t.Fatalf("p2p /workspace without backend error = %v", err)
+	}
+	cards = ff.replyCardsSnapshot()
+	if len(cards) != 2 {
+		t.Fatalf("reply cards after p2p /workspace = %d, want 2", len(cards))
+	}
+	if body := cardMarkdownContent(t, cards[1]); !strings.Contains(body, "当前 frontend 还没有设置 backend") {
+		t.Fatalf("p2p /workspace should keep backend-selection behavior, got %q", body)
+	}
+}
+
+func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
+	groupHelp := renderHelpBodyForSession(backendCodex, "feishu:frontend:bot-a:group:chat-help:root:root-1")
+	for _, banned := range []string{"/" + "bind", "binding", "Binding", "component", "/workspace delete", "/model plan"} {
+		if strings.Contains(groupHelp, banned) {
+			t.Fatalf("group help should hide %q, got %q", banned, groupHelp)
+		}
+	}
+	for _, want := range []string{"/workspace use ID", "当前 Bot 在本群内使用", "/model set <model-id>", "当前 Bot 在本群内的 model 覆盖", "/primary on|off"} {
+		if !strings.Contains(groupHelp, want) {
+			t.Fatalf("group help = %q, want %q", groupHelp, want)
+		}
+	}
+
+	p2pHelp := renderHelpBodyForSession(backendCodex, "feishu:frontend:bot-a:p2p:chat-help:user-1")
+	for _, want := range []string{"直接设置全局 model。", "/workspace delete ID", "/model plan"} {
+		if !strings.Contains(p2pHelp, want) {
+			t.Fatalf("p2p help changed unexpectedly: %q, want %q", p2pHelp, want)
+		}
 	}
 }
 
@@ -455,8 +545,8 @@ func TestWorkspaceDeletionBlockedWhenReferencedByLocalBinding(t *testing.T) {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
 	err := newWorkspaceConfigServiceInner(a).ValidateWorkspaceDeletion("sess-1", "bound")
-	if err == nil || !strings.Contains(err.Error(), "binding-bound") {
-		t.Fatalf("ValidateWorkspaceDeletion(bound) error = %v, want binding guard", err)
+	if err == nil || !strings.Contains(err.Error(), "当前 Bot 工作区配置") {
+		t.Fatalf("ValidateWorkspaceDeletion(bound) error = %v, want group workspace guard", err)
 	}
 }
 

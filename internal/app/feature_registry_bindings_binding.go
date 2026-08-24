@@ -10,12 +10,22 @@ import (
 
 func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 	bindings["menu.current_bot"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"primary": {
+				Match: func(fields []string) bool {
+					return len(fields) > 0 && strings.TrimSpace(fields[0]) == "/primary" && len(fields) <= 2
+				},
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return newBindingService(a).commandPrimary(msg, args)
+				},
+			},
+		},
 		RenderActions: []string{"menu.current_bot"},
 		Render: func(actionName string, a *App, sessionKey string) (map[string]any, bool) {
 			if actionName != "menu.current_bot" {
 				return nil, false
 			}
-			return renderCurrentBotMenu(a, sessionKey), true
+			return renderCommandMenuCard(a, sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.current_bot" {
@@ -23,39 +33,28 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			}
 			sessionKey := actionSessionKey(action)
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "info", Content: "已打开当前 Bot"},
-				Card:  rawCard(renderCurrentBotMenu(s.app, sessionKey)),
+				Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
+				Card:  rawCard(renderCommandMenuCard(s.app, sessionKey)),
 			}, nil
 		},
 	}
 
-	bindings["menu.binding"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"bind": {
-				Match: func(fields []string) bool {
-					return len(fields) > 0 && strings.TrimSpace(fields[0]) == "/bind"
-				},
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newBindingService(a).commandBind(msg, args)
-				},
-			},
-		},
-		RenderActions: []string{"menu.binding"},
+	bindings["menu.current_workspace"] = featureBinding{
+		RenderActions: []string{"menu.current_workspace"},
 		Render: func(actionName string, a *App, sessionKey string) (map[string]any, bool) {
-			if actionName != "menu.binding" {
+			if actionName != "menu.current_workspace" {
 				return nil, false
 			}
-			chatType, chatID, _, _ := parseSessionKeyMeta(sessionKey)
-			return newBindingService(a).renderBindingStatusCard(sessionKey, agentBindingForChat(a, chatType, chatID)), true
+			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
-			case "menu.binding":
-				return newBindingService(s.app).completeMenuBinding(action, sessionKey)
-			case "bind.choose":
-				return newBindingService(s.app).completeBindingWorkspaceChoose(action, sessionKey)
-			case "bind.use":
+			case "menu.current_workspace":
+				return completeMenuCommand(s.app, action, sessionKey, "/workspace", "menu.root")
+			case "current_workspace.choose":
+				return completeMenuCommand(s.app, action, sessionKey, "/workspace choose", "menu.workspace")
+			case "current_workspace.use":
 				return newBindingService(s.app).completeBindingUse(action, sessionKey, actionStringValue(action, "workspace_id"))
 			default:
 				return nil, nil

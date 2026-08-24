@@ -24,12 +24,12 @@ func newBindingService(a *App) bindingService {
 	return bindingService{app: a}
 }
 
-func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) error {
+func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
 	if strings.TrimSpace(msg.ChatType) != "group" {
-		return fmt.Errorf("/bind 只能在群聊中使用；私聊仍用于配置当前 bot 的默认能力")
+		return fmt.Errorf("该工作区配置只能在群聊中使用；私聊仍用于配置当前 Bot 的默认能力")
 	}
 	binding, err := s.ensureBindingForMessage(msg)
 	if err != nil {
@@ -43,19 +43,19 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "use":
 		if len(args) != 2 {
-			return fmt.Errorf("usage: /bind use WORKSPACE_ID")
+			return fmt.Errorf("usage: /workspace use WORKSPACE_ID")
 		}
 		updated, err := s.activateBindingWorkspace(binding, args[1])
 		if err != nil {
 			return err
 		}
-		if err := s.replyBindingUpdated(msg, "已绑定本机 workspace `"+updated.WorkspaceID+"`。"); err != nil {
+		if err := s.replyBindingUpdated(msg, "已设置当前工作区 `"+updated.WorkspaceID+"`。"); err != nil {
 			return err
 		}
 		return s.replayPendingBindingMessage(updated)
 	case "new":
 		if len(args) < 3 {
-			return fmt.Errorf("usage: /bind new WORKSPACE_ID CWD")
+			return fmt.Errorf("usage: /workspace new WORKSPACE_ID CWD")
 		}
 		workspaceID := strings.TrimSpace(args[1])
 		cwd := strings.TrimSpace(strings.Join(args[2:], " "))
@@ -66,13 +66,13 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		if err := s.replyBindingUpdated(msg, "已创建并绑定本机 workspace `"+updated.WorkspaceID+"`。"); err != nil {
+		if err := s.replyBindingUpdated(msg, "已创建并设置当前工作区 `"+updated.WorkspaceID+"`。"); err != nil {
 			return err
 		}
 		return s.replayPendingBindingMessage(updated)
 	case "clone":
 		if len(args) < 2 {
-			return fmt.Errorf("usage: /bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
+			return fmt.Errorf("usage: /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
 		}
 		workspaceID, targetDir, err := s.cloneLocalWorkspace(msg, args[1:])
 		if err != nil {
@@ -82,40 +82,15 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		if err := s.replyBindingUpdated(msg, "已 clone 并绑定本机 workspace `"+updated.WorkspaceID+"`。\n\ncwd: `"+targetDir+"`"); err != nil {
+		if err := s.replyBindingUpdated(msg, "已 clone 并设置当前工作区 `"+updated.WorkspaceID+"`。\n\ncwd: `"+targetDir+"`"); err != nil {
 			return err
 		}
 		return s.replayPendingBindingMessage(updated)
-	case "component":
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /bind component NAME|default")
-		}
-		value := clearableArg(args[1])
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
-			current.Component = strings.ToLower(value)
-		})
-		if err != nil {
-			return err
-		}
-		return s.replyBindingUpdated(msg, "已更新 component: "+renderOptionalBacktick(updated.Component))
 	case "primary":
-		if len(args) != 2 {
-			return fmt.Errorf("usage: /bind primary on|off")
-		}
-		primary, err := parseOnOff(args[1])
-		if err != nil {
-			return err
-		}
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
-			current.Primary = primary
-		})
-		if err != nil {
-			return err
-		}
-		return s.replyBindingUpdated(msg, "已更新 primary: `"+onOffLabel(updated.Primary)+"`")
+		return s.commandPrimary(msg, args[1:])
 	case "model":
 		if len(args) != 2 {
-			return fmt.Errorf("usage: /bind model MODEL_ID|default")
+			return fmt.Errorf("usage: /model set MODEL_ID|default")
 		}
 		value := clearableArg(args[1])
 		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
@@ -124,10 +99,10 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已更新 binding model: "+renderOptionalBacktick(updated.ModelOverride))
+		return s.replyBindingUpdated(msg, "已更新当前群内模型: "+renderOptionalBacktick(updated.ModelOverride))
 	case "effort":
 		if len(args) != 2 {
-			return fmt.Errorf("usage: /bind effort EFFORT|default")
+			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
 		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
@@ -136,10 +111,10 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已更新 binding effort: "+renderOptionalBacktick(updated.ReasoningEffortOverride))
+		return s.replyBindingUpdated(msg, "已更新当前群内推理强度: "+renderOptionalBacktick(updated.ReasoningEffortOverride))
 	case "fast":
 		if len(args) != 2 {
-			return fmt.Errorf("usage: /bind fast fast|default|off")
+			return fmt.Errorf("usage: /fast fast|default|off")
 		}
 		value := clearableArg(args[1])
 		if strings.EqualFold(strings.TrimSpace(args[1]), "off") {
@@ -157,7 +132,7 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已更新 binding fast: "+renderOptionalBacktick(updated.ServiceTierOverride))
+		return s.replyBindingUpdated(msg, "已更新当前群内响应速度: "+renderOptionalBacktick(updated.ServiceTierOverride))
 	case "sandbox":
 		return s.updateSimpleOverride(msg, binding, args, "sandbox", func(current *state.AgentBinding, value string) { current.SandboxModeOverride = value }, func(current *state.AgentBinding) string { return current.SandboxModeOverride })
 	case "policy":
@@ -167,22 +142,51 @@ func (s bindingService) commandBind(msg *feishu.InboundMessage, args []string) e
 	case "permissions", "permission":
 		return s.updateSimpleOverride(msg, binding, args, "permissions", func(current *state.AgentBinding, value string) { current.ClaudePermissionMode = value }, func(current *state.AgentBinding) string { return current.ClaudePermissionMode })
 	default:
-		return fmt.Errorf("usage: %s", bindCommandUsage)
+		return fmt.Errorf("usage: %s", currentBotCommandUsage)
 	}
+}
+
+func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string) error {
+	if msg == nil {
+		return nil
+	}
+	if strings.TrimSpace(msg.ChatType) != "group" {
+		return fmt.Errorf("/primary 只能在群聊中使用")
+	}
+	binding, err := s.ensureBindingForMessage(msg)
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
+		return s.replyBindingUpdated(msg, "当前 Bot primary: `"+onOffLabel(binding.Primary)+"`")
+	}
+	if len(args) != 1 {
+		return fmt.Errorf("usage: /primary on|off")
+	}
+	primary, err := parseOnOff(args[0])
+	if err != nil {
+		return fmt.Errorf("usage: /primary on|off")
+	}
+	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		current.Primary = primary
+	})
+	if err != nil {
+		return err
+	}
+	return s.replyBindingUpdated(msg, "已更新 primary: `"+onOffLabel(updated.Primary)+"`")
 }
 
 func (s bindingService) completeMenuBinding(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {
 		return nil, nil
 	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/bind")
-	binding, err := s.ensureBindingForMessage(msg)
-	if err != nil {
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace")
+	if _, err := s.ensureBindingForMessage(msg); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开当前 Bot 配置"},
-		Card:  rawCard(s.renderBindingStatusCard(sessionKey, binding)),
+		Toast: &callback.Toast{Type: "info", Content: "已打开工作区管理"},
+		Card:  rawCard(newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -190,7 +194,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	if action == nil {
 		return nil, nil
 	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/bind")
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace use")
 	binding, err := s.ensureBindingForMessage(msg)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -201,8 +205,8 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	}
 	s.replayPendingBindingMessageAsync(updated)
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已绑定 workspace " + updated.WorkspaceID},
-		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
+		Toast: &callback.Toast{Type: "success", Content: "已设置当前工作区 " + updated.WorkspaceID},
+		Card:  rawCard(newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -213,7 +217,7 @@ func (s bindingService) ensureBindingForMessage(msg *feishu.InboundMessage) (*st
 	chatType := strings.TrimSpace(msg.ChatType)
 	chatID := strings.TrimSpace(msg.ChatID)
 	if chatType != "group" || chatID == "" {
-		return nil, fmt.Errorf("/bind 只能在群聊中使用")
+		return nil, fmt.Errorf("该命令只能在群聊中使用")
 	}
 	if binding := agentBindingForChat(s.app, chatType, chatID); binding != nil {
 		return binding, nil
@@ -234,14 +238,14 @@ func (s bindingService) ensureBindingForMessage(msg *feishu.InboundMessage) (*st
 
 func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding *state.AgentBinding, args []string, name string, set func(*state.AgentBinding, string), get func(*state.AgentBinding) string) error {
 	if len(args) != 2 {
-		return fmt.Errorf("usage: /bind %s VALUE|default", name)
+		return fmt.Errorf("usage: /workspace %s VALUE|default", name)
 	}
 	value := clearableArg(args[1])
 	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { set(current, value) })
 	if err != nil {
 		return err
 	}
-	return s.replyBindingUpdated(msg, "已更新 binding "+name+": "+renderOptionalBacktick(get(updated)))
+	return s.replyBindingUpdated(msg, "已更新当前群内 "+name+": "+renderOptionalBacktick(get(updated)))
 }
 
 func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, workspaceID string) (*state.AgentBinding, error) {
@@ -263,7 +267,7 @@ func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, wo
 
 func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*state.AgentBinding)) (*state.AgentBinding, error) {
 	if binding == nil {
-		return nil, fmt.Errorf("binding not initialized")
+		return nil, fmt.Errorf("当前 Bot 工作区配置未初始化")
 	}
 	current := *binding
 	if mutate != nil {
@@ -282,7 +286,7 @@ func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*
 	}
 	updated := s.app.State().AgentBinding(current.ID)
 	if updated == nil {
-		return nil, fmt.Errorf("binding %q not found after update", current.ID)
+		return nil, fmt.Errorf("当前 Bot 工作区配置 %q 更新后未找到", current.ID)
 	}
 	return updated, nil
 }
@@ -355,7 +359,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 	}
 	card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), agentBindingForChat(s.app, msg.ChatType, msg.ChatID))
 	if strings.TrimSpace(body) != "" {
-		card = s.app.feishu.SimpleStatusCard("当前 Bot 配置", "green", strings.TrimSpace(body), nil)
+		card = s.app.feishu.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
 	}
 	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
@@ -363,21 +367,24 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
 	if binding == nil {
-		return s.app.feishu.SimpleStatusCard("当前 Bot 配置", "orange", "当前群还没有本机 binding。\n\n使用 `@Bot /bind use WORKSPACE_ID` 绑定已有 workspace。", nil)
+		body := "当前 Bot 在本群还没有配置工作区。\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，或使用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
+		return s.app.feishu.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
 	}
-	workspaceLine := "workspace: `(未绑定)`"
+	statusLine := "状态: `工作区未配置`"
+	workspaceLine := "workspace: `(未配置)`"
 	if ws := config.FindWorkspace(s.app.cfg, binding.WorkspaceID); ws != nil {
+		statusLine = "状态: `工作区已配置`"
 		workspaceLine = "workspace: `" + ws.ID + "`\ncwd: `" + ws.Cwd + "`"
 	} else if strings.TrimSpace(binding.WorkspaceID) != "" {
+		statusLine = "状态: `工作区不可用`"
 		workspaceLine = "workspace: `" + binding.WorkspaceID + "` (配置不存在)"
 	}
 	lines := []string{
 		"frontend: `" + firstNonEmpty(s.app.FrontendID(), "default") + "`",
 		"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
-		"status: `" + binding.Status + "`",
+		statusLine,
 		"primary: `" + onOffLabel(binding.Primary) + "`",
-		"component: " + renderOptionalBacktick(binding.Component),
 		workspaceLine,
 		"model override: " + renderOptionalBacktick(binding.ModelOverride),
 		"effort override: " + renderOptionalBacktick(binding.ReasoningEffortOverride),
@@ -386,7 +393,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"approval policy: " + renderOptionalBacktick(binding.ApprovalPolicyOverride),
 		"multi-agent: " + renderOptionalBacktick(binding.MultiAgentModeOverride),
 		"Claude permissions: " + renderOptionalBacktick(binding.ClaudePermissionMode),
-		"\n常用命令：`/bind use WORKSPACE_ID`、`/bind new WORKSPACE_ID CWD`、`/bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/bind primary on|off`、`/bind model MODEL|default`、`/bind effort EFFORT|default`。",
+		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on|off`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
 	}
 	if binding.PendingMessage != nil {
 		preview := truncate(strings.TrimSpace(binding.PendingMessage.Text), 80)
@@ -396,22 +403,22 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		if preview == "" {
 			preview = binding.PendingMessage.MessageID
 		}
-		lines = append(lines, "\n已暂存原消息，绑定 workspace 成功后会继续处理: `"+preview+"`")
+		lines = append(lines, "\n已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
 	}
 	if !hasAnyPrimaryBindingForChat(s.app, binding.ChatType, binding.ChatID) {
-		lines = append(lines, "\n注意: 本机状态里这个群还没有 primary bot；未 `@` 的普通群消息不会被任何本机 bot 接收。使用 `@Bot /bind primary on` 设置当前 bot 为 primary。")
+		lines = append(lines, "\n注意: 本机状态里这个群还没有 primary bot；未 `@` 的普通群消息不会被任何本机 bot 接收。使用 `@Bot /primary on` 设置当前 Bot 为 primary。")
 	}
 	buttons := []feishu.Button{}
 	if config.FindWorkspace(s.app.cfg, "default") != nil {
-		buttons = append(buttons, feishu.Button{Text: "绑定 default", Type: "default", Value: map[string]any{"action": "bind.use", "session_key": sessionKey, "workspace_id": "default"}})
+		buttons = append(buttons, feishu.Button{Text: "使用 default", Type: "default", Value: map[string]any{"action": "workspace.use.existing", "session_key": sessionKey, "workspace_id": "default"}})
 	}
-	buttons = append(buttons, feishu.Button{Text: "选择已有", Type: "default", Value: map[string]any{"action": "bind.choose", "session_key": sessionKey}})
-	buttons = append(buttons, feishu.Button{Text: "返回当前 Bot", Type: "default", Value: map[string]any{"action": "menu.current_bot", "session_key": sessionKey}})
+	buttons = append(buttons, feishu.Button{Text: "选择已有", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}})
+	buttons = append(buttons, groupBindingBackButton(sessionKey))
 	color := "blue"
 	if binding.Status != state.AgentBindingStatusActive.String() || strings.TrimSpace(binding.WorkspaceID) == "" {
 		color = "orange"
 	}
-	return s.app.feishu.SimpleStatusCard("当前 Bot 配置", color, menuCardBody("menu.binding", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
 func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, binding *state.AgentBinding) map[string]any {
@@ -419,8 +426,7 @@ func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, bind
 		return s.renderBindingStatusCard(sessionKey, binding)
 	}
 	lines := []string{
-		"为当前 bot 在本群的 binding 选择本机已有 workspace。",
-		"当前 binding: `" + binding.ID + "`",
+		"为当前 Bot 在本群选择本机已有 workspace。",
 		"当前 workspace: " + renderOptionalBacktick(binding.WorkspaceID),
 		"",
 		"如果这台机器还没有该项目目录，请使用 `@Bot /workspace new WORKSPACE_ID CWD` 或 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`。",
@@ -437,10 +443,10 @@ func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, bind
 			buttonType = "primary"
 			label = "当前 · " + label
 		}
-		buttons = append(buttons, feishu.Button{Text: label, Type: buttonType, Value: map[string]any{"action": "bind.use", "session_key": sessionKey, "workspace_id": workspaceID}})
+		buttons = append(buttons, feishu.Button{Text: label, Type: buttonType, Value: map[string]any{"action": "workspace.use.existing", "session_key": sessionKey, "workspace_id": workspaceID}})
 	}
 	buttons = append(buttons, groupBindingBackButton(sessionKey))
-	return s.app.feishu.SimpleStatusCard("选择 Binding Workspace", "blue", menuCardBody("menu.binding", strings.Join(lines, "\n")), buttons)
+	return s.app.feishu.SimpleStatusCard("选择工作区", "blue", menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
 func hasAnyPrimaryBindingForChat(a *App, chatType, chatID string) bool {
@@ -495,16 +501,28 @@ func renderCurrentBotMenuCard(a *App, sessionKey string) map[string]any {
 	body := spec.Description
 	if chatType, chatID, _, _ := currentBotMenuContext(sessionKey); chatType == "group" && chatID != "" {
 		if binding := agentBindingForChat(a, chatType, chatID); binding != nil {
-			body += "\n\n当前 binding: `" + binding.Status + "`"
+			body += "\n\n工作区状态: `" + currentBotWorkspaceStatusLabel(a, binding) + "`"
 			body += "\nprimary: `" + onOffLabel(binding.Primary) + "`"
 			body += "\nworkspace: " + renderOptionalBacktick(binding.WorkspaceID)
-			body += "\ncomponent: " + renderOptionalBacktick(binding.Component)
 			if !hasAnyPrimaryBindingForChat(a, chatType, chatID) {
 				body += "\n注意: 本机状态里这个群还没有 primary bot。"
 			}
+		} else {
+			body += "\n\n工作区状态: `工作区未配置`"
+			body += "\n使用 `/workspace` 选择、创建或 clone 当前 Bot 在本群的工作区。"
 		}
 	}
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForSession(a, sessionKey, spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
+}
+
+func currentBotWorkspaceStatusLabel(a *App, binding *state.AgentBinding) string {
+	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
+		return "工作区未配置"
+	}
+	if config.FindWorkspace(a.cfg, binding.WorkspaceID) == nil {
+		return "工作区不可用"
+	}
+	return "工作区已配置"
 }
 
 func currentBotMenuContext(sessionKey string) (chatType, chatID, rootMessageID, userID string) {
@@ -563,7 +581,7 @@ func parseOnOff(value string) (bool, error) {
 	case "off", "false", "no", "0":
 		return false, nil
 	default:
-		return false, fmt.Errorf("usage: /bind primary on|off")
+		return false, fmt.Errorf("usage: /primary on|off")
 	}
 }
 
@@ -582,4 +600,4 @@ func renderOptionalBacktick(value string) string {
 	return "`" + value + "`"
 }
 
-const bindCommandUsage = "/bind | /bind status | /bind use WORKSPACE_ID | /bind new WORKSPACE_ID CWD | /bind clone GIT_URL [WORKSPACE_ID] [--parent DIR] | /bind component NAME|default | /bind primary on|off | /bind model MODEL|default | /bind effort EFFORT|default | /bind fast fast|default | /bind sandbox MODE|default | /bind policy POLICY|default | /bind multiagent MODE|default | /bind permissions MODE|default"
+const currentBotCommandUsage = "/workspace | /workspace use WORKSPACE_ID | /workspace new WORKSPACE_ID CWD | /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR] | /primary on|off | /model set MODEL|default | /model effort EFFORT|default | /fast fast|default|off | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"

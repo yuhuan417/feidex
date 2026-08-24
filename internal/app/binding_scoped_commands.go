@@ -18,7 +18,7 @@ func isGroupMessage(msg *feishu.InboundMessage) bool {
 }
 
 func groupBindingScopeActive(a *App, msg *feishu.InboundMessage) bool {
-	return isGroupMessage(msg) && agentBindingForChat(a, msg.ChatType, msg.ChatID) != nil
+	return isGroupMessage(msg)
 }
 
 func isGroupSessionKey(sessionKey string) bool {
@@ -40,52 +40,74 @@ func bindingForSessionKey(a *App, sessionKey string) *state.AgentBinding {
 }
 
 func groupBindingSessionScopeActive(a *App, sessionKey string) bool {
-	return bindingForSessionKey(a, sessionKey) != nil
+	return isGroupSessionKey(sessionKey)
 }
 
 func groupBindingBackButton(sessionKey string) feishu.Button {
-	return feishu.Button{Text: "返回当前 Bot", Type: "default", Value: map[string]any{"action": "menu.current_bot", "session_key": sessionKey}}
+	return feishu.Button{Text: "返回工作区", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}}
 }
 
 func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
 	if !isGroupMessage(msg) {
 		return commandWorkspace(s.app, msg, args)
 	}
-	binding, err := s.ensureBindingForMessage(msg)
-	if err != nil {
+	if _, err := s.ensureBindingForMessage(msg); err != nil {
 		return err
 	}
+	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) == 0 {
-		card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), binding)
+		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list", "choose":
-		card := s.renderBindingWorkspaceChooseCard(makeSessionKey(s.app, msg), binding)
+	case "list":
+		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		return err
+	case "choose":
+		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceChooseCard(sessionKey)
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "use":
-		return s.commandBind(msg, append([]string{"use"}, args[1:]...))
+		return s.commandCurrentBotGroupConfig(msg, append([]string{"use"}, args[1:]...))
 	case "new":
+		if len(args) == 1 {
+			return newWorkspaceManagementServiceInner(s.app).BeginWorkspaceNew(msg)
+		}
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /workspace new WORKSPACE_ID CWD")
 		}
-		return s.commandBind(msg, append([]string{"new"}, args[1:]...))
+		return s.commandCurrentBotGroupConfig(msg, append([]string{"new"}, args[1:]...))
 	case "clone":
+		if len(args) == 1 {
+			action := commandActionFromMessage(msg, map[string]any{"session_key": sessionKey})
+			resp, err := newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceClone(action, sessionKey)
+			if err != nil {
+				return err
+			}
+			return replyCommandActionResponse(s.app, msg, resp)
+		}
 		if len(args) < 2 {
 			return fmt.Errorf("usage: /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
 		}
-		return s.commandBind(msg, append([]string{"clone"}, args[1:]...))
+		return s.commandCurrentBotGroupConfig(msg, append([]string{"clone"}, args[1:]...))
 	case "sandbox", "policy", "multiagent", "permissions", "permission":
 		if len(args) == 1 {
-			card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), binding)
-			_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+			fieldName := strings.ToLower(strings.TrimSpace(args[0]))
+			if fieldName == "permission" {
+				fieldName = "permissions"
+			}
+			card, err := s.renderBindingWorkspaceSettingCard(sessionKey, bindingForSessionKey(s.app, sessionKey), fieldName)
+			if err != nil {
+				return err
+			}
+			_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 			return err
 		}
-		return s.commandBind(msg, append([]string{strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...))
+		return s.commandCurrentBotGroupConfig(msg, append([]string{strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...))
 	case "delete":
-		return fmt.Errorf("群聊中的 workspace 是当前 bot 的 binding 配置；删除本机 workspace 请私聊该 bot 使用 /workspace delete")
+		return fmt.Errorf("群聊中的 workspace 是当前 Bot 在本群的工作区配置；删除本机 workspace 请私聊该 Bot 使用 /workspace delete")
 	default:
 		return fmt.Errorf("usage: %s", groupBindingWorkspaceUsage)
 	}
@@ -96,23 +118,23 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, args)
 	}
 	if len(args) == 0 {
-		return s.commandBind(msg, []string{"status"})
+		return s.commandCurrentBotGroupConfig(msg, []string{"status"})
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "set":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /model set MODEL|default")
 		}
-		return s.commandBind(msg, []string{"model", args[1]})
+		return s.commandCurrentBotGroupConfig(msg, []string{"model", args[1]})
 	case "effort":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
-		return s.commandBind(msg, []string{"effort", args[1]})
+		return s.commandCurrentBotGroupConfig(msg, []string{"effort", args[1]})
 	case "plan":
-		return fmt.Errorf("/model plan 是当前 bot 的 frontend 默认配置；请私聊该 bot 配置，群聊中只修改 binding 的 /model set 和 /model effort")
+		return fmt.Errorf("/model plan 是当前 Bot 的默认配置；请私聊该 Bot 配置，群聊中只修改当前群内的 /model set 和 /model effort")
 	case "option":
-		return fmt.Errorf("/model option 是当前 bot 的模型候选列表配置；请私聊该 bot 使用")
+		return fmt.Errorf("/model option 是当前 Bot 的模型候选列表配置；请私聊该 Bot 使用")
 	default:
 		return fmt.Errorf("usage: /model | /model set MODEL|default | /model effort EFFORT|default")
 	}
@@ -124,9 +146,9 @@ func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string)
 	}
 	switch len(args) {
 	case 0:
-		return s.commandBind(msg, []string{"status"})
+		return s.commandCurrentBotGroupConfig(msg, []string{"status"})
 	case 1:
-		return s.commandBind(msg, []string{"effort", args[0]})
+		return s.commandCurrentBotGroupConfig(msg, []string{"effort", args[0]})
 	default:
 		return fmt.Errorf("usage: /effort | /effort EFFORT|default")
 	}
@@ -144,9 +166,9 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "config":
-		return s.commandBind(msg, []string{"status"})
+		return s.commandCurrentBotGroupConfig(msg, []string{"status"})
 	case "fast", "default", "off":
-		return s.commandBind(msg, []string{"fast", args[0]})
+		return s.commandCurrentBotGroupConfig(msg, []string{"fast", args[0]})
 	case "toggle":
 		binding, err := s.ensureBindingForMessage(msg)
 		if err != nil {
@@ -157,7 +179,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已更新 binding fast: "+renderOptionalBacktick(updated.ServiceTierOverride))
+		return s.replyBindingUpdated(msg, "已更新当前群内响应速度: "+renderOptionalBacktick(updated.ServiceTierOverride))
 	default:
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle | /fast config")
 	}
@@ -177,7 +199,7 @@ func (s bindingService) completeBindingWorkspaceChoose(action *feishu.CardAction
 
 func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessionKey, modelID string) (*callback.CardActionTriggerResponse, error) {
 	modelID = clearableArg(modelID)
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/bind model")
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
 	binding, err := s.ensureBindingForMessage(msg)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -187,14 +209,14 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 binding model"},
+		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内模型"},
 		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
 	}, nil
 }
 
 func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sessionKey, effort string) (*callback.CardActionTriggerResponse, error) {
 	effort = clearableArg(effort)
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/bind effort")
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/model effort")
 	binding, err := s.ensureBindingForMessage(msg)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -204,7 +226,7 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 binding effort"},
+		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内推理强度"},
 		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
 	}, nil
 }
@@ -217,7 +239,7 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
 		}
 	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/bind fast")
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/fast")
 	binding, err := s.ensureBindingForMessage(msg)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -227,13 +249,13 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 binding fast"},
+		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内响应速度"},
 		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
 	}, nil
 }
 
 func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction, sessionKey, fieldName, value string) (*callback.CardActionTriggerResponse, error) {
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/bind "+fieldName)
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
 	binding, err := s.ensureBindingForMessage(msg)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -254,8 +276,12 @@ func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction,
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	card, err := s.renderBindingWorkspaceSettingCard(sessionKey, updated, fieldName)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 binding " + fieldName},
-		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
+		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内 " + fieldName},
+		Card:  rawCard(card),
 	}, nil
 }

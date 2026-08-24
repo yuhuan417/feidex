@@ -273,7 +273,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		}
 	}
 	if workspaceID == "" {
-		return fmt.Errorf("binding %q has no workspace configured", strings.TrimSpace(sess.BindingID))
+		return fmt.Errorf("当前 Bot 在本群还没有配置工作区，请先使用 /workspace 选择、创建或 clone 工作区")
 	}
 	inboundAttachments, err := a.SubmissionQueueAttachmentResolver().ResolveInboundAttachments(msg, workspaceID, sessionKey)
 	if err != nil {

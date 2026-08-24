@@ -1600,7 +1600,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		ChatID:    "chat-1",
 		MessageID: "msg-1",
 		ActionValue: map[string]any{
-			"session_key": "feishu:group:chat-1:root:root-1",
+			"session_key": "feishu:frontend:default:p2p:chat-1:user-1",
 		},
 	}
 
@@ -4010,7 +4010,6 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/workspace list",
 		"/workspace sandbox",
 		"/workspace policy",
-		"/workspace new",
 	} {
 		if err := handleCommand(a, msg, raw); err != nil && raw != "/threads" {
 			t.Fatalf("handleCommand(%q) error = %v", raw, err)

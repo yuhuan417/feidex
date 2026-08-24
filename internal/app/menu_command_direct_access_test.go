@@ -384,7 +384,7 @@ func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 
-	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "/model set deepseek-v4-pro"}
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "/model set deepseek-v4-pro"}
 	newRuntimeStateService(a).beginFrontendMessageTraffic()
 	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
 

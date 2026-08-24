@@ -336,9 +336,13 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	sess = s.GetSession(sessionKey)
-	currentID := selectedWorkspaceIDForSession(s.App, sess)
+	currentID := s.WorkspaceIDForSession(sessionKey, sess)
 	currentWS := config.FindWorkspace(s.App.Config(), currentID)
-	bodyLines := []string{"当前工作区: `" + currentID + "`"}
+	currentLabel := "(未配置)"
+	if strings.TrimSpace(currentID) != "" {
+		currentLabel = "`" + currentID + "`"
+	}
+	bodyLines := []string{"当前工作区: " + currentLabel}
 	bodyLines = s.BackendWorkspaceSummaryLines(bodyLines, currentWS)
 	buttons := make([]feishu.Button, 0, 6)
 	workspaces := s.App.Config().Workspaces
@@ -411,7 +415,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]any {
 	var sess *state.Session
 	sess = s.GetSession(sessionKey)
-	currentID := selectedWorkspaceIDForSession(s.App, sess)
+	currentID := s.WorkspaceIDForSession(sessionKey, sess)
 	var recentIDs []string
 	if sess != nil {
 		if selectionKey := appcore.MakeWorkspaceSelectionKeyForSession(s.App, sess); selectionKey != "" {
