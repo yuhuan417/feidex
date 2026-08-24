@@ -80,6 +80,10 @@ func (a *App) ThreadMenuAppState() appthreadmenu.AppStateProvider {
 	return a.State()
 }
 
+func (a *App) ThreadMenuEffectiveSessionKey(sessionKey string) string {
+	return threadMenuEffectiveSessionKey(a, sessionKey)
+}
+
 func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendProvider {
 	return threadMenuConversationBackendAdapter{backend: conversationBackend(a)}
 }

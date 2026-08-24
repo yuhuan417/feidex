@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -371,6 +372,225 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	}
 	if got := workspaceLabels["menu.workspace"]; !strings.Contains(got, "工作区") {
 		t.Fatalf("workspace card labels = %+v, want menu.workspace", workspaceLabels)
+	}
+}
+
+func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.frontendID = "bot-a"
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "model/list":
+			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{
+				ID:                     "gpt-5",
+				DisplayName:            "GPT-5",
+				DefaultReasoningEffort: "medium",
+				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+					{ReasoningEffort: "low"},
+					{ReasoningEffort: "medium"},
+					{ReasoningEffort: "high"},
+				},
+				IsDefault: true,
+			}}}
+		}
+		return nil
+	}
+
+	sessionKey := "feishu:frontend:bot-a:group:chat-model-menu:root:root-1"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          "binding-model-menu",
+		FrontendID:  "bot-a",
+		ChatID:      "chat-model-menu",
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+
+	parentResp, err := newMenuActionService(a).completeMenuGroupModel(&feishu.CardAction{ActionValue: map[string]any{"session_key": sessionKey}, UserID: "user-1", ChatID: "chat-model-menu", MessageID: "card-parent"}, sessionKey)
+	if err != nil || parentResp == nil || parentResp.Card == nil {
+		t.Fatalf("completeMenuGroupModel() = %#v, %v", parentResp, err)
+	}
+	parentCard := parentResp.Card.Data.(map[string]any)
+	parentBody := cardMarkdownContent(t, parentCard)
+	if !strings.Contains(parentBody, "配置当前 Bot 在本群的模型相关设置") || strings.Contains(parentBody, "工作区管理") {
+		t.Fatalf("group model parent body = %q", parentBody)
+	}
+	parentLabels := cardButtonLabelsByAction(parentCard)
+	if parentLabels["menu.model"] == "" || parentLabels["menu.fast"] == "" || parentLabels["menu.workspace"] != "" {
+		t.Fatalf("group model parent labels = %+v", parentLabels)
+	}
+
+	modelResp, err := newCardActionService(a).dispatch(&feishu.CardAction{ActionValue: map[string]any{"action": "menu.model", "session_key": sessionKey}, UserID: "user-1", ChatID: "chat-model-menu", MessageID: "card-model"})
+	if err != nil || modelResp == nil || modelResp.Card == nil {
+		t.Fatalf("dispatch(menu.model) = %#v, %v", modelResp, err)
+	}
+	modelCard := modelResp.Card.Data.(map[string]any)
+	modelBody := cardMarkdownContent(t, modelCard)
+	if !strings.Contains(modelBody, "选择当前群内模型") || strings.Contains(modelBody, "工作区管理") || strings.Contains(modelBody, "当前工作区") {
+		t.Fatalf("group model config body = %q", modelBody)
+	}
+	if selects := cardSelectStaticForTest(modelCard); len(selects) != 2 {
+		t.Fatalf("group model config selects = %d, want 2", len(selects))
+	}
+
+	fastResp, err := newCardActionService(a).dispatch(&feishu.CardAction{ActionValue: map[string]any{"action": "menu.fast", "session_key": sessionKey}, UserID: "user-1", ChatID: "chat-model-menu", MessageID: "card-fast"})
+	if err != nil || fastResp == nil || fastResp.Card == nil {
+		t.Fatalf("dispatch(menu.fast) = %#v, %v", fastResp, err)
+	}
+	fastBody := cardMarkdownContent(t, fastResp.Card.Data.(map[string]any))
+	if !strings.Contains(fastBody, "当前群内响应速度") || strings.Contains(fastBody, "工作区管理") || strings.Contains(fastBody, "当前工作区") {
+		t.Fatalf("group fast body = %q", fastBody)
+	}
+}
+
+func TestGroupThreadMenuUsesLatestActiveSessionInCurrentGroupBinding(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.frontendID = "bot-a"
+	chatID := "chat-thread-menu"
+	bindingID := "binding-thread-menu"
+	menuKey := "feishu:frontend:bot-a:group:" + chatID + ":root:root-menu"
+	activeKey := "feishu:frontend:bot-a:group:" + chatID + ":root:root-active"
+	foreignBindingKey := "feishu:frontend:bot-a:group:" + chatID + ":root:root-foreign-binding"
+	foreignFrontendKey := "feishu:frontend:bot-b:group:" + chatID + ":root:root-foreign-frontend"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          bindingID,
+		FrontendID:  "bot-a",
+		ChatID:      chatID,
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	for _, sess := range []*state.Session{
+		{Key: menuKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-menu", Status: state.SessionStatusIdle.String()},
+		{Key: activeKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-active", ActiveThreadID: "12345678abcdef", ActiveThreadWorkspaceID: "default", ActiveThreadName: "Active Thread", ActiveThreadPreview: "active preview", ActiveThreadSandboxMode: "workspace-write", ActiveThreadApprovalPolicy: "on-request", ActiveThreadMultiAgentMode: "proactive", Status: state.SessionStatusIdle.String()},
+		{Key: foreignBindingKey, BindingID: "binding-other", WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-foreign-binding", ActiveThreadID: "ffffffffffffffff", ActiveThreadWorkspaceID: "default", Status: state.SessionStatusIdle.String()},
+		{Key: foreignFrontendKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-foreign-frontend", ActiveThreadID: "eeeeeeeeeeeeeeee", ActiveThreadWorkspaceID: "default", Status: state.SessionStatusIdle.String()},
+	} {
+		if err := a.store.UpsertSession(sess); err != nil {
+			t.Fatalf("UpsertSession(%s) error = %v", sess.Key, err)
+		}
+	}
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{Data: []codexrpc.ThreadListEntry{
+			{ID: "12345678abcdef", Name: "Active Thread", Preview: "active preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "older-thread", Name: "Older", Preview: "older preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[0].Cwd},
+		}}
+		return nil
+	}
+
+	if got := threadMenuEffectiveSessionKey(a, menuKey); got != activeKey {
+		t.Fatalf("threadMenuEffectiveSessionKey() = %q, want %q", got, activeKey)
+	}
+	card, ok := newMenuActionService(a).renderMenuNodeCard("menu.thread", menuKey)
+	if !ok {
+		t.Fatal("renderMenuNodeCard(menu.thread) should succeed")
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "`12345678abcdef`") || strings.Contains(body, "ffffffff") || strings.Contains(body, "eeeeeeee") {
+		t.Fatalf("group thread menu body = %q", body)
+	}
+	labels := cardButtonLabelsByAction(card)
+	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu"} {
+		if labels[actionName] == "" {
+			t.Fatalf("group thread menu labels = %+v, want action %q", labels, actionName)
+		}
+	}
+	for _, actionName := range []string{"menu.new", "menu.fork", "thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu", "menu.root"} {
+		value := firstCardActionValueForTest(card, actionName)
+		if value == nil {
+			t.Fatalf("missing card action value for %q in %+v", actionName, cardButtonsForTest(card))
+		}
+		if got, _ := value["session_key"].(string); got != activeKey {
+			t.Fatalf("action %q session_key = %q, want %q", actionName, got, activeKey)
+		}
+	}
+	selectValue := firstCardSelectActionValueForTest(card, "thread_resume_select")
+	if selectValue == nil {
+		t.Fatalf("missing thread resume select in %+v", cardSelectStaticForTest(card))
+	}
+	if got, _ := selectValue["session_key"].(string); got != activeKey {
+		t.Fatalf("thread resume select session_key = %q, want %q", got, activeKey)
+	}
+	if got := threadMenuEffectiveSessionKey(nil, menuKey); got != menuKey {
+		t.Fatalf("nil app effective session key = %q, want original", got)
+	}
+}
+
+func TestGroupClaudeSessionMenuUsesLatestActiveSessionInCurrentGroupBinding(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	a.cfg.Feishu.Backend = backendClaude
+	a.backend = backendClaude
+	a.codex = nil
+	a.claude = &fakeClaudeCore{}
+	configDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	sessionID := "12345678abcdef-claude"
+	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, sessionID, "Claude Session", "continue work", time.Unix(100, 0))
+	chatID := "chat-claude-menu"
+	bindingID := "binding-claude-menu"
+	menuKey := "feishu:frontend:bot-a:group:" + chatID + ":root:root-menu"
+	activeKey := "feishu:frontend:bot-a:group:" + chatID + ":root:root-active"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: bindingID, FrontendID: "bot-a", ChatID: chatID, ChatType: "group", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	for _, sess := range []*state.Session{
+		{Key: menuKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-menu", Status: state.SessionStatusIdle.String()},
+		{Key: activeKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-active", ActiveThreadID: sessionID, ActiveThreadWorkspaceID: "default", ActiveThreadName: "Claude Session", ActiveThreadPreview: "continue work", Status: state.SessionStatusIdle.String()},
+	} {
+		if err := a.store.UpsertSession(sess); err != nil {
+			t.Fatalf("UpsertSession(%s) error = %v", sess.Key, err)
+		}
+	}
+
+	if got := threadMenuEffectiveSessionKey(a, menuKey); got != activeKey {
+		t.Fatalf("threadMenuEffectiveSessionKey() = %q, want %q", got, activeKey)
+	}
+	card, ok := newMenuActionService(a).renderMenuNodeCard("menu.thread", menuKey)
+	if !ok {
+		t.Fatal("renderMenuNodeCard(menu.thread) should succeed")
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "`"+sessionID+"`") {
+		t.Fatalf("group Claude session menu body = %q", body)
+	}
+	labels := cardButtonLabelsByAction(card)
+	for _, actionName := range []string{"menu.fork", "thread.permission_mode.menu"} {
+		if labels[actionName] == "" {
+			t.Fatalf("group Claude session menu labels = %+v, want action %q", labels, actionName)
+		}
+	}
+	for _, actionName := range []string{"thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu"} {
+		if labels[actionName] != "" {
+			t.Fatalf("group Claude session menu labels = %+v, should not include %q", labels, actionName)
+		}
+	}
+	for _, actionName := range []string{"menu.new", "menu.fork", "thread.permission_mode.menu", "menu.root"} {
+		value := firstCardActionValueForTest(card, actionName)
+		if value == nil {
+			t.Fatalf("missing card action value for %q in %+v", actionName, cardButtonsForTest(card))
+		}
+		if got, _ := value["session_key"].(string); got != activeKey {
+			t.Fatalf("action %q session_key = %q, want %q", actionName, got, activeKey)
+		}
+	}
+	selectValue := firstCardSelectActionValueForTest(card, "thread_resume_select")
+	if selectValue == nil {
+		t.Fatalf("missing Claude session resume select in %+v", cardSelectStaticForTest(card))
+	}
+	if got, _ := selectValue["session_key"].(string); got != activeKey {
+		t.Fatalf("Claude session resume select session_key = %q, want %q", got, activeKey)
+	}
+	if selects := cardSelectStaticForTest(card); len(selects) != 1 {
+		t.Fatalf("group Claude session menu selects = %+v, want 1", selects)
 	}
 }
 

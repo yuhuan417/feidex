@@ -41,8 +41,8 @@ func (s menuActionService) completeMenuGroupModel(action *feishu.CardAction, ses
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
 		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "info", Content: "已打开当前 Bot 配置"},
-			Card:  rawCard(newBindingService(s.app).renderBindingStatusCard(sessionKey, binding)),
+			Toast: &callback.Toast{Type: "info", Content: "已打开当前群内模型配置"},
+			Card:  rawCard(newBindingService(s.app).renderBindingModelMenuCard(sessionKey, binding)),
 		}, nil
 	}
 	return &callback.CardActionTriggerResponse{

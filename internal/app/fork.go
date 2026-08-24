@@ -18,7 +18,7 @@ func commandFork(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
-	discarded, forkedID, err := startThreadFork(a, makeSessionKey(a, msg))
+	discarded, forkedID, err := startThreadFork(a, threadMenuEffectiveSessionKey(a, makeSessionKey(a, msg)))
 	if err != nil {
 		return err
 	}
@@ -59,5 +59,6 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 }
 
 func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey = threadMenuEffectiveSessionKey(a, sessionKey)
 	return completeMenuCommand(a, action, sessionKey, primaryConversationSlash(configuredBackend(a))+" fork", "menu.thread")
 }

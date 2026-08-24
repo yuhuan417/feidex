@@ -701,6 +701,37 @@ func cardButtonLabelsByAction(card map[string]any) map[string]string {
 	return labels
 }
 
+func firstCardActionValueForTest(card map[string]any, actionName string) map[string]any {
+	for _, button := range cardButtonsForTest(card) {
+		value, _ := button["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := button["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if got, _ := value["action"].(string); got == actionName {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstCardSelectActionValueForTest(card map[string]any, name string) map[string]any {
+	for _, selectStatic := range cardSelectStaticForTest(card) {
+		if got, _ := selectStatic["name"].(string); got != name {
+			continue
+		}
+		behaviors, _ := selectStatic["behaviors"].([]map[string]any)
+		if len(behaviors) == 0 {
+			return nil
+		}
+		value, _ := behaviors[0]["value"].(map[string]any)
+		return value
+	}
+	return nil
+}
+
 func cardSelectStaticForTest(card map[string]any) []map[string]any {
 	var selects []map[string]any
 	for _, elem := range cardElementsForTest(card) {

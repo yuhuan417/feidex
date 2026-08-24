@@ -77,6 +77,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			if actionName != "menu.thread" {
 				return nil, false
 			}
+			sessionKey = threadMenuEffectiveSessionKey(a, sessionKey)
 			card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
 			if err != nil {
 				return nil, false
@@ -163,7 +164,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}
-					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内模型配置"}, Card: rawCard(svc.renderBindingStatusCard(sessionKey, binding))}, nil
+					card, err := svc.renderBindingModelConfigCard(sessionKey, binding)
+					if err != nil {
+						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+					}
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内模型配置"}, Card: rawCard(card)}, nil
 				case "model.config.set_model":
 					return svc.completeBindingModelSet(action, sessionKey, actionStringValue(action, "model_id"))
 				case "model.config.select_model":
@@ -256,7 +261,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}
-					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内响应速度配置"}, Card: rawCard(svc.renderBindingStatusCard(sessionKey, binding))}, nil
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内响应速度配置"}, Card: rawCard(svc.renderBindingFastCard(sessionKey, binding))}, nil
 				case "service_tier.set":
 					return svc.completeBindingServiceTierSet(action, sessionKey, actionStringValue(action, "service_tier"))
 				}

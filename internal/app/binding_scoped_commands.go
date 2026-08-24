@@ -43,6 +43,55 @@ func groupBindingSessionScopeActive(a *App, sessionKey string) bool {
 	return isGroupSessionKey(sessionKey)
 }
 
+func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if a == nil {
+		return sessionKey
+	}
+	sessionKey = normalizeSessionKey(a, sessionKey)
+	chatType, chatID := sessionKeyChat(sessionKey)
+	if chatType != "group" || strings.TrimSpace(chatID) == "" {
+		return sessionKey
+	}
+	st := a.State()
+	if st == nil {
+		return sessionKey
+	}
+	if sess := st.Session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
+		return sessionKey
+	}
+	binding := bindingForSessionKey(a, sessionKey)
+	bindingID := ""
+	if binding != nil {
+		bindingID = strings.TrimSpace(binding.ID)
+	}
+	var best *state.Session
+	for _, sess := range st.Sessions() {
+		if sess == nil || strings.TrimSpace(sess.Key) == "" || strings.TrimSpace(sess.ActiveThreadID) == "" {
+			continue
+		}
+		if !sessionBelongsToFrontend(a, sess.Key) {
+			continue
+		}
+		candidateChatType, candidateChatID := sessionKeyChat(sess.Key)
+		if candidateChatType != "group" || candidateChatID != chatID {
+			continue
+		}
+		if bindingID != "" {
+			if strings.TrimSpace(sess.BindingID) != bindingID {
+				continue
+			}
+		}
+		if best == nil || sess.UpdatedAt > best.UpdatedAt || (sess.UpdatedAt == best.UpdatedAt && strings.TrimSpace(sess.Key) > strings.TrimSpace(best.Key)) {
+			best = sess
+		}
+	}
+	if best != nil {
+		return strings.TrimSpace(best.Key)
+	}
+	return sessionKey
+}
+
 func groupBindingBackButton(sessionKey string) feishu.Button {
 	return feishu.Button{Text: "返回工作区", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}}
 }
@@ -118,7 +167,16 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, args)
 	}
 	if len(args) == 0 {
-		return s.commandCurrentBotGroupConfig(msg, []string{"status"})
+		binding, err := s.ensureBindingForMessage(msg)
+		if err != nil {
+			return err
+		}
+		card, err := s.renderBindingModelConfigCard(makeSessionKey(s.app, msg), binding)
+		if err != nil {
+			return err
+		}
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "set":
@@ -146,7 +204,16 @@ func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string)
 	}
 	switch len(args) {
 	case 0:
-		return s.commandCurrentBotGroupConfig(msg, []string{"status"})
+		binding, err := s.ensureBindingForMessage(msg)
+		if err != nil {
+			return err
+		}
+		card, err := s.renderBindingModelConfigCard(makeSessionKey(s.app, msg), binding)
+		if err != nil {
+			return err
+		}
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		return err
 	case 1:
 		return s.commandCurrentBotGroupConfig(msg, []string{"effort", args[0]})
 	default:
@@ -166,7 +233,12 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "config":
-		return s.commandCurrentBotGroupConfig(msg, []string{"status"})
+		binding, err := s.ensureBindingForMessage(msg)
+		if err != nil {
+			return err
+		}
+		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, s.renderBindingFastCard(makeSessionKey(s.app, msg), binding), replyInThreadEnabled(s.app, msg.ChatType))
+		return err
 	case "fast", "default", "off":
 		return s.commandCurrentBotGroupConfig(msg, []string{"fast", args[0]})
 	case "toggle":
@@ -210,7 +282,7 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内模型"},
-		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
+		Card:  rawCard(s.renderBindingModelConfigOrMenuCard(sessionKey, updated)),
 	}, nil
 }
 
@@ -227,7 +299,7 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内推理强度"},
-		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
+		Card:  rawCard(s.renderBindingModelConfigOrMenuCard(sessionKey, updated)),
 	}, nil
 }
 
@@ -250,7 +322,7 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内响应速度"},
-		Card:  rawCard(s.renderBindingStatusCard(sessionKey, updated)),
+		Card:  rawCard(s.renderBindingFastCard(sessionKey, updated)),
 	}, nil
 }
 
