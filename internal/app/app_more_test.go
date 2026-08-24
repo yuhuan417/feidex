@@ -1074,18 +1074,21 @@ func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
 		t.Fatalf("expected one reply card, got %d", len(ff.replyCards))
 	}
 
-	if err := a.store.UpsertSession(&state.Session{Key: "s1", ChatID: "chat-2"}); err != nil {
+	if err := a.store.UpsertSession(&state.Session{Key: "s1", ChatID: "chat-2", ChatType: "p2p"}); err != nil {
 		t.Fatalf("UpsertSession(s1) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{Key: "s2", ChatID: "chat-1"}); err != nil {
+	if err := a.store.UpsertSession(&state.Session{Key: "s2", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
 		t.Fatalf("UpsertSession(s2) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{Key: "s3", ChatID: "chat-1"}); err != nil {
+	if err := a.store.UpsertSession(&state.Session{Key: "s3", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
 		t.Fatalf("UpsertSession(s3) error = %v", err)
 	}
+	if err := a.store.UpsertSession(&state.Session{Key: "s4", ChatID: "chat-group", ChatType: "group"}); err != nil {
+		t.Fatalf("UpsertSession(s4) error = %v", err)
+	}
 	sendStartupReadyNotifications(a)
-	if len(ff.sentTexts) < 2 {
-		t.Fatalf("expected startup notifications to known chats, got %+v", ff.sentTexts)
+	if len(ff.sentTexts) != 2 {
+		t.Fatalf("expected startup notifications only to p2p chats, got %+v", ff.sentTexts)
 	}
 }
 

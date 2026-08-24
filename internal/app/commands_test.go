@@ -494,18 +494,22 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 	_ = msg
 }
 
-func TestStartupReadyChatIDsDeduplicatesChats(t *testing.T) {
+func TestStartupReadyChatIDsDeduplicatesP2PChats(t *testing.T) {
 	ids := startupReadyChatIDs([]*state.Session{
-		{ChatID: "chat-b"},
-		{ChatID: "chat-a"},
-		{ChatID: "chat-b"},
+		{ChatID: "chat-b", ChatType: "p2p"},
+		{ChatID: "chat-a", ChatType: "p2p"},
+		{ChatID: "chat-b", ChatType: "p2p"},
+		{Key: "feishu:p2p:chat-key:user-key"},
+		{ChatID: "chat-group", ChatType: "group"},
+		{Key: "feishu:group:chat-key-group:root:root-key"},
+		{ChatID: "chat-legacy"},
 		{ChatID: ""},
 		nil,
 	})
-	if len(ids) != 2 {
+	if len(ids) != 3 {
 		t.Fatalf("unexpected chat id count: %#v", ids)
 	}
-	if ids[0] != "chat-a" || ids[1] != "chat-b" {
+	if ids[0] != "chat-a" || ids[1] != "chat-b" || ids[2] != "chat-key" {
 		t.Fatalf("unexpected sorted chat ids: %#v", ids)
 	}
 }

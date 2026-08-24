@@ -144,7 +144,20 @@ func StartupReadyChatIDs(sessions []*state.Session) []string {
 		if sess == nil {
 			continue
 		}
+		chatType := strings.ToLower(strings.TrimSpace(sess.ChatType))
 		chatID := strings.TrimSpace(sess.ChatID)
+		if chatType == "" || chatID == "" {
+			_, keyChatType, keyChatID, _, _ := appcore.ParseSessionKey(sess.Key)
+			if chatType == "" {
+				chatType = keyChatType
+			}
+			if chatID == "" {
+				chatID = keyChatID
+			}
+		}
+		if chatType != "p2p" {
+			continue
+		}
 		if chatID == "" {
 			continue
 		}
