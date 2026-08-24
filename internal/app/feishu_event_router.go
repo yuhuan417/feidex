@@ -66,6 +66,17 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		len(msg.MentionedOpenIDs) > 0,
 		msg.MentionedEveryone,
 	) {
+		slog.Debug("feishu group message ignored by app group policy",
+			"frontend_id", strings.TrimSpace(a.FrontendID()),
+			"message_id", msg.MessageID,
+			"chat_id", msg.ChatID,
+			"root_message_id", msg.RootMessageID,
+			"policy_root_message_id", groupPolicyRootMessageID(msg),
+			"parent_message_id", msg.ParentMessageID,
+			"mentioned_self", msg.MentionedSelf,
+			"mention_count", len(msg.MentionedOpenIDs),
+			"mentioned_everyone", msg.MentionedEveryone,
+		)
 		return nil
 	}
 	sessionKey := makeSessionKey(a, msg)

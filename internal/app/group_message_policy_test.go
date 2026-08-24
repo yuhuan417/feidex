@@ -2,6 +2,7 @@ package app
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"feidex/internal/config"
@@ -168,5 +169,38 @@ func TestBindingDoesNotChangeRootScopedSessionKey(t *testing.T) {
 	frontendID, chatType, chatID, rootID, userID := parseSessionKey(first)
 	if frontendID != "frontend-a" || chatType != "group" || chatID != "chat-1" || rootID != "m-1" || userID != "" {
 		t.Fatalf("parsed root session key = %q %q %q %q %q", frontendID, chatType, chatID, rootID, userID)
+	}
+}
+
+func TestPrimaryBindingHandlesUnmentionedSlashCommand(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          "binding-primary-slash",
+		FrontendID:  "bot-a",
+		ChatID:      "chat-slash",
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+		Primary:     true,
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "slash-1",
+		ChatID:        "chat-slash",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "/menu",
+		RootMessageID: "slash-1",
+	})
+
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want 1", len(cards))
+	}
+	if body := cardMarkdownContent(t, cards[0]); !strings.Contains(body, "当前位置：主菜单") {
+		t.Fatalf("/menu reply body = %q, want main menu", body)
 	}
 }

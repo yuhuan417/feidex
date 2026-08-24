@@ -59,3 +59,42 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 		t.Fatalf("inbound mention metadata = %+v", msg)
 	}
 }
+
+func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.T) {
+	a := New(config.FeishuConfig{GroupAtOnly: true})
+	a.botOpenID = "bot-self"
+	var capturedRootID string
+	a.SetGroupMessagePolicy(func(chatID, rootID, parentID string, self, any, everyone bool) bool {
+		capturedRootID = rootID
+		return chatID == "chat-1" && rootID == "" && parentID == "" && !self && !any && !everyone
+	})
+
+	messageID := "msg-top"
+	chatID := "chat-1"
+	chatType := "group"
+	messageType := "text"
+	userID := "user-1"
+	content := `{"text":"/menu"}`
+	msg := a.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   &messageID,
+				ChatId:      &chatID,
+				ChatType:    &chatType,
+				MessageType: &messageType,
+				RootId:      &messageID,
+				Content:     &content,
+			},
+		},
+	})
+	if msg == nil {
+		t.Fatal("convertMessage() returned nil")
+	}
+	if capturedRootID != "" {
+		t.Fatalf("group policy root id = %q, want normalized empty top-level root", capturedRootID)
+	}
+	if msg.RootMessageID != messageID || msg.Text != "/menu" {
+		t.Fatalf("inbound message = %+v, want original root preserved and slash text", msg)
+	}
+}

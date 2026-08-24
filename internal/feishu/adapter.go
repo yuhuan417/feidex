@@ -1071,18 +1071,32 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	chatType := stringValue(msg.ChatType)
 	rootMessageID := stringValue(msg.RootId)
 	parentMessageID := stringValue(msg.ParentId)
+	policyRootMessageID := groupPolicyRootMessageID(messageID, rootMessageID, parentMessageID)
 	mentionedSelf := a.botOpenID != "" && mentioned(msg.Mentions, a.botOpenID)
 	mentionedAny := len(mentionedOpenIDs(msg.Mentions)) > 0
 	mentionedEveryone := mentionedEveryone(msg.Mentions)
 	if chatType == "group" && a.cfg.GroupAtOnly {
 		allowedGroupTrigger := false
 		if a.groupMessagePolicy != nil && a.botOpenID != "" {
-			allowedGroupTrigger = a.groupMessagePolicy(chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+			allowedGroupTrigger = a.groupMessagePolicy(chatID, policyRootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
 		} else {
 			allowedGroupTrigger = a.cfg.RespondToAtEveryone && mentionedEveryone
 			allowedGroupTrigger = allowedGroupTrigger || mentionedSelf
 		}
 		if !allowedGroupTrigger {
+			slog.Debug("feishu group message ignored by trigger policy",
+				"app_id", strings.TrimSpace(a.cfg.AppID),
+				"message_id", messageID,
+				"chat_id", chatID,
+				"root_message_id", rootMessageID,
+				"policy_root_message_id", policyRootMessageID,
+				"parent_message_id", parentMessageID,
+				"mentioned_self", mentionedSelf,
+				"mention_count", len(mentionedOpenIDs(msg.Mentions)),
+				"mentioned_everyone", mentionedEveryone,
+				"has_group_policy", a.groupMessagePolicy != nil,
+				"has_bot_open_id", strings.TrimSpace(a.botOpenID) != "",
+			)
 			return nil
 		}
 	}
@@ -1167,6 +1181,16 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	out.Text = text
 	out.Attachments = attachments
 	return out
+}
+
+func groupPolicyRootMessageID(messageID, rootMessageID, parentMessageID string) string {
+	messageID = strings.TrimSpace(messageID)
+	rootMessageID = strings.TrimSpace(rootMessageID)
+	parentMessageID = strings.TrimSpace(parentMessageID)
+	if parentMessageID == "" && rootMessageID != "" && rootMessageID == messageID {
+		return ""
+	}
+	return rootMessageID
 }
 
 func (a *Adapter) convertMessageRecall(event *larkim.P2MessageRecalledV1) *MessageRecall {
