@@ -19,7 +19,7 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	if spec == nil {
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
-	if !hasConfiguredBackend(a) && fields[0] != "/backend" {
+	if !hasConfiguredBackend(a) && fields[0] != "/backend" && fields[0] != "/bind" {
 		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
 	backend := configuredBackend(a)
@@ -82,6 +82,10 @@ func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
 func renderToolsMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.tools")
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForSession(a, sessionKey, spec.Action, spec.Description), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
+}
+
+func renderCurrentBotMenu(a *App, sessionKey string) map[string]any {
+	return renderCurrentBotMenuCard(a, sessionKey)
 }
 
 func renderSessionMenuCard(a *App, sessionKey string) map[string]any {

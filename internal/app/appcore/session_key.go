@@ -20,8 +20,10 @@ func ParseSessionKey(sessionKey string) (frontendID, chatType, chatID, rootMessa
 	}
 	switch parts[offset] {
 	case "group":
-		if len(parts) > offset+3 && parts[offset+2] == "root" {
-			return frontendID, "group", strings.TrimSpace(parts[offset+1]), strings.TrimSpace(parts[offset+3]), ""
+		if len(parts) > offset+3 {
+			if parts[offset+2] == "root" {
+				return frontendID, "group", strings.TrimSpace(parts[offset+1]), strings.TrimSpace(parts[offset+3]), ""
+			}
 		}
 	case "p2p":
 		if len(parts) > offset+2 {

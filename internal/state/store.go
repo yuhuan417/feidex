@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 6
+const currentSnapshotVersion = 8
 
 type Store struct {
 	path    string
@@ -25,6 +25,7 @@ type Store struct {
 type Snapshot struct {
 	Version                   int                                   `json:"version"`
 	Sessions                  map[string]*storedSession             `json:"sessions"`
+	AgentBindings             map[string]*AgentBinding              `json:"agent_bindings,omitempty"`
 	FrontendCardNotifications map[string][]FrontendCardNotification `json:"frontend_card_notifications,omitempty"`
 }
 
@@ -43,6 +44,7 @@ type Counters struct {
 
 type storedSession struct {
 	Key                           string                          `json:"key"`
+	BindingID                     string                          `json:"binding_id,omitempty"`
 	WorkspaceID                   string                          `json:"workspace_id"`
 	ActiveThreadID                string                          `json:"active_thread_id"`
 	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
@@ -70,6 +72,28 @@ type FrontendCardNotification struct {
 	CreatedAt   int64  `json:"created_at,omitempty"`
 }
 
+// AgentBinding maps a local frontend/bot to one logical chat project.
+// WorkspaceID and the optional model settings refer to this local instance.
+type AgentBinding struct {
+	ID                      string `json:"id"`
+	FrontendID              string `json:"frontend_id"`
+	ChatID                  string `json:"chat_id"`
+	ChatType                string `json:"chat_type"`
+	Component               string `json:"component"`
+	WorkspaceID             string `json:"workspace_id"`
+	ModelOverride           string `json:"model_override,omitempty"`
+	ReasoningEffortOverride string `json:"reasoning_effort_override,omitempty"`
+	ServiceTierOverride     string `json:"service_tier_override,omitempty"`
+	SandboxModeOverride     string `json:"sandbox_mode_override,omitempty"`
+	ApprovalPolicyOverride  string `json:"approval_policy_override,omitempty"`
+	MultiAgentModeOverride  string `json:"multi_agent_mode_override,omitempty"`
+	ClaudePermissionMode    string `json:"claude_permission_mode,omitempty"`
+	Primary                 bool   `json:"primary,omitempty"`
+	Status                  string `json:"status"`
+	CreatedAt               int64  `json:"created_at"`
+	UpdatedAt               int64  `json:"updated_at"`
+}
+
 type SessionBackendThread struct {
 	ThreadID             string                    `json:"thread_id,omitempty"`
 	WorkspaceID          string                    `json:"workspace_id,omitempty"`
@@ -92,6 +116,7 @@ type SessionCollaborationMode struct {
 
 type Session struct {
 	Key                           string                          `json:"key"`
+	BindingID                     string                          `json:"binding_id,omitempty"`
 	WorkspaceID                   string                          `json:"workspace_id"`
 	ActiveThreadID                string                          `json:"active_thread_id"`
 	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
@@ -149,6 +174,7 @@ type SubmissionSkill struct {
 type Submission struct {
 	ID                   string                 `json:"id"`
 	SessionKey           string                 `json:"session_key"`
+	BindingID            string                 `json:"binding_id,omitempty"`
 	WorkspaceID          string                 `json:"workspace_id"`
 	ThreadID             string                 `json:"thread_id"`
 	TurnID               string                 `json:"turn_id"`
@@ -211,6 +237,7 @@ func Open(path string) (*Store, error) {
 		data: Snapshot{
 			Version:                   currentSnapshotVersion,
 			Sessions:                  map[string]*storedSession{},
+			AgentBindings:             map[string]*AgentBinding{},
 			FrontendCardNotifications: map[string][]FrontendCardNotification{},
 		},
 		runtime: runtimeState{
@@ -242,6 +269,14 @@ func Open(path string) (*Store, error) {
 	}
 	rewrite := s.data.Version != currentSnapshotVersion
 	s.data.Version = currentSnapshotVersion
+	normalizedBindings := normalizeAgentBindings(s.data.AgentBindings)
+	if normalizedBindings == nil {
+		normalizedBindings = map[string]*AgentBinding{}
+	}
+	if !agentBindingsEqual(s.data.AgentBindings, normalizedBindings) {
+		rewrite = true
+	}
+	s.data.AgentBindings = normalizedBindings
 	for key, sess := range s.data.Sessions {
 		persisted := normalizeStoredSession(sess)
 		if !storedSessionsEqual(sess, persisted) {
@@ -256,6 +291,143 @@ func Open(path string) (*Store, error) {
 		}
 	}
 	return s, nil
+}
+
+// GetAgentBinding returns a binding by id without frontend filtering.
+func (s *Store) GetAgentBinding(id string) *AgentBinding {
+	return s.GetScopedAgentBinding("", id)
+}
+
+// GetScopedAgentBinding returns a binding by id when it belongs to frontendID.
+// An empty frontendID disables the scope check for store-level callers.
+func (s *Store) GetScopedAgentBinding(frontendID, id string) *AgentBinding {
+	frontendID = strings.TrimSpace(frontendID)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	binding, ok := s.data.AgentBindings[id]
+	if !ok || binding == nil {
+		return nil
+	}
+	if frontendID != "" && binding.FrontendID != frontendID {
+		return nil
+	}
+	return cloneAgentBinding(binding)
+}
+
+// AllAgentBindings returns deep copies of all persisted bindings.
+func (s *Store) AllAgentBindings() []*AgentBinding {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneAgentBindings(s.data.AgentBindings)
+}
+
+// AgentBindingsByFrontend returns bindings owned by one local frontend.
+func (s *Store) AgentBindingsByFrontend(frontendID string) []*AgentBinding {
+	frontendID = strings.TrimSpace(frontendID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneAgentBindingsMatching(s.data.AgentBindings, func(binding *AgentBinding) bool {
+		return binding != nil && binding.FrontendID == frontendID
+	})
+}
+
+// AgentBindingsByChat returns bindings for one frontend and logical chat.
+func (s *Store) AgentBindingsByChat(frontendID, chatType, chatID string) []*AgentBinding {
+	frontendID = strings.TrimSpace(frontendID)
+	chatType = strings.ToLower(strings.TrimSpace(chatType))
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneAgentBindingsMatching(s.data.AgentBindings, func(binding *AgentBinding) bool {
+		if binding == nil || binding.FrontendID != frontendID || binding.ChatID != chatID {
+			return false
+		}
+		return chatType == "" || binding.ChatType == chatType
+	})
+}
+
+// UpsertAgentBinding persists a local binding.
+func (s *Store) UpsertAgentBinding(binding *AgentBinding) error {
+	if binding == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := cloneAgentBinding(binding)
+	if cp == nil || cp.ID == "" {
+		return nil
+	}
+	normalizeAgentBindingValues(cp)
+	now := time.Now().Unix()
+	if previous := s.data.AgentBindings[cp.ID]; previous != nil && cp.CreatedAt == 0 {
+		cp.CreatedAt = previous.CreatedAt
+	}
+	for id, previous := range s.data.AgentBindings {
+		if id == cp.ID || previous == nil {
+			continue
+		}
+		if previous.FrontendID == cp.FrontendID && previous.ChatType == cp.ChatType && previous.ChatID == cp.ChatID {
+			return fmt.Errorf("agent binding already exists for frontend %q chat %q: %s", cp.FrontendID, cp.ChatID, id)
+		}
+	}
+	if cp.CreatedAt == 0 {
+		cp.CreatedAt = now
+	}
+	cp.UpdatedAt = now
+	if s.data.AgentBindings == nil {
+		s.data.AgentBindings = map[string]*AgentBinding{}
+	}
+	s.data.AgentBindings[cp.ID] = cp
+	return s.saveLocked()
+}
+
+// UpsertScopedAgentBinding persists a binding owned by frontendID. A blank
+// binding frontend is filled from the scope; a different frontend is rejected.
+func (s *Store) UpsertScopedAgentBinding(frontendID string, binding *AgentBinding) error {
+	if binding == nil {
+		return nil
+	}
+	frontendID = strings.TrimSpace(frontendID)
+	cp := cloneAgentBinding(binding)
+	if cp == nil {
+		return nil
+	}
+	if strings.TrimSpace(cp.FrontendID) == "" {
+		cp.FrontendID = frontendID
+	}
+	if frontendID != "" && strings.TrimSpace(cp.FrontendID) != frontendID {
+		return fmt.Errorf("agent binding frontend %q does not match scope %q", cp.FrontendID, frontendID)
+	}
+	return s.UpsertAgentBinding(cp)
+}
+
+// DeleteAgentBinding deletes a persisted binding by id.
+func (s *Store) DeleteAgentBinding(id string) error {
+	return s.DeleteScopedAgentBinding("", id)
+}
+
+// DeleteScopedAgentBinding deletes a binding only when it belongs to frontendID.
+func (s *Store) DeleteScopedAgentBinding(frontendID, id string) error {
+	frontendID = strings.TrimSpace(frontendID)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	binding, ok := s.data.AgentBindings[id]
+	if !ok || binding == nil || (frontendID != "" && binding.FrontendID != frontendID) {
+		return nil
+	}
+	delete(s.data.AgentBindings, id)
+	return s.saveLocked()
 }
 
 func (s *Store) GetSession(key string) *Session {
@@ -547,6 +719,97 @@ func cloneFrontendCardNotifications(src []FrontendCardNotification) []FrontendCa
 	return dst
 }
 
+func cloneAgentBinding(binding *AgentBinding) *AgentBinding {
+	if binding == nil {
+		return nil
+	}
+	cp := *binding
+	normalizeAgentBindingValues(&cp)
+	return &cp
+}
+
+func cloneAgentBindings(src map[string]*AgentBinding) []*AgentBinding {
+	return cloneAgentBindingsMatching(src, func(*AgentBinding) bool { return true })
+}
+
+func cloneAgentBindingsMatching(src map[string]*AgentBinding, match func(*AgentBinding) bool) []*AgentBinding {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]*AgentBinding, 0, len(src))
+	for _, binding := range src {
+		if binding == nil || (match != nil && !match(binding)) {
+			continue
+		}
+		out = append(out, cloneAgentBinding(binding))
+	}
+	slices.SortFunc(out, func(a, b *AgentBinding) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	return out
+}
+
+func normalizeAgentBindingValues(binding *AgentBinding) bool {
+	if binding == nil {
+		return false
+	}
+	before := *binding
+	binding.ID = strings.TrimSpace(binding.ID)
+	binding.FrontendID = strings.TrimSpace(binding.FrontendID)
+	binding.ChatID = strings.TrimSpace(binding.ChatID)
+	binding.ChatType = strings.ToLower(strings.TrimSpace(binding.ChatType))
+	binding.Component = strings.ToLower(strings.TrimSpace(binding.Component))
+	binding.WorkspaceID = strings.TrimSpace(binding.WorkspaceID)
+	binding.ModelOverride = strings.TrimSpace(binding.ModelOverride)
+	binding.ReasoningEffortOverride = strings.TrimSpace(binding.ReasoningEffortOverride)
+	binding.ServiceTierOverride = normalizeStoredServiceTier(binding.ServiceTierOverride)
+	binding.SandboxModeOverride = strings.TrimSpace(binding.SandboxModeOverride)
+	binding.ApprovalPolicyOverride = strings.TrimSpace(binding.ApprovalPolicyOverride)
+	binding.MultiAgentModeOverride = strings.TrimSpace(binding.MultiAgentModeOverride)
+	binding.ClaudePermissionMode = strings.TrimSpace(binding.ClaudePermissionMode)
+	binding.Status = NormalizeAgentBindingStatus(binding.Status).String()
+	if binding.UpdatedAt == 0 && binding.CreatedAt != 0 {
+		binding.UpdatedAt = binding.CreatedAt
+	}
+	return before != *binding
+}
+
+func normalizeAgentBindings(src map[string]*AgentBinding) map[string]*AgentBinding {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]*AgentBinding, len(src))
+	for key, binding := range src {
+		cp := cloneAgentBinding(binding)
+		if cp == nil {
+			continue
+		}
+		if cp.ID == "" {
+			cp.ID = strings.TrimSpace(key)
+		}
+		if cp.ID == "" {
+			continue
+		}
+		dst[cp.ID] = cp
+	}
+	if len(dst) == 0 {
+		return nil
+	}
+	return dst
+}
+
+func agentBindingsEqual(a, b map[string]*AgentBinding) bool {
+	ab, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	bb, err := json.Marshal(b)
+	if err != nil {
+		return false
+	}
+	return string(ab) == string(bb)
+}
+
 func normalizeFrontendCardNotification(note FrontendCardNotification) (FrontendCardNotification, bool) {
 	note.Kind = strings.TrimSpace(note.Kind)
 	note.CollapseKey = strings.TrimSpace(note.CollapseKey)
@@ -588,9 +851,21 @@ func normalizeSessionValues(sess *Session) bool {
 	if sess == nil {
 		return false
 	}
+	before := *sess
 	normalizedServiceTier := normalizeStoredServiceTier(sess.ActiveThreadServiceTier)
 	changed := sess.ActiveThreadServiceTier != normalizedServiceTier
 	sess.ActiveThreadServiceTier = normalizedServiceTier
+	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
+		if strings.TrimSpace(sess.ChatType) == "" {
+			sess.ChatType = chatType
+		}
+		if strings.TrimSpace(sess.ChatID) == "" {
+			sess.ChatID = chatID
+		}
+		if strings.TrimSpace(sess.RootMessageID) == "" {
+			sess.RootMessageID = rootMessageID
+		}
+	}
 	normalizedStatus := NormalizeSessionStatus(sess.Status).String()
 	if sess.Status != normalizedStatus {
 		changed = true
@@ -606,7 +881,7 @@ func normalizeSessionValues(sess *Session) bool {
 		changed = true
 	}
 	sess.ActiveThreadCollaborationMode = normalizedCollaborationMode
-	return changed
+	return changed || before.ChatType != sess.ChatType || before.ChatID != sess.ChatID || before.RootMessageID != sess.RootMessageID || before.BindingID != sess.BindingID
 }
 
 func normalizeSubmissionValues(sub *Submission) {
@@ -634,6 +909,7 @@ func storedSessionFromSession(sess *Session) *storedSession {
 	normalizeSessionValues(cp)
 	return &storedSession{
 		Key:                           cp.Key,
+		BindingID:                     cp.BindingID,
 		WorkspaceID:                   cp.WorkspaceID,
 		ActiveThreadID:                cp.ActiveThreadID,
 		ActiveThreadWorkspaceID:       cp.ActiveThreadWorkspaceID,
@@ -659,6 +935,7 @@ func sessionFromStored(sess *storedSession) *Session {
 	}
 	cp := &Session{
 		Key:                           sess.Key,
+		BindingID:                     strings.TrimSpace(sess.BindingID),
 		WorkspaceID:                   sess.WorkspaceID,
 		ActiveThreadID:                sess.ActiveThreadID,
 		ActiveThreadWorkspaceID:       sess.ActiveThreadWorkspaceID,
@@ -691,6 +968,7 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 		return nil
 	}
 	cp := *sess
+	cp.BindingID = strings.TrimSpace(cp.BindingID)
 	cp.ActiveClaudePermissionMode = strings.TrimSpace(cp.ActiveClaudePermissionMode)
 	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
 	cp.ActiveThreadCollaborationMode = normalizeSessionCollaborationMode(cp.ActiveThreadCollaborationMode)
@@ -840,10 +1118,15 @@ func sessionContextFromKey(key string) (chatType, chatID, rootMessageID string, 
 	}
 	switch parts[offset] {
 	case "group":
-		if len(parts) <= offset+3 || strings.TrimSpace(parts[offset+1]) == "" || parts[offset+2] != "root" {
+		if len(parts) <= offset+3 || strings.TrimSpace(parts[offset+1]) == "" {
 			return "", "", "", false
 		}
-		return "group", strings.TrimSpace(parts[offset+1]), strings.TrimSpace(parts[offset+3]), true
+		switch parts[offset+2] {
+		case "root":
+			return "group", strings.TrimSpace(parts[offset+1]), strings.TrimSpace(parts[offset+3]), true
+		default:
+			return "", "", "", false
+		}
 	case "p2p":
 		if len(parts) <= offset+2 || strings.TrimSpace(parts[offset+1]) == "" {
 			return "", "", "", false

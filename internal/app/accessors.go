@@ -65,6 +65,19 @@ func (a *App) State() *appstate.Store {
 	return appstate.New(a)
 }
 
+// AgentBindingsForChat returns local binding configuration for one logical
+// chat. It is an optional appcore capability used by binding-aware helpers.
+func (a *App) AgentBindingsForChat(chatType, chatID string) []*state.AgentBinding {
+	if a == nil {
+		return nil
+	}
+	st := a.State()
+	if st == nil {
+		return nil
+	}
+	return st.AgentBindingsForChat(chatType, chatID)
+}
+
 // ConfigPath returns the filesystem path to the configuration file.
 func (a *App) ConfigPath() string {
 	if a == nil {

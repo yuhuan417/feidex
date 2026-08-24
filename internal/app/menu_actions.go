@@ -34,6 +34,17 @@ func (s menuActionService) completeMenuTools(action *feishu.CardAction, sessionK
 }
 
 func (s menuActionService) completeMenuGroupModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if groupBindingSessionScopeActive(s.app, sessionKey) {
+		msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+		binding, err := newBindingService(s.app).ensureBindingForMessage(msg)
+		if err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "已打开当前 Bot 配置"},
+			Card:  rawCard(newBindingService(s.app).renderBindingStatusCard(sessionKey, binding)),
+		}, nil
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 model"},
 		Card:  rawCard(newBackendConfigurationService(s.app).renderModelMenuCard(sessionKey)),

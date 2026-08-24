@@ -366,6 +366,7 @@ func TestAppStateStoreScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 
 func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.ReplyInThread = true
 	sessionKey := "feishu:group:chat-1:root:root-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,

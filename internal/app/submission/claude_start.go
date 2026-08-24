@@ -74,7 +74,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 		return err
 	}
 
-	model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.SubmissionQueueConfiguredClaudeModel()))
+	model := effectiveClaudeModel(a, sess, sub, ws)
 	ensureCtx, ensureCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	resumeThreadID := threadID
 	claudeThreadID, err := claude.EnsureSession(ensureCtx, sessionKey, ws, resumeThreadID, model)

@@ -42,6 +42,7 @@ func (f *blockingClaudeCompactCore) StartTurn(_ context.Context, sessionKey, thr
 
 func TestStandaloneCompactionLifecycle(t *testing.T) {
 	a, ff, fc := newTestApp(t)
+	a.cfg.Feishu.ReplyInThread = true
 	sessionKey := "sess-compact"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
@@ -115,6 +116,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}
 
 	a, ff, fc := newTestApp(t)
+	a.cfg.Feishu.ReplyInThread = true
 	if _, err := startThreadCompaction(a, "missing"); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("startThreadCompaction(missing) error = %v", err)
 	}

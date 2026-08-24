@@ -126,6 +126,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		handle.install(app)
 	}
 	app.feishu.SetHandlers(app.HandleFeishuMessage, app.HandleCardAction, app.HandleBotMenu, app.HandleFeishuRecall, app.HandleFeishuReaction)
+	configureGroupMessagePolicy(app)
 	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }
@@ -177,14 +178,17 @@ func runAsync(a *App, fn func()) {
 }
 
 func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+	if strings.TrimSpace(effectiveModel) == "" {
+		effectiveModel = effectiveCodexModel(a, sess, ws)
+	}
 	return codexrpc.ThreadStartParams{
 		Cwd:                    ws.Cwd,
-		ApprovalPolicy:         effectiveThreadApprovalPolicy(sess, ws),
-		Sandbox:                effectiveThreadSandboxMode(sess, ws),
+		ApprovalPolicy:         effectiveBindingApprovalPolicy(a, sess, ws),
+		Sandbox:                effectiveBindingSandboxMode(a, sess, ws),
 		ServiceName:            a.cfg.Codex.ServiceName,
 		ExperimentalRawEvents:  false,
 		PersistExtendedHistory: true,
-		ServiceTier:            strings.TrimSpace(effectiveThreadServiceTier(sess)),
+		ServiceTier:            strings.TrimSpace(effectiveBindingServiceTier(a, sess)),
 		Model:                  strings.TrimSpace(effectiveModel),
 	}
 }

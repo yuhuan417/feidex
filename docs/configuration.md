@@ -18,7 +18,7 @@ debug_allow_from = []
 group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
-reply_in_thread = true
+reply_in_thread = false
 quiet = "progress"
 
 [codex]
@@ -89,7 +89,7 @@ Feidex 会把这些状态写进去：
 - `card_enabled`
   - 是否启用卡片输出
 - `reply_in_thread`
-  - 群聊是否在线程内回复
+  - 群聊是否在线程内回复，默认 `false`
 - `quiet`
   - Quiet 模式默认值，默认 `progress`
 

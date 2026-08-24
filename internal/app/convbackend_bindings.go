@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	appcore "feidex/internal/app/appcore"
 	appconvbackend "feidex/internal/app/convbackend"
@@ -42,7 +41,7 @@ func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App
 		ResetActiveOps:     sessionResetActiveOperations,
 		MarkThreadLive:     func(sessionKey, threadID string) { markSessionThreadLive(root, sessionKey, threadID) },
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(root) },
-		ConfiguredModel:    func() string { return configuredGlobalModel(root.cfg) },
+		ConfiguredModel:    func() string { return effectiveCodexModel(root, sess, ws) },
 	}, sessionKey, sess, ws, sel)
 }
 
@@ -129,7 +128,7 @@ func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.Ap
 		MarkThreadLive:     func(sessionKey, threadID string) { markSessionThreadLive(root, sessionKey, threadID) },
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(root) },
 		ResolveModel: func(sess *state.Session, ws *config.Workspace) string {
-			return firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(root.cfg.Claude.Model))
+			return effectiveClaudeModel(root, sess, ws)
 		},
 	}, sessionKey, sess, ws, sel)
 }

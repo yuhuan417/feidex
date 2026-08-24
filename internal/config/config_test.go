@@ -99,6 +99,9 @@ func TestDefaultConfigUsesInfoLogLevel(t *testing.T) {
 	if cfg.Daemon.ServiceName != "feidex" {
 		t.Fatalf("default daemon service name = %q, want feidex", cfg.Daemon.ServiceName)
 	}
+	if cfg.Feishu.ReplyInThread {
+		t.Fatal("default feishu reply_in_thread = true, want false")
+	}
 }
 
 func TestSaveUsesPrivatePermissions(t *testing.T) {

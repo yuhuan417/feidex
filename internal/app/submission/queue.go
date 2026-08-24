@@ -72,6 +72,22 @@ type App interface {
 	SubmissionQueueConfiguredClaudeModel() string
 }
 
+// agentBindingResolver is optional so narrow queue test hosts and non-Feishu
+// callers do not need to provide binding state. The production adapter uses
+// the current frontend's local binding for the inbound chat.
+type agentBindingResolver interface {
+	SubmissionQueueAgentBinding(chatType, chatID string) *state.AgentBinding
+}
+
+type agentBindingByIDResolver interface {
+	SubmissionQueueAgentBindingByID(id string) *state.AgentBinding
+}
+
+type codexConfigResolver interface {
+	SubmissionQueueConfiguredCodexModel() string
+	SubmissionQueueConfiguredCodexReasoningEffort() string
+}
+
 // ---------------------------------------------------------------------------
 // Narrow provider interfaces
 // ---------------------------------------------------------------------------
@@ -208,17 +224,31 @@ func NewSubmissionQueueService(app App) SubmissionQueueService {
 func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
-	sess := appState.Session(sessionKey)
-	if sess == nil {
-		sess = &state.Session{
+	chatBinding := resolveAgentBinding(a, msg)
+	newSession := func() *state.Session {
+		bindingID := ""
+		workspaceID := a.SubmissionQueueDefaultWorkspaceID()
+		if chatBinding != nil {
+			bindingID = strings.TrimSpace(chatBinding.ID)
+			workspaceID = ""
+		}
+		return &state.Session{
 			Key:           sessionKey,
-			WorkspaceID:   a.SubmissionQueueDefaultWorkspaceID(),
+			BindingID:     bindingID,
+			WorkspaceID:   workspaceID,
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
-			RootMessageID: msg.RootMessageID,
+			RootMessageID: firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID)),
 			Status:        state.SessionStatusIdle.String(),
 		}
+	}
+	sess := appState.Session(sessionKey)
+	if sess == nil {
+		sess = newSession()
+	}
+	if strings.TrimSpace(sess.BindingID) == "" && chatBinding != nil {
+		sess.BindingID = strings.TrimSpace(chatBinding.ID)
 	}
 	workspaceID := strings.TrimSpace(a.SubmissionQueueResolveWorkspaceID(msg, sess, bindOnlyCurrentRoot))
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -231,18 +261,19 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		sess = appState.Session(sessionKey)
 	}
 	if sess == nil {
-		sess = &state.Session{
-			Key:           sessionKey,
-			WorkspaceID:   a.SubmissionQueueDefaultWorkspaceID(),
-			OwnerUserID:   msg.UserID,
-			ChatID:        msg.ChatID,
-			ChatType:      msg.ChatType,
-			RootMessageID: msg.RootMessageID,
-			Status:        state.SessionStatusIdle.String(),
+		sess = newSession()
+		if strings.TrimSpace(sess.BindingID) == "" && chatBinding != nil {
+			sess.BindingID = strings.TrimSpace(chatBinding.ID)
 		}
 	}
 	if workspaceID == "" {
-		workspaceID = firstNonEmpty(strings.TrimSpace(a.SubmissionQueueResolveWorkspaceID(msg, sess, bindOnlyCurrentRoot)), strings.TrimSpace(sess.WorkspaceID), a.SubmissionQueueDefaultWorkspaceID())
+		workspaceID = firstNonEmpty(strings.TrimSpace(a.SubmissionQueueResolveWorkspaceID(msg, sess, bindOnlyCurrentRoot)), strings.TrimSpace(sess.WorkspaceID))
+		if strings.TrimSpace(sess.BindingID) == "" {
+			workspaceID = firstNonEmpty(workspaceID, a.SubmissionQueueDefaultWorkspaceID())
+		}
+	}
+	if workspaceID == "" {
+		return fmt.Errorf("binding %q has no workspace configured", strings.TrimSpace(sess.BindingID))
 	}
 	inboundAttachments, err := a.SubmissionQueueAttachmentResolver().ResolveInboundAttachments(msg, workspaceID, sessionKey)
 	if err != nil {
@@ -293,6 +324,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	a.SubmissionQueueLogSessionState("submission enqueue session persisted", sessionKey, appState.Session(sessionKey))
 	sub := &state.Submission{
 		SessionKey:           sessionKey,
+		BindingID:            strings.TrimSpace(sess.BindingID),
 		WorkspaceID:          workspaceID,
 		UserID:               msg.UserID,
 		ChatID:               msg.ChatID,
@@ -343,6 +375,160 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	a.SubmissionQueueMarkSubmissionQueuedReactions(sub)
 	a.SubmissionQueueSendQueuedNotice(context.Background(), sub)
 	return nil
+}
+
+func resolveAgentBinding(a App, msg *feishu.InboundMessage) *state.AgentBinding {
+	if msg == nil {
+		return nil
+	}
+	resolver, ok := a.(agentBindingResolver)
+	if !ok || resolver == nil {
+		return nil
+	}
+	return resolver.SubmissionQueueAgentBinding(msg.ChatType, msg.ChatID)
+}
+
+func resolveAgentBindingByID(a App, id string) *state.AgentBinding {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	resolver, ok := a.(agentBindingByIDResolver)
+	if !ok || resolver == nil {
+		return nil
+	}
+	return resolver.SubmissionQueueAgentBindingByID(id)
+}
+
+func submissionBinding(a App, sess *state.Session, sub *state.Submission) *state.AgentBinding {
+	if sub != nil {
+		if binding := resolveAgentBindingByID(a, sub.BindingID); binding != nil {
+			return binding
+		}
+	}
+	if sess != nil {
+		return resolveAgentBindingByID(a, sess.BindingID)
+	}
+	return nil
+}
+
+func effectiveCodexModel(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+	binding := submissionBinding(a, sess, sub)
+	return firstNonEmpty(
+		sessionModelOverride(sess),
+		bindingModelOverride(binding),
+		workspaceModel(ws),
+		configuredCodexModel(a),
+	)
+}
+
+func effectiveCodexReasoningEffort(a App, sess *state.Session, sub *state.Submission) string {
+	binding := submissionBinding(a, sess, sub)
+	return firstNonEmpty(
+		bindingReasoningEffortOverride(binding),
+		configuredCodexReasoningEffort(a),
+	)
+}
+
+func effectiveClaudeModel(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+	binding := submissionBinding(a, sess, sub)
+	return firstNonEmpty(
+		sessionModelOverride(sess),
+		bindingModelOverride(binding),
+		workspaceModel(ws),
+		configuredClaudeModel(a),
+	)
+}
+
+func effectiveBindingApprovalPolicy(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
+		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
+	}
+	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.ApprovalPolicyOverride) != "" {
+		return strings.TrimSpace(binding.ApprovalPolicyOverride)
+	}
+	return sessionctx.EffectiveApprovalPolicy(sess, ws)
+}
+
+func effectiveBindingSandboxMode(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
+		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
+	}
+	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.SandboxModeOverride) != "" {
+		return strings.TrimSpace(binding.SandboxModeOverride)
+	}
+	return sessionctx.EffectiveSandboxMode(sess, ws)
+}
+
+func effectiveBindingServiceTier(a App, sess *state.Session, sub *state.Submission) string {
+	if value := sessionctx.EffectiveServiceTier(sess); strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value)
+	}
+	if binding := submissionBinding(a, sess, sub); binding != nil {
+		return strings.TrimSpace(binding.ServiceTierOverride)
+	}
+	return ""
+}
+
+func effectiveBindingMultiAgentMode(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
+		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
+	}
+	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.MultiAgentModeOverride) != "" {
+		return strings.TrimSpace(binding.MultiAgentModeOverride)
+	}
+	return sessionctx.EffectiveMultiAgentMode(sess, ws)
+}
+
+func configuredCodexModel(a App) string {
+	resolver, ok := a.(codexConfigResolver)
+	if !ok || resolver == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolver.SubmissionQueueConfiguredCodexModel())
+}
+
+func configuredCodexReasoningEffort(a App) string {
+	resolver, ok := a.(codexConfigResolver)
+	if !ok || resolver == nil {
+		return ""
+	}
+	return strings.TrimSpace(resolver.SubmissionQueueConfiguredCodexReasoningEffort())
+}
+
+func configuredClaudeModel(a App) string {
+	if a == nil {
+		return ""
+	}
+	return strings.TrimSpace(a.SubmissionQueueConfiguredClaudeModel())
+}
+
+func sessionModelOverride(sess *state.Session) string {
+	if sess == nil {
+		return ""
+	}
+	return strings.TrimSpace(sess.ModelOverride)
+}
+
+func bindingModelOverride(binding *state.AgentBinding) string {
+	if binding == nil {
+		return ""
+	}
+	return strings.TrimSpace(binding.ModelOverride)
+}
+
+func bindingReasoningEffortOverride(binding *state.AgentBinding) string {
+	if binding == nil {
+		return ""
+	}
+	return strings.TrimSpace(binding.ReasoningEffortOverride)
+}
+
+func workspaceModel(ws *config.Workspace) string {
+	if ws == nil {
+		return ""
+	}
+	return strings.TrimSpace(ws.Model)
 }
 
 // PendingConfirmationText returns the pending confirmation text for a skill.
@@ -640,13 +826,13 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		threadID = ""
 		sessionctx.ClearThreadContext(sess)
 	}
-	effectiveModel := ""
-	effectiveReasoningEffort := ""
-	effectiveApprovalPolicy := sessionctx.EffectiveApprovalPolicy(sess, ws)
-	effectiveSandboxMode := sessionctx.EffectiveSandboxMode(sess, ws)
-	effectiveServiceTier := sessionctx.EffectiveServiceTier(sess)
-		effectiveMultiAgentMode := sessionctx.EffectiveMultiAgentMode(sess, ws)
-		if threadID == "" {
+	effectiveModel := effectiveCodexModel(a, sess, sub, ws)
+	effectiveReasoningEffort := effectiveCodexReasoningEffort(a, sess, sub)
+	effectiveApprovalPolicy := effectiveBindingApprovalPolicy(a, sess, sub, ws)
+	effectiveSandboxMode := effectiveBindingSandboxMode(a, sess, sub, ws)
+	effectiveServiceTier := effectiveBindingServiceTier(a, sess, sub)
+	effectiveMultiAgentMode := effectiveBindingMultiAgentMode(a, sess, sub, ws)
+	if threadID == "" {
 		client, err := a.SubmissionQueueRequireCodexClient()
 		if err != nil {
 			s.HandleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)

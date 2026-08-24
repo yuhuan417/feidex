@@ -8,13 +8,13 @@
 
 单聊：
 
-- 以 `chat_id + user_id` 作为 session key
+- 以 `frontend_id + chat_id + user_id` 作为 session key
 
 群聊：
 
-- 以 `chat_id + root_message_id` 作为 session key
+- 以 `frontend_id + chat_id + root_message_id` 作为 session key
 
-也就是说，群聊中同一个根消息树会共享同一个 session。
+也就是说，群聊中同一个 frontend 下的同一个根消息树会共享同一个 session；不同 frontend 的 bot 即使处理同一个根消息，也使用各自隔离的 session。Binding 和 workspace 是 session 的本地执行元数据，不参与 session key。
 
 ### Queue 与 Steer
 
@@ -56,6 +56,12 @@
 
 主菜单按后端分不同入口（Codex 侧重 thread，Claude 侧重 session）：
 
+- 当前 Bot
+  - `群内 Binding /bind`
+  - `Binding Workspace /workspace`
+  - `Binding 模型 /model`
+  - `Binding 响应速度 /fast config`
+  - 查看当前 bot 在本群的 binding、workspace、component 和本地运行参数
 - 常用工具
   - `中断任务 /stop`
   - `静默模式 /quiet`
@@ -91,12 +97,28 @@
   - `状态面板 /status`
   - `命令帮助 /help`
 
+群聊中的菜单作用域规则：没有本地 binding 的老群继续沿用旧命令语义；一旦当前 bot 在该群通过 `/bind` 建立了本地 binding，`/workspace use`、`/workspace sandbox/policy/multiagent/permissions`、`/model set`、`/model effort`、`/effort`、`/fast` 以及对应菜单按钮都会写入当前 bot 的群内 binding，不会切换无作用域的 session workspace 或全局模型配置。要操作另一个 bot，必须明确 `@Bot /menu` 或 `@Bot /bind`，菜单里不提供 bot 选择列表或跨 bot handoff。
+
 ### 本地 slash 命令
 
 - `/menu`
   - 打开主菜单
 - `/help`
   - 查看命令说明
+- `/bind`
+  - 群聊中查看或创建当前 bot 在本群的本地 binding
+- `/bind use WORKSPACE_ID`
+  - 将当前 bot 在本群的 binding 指向本机已有 workspace
+- `/bind new WORKSPACE_ID CWD`
+  - 创建本机 workspace 并绑定到当前群
+- `/bind clone GIT_URL [WORKSPACE_ID] [--parent DIR]`
+  - clone 仓库创建本机 workspace 并绑定到当前群
+- `/bind component NAME|default` / `/bind primary on|off`
+  - 设置当前 bot 在本群的组件说明和 primary 路由标记
+- `/bind model MODEL|default` / `/bind effort EFFORT|default` / `/bind fast fast|default|off`
+  - 设置当前 bot 在本群的模型、推理强度和 service tier 覆盖
+- `/bind sandbox MODE|default` / `/bind policy POLICY|default` / `/bind multiagent MODE|default` / `/bind permissions MODE|default`
+  - 设置当前 bot 在本群的 sandbox、approval policy、multi-agent 和 Claude permission 覆盖
 - `/interrupt` 或 `/stop`
   - 中断当前任务
 - `/quiet`
@@ -115,9 +137,11 @@
   - 查看当前 thread 的累计 token usage
 - `/model`
   - 打开模型选择与推理强度配置
+  - 在已有本地 binding 的群聊中，`/model set` 和 `/model effort` 修改当前 bot 的 binding 覆盖；`/model plan` 和 Claude 候选模型管理仍是 bot/frontend 默认配置，建议私聊 bot 配置
   - Claude 后端可在卡片中添加/移除候选 model；也可用 `/model option add <model-id>`、`/model option remove <model-id>`
 - `/fast`
   - 配置当前 thread 的 service tier
+  - 在已有本地 binding 的群聊中，配置当前 bot 的 binding service tier 覆盖
 - `/debug`
   - 切换服务端 slog 日志级别（debug/info）
   - 仅 `debug_allow_from` 白名单内用户可用
@@ -162,16 +186,22 @@
   - 等价于 `/thread fork`
 - `/workspace`
   - 打开工作区菜单
+  - 在已有本地 binding 的群聊中，打开当前 bot 的 binding workspace 选择/状态卡
 - `/workspace list`
   - 打开工作区列表并可直接切换
+  - 在已有本地 binding 的群聊中，显示可绑定的本机 workspace
 - `/workspace new`
   - 新建工作区
+  - 在已有本地 binding 的群聊中，使用 `/workspace new WORKSPACE_ID CWD` 创建本机 workspace 并绑定当前 bot
 - `/workspace use ID`
   - 切换工作区
+  - 在已有本地 binding 的群聊中，绑定当前 bot 到本机 workspace `ID`，不切换 session workspace
 - `/workspace sandbox`
   - 配置 workspace 默认 sandbox
+  - 在已有本地 binding 的群聊中，使用 `/workspace sandbox MODE|default` 配置 binding sandbox 覆盖
 - `/workspace policy`
   - 配置 workspace 默认 approval policy
+  - 在已有本地 binding 的群聊中，使用 `/workspace policy POLICY|default` 配置 binding approval policy 覆盖
 - `/status`
   - 查看当前状态
 - `/upgrade`
@@ -234,12 +264,16 @@
   - 刷新技能列表
 - `/workspace clone GIT_URL [ID] [--parent DIR]`
   - clone Git 仓库创建新工作区
+  - 在已有本地 binding 的群聊中，clone 后创建本机 workspace 并绑定当前 bot
 - `/workspace choose`
   - 按钮式工作区选择器（按最近使用排序）
+  - 在已有本地 binding 的群聊中，作为当前 bot 的 binding workspace 选择器
 - `/workspace delete [ID]`
   - 删除工作区配置（不删磁盘文件）
+  - 如果该 workspace 仍被当前 frontend 的群 binding 引用，会拒绝删除；先在群里 `/bind use` 或 `/workspace use` 切到其他 workspace
 - `/workspace permissions [MODE]`
   - 配置 workspace 默认 Claude 权限模式
+  - 在已有本地 binding 的群聊中，使用 `/workspace permissions MODE|default` 配置当前 bot 的 binding Claude permission 覆盖
 
 ## Plan Mode（Codex only）
 

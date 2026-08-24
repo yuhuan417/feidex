@@ -20,6 +20,7 @@ func ClearThreadContext(sess *state.Session) {
 	sess.ActiveThreadWorkspaceID = ""
 	sess.ActiveThreadApprovalPolicy = ""
 	sess.ActiveThreadSandboxMode = ""
+	sess.ActiveThreadMultiAgentMode = ""
 	sess.ActiveClaudePermissionMode = ""
 	sess.ActiveThreadServiceTier = ""
 	sess.ActiveThreadCollaborationMode = nil
@@ -57,6 +58,7 @@ func BackendThreadSnapshot(sess *state.Session) state.SessionBackendThread {
 		WorkspaceID:          strings.TrimSpace(sess.ActiveThreadWorkspaceID),
 		ApprovalPolicy:       strings.TrimSpace(sess.ActiveThreadApprovalPolicy),
 		SandboxMode:          strings.TrimSpace(sess.ActiveThreadSandboxMode),
+		MultiAgentMode:       strings.TrimSpace(sess.ActiveThreadMultiAgentMode),
 		ClaudePermissionMode: strings.TrimSpace(sess.ActiveClaudePermissionMode),
 		ServiceTier:          strings.TrimSpace(sess.ActiveThreadServiceTier),
 		CollaborationMode:    cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode),
@@ -121,6 +123,7 @@ func RestoreBackendThread(sess *state.Session, backend string) bool {
 	SetThreadContext(sess, snapshot.WorkspaceID, snapshot.ThreadID, snapshot.Name, snapshot.Preview)
 	sess.ActiveThreadApprovalPolicy = strings.TrimSpace(snapshot.ApprovalPolicy)
 	sess.ActiveThreadSandboxMode = strings.TrimSpace(snapshot.SandboxMode)
+	sess.ActiveThreadMultiAgentMode = strings.TrimSpace(snapshot.MultiAgentMode)
 	sess.ActiveClaudePermissionMode = strings.TrimSpace(snapshot.ClaudePermissionMode)
 	sess.ActiveThreadServiceTier = NormalizeServiceTier(snapshot.ServiceTier)
 	sess.ActiveThreadCollaborationMode = cloneSessionCollaborationMode(snapshot.CollaborationMode)

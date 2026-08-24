@@ -2,6 +2,31 @@ package state
 
 import "strings"
 
+type AgentBindingStatus string
+
+const (
+	AgentBindingStatusPending AgentBindingStatus = "pending"
+	AgentBindingStatusActive  AgentBindingStatus = "active"
+)
+
+func (s AgentBindingStatus) String() string {
+	return string(s)
+}
+
+func NormalizeAgentBindingStatus(value string) AgentBindingStatus {
+	trimmed := strings.TrimSpace(value)
+	switch trimmed {
+	case "":
+		return AgentBindingStatusPending
+	case AgentBindingStatusPending.String():
+		return AgentBindingStatusPending
+	case AgentBindingStatusActive.String():
+		return AgentBindingStatusActive
+	default:
+		return AgentBindingStatus(trimmed)
+	}
+}
+
 type SessionStatus string
 
 const (

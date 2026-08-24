@@ -265,6 +265,35 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 	}
 }
 
+func TestSessionContextAndExplicitBindingMetadata(t *testing.T) {
+	store := openTestStore(t)
+	key := "feishu:frontend:frontend-a:group:chat-1:root:root-1"
+	if err := store.UpsertSession(&Session{Key: key, BindingID: "binding-1", WorkspaceID: "workspace-1"}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	sess := store.GetSession(key)
+	if sess == nil || sess.BindingID != "binding-1" || sess.ChatType != "group" || sess.ChatID != "chat-1" {
+		t.Fatalf("root session = %+v", sess)
+	}
+	sub := &Submission{SessionKey: key, BindingID: "binding-1", InputText: "hello"}
+	id, err := store.CreateSubmission(sub)
+	if err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	saved := store.GetSubmission(id)
+	if saved == nil || saved.BindingID != "binding-1" {
+		t.Fatalf("submission binding id = %+v", saved)
+	}
+	withoutMetadata := &Submission{SessionKey: key, InputText: "no implicit binding"}
+	withoutID, err := store.CreateSubmission(withoutMetadata)
+	if err != nil {
+		t.Fatalf("CreateSubmission(without metadata) error = %v", err)
+	}
+	if saved := store.GetSubmission(withoutID); saved == nil || saved.BindingID != "" {
+		t.Fatalf("session key implicitly supplied binding metadata: %+v", saved)
+	}
+}
+
 func TestFrontendCardNotificationsPersistDeduplicateAndDrain(t *testing.T) {
 	store := openTestStore(t)
 

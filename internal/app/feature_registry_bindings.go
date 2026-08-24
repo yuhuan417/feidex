@@ -29,6 +29,7 @@ var registryBackends = []string{backendCodex, backendClaude}
 func buildFeatureBindings() map[string]featureBinding {
 	bindings := map[string]featureBinding{}
 	appendFeatureBindingsMenuCore(bindings)
+	appendFeatureBindingsBinding(bindings)
 	appendFeatureBindingsTools(bindings)
 	appendFeatureBindingsThreadWorkspace(bindings)
 	appendFeatureBindingsSystem(bindings)

@@ -81,6 +81,12 @@ func (a submissionAppAdapter) SubmissionQueueBackendRuntime() appsubmission.Queu
 func (a submissionAppAdapter) SubmissionQueueDefaultWorkspaceID() string {
 	return defaultWorkspaceID(a.app)
 }
+func (a submissionAppAdapter) SubmissionQueueAgentBinding(chatType, chatID string) *state.AgentBinding {
+	return agentBindingForChat(a.app, chatType, chatID)
+}
+func (a submissionAppAdapter) SubmissionQueueAgentBindingByID(id string) *state.AgentBinding {
+	return a.app.State().AgentBinding(id)
+}
 func (a submissionAppAdapter) SubmissionQueueWorkspace(id string) *config.Workspace {
 	return config.FindWorkspace(a.app.cfg, id)
 }
@@ -175,6 +181,12 @@ func (a submissionAppAdapter) SubmissionQueueClaudeClient() appsubmission.QueueC
 }
 func (a submissionAppAdapter) SubmissionQueueConfiguredClaudeModel() string {
 	return strings.TrimSpace(a.app.cfg.Claude.Model)
+}
+func (a submissionAppAdapter) SubmissionQueueConfiguredCodexModel() string {
+	return strings.TrimSpace(a.app.cfg.Codex.Model)
+}
+func (a submissionAppAdapter) SubmissionQueueConfiguredCodexReasoningEffort() string {
+	return strings.TrimSpace(a.app.cfg.Codex.ReasoningEffort)
 }
 func (a submissionAppAdapter) SubmissionQueueNextLocalID(prefix string) (string, error) {
 	return a.app.State().NextLocalID(prefix)

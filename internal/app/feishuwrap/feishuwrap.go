@@ -44,6 +44,14 @@ func (c *CommandCaptureClient) SetHandlers(onMessage func(*feishu.InboundMessage
 	c.Base.SetHandlers(onMessage, onCardAction, onBotMenu, onRecall, onReaction)
 }
 
+func (c *CommandCaptureClient) SetGroupMessagePolicy(policy feishu.GroupMessagePolicy) {
+	if configurable, ok := c.Base.(interface {
+		SetGroupMessagePolicy(feishu.GroupMessagePolicy)
+	}); ok {
+		configurable.SetGroupMessagePolicy(policy)
+	}
+}
+
 func (c *CommandCaptureClient) Start(ctx context.Context) error {
 	return c.Base.Start(ctx)
 }
@@ -205,6 +213,14 @@ func (n *NotifyingFeishuClient) commandCaptureForMessageLocked(messageID string)
 
 func (n *NotifyingFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*feishu.BotMenuClick), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
 	n.Base.SetHandlers(onMessage, onCardAction, onBotMenu, onRecall, onReaction)
+}
+
+func (n *NotifyingFeishuClient) SetGroupMessagePolicy(policy feishu.GroupMessagePolicy) {
+	if configurable, ok := n.Base.(interface {
+		SetGroupMessagePolicy(feishu.GroupMessagePolicy)
+	}); ok {
+		configurable.SetGroupMessagePolicy(policy)
+	}
 }
 
 func (n *NotifyingFeishuClient) Start(ctx context.Context) error {

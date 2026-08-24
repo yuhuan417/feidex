@@ -309,10 +309,9 @@ func (c *Config) Normalize(baseDir string) error {
 
 func defaultFeishuConfig() FeishuConfig {
 	return FeishuConfig{
-		GroupAtOnly:   true,
-		CardEnabled:   true,
-		ReplyInThread: true,
-		Quiet:         QuietModeProgress,
+		GroupAtOnly: true,
+		CardEnabled: true,
+		Quiet:       QuietModeProgress,
 	}
 }
 

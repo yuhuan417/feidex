@@ -57,6 +57,17 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
+	if msg.ChatType == "group" && hasLocalAgentBinding(a, msg.ChatID) && !shouldAcceptGroupMessage(
+		a,
+		msg.ChatID,
+		groupPolicyRootMessageID(msg),
+		msg.ParentMessageID,
+		msg.MentionedSelf,
+		len(msg.MentionedOpenIDs) > 0,
+		msg.MentionedEveryone,
+	) {
+		return nil
+	}
 	sessionKey := makeSessionKey(a, msg)
 	logText := truncate(msg.Text, 160)
 	if a.ServerRequestService().ShouldRedactInboundText(sessionKey, msg.UserID) {
@@ -146,6 +157,20 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return err
 	}
 	return nil
+}
+
+func groupPolicyRootMessageID(msg *feishu.InboundMessage) string {
+	if msg == nil {
+		return ""
+	}
+	rootMessageID := strings.TrimSpace(msg.RootMessageID)
+	if rootMessageID == "" {
+		return ""
+	}
+	if strings.TrimSpace(msg.ParentMessageID) == "" && rootMessageID == strings.TrimSpace(msg.MessageID) {
+		return ""
+	}
+	return rootMessageID
 }
 
 func (r *feishuEventRouter) handleRecall(recall *feishu.MessageRecall) {

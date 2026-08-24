@@ -16,7 +16,7 @@ func forkClaudeActiveConversation(a *App, sessionKey string, sess *state.Session
 		return "", fmt.Errorf("claude backend not initialized")
 	}
 	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
-	model := firstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(a.cfg.Claude.Model))
+	model := effectiveClaudeModel(a, sess, ws)
 	currentThreadID := strings.TrimSpace(sess.ActiveThreadID)
 	currentName := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude")
 	currentPreview := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name)
@@ -42,14 +42,14 @@ func forkCodexActiveConversation(a *App, sessionKey string, sess *state.Session,
 	params := map[string]any{
 		"threadId":       strings.TrimSpace(sess.ActiveThreadID),
 		"cwd":            ws.Cwd,
-		"approvalPolicy": effectiveThreadApprovalPolicy(sess, ws),
-		"sandbox":        effectiveThreadSandboxMode(sess, ws),
-		"multiAgentMode": effectiveThreadMultiAgentMode(sess, ws),
+		"approvalPolicy": effectiveBindingApprovalPolicy(a, sess, ws),
+		"sandbox":        effectiveBindingSandboxMode(a, sess, ws),
+		"multiAgentMode": effectiveBindingMultiAgentMode(a, sess, ws),
 	}
-	if serviceTier := effectiveThreadServiceTier(sess); strings.TrimSpace(serviceTier) != "" {
+	if serviceTier := effectiveBindingServiceTier(a, sess); strings.TrimSpace(serviceTier) != "" {
 		params["serviceTier"] = strings.TrimSpace(serviceTier)
 	}
-	if model := configuredGlobalModel(a.cfg); strings.TrimSpace(model) != "" {
+	if model := effectiveCodexModel(a, sess, ws); strings.TrimSpace(model) != "" {
 		params["model"] = strings.TrimSpace(model)
 	}
 

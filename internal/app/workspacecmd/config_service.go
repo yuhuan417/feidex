@@ -234,6 +234,17 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 			return fmt.Errorf("workspace %q 仍有运行中的任务，无法删除", workspaceID)
 		}
 	}
+	if s.App != nil && s.App.Store() != nil {
+		stateFacade := appcore.NewAppState(s.App)
+		for _, binding := range s.App.Store().AllAgentBindings() {
+			if binding == nil || !stateFacade.MatchesFrontend(binding.FrontendID) {
+				continue
+			}
+			if strings.TrimSpace(binding.WorkspaceID) == workspaceID {
+				return fmt.Errorf("workspace %q 仍被群 binding %q 使用，请先在群聊中用 /bind use 切换", workspaceID, binding.ID)
+			}
+		}
+	}
 	return nil
 }
 

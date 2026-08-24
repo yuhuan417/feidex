@@ -104,7 +104,7 @@ func (s *ThreadService) EnsureClaudeWorkspaceThreadBinding(sessionKey string, se
 		return nil, err
 	}
 	if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		model := appcore.FirstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(s.App.Config().Claude.Model))
+		model := s.effectiveClaudeModel(sess, ws)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		threadID, err := claude.EnsureSession(ctx, sessionKey, ws, sess.ActiveThreadID, model)
@@ -179,7 +179,7 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 	if threadID == "" {
 		return nil, fmt.Errorf("missing thread id")
 	}
-	effectiveModel := modelconfig.ConfiguredGlobalModel(s.App.Config())
+	effectiveModel := s.effectiveCodexModel(sess, ws)
 	params := codexrpc.ThreadResumeParams{
 		ThreadID:               threadID,
 		PersistExtendedHistory: true,
@@ -229,7 +229,7 @@ func (s *ThreadService) StartClaudeWorkspaceThread(sessionKey string, sess *stat
 		return nil, err
 	}
 	_ = claude.ResetSession(sessionKey)
-	model := appcore.FirstNonEmpty(strings.TrimSpace(sess.ModelOverride), strings.TrimSpace(ws.Model), strings.TrimSpace(s.App.Config().Claude.Model))
+	model := s.effectiveClaudeModel(sess, ws)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	threadID, err := claude.EnsureSession(ctx, sessionKey, ws, "", model)
@@ -258,7 +258,7 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state
 	if err != nil {
 		return nil, err
 	}
-	effectiveModel := modelconfig.ConfiguredGlobalModel(s.App.Config())
+	effectiveModel := s.effectiveCodexModel(sess, ws)
 	threadParams := s.BuildThreadStartParams(ws, sess, effectiveModel)
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -284,4 +284,65 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state
 		Preview:  sess.ActiveThreadPreview,
 		Resumed:  false,
 	}, nil
+}
+
+func (s *ThreadService) effectiveCodexModel(sess *state.Session, ws *config.Workspace) string {
+	binding := s.agentBindingForSession(sess)
+	return appcore.FirstNonEmpty(
+		strings.TrimSpace(sessionModelOverride(sess)),
+		strings.TrimSpace(bindingModelOverride(binding)),
+		workspaceModel(ws),
+		modelconfig.ConfiguredGlobalModel(s.App.Config()),
+	)
+}
+
+func (s *ThreadService) effectiveClaudeModel(sess *state.Session, ws *config.Workspace) string {
+	binding := s.agentBindingForSession(sess)
+	return appcore.FirstNonEmpty(
+		strings.TrimSpace(sessionModelOverride(sess)),
+		strings.TrimSpace(bindingModelOverride(binding)),
+		workspaceModel(ws),
+		strings.TrimSpace(s.App.Config().Claude.Model),
+	)
+}
+
+func (s *ThreadService) agentBindingForSession(sess *state.Session) *state.AgentBinding {
+	if s == nil || s.App == nil || s.App.Store() == nil || sess == nil {
+		return nil
+	}
+	bindingID := strings.TrimSpace(sess.BindingID)
+	if bindingID == "" {
+		return nil
+	}
+	if binding := s.App.Store().GetScopedAgentBinding(s.App.FrontendID(), bindingID); binding != nil {
+		return binding
+	}
+	if appcore.AllowLegacyFrontendFallback(s.App) {
+		binding := s.App.Store().GetAgentBinding(bindingID)
+		if binding != nil && strings.TrimSpace(binding.FrontendID) == "" {
+			return binding
+		}
+	}
+	return nil
+}
+
+func sessionModelOverride(sess *state.Session) string {
+	if sess == nil {
+		return ""
+	}
+	return sess.ModelOverride
+}
+
+func bindingModelOverride(binding *state.AgentBinding) string {
+	if binding == nil {
+		return ""
+	}
+	return binding.ModelOverride
+}
+
+func workspaceModel(ws *config.Workspace) string {
+	if ws == nil {
+		return ""
+	}
+	return strings.TrimSpace(ws.Model)
 }

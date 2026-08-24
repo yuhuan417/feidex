@@ -44,8 +44,17 @@ type InboundMessage struct {
 	Attachments            []Attachment
 	MergeForwardMessageIDs []string
 	ExpandedMergeForward   bool
+	MentionedOpenIDs       []string
+	MentionedEveryone      bool
+	MentionedSelf          bool
 	CreatedAt              int64
 }
+
+// GroupMessagePolicy decides whether a group message should be delivered to
+// this local bot when group_at_only is enabled. It is evaluated before app
+// routing, so it may use message threading and mention metadata to avoid
+// dropping replies to this bot's own messages.
+type GroupMessagePolicy func(chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool
 
 type MessageRecall struct {
 	MessageID string
@@ -85,23 +94,24 @@ type BotMenuClick struct {
 }
 
 type Adapter struct {
-	cfg           config.FeishuConfig
-	clientMu      sync.RWMutex
-	client        *lark.Client
-	clientFactory func() *lark.Client
-	wsClient      *wsClientState
-	botOpenID     string
-	cancel        context.CancelFunc
-	allowSet      map[string]struct{}
-	allowAll      bool
-	startOnce     sync.Once
-	seenMu        sync.Mutex
-	seen          map[string]time.Time
-	paceMu        sync.Mutex
-	createPacer   *requestPacer
-	patchPacer    *keyedRequestPacer
-	reactionMu    sync.Mutex
-	reactions     map[string]string
+	cfg                config.FeishuConfig
+	clientMu           sync.RWMutex
+	client             *lark.Client
+	clientFactory      func() *lark.Client
+	wsClient           *wsClientState
+	botOpenID          string
+	groupMessagePolicy GroupMessagePolicy
+	cancel             context.CancelFunc
+	allowSet           map[string]struct{}
+	allowAll           bool
+	startOnce          sync.Once
+	seenMu             sync.Mutex
+	seen               map[string]time.Time
+	paceMu             sync.Mutex
+	createPacer        *requestPacer
+	patchPacer         *keyedRequestPacer
+	reactionMu         sync.Mutex
+	reactions          map[string]string
 
 	onMessage    func(*InboundMessage)
 	onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error)
@@ -187,6 +197,14 @@ func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func
 	a.onBotMenu = onBotMenu
 	a.onRecall = onRecall
 	a.onReaction = onReaction
+}
+
+// SetGroupMessagePolicy installs the optional binding-aware group filter.
+func (a *Adapter) SetGroupMessagePolicy(policy GroupMessagePolicy) {
+	if a == nil {
+		return
+	}
+	a.groupMessagePolicy = policy
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -1048,36 +1066,40 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	if !a.allowed(userID) {
 		return nil
 	}
-	if msg.ChatType != nil && *msg.ChatType == "group" && a.cfg.GroupAtOnly {
-		allowedGroupTrigger := a.cfg.RespondToAtEveryone && mentionedEveryone(msg.Mentions)
-		if a.botOpenID != "" {
-			allowedGroupTrigger = allowedGroupTrigger || mentioned(msg.Mentions, a.botOpenID)
+	messageID := stringValue(msg.MessageId)
+	chatID := stringValue(msg.ChatId)
+	chatType := stringValue(msg.ChatType)
+	rootMessageID := stringValue(msg.RootId)
+	parentMessageID := stringValue(msg.ParentId)
+	mentionedSelf := a.botOpenID != "" && mentioned(msg.Mentions, a.botOpenID)
+	mentionedAny := len(mentionedOpenIDs(msg.Mentions)) > 0
+	mentionedEveryone := mentionedEveryone(msg.Mentions)
+	if chatType == "group" && a.cfg.GroupAtOnly {
+		allowedGroupTrigger := false
+		if a.groupMessagePolicy != nil && a.botOpenID != "" {
+			allowedGroupTrigger = a.groupMessagePolicy(chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+		} else {
+			allowedGroupTrigger = a.cfg.RespondToAtEveryone && mentionedEveryone
+			allowedGroupTrigger = allowedGroupTrigger || mentionedSelf
 		}
 		if !allowedGroupTrigger {
 			return nil
 		}
 	}
 	out := &InboundMessage{
-		UserID: userID,
-	}
-	if msg.MessageId != nil {
-		out.MessageID = *msg.MessageId
+		UserID:            userID,
+		MessageID:         messageID,
+		ChatID:            chatID,
+		ChatType:          chatType,
+		RootMessageID:     rootMessageID,
+		ParentMessageID:   parentMessageID,
+		MentionedOpenIDs:  mentionedOpenIDs(msg.Mentions),
+		MentionedEveryone: mentionedEveryone,
+		MentionedSelf:     mentionedSelf,
 	}
 	if out.MessageID != "" && a.duplicate(out.MessageID) {
 		slog.Debug("feishu duplicate message ignored", "message_id", out.MessageID)
 		return nil
-	}
-	if msg.ChatId != nil {
-		out.ChatID = *msg.ChatId
-	}
-	if msg.ChatType != nil {
-		out.ChatType = *msg.ChatType
-	}
-	if msg.RootId != nil {
-		out.RootMessageID = *msg.RootId
-	}
-	if msg.ParentId != nil {
-		out.ParentMessageID = *msg.ParentId
 	}
 	if out.RootMessageID == "" && out.MessageID != "" && out.ChatType == "group" {
 		out.RootMessageID = out.MessageID
@@ -1597,6 +1619,36 @@ func mentioned(mentions []*larkim.MentionEvent, botOpenID string) bool {
 		}
 	}
 	return false
+}
+
+func mentionedOpenIDs(mentions []*larkim.MentionEvent) []string {
+	if len(mentions) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(mentions))
+	for _, mention := range mentions {
+		if mention == nil || mention.Id == nil || mention.Id.OpenId == nil {
+			continue
+		}
+		openID := strings.TrimSpace(*mention.Id.OpenId)
+		if openID == "" {
+			continue
+		}
+		if _, ok := seen[openID]; ok {
+			continue
+		}
+		seen[openID] = struct{}{}
+		out = append(out, openID)
+	}
+	return out
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func mentionedEveryone(mentions []*larkim.MentionEvent) bool {

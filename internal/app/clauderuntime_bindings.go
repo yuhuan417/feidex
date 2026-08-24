@@ -131,7 +131,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Permission: appclauderuntime.PermissionDeps{
 			EffectivePermissionMode: func(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-				return effectiveClaudePermissionMode(sess, ws, cfg)
+				return effectiveBindingClaudePermissionMode(app, sess, ws, cfg)
 			},
 			QuietWorkingCardEnabled: func() bool {
 				return quietWorkingCardEnabled(feishuConfig(app))
