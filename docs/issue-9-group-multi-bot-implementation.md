@@ -40,6 +40,7 @@ frontend 隔离以下内容：
 - pending request
 - message link
 - AgentBinding
+- GroupPrimary
 - thread / submission 的本地关联
 
 因此同一个群、同一个 RootMessage，由 Bot A 和 Bot B 分别处理时，仍然是两个不同的本地 Session。
@@ -60,13 +61,21 @@ frontend 隔离以下内容：
 - `approval_policy_override`
 - `multi_agent_mode_override`
 - `claude_permission_mode`
-- `primary`
 - `pending` / `active` 状态
 - pending 原消息
 
 当前本地状态对 `(frontend_id, chat_type, chat_id)` 强制一条 `AgentBinding`。多个机器之间没有共享状态库；每个 Feidex 实例只保存自己的本地配置。
 
-### 2.3 Workspace
+### 2.3 GroupPrimary
+
+`GroupPrimary` 是当前 frontend/Bot 在某个群里是否处理未 `@` 消息的独立状态。它和 `AgentBinding` 没有生命周期依赖：
+
+- `/primary on|off` 只写 `GroupPrimary`，不创建或修改 `AgentBinding`。
+- `/workspace`、model、effort、fast 和运行参数配置只写 `AgentBinding`，不隐式切换 primary。
+- 旧状态里 `AgentBinding.primary=true` 会在启动时迁移成 `GroupPrimary`，但新代码不再读取 binding 上的 primary 字段。
+- 同一 Feidex 实例内显式设置某个 frontend 为 primary，会清掉同群其他本地 frontend 的 primary 标记；不同机器之间仍不共享状态。
+
+### 2.4 Workspace
 
 Workspace 是当前 frontend 可访问的物理目录及其工作区配置，例如：
 
@@ -78,7 +87,7 @@ Workspace 是当前 frontend 可访问的物理目录及其工作区配置，例
 
 不同机器上的 workspace 可以指向不同目录。Feidex 当前不做跨机器目录同步或一致性校验。
 
-### 2.4 Session
+### 2.5 Session
 
 Feidex Session 是“一条 Feishu 对话分支”的本地状态对象。
 
@@ -140,7 +149,9 @@ pending 状态收到当前 Bot 应处理的普通群消息时，必须先暂存�
 - `@everyone`：沿用 `RespondToAtEveryone` 配置，并要求本地 primary 才能作为默认处理者。
 - pending 状态不直接投递 Codex/Claude，只展示当前工作区配置入口并暂存原消息。
 
-创建或激活当前群的第一条本机 `AgentBinding` 时，会自动把当前 Bot 设为 primary。用户也可以显式执行 `@Bot /primary on|off` 调整本机 primary 状态；同一 Feidex 实例内设置某个 Bot 为 primary 会清掉同一群内其他本地 frontend 的 primary 标记。不同机器之间没有共享状态，因此跨机器 primary 仍需要用户分别配置。
+primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群消息时，Feidex 会用 bot 身份读取群信息里的 `bot_count`：如果 `bot_count == 1`，当前 Bot 自动成为 primary；如果 `bot_count > 1`，当前 Bot 默认不是 primary。用户也可以显式执行 `@Bot /primary on|off` 调整本机 primary 状态；同一 Feidex 实例内设置某个 Bot 为 primary 会清掉同一群内其他本地 frontend 的 primary 标记。不同机器之间没有共享状态，因此跨机器 primary 仍需要用户分别配置。
+
+如果当前 Bot 是 primary，但本群尚未配置 workspace，那么未 `@` 普通消息仍会先进入 workspace onboarding：Feidex 创建 pending `AgentBinding`、暂存原消息，并在 workspace 配置完成后重放该原始输入。
 
 ### 3.4 Backend state machine
 
@@ -240,6 +251,8 @@ Session / Thread 临时覆盖
 
 - [x] 新增 `AgentBinding` 状态模型。
 - [x] `AgentBinding` 持久化、frontend scope、chat 查询、删除和深拷贝。
+- [x] 新增独立 `GroupPrimary` 状态模型，并从旧 `AgentBinding.primary` 自动迁移。
+- [x] primary 自动初始化改为读取 Feishu 群信息 `bot_count`，不再依赖 binding 创建顺序。
 - [x] Session 持久化 `BindingID` 元数据。
 - [x] Submission 创建时固化 `BindingID` 元数据。
 - [x] 群消息路由支持 primary / direct mention / local reply link。
@@ -249,7 +262,7 @@ Session / Thread 临时覆盖
 - [x] 群内工作区优先解析。
 - [x] 群内工作区为空时阻止静默使用默认 workspace。
 - [x] 群内 `/workspace` 可创建 pending 配置，并支持选择已有 workspace、新建 workspace、clone workspace。
-- [x] 群内 `/workspace`、`/model`、`/effort`、`/fast`、`/primary` 写入当前 Bot 在当前群内的本地配置。
+- [x] 群内 `/workspace`、`/model`、`/effort`、`/fast` 写入当前 Bot 在当前群内的 workspace/runtime 配置；`/primary` 只写独立 primary 状态。
 - [x] 旧的绑定 slash command 已移除，不再进入命令注册、菜单、help 或推荐命令。
 - [x] workspace 选择、model、effort、fast 和 workspace runtime 设置的旧菜单按钮，在群聊中写入当前 Bot 的群内配置。
 - [x] 删除本机 workspace 配置时，如果仍被某个群内当前 Bot 工作区配置引用，会阻止删除并提示先切换。
@@ -293,6 +306,7 @@ issue 9 完成条件：
 - [Session key](../internal/app/appcore/session_key.go)
 - [AgentBinding state](../internal/state/store.go)
 - [AgentBinding app scope](../internal/app/appstate/agent_binding.go)
+- [GroupPrimary state](../internal/app/group_primary.go)
 - [Group message routing](../internal/app/group_message_policy.go)
 - [Feishu event routing](../internal/app/feishu_event_router.go)
 - [Submission metadata](../internal/app/submission/queue.go)

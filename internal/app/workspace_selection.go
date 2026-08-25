@@ -87,19 +87,13 @@ func agentBindingForChat(a *App, chatType, chatID string) *state.AgentBinding {
 		return nil
 	}
 	bindings := a.State().AgentBindingsForChat(chatType, chatID)
-	var selected *state.AgentBinding
 	for _, binding := range bindings {
 		if binding == nil {
 			continue
 		}
-		if selected == nil {
-			selected = binding
-		}
-		if binding.Primary {
-			return binding
-		}
+		return binding
 	}
-	return selected
+	return nil
 }
 
 func sessionCanRetargetWorkspaceSelection(sess *state.Session) bool {

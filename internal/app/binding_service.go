@@ -153,23 +153,26 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("/primary 只能在群聊中使用")
 	}
-	binding, err := s.ensureBindingForMessage(msg)
-	if err != nil {
-		return err
+	primary, initErr := ensureGroupPrimaryInitialized(context.Background(), s.app, msg.ChatType, msg.ChatID)
+	if initErr != nil {
+		primary = groupPrimaryForChat(s.app, msg.ChatType, msg.ChatID)
 	}
 	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
-		return s.replyBindingUpdated(msg, "当前 Bot primary: `"+onOffLabel(binding.Primary)+"`")
+		label := onOffLabel(primary != nil && primary.Primary)
+		body := "当前 Bot primary: `" + label + "`"
+		if initErr != nil && primary == nil {
+			body += "\n\n自动读取群机器人数量失败: `" + initErr.Error() + "`"
+		}
+		return s.replyBindingUpdated(msg, body)
 	}
 	if len(args) != 1 {
 		return fmt.Errorf("usage: /primary on|off")
 	}
-	primary, err := parseOnOff(args[0])
+	primaryValue, err := parseOnOff(args[0])
 	if err != nil {
 		return fmt.Errorf("usage: /primary on|off")
 	}
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
-		current.Primary = primary
-	})
+	updated, err := setGroupPrimary(s.app, msg.ChatType, msg.ChatID, primaryValue)
 	if err != nil {
 		return err
 	}
@@ -227,7 +230,6 @@ func (s bindingService) ensureBindingForMessage(msg *feishu.InboundMessage) (*st
 		FrontendID: s.app.FrontendID(),
 		ChatID:     chatID,
 		ChatType:   chatType,
-		Primary:    !hasAnyPrimaryBindingForChat(s.app, chatType, chatID),
 		Status:     state.AgentBindingStatusPending.String(),
 	}
 	if err := s.app.State().SaveAgentBinding(binding); err != nil {
@@ -258,9 +260,6 @@ func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, wo
 	}
 	return s.updateBinding(binding, func(current *state.AgentBinding) {
 		current.WorkspaceID = workspaceID
-		if !current.Primary && !hasAnyPrimaryBindingForChatExcluding(s.app, current.ChatType, current.ChatID, current.ID) {
-			current.Primary = true
-		}
 		current.Status = state.AgentBindingStatusActive.String()
 	})
 }
@@ -278,11 +277,6 @@ func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*
 	}
 	if err := s.app.State().SaveAgentBinding(&current); err != nil {
 		return nil, err
-	}
-	if current.Primary {
-		if err := clearOtherPrimaryBindingsForChat(s.app, current.ChatType, current.ChatID, current.ID); err != nil {
-			return nil, err
-		}
 	}
 	updated := s.app.State().AgentBinding(current.ID)
 	if updated == nil {
@@ -366,8 +360,10 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 }
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
+	chatType, chatID, _, _ := currentBotMenuContext(sessionKey)
+	primaryLabel := onOffLabel(isGroupPrimary(s.app, chatType, chatID))
 	if binding == nil {
-		body := "当前 Bot 在本群还没有配置工作区。\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，或使用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
+		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，或使用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
 		return s.app.feishu.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
 	}
 	statusLine := "状态: `工作区未配置`"
@@ -384,7 +380,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
 		statusLine,
-		"primary: `" + onOffLabel(binding.Primary) + "`",
+		"primary: `" + onOffLabel(isGroupPrimary(s.app, binding.ChatType, binding.ChatID)) + "`",
 		workspaceLine,
 		"model override: " + renderOptionalBacktick(binding.ModelOverride),
 		"effort override: " + renderOptionalBacktick(binding.ReasoningEffortOverride),
@@ -396,17 +392,13 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on|off`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
 	}
 	if binding.PendingMessage != nil {
-		preview := truncate(strings.TrimSpace(binding.PendingMessage.Text), 80)
-		if preview == "" && len(binding.PendingMessage.Attachments) > 0 {
-			preview = fmt.Sprintf("%d 个附件", len(binding.PendingMessage.Attachments))
-		}
-		if preview == "" {
-			preview = binding.PendingMessage.MessageID
-		}
+		preview := pendingBindingMessagePreview(binding.PendingMessage)
 		lines = append(lines, "\n已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
 	}
-	if !hasAnyPrimaryBindingForChat(s.app, binding.ChatType, binding.ChatID) {
-		lines = append(lines, "\n注意: 本机状态里这个群还没有 primary bot；未 `@` 的普通群消息不会被任何本机 bot 接收。使用 `@Bot /primary on` 设置当前 Bot 为 primary。")
+	if !hasGroupPrimaryState(s.app, binding.ChatType, binding.ChatID) {
+		lines = append(lines, "\n注意: 还没有完成本群 primary 判断；如果未 `@` 消息没有响应，请使用 `@Bot /primary on` 显式设置当前 Bot 为 primary。")
+	} else if !isGroupPrimary(s.app, binding.ChatType, binding.ChatID) {
+		lines = append(lines, "\n当前 Bot 不是本群 primary；未 `@` 的普通群消息不会由它处理。使用 `@Bot /primary on` 可切换。")
 	}
 	buttons := []feishu.Button{}
 	if config.FindWorkspace(s.app.cfg, "default") != nil {
@@ -449,66 +441,20 @@ func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, bind
 	return s.app.feishu.SimpleStatusCard("选择工作区", "blue", menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
-func hasAnyPrimaryBindingForChat(a *App, chatType, chatID string) bool {
-	return hasAnyPrimaryBindingForChatExcluding(a, chatType, chatID, "")
-}
-
-func hasAnyPrimaryBindingForChatExcluding(a *App, chatType, chatID, excludeID string) bool {
-	chatType = strings.ToLower(strings.TrimSpace(chatType))
-	chatID = strings.TrimSpace(chatID)
-	excludeID = strings.TrimSpace(excludeID)
-	if a == nil || a.Store() == nil || chatID == "" {
-		return false
-	}
-	for _, binding := range a.Store().AllAgentBindings() {
-		if binding == nil || strings.TrimSpace(binding.ID) == excludeID {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(binding.ChatType)) != chatType || strings.TrimSpace(binding.ChatID) != chatID {
-			continue
-		}
-		if binding.Primary {
-			return true
-		}
-	}
-	return false
-}
-
-func clearOtherPrimaryBindingsForChat(a *App, chatType, chatID, keepID string) error {
-	chatType = strings.ToLower(strings.TrimSpace(chatType))
-	chatID = strings.TrimSpace(chatID)
-	keepID = strings.TrimSpace(keepID)
-	if a == nil || a.Store() == nil || chatID == "" || keepID == "" {
-		return nil
-	}
-	for _, binding := range a.Store().AllAgentBindings() {
-		if binding == nil || strings.TrimSpace(binding.ID) == keepID || !binding.Primary {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(binding.ChatType)) != chatType || strings.TrimSpace(binding.ChatID) != chatID {
-			continue
-		}
-		binding.Primary = false
-		if err := a.Store().UpsertAgentBinding(binding); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func renderCurrentBotMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.current_bot")
 	body := spec.Description
 	if chatType, chatID, _, _ := currentBotMenuContext(sessionKey); chatType == "group" && chatID != "" {
 		if binding := agentBindingForChat(a, chatType, chatID); binding != nil {
 			body += "\n\n工作区状态: `" + currentBotWorkspaceStatusLabel(a, binding) + "`"
-			body += "\nprimary: `" + onOffLabel(binding.Primary) + "`"
+			body += "\nprimary: `" + onOffLabel(isGroupPrimary(a, chatType, chatID)) + "`"
 			body += "\nworkspace: " + renderOptionalBacktick(binding.WorkspaceID)
-			if !hasAnyPrimaryBindingForChat(a, chatType, chatID) {
-				body += "\n注意: 本机状态里这个群还没有 primary bot。"
+			if !hasGroupPrimaryState(a, chatType, chatID) {
+				body += "\n注意: 还没有完成本群 primary 判断。"
 			}
 		} else {
 			body += "\n\n工作区状态: `工作区未配置`"
+			body += "\nprimary: `" + onOffLabel(isGroupPrimary(a, chatType, chatID)) + "`"
 			body += "\n使用 `/workspace` 选择、创建或 clone 当前 Bot 在本群的工作区。"
 		}
 	}

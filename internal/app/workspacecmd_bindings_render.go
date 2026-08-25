@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -51,5 +52,34 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 			}
 			return appcore.ResolveWorkspaceSelectionForSession(a, sess)
 		},
+		WorkspaceMenuBodyLines: func(sessionKey string, sess *state.Session, lines []string) []string {
+			if !isGroupSessionKey(sessionKey) {
+				return lines
+			}
+			binding := bindingForSessionKey(a, sessionKey)
+			if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
+				lines = append(lines, "当前 Bot 在本群还没有配置工作区。")
+			}
+			if binding != nil && binding.PendingMessage != nil {
+				if preview := pendingBindingMessagePreview(binding.PendingMessage); preview != "" {
+					lines = append(lines, "已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
+				}
+			}
+			return lines
+		},
 	})
+}
+
+func pendingBindingMessagePreview(pending *state.AgentBindingPendingMessage) string {
+	if pending == nil {
+		return ""
+	}
+	preview := truncate(strings.TrimSpace(pending.Text), 80)
+	if preview == "" && len(pending.Attachments) > 0 {
+		preview = fmt.Sprintf("%d 个附件", len(pending.Attachments))
+	}
+	if preview == "" {
+		preview = strings.TrimSpace(pending.MessageID)
+	}
+	return preview
 }

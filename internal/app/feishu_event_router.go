@@ -57,7 +57,17 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	if msg.ChatType == "group" && hasLocalAgentBinding(a, msg.ChatID) && !shouldAcceptGroupMessage(
+	if msg.ChatType == "group" {
+		if _, err := ensureGroupPrimaryInitialized(context.Background(), a, msg.ChatType, msg.ChatID); err != nil {
+			slog.Warn("group primary auto init failed during message processing",
+				"frontend_id", strings.TrimSpace(a.FrontendID()),
+				"message_id", msg.MessageID,
+				"chat_id", msg.ChatID,
+				"error", err,
+			)
+		}
+	}
+	if msg.ChatType == "group" && !shouldAcceptGroupMessage(
 		a,
 		msg.ChatID,
 		groupPolicyRootMessageID(msg),

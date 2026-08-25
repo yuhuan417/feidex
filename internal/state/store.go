@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 9
+const currentSnapshotVersion = 10
 
 type Store struct {
 	path    string
@@ -26,6 +26,7 @@ type Snapshot struct {
 	Version                   int                                   `json:"version"`
 	Sessions                  map[string]*storedSession             `json:"sessions"`
 	AgentBindings             map[string]*AgentBinding              `json:"agent_bindings,omitempty"`
+	GroupPrimaries            map[string]*GroupPrimary              `json:"group_primaries,omitempty"`
 	FrontendCardNotifications map[string][]FrontendCardNotification `json:"frontend_card_notifications,omitempty"`
 }
 
@@ -93,6 +94,19 @@ type AgentBinding struct {
 	Status                  string                      `json:"status"`
 	CreatedAt               int64                       `json:"created_at"`
 	UpdatedAt               int64                       `json:"updated_at"`
+}
+
+// GroupPrimary stores whether one local frontend/bot is the primary handler
+// for unmentioned messages in one Feishu group. It is intentionally separate
+// from AgentBinding, which only owns local workspace/runtime configuration.
+type GroupPrimary struct {
+	ID         string `json:"id"`
+	FrontendID string `json:"frontend_id"`
+	ChatID     string `json:"chat_id"`
+	ChatType   string `json:"chat_type"`
+	Primary    bool   `json:"primary"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
 }
 
 // AgentBindingPendingMessage stores one inbound group message while a binding
@@ -269,6 +283,7 @@ func Open(path string) (*Store, error) {
 			Version:                   currentSnapshotVersion,
 			Sessions:                  map[string]*storedSession{},
 			AgentBindings:             map[string]*AgentBinding{},
+			GroupPrimaries:            map[string]*GroupPrimary{},
 			FrontendCardNotifications: map[string][]FrontendCardNotification{},
 		},
 		runtime: runtimeState{
@@ -289,9 +304,11 @@ func Open(path string) (*Store, error) {
 	if len(b) == 0 {
 		return s, s.saveLocked()
 	}
-	if err := json.Unmarshal(b, &s.data); err != nil {
+	var loaded Snapshot
+	if err := json.Unmarshal(b, &loaded); err != nil {
 		return nil, err
 	}
+	s.data = loaded
 	if s.data.Sessions == nil {
 		s.data.Sessions = map[string]*storedSession{}
 	}
@@ -308,6 +325,17 @@ func Open(path string) (*Store, error) {
 		rewrite = true
 	}
 	s.data.AgentBindings = normalizedBindings
+	normalizedPrimaries := normalizeGroupPrimaries(s.data.GroupPrimaries)
+	if normalizedPrimaries == nil {
+		normalizedPrimaries = map[string]*GroupPrimary{}
+	}
+	if s.data.GroupPrimaries == nil {
+		migrateGroupPrimariesFromBindings(normalizedPrimaries, normalizedBindings)
+	}
+	if !groupPrimariesEqual(s.data.GroupPrimaries, normalizedPrimaries) {
+		rewrite = true
+	}
+	s.data.GroupPrimaries = normalizedPrimaries
 	for key, sess := range s.data.Sessions {
 		persisted := normalizeStoredSession(sess)
 		if !storedSessionsEqual(sess, persisted) {
@@ -459,6 +487,106 @@ func (s *Store) DeleteScopedAgentBinding(frontendID, id string) error {
 	}
 	delete(s.data.AgentBindings, id)
 	return s.saveLocked()
+}
+
+// GetGroupPrimary returns a group primary record by id without frontend filtering.
+func (s *Store) GetGroupPrimary(id string) *GroupPrimary {
+	return s.GetScopedGroupPrimary("", id)
+}
+
+// GetScopedGroupPrimary returns a group primary record by id when it belongs to frontendID.
+func (s *Store) GetScopedGroupPrimary(frontendID, id string) *GroupPrimary {
+	frontendID = strings.TrimSpace(frontendID)
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	primary, ok := s.data.GroupPrimaries[id]
+	if !ok || primary == nil || (frontendID != "" && primary.FrontendID != frontendID) {
+		return nil
+	}
+	return cloneGroupPrimary(primary)
+}
+
+// AllGroupPrimaries returns deep copies of all persisted group primary records.
+func (s *Store) AllGroupPrimaries() []*GroupPrimary {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneGroupPrimaries(s.data.GroupPrimaries)
+}
+
+// GroupPrimariesByChat returns primary records for one frontend and logical chat.
+func (s *Store) GroupPrimariesByChat(frontendID, chatType, chatID string) []*GroupPrimary {
+	frontendID = strings.TrimSpace(frontendID)
+	chatType = strings.ToLower(strings.TrimSpace(chatType))
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneGroupPrimariesMatching(s.data.GroupPrimaries, func(primary *GroupPrimary) bool {
+		if primary == nil || primary.FrontendID != frontendID || primary.ChatID != chatID {
+			return false
+		}
+		return chatType == "" || primary.ChatType == chatType
+	})
+}
+
+// UpsertGroupPrimary persists a local frontend's primary status for a group.
+func (s *Store) UpsertGroupPrimary(primary *GroupPrimary) error {
+	if primary == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := cloneGroupPrimary(primary)
+	if cp == nil || cp.ID == "" {
+		return nil
+	}
+	normalizeGroupPrimaryValues(cp)
+	now := time.Now().Unix()
+	if previous := s.data.GroupPrimaries[cp.ID]; previous != nil && cp.CreatedAt == 0 {
+		cp.CreatedAt = previous.CreatedAt
+	}
+	for id, previous := range s.data.GroupPrimaries {
+		if id == cp.ID || previous == nil {
+			continue
+		}
+		if previous.FrontendID == cp.FrontendID && previous.ChatType == cp.ChatType && previous.ChatID == cp.ChatID {
+			return fmt.Errorf("group primary already exists for frontend %q chat %q: %s", cp.FrontendID, cp.ChatID, id)
+		}
+	}
+	if cp.CreatedAt == 0 {
+		cp.CreatedAt = now
+	}
+	cp.UpdatedAt = now
+	if s.data.GroupPrimaries == nil {
+		s.data.GroupPrimaries = map[string]*GroupPrimary{}
+	}
+	s.data.GroupPrimaries[cp.ID] = cp
+	return s.saveLocked()
+}
+
+// UpsertScopedGroupPrimary persists a group primary record owned by frontendID.
+func (s *Store) UpsertScopedGroupPrimary(frontendID string, primary *GroupPrimary) error {
+	if primary == nil {
+		return nil
+	}
+	frontendID = strings.TrimSpace(frontendID)
+	cp := cloneGroupPrimary(primary)
+	if cp == nil {
+		return nil
+	}
+	if strings.TrimSpace(cp.FrontendID) == "" {
+		cp.FrontendID = frontendID
+	}
+	if frontendID != "" && strings.TrimSpace(cp.FrontendID) != frontendID {
+		return fmt.Errorf("group primary frontend %q does not match scope %q", cp.FrontendID, frontendID)
+	}
+	return s.UpsertGroupPrimary(cp)
 }
 
 func (s *Store) GetSession(key string) *Session {
@@ -792,6 +920,36 @@ func cloneAgentBindingsMatching(src map[string]*AgentBinding, match func(*AgentB
 	return out
 }
 
+func cloneGroupPrimary(primary *GroupPrimary) *GroupPrimary {
+	if primary == nil {
+		return nil
+	}
+	cp := *primary
+	normalizeGroupPrimaryValues(&cp)
+	return &cp
+}
+
+func cloneGroupPrimaries(src map[string]*GroupPrimary) []*GroupPrimary {
+	return cloneGroupPrimariesMatching(src, func(*GroupPrimary) bool { return true })
+}
+
+func cloneGroupPrimariesMatching(src map[string]*GroupPrimary, match func(*GroupPrimary) bool) []*GroupPrimary {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]*GroupPrimary, 0, len(src))
+	for _, primary := range src {
+		if primary == nil || (match != nil && !match(primary)) {
+			continue
+		}
+		out = append(out, cloneGroupPrimary(primary))
+	}
+	slices.SortFunc(out, func(a, b *GroupPrimary) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	return out
+}
+
 func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	if binding == nil {
 		return false
@@ -816,6 +974,21 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 		binding.UpdatedAt = binding.CreatedAt
 	}
 	return before != *binding
+}
+
+func normalizeGroupPrimaryValues(primary *GroupPrimary) bool {
+	if primary == nil {
+		return false
+	}
+	before := *primary
+	primary.ID = strings.TrimSpace(primary.ID)
+	primary.FrontendID = strings.TrimSpace(primary.FrontendID)
+	primary.ChatID = strings.TrimSpace(primary.ChatID)
+	primary.ChatType = strings.ToLower(strings.TrimSpace(primary.ChatType))
+	if primary.UpdatedAt == 0 && primary.CreatedAt != 0 {
+		primary.UpdatedAt = primary.CreatedAt
+	}
+	return before != *primary
 }
 
 func normalizeAgentBindingPendingMessage(msg *AgentBindingPendingMessage) *AgentBindingPendingMessage {
@@ -894,6 +1067,59 @@ func normalizeAgentBindings(src map[string]*AgentBinding) map[string]*AgentBindi
 	return dst
 }
 
+func normalizeGroupPrimaries(src map[string]*GroupPrimary) map[string]*GroupPrimary {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]*GroupPrimary, len(src))
+	for key, primary := range src {
+		cp := cloneGroupPrimary(primary)
+		if cp == nil {
+			continue
+		}
+		if cp.ID == "" {
+			cp.ID = strings.TrimSpace(key)
+		}
+		if cp.ID == "" {
+			continue
+		}
+		dst[cp.ID] = cp
+	}
+	if len(dst) == 0 {
+		return nil
+	}
+	return dst
+}
+
+func migrateGroupPrimariesFromBindings(dst map[string]*GroupPrimary, bindings map[string]*AgentBinding) {
+	if dst == nil || len(bindings) == 0 {
+		return
+	}
+	for _, binding := range bindings {
+		if binding == nil || !binding.Primary || strings.TrimSpace(binding.ChatID) == "" {
+			continue
+		}
+		id := strings.Join([]string{
+			"primary",
+			sanitizeStateIDPart(binding.FrontendID),
+			sanitizeStateIDPart(binding.ChatType),
+			sanitizeStateIDPart(binding.ChatID),
+		}, "_")
+		if _, exists := dst[id]; exists {
+			continue
+		}
+		dst[id] = &GroupPrimary{
+			ID:         id,
+			FrontendID: strings.TrimSpace(binding.FrontendID),
+			ChatID:     strings.TrimSpace(binding.ChatID),
+			ChatType:   strings.ToLower(strings.TrimSpace(binding.ChatType)),
+			Primary:    true,
+			CreatedAt:  binding.CreatedAt,
+			UpdatedAt:  binding.UpdatedAt,
+		}
+	}
+}
+
 func agentBindingsEqual(a, b map[string]*AgentBinding) bool {
 	ab, err := json.Marshal(a)
 	if err != nil {
@@ -904,6 +1130,37 @@ func agentBindingsEqual(a, b map[string]*AgentBinding) bool {
 		return false
 	}
 	return string(ab) == string(bb)
+}
+
+func groupPrimariesEqual(a, b map[string]*GroupPrimary) bool {
+	ab, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	bb, err := json.Marshal(b)
+	if err != nil {
+		return false
+	}
+	return string(ab) == string(bb)
+}
+
+func sanitizeStateIDPart(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "default"
+	}
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "default"
+	}
+	return b.String()
 }
 
 func normalizeFrontendCardNotification(note FrontendCardNotification) (FrontendCardNotification, bool) {

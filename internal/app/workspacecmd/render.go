@@ -344,6 +344,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 	}
 	bodyLines := []string{"当前工作区: " + currentLabel}
 	bodyLines = s.BackendWorkspaceSummaryLines(bodyLines, currentWS)
+	bodyLines = s.WorkspaceMenuBodyLines(sessionKey, sess, bodyLines)
 	buttons := make([]feishu.Button, 0, 6)
 	workspaces := s.App.Config().Workspaces
 	selectOptions := make([]appcards.SelectStaticOption, 0, len(workspaces))

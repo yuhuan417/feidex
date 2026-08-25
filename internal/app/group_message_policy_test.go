@@ -27,9 +27,11 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		ChatID:   "chat-1",
 		ChatType: "group",
 		Status:   state.AgentBindingStatusActive.String(),
-		Primary:  true,
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(primary) error = %v", err)
+	}
+	if _, err := setGroupPrimary(a, "group", "chat-1", true); err != nil {
+		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
 
 	if !shouldAcceptGroupMessage(a, "chat-1", "", "", false, false, false) {
@@ -101,9 +103,11 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		ChatID:   "chat-3",
 		ChatType: "group",
 		Status:   state.AgentBindingStatusPending.String(),
-		Primary:  true,
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(pending primary) error = %v", err)
+	}
+	if _, err := setGroupPrimary(a, "group", "chat-3", true); err != nil {
+		t.Fatalf("setGroupPrimary(chat-3) error = %v", err)
 	}
 	if !shouldAcceptGroupMessage(a, "chat-3", "", "", false, false, false) {
 		t.Fatal("pending primary binding rejected an unmentioned message")
@@ -122,9 +126,11 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 		ChatID:   "chat-1",
 		ChatType: "group",
 		Status:   state.AgentBindingStatusActive.String(),
-		Primary:  false,
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if _, err := setGroupPrimary(a, "group", "chat-1", false); err != nil {
+		t.Fatalf("setGroupPrimary(false) error = %v", err)
 	}
 	if shouldAcceptGroupMessage(a, "chat-1", "", "", false, false, false) {
 		t.Fatal("non-primary binding accepted an unmentioned group message")
@@ -141,6 +147,40 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 	}
 	if !shouldAcceptGroupMessage(a, "chat-1", "client-reply", "user-reply", false, false, false) {
 		t.Fatal("non-primary binding rejected reply to its own message")
+	}
+}
+
+func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("state.Open() error = %v", err)
+	}
+	cfg := config.Default()
+	cfg.Feishu.GroupAtOnly = true
+	a := &App{cfg: cfg, store: store, frontendID: "frontend-auto"}
+
+	if shouldAcceptGroupMessage(a, "chat-new", "", "", false, false, false) {
+		t.Fatal("app policy accepted unmentioned message before primary init")
+	}
+	if !shouldDeliverGroupMessageToApp(a, "chat-new", "", "", false, false, false) {
+		t.Fatal("adapter policy rejected top-level message needed for primary init")
+	}
+	if shouldDeliverGroupMessageToApp(a, "chat-new", "root-1", "parent-1", false, false, false) {
+		t.Fatal("adapter policy delivered unrelated reply for primary init")
+	}
+	if shouldDeliverGroupMessageToApp(a, "chat-new", "", "", false, true, false) {
+		t.Fatal("adapter policy delivered explicit mention of another bot for primary init")
+	}
+
+	cfg.Feishu.RespondToAtEveryone = true
+	if !shouldDeliverGroupMessageToApp(a, "chat-new", "", "", false, false, true) {
+		t.Fatal("adapter policy rejected configured @everyone primary init probe")
+	}
+	if _, err := setGroupPrimary(a, "group", "chat-new", false); err != nil {
+		t.Fatalf("setGroupPrimary(false) error = %v", err)
+	}
+	if shouldDeliverGroupMessageToApp(a, "chat-new", "", "", false, false, false) {
+		t.Fatal("adapter policy delivered top-level message after non-primary state was initialized")
 	}
 }
 
@@ -182,9 +222,11 @@ func TestPrimaryBindingHandlesUnmentionedSlashCommand(t *testing.T) {
 		ChatType:    "group",
 		WorkspaceID: "default",
 		Status:      state.AgentBindingStatusActive.String(),
-		Primary:     true,
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if _, err := setGroupPrimary(a, "group", "chat-slash", true); err != nil {
+		t.Fatalf("setGroupPrimary(chat-slash) error = %v", err)
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{

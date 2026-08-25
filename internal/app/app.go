@@ -127,6 +127,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 	}
 	app.feishu.SetHandlers(app.HandleFeishuMessage, app.HandleCardAction, app.HandleBotMenu, app.HandleFeishuRecall, app.HandleFeishuReaction)
 	configureGroupMessagePolicy(app)
+	configureGroupPrimaryEvents(app)
 	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }

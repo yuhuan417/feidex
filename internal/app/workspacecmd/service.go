@@ -176,6 +176,7 @@ type (
 	RenderWorkspaceDeleteMenuCardFn     func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteConfirmCardFn  func(sessionKey, workspaceID string) (map[string]any, error)
 	WorkspaceIDForSessionFn             func(sessionKey string, sess *state.Session) string
+	WorkspaceMenuBodyLinesFn            func(sessionKey string, sess *state.Session, lines []string) []string
 )
 
 // ---------------------------------------------------------------------------
@@ -309,13 +310,14 @@ type ManagementDeps struct {
 }
 
 type RenderDeps struct {
-	App                   App
-	State                 StateDeps
-	Backend               BackendConfigDeps
-	Formatting            FormattingDeps
-	PathPicker            PathPickerDeps
-	Management            RenderManagementDeps
-	WorkspaceIDForSession WorkspaceIDForSessionFn
+	App                    App
+	State                  StateDeps
+	Backend                BackendConfigDeps
+	Formatting             FormattingDeps
+	PathPicker             PathPickerDeps
+	Management             RenderManagementDeps
+	WorkspaceIDForSession  WorkspaceIDForSessionFn
+	WorkspaceMenuBodyLines WorkspaceMenuBodyLinesFn
 }
 
 type ThreadServiceDeps struct {
@@ -827,6 +829,13 @@ func (s RenderService) WorkspaceIDForSession(sessionKey string, sess *state.Sess
 		return strings.TrimSpace(s.deps.WorkspaceIDForSession(sessionKey, sess))
 	}
 	return selectedWorkspaceIDForSession(s.App, sess)
+}
+
+func (s RenderService) WorkspaceMenuBodyLines(sessionKey string, sess *state.Session, lines []string) []string {
+	if s.deps.WorkspaceMenuBodyLines == nil {
+		return lines
+	}
+	return s.deps.WorkspaceMenuBodyLines(sessionKey, sess, lines)
 }
 
 func (s RenderService) BackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {

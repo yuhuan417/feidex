@@ -93,6 +93,11 @@ type BotMenuClick struct {
 	Command  string
 }
 
+type BotGroupEvent struct {
+	ChatID   string
+	ChatName string
+}
+
 type Adapter struct {
 	cfg                config.FeishuConfig
 	clientMu           sync.RWMutex
@@ -116,6 +121,7 @@ type Adapter struct {
 	onMessage    func(*InboundMessage)
 	onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error)
 	onBotMenu    func(*BotMenuClick)
+	onBotAdded   func(*BotGroupEvent)
 	onRecall     func(*MessageRecall)
 	onReaction   func(*MessageReaction)
 
@@ -199,12 +205,19 @@ func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func
 	a.onReaction = onReaction
 }
 
-// SetGroupMessagePolicy installs the optional binding-aware group filter.
+// SetGroupMessagePolicy installs the optional app-level group trigger filter.
 func (a *Adapter) SetGroupMessagePolicy(policy GroupMessagePolicy) {
 	if a == nil {
 		return
 	}
 	a.groupMessagePolicy = policy
+}
+
+func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
+	if a == nil {
+		return
+	}
+	a.onBotAdded = handler
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -265,6 +278,17 @@ func (a *Adapter) Start(ctx context.Context) error {
 					cmd = "/" + cmd
 				}
 				go a.onBotMenu(&BotMenuClick{UserID: userID, Command: cmd})
+				return nil
+			}).
+			OnP2ChatMemberBotAddedV1(func(ctx context.Context, event *larkim.P2ChatMemberBotAddedV1) error {
+				if a.onBotAdded == nil || event == nil || event.Event == nil || event.Event.ChatId == nil {
+					return nil
+				}
+				chatName := ""
+				if event.Event.Name != nil {
+					chatName = *event.Event.Name
+				}
+				go a.onBotAdded(&BotGroupEvent{ChatID: *event.Event.ChatId, ChatName: chatName})
 				return nil
 			})
 		a.wsDispatcher = dispatcher
@@ -723,6 +747,36 @@ func (a *Adapter) SendCard(ctx context.Context, chatID string, card map[string]a
 	}
 	slog.Debug("feishu outbound sent", "op", "send", "msg_type", "interactive", "chat_id", chatID, "message_id", *resp.Data.MessageId, "card_title", title)
 	return *resp.Data.MessageId, nil
+}
+
+func (a *Adapter) GetGroupBotCount(ctx context.Context, chatID string) (int, error) {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return 0, fmt.Errorf("chat_id is required")
+	}
+	req := larkim.NewGetChatReqBuilder().ChatId(chatID).Build()
+	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.chat.get", func(client *lark.Client) (*larkim.GetChatResp, error) {
+		return client.Im.Chat.Get(ctx, req)
+	})
+	if err != nil {
+		logFeishuFailure("feishu get chat failed", err, 0, "", "op", "get_chat", "chat_id", chatID)
+		return 0, wrapPermissionIssue(err, permissionIssueFromDirectError("im.chat.get", err))
+	}
+	if !resp.Success() {
+		logFeishuFailure("feishu get chat failed", nil, resp.Code, resp.Msg, "op", "get_chat", "chat_id", chatID)
+		return 0, wrapPermissionIssue(
+			fmt.Errorf("feishu get chat failed code=%d msg=%s", resp.Code, resp.Msg),
+			permissionIssueFromCodeError("im.chat.get", resp.Code, resp.Msg, &resp.CodeError, resp.ApiResp, nil),
+		)
+	}
+	if resp.Data == nil || resp.Data.BotCount == nil {
+		return 0, fmt.Errorf("feishu get chat %s returned no bot_count", chatID)
+	}
+	botCount, err := strconv.Atoi(strings.TrimSpace(*resp.Data.BotCount))
+	if err != nil {
+		return 0, fmt.Errorf("invalid bot_count %q for chat %s", strings.TrimSpace(*resp.Data.BotCount), chatID)
+	}
+	return botCount, nil
 }
 
 func (a *Adapter) PatchCard(ctx context.Context, messageID string, card map[string]any) error {

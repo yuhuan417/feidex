@@ -52,6 +52,14 @@ func (c *CommandCaptureClient) SetGroupMessagePolicy(policy feishu.GroupMessageP
 	}
 }
 
+func (c *CommandCaptureClient) SetBotGroupAddedHandler(handler func(*feishu.BotGroupEvent)) {
+	if configurable, ok := c.Base.(interface {
+		SetBotGroupAddedHandler(func(*feishu.BotGroupEvent))
+	}); ok {
+		configurable.SetBotGroupAddedHandler(handler)
+	}
+}
+
 func (c *CommandCaptureClient) Start(ctx context.Context) error {
 	return c.Base.Start(ctx)
 }
@@ -152,6 +160,10 @@ func (c *CommandCaptureClient) LookupMessageSenderOpenID(ctx context.Context, me
 	return c.Base.LookupMessageSenderOpenID(ctx, messageID)
 }
 
+func (c *CommandCaptureClient) GetGroupBotCount(ctx context.Context, chatID string) (int, error) {
+	return c.Base.GetGroupBotCount(ctx, chatID)
+}
+
 // NotifyingFeishuClient wraps a FeishuClient to intercept replies for
 // command capture and to send permission-issue notifications.
 type NotifyingFeishuClient struct {
@@ -220,6 +232,14 @@ func (n *NotifyingFeishuClient) SetGroupMessagePolicy(policy feishu.GroupMessage
 		SetGroupMessagePolicy(feishu.GroupMessagePolicy)
 	}); ok {
 		configurable.SetGroupMessagePolicy(policy)
+	}
+}
+
+func (n *NotifyingFeishuClient) SetBotGroupAddedHandler(handler func(*feishu.BotGroupEvent)) {
+	if configurable, ok := n.Base.(interface {
+		SetBotGroupAddedHandler(func(*feishu.BotGroupEvent))
+	}); ok {
+		configurable.SetBotGroupAddedHandler(handler)
 	}
 }
 
@@ -401,6 +421,14 @@ func (n *NotifyingFeishuClient) UrgentApp(ctx context.Context, messageID, userID
 
 func (n *NotifyingFeishuClient) LookupMessageSenderOpenID(ctx context.Context, messageID string) (string, error) {
 	return n.Base.LookupMessageSenderOpenID(ctx, messageID)
+}
+
+func (n *NotifyingFeishuClient) GetGroupBotCount(ctx context.Context, chatID string) (int, error) {
+	count, err := n.Base.GetGroupBotCount(ctx, chatID)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
+	}
+	return count, err
 }
 
 func (n *NotifyingFeishuClient) NotifyPermissionIssue(target NotifyTarget, err error) {

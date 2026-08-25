@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type groupMessagePolicyConfigurer interface {
@@ -20,15 +19,32 @@ func configureGroupMessagePolicy(a *App) {
 		return
 	}
 	configurer.SetGroupMessagePolicy(func(chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
-		return shouldAcceptGroupMessage(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+		return shouldDeliverGroupMessageToApp(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
 	})
 }
 
-func hasLocalAgentBinding(a *App, chatID string) bool {
-	if a == nil {
+func shouldDeliverGroupMessageToApp(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
+	if shouldAcceptGroupMessage(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone) {
+		return true
+	}
+	return shouldProbeGroupPrimaryForMessage(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+}
+
+func shouldProbeGroupPrimaryForMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
+	if a == nil || hasGroupPrimaryState(a, "group", chatID) {
 		return false
 	}
-	return len(a.State().AgentBindingsForChat("group", chatID)) > 0
+	if mentionedSelf {
+		return true
+	}
+	if mentionedAny {
+		return false
+	}
+	if mentionedEveryone {
+		cfg := feishuConfig(a)
+		return cfg != nil && cfg.RespondToAtEveryone
+	}
+	return strings.TrimSpace(rootMessageID) == "" && strings.TrimSpace(parentMessageID) == ""
 }
 
 func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
@@ -36,21 +52,14 @@ func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID str
 		return false
 	}
 	cfg := feishuConfig(a)
-	bindings := a.State().AgentBindingsForChat("group", chatID)
-
-	// Preserve the existing @-only behavior for chats that have not entered
-	// binding mode yet.
-	if len(bindings) == 0 {
-		return mentionedSelf || (mentionedEveryone && cfg != nil && cfg.RespondToAtEveryone)
-	}
 	if mentionedSelf {
 		return true
 	}
 	// An explicit mention of another person or bot must not fall through to
-	// the local primary binding.
+	// the local primary frontend.
 	if mentionedAny || mentionedEveryone {
 		if mentionedEveryone && cfg != nil && cfg.RespondToAtEveryone {
-			return hasPrimaryBinding(bindings)
+			return isGroupPrimary(a, "group", chatID)
 		}
 		return false
 	}
@@ -62,7 +71,7 @@ func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID str
 		}
 		return false
 	}
-	return hasPrimaryBinding(bindings)
+	return isGroupPrimary(a, "group", chatID)
 }
 
 func hasLocalGroupMessageLink(a *App, messageIDs ...string) bool {
@@ -74,15 +83,6 @@ func hasLocalGroupMessageLink(a *App, messageIDs ...string) bool {
 			continue
 		}
 		if link := a.State().MessageLink(messageID); link != nil {
-			return true
-		}
-	}
-	return false
-}
-
-func hasPrimaryBinding(bindings []*state.AgentBinding) bool {
-	for _, binding := range bindings {
-		if binding != nil && binding.Primary {
 			return true
 		}
 	}

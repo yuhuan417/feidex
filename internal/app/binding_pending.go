@@ -20,7 +20,7 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 	}
 	binding := agentBindingForChat(s.app, msg.ChatType, msg.ChatID)
 	if binding == nil {
-		if !msg.MentionedSelf {
+		if !msg.MentionedSelf && !isGroupPrimary(s.app, msg.ChatType, msg.ChatID) {
 			return false, nil
 		}
 		var err error
@@ -32,13 +32,13 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 	if bindingReadyForInput(binding) {
 		return false, nil
 	}
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+	_, err := s.updateBinding(binding, func(current *state.AgentBinding) {
 		current.PendingMessage = pendingBindingMessageFromInbound(s.app, msg)
 	})
 	if err != nil {
 		return false, err
 	}
-	card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), updated)
+	card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(makeSessionKey(s.app, msg))
 	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return true, err
 }

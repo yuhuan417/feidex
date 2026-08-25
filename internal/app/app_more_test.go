@@ -283,6 +283,7 @@ type fakeFeishuClient struct {
 	shareFileErr              error
 	urgentAppErr              error
 	lookupMessageSenderErr    error
+	getGroupBotCountErr       error
 	cleanupResult             feishu.PreviewDriveCleanupResult
 	cleanupErr                error
 	cleanupHook               func(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
@@ -324,13 +325,22 @@ type fakeFeishuClient struct {
 	urgentAppCalls           []struct{ messageID, userID string }
 	lookupMessageSenderCalls []string
 	lookupMessageSenderOpen  string
+	groupBotCounts           map[string]int
+	groupBotCountCalls       []string
 	onMessage                func(*feishu.InboundMessage)
+	onBotAdded               func(*feishu.BotGroupEvent)
 }
 
 func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.onMessage = onMessage
+}
+
+func (f *fakeFeishuClient) SetBotGroupAddedHandler(handler func(*feishu.BotGroupEvent)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.onBotAdded = handler
 }
 
 func (f *fakeFeishuClient) Start(context.Context) error {
@@ -522,6 +532,19 @@ func (f *fakeFeishuClient) LookupMessageSenderOpenID(_ context.Context, messageI
 	defer f.mu.Unlock()
 	f.lookupMessageSenderCalls = append(f.lookupMessageSenderCalls, messageID)
 	return f.lookupMessageSenderOpen, f.lookupMessageSenderErr
+}
+
+func (f *fakeFeishuClient) GetGroupBotCount(_ context.Context, chatID string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.groupBotCountCalls = append(f.groupBotCountCalls, chatID)
+	if f.getGroupBotCountErr != nil {
+		return 0, f.getGroupBotCountErr
+	}
+	if f.groupBotCounts != nil {
+		return f.groupBotCounts[chatID], nil
+	}
+	return 0, errors.New("group bot count not configured")
 }
 
 func (f *fakeFeishuClient) replyCardsSnapshot() []map[string]any {
@@ -785,6 +808,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		},
 	}
 	replaceCodexClient(a, fc)
+	configureGroupPrimaryEvents(a)
 	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc
 }
@@ -3431,9 +3455,22 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	}
 }
 
-func TestHandleFeishuMessageUsesSelectedWorkspaceForNewGroupRoots(t *testing.T) {
+func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if _, err := setGroupPrimary(a, "group", "chat-1", true); err != nil {
+		t.Fatalf("setGroupPrimary(chat-1) error = %v", err)
+	}
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          defaultBindingID(a.FrontendID(), "group", "chat-1"),
+		FrontendID:  a.FrontendID(),
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding(chat-1) error = %v", err)
+	}
 	rootASessionKey := makeSessionKey(a, &feishu.InboundMessage{
 		ChatID:        "chat-1",
 		ChatType:      "group",
@@ -3480,8 +3517,8 @@ func TestHandleFeishuMessageUsesSelectedWorkspaceForNewGroupRoots(t *testing.T) 
 		}
 	}
 
-	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"}, "alt"); err != nil {
-		t.Fatalf("setWorkspaceSelectionForMessage(group -> alt) error = %v", err)
+	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "alt"); err != nil {
+		t.Fatalf("activateBindingWorkspace(group -> alt) error = %v", err)
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{
@@ -3500,8 +3537,8 @@ func TestHandleFeishuMessageUsesSelectedWorkspaceForNewGroupRoots(t *testing.T) 
 		MessageID:     "root-b",
 		RootMessageID: "root-b",
 	})
-	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"}, "default"); err != nil {
-		t.Fatalf("setWorkspaceSelectionForMessage(group -> default) error = %v", err)
+	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "default"); err != nil {
+		t.Fatalf("activateBindingWorkspace(group -> default) error = %v", err)
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{

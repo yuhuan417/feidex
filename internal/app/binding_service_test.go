@@ -24,8 +24,11 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	if binding == nil {
 		t.Fatal("/workspace did not create pending group config")
 	}
-	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" || !binding.Primary {
-		t.Fatalf("initial binding = %+v, want pending primary without workspace", binding)
+	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" || binding.Primary {
+		t.Fatalf("initial binding = %+v, want pending workspace config without primary coupling", binding)
+	}
+	if primary := groupPrimaryForChat(a, "group", "chat-issue-9"); primary != nil {
+		t.Fatalf("/workspace should not create primary state, got %+v", primary)
 	}
 	if len(ff.replyCardsSnapshot()) != 1 {
 		t.Fatalf("reply cards after status = %d, want 1", len(ff.replyCardsSnapshot()))
@@ -56,8 +59,11 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	if binding.Status != state.AgentBindingStatusActive.String() || binding.WorkspaceID != "default" {
 		t.Fatalf("activated binding = %+v", binding)
 	}
-	if !binding.Primary || binding.Component != "" || binding.ModelOverride != "gpt-5-binding" || binding.ReasoningEffortOverride != "high" {
+	if binding.Primary || binding.Component != "" || binding.ModelOverride != "gpt-5-binding" || binding.ReasoningEffortOverride != "high" {
 		t.Fatalf("binding user overrides = %+v", binding)
+	}
+	if primary := groupPrimaryForChat(a, "group", "chat-issue-9"); primary == nil || !primary.Primary {
+		t.Fatalf("group primary after /primary on = %+v, want on", primary)
 	}
 	if binding.ServiceTierOverride != "fast" || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" || binding.MultiAgentModeOverride != "proactive" || binding.ClaudePermissionMode != "acceptEdits" {
 		t.Fatalf("binding runtime overrides = %+v", binding)
@@ -67,10 +73,13 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	}
 }
 
-func TestWorkspaceDefaultsOnlyFirstLocalGroupConfigToPrimary(t *testing.T) {
-	a, _, _ := newTestApp(t)
+func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) {
+	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
-	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: wrapFeishuClient(&fakeFeishuClient{})}
+	ffA.groupBotCounts = map[string]int{"chat-primary": 1}
+	fb := &fakeFeishuClient{groupBotCounts: map[string]int{"chat-primary": 2}}
+	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: wrapFeishuClient(fb)}
+	configureGroupPrimaryEvents(b)
 
 	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
 	if err := newBindingService(a).commandWorkspace(msgA, nil); err != nil {
@@ -80,26 +89,76 @@ func TestWorkspaceDefaultsOnlyFirstLocalGroupConfigToPrimary(t *testing.T) {
 	if err := newBindingService(b).commandWorkspace(msgB, nil); err != nil {
 		t.Fatalf("bot-b /workspace error = %v", err)
 	}
+	handleBotGroupAdded(a, &feishu.BotGroupEvent{ChatID: "chat-primary"})
+	handleBotGroupAdded(b, &feishu.BotGroupEvent{ChatID: "chat-primary"})
 
-	bindingA := a.State().AgentBinding(defaultBindingID("bot-a", "group", "chat-primary"))
-	bindingB := b.State().AgentBinding(defaultBindingID("bot-b", "group", "chat-primary"))
-	if bindingA == nil || !bindingA.Primary {
-		t.Fatalf("bot-a binding = %+v, want primary", bindingA)
+	primaryA := groupPrimaryForChat(a, "group", "chat-primary")
+	primaryB := groupPrimaryForChat(b, "group", "chat-primary")
+	if primaryA == nil || !primaryA.Primary {
+		t.Fatalf("bot-a primary = %+v, want primary", primaryA)
 	}
-	if bindingB == nil || bindingB.Primary {
-		t.Fatalf("bot-b binding = %+v, want non-primary", bindingB)
+	if primaryB == nil || primaryB.Primary {
+		t.Fatalf("bot-b primary = %+v, want non-primary", primaryB)
 	}
 
 	if err := newBindingService(b).commandPrimary(msgB, []string{"on"}); err != nil {
 		t.Fatalf("bot-b /primary on error = %v", err)
 	}
-	bindingA = a.State().AgentBinding(defaultBindingID("bot-a", "group", "chat-primary"))
-	bindingB = b.State().AgentBinding(defaultBindingID("bot-b", "group", "chat-primary"))
-	if bindingA == nil || bindingA.Primary {
-		t.Fatalf("bot-a binding after bot-b primary = %+v, want demoted", bindingA)
+	primaryA = groupPrimaryForChat(a, "group", "chat-primary")
+	primaryB = groupPrimaryForChat(b, "group", "chat-primary")
+	if primaryA == nil || primaryA.Primary {
+		t.Fatalf("bot-a primary after bot-b primary = %+v, want demoted", primaryA)
 	}
-	if bindingB == nil || !bindingB.Primary {
-		t.Fatalf("bot-b binding after primary = %+v, want primary", bindingB)
+	if primaryB == nil || !primaryB.Primary {
+		t.Fatalf("bot-b primary after primary = %+v, want primary", primaryB)
+	}
+}
+
+func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary-only", MessageID: "msg-primary", UserID: "user-1"}
+
+	if err := newBindingService(a).commandPrimary(msg, []string{"on"}); err != nil {
+		t.Fatalf("/primary on error = %v", err)
+	}
+	if binding := agentBindingForChat(a, "group", "chat-primary-only"); binding != nil {
+		t.Fatalf("/primary created binding = %+v", binding)
+	}
+	if primary := groupPrimaryForChat(a, "group", "chat-primary-only"); primary == nil || !primary.Primary {
+		t.Fatalf("group primary = %+v, want on", primary)
+	}
+}
+
+func TestPrimaryUnmentionedGroupMessageCreatesPendingWorkspaceConfig(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.frontendID = "bot-a"
+	if _, err := setGroupPrimary(a, "group", "chat-pending-new", true); err != nil {
+		t.Fatalf("setGroupPrimary() error = %v", err)
+	}
+	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
+		t.Fatalf("backend method %s should not run before workspace config", method)
+		return nil
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "orig-primary",
+		ChatID:        "chat-pending-new",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "start this project",
+		RootMessageID: "orig-primary",
+	})
+
+	binding := agentBindingForChat(a, "group", "chat-pending-new")
+	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() || binding.PendingMessage == nil {
+		t.Fatalf("pending binding = %+v", binding)
+	}
+	if binding.PendingMessage.Text != "start this project" || binding.PendingMessage.MessageID != "orig-primary" {
+		t.Fatalf("pending message = %+v", binding.PendingMessage)
+	}
+	if cards := ff.replyCardsSnapshot(); len(cards) != 1 || !strings.Contains(cardMarkdownContent(t, cards[0]), "已暂存原消息") {
+		t.Fatalf("pending cards = %+v", cards)
 	}
 }
 
@@ -112,9 +171,11 @@ func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 		ChatID:     "chat-pending",
 		ChatType:   "group",
 		Status:     state.AgentBindingStatusPending.String(),
-		Primary:    true,
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if _, err := setGroupPrimary(a, "group", "chat-pending", true); err != nil {
+		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
 
 	var methods []string
@@ -656,7 +717,7 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 		t.Fatalf("group /workspace without backend error = %v", err)
 	}
 	binding := agentBindingForChat(a, "group", "chat-no-backend")
-	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() || !binding.Primary {
+	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() || binding.Primary {
 		t.Fatalf("binding after group /workspace without backend = %+v", binding)
 	}
 	cards := ff.replyCardsSnapshot()
