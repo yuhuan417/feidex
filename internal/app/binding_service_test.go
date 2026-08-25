@@ -197,7 +197,7 @@ func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
 	}
 }
 
-func TestPrimaryOffOnlyClearsCurrentOwner(t *testing.T) {
+func TestPrimaryOffRejectedAndKeepsOwner(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-b"
 	ff.botOpenID = "bot-b-open"
@@ -206,8 +206,8 @@ func TestPrimaryOffOnlyClearsCurrentOwner(t *testing.T) {
 	if _, err := setGroupPrimaryOwner(a, "group", "chat-primary-off", "bot-a-open"); err != nil {
 		t.Fatalf("seed owner error = %v", err)
 	}
-	if err := newBindingService(a).commandPrimary(msg, []string{"off"}); err != nil {
-		t.Fatalf("/primary off non-owner error = %v", err)
+	if err := newBindingService(a).commandPrimary(msg, []string{"off"}); err == nil || !strings.Contains(err.Error(), "usage: /primary on") {
+		t.Fatalf("/primary off non-owner error = %v, want usage", err)
 	}
 	if owner := groupPrimaryOwnerOpenID(a, "group", "chat-primary-off"); owner != "bot-a-open" {
 		t.Fatalf("owner after non-owner off = %q, want bot-a-open", owner)
@@ -217,11 +217,11 @@ func TestPrimaryOffOnlyClearsCurrentOwner(t *testing.T) {
 		t.Fatalf("seed current owner error = %v", err)
 	}
 	msg.MessageID = "msg-primary-off-owner"
-	if err := newBindingService(a).commandPrimary(msg, []string{"off"}); err != nil {
-		t.Fatalf("/primary off owner error = %v", err)
+	if err := newBindingService(a).commandPrimary(msg, []string{"off"}); err == nil || !strings.Contains(err.Error(), "usage: /primary on") {
+		t.Fatalf("/primary off owner error = %v, want usage", err)
 	}
-	if owner := groupPrimaryOwnerOpenID(a, "group", "chat-primary-off"); owner != "" {
-		t.Fatalf("owner after owner off = %q, want empty", owner)
+	if owner := groupPrimaryOwnerOpenID(a, "group", "chat-primary-off"); owner != "bot-b-open" {
+		t.Fatalf("owner after owner off = %q, want bot-b-open", owner)
 	}
 }
 
@@ -887,7 +887,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 			t.Fatalf("group help should hide %q, got %q", banned, groupHelp)
 		}
 	}
-	for _, want := range []string{"/workspace use ID", "当前 Bot 在本群内使用", "/model set <model-id>", "当前 Bot 在本群内的 model 覆盖", "/primary on|off"} {
+	for _, want := range []string{"/workspace use ID", "当前 Bot 在本群内使用", "/model set <model-id>", "当前 Bot 在本群内的 model 覆盖", "/primary on"} {
 		if !strings.Contains(groupHelp, want) {
 			t.Fatalf("group help = %q, want %q", groupHelp, want)
 		}

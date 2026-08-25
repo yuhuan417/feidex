@@ -169,22 +169,28 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", RootMessageID: "root-1", ParentMessageID: "parent-1"}) {
 		t.Fatal("adapter policy delivered unrelated reply for primary init")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", MentionedOpenIDs: []string{"bot-other"}}) {
+	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-other hello", MentionedOpenIDs: []string{"bot-other"}}) {
 		t.Fatal("adapter policy delivered explicit mention of another bot for primary init")
 	}
 	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b /primary on", MentionedOpenIDs: []string{"bot-b-open"}}) {
 		t.Fatal("adapter policy rejected explicit primary owner assignment")
+	}
+	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b", MentionedOpenIDs: []string{"bot-b-open"}}) {
+		t.Fatal("adapter policy delivered mention-only primary owner assignment")
+	}
+	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b hello", MentionedOpenIDs: []string{"bot-b-open"}}) {
+		t.Fatal("adapter policy delivered ordinary explicit mention of another bot")
 	}
 
 	cfg.Feishu.RespondToAtEveryone = true
 	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", MentionedEveryone: true}) {
 		t.Fatal("adapter policy rejected configured @everyone primary init probe")
 	}
-	if _, err := setGroupPrimary(a, "group", "chat-new", false); err != nil {
-		t.Fatalf("setGroupPrimary(false) error = %v", err)
+	if _, err := setGroupPrimaryOwner(a, "group", "chat-new", "bot-other-open"); err != nil {
+		t.Fatalf("setGroupPrimaryOwner(other) error = %v", err)
 	}
 	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new"}) {
-		t.Fatal("adapter policy delivered top-level message after non-primary state was initialized")
+		t.Fatal("adapter policy delivered top-level message after non-primary owner state was initialized")
 	}
 }
 

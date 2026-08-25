@@ -169,25 +169,22 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 		}
 		return s.replyBindingUpdated(msg, body)
 	}
-	if len(args) != 1 {
-		return fmt.Errorf("usage: /primary on|off")
-	}
-	primaryValue, err := parseOnOff(args[0])
-	if err != nil {
-		return fmt.Errorf("usage: /primary on|off")
+	if len(args) != 1 || !strings.EqualFold(strings.TrimSpace(args[0]), "on") {
+		return fmt.Errorf("usage: /primary on")
 	}
 	targetOpenID := currentOrMentionedBotOpenID(s.app, msg)
-	var updated *state.GroupPrimary
-	if primaryValue {
-		if targetOpenID == "" {
-			return fmt.Errorf("bot open_id is required to set group primary")
-		}
-		updated, err = setGroupPrimaryOwner(s.app, msg.ChatType, msg.ChatID, targetOpenID)
-	} else if ownerOpenID == "" || ownerOpenID == targetOpenID {
-		updated, err = setGroupPrimaryOwner(s.app, msg.ChatType, msg.ChatID, "")
-	} else {
-		updated = groupPrimaryForChat(s.app, msg.ChatType, msg.ChatID)
+	return s.setPrimaryOwnerForMessage(msg, targetOpenID)
+}
+
+func (s bindingService) setPrimaryOwnerForMessage(msg *feishu.InboundMessage, targetOpenID string) error {
+	if msg == nil {
+		return nil
 	}
+	targetOpenID = strings.TrimSpace(targetOpenID)
+	if targetOpenID == "" {
+		return fmt.Errorf("bot open_id is required to set group primary")
+	}
+	updated, err := setGroupPrimaryOwner(s.app, msg.ChatType, msg.ChatID, targetOpenID)
 	if err != nil {
 		return err
 	}
@@ -411,7 +408,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"approval policy: " + renderOptionalBacktick(binding.ApprovalPolicyOverride),
 		"multi-agent: " + renderOptionalBacktick(binding.MultiAgentModeOverride),
 		"Claude permissions: " + renderOptionalBacktick(binding.ClaudePermissionMode),
-		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on|off`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
+		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
 	}
 	if binding.PendingMessage != nil {
 		preview := pendingBindingMessagePreview(binding.PendingMessage)
@@ -542,17 +539,6 @@ func clearableArg(value string) string {
 	}
 }
 
-func parseOnOff(value string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "on", "true", "yes", "1":
-		return true, nil
-	case "off", "false", "no", "0":
-		return false, nil
-	default:
-		return false, fmt.Errorf("usage: /primary on|off")
-	}
-}
-
 func onOffLabel(value bool) string {
 	if value {
 		return "on"
@@ -568,4 +554,4 @@ func renderOptionalBacktick(value string) string {
 	return "`" + value + "`"
 }
 
-const currentBotCommandUsage = "/workspace | /workspace use WORKSPACE_ID | /workspace new WORKSPACE_ID CWD | /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR] | /primary on|off | /model set MODEL|default | /model effort EFFORT|default | /fast fast|default|off | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"
+const currentBotCommandUsage = "/workspace | /workspace use WORKSPACE_ID | /workspace new WORKSPACE_ID CWD | /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR] | /primary on | /model set MODEL|default | /model effort EFFORT|default | /fast fast|default|off | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"

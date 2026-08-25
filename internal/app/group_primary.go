@@ -21,7 +21,6 @@ type botOpenIDProvider interface {
 
 type groupPrimaryAssignment struct {
 	TargetBotOpenID string
-	Enable          bool
 }
 
 func configureGroupPrimaryEvents(a *App) {
@@ -156,12 +155,13 @@ func setGroupPrimaryOwner(a *App, chatType, chatID, ownerBotOpenID string) (*sta
 }
 
 func setGroupPrimary(a *App, chatType, chatID string, enabled bool) (*state.GroupPrimary, error) {
+	if !enabled {
+		return nil, fmt.Errorf("clearing group primary is unsupported")
+	}
 	ownerBotOpenID := ""
-	if enabled {
-		ownerBotOpenID = currentBotOpenID(a)
-		if ownerBotOpenID == "" {
-			return nil, fmt.Errorf("bot open_id is required to set group primary")
-		}
+	ownerBotOpenID = currentBotOpenID(a)
+	if ownerBotOpenID == "" {
+		return nil, fmt.Errorf("bot open_id is required to set group primary")
 	}
 	return setGroupPrimaryOwner(a, chatType, chatID, ownerBotOpenID)
 }
@@ -172,22 +172,12 @@ func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error
 		return false, nil
 	}
 	selfOpenID := currentBotOpenID(a)
-	targetsSelf := selfOpenID != "" && selfOpenID == assignment.TargetBotOpenID
-	if selfOpenID == "" {
-		targetsSelf = msg.MentionedSelf
-	}
+	targetsSelf := msg.MentionedSelf || (selfOpenID != "" && selfOpenID == assignment.TargetBotOpenID)
 	if targetsSelf {
 		return false, nil
 	}
-	if assignment.Enable {
-		_, err := setGroupPrimaryOwner(a, msg.ChatType, msg.ChatID, assignment.TargetBotOpenID)
-		return true, err
-	}
-	if strings.TrimSpace(groupPrimaryOwnerOpenID(a, msg.ChatType, msg.ChatID)) == assignment.TargetBotOpenID {
-		_, err := setGroupPrimaryOwner(a, msg.ChatType, msg.ChatID, "")
-		return true, err
-	}
-	return true, nil
+	_, err := setGroupPrimaryOwner(a, msg.ChatType, msg.ChatID, assignment.TargetBotOpenID)
+	return true, err
 }
 
 func groupPrimaryAssignmentFromMessage(msg *feishu.InboundMessage) (groupPrimaryAssignment, bool) {
@@ -206,11 +196,10 @@ func groupPrimaryAssignmentFromTextAndMentions(text string, mentionedOpenIDs []s
 	if targetBotOpenID == "" {
 		return groupPrimaryAssignment{}, false
 	}
-	primary, ok := parsePrimaryCommandValueFromText(text)
-	if !ok {
-		return groupPrimaryAssignment{}, false
+	if parsePrimaryOnCommandFromText(text) {
+		return groupPrimaryAssignment{TargetBotOpenID: targetBotOpenID}, true
 	}
-	return groupPrimaryAssignment{TargetBotOpenID: targetBotOpenID, Enable: primary}, true
+	return groupPrimaryAssignment{}, false
 }
 
 func firstMentionedOpenID(mentionedOpenIDs []string) string {
@@ -222,20 +211,16 @@ func firstMentionedOpenID(mentionedOpenIDs []string) string {
 	return ""
 }
 
-func parsePrimaryCommandValueFromText(text string) (bool, bool) {
+func parsePrimaryOnCommandFromText(text string) bool {
 	fields := strings.Fields(strings.TrimSpace(text))
 	for i, field := range fields {
 		if strings.TrimSpace(field) != "/primary" {
 			continue
 		}
 		if i+1 >= len(fields) {
-			return false, false
+			return false
 		}
-		value, err := parseOnOff(fields[i+1])
-		if err != nil {
-			return false, false
-		}
-		return value, true
+		return strings.EqualFold(strings.TrimSpace(fields[i+1]), "on")
 	}
-	return false, false
+	return false
 }

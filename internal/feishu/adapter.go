@@ -1712,7 +1712,7 @@ func stripBotMention(text string, mentions []*larkim.MentionEvent, botOpenID str
 		if mention == nil || mention.Key == nil {
 			continue
 		}
-		if mention.Id != nil && mention.Id.OpenId != nil && *mention.Id.OpenId == botOpenID {
+		if mention.Id != nil && mention.Id.OpenId != nil && strings.TrimSpace(*mention.Id.OpenId) == strings.TrimSpace(botOpenID) {
 			text = strings.ReplaceAll(text, *mention.Key, "")
 		}
 	}
@@ -1724,7 +1724,7 @@ func mentioned(mentions []*larkim.MentionEvent, botOpenID string) bool {
 		if mention == nil || mention.Id == nil || mention.Id.OpenId == nil {
 			continue
 		}
-		if *mention.Id.OpenId == botOpenID {
+		if strings.TrimSpace(*mention.Id.OpenId) == strings.TrimSpace(botOpenID) {
 			return true
 		}
 	}
@@ -2074,5 +2074,5 @@ func (a *Adapter) fetchBotOpenID() string {
 	if err := json.NewDecoder(infoResp.Body).Decode(&info); err != nil || info.Code != 0 {
 		return ""
 	}
-	return info.Bot.OpenID
+	return strings.TrimSpace(info.Bot.OpenID)
 }

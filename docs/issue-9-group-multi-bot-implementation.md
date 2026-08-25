@@ -71,8 +71,8 @@ frontend 隔离以下内容：
 `GroupPrimary` 是当前 Feidex 实例保存的“某个群的 primary owner bot open_id”本地副本。它不是当前 Bot 自己的 bool 开关，也和 `AgentBinding` 没有生命周期依赖：
 
 - `@Bot /primary on` 把被 `@` 的 Bot open_id 写为本群 owner；所有能看到这条群消息的 Feidex 实例都会静默同步自己的本地副本。
-- `@Bot /primary off` 在当前 owner 等于被 `@` Bot 时清空 owner；目标 Bot 正常回复，非目标 Bot 只同步不回复。
-- `/primary on|off` 只写 `GroupPrimary`，不创建或修改 `AgentBinding`。
+- `/primary off` 不再支持；primary owner 只能通过把另一个 Bot 设为 owner 来切换，避免群内被清成无 primary 状态。
+- `/primary on` 只写 `GroupPrimary`，不创建或修改 `AgentBinding`。
 - `/workspace`、model、effort、fast 和运行参数配置只写 `AgentBinding`，不隐式切换 primary。
 - 当前只支持从 GitHub 线上 snapshot v6 直接升级到包含 `GroupPrimary` 的当前状态；测试环境中间版本不保留兼容迁移。
 - 不引入公共存储；不同机器之间只依赖同一条群消息投递到各自 bot 后，各自更新本地 owner 副本。
@@ -201,7 +201,7 @@ primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群�
 /model effort EFFORT|default
 /effort EFFORT|default
 /fast fast|default|off|toggle|config
-/primary on|off
+/primary on
 ```
 
 effective-value 优先级：
@@ -259,7 +259,7 @@ Session / Thread 临时覆盖
 - [x] Submission 创建时固化 `BindingID` 元数据。
 - [x] 群消息路由支持 primary / direct mention / local reply link。
 - [x] 未 `@` 消息不会因为提及了其他 Bot 而误落到 primary Bot。
-- [x] `@Bot /primary on|off` 会被所有可见 bot 用于同步本地 owner 副本；非目标 bot 静默处理。
+- [x] `@Bot /primary on` 会被所有可见 bot 用于同步本地 owner 副本；非目标 bot 静默处理。
 - [x] SessionKey 恢复为 `frontend + chat + RootMessage`。
 - [x] `BindingID` 不参与 SessionKey 推导。
 - [x] 群内工作区优先解析。

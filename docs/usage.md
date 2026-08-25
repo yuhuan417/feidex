@@ -96,7 +96,7 @@
   - `状态面板 /status`
   - `命令帮助 /help`
 
-群聊中的菜单和命令作用域规则：没有特殊 `@` 时由本群 primary bot 处理；明确 `@Bot` 时由被 `@` 的 bot 处理。群聊中的 `/workspace use`、`/workspace sandbox/policy/multiagent/permissions`、`/model set`、`/model effort`、`/effort`、`/fast` 以及对应菜单按钮，都会写入当前 bot 在当前群内的本地配置，不会切换无作用域的 session workspace 或全局模型配置。`@Bot /primary on` 会把被 `@` 的 bot 设为本群 primary owner；所有能收到这条群消息的 Feidex 实例都会同步本地 owner 副本。要操作另一个 bot，必须明确 `@Bot /menu` 或 `@Bot /workspace`，菜单里不提供 bot 选择列表或跨 bot handoff。
+群聊中的菜单和命令作用域规则：没有特殊 `@` 时由本群 primary bot 处理；明确 `@Bot` 时由被 `@` 的 bot 处理。群聊中的 `/workspace use`、`/workspace sandbox/policy/multiagent/permissions`、`/model set`、`/model effort`、`/effort`、`/fast` 以及对应菜单按钮，都会写入当前 bot 在当前群内的本地配置，不会切换无作用域的 session workspace 或全局模型配置。`@Bot /primary on` 会把被 `@` 的 bot 设为本群 primary owner；`/primary off` 不支持，切换 primary 要把另一个 bot 设为 owner。所有能收到这条群消息的 Feidex 实例都会同步本地 owner 副本。要操作另一个 bot，必须明确 `@Bot /menu` 或 `@Bot /workspace`，菜单里不提供 bot 选择列表或跨 bot handoff。
 
 当前 bot 在群内还没有 workspace 时，不能执行普通输入。当前 bot 收到应处理的普通群消息时，会先暂存原始消息并展示当前工作区配置入口；用户完成 `/workspace use`、`/workspace new` 或 `/workspace clone` 后，原始消息会自动继续处理。
 
