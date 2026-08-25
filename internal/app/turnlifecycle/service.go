@@ -47,6 +47,7 @@ type App interface {
 	SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string
 	SessionHasActiveWork(sess *state.Session) bool
 	SessionShouldStartNextSubmissionAsync(sess *state.Session) bool
+	NextQueuedSubmissionSessionKey(sessionKey string) string
 	BindStandaloneCompactTurn(threadID, turnID string) bool
 	BindGoalContinuationTurn(threadID, turnID string) bool
 	FinishStandaloneCompactTurn(threadID, turnID, status string) bool
@@ -609,13 +610,18 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			)
 		}
 	}
-	if updatedSess != nil && sessionShouldStartNextSubmissionAsync(updatedSess) {
+	nextSessionKey := ""
+	if updatedSess != nil {
+		nextSessionKey = strings.TrimSpace(w.app.NextQueuedSubmissionSessionKey(sessionKey))
+	}
+	if nextSessionKey != "" {
 		slog.Debug("finishTurn scheduling next submission asynchronously",
-			"session_key", sessionKey,
+			"session_key", nextSessionKey,
+			"source_session_key", sessionKey,
 			"thread_id", updatedSess.ActiveThreadID,
 		)
 		w.app.RunAsync(func() {
-			w.submissionDispatch().StartNextSubmissionAsync(sessionKey, "finishTurn")
+			w.submissionDispatch().StartNextSubmissionAsync(nextSessionKey, "finishTurn")
 		})
 	}
 	w.runtimeMaintenance().CleanupSubmissionRuntimeState(sub)

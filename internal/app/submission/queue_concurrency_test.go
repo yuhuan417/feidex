@@ -29,10 +29,10 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 	if _, err := store.CreateSubmission(&state.Submission{
-		ID:         "sub-1",
-		SessionKey: sessionKey,
+		ID:          "sub-1",
+		SessionKey:  sessionKey,
 		WorkspaceID: "default",
-		Status:     state.SubmissionStatusQueued.String(),
+		Status:      state.SubmissionStatusQueued.String(),
 	}); err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
@@ -81,7 +81,7 @@ type concurrentStartTestApp struct {
 func newConcurrentStartTestApp(store *state.Store, sessionKey string) *concurrentStartTestApp {
 	return &concurrentStartTestApp{
 		state: concurrentStartTestState{
-			store:            store,
+			store:             store,
 			barrierSessionKey: sessionKey,
 			barrierReady:      make(chan struct{}),
 		},
@@ -172,7 +172,8 @@ func (a *concurrentStartTestApp) SubmissionQueueReplyText(context.Context, strin
 	return nil
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueSendQueuedNotice(context.Context, *state.Submission) {}
+func (a *concurrentStartTestApp) SubmissionQueueSendQueuedNotice(context.Context, *state.Submission) {
+}
 
 func (a *concurrentStartTestApp) SubmissionQueueSendStartFailureNotice(context.Context, *state.Submission, error, bool) {
 }
@@ -195,7 +196,8 @@ func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionQueuedReactions(*s
 
 func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionRunningReactions(*state.Submission) {}
 
-func (a *concurrentStartTestApp) SubmissionQueueClearSubmissionProcessingReactions(*state.Submission) {}
+func (a *concurrentStartTestApp) SubmissionQueueClearSubmissionProcessingReactions(*state.Submission) {
+}
 
 func (a *concurrentStartTestApp) SubmissionQueueIsReviewSubmission(*state.Submission) bool {
 	return false
@@ -370,7 +372,7 @@ func (concurrentStartNoopSkillResolver) ResolveSubmissionSkill(string, string, s
 	return QueueSkillResolution{}
 }
 func (concurrentStartNoopSkillResolver) SetSessionPendingSkill(string, state.SubmissionSkill) {}
-func (concurrentStartNoopSkillResolver) ClearSessionPendingSkill(string)                {}
+func (concurrentStartNoopSkillResolver) ClearSessionPendingSkill(string)                      {}
 
 type concurrentStartNoopAttachmentResolver struct{}
 
@@ -400,12 +402,12 @@ func (concurrentStartNoopPendingQueue) ClearPendingStagedImages(string, string) 
 
 type concurrentStartNoopRuntimeState struct{}
 
-func (concurrentStartNoopRuntimeState) NotePendingTurnBinding(string, string, string) {}
+func (concurrentStartNoopRuntimeState) NotePendingTurnBinding(string, string, string)       {}
 func (concurrentStartNoopRuntimeState) ClearPendingTurnBindingForSubmission(string, string) {}
 func (concurrentStartNoopRuntimeState) BindTurnSubmission(string, string, string, string)   {}
-func (concurrentStartNoopRuntimeState) MarkTurnStartedAt(string, time.Time)                  {}
-func (concurrentStartNoopRuntimeState) ClearTurnBinding(string)                              {}
-func (concurrentStartNoopRuntimeState) ClearTurnItemStates(string)                           {}
+func (concurrentStartNoopRuntimeState) MarkTurnStartedAt(string, time.Time)                 {}
+func (concurrentStartNoopRuntimeState) ClearTurnBinding(string)                             {}
+func (concurrentStartNoopRuntimeState) ClearTurnItemStates(string)                          {}
 func (concurrentStartNoopRuntimeState) BoundSubmissionForTurn(string) (string, *state.Submission) {
 	return "", nil
 }
@@ -423,7 +425,7 @@ func (concurrentStartNoopReplyContinuation) RecordRootTurnBinding(string, string
 type concurrentStartNoopTurnStream struct{}
 
 func (concurrentStartNoopTurnStream) NoteTurnStarted(string, *state.Submission) {}
-func (concurrentStartNoopTurnStream) DeleteTurnStream(string)                    {}
+func (concurrentStartNoopTurnStream) DeleteTurnStream(string)                   {}
 
 type concurrentStartNoopAutoRetry struct{}
 
@@ -431,12 +433,14 @@ func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, str
 	return false
 }
 
+func (concurrentStartNoopAutoRetry) HasBlockingAutoRetry(string) bool { return false }
+
 type concurrentStartNoopCodexClient struct{}
 
 func (concurrentStartNoopCodexClient) SetHandlers(func(string, json.RawMessage), func(codexrpc.RequestEnvelope)) {
 }
 func (concurrentStartNoopCodexClient) Start(context.Context, bool) error { return nil }
-func (concurrentStartNoopCodexClient) Close() error                       { return nil }
+func (concurrentStartNoopCodexClient) Close() error                      { return nil }
 func (concurrentStartNoopCodexClient) Call(context.Context, string, any, any) error {
 	return nil
 }

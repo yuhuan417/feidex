@@ -203,6 +203,28 @@ func (s Service) HasPendingAutoRetry(sessionKey string) bool {
 	return false
 }
 
+// HasBlockingAutoRetry reports whether an auto-retry loop should take
+// priority over ordinary queued input for the given session. If sessionKey is
+// empty it checks all sessions.
+func (s Service) HasBlockingAutoRetry(sessionKey string) bool {
+	if s.app == nil {
+		return false
+	}
+	sessionKey = strings.TrimSpace(sessionKey)
+	tracker := s.AutoRetryTracker()
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	if sessionKey != "" {
+		return StateBlocksQueue(tracker.States[sessionKey])
+	}
+	for _, st := range tracker.States {
+		if StateBlocksQueue(st) {
+			return true
+		}
+	}
+	return false
+}
+
 // CurrentAutoRetryState returns a cloned snapshot of the retry state for the
 // given session.
 func (s Service) CurrentAutoRetryState(sessionKey string) (RetryState, bool) {
@@ -297,7 +319,8 @@ func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, upda
 	if updatedSess == nil || strings.TrimSpace(updatedSess.ActiveThreadID) != threadID || strings.TrimSpace(updatedSess.ActiveThreadID) == "" {
 		return false
 	}
-	if state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle || s.app.SessionHasActiveWork(updatedSess) || len(updatedSess.Queue) > 0 {
+	sessionStatus := state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), state.SessionStatusIdle.String()))
+	if s.app.SessionHasActiveWork(updatedSess) || (sessionStatus != state.SessionStatusIdle && sessionStatus != state.SessionStatusQueued) {
 		return false
 	}
 
@@ -461,6 +484,7 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *state.Session
 	}
 	sub := &state.Submission{
 		SessionKey:           strings.TrimSpace(sessionKey),
+		BindingID:            strings.TrimSpace(sess.BindingID),
 		WorkspaceID:          workspaceID,
 		UserID:               strings.TrimSpace(sess.OwnerUserID),
 		ChatID:               apputil.FirstNonEmpty(strings.TrimSpace(sess.ChatID), strings.TrimSpace(snapshot.ChatID)),

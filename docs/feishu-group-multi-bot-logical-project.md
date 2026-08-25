@@ -1,6 +1,6 @@
 # Feishu 群多 Bot / 逻辑项目实现说明
 
-状态: 当前实现完成；跨实例共享配置、BotProfile 继承、多人输入队列和群公告状态条是独立后续工作
+状态: 当前实现完成；跨实例共享配置、BotProfile 继承、多人审批权限模型和群公告状态条是独立后续工作
 
 更新时间: 2026-08-25
 
@@ -164,7 +164,21 @@ primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群�
 
 如果当前 Bot 是 primary，但本群尚未配置 workspace，那么未 `@` 普通消息仍会先进入 workspace onboarding：Feidex 创建 pending `AgentBinding`、暂存原消息，并在 workspace 配置完成后重放该原始输入。
 
-### 3.4 Backend state machine
+### 3.4 Binding-level execution queue
+
+群聊里的 Session 仍按 `frontend + chat + RootMessage` 隔离，但普通任务执行面按“同一个 Bot 在同一个群内”串行：
+
+- 串行 key 是 `frontend_id + group chat_id`，不是 `RootMessageID`。
+- 同一个 Bot 在同一个群里的多个 root/session 可以同时存在，但同一时间只能有一个普通 submission 进入 backend turn。
+- 当前 root 正在执行时，其他 root 的普通输入会保留在各自 session queue 中；当前 turn 收到最终 `turn/completed` 后，调度器从同一群同一 Bot 下最早入队的 session 继续启动。
+- 入队后的 submission 保存自己的 `SessionKey`、`BindingID` 和 `WorkspaceID`；消费队列时不能因为 primary 或 workspace 配置变化重新路由。
+- Bot A 和 Bot B 可以并行；同一个 Bot 在不同群可以并行；同一个 Bot 在同一个群必须串行。
+- `/menu`、`/workspace`、`/model`、`/primary` 等本地控制命令即时处理，不作为普通 backend turn 入队。
+- 自动重试优先级高于普通输入队列。无论单聊还是群聊，只要 failed turn 已挂起自动重试，同一执行面上的普通 queued submission 都不能启动；自动重试发送的 `继续` 不会消费普通队列，重试循环结束后再恢复队列调度。
+
+当前串行队列仍是运行期队列：session runtime queue、active turn/submission 和 submission runtime state 不写入持久 snapshot。重启后的队列恢复和跨实例队列状态展示是独立后续工作。
+
+### 3.5 Backend state machine
 
 本功能不改变 Codex app-server 的 thread / turn / approval 生命周期：
 
@@ -295,7 +309,8 @@ Session / Thread 临时覆盖
 - Bot 私聊 BotProfile 的持久化模型与 profile -> `AgentBinding` 继承。
 - 跨实例共享项目配置、跨 Bot primary 原子切换和全局 Bot 列表。
 - 群公告状态条。
-- 多自然人输入队列。
+- 多自然人的审批 / server request 权限模型。
+- 重启后的本地 runtime queue 恢复和跨实例队列状态展示。
 - Bot 离群或 frontend 重装后的本地配置清理。
 - `AgentBinding` 生命周期边界，例如删除后已有 Session 是否继续使用已解析 workspace、workspace 变更后已有 backend thread 是否继续复用。
 
@@ -315,11 +330,12 @@ Session / Thread 临时覆盖
 - [x] 通过 `@BotB /menu` 或其他明确 mention 命令可以直接进入 BotB 的本地菜单和配置流程。
 - [x] 当前新增本地群内配置能力可以从 `/menu` 进入，并有 slash command 入口。
 - [x] 同实例多 frontend 中，非 primary frontend 过滤未 `@` 消息不会影响 primary frontend 处理。
+- [x] 同一个 Bot 在同一个群内跨 RootMessage 串行执行普通 submission。
 - [x] `/primary off` 不支持；空正文 `@Bot` 不作为 primary 切换入口。
-- [x] 持久化、重启恢复、workspace 解析、路由和 primary 边界有测试。
+- [x] workspace / primary 持久化恢复、workspace 解析、路由和 primary 边界有测试。
 - [x] 不破坏现有 Codex app-server thread/turn/approval 状态机。
 
-非本功能验收项：BotProfile 私聊配置继承、完整群级状态条、多人输入队列、bot 离群清理和跨实例协作协议。
+非本功能验收项：BotProfile 私聊配置继承、完整群级状态条、多人审批权限模型、bot 离群清理、重启后的 runtime queue 恢复和跨实例协作协议。
 
 ## 8. 相关实现
 

@@ -175,6 +175,7 @@ type QueueTurnStreamProvider interface {
 // QueueAutoRetryProvider narrows auto retry.
 type QueueAutoRetryProvider interface {
 	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	HasBlockingAutoRetry(sessionKey string) bool
 }
 
 // QueueConversationBackendProvider narrows conversation backend.
@@ -300,8 +301,11 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	mode := a.SubmissionQueueConfiguredInflightMode()
 	hasInFlight := sessionctx.HasInFlightSubmission(sess)
 	queueLenBefore := len(sess.Queue)
-	shouldAttemptStart := !hasInFlight || a.SubmissionQueueInflightAllowsAdditional(mode)
-	willWaitInQueue := queueLenBefore > 0 || (hasInFlight && !a.SubmissionQueueInflightAllowsAdditional(mode))
+	autoRetryBlocked := s.hasAutoRetryWorkAhead(appState, sess)
+	serialBindingBlocked := s.hasSerialBindingWorkAhead(appState, sess)
+	allowsAdditional := a.SubmissionQueueInflightAllowsAdditional(mode) && serialGroupExecutionKey(sess) == ""
+	shouldAttemptStart := !autoRetryBlocked && !serialBindingBlocked && (!hasInFlight || allowsAdditional)
+	willWaitInQueue := queueLenBefore > 0 || autoRetryBlocked || serialBindingBlocked || (hasInFlight && !allowsAdditional)
 	if willWaitInQueue {
 		sess.Status = state.SessionStatusQueued.String()
 	}
@@ -317,6 +321,8 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		"active_operations_count", len(sess.ActiveOperations),
 		"should_attempt_start", shouldAttemptStart,
 		"will_wait_in_queue", willWaitInQueue,
+		"auto_retry_blocked", autoRetryBlocked,
+		"serial_binding_blocked", serialBindingBlocked,
 	)
 	if err := appState.SaveSession(sess); err != nil {
 		return err
@@ -374,6 +380,11 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	}
 	a.SubmissionQueueMarkSubmissionQueuedReactions(sub)
 	a.SubmissionQueueSendQueuedNotice(context.Background(), sub)
+	if serialBindingBlocked && !autoRetryBlocked {
+		a.SubmissionQueueRunAsync(func() {
+			s.StartNextSubmissionAsync(sessionKey, "serialBindingQueued")
+		})
+	}
 	return nil
 }
 
@@ -571,6 +582,14 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 			slog.Debug("startNextSubmission skipped", "session_key", sessionKey, "has_session", false)
 			return nil
 		}
+		if s.hasAutoRetryWorkAhead(appState, sess) {
+			slog.Debug("startNextSubmission skipped",
+				"session_key", sessionKey,
+				"reason", "auto_retry_priority",
+				"group_execution_key", serialGroupExecutionKey(sess),
+			)
+			return nil
+		}
 		nextMode := a.SubmissionQueueConfiguredInflightMode()
 		if len(sess.Queue) > 0 {
 			if nextSub := appState.Submission(sess.Queue[0]); nextSub != nil {
@@ -582,6 +601,14 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				"session_key", sessionKey,
 				"has_session", true,
 				"active_turn_id", sess.ActiveTurnID,
+			)
+			return nil
+		}
+		if s.hasSerialBindingWorkAhead(appState, sess) {
+			slog.Debug("startNextSubmission skipped",
+				"session_key", sessionKey,
+				"reason", "serial_binding_work_ahead",
+				"group_execution_key", serialGroupExecutionKey(sess),
 			)
 			return nil
 		}
@@ -743,8 +770,8 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 			"error", saveErr,
 		)
 	} else if sess != nil {
-		shouldStartNext = sess != nil && !sessionctx.HasInFlightSubmission(sess) && len(sess.Queue) > 0
-		a.SubmissionQueueAutoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+		retryPending := a.SubmissionQueueAutoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+		shouldStartNext = !retryPending && s.NextQueuedSessionKey(sessionKey) != ""
 	}
 	if clearedThreadLineage {
 		a.SubmissionQueueLiveThread().ClearSessionLiveThread(sessionKey)
@@ -755,8 +782,9 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	a.SubmissionQueueRuntimeMaintenance().CleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
+		nextSessionKey := s.NextQueuedSessionKey(sessionKey)
 		a.SubmissionQueueRunAsync(func() {
-			s.StartNextSubmissionAsync(sessionKey, "turnStartFailed")
+			s.StartNextSubmissionAsync(firstNonEmpty(nextSessionKey, sessionKey), "turnStartFailed")
 		})
 	}
 }
@@ -788,22 +816,184 @@ func (s SubmissionQueueService) NotifySubmissionStartFailure(ctx context.Context
 // StartNextSubmissionAsync asynchronously starts the next submission if needed.
 func (s SubmissionQueueService) StartNextSubmissionAsync(sessionKey, source string) {
 	a := s.App
-	appState := a.SubmissionQueueAppState()
 	if strings.TrimSpace(sessionKey) == "" {
 		return
 	}
-	sess := appState.Session(sessionKey)
-	if sess == nil || sessionctx.HasInFlightSubmission(sess) || len(sess.Queue) == 0 {
+	nextSessionKey := s.NextQueuedSessionKey(sessionKey)
+	if nextSessionKey == "" {
 		return
 	}
-	if err := s.StartNextSubmissionWithFailureNotice(sessionKey, true); err != nil {
+	if err := s.StartNextSubmissionWithFailureNotice(nextSessionKey, true); err != nil {
 		slog.Error("async startNextSubmission failed",
-			"session_key", sessionKey,
+			"session_key", nextSessionKey,
+			"source_session_key", sessionKey,
 			"source", source,
 			"error", err,
 		)
-		a.SubmissionQueueLogSessionState("async startNextSubmission failed snapshot", sessionKey, appState.Session(sessionKey))
+		a.SubmissionQueueLogSessionState("async startNextSubmission failed snapshot", nextSessionKey, a.SubmissionQueueAppState().Session(nextSessionKey))
 	}
+}
+
+// NextQueuedSessionKey returns the next session that may start work for the
+// same local execution surface as sessionKey. Group bindings are serialized
+// across roots; p2p and unbound sessions keep the existing per-session queue.
+func (s SubmissionQueueService) NextQueuedSessionKey(sessionKey string) string {
+	appState := s.App.SubmissionQueueAppState()
+	sess := appState.Session(sessionKey)
+	if sess == nil {
+		return ""
+	}
+	if s.hasAutoRetryWorkAhead(appState, sess) {
+		return ""
+	}
+	if groupExecutionKey := serialGroupExecutionKey(sess); groupExecutionKey != "" {
+		return nextQueuedSerialSessionKey(appState, groupExecutionKey)
+	}
+	if ShouldStartNextSubmissionAsync(sess) {
+		return strings.TrimSpace(sess.Key)
+	}
+	return ""
+}
+
+func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueAppStateProvider, sess *state.Session) bool {
+	if sess == nil {
+		return false
+	}
+	autoRetry := s.App.SubmissionQueueAutoRetry()
+	if autoRetry == nil {
+		return false
+	}
+	groupExecutionKey := serialGroupExecutionKey(sess)
+	if groupExecutionKey == "" {
+		return autoRetry.HasBlockingAutoRetry(strings.TrimSpace(sess.Key))
+	}
+	for _, candidate := range appState.Sessions() {
+		if candidate == nil || serialGroupExecutionKey(candidate) != groupExecutionKey {
+			continue
+		}
+		if autoRetry.HasBlockingAutoRetry(strings.TrimSpace(candidate.Key)) {
+			return true
+		}
+	}
+	return autoRetry.HasBlockingAutoRetry(strings.TrimSpace(sess.Key))
+}
+
+func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueAppStateProvider, sess *state.Session) bool {
+	groupExecutionKey := serialGroupExecutionKey(sess)
+	if groupExecutionKey == "" {
+		return false
+	}
+	currentKey := strings.TrimSpace(sess.Key)
+	currentHead := queuedHeadSubmission(appState, sess)
+	for _, candidate := range appState.Sessions() {
+		if candidate == nil || strings.TrimSpace(candidate.Key) == currentKey || serialGroupExecutionKey(candidate) != groupExecutionKey {
+			continue
+		}
+		if sessionctx.HasInFlightSubmission(candidate) {
+			return true
+		}
+		candidateHead := queuedHeadSubmission(appState, candidate)
+		if candidateHead == nil {
+			continue
+		}
+		if currentHead == nil || submissionBefore(candidateHead, currentHead) {
+			return true
+		}
+	}
+	return false
+}
+
+func nextQueuedSerialSessionKey(appState QueueAppStateProvider, groupExecutionKey string) string {
+	groupExecutionKey = strings.TrimSpace(groupExecutionKey)
+	if groupExecutionKey == "" {
+		return ""
+	}
+	var bestSessionKey string
+	var bestSub *state.Submission
+	for _, sess := range appState.Sessions() {
+		if sess == nil || serialGroupExecutionKey(sess) != groupExecutionKey {
+			continue
+		}
+		if sessionctx.HasInFlightSubmission(sess) {
+			return ""
+		}
+		head := queuedHeadSubmission(appState, sess)
+		if head == nil {
+			continue
+		}
+		if bestSub == nil || submissionBefore(head, bestSub) {
+			bestSub = head
+			bestSessionKey = strings.TrimSpace(sess.Key)
+		}
+	}
+	return bestSessionKey
+}
+
+func serialGroupExecutionKey(sess *state.Session) string {
+	if sess == nil || !strings.EqualFold(strings.TrimSpace(sess.ChatType), "group") {
+		return ""
+	}
+	frontendID, keyChatID, ok := sessionGroupKeyParts(sess.Key)
+	if !ok && strings.TrimSpace(sess.BindingID) == "" {
+		return ""
+	}
+	chatID := firstNonEmpty(keyChatID, strings.TrimSpace(sess.ChatID))
+	if chatID == "" {
+		return ""
+	}
+	if ok && frontendID == "" {
+		return "group:" + chatID
+	}
+	if !ok {
+		return "binding:" + strings.TrimSpace(sess.BindingID)
+	}
+	return "frontend:" + frontendID + ":group:" + chatID
+}
+
+func sessionGroupKeyParts(sessionKey string) (frontendID, chatID string, ok bool) {
+	parts := strings.Split(strings.TrimSpace(sessionKey), ":")
+	if len(parts) < 4 || parts[0] != "feishu" {
+		return "", "", false
+	}
+	offset := 1
+	if len(parts) >= 6 && parts[1] == "frontend" {
+		frontendID = strings.TrimSpace(parts[2])
+		offset = 3
+	}
+	if len(parts) > offset+3 && parts[offset] == "group" && parts[offset+2] == "root" {
+		chatID = strings.TrimSpace(parts[offset+1])
+		return frontendID, chatID, chatID != ""
+	}
+	return "", "", false
+}
+
+func queuedHeadSubmission(appState QueueAppStateProvider, sess *state.Session) *state.Submission {
+	if sess == nil || len(sess.Queue) == 0 {
+		return nil
+	}
+	id := strings.TrimSpace(sess.Queue[0])
+	if id == "" {
+		return nil
+	}
+	if sub := appState.Submission(id); sub != nil {
+		return sub
+	}
+	return &state.Submission{ID: id, SessionKey: strings.TrimSpace(sess.Key)}
+}
+
+func submissionBefore(a, b *state.Submission) bool {
+	if b == nil {
+		return a != nil
+	}
+	if a == nil {
+		return false
+	}
+	if a.CreatedAt != 0 || b.CreatedAt != 0 {
+		if a.CreatedAt != b.CreatedAt {
+			return a.CreatedAt < b.CreatedAt
+		}
+	}
+	return strings.TrimSpace(a.ID) < strings.TrimSpace(b.ID)
 }
 
 // StartNextCodexSubmissionWithFailureNotice handles Codex-specific submission

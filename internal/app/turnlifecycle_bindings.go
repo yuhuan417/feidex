@@ -80,6 +80,10 @@ func (a *App) SessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
 	return sessionShouldStartNextSubmissionAsync(sess)
 }
 
+func (a *App) NextQueuedSubmissionSessionKey(sessionKey string) string {
+	return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
+}
+
 func (a *App) BindStandaloneCompactTurn(threadID, turnID string) bool {
 	return bindStandaloneCompactTurn(a, threadID, turnID)
 }

@@ -3500,6 +3500,19 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 	}); err != nil {
 		t.Fatalf("UpsertSession(root-a) error = %v", err)
 	}
+	if _, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-a",
+		SessionKey:       rootASessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "thread-a",
+		TurnID:           "turn-a",
+		UserID:           "user-1",
+		ChatID:           "chat-1",
+		TriggerMessageID: "root-a",
+		Status:           state.SubmissionStatusRunning.String(),
+	}); err != nil {
+		t.Fatalf("CreateSubmission(root-a) error = %v", err)
+	}
 
 	threadStartCwds := []string{}
 	threadStartIDs := []string{"thread-b", "thread-c"}
@@ -3557,20 +3570,14 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 		Text:          "run in A",
 	})
 
-	if len(threadStartCwds) != 2 {
-		t.Fatalf("thread/start cwds = %+v, want 2 calls", threadStartCwds)
-	}
-	if threadStartCwds[0] != a.cfg.Workspaces[1].Cwd {
-		t.Fatalf("first thread/start cwd = %q, want alt cwd %q", threadStartCwds[0], a.cfg.Workspaces[1].Cwd)
-	}
-	if threadStartCwds[1] != a.cfg.Workspaces[0].Cwd {
-		t.Fatalf("second thread/start cwd = %q, want default cwd %q", threadStartCwds[1], a.cfg.Workspaces[0].Cwd)
+	if len(threadStartCwds) != 0 {
+		t.Fatalf("thread/start cwds before root-a completes = %+v, want no calls", threadStartCwds)
 	}
 	if sess := a.store.GetSession(rootASessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
 		t.Fatalf("root-a session should keep workspace A lineage: %+v", sess)
 	}
-	if sess := a.store.GetSession(rootBSessionKey); sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadWorkspaceID != "alt" {
-		t.Fatalf("root-b session should run in workspace B: %+v", sess)
+	if sess := a.store.GetSession(rootBSessionKey); sess == nil || sess.WorkspaceID != "alt" || len(sess.Queue) != 1 || sess.ActiveThreadID != "" {
+		t.Fatalf("root-b session should be queued on workspace B: %+v", sess)
 	}
 	rootCSessionKey := makeSessionKey(a, &feishu.InboundMessage{
 		ChatID:        "chat-1",
@@ -3579,8 +3586,37 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 		MessageID:     "root-c",
 		RootMessageID: "root-c",
 	})
-	if sess := a.store.GetSession(rootCSessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
-		t.Fatalf("root-c session should run in workspace A: %+v", sess)
+	if sess := a.store.GetSession(rootCSessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || len(sess.Queue) != 1 || sess.ActiveThreadID != "" {
+		t.Fatalf("root-c session should be queued on workspace A: %+v", sess)
+	}
+
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-a","turn":{"id":"turn-a","status":"completed"}}`))
+	a.waitAsync()
+
+	if len(threadStartCwds) != 1 {
+		t.Fatalf("thread/start cwds after root-a completes = %+v, want root-b call", threadStartCwds)
+	}
+	if threadStartCwds[0] != a.cfg.Workspaces[1].Cwd {
+		t.Fatalf("root-b thread/start cwd = %q, want alt cwd %q", threadStartCwds[0], a.cfg.Workspaces[1].Cwd)
+	}
+	if sess := a.store.GetSession(rootBSessionKey); sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadWorkspaceID != "alt" || sess.ActiveTurnID != "turn-b" {
+		t.Fatalf("root-b session should run in workspace B after root-a completes: %+v", sess)
+	}
+	if sess := a.store.GetSession(rootCSessionKey); sess == nil || len(sess.Queue) != 1 || sess.ActiveThreadID != "" {
+		t.Fatalf("root-c session should still be queued while root-b runs: %+v", sess)
+	}
+
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-b","turn":{"id":"turn-b","status":"completed"}}`))
+	a.waitAsync()
+
+	if len(threadStartCwds) != 2 {
+		t.Fatalf("thread/start cwds after root-b completes = %+v, want root-c call", threadStartCwds)
+	}
+	if threadStartCwds[1] != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("root-c thread/start cwd = %q, want default cwd %q", threadStartCwds[1], a.cfg.Workspaces[0].Cwd)
+	}
+	if sess := a.store.GetSession(rootCSessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveTurnID != "turn-c" {
+		t.Fatalf("root-c session should run in workspace A after root-b completes: %+v", sess)
 	}
 }
 

@@ -176,6 +176,9 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 			StartNextSubmissionAsync: func(sessionKey, reason string) {
 				newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)
 			},
+			NextQueuedSubmissionSessionKey: func(sessionKey string) string {
+				return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
+			},
 			RunAsync: func(fn func()) {
 				runAsync(a, fn)
 			},

@@ -91,6 +91,12 @@ func StateWaiting(state *RetryState) bool {
 	return state != nil && !state.Canceled && state.Timer != nil
 }
 
+// StateBlocksQueue returns true while an auto-retry loop owns priority over
+// ordinary queued input for the same execution surface.
+func StateBlocksQueue(state *RetryState) bool {
+	return state != nil && !state.Canceled
+}
+
 // RefreshState updates a RetryState from session and submission data.
 func RefreshState(state *RetryState, sess *state.Session, sub *state.Submission, threadID string) {
 	if state == nil {

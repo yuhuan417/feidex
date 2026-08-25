@@ -140,6 +140,181 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	}
 }
 
+func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.asyncRunner = func(fn func()) { fn() }
+
+	scheduled := make([]scheduledRetry, 0, 2)
+	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) delayedTask {
+		task := &fakeDelayedTask{fn: fn}
+		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
+		return task
+	}
+	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
+	}
+
+	sessionKey := "feishu:frontend:default:p2p:chat-1:user:user-1"
+	threadID := "thread-retry-queue-1"
+	sess := &state.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             defaultWorkspaceID(a),
+		ActiveThreadID:          threadID,
+		ActiveThreadWorkspaceID: defaultWorkspaceID(a),
+		OwnerUserID:             "user-1",
+		ChatID:                  "chat-1",
+		ChatType:                "p2p",
+		Status:                  state.SessionStatusIdle.String(),
+	}
+	if err := a.store.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	markSessionThreadLive(a, sessionKey, threadID)
+	queuedID, err := a.store.CreateSubmission(&state.Submission{
+		SessionKey:       sessionKey,
+		WorkspaceID:      defaultWorkspaceID(a),
+		ChatID:           "chat-1",
+		TriggerMessageID: "later-1",
+		InputText:        "later input",
+		Status:           state.SubmissionStatusQueued.String(),
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission(later) error = %v", err)
+	}
+	if err := a.State().QueueSubmission(sessionKey, queuedID); err != nil {
+		t.Fatalf("QueueSubmission(later) error = %v", err)
+	}
+	updatedSess, err := a.State().UpdateSession(sessionKey, func(sess *state.Session) {
+		sess.Status = state.SessionStatusQueued.String()
+	})
+	if err != nil {
+		t.Fatalf("UpdateSession() error = %v", err)
+	}
+	failedSub := &state.Submission{
+		SessionKey:           sessionKey,
+		WorkspaceID:          defaultWorkspaceID(a),
+		ThreadID:             threadID,
+		ChatID:               "chat-1",
+		TriggerMessageID:     "trigger-1",
+		SourceRootMessageIDs: []string{"trigger-1"},
+		Status:               state.SubmissionStatusFailed.String(),
+	}
+
+	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, failedSub, "") {
+		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
+	}
+	if len(scheduled) != 1 {
+		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
+	}
+	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey); next != "" {
+		t.Fatalf("NextQueuedSessionKey() = %q, want blocked by auto retry", next)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/start" {
+			t.Fatalf("Call() method = %q, want turn/start", method)
+		}
+		paramMap, ok := params.(map[string]any)
+		if !ok {
+			t.Fatalf("Call() params type = %T", params)
+		}
+		inputs, ok := paramMap["input"].([]map[string]any)
+		if !ok || len(inputs) != 1 {
+			t.Fatalf("turn/start input = %#v", paramMap["input"])
+		}
+		if got := inputs[0]["text"]; got != "继续" {
+			t.Fatalf("turn/start input text = %#v, want 继续", got)
+		}
+		result, ok := out.(*codexrpc.TurnStartResult)
+		if !ok {
+			t.Fatalf("turn/start out type = %T", out)
+		}
+		result.Turn.ID = "turn-retry-queue-1"
+		return nil
+	}
+	scheduled[0].task.fire()
+
+	refreshed := a.State().Session(sessionKey)
+	if refreshed == nil || len(refreshed.Queue) != 1 || refreshed.Queue[0] != queuedID {
+		t.Fatalf("queue after retry start = %#v, want queued later input retained", refreshed)
+	}
+}
+
+func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.asyncRunner = func(fn func()) { fn() }
+
+	scheduled := make([]scheduledRetry, 0, 2)
+	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) delayedTask {
+		task := &fakeDelayedTask{fn: fn}
+		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
+		return task
+	}
+	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
+	}
+
+	sessionA := "feishu:frontend:default:group:chat-1:root:root-a"
+	threadA := "thread-root-a"
+	sessA := seedAutoRetrySession(t, a, sessionA, threadA)
+	sessA.RootMessageID = "root-a"
+	if err := a.store.UpsertSession(sessA); err != nil {
+		t.Fatalf("UpsertSession(root-a) error = %v", err)
+	}
+	markSessionThreadLive(a, sessionA, threadA)
+
+	sessionB := "feishu:frontend:default:group:chat-1:root:root-b"
+	sessB := &state.Session{
+		Key:           sessionB,
+		WorkspaceID:   defaultWorkspaceID(a),
+		OwnerUserID:   "user-1",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		RootMessageID: "root-b",
+		Status:        state.SessionStatusQueued.String(),
+	}
+	if err := a.store.UpsertSession(sessB); err != nil {
+		t.Fatalf("UpsertSession(root-b) error = %v", err)
+	}
+	queuedB, err := a.store.CreateSubmission(&state.Submission{
+		SessionKey:       sessionB,
+		WorkspaceID:      defaultWorkspaceID(a),
+		ChatID:           "chat-1",
+		TriggerMessageID: "later-b",
+		InputText:        "root b input",
+		Status:           state.SubmissionStatusQueued.String(),
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission(root-b) error = %v", err)
+	}
+	if err := a.State().QueueSubmission(sessionB, queuedB); err != nil {
+		t.Fatalf("QueueSubmission(root-b) error = %v", err)
+	}
+	failedSub := &state.Submission{
+		SessionKey:           sessionA,
+		WorkspaceID:          defaultWorkspaceID(a),
+		ThreadID:             threadA,
+		ChatID:               "chat-1",
+		TriggerMessageID:     "trigger-a",
+		SourceRootMessageIDs: []string{"root-a"},
+		Status:               state.SubmissionStatusFailed.String(),
+	}
+	updatedA := a.State().Session(sessionA)
+
+	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionA, threadA, "failed", updatedA, failedSub, "") {
+		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
+	}
+	if len(scheduled) != 1 {
+		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
+	}
+	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionA); next != "" {
+		t.Fatalf("NextQueuedSessionKey(root-a) = %q, want blocked by auto retry", next)
+	}
+	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionB); next != "" {
+		t.Fatalf("NextQueuedSessionKey(root-b) = %q, want blocked by auto retry", next)
+	}
+}
+
 func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
