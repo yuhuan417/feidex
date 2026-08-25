@@ -12,15 +12,18 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 	a.botOpenID = "bot-self"
 	var captured struct {
 		chatID, rootID, parentID string
-		self, any, everyone      bool
+		text                     string
+		mentions                 []string
+		self, everyone           bool
 	}
-	a.SetGroupMessagePolicy(func(chatID, rootID, parentID string, self, any, everyone bool) bool {
-		captured.chatID = chatID
-		captured.rootID = rootID
-		captured.parentID = parentID
-		captured.self = self
-		captured.any = any
-		captured.everyone = everyone
+	a.SetGroupMessagePolicy(func(input GroupMessagePolicyInput) bool {
+		captured.chatID = input.ChatID
+		captured.rootID = input.RootMessageID
+		captured.parentID = input.ParentMessageID
+		captured.text = input.Text
+		captured.mentions = append([]string(nil), input.MentionedOpenIDs...)
+		captured.self = input.MentionedSelf
+		captured.everyone = input.MentionedEveryone
 		return true
 	})
 
@@ -52,7 +55,7 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 	if msg == nil {
 		t.Fatal("convertMessage() returned nil")
 	}
-	if captured.chatID != chatID || captured.rootID != rootID || captured.parentID != parentID || captured.self || !captured.any || captured.everyone {
+	if captured.chatID != chatID || captured.rootID != rootID || captured.parentID != parentID || captured.text != "@other hello" || captured.self || captured.everyone || len(captured.mentions) != 1 || captured.mentions[0] != otherBotID {
 		t.Fatalf("group policy args = %+v", captured)
 	}
 	if len(msg.MentionedOpenIDs) != 1 || msg.MentionedOpenIDs[0] != otherBotID || msg.MentionedSelf || msg.MentionedEveryone {
@@ -64,9 +67,9 @@ func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.
 	a := New(config.FeishuConfig{GroupAtOnly: true})
 	a.botOpenID = "bot-self"
 	var capturedRootID string
-	a.SetGroupMessagePolicy(func(chatID, rootID, parentID string, self, any, everyone bool) bool {
-		capturedRootID = rootID
-		return chatID == "chat-1" && rootID == "" && parentID == "" && !self && !any && !everyone
+	a.SetGroupMessagePolicy(func(input GroupMessagePolicyInput) bool {
+		capturedRootID = input.RootMessageID
+		return input.ChatID == "chat-1" && input.RootMessageID == "" && input.ParentMessageID == "" && !input.MentionedSelf && len(input.MentionedOpenIDs) == 0 && !input.MentionedEveryone
 	})
 
 	messageID := "msg-top"

@@ -164,6 +164,10 @@ func (c *CommandCaptureClient) GetGroupBotCount(ctx context.Context, chatID stri
 	return c.Base.GetGroupBotCount(ctx, chatID)
 }
 
+func (c *CommandCaptureClient) BotOpenID() string {
+	return c.Base.BotOpenID()
+}
+
 // NotifyingFeishuClient wraps a FeishuClient to intercept replies for
 // command capture and to send permission-issue notifications.
 type NotifyingFeishuClient struct {
@@ -429,6 +433,10 @@ func (n *NotifyingFeishuClient) GetGroupBotCount(ctx context.Context, chatID str
 		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
 	}
 	return count, err
+}
+
+func (n *NotifyingFeishuClient) BotOpenID() string {
+	return n.Base.BotOpenID()
 }
 
 func (n *NotifyingFeishuClient) NotifyPermissionIssue(target NotifyTarget, err error) {

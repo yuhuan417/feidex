@@ -69,4 +69,5 @@ type FeishuClient interface {
 	UrgentApp(context.Context, string, string) error
 	LookupMessageSenderOpenID(context.Context, string) (string, error)
 	GetGroupBotCount(context.Context, string) (int, error)
+	BotOpenID() string
 }

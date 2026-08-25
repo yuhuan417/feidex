@@ -68,12 +68,14 @@ frontend 隔离以下内容：
 
 ### 2.3 GroupPrimary
 
-`GroupPrimary` 是当前 frontend/Bot 在某个群里是否处理未 `@` 消息的独立状态。它和 `AgentBinding` 没有生命周期依赖：
+`GroupPrimary` 是当前 Feidex 实例保存的“某个群的 primary owner bot open_id”本地副本。它不是当前 Bot 自己的 bool 开关，也和 `AgentBinding` 没有生命周期依赖：
 
+- `@Bot /primary on` 把被 `@` 的 Bot open_id 写为本群 owner；所有能看到这条群消息的 Feidex 实例都会静默同步自己的本地副本。
+- `@Bot /primary off` 在当前 owner 等于被 `@` Bot 时清空 owner；目标 Bot 正常回复，非目标 Bot 只同步不回复。
 - `/primary on|off` 只写 `GroupPrimary`，不创建或修改 `AgentBinding`。
 - `/workspace`、model、effort、fast 和运行参数配置只写 `AgentBinding`，不隐式切换 primary。
 - 当前只支持从 GitHub 线上 snapshot v6 直接升级到包含 `GroupPrimary` 的当前状态；测试环境中间版本不保留兼容迁移。
-- 同一 Feidex 实例内显式设置某个 frontend 为 primary，会清掉同群其他本地 frontend 的 primary 标记；不同机器之间仍不共享状态。
+- 不引入公共存储；不同机器之间只依赖同一条群消息投递到各自 bot 后，各自更新本地 owner 副本。
 
 ### 2.4 Workspace
 
@@ -149,7 +151,7 @@ pending 状态收到当前 Bot 应处理的普通群消息时，必须先暂存�
 - `@everyone`：沿用 `RespondToAtEveryone` 配置，并要求本地 primary 才能作为默认处理者。
 - pending 状态不直接投递 Codex/Claude，只展示当前工作区配置入口并暂存原消息。
 
-primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群消息时，Feidex 会用 bot 身份读取群信息里的 `bot_count`：如果 `bot_count == 1`，当前 Bot 自动成为 primary；如果 `bot_count > 1`，当前 Bot 默认不是 primary。用户也可以显式执行 `@Bot /primary on|off` 调整本机 primary 状态；同一 Feidex 实例内设置某个 Bot 为 primary 会清掉同一群内其他本地 frontend 的 primary 标记。不同机器之间没有共享状态，因此跨机器 primary 仍需要用户分别配置。
+primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群消息时，Feidex 会用 bot 身份读取群信息里的 `bot_count`：如果 `bot_count == 1`，当前 Bot 的 open_id 自动写为 owner；如果 `bot_count > 1`，先记录“已判断但未设置 owner”。用户显式执行 `@Bot /primary on` 后，所有能收到该群消息的 bot 都会把本地 owner 副本更新为被 `@` 的 Bot open_id；非目标 bot 不回复，也不执行普通命令逻辑。
 
 如果当前 Bot 是 primary，但本群尚未配置 workspace，那么未 `@` 普通消息仍会先进入 workspace onboarding：Feidex 创建 pending `AgentBinding`、暂存原消息，并在 workspace 配置完成后重放该原始输入。
 
@@ -245,18 +247,19 @@ Session / Thread 临时覆盖
 - `/workspace` 管理当前 bot/frontend 的普通工作区配置。
 - `/model`、`/effort` 管理当前 bot/frontend 的默认模型配置。
 - `/fast` 仍按当前 thread 的响应速度语义运行。
-- `/primary` 在单聊中不作为本地群配置命令处理。
+- `/primary` 在单聊中不作为本地群配置命令处理；群内 primary 状态按 owner bot open_id 判断。
 
 ## 5. 已完成实现
 
 - [x] 新增 `AgentBinding` 状态模型。
 - [x] `AgentBinding` 持久化、frontend scope、chat 查询、删除和深拷贝。
-- [x] 新增独立 `GroupPrimary` 状态模型。
+- [x] 新增独立 `GroupPrimary` 状态模型，并改为保存群 owner bot open_id。
 - [x] primary 自动初始化改为读取 Feishu 群信息 `bot_count`，不再依赖 binding 创建顺序。
 - [x] Session 持久化 `BindingID` 元数据。
 - [x] Submission 创建时固化 `BindingID` 元数据。
 - [x] 群消息路由支持 primary / direct mention / local reply link。
 - [x] 未 `@` 消息不会因为提及了其他 Bot 而误落到 primary Bot。
+- [x] `@Bot /primary on|off` 会被所有可见 bot 用于同步本地 owner 副本；非目标 bot 静默处理。
 - [x] SessionKey 恢复为 `frontend + chat + RootMessage`。
 - [x] `BindingID` 不参与 SessionKey 推导。
 - [x] 群内工作区优先解析。

@@ -11,35 +11,32 @@ func TestGroupPrimaryPersistScopeAndClone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	if err := store.UpsertScopedGroupPrimary("frontend-a", &GroupPrimary{
-		ID:       " primary-a ",
-		ChatID:   " chat-1 ",
-		ChatType: " GROUP ",
-		Primary:  true,
+	if err := store.UpsertGroupPrimary(&GroupPrimary{
+		ID:             " primary-a ",
+		ChatID:         " chat-1 ",
+		ChatType:       " GROUP ",
+		OwnerBotOpenID: " bot-a ",
 	}); err != nil {
-		t.Fatalf("UpsertScopedGroupPrimary(frontend-a) error = %v", err)
+		t.Fatalf("UpsertGroupPrimary() error = %v", err)
 	}
-	gotA := store.GetScopedGroupPrimary("frontend-a", "primary-a")
-	if gotA == nil || gotA.FrontendID != "frontend-a" || gotA.ChatID != "chat-1" || gotA.ChatType != "group" || !gotA.Primary {
+	gotA := store.GetGroupPrimary("primary-a")
+	if gotA == nil || gotA.ChatID != "chat-1" || gotA.ChatType != "group" || gotA.OwnerBotOpenID != "bot-a" {
 		t.Fatalf("frontend-a group primary = %+v", gotA)
 	}
-	gotA.Primary = false
-	if again := store.GetScopedGroupPrimary("frontend-a", "primary-a"); again == nil || !again.Primary {
+	gotA.OwnerBotOpenID = "mutated"
+	if again := store.GetGroupPrimary("primary-a"); again == nil || again.OwnerBotOpenID != "bot-a" {
 		t.Fatalf("GetScopedGroupPrimary returned shared state: %+v", again)
 	}
 
-	if err := store.UpsertScopedGroupPrimary("frontend-b", &GroupPrimary{
-		ID:       "primary-b",
-		ChatID:   "chat-1",
-		ChatType: "group",
-		Primary:  true,
-	}); err != nil {
-		t.Fatalf("UpsertScopedGroupPrimary() error = %v", err)
+	if err := store.UpsertGroupPrimary(&GroupPrimary{
+		ID:             "primary-b",
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerBotOpenID: "bot-b",
+	}); err == nil {
+		t.Fatal("UpsertGroupPrimary accepted a second owner record for the same chat")
 	}
-	if got := store.GetScopedGroupPrimary("frontend-a", "primary-b"); got != nil {
-		t.Fatalf("cross-frontend group primary lookup = %+v, want nil", got)
-	}
-	if got := store.GetScopedGroupPrimary("frontend-b", "primary-b"); got == nil || got.FrontendID != "frontend-b" || !got.Primary {
-		t.Fatalf("frontend-b group primary = %+v", got)
+	if got := store.GroupPrimariesByChat("ignored", "group", "chat-1"); len(got) != 1 || got[0].OwnerBotOpenID != "bot-a" {
+		t.Fatalf("GroupPrimariesByChat() = %+v, want one owner", got)
 	}
 }

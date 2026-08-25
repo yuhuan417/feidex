@@ -94,17 +94,16 @@ type AgentBinding struct {
 	UpdatedAt               int64                       `json:"updated_at"`
 }
 
-// GroupPrimary stores whether one local frontend/bot is the primary handler
-// for unmentioned messages in one Feishu group. It is intentionally separate
-// from AgentBinding, which only owns local workspace/runtime configuration.
+// GroupPrimary stores the bot OpenID that owns unmentioned messages in one
+// Feishu group. It is intentionally separate from AgentBinding, which only
+// owns local workspace/runtime configuration.
 type GroupPrimary struct {
-	ID         string `json:"id"`
-	FrontendID string `json:"frontend_id"`
-	ChatID     string `json:"chat_id"`
-	ChatType   string `json:"chat_type"`
-	Primary    bool   `json:"primary"`
-	CreatedAt  int64  `json:"created_at"`
-	UpdatedAt  int64  `json:"updated_at"`
+	ID             string `json:"id"`
+	ChatID         string `json:"chat_id"`
+	ChatType       string `json:"chat_type"`
+	OwnerBotOpenID string `json:"owner_bot_open_id,omitempty"`
+	CreatedAt      int64  `json:"created_at"`
+	UpdatedAt      int64  `json:"updated_at"`
 }
 
 // AgentBindingPendingMessage stores one inbound group message while a binding
@@ -489,9 +488,11 @@ func (s *Store) GetGroupPrimary(id string) *GroupPrimary {
 	return s.GetScopedGroupPrimary("", id)
 }
 
-// GetScopedGroupPrimary returns a group primary record by id when it belongs to frontendID.
+// GetScopedGroupPrimary returns a group primary record by id. The frontendID
+// parameter is retained for call-site compatibility; group ownership is now
+// stored once per chat in this Feidex instance.
 func (s *Store) GetScopedGroupPrimary(frontendID, id string) *GroupPrimary {
-	frontendID = strings.TrimSpace(frontendID)
+	_ = strings.TrimSpace(frontendID)
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil
@@ -499,7 +500,7 @@ func (s *Store) GetScopedGroupPrimary(frontendID, id string) *GroupPrimary {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	primary, ok := s.data.GroupPrimaries[id]
-	if !ok || primary == nil || (frontendID != "" && primary.FrontendID != frontendID) {
+	if !ok || primary == nil {
 		return nil
 	}
 	return cloneGroupPrimary(primary)
@@ -512,9 +513,10 @@ func (s *Store) AllGroupPrimaries() []*GroupPrimary {
 	return cloneGroupPrimaries(s.data.GroupPrimaries)
 }
 
-// GroupPrimariesByChat returns primary records for one frontend and logical chat.
+// GroupPrimariesByChat returns primary records for one logical chat. The
+// frontendID parameter is retained for call-site compatibility and ignored.
 func (s *Store) GroupPrimariesByChat(frontendID, chatType, chatID string) []*GroupPrimary {
-	frontendID = strings.TrimSpace(frontendID)
+	_ = strings.TrimSpace(frontendID)
 	chatType = strings.ToLower(strings.TrimSpace(chatType))
 	chatID = strings.TrimSpace(chatID)
 	if chatID == "" {
@@ -523,14 +525,14 @@ func (s *Store) GroupPrimariesByChat(frontendID, chatType, chatID string) []*Gro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return cloneGroupPrimariesMatching(s.data.GroupPrimaries, func(primary *GroupPrimary) bool {
-		if primary == nil || primary.FrontendID != frontendID || primary.ChatID != chatID {
+		if primary == nil || primary.ChatID != chatID {
 			return false
 		}
 		return chatType == "" || primary.ChatType == chatType
 	})
 }
 
-// UpsertGroupPrimary persists a local frontend's primary status for a group.
+// UpsertGroupPrimary persists the local owner state for a group.
 func (s *Store) UpsertGroupPrimary(primary *GroupPrimary) error {
 	if primary == nil {
 		return nil
@@ -550,8 +552,8 @@ func (s *Store) UpsertGroupPrimary(primary *GroupPrimary) error {
 		if id == cp.ID || previous == nil {
 			continue
 		}
-		if previous.FrontendID == cp.FrontendID && previous.ChatType == cp.ChatType && previous.ChatID == cp.ChatID {
-			return fmt.Errorf("group primary already exists for frontend %q chat %q: %s", cp.FrontendID, cp.ChatID, id)
+		if previous.ChatType == cp.ChatType && previous.ChatID == cp.ChatID {
+			return fmt.Errorf("group primary already exists for chat %q: %s", cp.ChatID, id)
 		}
 	}
 	if cp.CreatedAt == 0 {
@@ -565,21 +567,16 @@ func (s *Store) UpsertGroupPrimary(primary *GroupPrimary) error {
 	return s.saveLocked()
 }
 
-// UpsertScopedGroupPrimary persists a group primary record owned by frontendID.
+// UpsertScopedGroupPrimary persists a group primary record. The frontendID
+// parameter is retained for call-site compatibility and ignored.
 func (s *Store) UpsertScopedGroupPrimary(frontendID string, primary *GroupPrimary) error {
 	if primary == nil {
 		return nil
 	}
-	frontendID = strings.TrimSpace(frontendID)
+	_ = strings.TrimSpace(frontendID)
 	cp := cloneGroupPrimary(primary)
 	if cp == nil {
 		return nil
-	}
-	if strings.TrimSpace(cp.FrontendID) == "" {
-		cp.FrontendID = frontendID
-	}
-	if frontendID != "" && strings.TrimSpace(cp.FrontendID) != frontendID {
-		return fmt.Errorf("group primary frontend %q does not match scope %q", cp.FrontendID, frontendID)
 	}
 	return s.UpsertGroupPrimary(cp)
 }
@@ -976,9 +973,9 @@ func normalizeGroupPrimaryValues(primary *GroupPrimary) bool {
 	}
 	before := *primary
 	primary.ID = strings.TrimSpace(primary.ID)
-	primary.FrontendID = strings.TrimSpace(primary.FrontendID)
 	primary.ChatID = strings.TrimSpace(primary.ChatID)
 	primary.ChatType = strings.ToLower(strings.TrimSpace(primary.ChatType))
+	primary.OwnerBotOpenID = strings.TrimSpace(primary.OwnerBotOpenID)
 	if primary.UpdatedAt == 0 && primary.CreatedAt != 0 {
 		primary.UpdatedAt = primary.CreatedAt
 	}

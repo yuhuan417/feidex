@@ -153,14 +153,18 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("/primary 只能在群聊中使用")
 	}
-	primary, initErr := ensureGroupPrimaryInitialized(context.Background(), s.app, msg.ChatType, msg.ChatID)
+	_, initErr := ensureGroupPrimaryInitialized(context.Background(), s.app, msg.ChatType, msg.ChatID)
+	ownerOpenID := groupPrimaryOwnerOpenID(s.app, msg.ChatType, msg.ChatID)
 	if initErr != nil {
-		primary = groupPrimaryForChat(s.app, msg.ChatType, msg.ChatID)
+		ownerOpenID = groupPrimaryOwnerOpenID(s.app, msg.ChatType, msg.ChatID)
 	}
 	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
-		label := onOffLabel(primary != nil && primary.Primary)
-		body := "当前 Bot primary: `" + label + "`"
-		if initErr != nil && primary == nil {
+		body := "当前 Bot primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
+		body += "\nowner bot open_id: `" + firstNonEmpty(ownerOpenID, "(未设置)") + "`"
+		if self := currentBotOpenID(s.app); self != "" {
+			body += "\n当前 Bot open_id: `" + self + "`"
+		}
+		if initErr != nil && !hasGroupPrimaryState(s.app, msg.ChatType, msg.ChatID) {
 			body += "\n\n自动读取群机器人数量失败: `" + initErr.Error() + "`"
 		}
 		return s.replyBindingUpdated(msg, body)
@@ -172,11 +176,29 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	if err != nil {
 		return fmt.Errorf("usage: /primary on|off")
 	}
-	updated, err := setGroupPrimary(s.app, msg.ChatType, msg.ChatID, primaryValue)
+	targetOpenID := currentOrMentionedBotOpenID(s.app, msg)
+	var updated *state.GroupPrimary
+	if primaryValue {
+		if targetOpenID == "" {
+			return fmt.Errorf("bot open_id is required to set group primary")
+		}
+		updated, err = setGroupPrimaryOwner(s.app, msg.ChatType, msg.ChatID, targetOpenID)
+	} else if ownerOpenID == "" || ownerOpenID == targetOpenID {
+		updated, err = setGroupPrimaryOwner(s.app, msg.ChatType, msg.ChatID, "")
+	} else {
+		updated = groupPrimaryForChat(s.app, msg.ChatType, msg.ChatID)
+	}
 	if err != nil {
 		return err
 	}
-	return s.replyBindingUpdated(msg, "已更新 primary: `"+onOffLabel(updated.Primary)+"`")
+	if updated == nil {
+		updated = groupPrimaryForChat(s.app, msg.ChatType, msg.ChatID)
+	}
+	body := "已更新 primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
+	if updated != nil {
+		body += "\nowner bot open_id: `" + firstNonEmpty(strings.TrimSpace(updated.OwnerBotOpenID), "(未设置)") + "`"
+	}
+	return s.replyBindingUpdated(msg, body)
 }
 
 func (s bindingService) completeMenuBinding(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

@@ -66,6 +66,18 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 				"error", err,
 			)
 		}
+		if handled, err := syncGroupPrimaryAssignment(a, msg); handled || err != nil {
+			if err != nil {
+				return err
+			}
+			slog.Debug("feishu group primary assignment synced by non-target bot",
+				"frontend_id", strings.TrimSpace(a.FrontendID()),
+				"message_id", msg.MessageID,
+				"chat_id", msg.ChatID,
+				"owner_bot_open_id", groupPrimaryOwnerOpenID(a, msg.ChatType, msg.ChatID),
+			)
+			return nil
+		}
 	}
 	if msg.ChatType == "group" && !shouldAcceptGroupMessage(
 		a,

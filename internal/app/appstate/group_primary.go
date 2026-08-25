@@ -6,7 +6,7 @@ import (
 	"feidex/internal/state"
 )
 
-// GroupPrimary returns the current frontend's primary setting for one group.
+// GroupPrimary returns this Feidex instance's primary owner setting for one group.
 func (s *Store) GroupPrimary(chatType, chatID string) *state.GroupPrimary {
 	if s == nil || s.Store == nil {
 		return nil
@@ -18,15 +18,15 @@ func (s *Store) GroupPrimary(chatType, chatID string) *state.GroupPrimary {
 	return primaries[0]
 }
 
-// GroupPrimariesForChat returns this frontend's primary records for one chat.
+// GroupPrimariesForChat returns this instance's primary records for one chat.
 func (s *Store) GroupPrimariesForChat(chatType, chatID string) []*state.GroupPrimary {
 	if s == nil || s.Store == nil {
 		return nil
 	}
-	return s.Store.GroupPrimariesByChat(s.FrontendID, chatType, chatID)
+	return s.Store.GroupPrimariesByChat("", chatType, chatID)
 }
 
-// SaveGroupPrimary persists primary state in the current frontend scope.
+// SaveGroupPrimary persists primary owner state for this Feidex instance.
 func (s *Store) SaveGroupPrimary(primary *state.GroupPrimary) error {
 	if s == nil || s.Store == nil {
 		return nil
@@ -35,12 +35,13 @@ func (s *Store) SaveGroupPrimary(primary *state.GroupPrimary) error {
 		primary = cloneGroupPrimaryForSave(primary)
 		primary.ID = DefaultGroupPrimaryID(s.FrontendID, primary.ChatType, primary.ChatID)
 	}
-	return s.Store.UpsertScopedGroupPrimary(s.FrontendID, primary)
+	return s.Store.UpsertGroupPrimary(primary)
 }
 
-// DefaultGroupPrimaryID is the stable state key for one frontend/chat pair.
+// DefaultGroupPrimaryID is the stable state key for one group chat.
 func DefaultGroupPrimaryID(frontendID, chatType, chatID string) string {
-	return "primary_" + sanitizeGroupPrimaryIDPart(frontendID) + "_" + sanitizeGroupPrimaryIDPart(chatType) + "_" + sanitizeGroupPrimaryIDPart(chatID)
+	_ = frontendID
+	return "primary_" + sanitizeGroupPrimaryIDPart(chatType) + "_" + sanitizeGroupPrimaryIDPart(chatID)
 }
 
 func cloneGroupPrimaryForSave(primary *state.GroupPrimary) *state.GroupPrimary {

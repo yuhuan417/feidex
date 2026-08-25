@@ -15,6 +15,15 @@ type botGroupAddedConfigurer interface {
 	SetBotGroupAddedHandler(func(*feishu.BotGroupEvent))
 }
 
+type botOpenIDProvider interface {
+	BotOpenID() string
+}
+
+type groupPrimaryAssignment struct {
+	TargetBotOpenID string
+	Enable          bool
+}
+
 func configureGroupPrimaryEvents(a *App) {
 	if a == nil || a.feishu == nil {
 		return
@@ -61,7 +70,14 @@ func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID
 	if err != nil {
 		return nil, err
 	}
-	return setGroupPrimary(a, chatType, chatID, botCount == 1)
+	ownerBotOpenID := ""
+	if botCount == 1 {
+		ownerBotOpenID = currentBotOpenID(a)
+		if ownerBotOpenID == "" {
+			return nil, fmt.Errorf("bot open_id is required to initialize group primary")
+		}
+	}
+	return setGroupPrimaryOwner(a, chatType, chatID, ownerBotOpenID)
 }
 
 func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
@@ -76,36 +92,61 @@ func hasGroupPrimaryState(a *App, chatType, chatID string) bool {
 }
 
 func isGroupPrimary(a *App, chatType, chatID string) bool {
-	primary := groupPrimaryForChat(a, chatType, chatID)
-	return primary != nil && primary.Primary
+	owner := groupPrimaryOwnerOpenID(a, chatType, chatID)
+	self := currentBotOpenID(a)
+	return owner != "" && self != "" && owner == self
 }
 
-func setGroupPrimary(a *App, chatType, chatID string, primary bool) (*state.GroupPrimary, error) {
+func groupPrimaryOwnerOpenID(a *App, chatType, chatID string) string {
+	primary := groupPrimaryForChat(a, chatType, chatID)
+	if primary == nil {
+		return ""
+	}
+	return strings.TrimSpace(primary.OwnerBotOpenID)
+}
+
+func currentBotOpenID(a *App) string {
+	if a == nil || a.feishu == nil {
+		return ""
+	}
+	provider, ok := a.feishu.(botOpenIDProvider)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(provider.BotOpenID())
+}
+
+func currentOrMentionedBotOpenID(a *App, msg *feishu.InboundMessage) string {
+	if self := currentBotOpenID(a); self != "" {
+		return self
+	}
+	if msg != nil && msg.MentionedSelf {
+		return firstMentionedOpenID(msg.MentionedOpenIDs)
+	}
+	return ""
+}
+
+func setGroupPrimaryOwner(a *App, chatType, chatID, ownerBotOpenID string) (*state.GroupPrimary, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
 	chatType = strings.ToLower(strings.TrimSpace(chatType))
 	chatID = strings.TrimSpace(chatID)
+	ownerBotOpenID = strings.TrimSpace(ownerBotOpenID)
 	if chatType != "group" || chatID == "" {
 		return nil, fmt.Errorf("group chat is required")
 	}
 	record := groupPrimaryForChat(a, chatType, chatID)
 	if record == nil {
 		record = &state.GroupPrimary{
-			ID:         appstate.DefaultGroupPrimaryID(a.FrontendID(), chatType, chatID),
-			FrontendID: a.FrontendID(),
-			ChatID:     chatID,
-			ChatType:   chatType,
+			ID:       appstate.DefaultGroupPrimaryID(a.FrontendID(), chatType, chatID),
+			ChatID:   chatID,
+			ChatType: chatType,
 		}
 	}
-	record.Primary = primary
+	record.OwnerBotOpenID = ownerBotOpenID
 	if err := a.State().SaveGroupPrimary(record); err != nil {
 		return nil, err
-	}
-	if primary {
-		if err := clearOtherGroupPrimariesForChat(a, chatType, chatID, record.ID); err != nil {
-			return nil, err
-		}
 	}
 	updated := groupPrimaryForChat(a, chatType, chatID)
 	if updated == nil {
@@ -114,24 +155,87 @@ func setGroupPrimary(a *App, chatType, chatID string, primary bool) (*state.Grou
 	return updated, nil
 }
 
-func clearOtherGroupPrimariesForChat(a *App, chatType, chatID, keepID string) error {
-	chatType = strings.ToLower(strings.TrimSpace(chatType))
-	chatID = strings.TrimSpace(chatID)
-	keepID = strings.TrimSpace(keepID)
-	if a == nil || a.Store() == nil || chatID == "" || keepID == "" {
-		return nil
-	}
-	for _, primary := range a.Store().AllGroupPrimaries() {
-		if primary == nil || strings.TrimSpace(primary.ID) == keepID || !primary.Primary {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(primary.ChatType)) != chatType || strings.TrimSpace(primary.ChatID) != chatID {
-			continue
-		}
-		primary.Primary = false
-		if err := a.Store().UpsertGroupPrimary(primary); err != nil {
-			return err
+func setGroupPrimary(a *App, chatType, chatID string, enabled bool) (*state.GroupPrimary, error) {
+	ownerBotOpenID := ""
+	if enabled {
+		ownerBotOpenID = currentBotOpenID(a)
+		if ownerBotOpenID == "" {
+			return nil, fmt.Errorf("bot open_id is required to set group primary")
 		}
 	}
-	return nil
+	return setGroupPrimaryOwner(a, chatType, chatID, ownerBotOpenID)
+}
+
+func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error) {
+	assignment, ok := groupPrimaryAssignmentFromMessage(msg)
+	if !ok {
+		return false, nil
+	}
+	selfOpenID := currentBotOpenID(a)
+	targetsSelf := selfOpenID != "" && selfOpenID == assignment.TargetBotOpenID
+	if selfOpenID == "" {
+		targetsSelf = msg.MentionedSelf
+	}
+	if targetsSelf {
+		return false, nil
+	}
+	if assignment.Enable {
+		_, err := setGroupPrimaryOwner(a, msg.ChatType, msg.ChatID, assignment.TargetBotOpenID)
+		return true, err
+	}
+	if strings.TrimSpace(groupPrimaryOwnerOpenID(a, msg.ChatType, msg.ChatID)) == assignment.TargetBotOpenID {
+		_, err := setGroupPrimaryOwner(a, msg.ChatType, msg.ChatID, "")
+		return true, err
+	}
+	return true, nil
+}
+
+func groupPrimaryAssignmentFromMessage(msg *feishu.InboundMessage) (groupPrimaryAssignment, bool) {
+	if msg == nil || strings.TrimSpace(msg.ChatType) != "group" {
+		return groupPrimaryAssignment{}, false
+	}
+	return groupPrimaryAssignmentFromTextAndMentions(msg.Text, msg.MentionedOpenIDs)
+}
+
+func groupPrimaryAssignmentFromPolicyInput(input feishu.GroupMessagePolicyInput) (groupPrimaryAssignment, bool) {
+	return groupPrimaryAssignmentFromTextAndMentions(input.Text, input.MentionedOpenIDs)
+}
+
+func groupPrimaryAssignmentFromTextAndMentions(text string, mentionedOpenIDs []string) (groupPrimaryAssignment, bool) {
+	targetBotOpenID := firstMentionedOpenID(mentionedOpenIDs)
+	if targetBotOpenID == "" {
+		return groupPrimaryAssignment{}, false
+	}
+	primary, ok := parsePrimaryCommandValueFromText(text)
+	if !ok {
+		return groupPrimaryAssignment{}, false
+	}
+	return groupPrimaryAssignment{TargetBotOpenID: targetBotOpenID, Enable: primary}, true
+}
+
+func firstMentionedOpenID(mentionedOpenIDs []string) string {
+	for _, openID := range mentionedOpenIDs {
+		if value := strings.TrimSpace(openID); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func parsePrimaryCommandValueFromText(text string) (bool, bool) {
+	fields := strings.Fields(strings.TrimSpace(text))
+	for i, field := range fields {
+		if strings.TrimSpace(field) != "/primary" {
+			continue
+		}
+		if i+1 >= len(fields) {
+			return false, false
+		}
+		value, err := parseOnOff(fields[i+1])
+		if err != nil {
+			return false, false
+		}
+		return value, true
+	}
+	return false, false
 }

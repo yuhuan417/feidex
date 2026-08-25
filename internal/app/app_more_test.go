@@ -325,6 +325,7 @@ type fakeFeishuClient struct {
 	urgentAppCalls           []struct{ messageID, userID string }
 	lookupMessageSenderCalls []string
 	lookupMessageSenderOpen  string
+	botOpenID                string
 	groupBotCounts           map[string]int
 	groupBotCountCalls       []string
 	onMessage                func(*feishu.InboundMessage)
@@ -545,6 +546,12 @@ func (f *fakeFeishuClient) GetGroupBotCount(_ context.Context, chatID string) (i
 		return f.groupBotCounts[chatID], nil
 	}
 	return 0, errors.New("group bot count not configured")
+}
+
+func (f *fakeFeishuClient) BotOpenID() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return strings.TrimSpace(f.botOpenID)
 }
 
 func (f *fakeFeishuClient) replyCardsSnapshot() []map[string]any {
@@ -783,7 +790,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	if err != nil {
 		t.Fatalf("Open(store) error = %v", err)
 	}
-	ff := &fakeFeishuClient{}
+	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	fc := &fakeCodexClient{}
 	var asyncWG sync.WaitGroup
 	a := &App{

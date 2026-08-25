@@ -18,16 +18,20 @@ func configureGroupMessagePolicy(a *App) {
 	if !ok {
 		return
 	}
-	configurer.SetGroupMessagePolicy(func(chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
-		return shouldDeliverGroupMessageToApp(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+	configurer.SetGroupMessagePolicy(func(input feishu.GroupMessagePolicyInput) bool {
+		return shouldDeliverGroupMessageToApp(a, input)
 	})
 }
 
-func shouldDeliverGroupMessageToApp(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
-	if shouldAcceptGroupMessage(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone) {
+func shouldDeliverGroupMessageToApp(a *App, input feishu.GroupMessagePolicyInput) bool {
+	mentionedAny := len(input.MentionedOpenIDs) > 0
+	if shouldAcceptGroupMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, input.MentionedSelf, mentionedAny, input.MentionedEveryone) {
 		return true
 	}
-	return shouldProbeGroupPrimaryForMessage(a, chatID, rootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+	if _, ok := groupPrimaryAssignmentFromPolicyInput(input); ok {
+		return true
+	}
+	return shouldProbeGroupPrimaryForMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, input.MentionedSelf, mentionedAny, input.MentionedEveryone)
 }
 
 func shouldProbeGroupPrimaryForMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {

@@ -50,11 +50,23 @@ type InboundMessage struct {
 	CreatedAt              int64
 }
 
+// GroupMessagePolicyInput is the app-level context used to decide whether a
+// group message should be delivered to this local bot when group_at_only is
+// enabled. It is evaluated before app routing, so it carries only lightweight
+// message metadata and raw text.
+type GroupMessagePolicyInput struct {
+	ChatID            string
+	RootMessageID     string
+	ParentMessageID   string
+	Text              string
+	MentionedOpenIDs  []string
+	MentionedSelf     bool
+	MentionedEveryone bool
+}
+
 // GroupMessagePolicy decides whether a group message should be delivered to
-// this local bot when group_at_only is enabled. It is evaluated before app
-// routing, so it may use message threading and mention metadata to avoid
-// dropping replies to this bot's own messages.
-type GroupMessagePolicy func(chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool
+// this local bot when group_at_only is enabled.
+type GroupMessagePolicy func(GroupMessagePolicyInput) bool
 
 type MessageRecall struct {
 	MessageID string
@@ -211,6 +223,14 @@ func (a *Adapter) SetGroupMessagePolicy(policy GroupMessagePolicy) {
 		return
 	}
 	a.groupMessagePolicy = policy
+}
+
+// BotOpenID returns this app bot's OpenID once it has been discovered during startup.
+func (a *Adapter) BotOpenID() string {
+	if a == nil {
+		return ""
+	}
+	return strings.TrimSpace(a.botOpenID)
 }
 
 func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
@@ -1127,12 +1147,24 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	parentMessageID := stringValue(msg.ParentId)
 	policyRootMessageID := groupPolicyRootMessageID(messageID, rootMessageID, parentMessageID)
 	mentionedSelf := a.botOpenID != "" && mentioned(msg.Mentions, a.botOpenID)
-	mentionedAny := len(mentionedOpenIDs(msg.Mentions)) > 0
+	mentionedOpenIDs := mentionedOpenIDs(msg.Mentions)
 	mentionedEveryone := mentionedEveryone(msg.Mentions)
+	rawText := ""
+	if messageType == "text" {
+		rawText = extractText(msg.Content)
+	}
 	if chatType == "group" && a.cfg.GroupAtOnly {
 		allowedGroupTrigger := false
 		if a.groupMessagePolicy != nil && a.botOpenID != "" {
-			allowedGroupTrigger = a.groupMessagePolicy(chatID, policyRootMessageID, parentMessageID, mentionedSelf, mentionedAny, mentionedEveryone)
+			allowedGroupTrigger = a.groupMessagePolicy(GroupMessagePolicyInput{
+				ChatID:            chatID,
+				RootMessageID:     policyRootMessageID,
+				ParentMessageID:   parentMessageID,
+				Text:              rawText,
+				MentionedOpenIDs:  mentionedOpenIDs,
+				MentionedSelf:     mentionedSelf,
+				MentionedEveryone: mentionedEveryone,
+			})
 		} else {
 			allowedGroupTrigger = a.cfg.RespondToAtEveryone && mentionedEveryone
 			allowedGroupTrigger = allowedGroupTrigger || mentionedSelf
@@ -1146,7 +1178,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 				"policy_root_message_id", policyRootMessageID,
 				"parent_message_id", parentMessageID,
 				"mentioned_self", mentionedSelf,
-				"mention_count", len(mentionedOpenIDs(msg.Mentions)),
+				"mention_count", len(mentionedOpenIDs),
 				"mentioned_everyone", mentionedEveryone,
 				"has_group_policy", a.groupMessagePolicy != nil,
 				"has_bot_open_id", strings.TrimSpace(a.botOpenID) != "",
@@ -1161,7 +1193,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		ChatType:          chatType,
 		RootMessageID:     rootMessageID,
 		ParentMessageID:   parentMessageID,
-		MentionedOpenIDs:  mentionedOpenIDs(msg.Mentions),
+		MentionedOpenIDs:  mentionedOpenIDs,
 		MentionedEveryone: mentionedEveryone,
 		MentionedSelf:     mentionedSelf,
 	}
