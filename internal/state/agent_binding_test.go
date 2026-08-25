@@ -21,7 +21,6 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 		FrontendID:              " frontend-a ",
 		ChatID:                  " chat-1 ",
 		ChatType:                " GROUP ",
-		Component:               " Client ",
 		WorkspaceID:             " workspace-a ",
 		ModelOverride:           " gpt-5 ",
 		ReasoningEffortOverride: " high ",
@@ -30,7 +29,6 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 		ApprovalPolicyOverride:  " never ",
 		MultiAgentModeOverride:  " proactive ",
 		ClaudePermissionMode:    " acceptEdits ",
-		Primary:                 true,
 		PendingMessage: &AgentBindingPendingMessage{
 			SessionKey:       " feishu:frontend:frontend-a:group:chat-1:root:msg-1 ",
 			MessageID:        " msg-1 ",
@@ -56,7 +54,7 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 	if saved == nil {
 		t.Fatal("GetScopedAgentBinding() returned nil")
 	}
-	if saved.ChatType != "group" || saved.Component != "client" || saved.Status != AgentBindingStatusPending.String() {
+	if saved.ChatType != "group" || saved.Status != AgentBindingStatusPending.String() {
 		t.Fatalf("normalized binding = %+v", saved)
 	}
 	if saved.WorkspaceID != "workspace-a" || saved.ModelOverride != "gpt-5" || saved.ReasoningEffortOverride != "high" {
@@ -136,25 +134,7 @@ func TestAgentBindingsNormalizeAndMigrateSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.json")
 	legacy := `{
   "version": 6,
-  "sessions": {},
-  "agent_bindings": {
-    "binding-1": {
-      "id": " binding-1 ",
-      "frontend_id": " frontend-a ",
-      "chat_id": " chat-1 ",
-      "chat_type": " GROUP ",
-      "component": " Server ",
-      "workspace_id": " /srv/project ",
-      "service_tier_override": " fast ",
-      "sandbox_mode_override": " read-only ",
-      "approval_policy_override": " never ",
-      "multi_agent_mode_override": " proactive ",
-      "claude_permission_mode": " acceptEdits ",
-      "status": "",
-      "created_at": 10
-    },
-    "invalid": null
-  }
+	"sessions": {}
 }`
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -164,18 +144,11 @@ func TestAgentBindingsNormalizeAndMigrateSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(legacy) error = %v", err)
 	}
-	binding := store.GetAgentBinding("binding-1")
-	if binding == nil {
-		t.Fatal("expected migrated binding")
+	if bindings := store.AllAgentBindings(); len(bindings) != 0 {
+		t.Fatalf("legacy v6 snapshot should not synthesize agent bindings: %+v", bindings)
 	}
-	if binding.FrontendID != "frontend-a" || binding.ChatType != "group" || binding.Component != "server" || binding.Status != AgentBindingStatusPending.String() {
-		t.Fatalf("migrated binding = %+v", binding)
-	}
-	if binding.CreatedAt != 10 || binding.UpdatedAt == 0 {
-		t.Fatalf("migrated timestamps = %+v", binding)
-	}
-	if binding.ServiceTierOverride != "fast" || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" || binding.MultiAgentModeOverride != "proactive" || binding.ClaudePermissionMode != "acceptEdits" {
-		t.Fatalf("migrated override fields = %+v", binding)
+	if primaries := store.AllGroupPrimaries(); len(primaries) != 0 {
+		t.Fatalf("legacy v6 snapshot should not synthesize group primaries: %+v", primaries)
 	}
 
 	content, err := os.ReadFile(path)
@@ -190,7 +163,7 @@ func TestAgentBindingsNormalizeAndMigrateSnapshot(t *testing.T) {
 	if err := json.Unmarshal(content, &snapshot); err != nil {
 		t.Fatalf("migrated snapshot is invalid JSON: %v", err)
 	}
-	if len(snapshot.AgentBindings) != 1 || snapshot.AgentBindings["binding-1"].ChatType != "group" {
-		t.Fatalf("migrated snapshot bindings = %+v", snapshot.AgentBindings)
+	if len(snapshot.AgentBindings) != 0 || len(snapshot.GroupPrimaries) != 0 {
+		t.Fatalf("migrated snapshot synthesized new group config state: bindings=%+v primaries=%+v", snapshot.AgentBindings, snapshot.GroupPrimaries)
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 10
+const currentSnapshotVersion = 7
 
 type Store struct {
 	path    string
@@ -80,7 +80,6 @@ type AgentBinding struct {
 	FrontendID              string                      `json:"frontend_id"`
 	ChatID                  string                      `json:"chat_id"`
 	ChatType                string                      `json:"chat_type"`
-	Component               string                      `json:"component"`
 	WorkspaceID             string                      `json:"workspace_id"`
 	ModelOverride           string                      `json:"model_override,omitempty"`
 	ReasoningEffortOverride string                      `json:"reasoning_effort_override,omitempty"`
@@ -89,7 +88,6 @@ type AgentBinding struct {
 	ApprovalPolicyOverride  string                      `json:"approval_policy_override,omitempty"`
 	MultiAgentModeOverride  string                      `json:"multi_agent_mode_override,omitempty"`
 	ClaudePermissionMode    string                      `json:"claude_permission_mode,omitempty"`
-	Primary                 bool                        `json:"primary,omitempty"`
 	PendingMessage          *AgentBindingPendingMessage `json:"pending_message,omitempty"`
 	Status                  string                      `json:"status"`
 	CreatedAt               int64                       `json:"created_at"`
@@ -328,9 +326,6 @@ func Open(path string) (*Store, error) {
 	normalizedPrimaries := normalizeGroupPrimaries(s.data.GroupPrimaries)
 	if normalizedPrimaries == nil {
 		normalizedPrimaries = map[string]*GroupPrimary{}
-	}
-	if s.data.GroupPrimaries == nil {
-		migrateGroupPrimariesFromBindings(normalizedPrimaries, normalizedBindings)
 	}
 	if !groupPrimariesEqual(s.data.GroupPrimaries, normalizedPrimaries) {
 		rewrite = true
@@ -959,7 +954,6 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	binding.FrontendID = strings.TrimSpace(binding.FrontendID)
 	binding.ChatID = strings.TrimSpace(binding.ChatID)
 	binding.ChatType = strings.ToLower(strings.TrimSpace(binding.ChatType))
-	binding.Component = strings.ToLower(strings.TrimSpace(binding.Component))
 	binding.WorkspaceID = strings.TrimSpace(binding.WorkspaceID)
 	binding.ModelOverride = strings.TrimSpace(binding.ModelOverride)
 	binding.ReasoningEffortOverride = strings.TrimSpace(binding.ReasoningEffortOverride)
@@ -1089,35 +1083,6 @@ func normalizeGroupPrimaries(src map[string]*GroupPrimary) map[string]*GroupPrim
 		return nil
 	}
 	return dst
-}
-
-func migrateGroupPrimariesFromBindings(dst map[string]*GroupPrimary, bindings map[string]*AgentBinding) {
-	if dst == nil || len(bindings) == 0 {
-		return
-	}
-	for _, binding := range bindings {
-		if binding == nil || !binding.Primary || strings.TrimSpace(binding.ChatID) == "" {
-			continue
-		}
-		id := strings.Join([]string{
-			"primary",
-			sanitizeStateIDPart(binding.FrontendID),
-			sanitizeStateIDPart(binding.ChatType),
-			sanitizeStateIDPart(binding.ChatID),
-		}, "_")
-		if _, exists := dst[id]; exists {
-			continue
-		}
-		dst[id] = &GroupPrimary{
-			ID:         id,
-			FrontendID: strings.TrimSpace(binding.FrontendID),
-			ChatID:     strings.TrimSpace(binding.ChatID),
-			ChatType:   strings.ToLower(strings.TrimSpace(binding.ChatType)),
-			Primary:    true,
-			CreatedAt:  binding.CreatedAt,
-			UpdatedAt:  binding.UpdatedAt,
-		}
-	}
 }
 
 func agentBindingsEqual(a, b map[string]*AgentBinding) bool {

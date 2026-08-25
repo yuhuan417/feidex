@@ -72,7 +72,7 @@ frontend 隔离以下内容：
 
 - `/primary on|off` 只写 `GroupPrimary`，不创建或修改 `AgentBinding`。
 - `/workspace`、model、effort、fast 和运行参数配置只写 `AgentBinding`，不隐式切换 primary。
-- 旧状态里 `AgentBinding.primary=true` 会在启动时迁移成 `GroupPrimary`，但新代码不再读取 binding 上的 primary 字段。
+- 当前只支持从 GitHub 线上 snapshot v6 直接升级到包含 `GroupPrimary` 的当前状态；测试环境中间版本不保留兼容迁移。
 - 同一 Feidex 实例内显式设置某个 frontend 为 primary，会清掉同群其他本地 frontend 的 primary 标记；不同机器之间仍不共享状态。
 
 ### 2.4 Workspace
@@ -251,7 +251,7 @@ Session / Thread 临时覆盖
 
 - [x] 新增 `AgentBinding` 状态模型。
 - [x] `AgentBinding` 持久化、frontend scope、chat 查询、删除和深拷贝。
-- [x] 新增独立 `GroupPrimary` 状态模型，并从旧 `AgentBinding.primary` 自动迁移。
+- [x] 新增独立 `GroupPrimary` 状态模型。
 - [x] primary 自动初始化改为读取 Feishu 群信息 `bot_count`，不再依赖 binding 创建顺序。
 - [x] Session 持久化 `BindingID` 元数据。
 - [x] Submission 创建时固化 `BindingID` 元数据。

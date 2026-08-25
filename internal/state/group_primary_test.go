@@ -1,39 +1,31 @@
 package state
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestGroupPrimaryPersistScopeAndMigrateBindingPrimary(t *testing.T) {
+func TestGroupPrimaryPersistScopeAndClone(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	legacy := `{
-  "version": 9,
-  "sessions": {},
-  "agent_bindings": {
-    "binding-1": {
-      "id": "binding-1",
-      "frontend_id": "frontend-a",
-      "chat_id": "chat-1",
-      "chat_type": "group",
-      "primary": true,
-      "status": "active",
-      "created_at": 10,
-      "updated_at": 20
-    }
-  }
-}`
-	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
 	store, err := Open(path)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	primaries := store.GroupPrimariesByChat("frontend-a", "group", "chat-1")
-	if len(primaries) != 1 || !primaries[0].Primary || primaries[0].CreatedAt != 10 || primaries[0].UpdatedAt != 20 {
-		t.Fatalf("migrated primaries = %+v", primaries)
+	if err := store.UpsertScopedGroupPrimary("frontend-a", &GroupPrimary{
+		ID:       " primary-a ",
+		ChatID:   " chat-1 ",
+		ChatType: " GROUP ",
+		Primary:  true,
+	}); err != nil {
+		t.Fatalf("UpsertScopedGroupPrimary(frontend-a) error = %v", err)
+	}
+	gotA := store.GetScopedGroupPrimary("frontend-a", "primary-a")
+	if gotA == nil || gotA.FrontendID != "frontend-a" || gotA.ChatID != "chat-1" || gotA.ChatType != "group" || !gotA.Primary {
+		t.Fatalf("frontend-a group primary = %+v", gotA)
+	}
+	gotA.Primary = false
+	if again := store.GetScopedGroupPrimary("frontend-a", "primary-a"); again == nil || !again.Primary {
+		t.Fatalf("GetScopedGroupPrimary returned shared state: %+v", again)
 	}
 
 	if err := store.UpsertScopedGroupPrimary("frontend-b", &GroupPrimary{

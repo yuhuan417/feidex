@@ -24,7 +24,7 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	if binding == nil {
 		t.Fatal("/workspace did not create pending group config")
 	}
-	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" || binding.Primary {
+	if binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" {
 		t.Fatalf("initial binding = %+v, want pending workspace config without primary coupling", binding)
 	}
 	if primary := groupPrimaryForChat(a, "group", "chat-issue-9"); primary != nil {
@@ -59,7 +59,7 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	if binding.Status != state.AgentBindingStatusActive.String() || binding.WorkspaceID != "default" {
 		t.Fatalf("activated binding = %+v", binding)
 	}
-	if binding.Primary || binding.Component != "" || binding.ModelOverride != "gpt-5-binding" || binding.ReasoningEffortOverride != "high" {
+	if binding.ModelOverride != "gpt-5-binding" || binding.ReasoningEffortOverride != "high" {
 		t.Fatalf("binding user overrides = %+v", binding)
 	}
 	if primary := groupPrimaryForChat(a, "group", "chat-issue-9"); primary == nil || !primary.Primary {
@@ -717,7 +717,7 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 		t.Fatalf("group /workspace without backend error = %v", err)
 	}
 	binding := agentBindingForChat(a, "group", "chat-no-backend")
-	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() || binding.Primary {
+	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() {
 		t.Fatalf("binding after group /workspace without backend = %+v", binding)
 	}
 	cards := ff.replyCardsSnapshot()
