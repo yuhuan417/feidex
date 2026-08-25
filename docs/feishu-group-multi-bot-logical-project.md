@@ -1,10 +1,10 @@
-# Issue 9: Feishu 群多 Bot / 逻辑项目实现说明
+# Feishu 群多 Bot / 逻辑项目实现说明
 
-状态: issue 9 当前实现完成；跨实例共享配置、BotProfile 继承、多人输入队列和群公告状态条是独立后续 issue
+状态: 当前实现完成；跨实例共享配置、BotProfile 继承、多人输入队列和群公告状态条是独立后续工作
 
-更新时间: 2026-08-24
+更新时间: 2026-08-25
 
-本文记录 issue 9 的最终产品边界和实现约束。核心原则是：单聊体验保持原样；群聊里同一套菜单和 slash command 仍可用，但配置作用域变为“当前接收命令的 Bot 在当前群内”。
+本文记录 Feishu 群多 Bot / 逻辑项目的最终产品边界和实现约束。核心原则是：本功能的行为变化只影响群聊；单聊体验保持原样。群聊里同一套菜单和 slash command 仍可用，但配置作用域变为“当前接收命令的 Bot 在当前群内”。
 
 ## 1. 产品模型
 
@@ -40,10 +40,11 @@ frontend 隔离以下内容：
 - pending request
 - message link
 - AgentBinding
-- GroupPrimary
 - thread / submission 的本地关联
 
 因此同一个群、同一个 RootMessage，由 Bot A 和 Bot B 分别处理时，仍然是两个不同的本地 Session。
+
+`GroupPrimary` 是例外：它不是 frontend-scoped 状态，而是当前 Feidex 实例内按群共享的一份 owner bot open_id。本机同一 Feidex 进程里的多个 frontend 会读取同一份 `GroupPrimary`，但它们仍用各自 bot open_id 判断自己是否为 primary。
 
 ### 2.2 AgentBinding
 
@@ -68,14 +69,16 @@ frontend 隔离以下内容：
 
 ### 2.3 GroupPrimary
 
-`GroupPrimary` 是当前 Feidex 实例保存的“某个群的 primary owner bot open_id”本地副本。它不是当前 Bot 自己的 bool 开关，也和 `AgentBinding` 没有生命周期依赖：
+`GroupPrimary` 是当前 Feidex 实例保存的“某个群的 primary owner bot open_id”本地副本。它不是当前 Bot 自己的 bool 开关，不属于 frontend 隔离状态，也和 `AgentBinding` 没有生命周期依赖：
 
 - `@Bot /primary on` 把被 `@` 的 Bot open_id 写为本群 owner；所有能看到这条群消息的 Feidex 实例都会静默同步自己的本地副本。
 - `/primary off` 不再支持；primary owner 只能通过把另一个 Bot 设为 owner 来切换，避免群内被清成无 primary 状态。
 - `/primary on` 只写 `GroupPrimary`，不创建或修改 `AgentBinding`。
 - `/workspace`、model、effort、fast 和运行参数配置只写 `AgentBinding`，不隐式切换 primary。
 - 当前只支持从 GitHub 线上 snapshot v6 直接升级到包含 `GroupPrimary` 的当前状态；测试环境中间版本不保留兼容迁移。
-- 不引入公共存储；不同机器之间只依赖同一条群消息投递到各自 bot 后，各自更新本地 owner 副本。
+- 不引入公共存储；不同机器之间只依赖同一条群消息投递到各自 bot 后，各自更新本地 owner 副本。不同机器上的 owner 副本可能短暂不一致，最终以最近一次各实例实际收到并处理的 `@Bot /primary on` 为准。
+- 同一 Feidex 实例内的多个 frontend 共享同一份群 owner 副本；非 primary frontend 过滤掉未 `@` 消息，不会影响 primary frontend 自己的 adapter 处理同一条消息。
+- 只发送空正文 `@Bot` 不作为 `/primary on` 语法糖；切换 primary 必须显式发送 `@Bot /primary on`。
 
 ### 2.4 Workspace
 
@@ -117,6 +120,10 @@ Session 内可以保存 `BindingID`，但 `BindingID` 只是执行元数据，�
 
 ## 3. 不可违反的约束
 
+### 3.0 Scope invariant
+
+本功能的实现边界只覆盖群聊。单聊窗口里的 `/workspace`、`/model`、`/effort`、`/fast`、菜单结构和既有 session/thread 语义必须保持原有行为。群聊新增的“当前 Bot 在本群内”作用域不能泄漏到单聊默认配置。
+
 ### 3.1 Session identity
 
 必须保持：
@@ -151,13 +158,15 @@ pending 状态收到当前 Bot 应处理的普通群消息时，必须先暂存�
 - `@everyone`：沿用 `RespondToAtEveryone` 配置，并要求本地 primary 才能作为默认处理者。
 - pending 状态不直接投递 Codex/Claude，只展示当前工作区配置入口并暂存原消息。
 
+当前 Bot 是否为 primary 的判断是本地判断：读取当前实例的 `GroupPrimary.OwnerBotOpenID`，再和当前 frontend 的 bot open_id 比较。同一实例内如果 A/B 两个 frontend 都在同一群，A 是 owner，则 A 会处理未 `@` 顶层消息，B 会丢弃；B 的丢弃不会阻止 A，因为二者各自有独立 adapter 和 group policy。
+
 primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群消息时，Feidex 会用 bot 身份读取群信息里的 `bot_count`：如果 `bot_count == 1`，当前 Bot 的 open_id 自动写为 owner；如果 `bot_count > 1`，先记录“已判断但未设置 owner”。用户显式执行 `@Bot /primary on` 后，所有能收到该群消息的 bot 都会把本地 owner 副本更新为被 `@` 的 Bot open_id；非目标 bot 不回复，也不执行普通命令逻辑。
 
 如果当前 Bot 是 primary，但本群尚未配置 workspace，那么未 `@` 普通消息仍会先进入 workspace onboarding：Feidex 创建 pending `AgentBinding`、暂存原消息，并在 workspace 配置完成后重放该原始输入。
 
 ### 3.4 Backend state machine
 
-本 issue 不改变 Codex app-server 的 thread / turn / approval 生命周期：
+本功能不改变 Codex app-server 的 thread / turn / approval 生命周期：
 
 - Session 仍然是本地状态聚合对象。
 - backend thread 的启动、恢复、turn 开始和完成仍遵循现有状态机。
@@ -204,6 +213,8 @@ primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群�
 /primary on
 ```
 
+`@Bot /primary on` 是切换 primary 的唯一命令入口；`/primary off` 不支持，空正文 `@Bot` 也不承担切换语义。
+
 effective-value 优先级：
 
 ```text
@@ -227,6 +238,7 @@ Session / Thread 临时覆盖
 - 菜单操作始终只作用于接收并生成这张菜单卡片的本地 Bot。
 - 菜单不显示 Bot selector，不通过当前 Bot 的菜单调用其他 Bot。
 - 需要操作其他 Bot 时，必须重新发送明确 mention 的命令，例如 `@BotB /menu` 或 `@BotB /workspace`。
+- 所有群菜单可达能力都必须有 slash command 入口；不能新增只能通过卡片点击触发的群内配置能力。
 
 当前已实现菜单入口：
 
@@ -242,7 +254,7 @@ Session / Thread 临时覆盖
 
 ### 4.4 单聊不变
 
-单聊场景仍保持 issue 9 之前的行为：
+单聊场景仍保持原有行为：
 
 - `/workspace` 管理当前 bot/frontend 的普通工作区配置。
 - `/model`、`/effort` 管理当前 bot/frontend 的默认模型配置。
@@ -254,12 +266,15 @@ Session / Thread 临时覆盖
 - [x] 新增 `AgentBinding` 状态模型。
 - [x] `AgentBinding` 持久化、frontend scope、chat 查询、删除和深拷贝。
 - [x] 新增独立 `GroupPrimary` 状态模型，并改为保存群 owner bot open_id。
+- [x] `GroupPrimary` 明确为实例内按群共享的 owner 副本，不按 frontend 隔离。
 - [x] primary 自动初始化改为读取 Feishu 群信息 `bot_count`，不再依赖 binding 创建顺序。
 - [x] Session 持久化 `BindingID` 元数据。
 - [x] Submission 创建时固化 `BindingID` 元数据。
 - [x] 群消息路由支持 primary / direct mention / local reply link。
 - [x] 未 `@` 消息不会因为提及了其他 Bot 而误落到 primary Bot。
+- [x] 同实例多 frontend 中，非 primary frontend 的过滤不会影响 primary frontend 处理未 `@` 消息。
 - [x] `@Bot /primary on` 会被所有可见 bot 用于同步本地 owner 副本；非目标 bot 静默处理。
+- [x] `/primary off` 不支持；空正文 `@Bot` 不作为 primary 切换入口。
 - [x] SessionKey 恢复为 `frontend + chat + RootMessage`。
 - [x] `BindingID` 不参与 SessionKey 推导。
 - [x] 群内工作区优先解析。
@@ -273,9 +288,9 @@ Session / Thread 临时覆盖
 - [x] `/menu` 增加“当前 Bot”入口；菜单不提供 Bot selector，也不做跨 Bot handoff。
 - [x] 新增/更新 state、appstate、群消息策略、workspace 解析、binding service、群作用域 command/action、effective config、help 和菜单测试。
 
-## 6. 后续独立 issue
+## 6. 后续独立工作
 
-以下设计项不作为 issue 9 完成条件：
+以下设计项不作为本功能完成条件：
 
 - Bot 私聊 BotProfile 的持久化模型与 profile -> `AgentBinding` 继承。
 - 跨实例共享项目配置、跨 Bot primary 原子切换和全局 Bot 列表。
@@ -286,7 +301,7 @@ Session / Thread 临时覆盖
 
 ## 7. 验收标准
 
-issue 9 完成条件：
+本功能完成条件：
 
 - [x] 同群不同 RootMessage 产生独立 Session。
 - [x] 同 RootMessage 的不同 Bot 产生 frontend 隔离的 Session。
@@ -299,10 +314,12 @@ issue 9 完成条件：
 - [x] 群内 menu 增加当前 Bot 入口，菜单卡片不提供 Bot 选择列表。
 - [x] 通过 `@BotB /menu` 或其他明确 mention 命令可以直接进入 BotB 的本地菜单和配置流程。
 - [x] 当前新增本地群内配置能力可以从 `/menu` 进入，并有 slash command 入口。
+- [x] 同实例多 frontend 中，非 primary frontend 过滤未 `@` 消息不会影响 primary frontend 处理。
+- [x] `/primary off` 不支持；空正文 `@Bot` 不作为 primary 切换入口。
 - [x] 持久化、重启恢复、workspace 解析、路由和 primary 边界有测试。
 - [x] 不破坏现有 Codex app-server thread/turn/approval 状态机。
 
-非本 issue 验收项：BotProfile 私聊配置继承、完整群级状态条、多人输入队列、bot 离群清理和跨实例协作协议。
+非本功能验收项：BotProfile 私聊配置继承、完整群级状态条、多人输入队列、bot 离群清理和跨实例协作协议。
 
 ## 8. 相关实现
 
