@@ -60,11 +60,9 @@ func FeishuConfig(a AppConfig) *config.FeishuConfig {
 	return FeishuConfigUnlocked(a)
 }
 
-// ReplyInThreadEnabled returns whether reply-in-thread is enabled for the
-// given chat type.
-func ReplyInThreadEnabled(a AppConfig, chatType string) bool {
-	cfg := FeishuConfig(a)
-	return cfg != nil && strings.TrimSpace(chatType) == "group" && cfg.ReplyInThread
+// ReplyInThreadEnabled returns the fixed Feishu reply mode.
+func ReplyInThreadEnabled(_ AppConfig, _ string) bool {
+	return false
 }
 
 // DebugAllowFrom returns the debug allow list from Feishu config.

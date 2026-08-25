@@ -353,7 +353,6 @@ func TestResolvedFrontendsSupportsLegacyAndMultiFrontendConfigs(t *testing.T) {
 		`backend = "codex"`,
 		`app_id = "cli_codex"`,
 		`app_secret = "secret-1"`,
-		`reply_in_thread = true`,
 		`quiet = "progress"`,
 		``,
 		`[[frontend]]`,
@@ -361,7 +360,6 @@ func TestResolvedFrontendsSupportsLegacyAndMultiFrontendConfigs(t *testing.T) {
 		`backend = "claude"`,
 		`app_id = "cli_claude"`,
 		`app_secret = "secret-2"`,
-		`reply_in_thread = true`,
 		`quiet = "final"`,
 		``,
 		`[[workspace]]`,
@@ -397,21 +395,19 @@ func TestResolvedFrontendsSupportsLegacyAndMultiFrontendConfigs(t *testing.T) {
 			{
 				ID: "codex-main",
 				FeishuConfig: FeishuConfig{
-					Backend:       RuntimeBackendCodex,
-					AppID:         "cli_codex",
-					AppSecret:     "secret-1",
-					ReplyInThread: true,
-					Quiet:         QuietModeProgress,
+					Backend:   RuntimeBackendCodex,
+					AppID:     "cli_codex",
+					AppSecret: "secret-1",
+					Quiet:     QuietModeProgress,
 				},
 			},
 			{
 				ID: "claude-main",
 				FeishuConfig: FeishuConfig{
-					Backend:       RuntimeBackendClaude,
-					AppID:         "cli_claude",
-					AppSecret:     "secret-2",
-					ReplyInThread: true,
-					Quiet:         QuietModeFinal,
+					Backend:   RuntimeBackendClaude,
+					AppID:     "cli_claude",
+					AppSecret: "secret-2",
+					Quiet:     QuietModeFinal,
 				},
 			},
 		},
@@ -435,10 +431,9 @@ func TestResolvedFrontendsPreservesUnsetBackend(t *testing.T) {
 	cfg.Frontends = []FrontendConfig{{
 		ID: "unset-main",
 		FeishuConfig: FeishuConfig{
-			AppID:         "cli_unset",
-			AppSecret:     "secret-1",
-			ReplyInThread: true,
-			Quiet:         QuietModeProgress,
+			AppID:     "cli_unset",
+			AppSecret: "secret-1",
+			Quiet:     QuietModeProgress,
 		},
 	}}
 	if err := cfg.Normalize(t.TempDir()); err != nil {
@@ -527,6 +522,59 @@ func TestLoadIgnoresLegacyWorkspaceBackendField(t *testing.T) {
 	}
 	if strings.Contains(string(saved), "legacy-workspace-only") {
 		t.Fatalf("roundtrip config should not persist legacy workspace backend field:\n%s", string(saved))
+	}
+}
+
+func TestLoadIgnoresLegacyReplyInThreadField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := strings.Join([]string{
+		`data_dir = ".feidex-data"`,
+		``,
+		`[log]`,
+		`level = "info"`,
+		``,
+		`[feishu]`,
+		`app_id = "legacy-app"`,
+		`app_secret = "legacy-secret"`,
+		`reply_in_thread = true`,
+		``,
+		`[[frontend]]`,
+		`id = "codex-main"`,
+		`backend = "codex"`,
+		`app_id = "frontend-app"`,
+		`app_secret = "frontend-secret"`,
+		`reply_in_thread = true`,
+		``,
+		`[[workspace]]`,
+		`id = "default"`,
+		`cwd = "."`,
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(legacy reply_in_thread config) error = %v", err)
+	}
+
+	roundTripPath := filepath.Join(dir, "roundtrip.toml")
+	if err := Save(roundTripPath, cfg); err != nil {
+		t.Fatalf("Save(roundtrip legacy reply_in_thread config) error = %v", err)
+	}
+	saved, err := os.ReadFile(roundTripPath)
+	if err != nil {
+		t.Fatalf("ReadFile(roundtrip config) error = %v", err)
+	}
+	if strings.Contains(string(saved), "reply_in_thread") {
+		t.Fatalf("roundtrip config should not persist legacy reply_in_thread field:\n%s", string(saved))
+	}
+	frontends := cfg.ResolvedFrontends()
+	if len(frontends) != 1 || frontends[0].ID != "codex-main" || frontends[0].Backend != RuntimeBackendCodex {
+		t.Fatalf("ResolvedFrontends() = %+v", frontends)
+	}
+	if cfg.Feishu.AppID != "legacy-app" {
+		t.Fatalf("Feishu.AppID = %q, want legacy-app", cfg.Feishu.AppID)
 	}
 }
 

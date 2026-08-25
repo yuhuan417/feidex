@@ -366,7 +366,6 @@ func TestAppStateStoreScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 
 func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.ReplyInThread = true
 	sessionKey := "feishu:group:chat-1:root:root-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
@@ -389,8 +388,8 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
 	sub := a.store.GetSubmission(subID)
-	if !replyInThreadForSubmission(a, sub) {
-		t.Fatal("replyInThreadForSubmission() should be true for group session")
+	if replyInThreadForSubmission(a, sub) {
+		t.Fatal("replyInThreadForSubmission() should be false for group session")
 	}
 	if got := newOutboundCardService(a).sendPlanCardWithReuse(context.Background(), sub, "  do thing  ", ""); got != "reply-card-id" {
 		t.Fatalf("sendPlanCardWithReuse() = %q", got)

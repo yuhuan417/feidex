@@ -42,7 +42,6 @@ func (f *blockingClaudeCompactCore) StartTurn(_ context.Context, sessionKey, thr
 
 func TestStandaloneCompactionLifecycle(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	a.cfg.Feishu.ReplyInThread = true
 	sessionKey := "sess-compact"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
@@ -93,8 +92,11 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 	if updated := a.store.GetSession(sessionKey); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
 		t.Fatalf("session after finish = %+v", updated)
 	}
-	if len(ff.replyTexts) != 1 || ff.replyTexts[0] != "当前线程上下文已压缩完成。" {
-		t.Fatalf("completeStandaloneCompactItem() notices = %#v", ff.replyTexts)
+	if len(ff.sentTexts) != 1 || ff.sentTexts[0] != "当前线程上下文已压缩完成。" {
+		t.Fatalf("completeStandaloneCompactItem() notices = %#v", ff.sentTexts)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("completeStandaloneCompactItem() reply notices = %#v, want none", ff.replyTexts)
 	}
 }
 
@@ -116,7 +118,6 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}
 
 	a, ff, fc := newTestApp(t)
-	a.cfg.Feishu.ReplyInThread = true
 	if _, err := startThreadCompaction(a, "missing"); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("startThreadCompaction(missing) error = %v", err)
 	}
@@ -169,8 +170,11 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	if updated := a.store.GetSession("sess-fail"); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
 		t.Fatalf("session after fail = %+v", updated)
 	}
-	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[len(ff.replyTexts)-1], "boom") {
-		t.Fatalf("failStandaloneCompactTurn() notices = %#v", ff.replyTexts)
+	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[len(ff.sentTexts)-1], "boom") {
+		t.Fatalf("failStandaloneCompactTurn() notices = %#v", ff.sentTexts)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("failStandaloneCompactTurn() reply notices = %#v, want none", ff.replyTexts)
 	}
 
 	if err := a.store.UpsertSession(&state.Session{

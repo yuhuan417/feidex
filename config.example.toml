@@ -19,7 +19,6 @@ debug_allow_from = []
 group_at_only = true
 respond_to_at_everyone = false
 card_enabled = true
-reply_in_thread = false
 quiet = "progress"
 
 # ── Multi-frontend support (optional) ──
@@ -33,7 +32,6 @@ quiet = "progress"
 # app_secret = "sec_xxx"
 # allow_from = []
 # card_enabled = true
-# reply_in_thread = false
 # quiet = "progress"
 #
 # [[frontend]]
@@ -43,7 +41,6 @@ quiet = "progress"
 # app_secret = "sec_yyy"
 # allow_from = []
 # card_enabled = true
-# reply_in_thread = false
 # quiet = "progress"
 
 # ── Codex backend settings ──

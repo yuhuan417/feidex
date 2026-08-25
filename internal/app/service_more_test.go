@@ -42,21 +42,19 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 		{
 			ID: "codex-main",
 			FeishuConfig: config.FeishuConfig{
-				Backend:       config.RuntimeBackendCodex,
-				AppID:         "cli_codex",
-				AppSecret:     "secret-1",
-				ReplyInThread: true,
-				Quiet:         config.QuietModeProgress,
+				Backend:   config.RuntimeBackendCodex,
+				AppID:     "cli_codex",
+				AppSecret: "secret-1",
+				Quiet:     config.QuietModeProgress,
 			},
 		},
 		{
 			ID: "claude-main",
 			FeishuConfig: config.FeishuConfig{
-				Backend:       config.RuntimeBackendClaude,
-				AppID:         "cli_claude",
-				AppSecret:     "secret-2",
-				ReplyInThread: true,
-				Quiet:         config.QuietModeProgress,
+				Backend:   config.RuntimeBackendClaude,
+				AppID:     "cli_claude",
+				AppSecret: "secret-2",
+				Quiet:     config.QuietModeProgress,
 			},
 		},
 	}
@@ -121,10 +119,9 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 	cfg.Frontends = []config.FrontendConfig{{
 		ID: "unset-main",
 		FeishuConfig: config.FeishuConfig{
-			AppID:         "cli_unset",
-			AppSecret:     "secret-1",
-			ReplyInThread: true,
-			Quiet:         config.QuietModeProgress,
+			AppID:     "cli_unset",
+			AppSecret: "secret-1",
+			Quiet:     config.QuietModeProgress,
 		},
 	}}
 

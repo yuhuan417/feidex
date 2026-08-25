@@ -41,7 +41,6 @@ type FeishuConfig struct {
 	GroupAtOnly         bool      `toml:"group_at_only"`
 	RespondToAtEveryone bool      `toml:"respond_to_at_everyone"`
 	CardEnabled         bool      `toml:"card_enabled"`
-	ReplyInThread       bool      `toml:"reply_in_thread"`
 	Quiet               QuietMode `toml:"quiet"`
 }
 
