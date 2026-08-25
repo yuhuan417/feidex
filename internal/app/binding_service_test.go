@@ -130,6 +130,43 @@ func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
 	}
 }
 
+func TestPrimaryMessageBypassesWorkspaceOnboarding(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.frontendID = "bot-a"
+	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
+		t.Fatalf("backend method %s should not run for /primary", method)
+		return nil
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "msg-primary-on",
+		ChatID:        "chat-primary-onboarding",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "/primary on",
+		RootMessageID: "msg-primary-on",
+		MentionedSelf: true,
+	})
+
+	if binding := agentBindingForChat(a, "group", "chat-primary-onboarding"); binding != nil {
+		t.Fatalf("/primary should not create workspace binding, got %+v", binding)
+	}
+	if primary := groupPrimaryForChat(a, "group", "chat-primary-onboarding"); primary == nil || !primary.Primary {
+		t.Fatalf("group primary = %+v, want on", primary)
+	}
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want 1", len(cards))
+	}
+	body := cardMarkdownContent(t, cards[0])
+	if strings.Contains(body, "当前 Bot 在本群还没有配置工作区") || strings.Contains(body, "已暂存原消息") {
+		t.Fatalf("/primary reply should not be workspace onboarding card: %q", body)
+	}
+	if !strings.Contains(body, "已更新 primary") {
+		t.Fatalf("/primary reply body = %q, want primary update", body)
+	}
+}
+
 func TestPrimaryUnmentionedGroupMessageCreatesPendingWorkspaceConfig(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.frontendID = "bot-a"

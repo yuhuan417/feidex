@@ -56,7 +56,7 @@ func isBindingOnboardingCommand(raw string) bool {
 		return false
 	}
 	switch strings.ToLower(strings.TrimSpace(fields[0])) {
-	case "/workspace", "/menu", "/model", "/effort", "/fast", "/help", "/backend":
+	case "/workspace", "/primary", "/menu", "/model", "/effort", "/fast", "/help", "/backend":
 		return true
 	default:
 		return false
