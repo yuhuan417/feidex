@@ -30,7 +30,7 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 		MultiAgentModeOverride:  " proactive ",
 		ClaudePermissionMode:    " acceptEdits ",
 		PendingMessage: &AgentBindingPendingMessage{
-			SessionKey:       " feishu:frontend:frontend-a:group:chat-1:root:msg-1 ",
+			SessionKey:       " feishu:frontend:frontend-a:group:chat-1 ",
 			MessageID:        " msg-1 ",
 			ChatID:           " chat-1 ",
 			ChatType:         " GROUP ",

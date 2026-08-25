@@ -12,9 +12,9 @@
 
 群聊：
 
-- 以 `frontend_id + chat_id + root_message_id` 作为 session key
+- 以 `frontend_id + chat_id` 作为 session key
 
-也就是说，群聊中同一个 frontend 下的同一个根消息树会共享同一个 session；不同 frontend 的 bot 即使处理同一个根消息，也使用各自隔离的 session。群内工作区配置和 workspace 是 session 的本地执行元数据，不参与 session key。
+也就是说，群聊中同一个 frontend 下的同一个群会共享同一个 session；不同 frontend 的 bot 即使处理同一个群，也使用各自隔离的 session。RootMessageID 只作为回复树/turn 绑定元数据保存，不参与 session key。群内工作区配置和 workspace 是 session 的本地执行元数据，也不参与 session key。
 
 ### Queue 与 Steer
 
@@ -23,7 +23,7 @@
 - 用户直接发新消息
   - 走 queue / 新 turn
 - 用户回复某条消息
-  - 先按该消息的 `rootId` 找当前绑定的 turn
+  - 先按该消息的 `rootId`/父消息找当前绑定的 turn
   - 能 steer 就 steer
   - steer 失败自动回退 queue
 

@@ -322,11 +322,7 @@ func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string
 		return nil, err
 	}
 	a.SubmissionQueueReplyContinuation().RecordSubmissionSourceLinks(sub)
-	rootMessageID := ""
-	if updatedSess != nil {
-		rootMessageID = strings.TrimSpace(updatedSess.RootMessageID)
-	}
-	a.SubmissionQueueReplyContinuation().RecordRootTurnBinding(rootMessageID, sessionKey, claudeThreadID, turnID)
+	recordLegacySessionRootTurnBinding(a.SubmissionQueueReplyContinuation(), updatedSess, sub, sessionKey, claudeThreadID, turnID)
 	a.SubmissionQueueTurnStream().NoteTurnStarted(sessionKey, sub)
 	if strings.TrimSpace(claudeThreadID) != "" {
 		a.SubmissionQueueLiveThread().MarkSessionThreadLive(sessionKey, claudeThreadID)

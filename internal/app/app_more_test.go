@@ -1111,7 +1111,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 	}
 
 	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"})
-	if sessionKey != "feishu:group:chat:root:root" {
+	if sessionKey != "feishu:group:chat" {
 		t.Fatalf("makeSessionKey(group) = %q", sessionKey)
 	}
 	sessionKey = makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"})
@@ -1119,7 +1119,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 		t.Fatalf("makeSessionKey(p2p) = %q", sessionKey)
 	}
 	a.frontendID = "frontend-a"
-	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:group:chat:root:root" {
+	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:group:chat" {
 		t.Fatalf("makeSessionKey(frontend group) = %q", got)
 	}
 	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:p2p:chat:user" {
@@ -1691,10 +1691,12 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newThreadService(a).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
-			const downloadSessionKey = "feishu:group:chat-1:root:download-root"
+			const downloadSessionKey = "feishu:group:chat-1"
 			if err := a.store.UpsertSession(&state.Session{
 				Key:         downloadSessionKey,
 				WorkspaceID: a.cfg.Workspaces[0].ID,
+				ChatID:      "chat-1",
+				ChatType:    "group",
 			}); err != nil {
 				t.Fatalf("UpsertSession(download) error = %v", err)
 			}
@@ -1706,10 +1708,13 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}, downloadSessionKey)
 		},
 		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
-			const forkSessionKey = "feishu:group:chat-1:root:fork-root"
+			const forkSessionKey = "feishu:group:chat-1"
 			if err := a.store.UpsertSession(&state.Session{
 				Key:                     forkSessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ChatID:                  "chat-1",
+				ChatType:                "group",
+				RootMessageID:           "fork-root",
 				ActiveThreadID:          "thread-1",
 				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
 			}); err != nil {
@@ -1721,10 +1726,13 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}}, forkSessionKey)
 		},
 		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
-			const compactSessionKey = "feishu:group:chat-1:root:compact-root"
+			const compactSessionKey = "feishu:group:chat-1"
 			if err := a.store.UpsertSession(&state.Session{
 				Key:                     compactSessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ChatID:                  "chat-1",
+				ChatType:                "group",
+				RootMessageID:           "compact-root",
 				ActiveThreadID:          "thread-1",
 				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
 			}); err != nil {
@@ -3273,7 +3281,7 @@ func TestNotificationHelpers(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	targetSessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -3331,7 +3339,7 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	targetSessionKey := "feishu:group:chat-1"
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
@@ -3406,7 +3414,7 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	targetSessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -3462,7 +3470,7 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	}
 }
 
-func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing.T) {
+func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	if _, err := setGroupPrimary(a, "group", "chat-1", true); err != nil {
@@ -3557,6 +3565,9 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 		MessageID:     "root-b",
 		RootMessageID: "root-b",
 	})
+	if rootBSessionKey != rootASessionKey {
+		t.Fatalf("root-b session key = %q, want shared group session %q", rootBSessionKey, rootASessionKey)
+	}
 	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "default"); err != nil {
 		t.Fatalf("activateBindingWorkspace(group -> default) error = %v", err)
 	}
@@ -3573,12 +3584,6 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 	if len(threadStartCwds) != 0 {
 		t.Fatalf("thread/start cwds before root-a completes = %+v, want no calls", threadStartCwds)
 	}
-	if sess := a.store.GetSession(rootASessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
-		t.Fatalf("root-a session should keep workspace A lineage: %+v", sess)
-	}
-	if sess := a.store.GetSession(rootBSessionKey); sess == nil || sess.WorkspaceID != "alt" || len(sess.Queue) != 1 || sess.ActiveThreadID != "" {
-		t.Fatalf("root-b session should be queued on workspace B: %+v", sess)
-	}
 	rootCSessionKey := makeSessionKey(a, &feishu.InboundMessage{
 		ChatID:        "chat-1",
 		ChatType:      "group",
@@ -3586,8 +3591,20 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 		MessageID:     "root-c",
 		RootMessageID: "root-c",
 	})
-	if sess := a.store.GetSession(rootCSessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || len(sess.Queue) != 1 || sess.ActiveThreadID != "" {
-		t.Fatalf("root-c session should be queued on workspace A: %+v", sess)
+	if rootCSessionKey != rootASessionKey {
+		t.Fatalf("root-c session key = %q, want shared group session %q", rootCSessionKey, rootASessionKey)
+	}
+	sess := a.store.GetSession(rootASessionKey)
+	if sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || len(sess.Queue) != 2 {
+		t.Fatalf("group session should keep active workspace A and queue two submissions: %+v", sess)
+	}
+	rootBSub := a.store.GetSubmission(sess.Queue[0])
+	if rootBSub == nil || rootBSub.WorkspaceID != "alt" || rootBSub.TriggerMessageID != "root-b" {
+		t.Fatalf("root-b submission should be queued on workspace B: %+v", rootBSub)
+	}
+	rootCSub := a.store.GetSubmission(sess.Queue[1])
+	if rootCSub == nil || rootCSub.WorkspaceID != a.cfg.Workspaces[0].ID || rootCSub.TriggerMessageID != "root-c" {
+		t.Fatalf("root-c submission should be queued on workspace A: %+v", rootCSub)
 	}
 
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-a","turn":{"id":"turn-a","status":"completed"}}`))
@@ -3599,11 +3616,9 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 	if threadStartCwds[0] != a.cfg.Workspaces[1].Cwd {
 		t.Fatalf("root-b thread/start cwd = %q, want alt cwd %q", threadStartCwds[0], a.cfg.Workspaces[1].Cwd)
 	}
-	if sess := a.store.GetSession(rootBSessionKey); sess == nil || sess.WorkspaceID != "alt" || sess.ActiveThreadWorkspaceID != "alt" || sess.ActiveTurnID != "turn-b" {
-		t.Fatalf("root-b session should run in workspace B after root-a completes: %+v", sess)
-	}
-	if sess := a.store.GetSession(rootCSessionKey); sess == nil || len(sess.Queue) != 1 || sess.ActiveThreadID != "" {
-		t.Fatalf("root-c session should still be queued while root-b runs: %+v", sess)
+	sess = a.store.GetSession(rootASessionKey)
+	if sess == nil || sess.ActiveThreadWorkspaceID != "alt" || sess.ActiveTurnID != "turn-b" || len(sess.Queue) != 1 || sess.Queue[0] != rootCSub.ID {
+		t.Fatalf("group session should run root-b and keep root-c queued: %+v", sess)
 	}
 
 	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-b","turn":{"id":"turn-b","status":"completed"}}`))
@@ -3615,8 +3630,8 @@ func TestHandleFeishuMessageUsesGroupWorkspaceBindingForNewGroupRoots(t *testing
 	if threadStartCwds[1] != a.cfg.Workspaces[0].Cwd {
 		t.Fatalf("root-c thread/start cwd = %q, want default cwd %q", threadStartCwds[1], a.cfg.Workspaces[0].Cwd)
 	}
-	if sess := a.store.GetSession(rootCSessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveTurnID != "turn-c" {
-		t.Fatalf("root-c session should run in workspace A after root-b completes: %+v", sess)
+	if sess := a.store.GetSession(rootASessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveTurnID != "turn-c" || len(sess.Queue) != 0 {
+		t.Fatalf("group session should run root-c in workspace A after root-b completes: %+v", sess)
 	}
 }
 
@@ -3762,7 +3777,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 
 func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	replySessionKey := "feishu:group:chat-1:root:reply-root"
+	replySessionKey := "feishu:group:chat-1"
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         replySessionKey,
@@ -4053,8 +4068,20 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
+	bindingID := defaultBindingID(a.FrontendID(), "group", "chat-1")
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          bindingID,
+		FrontendID:  a.FrontendID(),
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                        sessionKey,
+		BindingID:                  bindingID,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "thread-1",
 		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,

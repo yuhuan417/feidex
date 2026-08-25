@@ -67,3 +67,17 @@ func StateCloneSession(sess *state.Session) *state.Session {
 	}
 	return &cp
 }
+
+// SubmissionHasSourceRootMessages reports whether a submission already carries
+// explicit source root anchors for reply continuation binding.
+func SubmissionHasSourceRootMessages(sub *state.Submission) bool {
+	if sub == nil {
+		return false
+	}
+	for _, rootID := range sub.SourceRootMessageIDs {
+		if strings.TrimSpace(rootID) != "" {
+			return true
+		}
+	}
+	return false
+}

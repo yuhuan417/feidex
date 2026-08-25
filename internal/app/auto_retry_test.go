@@ -68,7 +68,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
+	sessionKey := "feishu:frontend:default:group:chat-1"
 	threadID := "thread-retry-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
@@ -271,7 +271,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	}
 }
 
-func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
+func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
 
@@ -285,30 +285,17 @@ func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionA := "feishu:frontend:default:group:chat-1:root:root-a"
+	sessionKey := "feishu:frontend:default:group:chat-1"
 	threadA := "thread-root-a"
-	sessA := seedAutoRetrySession(t, a, sessionA, threadA)
+	sessA := seedAutoRetrySession(t, a, sessionKey, threadA)
 	sessA.RootMessageID = "root-a"
 	if err := a.store.UpsertSession(sessA); err != nil {
 		t.Fatalf("UpsertSession(root-a) error = %v", err)
 	}
-	markSessionThreadLive(a, sessionA, threadA)
+	markSessionThreadLive(a, sessionKey, threadA)
 
-	sessionB := "feishu:frontend:default:group:chat-1:root:root-b"
-	sessB := &state.Session{
-		Key:           sessionB,
-		WorkspaceID:   defaultWorkspaceID(a),
-		OwnerUserID:   "user-1",
-		ChatID:        "chat-1",
-		ChatType:      "group",
-		RootMessageID: "root-b",
-		Status:        state.SessionStatusQueued.String(),
-	}
-	if err := a.store.UpsertSession(sessB); err != nil {
-		t.Fatalf("UpsertSession(root-b) error = %v", err)
-	}
 	queuedB, err := a.store.CreateSubmission(&state.Submission{
-		SessionKey:       sessionB,
+		SessionKey:       sessionKey,
 		WorkspaceID:      defaultWorkspaceID(a),
 		ChatID:           "chat-1",
 		TriggerMessageID: "later-b",
@@ -318,11 +305,11 @@ func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSubmission(root-b) error = %v", err)
 	}
-	if err := a.State().QueueSubmission(sessionB, queuedB); err != nil {
+	if err := a.State().QueueSubmission(sessionKey, queuedB); err != nil {
 		t.Fatalf("QueueSubmission(root-b) error = %v", err)
 	}
 	failedSub := &state.Submission{
-		SessionKey:           sessionA,
+		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadA,
 		ChatID:               "chat-1",
@@ -330,19 +317,16 @@ func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
 		SourceRootMessageIDs: []string{"root-a"},
 		Status:               state.SubmissionStatusFailed.String(),
 	}
-	updatedA := a.State().Session(sessionA)
+	updatedA := a.State().Session(sessionKey)
 
-	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionA, threadA, "failed", updatedA, failedSub, "") {
+	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadA, "failed", updatedA, failedSub, "") {
 		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
 	}
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
 	}
-	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionA); next != "" {
-		t.Fatalf("NextQueuedSessionKey(root-a) = %q, want blocked by auto retry", next)
-	}
-	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionB); next != "" {
-		t.Fatalf("NextQueuedSessionKey(root-b) = %q, want blocked by auto retry", next)
+	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey); next != "" {
+		t.Fatalf("NextQueuedSessionKey(group) = %q, want blocked by auto retry", next)
 	}
 
 	var threadStartCalls int
@@ -389,25 +373,25 @@ func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
 	if len(turnStartInputs) != 1 || turnStartInputs[0] != "继续" {
 		t.Fatalf("turn/start inputs after retry fire = %#v, want [继续]", turnStartInputs)
 	}
-	if sessB := a.State().Session(sessionB); sessB == nil || len(sessB.Queue) != 1 || sessB.ActiveTurnID != "" {
-		t.Fatalf("root-b session before retry completion = %+v, want still queued", sessB)
+	if sess := a.State().Session(sessionKey); sess == nil || len(sess.Queue) != 1 || sess.ActiveTurnID != "turn-root-a-retry" {
+		t.Fatalf("group session before retry completion = %+v, want retry active and queued follow-up", sess)
 	}
 
 	finishTurn(a, threadA, "turn-root-a-retry", "completed")
-	if threadStartCalls != 1 {
-		t.Fatalf("thread/start calls = %d, want 1 for root-b queued submission", threadStartCalls)
+	if threadStartCalls != 0 {
+		t.Fatalf("thread/start calls = %d, want 0 for same group session queued submission", threadStartCalls)
 	}
 	if len(turnStartInputs) != 2 || turnStartInputs[1] != "root b input" {
 		t.Fatalf("turn/start inputs after retry completion = %#v, want root-b input", turnStartInputs)
 	}
-	if len(turnStartThreadIDs) != 2 || turnStartThreadIDs[0] != threadA || turnStartThreadIDs[1] != "thread-root-b-started" {
-		t.Fatalf("turn/start thread IDs = %#v, want retry thread then root-b thread", turnStartThreadIDs)
+	if len(turnStartThreadIDs) != 2 || turnStartThreadIDs[0] != threadA || turnStartThreadIDs[1] != threadA {
+		t.Fatalf("turn/start thread IDs = %#v, want retry thread reused for queued input", turnStartThreadIDs)
 	}
-	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionA); ok {
+	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState(root-a) still present after successful retry completion")
 	}
-	if sessB := a.State().Session(sessionB); sessB == nil || len(sessB.Queue) != 0 || sessB.ActiveTurnID != "turn-root-b" {
-		t.Fatalf("root-b session after retry completion = %+v, want queued turn active", sessB)
+	if sess := a.State().Session(sessionKey); sess == nil || len(sess.Queue) != 0 || sess.ActiveTurnID != "turn-root-b" {
+		t.Fatalf("group session after retry completion = %+v, want queued turn active", sess)
 	}
 }
 
@@ -425,7 +409,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
+	sessionKey := "feishu:frontend:default:group:chat-1"
 	threadID := "thread-stop-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
@@ -540,7 +524,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1:root:root-1"
+	sessionKey := "feishu:frontend:default:group:chat-1"
 	threadID := "claude-session-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)

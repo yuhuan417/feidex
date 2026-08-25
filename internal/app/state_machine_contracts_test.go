@@ -74,12 +74,11 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 	}
 }
 
-func TestGroupTopLevelCommandInterruptTargetsActiveRootAndClearsQueuedRoots(t *testing.T) {
+func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	activeKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-active", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-active", UserID: "user-1"})
-	queuedKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-queued", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-queued", UserID: "user-1"})
-	sub := seedActiveSubmission(t, a, activeKey, "thread-active", "turn-active")
-	if _, err := a.store.UpdateSession(activeKey, func(sess *state.Session) {
+	sessionKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-active", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-active", UserID: "user-1"})
+	sub := seedActiveSubmission(t, a, sessionKey, "thread-active", "turn-active")
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
 		sess.RootMessageID = "root-active"
 		sess.Status = "turn_in_progress"
 	}); err != nil {
@@ -87,7 +86,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveRootAndClearsQueuedRoots(t *t
 	}
 	queuedID, err := a.store.CreateSubmission(&state.Submission{
 		ID:               "sub-queued-other-root",
-		SessionKey:       queuedKey,
+		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
 		UserID:           "user-1",
 		ChatID:           "chat-1",
@@ -98,17 +97,10 @@ func TestGroupTopLevelCommandInterruptTargetsActiveRootAndClearsQueuedRoots(t *t
 	if err != nil {
 		t.Fatalf("CreateSubmission(queued) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
-		Key:           queuedKey,
-		WorkspaceID:   a.cfg.Workspaces[0].ID,
-		OwnerUserID:   "user-1",
-		ChatID:        "chat-1",
-		ChatType:      "group",
-		RootMessageID: "root-queued",
-		Status:        "queued",
-		Queue:         []string{queuedID},
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
+		sess.Queue = []string{queuedID}
 	}); err != nil {
-		t.Fatalf("UpsertSession(queued) error = %v", err)
+		t.Fatalf("UpdateSession(queue) error = %v", err)
 	}
 
 	interruptCalls := 0
@@ -137,19 +129,18 @@ func TestGroupTopLevelCommandInterruptTargetsActiveRootAndClearsQueuedRoots(t *t
 	if interruptCalls != 1 {
 		t.Fatalf("interrupt calls = %d, want 1", interruptCalls)
 	}
-	active := a.store.GetSession(activeKey)
+	active := a.store.GetSession(sessionKey)
 	if active == nil || active.ActiveTurnID != "turn-active" || active.ActiveSubmissionID != sub.ID {
 		t.Fatalf("active session after /stop = %+v", active)
 	}
-	queued := a.store.GetSession(queuedKey)
-	if queued == nil || len(queued.Queue) != 0 || queued.Status != "idle" {
-		t.Fatalf("queued session after /stop = %+v, want cleared idle session", queued)
+	if len(active.Queue) != 0 || active.Status != "turn_in_progress" {
+		t.Fatalf("active session after queue cleanup = %+v, want active turn with empty queue", active)
 	}
 	if got := a.store.GetSubmission(queuedID); got != nil {
 		t.Fatalf("queued submission after /stop = %+v, want cleanup", got)
 	}
 	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "已请求中断当前任务") || !strings.Contains(ff.replyTexts[0], "已清空 1 条排队或暂存输入") {
-		t.Fatalf("replyTexts = %+v, want interrupt plus cross-root queue cleanup", ff.replyTexts)
+		t.Fatalf("replyTexts = %+v, want interrupt plus queue cleanup", ff.replyTexts)
 	}
 }
 

@@ -501,7 +501,7 @@ func TestStartupReadyChatIDsDeduplicatesP2PChats(t *testing.T) {
 		{ChatID: "chat-b", ChatType: "p2p"},
 		{Key: "feishu:p2p:chat-key:user-key"},
 		{ChatID: "chat-group", ChatType: "group"},
-		{Key: "feishu:group:chat-key-group:root:root-key"},
+		{Key: "feishu:group:chat-key-group"},
 		{ChatID: "chat-legacy"},
 		{ChatID: ""},
 		nil,

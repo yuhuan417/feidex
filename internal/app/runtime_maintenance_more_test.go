@@ -88,7 +88,7 @@ func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 	a.feishu = wrapFeishuClient(ff)
 	for _, sess := range []*state.Session{
 		{Key: "feishu:frontend:default:p2p:chat-b:ou-user-1", ChatID: "chat-b"},
-		{Key: "feishu:frontend:default:group:chat-a:root:om-root-1", ChatID: "chat-a"},
+		{Key: "feishu:frontend:default:group:chat-a", ChatID: "chat-a"},
 		{Key: "feishu:frontend:default:p2p:chat-a:ou-user-2", ChatID: "chat-a"},
 		{Key: "feishu:frontend:other:p2p:chat-c:ou-user-3", ChatID: "chat-c"},
 	} {

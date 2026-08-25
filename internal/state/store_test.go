@@ -267,7 +267,7 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 
 func TestSessionContextAndExplicitBindingMetadata(t *testing.T) {
 	store := openTestStore(t)
-	key := "feishu:frontend:frontend-a:group:chat-1:root:root-1"
+	key := "feishu:frontend:frontend-a:group:chat-1"
 	if err := store.UpsertSession(&Session{Key: key, BindingID: "binding-1", WorkspaceID: "workspace-1"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}

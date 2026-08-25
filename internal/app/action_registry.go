@@ -24,6 +24,7 @@ func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardAc
 	if action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
+	s.normalizeSessionKey(action)
 	name := resolvedCardActionName(action)
 	if reason := newRuntimeStateService(s.app).backendSwitchBlocksCardAction(name); reason != "" {
 		return &callback.CardActionTriggerResponse{
@@ -46,6 +47,19 @@ func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardAc
 		}, nil
 	}
 	return handler(s, action)
+}
+
+func (s cardActionService) normalizeSessionKey(action *feishu.CardAction) {
+	if s.app == nil || action == nil || action.ActionValue == nil {
+		return
+	}
+	raw, ok := action.ActionValue["session_key"].(string)
+	if !ok {
+		return
+	}
+	if normalized := normalizeSessionKey(s.app, raw); normalized != strings.TrimSpace(raw) {
+		action.ActionValue["session_key"] = normalized
+	}
 }
 
 type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)

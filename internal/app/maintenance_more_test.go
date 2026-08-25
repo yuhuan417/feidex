@@ -100,7 +100,7 @@ func TestMiscAppFunctions(t *testing.T) {
 	if got := nonZero(0, 0, 7, 9); got != 7 {
 		t.Fatalf("nonZero() = %d, want first non-zero", got)
 	}
-	if got := makeSessionKey(app, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:group:chat:root:root" {
+	if got := makeSessionKey(app, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:group:chat" {
 		t.Fatalf("makeSessionKey(group) = %q", got)
 	}
 	if got := makeSessionKey(app, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:p2p:chat:user" {

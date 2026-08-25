@@ -8,6 +8,10 @@ import (
 	"feidex/internal/state"
 )
 
+type agentBindingsForChatProvider interface {
+	AgentBindingsForChat(chatType, chatID string) []*state.AgentBinding
+}
+
 // MakeWorkspaceSelectionKey returns the frontend-scoped session key used to
 // store the current workspace selection for a chat/user scope.
 func MakeWorkspaceSelectionKey(a AppConfig, chatType, chatID, userID string) string {
@@ -89,6 +93,51 @@ func ResolveWorkspaceSelectionForSession(a AppConfig, sess *state.Session) strin
 		return strings.TrimSpace(sess.WorkspaceID)
 	}
 	return DefaultWorkspaceID(a)
+}
+
+// ResolveBindingWorkspaceForSessionKey returns the workspace configured by a
+// group chat binding, if the app exposes binding lookup for the current
+// frontend. It accepts a session key so group menu cards can resolve binding
+// workspace even before a concrete session has been created.
+func ResolveBindingWorkspaceForSessionKey(a AppConfig, sessionKey string, sess *state.Session) string {
+	provider, ok := a.(agentBindingsForChatProvider)
+	if a == nil || !ok {
+		return ""
+	}
+	chatType := ""
+	chatID := ""
+	bindingID := ""
+	if sess != nil {
+		chatType = strings.TrimSpace(sess.ChatType)
+		chatID = strings.TrimSpace(sess.ChatID)
+		bindingID = strings.TrimSpace(sess.BindingID)
+	}
+	if chatType == "" || chatID == "" {
+		_, parsedChatType, parsedChatID, _, _ := ParseSessionKey(sessionKey)
+		chatType = FirstNonEmpty(chatType, parsedChatType)
+		chatID = FirstNonEmpty(chatID, parsedChatID)
+	}
+	if !strings.EqualFold(strings.TrimSpace(chatType), "group") || strings.TrimSpace(chatID) == "" {
+		return ""
+	}
+	bindings := provider.AgentBindingsForChat(chatType, chatID)
+	if bindingID != "" {
+		for _, binding := range bindings {
+			if binding == nil || strings.TrimSpace(binding.ID) != bindingID {
+				continue
+			}
+			return strings.TrimSpace(binding.WorkspaceID)
+		}
+	}
+	for _, binding := range bindings {
+		if binding == nil {
+			continue
+		}
+		if workspaceID := strings.TrimSpace(binding.WorkspaceID); workspaceID != "" {
+			return workspaceID
+		}
+	}
+	return ""
 }
 
 // SetWorkspaceSelection persists the current workspace selection for a

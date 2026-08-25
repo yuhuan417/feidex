@@ -42,7 +42,7 @@ frontend 隔离以下内容：
 - AgentBinding
 - thread / submission 的本地关联
 
-因此同一个群、同一个 RootMessage，由 Bot A 和 Bot B 分别处理时，仍然是两个不同的本地 Session。
+因此同一个群由 Bot A 和 Bot B 分别处理时，仍然是两个不同的本地 Session。
 
 `GroupPrimary` 是例外：它不是 frontend-scoped 状态，而是当前 Feidex 实例内按群共享的一份 owner bot open_id。本机同一 Feidex 进程里的多个 frontend 会读取同一份 `GroupPrimary`，但它们仍用各自 bot open_id 判断自己是否为 primary。
 
@@ -94,21 +94,21 @@ Workspace 是当前 frontend 可访问的物理目录及其工作区配置，例
 
 ### 2.5 Session
 
-Feidex Session 是“一条 Feishu 对话分支”的本地状态对象。
+Feidex Session 是“一个 frontend 在一个 Feishu 会话里”的本地状态对象。
 
 群聊 Session 的身份是：
 
 ```text
-(frontend_id, chat_type, chat_id, root_message_id)
+(frontend_id, chat_type, chat_id)
 ```
 
 对应的 SessionKey 是：
 
 ```text
-feishu:frontend:<frontend_id>:group:<chat_id>:root:<root_message_id>
+feishu:frontend:<frontend_id>:group:<chat_id>
 ```
 
-其中 `root_message_id` 是 Feishu 回复树的根消息；如果入口消息没有显式 RootMessageID，当前实现使用入口消息自己的 MessageID 作为 root。
+其中 `RootMessageID` 仍会保存为 session/submission 的回复树绑定元数据，用于回复续写和消息链接，但不参与 SessionKey 生成。
 
 Session 内可以保存 `BindingID`，但 `BindingID` 只是执行元数据，不能参与 SessionKey 生成。
 
@@ -129,13 +129,13 @@ Session 内可以保存 `BindingID`，但 `BindingID` 只是执行元数据，�
 必须保持：
 
 ```text
-group session = frontend + chat + RootMessage
+group session = frontend + chat
 ```
 
 禁止：
 
-- 使用 `BindingID` 替代 RootMessageID。
-- 把整个群合并成一个 Session。
+- 使用 `BindingID` 或 RootMessageID 参与 SessionKey。
+- 把不同 frontend 的同一个群合并成一个 Session。
 - 因为 workspace、model 或 backend 配置变化而直接改变 SessionKey。
 - 让 Bot A 和 Bot B 共用同一个 frontend-scoped Session。
 
@@ -166,11 +166,11 @@ primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群�
 
 ### 3.4 Binding-level execution queue
 
-群聊里的 Session 仍按 `frontend + chat + RootMessage` 隔离，但普通任务执行面按“同一个 Bot 在同一个群内”串行：
+群聊里的 Session 按 `frontend + chat` 隔离，普通任务执行面也按“同一个 Bot 在同一个群内”串行：
 
-- 串行 key 是 `frontend_id + group chat_id`，不是 `RootMessageID`。
-- 同一个 Bot 在同一个群里的多个 root/session 可以同时存在，但同一时间只能有一个普通 submission 进入 backend turn。
-- 当前 root 正在执行时，其他 root 的普通输入会保留在各自 session queue 中；当前 turn 收到最终 `turn/completed` 后，调度器从同一群同一 Bot 下最早入队的 session 继续启动。
+- 串行 key 是 `frontend_id + group chat_id`。
+- 同一个 Bot 在同一个群里只有一个 chat-scoped session；同一时间只能有一个普通 submission 进入 backend turn。
+- 当前 turn 正在执行时，后续普通输入会保留在该 group session queue 中；当前 turn 收到最终 `turn/completed` 后，调度器从同一个 session queue 继续启动。
 - 入队后的 submission 保存自己的 `SessionKey`、`BindingID` 和 `WorkspaceID`；消费队列时不能因为 primary 或 workspace 配置变化重新路由。
 - Bot A 和 Bot B 可以并行；同一个 Bot 在不同群可以并行；同一个 Bot 在同一个群必须串行。
 - `/menu`、`/workspace`、`/model`、`/primary` 等本地控制命令即时处理，不作为普通 backend turn 入队。
@@ -289,7 +289,7 @@ Session / Thread 临时覆盖
 - [x] 同实例多 frontend 中，非 primary frontend 的过滤不会影响 primary frontend 处理未 `@` 消息。
 - [x] `@Bot /primary on` 会被所有可见 bot 用于同步本地 owner 副本；非目标 bot 静默处理。
 - [x] `/primary off` 不支持；空正文 `@Bot` 不作为 primary 切换入口。
-- [x] SessionKey 恢复为 `frontend + chat + RootMessage`。
+- [x] SessionKey 使用 `frontend + chat`。
 - [x] `BindingID` 不参与 SessionKey 推导。
 - [x] 群内工作区优先解析。
 - [x] 群内工作区为空时阻止静默使用默认 workspace。
@@ -318,8 +318,8 @@ Session / Thread 临时覆盖
 
 本功能完成条件：
 
-- [x] 同群不同 RootMessage 产生独立 Session。
-- [x] 同 RootMessage 的不同 Bot 产生 frontend 隔离的 Session。
+- [x] 同群不同 RootMessage 共享当前 frontend 的群 session。
+- [x] 同群不同 Bot 产生 frontend 隔离的 Session。
 - [x] `BindingID` 不出现在 SessionKey 中。
 - [x] 每个 Bot 可以使用自己机器上的 workspace。
 - [x] 新 Bot 入群后可以通过群内 `/workspace` 选择已有、新建或 clone workspace。

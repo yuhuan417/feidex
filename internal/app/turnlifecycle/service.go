@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/app/appcore"
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/sessionctx"
 	"feidex/internal/app/submission"
@@ -53,6 +54,13 @@ type App interface {
 	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
 	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool
 	LogSessionState(event, sessionKey string, sess *state.Session)
+}
+
+func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *state.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
+	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
+		return
+	}
+	reply.RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +245,7 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 	sub.TurnID = turnID
 	sub.Status = state.SubmissionStatusRunning.String()
 	w.replyContinuation().RecordSubmissionSourceLinks(sub)
-	w.replyContinuation().RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	recordLegacySessionRootTurnBinding(w.replyContinuation(), sess, sub, sessionKey, threadID, turnID)
 	w.turnStream().NoteTurnStarted(sessionKey, sub)
 	w.app.MarkSessionThreadLive(sessionKey, threadID)
 	return true
@@ -332,7 +340,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 	w.runtimeState().MarkTurnStartedAt(turnID, time.Now())
 	w.runtimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
 	w.replyContinuation().RecordSubmissionSourceLinks(sub)
-	w.replyContinuation().RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	recordLegacySessionRootTurnBinding(w.replyContinuation(), sess, sub, sessionKey, threadID, turnID)
 	w.turnStream().NoteTurnStarted(sessionKey, sub)
 	w.app.MarkSessionThreadLive(sessionKey, threadID)
 	slog.Debug("turn started notification rebound pending submission",
@@ -411,7 +419,7 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 		return "", nil
 	}
 	w.replyContinuation().RecordSubmissionSourceLinks(sub)
-	w.replyContinuation().RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	recordLegacySessionRootTurnBinding(w.replyContinuation(), sess, sub, sessionKey, threadID, turnID)
 	w.turnStream().NoteTurnStarted(sessionKey, sub)
 	w.app.MarkSessionThreadLive(sessionKey, threadID)
 	slog.Debug("turn completed rebound pending submission without prior turn start notification",

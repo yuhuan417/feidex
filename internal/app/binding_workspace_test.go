@@ -25,7 +25,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
 	sess := &state.Session{
-		Key:       "feishu:frontend:frontend-a:group:chat-1:root:root-1",
+		Key:       "feishu:frontend:frontend-a:group:chat-1",
 		BindingID: "binding-client",
 	}
 	if got := resolveSubmissionWorkspaceID(a, nil, sess, false); got != "client-workspace" {
@@ -40,7 +40,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 		t.Fatalf("SaveAgentBinding(empty) error = %v", err)
 	}
 	emptySession := &state.Session{
-		Key:         "feishu:frontend:frontend-a:group:chat-2:root:root-2",
+		Key:         "feishu:frontend:frontend-a:group:chat-2",
 		BindingID:   "binding-empty",
 		WorkspaceID: "",
 	}

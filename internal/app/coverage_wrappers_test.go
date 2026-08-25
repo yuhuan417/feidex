@@ -320,11 +320,17 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:group:chat-1:root:root-1"); chatType != "group" || chatID != "chat-1" || rootID != "root-1" || userID != "" {
 		t.Fatalf("parseSessionKeyMeta(group) = %q %q %q %q", chatType, chatID, rootID, userID)
 	}
+	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:group:chat-1"); chatType != "group" || chatID != "chat-1" || rootID != "" || userID != "" {
+		t.Fatalf("parseSessionKeyMeta(group chat) = %q %q %q %q", chatType, chatID, rootID, userID)
+	}
 	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:p2p:chat-1:user-1"); chatType != "p2p" || chatID != "chat-1" || rootID != "" || userID != "user-1" {
 		t.Fatalf("parseSessionKeyMeta(p2p) = %q %q %q %q", chatType, chatID, rootID, userID)
 	}
 	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:frontend:codex-main:group:chat-2:root:root-2"); chatType != "group" || chatID != "chat-2" || rootID != "root-2" || userID != "" {
 		t.Fatalf("parseSessionKeyMeta(frontend group) = %q %q %q %q", chatType, chatID, rootID, userID)
+	}
+	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:frontend:codex-main:group:chat-2"); chatType != "group" || chatID != "chat-2" || rootID != "" || userID != "" {
+		t.Fatalf("parseSessionKeyMeta(frontend group chat) = %q %q %q %q", chatType, chatID, rootID, userID)
 	}
 	if chatType, chatID, rootID, userID := parseSessionKeyMeta("feishu:frontend:claude-main:p2p:chat-2:user-2"); chatType != "p2p" || chatID != "chat-2" || rootID != "" || userID != "user-2" {
 		t.Fatalf("parseSessionKeyMeta(frontend p2p) = %q %q %q %q", chatType, chatID, rootID, userID)
@@ -366,7 +372,8 @@ func TestAppStateStoreScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 
 func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	sessionKey := "feishu:group:chat-1:root:root-1"
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1", MessageID: "msg-1"}
+	sessionKey := makeSessionKey(a, msg)
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -429,7 +436,6 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("setSessionThreadDefaults() = %+v", sess)
 	}
 
-	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1", MessageID: "msg-1"}
 	if _, _, _, threadID, err := newWorkspaceConfigService(a).currentThreadForMessage(msg); err != nil || threadID != "thread-1" {
 		t.Fatalf("currentThreadForMessage() = %q, %v", threadID, err)
 	}

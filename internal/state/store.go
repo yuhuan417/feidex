@@ -1424,24 +1424,25 @@ func storedSessionsEqual(a, b *storedSession) bool {
 func sessionContextFromKey(key string) (chatType, chatID, rootMessageID string, ok bool) {
 	key = strings.TrimSpace(key)
 	parts := strings.Split(key, ":")
-	if len(parts) < 4 || parts[0] != "feishu" {
+	if len(parts) < 3 || parts[0] != "feishu" {
 		return "", "", "", false
 	}
 	offset := 1
-	if len(parts) >= 6 && parts[1] == "frontend" {
+	if len(parts) > 3 && parts[1] == "frontend" {
 		offset = 3
+	}
+	if offset >= len(parts) {
+		return "", "", "", false
 	}
 	switch parts[offset] {
 	case "group":
-		if len(parts) <= offset+3 || strings.TrimSpace(parts[offset+1]) == "" {
+		if len(parts) <= offset+1 || strings.TrimSpace(parts[offset+1]) == "" {
 			return "", "", "", false
 		}
-		switch parts[offset+2] {
-		case "root":
+		if len(parts) > offset+3 && parts[offset+2] == "root" {
 			return "group", strings.TrimSpace(parts[offset+1]), strings.TrimSpace(parts[offset+3]), true
-		default:
-			return "", "", "", false
 		}
+		return "group", strings.TrimSpace(parts[offset+1]), "", true
 	case "p2p":
 		if len(parts) <= offset+2 || strings.TrimSpace(parts[offset+1]) == "" {
 			return "", "", "", false

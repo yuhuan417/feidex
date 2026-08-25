@@ -952,15 +952,18 @@ func serialGroupExecutionKey(sess *state.Session) string {
 
 func sessionGroupKeyParts(sessionKey string) (frontendID, chatID string, ok bool) {
 	parts := strings.Split(strings.TrimSpace(sessionKey), ":")
-	if len(parts) < 4 || parts[0] != "feishu" {
+	if len(parts) < 3 || parts[0] != "feishu" {
 		return "", "", false
 	}
 	offset := 1
-	if len(parts) >= 6 && parts[1] == "frontend" {
+	if len(parts) > 3 && parts[1] == "frontend" {
 		frontendID = strings.TrimSpace(parts[2])
 		offset = 3
 	}
-	if len(parts) > offset+3 && parts[offset] == "group" && parts[offset+2] == "root" {
+	if offset >= len(parts) {
+		return "", "", false
+	}
+	if len(parts) > offset+1 && parts[offset] == "group" {
 		chatID = strings.TrimSpace(parts[offset+1])
 		return frontendID, chatID, chatID != ""
 	}
@@ -1146,7 +1149,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		return err
 	}
 	a.SubmissionQueueReplyContinuation().RecordSubmissionSourceLinks(sub)
-	a.SubmissionQueueReplyContinuation().RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
+	recordLegacySessionRootTurnBinding(a.SubmissionQueueReplyContinuation(), sess, sub, sessionKey, threadID, turnID)
 	a.SubmissionQueueTurnStream().NoteTurnStarted(sessionKey, sub)
 	slog.Debug("startNextSubmission completed",
 		"session_key", sessionKey,
@@ -1165,4 +1168,11 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *state.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
+	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
+		return
+	}
+	reply.RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)
 }

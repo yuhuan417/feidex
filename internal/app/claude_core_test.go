@@ -698,7 +698,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	claude := &fakeClaudeCore{ensureSessionSet: true}
 	a.claude = claude
 
-	sessionKey := "feishu:group:chat-1:root:root-1"
+	sessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:           sessionKey,
 		WorkspaceID:   a.cfg.Workspaces[0].ID,
@@ -775,7 +775,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 
-	sessionKey := "feishu:group:chat-1:root:root-1"
+	sessionKey := "feishu:group:chat-1"
 	subID, err := a.store.CreateSubmission(&state.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
@@ -830,7 +830,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
 
-	sessionKey := "feishu:group:chat-1:root:root-1"
+	sessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -1417,7 +1417,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
 
-	targetSessionKey := "feishu:group:chat-1:root:root-msg"
+	targetSessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                targetSessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
@@ -1505,7 +1505,7 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
 
-	sessionKey := "feishu:group:chat-1:root:root-msg"
+	sessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -1735,7 +1735,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
 
-	sessionKey := "feishu:group:chat-1:root:root-msg"
+	sessionKey := "feishu:group:chat-1"
 
 	// Set up session with 2 active operations (original + steer)
 	if err := a.store.UpsertSession(&state.Session{
@@ -1828,7 +1828,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	a.claude = claude
 
-	sessionKey := "feishu:group:chat-1:root:root-msg"
+	sessionKey := "feishu:group:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
