@@ -96,10 +96,12 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		t.Fatalf("retry count = %d, want 0 before timer fires", snapshot.RetryCount)
 	}
 
+	startCalls := 0
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		if method != "turn/start" {
 			t.Fatalf("Call() method = %q, want turn/start", method)
 		}
+		startCalls++
 		paramMap, ok := params.(map[string]any)
 		if !ok {
 			t.Fatalf("Call() params type = %T", params)
@@ -120,6 +122,9 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	}
 
 	scheduled[0].task.fire()
+	if startCalls != 1 {
+		t.Fatalf("turn/start calls = %d, want 1", startCalls)
+	}
 
 	snapshot, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey)
 	if !ok {
@@ -210,6 +215,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		t.Fatalf("NextQueuedSessionKey() = %q, want blocked by auto retry", next)
 	}
 
+	startInputs := []string{}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		if method != "turn/start" {
 			t.Fatalf("Call() method = %q, want turn/start", method)
@@ -222,26 +228,51 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		if !ok || len(inputs) != 1 {
 			t.Fatalf("turn/start input = %#v", paramMap["input"])
 		}
-		if got := inputs[0]["text"]; got != "继续" {
-			t.Fatalf("turn/start input text = %#v, want 继续", got)
-		}
+		gotText, _ := inputs[0]["text"].(string)
+		startInputs = append(startInputs, gotText)
 		result, ok := out.(*codexrpc.TurnStartResult)
 		if !ok {
 			t.Fatalf("turn/start out type = %T", out)
 		}
-		result.Turn.ID = "turn-retry-queue-1"
+		switch len(startInputs) {
+		case 1:
+			result.Turn.ID = "turn-retry-queue-1"
+		case 2:
+			result.Turn.ID = "turn-later-1"
+		default:
+			t.Fatalf("unexpected turn/start #%d with input %q", len(startInputs), gotText)
+		}
 		return nil
 	}
 	scheduled[0].task.fire()
+	if len(startInputs) != 1 || startInputs[0] != "继续" {
+		t.Fatalf("turn/start inputs after retry fire = %#v, want [继续]", startInputs)
+	}
+	if snapshot, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); !ok {
+		t.Fatal("currentAutoRetryState() missing after queued retry start")
+	} else if snapshot.RetryCount != 1 {
+		t.Fatalf("retry count after queued retry start = %d, want 1", snapshot.RetryCount)
+	}
 
 	refreshed := a.State().Session(sessionKey)
 	if refreshed == nil || len(refreshed.Queue) != 1 || refreshed.Queue[0] != queuedID {
 		t.Fatalf("queue after retry start = %#v, want queued later input retained", refreshed)
 	}
+	finishTurn(a, threadID, "turn-retry-queue-1", "completed")
+	if len(startInputs) != 2 || startInputs[1] != "later input" {
+		t.Fatalf("turn/start inputs after retry completion = %#v, want queued input to resume", startInputs)
+	}
+	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
+		t.Fatal("currentAutoRetryState() still present after successful retry completion")
+	}
+	refreshed = a.State().Session(sessionKey)
+	if refreshed == nil || len(refreshed.Queue) != 0 || refreshed.ActiveTurnID != "turn-later-1" {
+		t.Fatalf("session after queued input resumes = %+v, want queue empty and turn-later-1 active", refreshed)
+	}
 }
 
 func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
-	a, _, _ := newTestApp(t)
+	a, _, fc := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
@@ -313,6 +344,71 @@ func TestAutoRetryTakesPriorityOverGroupRootQueue(t *testing.T) {
 	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionB); next != "" {
 		t.Fatalf("NextQueuedSessionKey(root-b) = %q, want blocked by auto retry", next)
 	}
+
+	var threadStartCalls int
+	var turnStartInputs []string
+	var turnStartThreadIDs []string
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			threadStartCalls++
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-root-b-started"
+			result.Thread.Name = "Root B"
+			result.Thread.Preview = "root b"
+		case "turn/start":
+			paramMap, ok := params.(map[string]any)
+			if !ok {
+				t.Fatalf("turn/start params type = %T", params)
+			}
+			if threadID, _ := paramMap["threadId"].(string); threadID != "" {
+				turnStartThreadIDs = append(turnStartThreadIDs, threadID)
+			}
+			inputs, ok := paramMap["input"].([]map[string]any)
+			if !ok || len(inputs) != 1 {
+				t.Fatalf("turn/start input = %#v", paramMap["input"])
+			}
+			gotText, _ := inputs[0]["text"].(string)
+			turnStartInputs = append(turnStartInputs, gotText)
+			result := out.(*codexrpc.TurnStartResult)
+			switch gotText {
+			case "继续":
+				result.Turn.ID = "turn-root-a-retry"
+			case "root b input":
+				result.Turn.ID = "turn-root-b"
+			default:
+				t.Fatalf("unexpected turn/start input %q", gotText)
+			}
+		default:
+			t.Fatalf("unexpected codex method %q", method)
+		}
+		return nil
+	}
+
+	scheduled[0].task.fire()
+	if len(turnStartInputs) != 1 || turnStartInputs[0] != "继续" {
+		t.Fatalf("turn/start inputs after retry fire = %#v, want [继续]", turnStartInputs)
+	}
+	if sessB := a.State().Session(sessionB); sessB == nil || len(sessB.Queue) != 1 || sessB.ActiveTurnID != "" {
+		t.Fatalf("root-b session before retry completion = %+v, want still queued", sessB)
+	}
+
+	finishTurn(a, threadA, "turn-root-a-retry", "completed")
+	if threadStartCalls != 1 {
+		t.Fatalf("thread/start calls = %d, want 1 for root-b queued submission", threadStartCalls)
+	}
+	if len(turnStartInputs) != 2 || turnStartInputs[1] != "root b input" {
+		t.Fatalf("turn/start inputs after retry completion = %#v, want root-b input", turnStartInputs)
+	}
+	if len(turnStartThreadIDs) != 2 || turnStartThreadIDs[0] != threadA || turnStartThreadIDs[1] != "thread-root-b-started" {
+		t.Fatalf("turn/start thread IDs = %#v, want retry thread then root-b thread", turnStartThreadIDs)
+	}
+	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionA); ok {
+		t.Fatal("currentAutoRetryState(root-a) still present after successful retry completion")
+	}
+	if sessB := a.State().Session(sessionB); sessB == nil || len(sessB.Queue) != 0 || sessB.ActiveTurnID != "turn-root-b" {
+		t.Fatalf("root-b session after retry completion = %+v, want queued turn active", sessB)
+	}
 }
 
 func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
@@ -359,6 +455,64 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	}
 	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState() still present after /stop")
+	}
+	replies := ff.replyTextsSnapshot()
+	if len(replies) == 0 || !containsAll(replies[len(replies)-1], "已停止当前 session 的自动重试") {
+		t.Fatalf("reply texts = %#v", replies)
+	}
+}
+
+func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.asyncRunner = func(fn func()) { fn() }
+
+	scheduled := make([]scheduledRetry, 0, 2)
+	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) delayedTask {
+		task := &fakeDelayedTask{fn: fn}
+		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
+		return task
+	}
+	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
+	}
+
+	sessionKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-retry", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-retry", UserID: "user-1"})
+	threadID := "thread-stop-retry"
+	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
+	markSessionThreadLive(a, sessionKey, threadID)
+	sub := &state.Submission{
+		SessionKey:           sessionKey,
+		WorkspaceID:          defaultWorkspaceID(a),
+		ThreadID:             threadID,
+		ChatID:               sess.ChatID,
+		TriggerMessageID:     "trigger-1",
+		SourceRootMessageIDs: []string{sess.RootMessageID},
+		Status:               "failed",
+	}
+	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	if len(scheduled) != 1 {
+		t.Fatalf("scheduled retries = %d, want 1 before /stop", len(scheduled))
+	}
+	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
+		t.Fatalf("unexpected codex method during retry-only /stop: %s", method)
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:     "cmd-stop-new-root",
+		ChatID:        sess.ChatID,
+		ChatType:      sess.ChatType,
+		RootMessageID: "cmd-stop-new-root",
+		UserID:        sess.OwnerUserID,
+	}
+	if err := commandInterrupt(a, msg); err != nil {
+		t.Fatalf("commandInterrupt() error = %v", err)
+	}
+	if !scheduled[0].task.stopped {
+		t.Fatal("scheduled retry task was not stopped by cross-root /stop")
+	}
+	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
+		t.Fatal("currentAutoRetryState() still present after cross-root /stop")
 	}
 	replies := ff.replyTextsSnapshot()
 	if len(replies) == 0 || !containsAll(replies[len(replies)-1], "已停止当前 session 的自动重试") {

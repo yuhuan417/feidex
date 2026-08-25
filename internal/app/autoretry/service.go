@@ -404,11 +404,12 @@ func (s Service) RunAutoRetryTimer(sessionKey string, expectedSeq uint64) {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已切换到其他线程。")
 		return
 	}
-	if s.app.SessionHasActiveWork(sess) || len(sess.Queue) > 0 {
+	if s.app.SessionHasActiveWork(sess) {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "检测到当前线程已有新任务，自动重试结束。")
 		return
 	}
-	if state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
+	sessionStatus := state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String()))
+	if sessionStatus != state.SessionStatusIdle && sessionStatus != state.SessionStatusQueued {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不再处于空闲态。")
 		return
 	}

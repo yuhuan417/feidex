@@ -33,12 +33,16 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessage
 	if newRuntimeStateService(a).frontendMessageTrafficCount() > allowedMessageTraffic {
 		return "当前仍有消息处理中"
 	}
+	autoRetrySvc := newAutoRetryService(a)
 	for _, sess := range a.State().Sessions() {
 		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
 		if sessionHasActiveWork(sess) {
 			return "当前仍有运行中的任务"
+		}
+		if autoRetrySvc.HasBlockingAutoRetry(sess.Key) {
+			return "当前仍有自动重试中的任务"
 		}
 		if len(sess.Queue) > 0 {
 			return "当前仍有排队中的消息"
@@ -49,9 +53,6 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessage
 		if state.NormalizeSessionStatus(firstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 			return "当前会话还没有完全回到空闲态"
 		}
-	}
-	if newAutoRetryService(a).HasPendingAutoRetry("") {
-		return "当前仍有等待自动重试的任务"
 	}
 	for _, req := range a.State().PendingRequests() {
 		if isPendingRequestOpen(req) {

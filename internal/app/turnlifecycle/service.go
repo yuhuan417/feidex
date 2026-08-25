@@ -46,7 +46,6 @@ type App interface {
 	SendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string
 	SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string
 	SessionHasActiveWork(sess *state.Session) bool
-	SessionShouldStartNextSubmissionAsync(sess *state.Session) bool
 	NextQueuedSubmissionSessionKey(sessionKey string) string
 	BindStandaloneCompactTurn(threadID, turnID string) bool
 	BindGoalContinuationTurn(threadID, turnID string) bool
@@ -186,10 +185,6 @@ func sessionHasActiveWork(sess *state.Session) bool {
 	default:
 		return false
 	}
-}
-
-func sessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
-	return submission.ShouldStartNextSubmissionAsync(sess)
 }
 
 // TurnCompletionTerminalText returns the terminal text to display when a turn

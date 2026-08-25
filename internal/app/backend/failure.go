@@ -421,9 +421,6 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	nextSessionKey := ""
 	if updatedSess != nil {
 		nextSessionKey = s.NextQueuedSubmissionSessionKey(sessionKey)
-		if nextSessionKey == "" && sessionShouldStartNextSubmissionAsync(updatedSess) {
-			nextSessionKey = sessionKey
-		}
 	}
 	if nextSessionKey != "" {
 		s.RunAsync(func() {
@@ -443,10 +440,4 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 	default:
 		return false
 	}
-}
-
-// sessionShouldStartNextSubmissionAsync reports whether the session should
-// start the next submission asynchronously.
-func sessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
-	return sess != nil && !appsessionctx.HasInFlightSubmission(sess) && len(sess.Queue) > 0
 }

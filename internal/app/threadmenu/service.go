@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -95,6 +96,7 @@ type App interface {
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
 	Session(key string) *state.Session
+	Sessions() []*state.Session
 	SaveSession(sess *state.Session) error
 }
 
@@ -348,6 +350,124 @@ func (s *Service) messageForThreadMenu(msg *feishu.InboundMessage) (*feishu.Inbo
 	return &cp, effectiveSessionKey
 }
 
+func (s *Service) interruptSurfaceSessionKeys(sessionKey string) []string {
+	sessionKey = strings.TrimSpace(sessionKey)
+	keys := appendUniqueSessionKey(nil, sessionKey)
+	if s == nil || s.app == nil {
+		return keys
+	}
+	_, chatType, chatID, _, _ := appcore.ParseSessionKey(sessionKey)
+	if chatType != "group" || strings.TrimSpace(chatID) == "" {
+		return keys
+	}
+	st := s.app.ThreadMenuAppState()
+	if st == nil {
+		return keys
+	}
+	for _, sess := range st.Sessions() {
+		if sess == nil {
+			continue
+		}
+		candidateKey := strings.TrimSpace(sess.Key)
+		if candidateKey == "" || !appcore.SessionBelongsToFrontend(s.app, candidateKey) {
+			continue
+		}
+		candidateChatType, candidateChatID := sessionGroupChat(candidateKey, sess)
+		if candidateChatType == "group" && candidateChatID == chatID {
+			keys = appendUniqueSessionKey(keys, candidateKey)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func appendUniqueSessionKey(keys []string, key string) []string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return keys
+	}
+	for _, existing := range keys {
+		if strings.TrimSpace(existing) == key {
+			return keys
+		}
+	}
+	return append(keys, key)
+}
+
+func sessionGroupChat(sessionKey string, sess *state.Session) (chatType, chatID string) {
+	_, chatType, chatID, _, _ = appcore.ParseSessionKey(sessionKey)
+	if chatType == "" && sess != nil {
+		chatType = strings.TrimSpace(sess.ChatType)
+		chatID = strings.TrimSpace(sess.ChatID)
+	}
+	return chatType, chatID
+}
+
+func (s *Service) discardInterruptSurfacePendingInputs(sessionKeys []string) int {
+	if s == nil || s.app == nil {
+		return 0
+	}
+	pendingQueue := s.app.ThreadMenuPendingQueue()
+	if pendingQueue == nil {
+		return 0
+	}
+	discarded := 0
+	for _, key := range sessionKeys {
+		discarded += pendingQueue.DiscardSessionPendingInputs(key)
+	}
+	return discarded
+}
+
+func (s *Service) interruptTargetSession(sessionKeys []string) (string, *state.Session) {
+	if s == nil || s.app == nil {
+		return "", nil
+	}
+	st := s.app.ThreadMenuAppState()
+	if st == nil {
+		return "", nil
+	}
+	var bestKey string
+	var best *state.Session
+	for _, key := range sessionKeys {
+		sess := st.Session(key)
+		if !interruptSessionActive(sess) {
+			continue
+		}
+		if best == nil || sess.UpdatedAt > best.UpdatedAt || (sess.UpdatedAt == best.UpdatedAt && strings.TrimSpace(key) > strings.TrimSpace(bestKey)) {
+			bestKey = strings.TrimSpace(key)
+			best = sess
+		}
+	}
+	return bestKey, best
+}
+
+func interruptSessionActive(sess *state.Session) bool {
+	return sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveThreadID) != ""
+}
+
+func (s *Service) cancelInterruptSurfaceAutoRetry(sessionKeys []string, activeSessionKey string, activeSess *state.Session) bool {
+	if s == nil || s.app == nil {
+		return false
+	}
+	st := s.app.ThreadMenuAppState()
+	canceled := false
+	for _, key := range sessionKeys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		sess := activeSess
+		if key != strings.TrimSpace(activeSessionKey) && st != nil {
+			sess = st.Session(key)
+		}
+		keepUntilTerminal := key == strings.TrimSpace(activeSessionKey) && interruptSessionActive(sess)
+		if s.app.CancelAutoRetry(key, keepUntilTerminal, "已停止当前 session 的自动重试。") {
+			canceled = true
+		}
+	}
+	return canceled
+}
+
 // ---------------------------------------------------------------------------
 // Thread listing and creation
 // ---------------------------------------------------------------------------
@@ -598,16 +718,20 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 // CommandInterrupt handles /stop — interrupts the active turn.
 func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := appcore.MakeSessionKey(s.app, msg)
-	discarded := s.app.ThreadMenuPendingQueue().DiscardSessionPendingInputs(sessionKey)
-	sess := s.app.ThreadMenuAppState().Session(sessionKey)
-	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil {
-		sess = runtime.ReconcileCompletedTurnFromFinalOutput(sessionKey, sess)
+	sessionKeys := s.interruptSurfaceSessionKeys(sessionKey)
+	discarded := s.discardInterruptSurfacePendingInputs(sessionKeys)
+	targetSessionKey, sess := s.interruptTargetSession(sessionKeys)
+	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil && sess != nil {
+		sess = runtime.ReconcileCompletedTurnFromFinalOutput(targetSessionKey, sess)
 	}
 	if sess == nil {
-		sess = s.app.ThreadMenuAppState().Session(sessionKey)
+		targetSessionKey, sess = s.interruptTargetSession(sessionKeys)
 	}
-	canceledRetry := s.app.CancelAutoRetry(sessionKey, sess != nil && sess.ActiveTurnID != "" && sess.ActiveThreadID != "", "已停止当前 session 的自动重试。")
-	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
+	if !interruptSessionActive(sess) {
+		targetSessionKey, sess = s.interruptTargetSession(sessionKeys)
+	}
+	canceledRetry := s.cancelInterruptSurfaceAutoRetry(sessionKeys, targetSessionKey, sess)
+	if !interruptSessionActive(sess) {
 		if canceledRetry {
 			reply := "已停止当前 session 的自动重试。"
 			if discarded > 0 {
@@ -622,13 +746,13 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err := s.app.ThreadMenuConversationBackend().InterruptActiveTurn(ctx, sessionKey, sess); err != nil {
+	if err := s.app.ThreadMenuConversationBackend().InterruptActiveTurn(ctx, targetSessionKey, sess); err != nil {
 		return err
 	}
 	// For backends with asynchronous interrupt responses (e.g. Claude), clear
 	// stale active operations so the session doesn't get stuck in "queuing".
 	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil {
-		sess = runtime.ClearActiveOperationsAfterInterrupt(sessionKey, sess)
+		sess = runtime.ClearActiveOperationsAfterInterrupt(targetSessionKey, sess)
 	}
 	reply := "已请求中断当前任务。"
 	if discarded > 0 {

@@ -8,6 +8,7 @@ import (
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 )
 
 func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
@@ -73,6 +74,85 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 	}
 }
 
+func TestGroupTopLevelCommandInterruptTargetsActiveRootAndClearsQueuedRoots(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	activeKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-active", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-active", UserID: "user-1"})
+	queuedKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-queued", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-queued", UserID: "user-1"})
+	sub := seedActiveSubmission(t, a, activeKey, "thread-active", "turn-active")
+	if _, err := a.store.UpdateSession(activeKey, func(sess *state.Session) {
+		sess.RootMessageID = "root-active"
+		sess.Status = "turn_in_progress"
+	}); err != nil {
+		t.Fatalf("UpdateSession(active) error = %v", err)
+	}
+	queuedID, err := a.store.CreateSubmission(&state.Submission{
+		ID:               "sub-queued-other-root",
+		SessionKey:       queuedKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		UserID:           "user-1",
+		ChatID:           "chat-1",
+		TriggerMessageID: "msg-queued",
+		InputText:        "queued follow-up",
+		Status:           "queued",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission(queued) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:           queuedKey,
+		WorkspaceID:   a.cfg.Workspaces[0].ID,
+		OwnerUserID:   "user-1",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		RootMessageID: "root-queued",
+		Status:        "queued",
+		Queue:         []string{queuedID},
+	}); err != nil {
+		t.Fatalf("UpsertSession(queued) error = %v", err)
+	}
+
+	interruptCalls := 0
+	fc.callHook = func(_ context.Context, method string, params any, _ any) error {
+		if method != "turn/interrupt" {
+			t.Fatalf("unexpected codex method: %s", method)
+		}
+		interruptCalls++
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-active" || got["turnId"] != "turn-active" {
+			t.Fatalf("turn/interrupt params = %+v, want active root thread/turn", got)
+		}
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:     "msg-stop",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		RootMessageID: "msg-stop",
+		UserID:        "user-1",
+	}
+	if err := commandInterrupt(a, msg); err != nil {
+		t.Fatalf("commandInterrupt() error = %v", err)
+	}
+	if interruptCalls != 1 {
+		t.Fatalf("interrupt calls = %d, want 1", interruptCalls)
+	}
+	active := a.store.GetSession(activeKey)
+	if active == nil || active.ActiveTurnID != "turn-active" || active.ActiveSubmissionID != sub.ID {
+		t.Fatalf("active session after /stop = %+v", active)
+	}
+	queued := a.store.GetSession(queuedKey)
+	if queued == nil || len(queued.Queue) != 0 || queued.Status != "idle" {
+		t.Fatalf("queued session after /stop = %+v, want cleared idle session", queued)
+	}
+	if got := a.store.GetSubmission(queuedID); got != nil {
+		t.Fatalf("queued submission after /stop = %+v, want cleanup", got)
+	}
+	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "已请求中断当前任务") || !strings.Contains(ff.replyTexts[0], "已清空 1 条排队或暂存输入") {
+		t.Fatalf("replyTexts = %+v, want interrupt plus cross-root queue cleanup", ff.replyTexts)
+	}
+}
+
 func TestErrorNotificationKeepsSessionBoundUntilFailedCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
@@ -125,7 +205,7 @@ func TestPermissionsApprovalLifecycleResumesOnlyAfterServerRequestResolved(t *te
 		t.Fatalf("submission after permissions request = %+v, want waiting_approval", updated)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "perm-1"},
 	}, "approval.permissions.accept_session")
@@ -173,7 +253,7 @@ func TestMcpElicitationURLLifecycleResumesOnlyAfterServerRequestResolved(t *test
 		t.Fatalf("submission after elicitation request = %+v, want waiting_user_input", updated)
 	}
 
-	resp, err := a.ServerRequestService().CompleteElicitationURLAction( &feishu.CardAction{
+	resp, err := a.ServerRequestService().CompleteElicitationURLAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "elicit-1"},
 	}, "elicitation_url.accept")

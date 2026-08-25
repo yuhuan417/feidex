@@ -35,7 +35,7 @@ func TestFrontendIdleState(t *testing.T) {
 	}{
 		{
 			name: "idle ignores other frontend state",
-			seed: func(t *testing.T, _ *App, store *state.Store) {
+			seed: func(t *testing.T, a *App, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&state.Session{
 					Key:    currentSessionKey,
@@ -50,6 +50,13 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(foreign) error = %v", err)
 				}
+				a.autoRetries = &autoRetryTracker{States: map[string]*autoRetryState{
+					foreignSessionKey: {
+						SessionKey: foreignSessionKey,
+						ThreadID:   "thread-foreign",
+						Timer:      &fakeDelayedTask{},
+					},
+				}}
 			},
 			wantIdle: true,
 			want:     "",
@@ -161,8 +168,14 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "pending auto retry blocks idle",
-			seed: func(t *testing.T, a *App, _ *state.Store) {
+			seed: func(t *testing.T, a *App, store *state.Store) {
 				t.Helper()
+				if err := store.UpsertSession(&state.Session{
+					Key:    currentSessionKey,
+					Status: "idle",
+				}); err != nil {
+					t.Fatalf("UpsertSession(current) error = %v", err)
+				}
 				a.autoRetries = &autoRetryTracker{States: map[string]*autoRetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
@@ -171,7 +184,27 @@ func TestFrontendIdleState(t *testing.T) {
 					},
 				}}
 			},
-			want: "当前仍有等待自动重试的任务",
+			want: "当前仍有自动重试中的任务",
+		},
+		{
+			name: "running auto retry blocks idle",
+			seed: func(t *testing.T, a *App, store *state.Store) {
+				t.Helper()
+				if err := store.UpsertSession(&state.Session{
+					Key:    currentSessionKey,
+					Status: "idle",
+				}); err != nil {
+					t.Fatalf("UpsertSession(current) error = %v", err)
+				}
+				a.autoRetries = &autoRetryTracker{States: map[string]*autoRetryState{
+					currentSessionKey: {
+						SessionKey: currentSessionKey,
+						ThreadID:   "thread-1",
+						RetryCount: 1,
+					},
+				}}
+			},
+			want: "当前仍有自动重试中的任务",
 		},
 	}
 

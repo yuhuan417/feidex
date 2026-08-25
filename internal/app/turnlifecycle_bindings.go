@@ -76,10 +76,6 @@ func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submiss
 	return ids
 }
 
-func (a *App) SessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
-	return sessionShouldStartNextSubmissionAsync(sess)
-}
-
 func (a *App) NextQueuedSubmissionSessionKey(sessionKey string) string {
 	return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
 }
