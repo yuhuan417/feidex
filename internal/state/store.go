@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 8
+const currentSnapshotVersion = 9
 
 type Store struct {
 	path    string
@@ -27,6 +27,7 @@ type Snapshot struct {
 	Sessions                  map[string]*storedSession             `json:"sessions"`
 	AgentBindings             map[string]*AgentBinding              `json:"agent_bindings,omitempty"`
 	GroupPrimaries            map[string]*GroupPrimary              `json:"group_primaries,omitempty"`
+	GroupAnnouncementBlocks   map[string]*GroupAnnouncementBlock    `json:"group_announcement_blocks,omitempty"`
 	FrontendCardNotifications map[string][]FrontendCardNotification `json:"frontend_card_notifications,omitempty"`
 }
 
@@ -107,6 +108,22 @@ type GroupPrimary struct {
 	OwnerBotOpenID string `json:"owner_bot_open_id,omitempty"`
 	CreatedAt      int64  `json:"created_at"`
 	UpdatedAt      int64  `json:"updated_at"`
+}
+
+// GroupAnnouncementBlock stores the Feishu upgraded group announcement block
+// owned by one local frontend/bot in one group chat.
+type GroupAnnouncementBlock struct {
+	ID              string `json:"id"`
+	FrontendID      string `json:"frontend_id"`
+	ChatID          string `json:"chat_id"`
+	ChatType        string `json:"chat_type"`
+	BotOpenID       string `json:"bot_open_id,omitempty"`
+	BlockID         string `json:"block_id,omitempty"`
+	Marker          string `json:"marker,omitempty"`
+	LastContentHash string `json:"last_content_hash,omitempty"`
+	LastUpdatedAt   int64  `json:"last_updated_at,omitempty"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
 }
 
 // AgentBindingPendingMessage stores one inbound group message while a binding
@@ -284,6 +301,7 @@ func Open(path string) (*Store, error) {
 			Sessions:                  map[string]*storedSession{},
 			AgentBindings:             map[string]*AgentBinding{},
 			GroupPrimaries:            map[string]*GroupPrimary{},
+			GroupAnnouncementBlocks:   map[string]*GroupAnnouncementBlock{},
 			FrontendCardNotifications: map[string][]FrontendCardNotification{},
 		},
 		runtime: runtimeState{
@@ -333,6 +351,14 @@ func Open(path string) (*Store, error) {
 		rewrite = true
 	}
 	s.data.GroupPrimaries = normalizedPrimaries
+	normalizedAnnouncementBlocks := normalizeGroupAnnouncementBlocks(s.data.GroupAnnouncementBlocks)
+	if normalizedAnnouncementBlocks == nil {
+		normalizedAnnouncementBlocks = map[string]*GroupAnnouncementBlock{}
+	}
+	if !groupAnnouncementBlocksEqual(s.data.GroupAnnouncementBlocks, normalizedAnnouncementBlocks) {
+		rewrite = true
+	}
+	s.data.GroupAnnouncementBlocks = normalizedAnnouncementBlocks
 	for key, sess := range s.data.Sessions {
 		persisted := normalizeStoredSession(sess)
 		if !storedSessionsEqual(sess, persisted) {

@@ -301,6 +301,9 @@ func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*
 	if updated == nil {
 		return nil, fmt.Errorf("当前 Bot 工作区配置 %q 更新后未找到", current.ID)
 	}
+	if strings.ToLower(strings.TrimSpace(updated.ChatType)) == "group" {
+		scheduleGroupAnnouncementStatusRefresh(s.app, updated.ChatID, "binding_updated")
+	}
 	return updated, nil
 }
 

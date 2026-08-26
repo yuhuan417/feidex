@@ -37,6 +37,7 @@ func newBackendSelectionService(app *App) backendSelectionService {
 			},
 			RecoverState: func() {
 				recoverFrontendRuntimeState(app)
+				scheduleAllGroupAnnouncementStatusRefreshes(app, "backend_switched")
 			},
 			IdleBlockedReason: func() string {
 				return frontendIdleBlockedReason(app)
@@ -159,7 +160,10 @@ func (s backendSelectionService) backendSwitchBlockedReason() string {
 }
 
 func (s backendSelectionService) switchBackend(ctx context.Context, target string) error {
-	return s.inner.SwitchBackend(ctx, target)
+	if err := s.inner.SwitchBackend(ctx, target); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s backendSelectionService) setConfiguredBackend(target string) error {

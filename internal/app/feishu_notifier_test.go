@@ -71,7 +71,8 @@ func TestNotifyingFeishuClientRepliesPermissionCardForMessageTarget(t *testing.T
 		"99991668",
 		"log-1",
 		"scope:im:message.reaction",
-		"https://open.feishu.cn/app/scope",
+		"[排障链接](https://open.feishu.cn/troubleshoot)",
+		"[开通接口权限](https://open.feishu.cn/app/scope)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("permission diagnostic body = %q, want %q", body, want)
@@ -102,8 +103,38 @@ func TestNotifyingFeishuClientSendsPermissionCardForChatTarget(t *testing.T) {
 	if len(base.sendCards) != 1 {
 		t.Fatalf("permission diagnostic send cards = %d, want 1", len(base.sendCards))
 	}
-	if body := cardMarkdownContent(t, base.sendCards[0]); !strings.Contains(body, "drive.permission_member.create") || !strings.Contains(body, "https://open.feishu.cn/permissions/drive") {
+	if body := cardMarkdownContent(t, base.sendCards[0]); !strings.Contains(body, "drive.permission_member.create") || !strings.Contains(body, "[开通云文档权限](https://open.feishu.cn/permissions/drive)") {
 		t.Fatalf("permission diagnostic send body = %q", body)
+	}
+}
+
+func TestNotifyingFeishuClientSendsPermissionCardForAnnouncementTarget(t *testing.T) {
+	base := &fakeFeishuClient{
+		announcementListErr: &feishu.AnnouncementAPIError{
+			Op:   "docx.chat_announcement_block.list",
+			Code: 99991672,
+			Msg:  "Access denied. One of the following scopes is required: [im:chat.announcement:read].应用尚未开通所需的应用身份权限：[im:chat.announcement:read]，点击链接申请并开通任一权限即可：https://open.feishu.cn/app/cli_a945cd72cafb1cb5/auth?q=im:chat.announcement:read&op_from=openapi&token_type=tenant",
+		},
+	}
+	client := wrapFeishuClient(base)
+
+	if _, err := client.ListAnnouncementBlocks(context.Background(), "chat-1"); err == nil {
+		t.Fatal("expected ListAnnouncementBlocks to return error")
+	}
+	if len(base.sendCards) != 1 {
+		t.Fatalf("permission diagnostic send cards = %d, want 1", len(base.sendCards))
+	}
+	body := cardMarkdownContent(t, base.sendCards[0])
+	for _, want := range []string{
+		"飞书接口权限或鉴权失败",
+		"docx.chat_announcement_block.list",
+		"99991672",
+		"im:chat.announcement:read",
+		"[申请权限](https://open.feishu.cn/app/cli_a945cd72cafb1cb5/auth?q=im:chat.announcement:read&op_from=openapi&token_type=tenant)",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("permission diagnostic body = %q, want %q", body, want)
+		}
 	}
 }
 

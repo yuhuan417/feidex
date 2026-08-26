@@ -164,8 +164,24 @@ func (c *CommandCaptureClient) GetGroupBotCount(ctx context.Context, chatID stri
 	return c.Base.GetGroupBotCount(ctx, chatID)
 }
 
+func (c *CommandCaptureClient) ListAnnouncementBlocks(ctx context.Context, chatID string) ([]feishu.AnnouncementBlock, error) {
+	return c.Base.ListAnnouncementBlocks(ctx, chatID)
+}
+
+func (c *CommandCaptureClient) CreateAnnouncementTextBlock(ctx context.Context, chatID, parentBlockID, content, clientToken string) (feishu.AnnouncementBlock, error) {
+	return c.Base.CreateAnnouncementTextBlock(ctx, chatID, parentBlockID, content, clientToken)
+}
+
+func (c *CommandCaptureClient) UpdateAnnouncementTextBlock(ctx context.Context, chatID, blockID, content, clientToken string) error {
+	return c.Base.UpdateAnnouncementTextBlock(ctx, chatID, blockID, content, clientToken)
+}
+
 func (c *CommandCaptureClient) BotOpenID() string {
 	return c.Base.BotOpenID()
+}
+
+func (c *CommandCaptureClient) BotName() string {
+	return c.Base.BotName()
 }
 
 // NotifyingFeishuClient wraps a FeishuClient to intercept replies for
@@ -435,8 +451,36 @@ func (n *NotifyingFeishuClient) GetGroupBotCount(ctx context.Context, chatID str
 	return count, err
 }
 
+func (n *NotifyingFeishuClient) ListAnnouncementBlocks(ctx context.Context, chatID string) ([]feishu.AnnouncementBlock, error) {
+	blocks, err := n.Base.ListAnnouncementBlocks(ctx, chatID)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
+	}
+	return blocks, err
+}
+
+func (n *NotifyingFeishuClient) CreateAnnouncementTextBlock(ctx context.Context, chatID, parentBlockID, content, clientToken string) (feishu.AnnouncementBlock, error) {
+	block, err := n.Base.CreateAnnouncementTextBlock(ctx, chatID, parentBlockID, content, clientToken)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
+	}
+	return block, err
+}
+
+func (n *NotifyingFeishuClient) UpdateAnnouncementTextBlock(ctx context.Context, chatID, blockID, content, clientToken string) error {
+	err := n.Base.UpdateAnnouncementTextBlock(ctx, chatID, blockID, content, clientToken)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
+	}
+	return err
+}
+
 func (n *NotifyingFeishuClient) BotOpenID() string {
 	return n.Base.BotOpenID()
+}
+
+func (n *NotifyingFeishuClient) BotName() string {
+	return n.Base.BotName()
 }
 
 func (n *NotifyingFeishuClient) NotifyPermissionIssue(target NotifyTarget, err error) {

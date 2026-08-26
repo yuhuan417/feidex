@@ -69,6 +69,7 @@ type appTrackers struct {
 	workspaceCloneOps   *workspaceCloneTracker
 	finalCardPatches    *finalCardPatchTracker
 	pendingSkills       *appskillscmd.PendingSkillTracker
+	groupAnnouncements  *groupAnnouncementTracker
 	maintenanceTrackers backend.TrackerMap
 	goals               *goalcmd.Tracker
 }
@@ -110,12 +111,13 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		liveThreads:         newLiveThreadTracker(),
 		autoRetries:         newAutoRetryTracker(),
 		trackers: appTrackers{
-			turnStreams:       newTurnStreamTracker(),
-			turnItems:         newTurnItemTracker(),
-			workspaceCloneOps: newWorkspaceCloneTracker(),
-			turnBindings:      turnbinding.NewTracker(store),
-			finalCardPatches:  newFinalCardPatchTracker(),
-			pendingSkills:     appskillscmd.NewPendingSkillTracker(),
+			turnStreams:        newTurnStreamTracker(),
+			turnItems:          newTurnItemTracker(),
+			workspaceCloneOps:  newWorkspaceCloneTracker(),
+			turnBindings:       turnbinding.NewTracker(store),
+			finalCardPatches:   newFinalCardPatchTracker(),
+			pendingSkills:      appskillscmd.NewPendingSkillTracker(),
+			groupAnnouncements: newGroupAnnouncementTracker(),
 		},
 	}
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
@@ -153,6 +155,7 @@ func (a *App) Start(ctx context.Context) error {
 	}
 	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
 	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
+	scheduleStartupGroupAnnouncementRefreshes(a)
 	go sendStartupReadyNotifications(a)
 	return nil
 }

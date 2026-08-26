@@ -121,17 +121,17 @@ if sess.Status != "turn_in_progress" { ... }
 ./scripts/with_tmp_go_cache.sh go test ./internal/daemon
 ```
 
-Feidex 约定在“默认 Go cache 不可写”或“需要沙箱内临时 cache”时统一使用：
+Feidex 约定在“默认 Go cache 不可写”或“需要隔离 cache”时统一使用用户 cache 目录，避免 `/tmp` 在 tmpfs 机器上占用内存：
 
-- `GOCACHE=/tmp/feidex-gocache`
-- `GOMODCACHE=/tmp/feidex-gomodcache`
+- `GOCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/go-build`
+- `GOMODCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/gomodcache`
 
 优先使用脚本，不要临时发明新的 `/tmp/go-build-*` 或 `/tmp/*-gomodcache` 路径。
 
 等价环境变量写法：
 
 ```bash
-env GOCACHE=/tmp/feidex-gocache GOMODCACHE=/tmp/feidex-gomodcache go test ./internal/app
+env GOCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/go-build GOMODCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/gomodcache go test ./internal/app
 ```
 
 清理：
@@ -139,6 +139,8 @@ env GOCACHE=/tmp/feidex-gocache GOMODCACHE=/tmp/feidex-gomodcache go test ./inte
 ```bash
 ./scripts/clean_tmp_go_cache.sh
 ```
+
+清理脚本也会删除历史 `/tmp/feidex-gocache` 和 `/tmp/feidex-gomodcache` 目录。
 
 ### 版本信息
 

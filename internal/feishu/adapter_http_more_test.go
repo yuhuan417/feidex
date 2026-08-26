@@ -586,7 +586,7 @@ func TestFetchBotOpenIDSuccess(t *testing.T) {
 			body := `{"code":0,"tenant_access_token":"tenant-token"}`
 			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
 		case "/open-apis/bot/v3/info":
-			body := `{"code":0,"bot":{"open_id":"ou_bot"}}`
+			body := `{"code":0,"bot":{"open_id":"ou_bot","app_name":"luban-feidex"}}`
 			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
 		default:
 			return &http.Response{StatusCode: http.StatusNotFound, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"code":404}`)), Request: req}, nil
@@ -594,5 +594,9 @@ func TestFetchBotOpenIDSuccess(t *testing.T) {
 	})
 	if got := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotOpenID(); got != "ou_bot" {
 		t.Fatalf("fetchBotOpenID() = %q, want ou_bot", got)
+	}
+	profile := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotProfile()
+	if profile.OpenID != "ou_bot" || profile.Name != "luban-feidex" {
+		t.Fatalf("fetchBotProfile() = %+v, want open id and app name", profile)
 	}
 }

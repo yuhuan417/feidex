@@ -51,6 +51,7 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 			"error", err,
 		)
 	}
+	scheduleGroupAnnouncementStatusRefresh(a, chatID, "bot_added")
 }
 
 func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID string) (*state.GroupPrimary, error) {

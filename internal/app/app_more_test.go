@@ -326,8 +326,16 @@ type fakeFeishuClient struct {
 	lookupMessageSenderCalls []string
 	lookupMessageSenderOpen  string
 	botOpenID                string
+	botName                  string
 	groupBotCounts           map[string]int
 	groupBotCountCalls       []string
+	announcementBlocks       []feishu.AnnouncementBlock
+	announcementListErr      error
+	announcementCreateErr    error
+	announcementUpdateErr    error
+	announcementListCalls    []string
+	announcementCreateCalls  []struct{ chatID, parentBlockID, content, clientToken string }
+	announcementUpdateCalls  []struct{ chatID, blockID, content, clientToken string }
 	onMessage                func(*feishu.InboundMessage)
 	onBotAdded               func(*feishu.BotGroupEvent)
 }
@@ -548,10 +556,61 @@ func (f *fakeFeishuClient) GetGroupBotCount(_ context.Context, chatID string) (i
 	return 0, errors.New("group bot count not configured")
 }
 
+func (f *fakeFeishuClient) ListAnnouncementBlocks(_ context.Context, chatID string) ([]feishu.AnnouncementBlock, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.announcementListCalls = append(f.announcementListCalls, chatID)
+	if f.announcementListErr != nil {
+		return nil, f.announcementListErr
+	}
+	out := make([]feishu.AnnouncementBlock, len(f.announcementBlocks))
+	copy(out, f.announcementBlocks)
+	return out, nil
+}
+
+func (f *fakeFeishuClient) CreateAnnouncementTextBlock(_ context.Context, chatID, parentBlockID, content, clientToken string) (feishu.AnnouncementBlock, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.announcementCreateCalls = append(f.announcementCreateCalls, struct{ chatID, parentBlockID, content, clientToken string }{chatID: chatID, parentBlockID: parentBlockID, content: content, clientToken: clientToken})
+	if f.announcementCreateErr != nil {
+		return feishu.AnnouncementBlock{}, f.announcementCreateErr
+	}
+	blockID := "announcement-block-created"
+	if len(f.announcementBlocks) > 0 {
+		blockID = blockID + "-next"
+	}
+	block := feishu.AnnouncementBlock{BlockID: blockID, Text: content}
+	f.announcementBlocks = append(f.announcementBlocks, block)
+	return block, nil
+}
+
+func (f *fakeFeishuClient) UpdateAnnouncementTextBlock(_ context.Context, chatID, blockID, content, clientToken string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.announcementUpdateCalls = append(f.announcementUpdateCalls, struct{ chatID, blockID, content, clientToken string }{chatID: chatID, blockID: blockID, content: content, clientToken: clientToken})
+	if f.announcementUpdateErr != nil {
+		return f.announcementUpdateErr
+	}
+	for i := range f.announcementBlocks {
+		if f.announcementBlocks[i].BlockID == blockID {
+			f.announcementBlocks[i].Text = content
+			return nil
+		}
+	}
+	f.announcementBlocks = append(f.announcementBlocks, feishu.AnnouncementBlock{BlockID: blockID, Text: content})
+	return nil
+}
+
 func (f *fakeFeishuClient) BotOpenID() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return strings.TrimSpace(f.botOpenID)
+}
+
+func (f *fakeFeishuClient) BotName() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return strings.TrimSpace(f.botName)
 }
 
 func (f *fakeFeishuClient) replyCardsSnapshot() []map[string]any {

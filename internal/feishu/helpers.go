@@ -3,6 +3,7 @@ package feishu
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	apputil "feidex/internal/app/apputil"
 )
@@ -79,7 +80,10 @@ func RenderPermissionIssueBody(issue *PermissionIssue) string {
 		lines = append(lines, "log_id: `"+EscapeInlineBackticks(logID)+"`")
 	}
 	if ts := strings.TrimSpace(issue.Troubleshooter); ts != "" {
-		lines = append(lines, "排障链接: "+ts)
+		lines = append(lines, "排障链接: "+MarkdownLink("排障链接", ts))
+	}
+	for _, url := range PermissionIssueApplicationURLs(issue) {
+		lines = append(lines, "申请权限: "+MarkdownLink("申请权限", url))
 	}
 	for _, violation := range issue.PermissionViolations {
 		item := JoinNonEmpty(" | ",
@@ -108,15 +112,113 @@ func RenderPermissionIssueBody(issue *PermissionIssue) string {
 		}
 	}
 	for _, help := range issue.Helps {
-		item := strings.TrimSpace(help.URL)
-		if desc := strings.TrimSpace(help.Description); desc != "" {
-			item = JoinNonEmpty(" | ", desc, item)
+		url := strings.TrimSpace(help.URL)
+		label := strings.TrimSpace(help.Description)
+		if label == "" {
+			label = "帮助链接"
 		}
+		item := MarkdownLink(label, url)
 		if item != "" {
 			lines = append(lines, "帮助链接: "+item)
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// PermissionIssueApplicationURLs extracts Feishu app permission application links
+// embedded in API messages. Some Feishu APIs return the grant URL only inside
+// msg/cause text instead of structured helps.
+func PermissionIssueApplicationURLs(issue *PermissionIssue) []string {
+	if issue == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	addFromText := func(text string) {
+		for _, url := range ExtractHTTPURLs(text) {
+			if !isPermissionApplicationURL(url) || seen[url] {
+				continue
+			}
+			seen[url] = true
+			out = append(out, url)
+		}
+	}
+	addFromText(issue.Message)
+	addFromText(issue.Cause)
+	for _, detail := range issue.Details {
+		addFromText(detail.Value)
+	}
+	for _, violation := range issue.PermissionViolations {
+		addFromText(violation.Description)
+	}
+	for _, violation := range issue.FieldViolations {
+		addFromText(violation.Description)
+	}
+	return out
+}
+
+// ExtractHTTPURLs returns URL-looking substrings from arbitrary text.
+func ExtractHTTPURLs(text string) []string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	var out []string
+	for len(text) > 0 {
+		idx := nextHTTPURLIndex(text)
+		if idx < 0 {
+			break
+		}
+		text = text[idx:]
+		end := strings.IndexFunc(text, func(r rune) bool {
+			return unicode.IsSpace(r) || strings.ContainsRune("`<>[]\"'", r)
+		})
+		candidate := text
+		if end >= 0 {
+			candidate = text[:end]
+			text = text[end:]
+		} else {
+			text = ""
+		}
+		candidate = strings.TrimRight(strings.TrimSpace(candidate), ".,;，。；、!！?？)")
+		if candidate != "" {
+			out = append(out, candidate)
+		}
+	}
+	return out
+}
+
+func nextHTTPURLIndex(text string) int {
+	https := strings.Index(text, "https://")
+	http := strings.Index(text, "http://")
+	switch {
+	case https < 0:
+		return http
+	case http < 0:
+		return https
+	case https < http:
+		return https
+	default:
+		return http
+	}
+}
+
+func isPermissionApplicationURL(url string) bool {
+	url = strings.ToLower(strings.TrimSpace(url))
+	return strings.HasPrefix(url, "http") && strings.Contains(url, "/app/") && strings.Contains(url, "/auth")
+}
+
+// MarkdownLink formats a clickable link for Feishu lark_md fields.
+func MarkdownLink(label, url string) string {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return ""
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		label = url
+	}
+	return "[" + sanitizeMarkdownLinkLabel(label) + "](" + url + ")"
 }
 
 // LabelledValue formats a label=value pair, returning empty if value is blank.

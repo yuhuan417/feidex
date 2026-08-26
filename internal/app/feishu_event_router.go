@@ -58,6 +58,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return nil
 	}
 	if msg.ChatType == "group" {
+		scheduleGroupAnnouncementStatusRefresh(a, msg.ChatID, "group_message")
 		if _, err := ensureGroupPrimaryInitialized(context.Background(), a, msg.ChatType, msg.ChatID); err != nil {
 			slog.Warn("group primary auto init failed during message processing",
 				"frontend_id", strings.TrimSpace(a.FrontendID()),

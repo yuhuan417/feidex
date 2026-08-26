@@ -14,6 +14,7 @@ import (
 const (
 	feishuMessageCreateQPS  = 5
 	feishuMessagePatchQPS   = 5
+	feishuAnnouncementQPS   = 2
 	keyedPacerIdleTTL       = 30 * time.Minute
 	keyedPacerSweepInterval = 5 * time.Minute
 )
@@ -162,6 +163,15 @@ func (a *Adapter) ensurePatchPacer() *keyedRequestPacer {
 		a.patchPacer = newKeyedRequestPacer(feishuMessagePatchQPS)
 	}
 	return a.patchPacer
+}
+
+func (a *Adapter) ensureAnnouncementPacer() *requestPacer {
+	a.paceMu.Lock()
+	defer a.paceMu.Unlock()
+	if a.announcementPacer == nil {
+		a.announcementPacer = newRequestPacer(feishuAnnouncementQPS)
+	}
+	return a.announcementPacer
 }
 
 func (a *Adapter) createMessage(ctx context.Context, req *larkim.CreateMessageReq) (*larkim.CreateMessageResp, error) {

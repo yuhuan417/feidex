@@ -117,6 +117,7 @@ type Adapter struct {
 	clientFactory      func() *lark.Client
 	wsClient           *wsClientState
 	botOpenID          string
+	botName            string
 	groupMessagePolicy GroupMessagePolicy
 	cancel             context.CancelFunc
 	allowSet           map[string]struct{}
@@ -127,6 +128,7 @@ type Adapter struct {
 	paceMu             sync.Mutex
 	createPacer        *requestPacer
 	patchPacer         *keyedRequestPacer
+	announcementPacer  *requestPacer
 	reactionMu         sync.Mutex
 	reactions          map[string]string
 
@@ -233,6 +235,14 @@ func (a *Adapter) BotOpenID() string {
 	return strings.TrimSpace(a.botOpenID)
 }
 
+// BotName returns this app bot's Feishu display name once discovered during startup.
+func (a *Adapter) BotName() string {
+	if a == nil {
+		return ""
+	}
+	return strings.TrimSpace(a.botName)
+}
+
 func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
 	if a == nil {
 		return
@@ -242,7 +252,9 @@ func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
 
 func (a *Adapter) Start(ctx context.Context) error {
 	a.startOnce.Do(func() {
-		a.botOpenID = a.fetchBotOpenID()
+		profile := a.fetchBotProfile()
+		a.botOpenID = profile.OpenID
+		a.botName = profile.Name
 		dispatcher := dispatcher.NewEventDispatcher("", "").
 			OnP2MessageReceiveV1(func(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 				if a.onMessage != nil {
@@ -2031,7 +2043,16 @@ func reactionKey(messageID, emojiType string) string {
 	return strings.TrimSpace(messageID) + ":" + strings.TrimSpace(emojiType)
 }
 
+type botProfile struct {
+	OpenID string
+	Name   string
+}
+
 func (a *Adapter) fetchBotOpenID() string {
+	return a.fetchBotProfile().OpenID
+}
+
+func (a *Adapter) fetchBotProfile() botProfile {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	body, _ := json.Marshal(map[string]string{
@@ -2040,12 +2061,12 @@ func (a *Adapter) fetchBotOpenID() string {
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.cfg.OpenBaseURL()+"/open-apis/auth/v3/tenant_access_token/internal", strings.NewReader(string(body)))
 	if err != nil {
-		return ""
+		return botProfile{}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ""
+		return botProfile{}
 	}
 	defer resp.Body.Close()
 	var tokenResp struct {
@@ -2053,26 +2074,32 @@ func (a *Adapter) fetchBotOpenID() string {
 		TenantAccessToken string `json:"tenant_access_token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil || tokenResp.Code != 0 || tokenResp.TenantAccessToken == "" {
-		return ""
+		return botProfile{}
 	}
 	infoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, a.cfg.OpenBaseURL()+"/open-apis/bot/v3/info", nil)
 	if err != nil {
-		return ""
+		return botProfile{}
 	}
 	infoReq.Header.Set("Authorization", "Bearer "+tokenResp.TenantAccessToken)
 	infoResp, err := http.DefaultClient.Do(infoReq)
 	if err != nil {
-		return ""
+		return botProfile{}
 	}
 	defer infoResp.Body.Close()
 	var info struct {
 		Code int `json:"code"`
 		Bot  struct {
-			OpenID string `json:"open_id"`
+			OpenID  string `json:"open_id"`
+			AppName string `json:"app_name"`
+			Name    string `json:"name"`
+			BotName string `json:"bot_name"`
 		} `json:"bot"`
 	}
 	if err := json.NewDecoder(infoResp.Body).Decode(&info); err != nil || info.Code != 0 {
-		return ""
+		return botProfile{}
 	}
-	return strings.TrimSpace(info.Bot.OpenID)
+	return botProfile{
+		OpenID: strings.TrimSpace(info.Bot.OpenID),
+		Name:   firstNonEmptyString(info.Bot.AppName, info.Bot.Name, info.Bot.BotName),
+	}
 }

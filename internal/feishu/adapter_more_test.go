@@ -260,6 +260,24 @@ func TestPermissionIssueFromError(t *testing.T) {
 	}
 }
 
+func TestAnnouncementAPIErrorProvidesPermissionIssue(t *testing.T) {
+	err := &AnnouncementAPIError{
+		Op:   "docx.chat_announcement_block.list",
+		Code: 99991672,
+		Msg:  "Access denied. One of the following scopes is required: [im:chat.announcement:read].",
+	}
+	issue, ok := PermissionIssueFromError(err)
+	if !ok || issue == nil {
+		t.Fatal("expected PermissionIssueFromError to extract announcement issue")
+	}
+	if issue.API != "docx.chat_announcement_block.list" || issue.Code != 99991672 {
+		t.Fatalf("announcement permission issue = %+v", issue)
+	}
+	if !strings.Contains(issue.Message, "im:chat.announcement:read") || !strings.Contains(issue.Cause, "feishu announcement api error") {
+		t.Fatalf("announcement permission issue lost context: %+v", issue)
+	}
+}
+
 func TestPermissionIssueWrapperHelpers(t *testing.T) {
 	var wrapped *permissionIssueError
 	if got := wrapped.Error(); got != "" {
@@ -289,6 +307,26 @@ func TestPermissionIssueWrapperHelpers(t *testing.T) {
 	}
 	if got := wrapPermissionIssue(baseErr, nil); got != baseErr {
 		t.Fatalf("wrapPermissionIssue(err, nil) = %v, want original error", got)
+	}
+}
+
+func TestMarkdownLinkEscapesLabel(t *testing.T) {
+	got := MarkdownLink("开通[权限]", "https://open.feishu.cn/app/scope?q=im:message")
+	want := `[开通\[权限\]](https://open.feishu.cn/app/scope?q=im:message)`
+	if got != want {
+		t.Fatalf("MarkdownLink() = %q, want %q", got, want)
+	}
+}
+
+func TestRenderPermissionIssueBodyIncludesApplicationLink(t *testing.T) {
+	url := "https://open.feishu.cn/app/cli_a945cd72cafb1cb5/auth?q=im:chat.announcement:read&op_from=openapi&token_type=tenant"
+	body := RenderPermissionIssueBody(&PermissionIssue{
+		API:     "docx.chat_announcement_block.list",
+		Code:    99991672,
+		Message: "应用尚未开通所需的应用身份权限，点击链接申请并开通任一权限即可：" + url,
+	})
+	if !strings.Contains(body, "申请权限: [申请权限]("+url+")") {
+		t.Fatalf("RenderPermissionIssueBody() = %q, want clickable application link", body)
 	}
 }
 
@@ -788,8 +826,8 @@ func TestFetchBotOpenIDHandlesFailuresQuickly(t *testing.T) {
 	})
 	defer func() { http.DefaultTransport = transport }()
 
-	if got := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotOpenID(); got != "" {
-		t.Fatalf("fetchBotOpenID() = %q, want empty on transport error", got)
+	if got := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotProfile(); got != (botProfile{}) {
+		t.Fatalf("fetchBotProfile() = %+v, want empty on transport error", got)
 	}
 }
 
