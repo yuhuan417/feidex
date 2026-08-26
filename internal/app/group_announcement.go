@@ -190,7 +190,7 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 			}
 			return err
 		}
-		blockID = findAnnouncementBlockID(blocks, status.marker)
+		blockID = findAnnouncementBlockID(blocks, groupAnnouncementMarkerCandidates(status)...)
 	}
 	if blockID == "" {
 		created, err := a.feishu.CreateAnnouncementTextBlock(ctx, chatID, chatID, status.content, "")
@@ -227,17 +227,19 @@ type groupAnnouncementStatus struct {
 	marker     string
 	content    string
 	stableHash string
+	frontendID string
 	botOpenID  string
 	updatedAt  time.Time
 }
 
 func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
 	frontendID := firstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
-	botOpenID := strings.TrimSpace(currentBotOpenID(a))
-	marker := groupAnnouncementMarker(frontendID, botOpenID)
+	botOpenID := groupAnnouncementBotOpenID(a, chatID)
+	botName := groupAnnouncementBotName(a, botOpenID)
+	marker := groupAnnouncementMarker(botName, botOpenID)
 	stableLines := []string{
 		marker,
-		"Bot: " + groupAnnouncementBotName(a, frontendID, botOpenID),
+		"Bot: " + botName,
 		"Machine IP: " + firstNonEmpty(localAnnouncementMachineIP(), "unknown"),
 		"Workspace: " + groupAnnouncementWorkspaceDir(a, chatID),
 		"Backend: " + firstNonEmpty(configuredBackend(a), "unset"),
@@ -249,22 +251,58 @@ func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) gr
 		marker:     marker,
 		content:    content,
 		stableHash: hashGroupAnnouncementStableContent(stableContent),
+		frontendID: frontendID,
 		botOpenID:  botOpenID,
 		updatedAt:  updatedAt,
 	}
 }
 
-func groupAnnouncementMarker(frontendID, botOpenID string) string {
+func groupAnnouncementBotOpenID(a *App, chatID string) string {
+	if botOpenID := strings.TrimSpace(currentBotOpenID(a)); botOpenID != "" {
+		return botOpenID
+	}
+	return strings.TrimSpace(groupPrimaryOwnerOpenID(a, "group", chatID))
+}
+
+func groupAnnouncementMarker(botName, botOpenID string) string {
+	nameToken := groupAnnouncementMarkerToken(firstNonEmpty(strings.TrimSpace(botName), "bot"))
+	idToken := groupAnnouncementMarkerToken(firstNonEmpty(strings.TrimSpace(botOpenID), "unknown"))
+	return "feidex-status-region:" + firstNonEmpty(nameToken, "bot") + ":" + firstNonEmpty(idToken, "unknown")
+}
+
+func groupAnnouncementLegacyMarker(frontendID, botOpenID string) string {
 	return "feidex-status-region:" + firstNonEmpty(strings.TrimSpace(frontendID), config.DefaultFrontendID) + ":" + firstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
 }
 
-func groupAnnouncementBotName(a *App, frontendID, botOpenID string) string {
+func groupAnnouncementMarkerToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		keep := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.'
+		if keep {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func groupAnnouncementBotName(a *App, botOpenID string) string {
 	if a != nil && a.feishu != nil {
 		if name := strings.TrimSpace(a.feishu.BotName()); name != "" {
 			return name
 		}
 	}
-	return firstNonEmpty(strings.TrimSpace(botOpenID), strings.TrimSpace(frontendID), config.DefaultFrontendID)
+	return firstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
 }
 
 func hashGroupAnnouncementStableContent(content string) string {
@@ -272,14 +310,39 @@ func hashGroupAnnouncementStableContent(content string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func findAnnouncementBlockID(blocks []feishu.AnnouncementBlock, marker string) string {
-	marker = strings.TrimSpace(marker)
-	if marker == "" {
+func groupAnnouncementMarkerCandidates(status groupAnnouncementStatus) []string {
+	markers := []string{strings.TrimSpace(status.marker)}
+	frontendID := firstNonEmpty(strings.TrimSpace(status.frontendID), config.DefaultFrontendID)
+	markers = append(markers,
+		groupAnnouncementLegacyMarker(frontendID, status.botOpenID),
+		groupAnnouncementLegacyMarker(frontendID, ""),
+	)
+	out := make([]string, 0, len(markers))
+	seen := map[string]struct{}{}
+	for _, marker := range markers {
+		marker = strings.TrimSpace(marker)
+		if marker == "" {
+			continue
+		}
+		if _, ok := seen[marker]; ok {
+			continue
+		}
+		seen[marker] = struct{}{}
+		out = append(out, marker)
+	}
+	return out
+}
+
+func findAnnouncementBlockID(blocks []feishu.AnnouncementBlock, markers ...string) string {
+	if len(markers) == 0 {
 		return ""
 	}
 	for _, block := range blocks {
-		if strings.Contains(block.Text, marker) && strings.TrimSpace(block.BlockID) != "" {
-			return strings.TrimSpace(block.BlockID)
+		for _, marker := range markers {
+			marker = strings.TrimSpace(marker)
+			if marker != "" && strings.Contains(block.Text, marker) && strings.TrimSpace(block.BlockID) != "" {
+				return strings.TrimSpace(block.BlockID)
+			}
 		}
 	}
 	return ""

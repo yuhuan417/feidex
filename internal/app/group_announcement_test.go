@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -86,7 +85,7 @@ func TestGroupAnnouncementRefreshCreatesBlockAndSkipsStableContent(t *testing.T)
 	}
 	content := ff.announcementCreateCalls[0].content
 	for _, want := range []string{
-		"feidex-status-region:bot-a:bot-open",
+		"feidex-status-region:luban-feidex:bot-open",
 		"Bot: luban-feidex",
 		"Machine IP: ",
 		"Workspace: " + a.cfg.Workspaces[0].Cwd,
@@ -123,8 +122,8 @@ func TestGroupAnnouncementBotNameFallbacks(t *testing.T) {
 
 	ff.botOpenID = ""
 	status = buildGroupAnnouncementStatus(a, "chat-1", time.Unix(1700000000, 0))
-	if !strings.Contains(status.content, "Bot: bot-a") {
-		t.Fatalf("status content = %q, want frontend id fallback", status.content)
+	if strings.Contains(status.content, "Bot: bot-a") || !strings.Contains(status.content, "Bot: unknown") {
+		t.Fatalf("status content = %q, want unknown fallback without frontend id", status.content)
 	}
 }
 
@@ -154,6 +153,34 @@ func TestGroupAnnouncementRefreshRecoversExistingBlockByMarker(t *testing.T) {
 	}
 }
 
+func TestGroupAnnouncementRefreshRecoversLegacyUnknownMarker(t *testing.T) {
+	store := newGroupAnnouncementStore(t)
+	ff := &fakeFeishuClient{
+		botOpenID: "bot-open",
+		botName:   "luban-feidex",
+		announcementBlocks: []feishu.AnnouncementBlock{{
+			BlockID: "legacy-block",
+			Text:    "old\n" + groupAnnouncementLegacyMarker("default", ""),
+		}},
+	}
+	a := newGroupAnnouncementTestApp(t, store, ff, "default")
+	seedGroupAnnouncementBinding(t, a, "chat-1")
+
+	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
+	}
+	if len(ff.announcementCreateCalls) != 0 || len(ff.announcementUpdateCalls) != 1 {
+		t.Fatalf("create/update calls = %d/%d", len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
+	}
+	updated := ff.announcementUpdateCalls[0]
+	if updated.blockID != "legacy-block" {
+		t.Fatalf("updated block id = %q, want legacy-block", updated.blockID)
+	}
+	if !strings.Contains(updated.content, "feidex-status-region:luban-feidex:bot-open") || !strings.Contains(updated.content, "Bot: luban-feidex") {
+		t.Fatalf("updated content did not replace legacy marker/name:\n%s", updated.content)
+	}
+}
+
 func TestGroupAnnouncementRefreshSwallowsRateLimitWithoutRetry(t *testing.T) {
 	store := newGroupAnnouncementStore(t)
 	ff := &fakeFeishuClient{
@@ -174,9 +201,9 @@ func TestGroupAnnouncementRefreshSwallowsRateLimitWithoutRetry(t *testing.T) {
 	}
 }
 
-func TestGroupAnnouncementRefreshCreatesSeparateBlocksPerFrontend(t *testing.T) {
+func TestGroupAnnouncementRefreshReusesBlockForSameBotIdentity(t *testing.T) {
 	store := newGroupAnnouncementStore(t)
-	ff := &fakeFeishuClient{botOpenID: "bot-open"}
+	ff := &fakeFeishuClient{botOpenID: "bot-open", botName: "luban-feidex"}
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 	b := newGroupAnnouncementTestApp(t, store, ff, "bot-b")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
@@ -188,15 +215,14 @@ func TestGroupAnnouncementRefreshCreatesSeparateBlocksPerFrontend(t *testing.T) 
 	if err := refreshGroupAnnouncementStatusNow(context.Background(), b, "chat-1"); err != nil {
 		t.Fatalf("refresh bot-b error = %v", err)
 	}
-	if len(ff.announcementCreateCalls) != 2 || len(ff.announcementUpdateCalls) != 0 {
+	if len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 1 {
 		t.Fatalf("create/update calls = %d/%d", len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
 	}
-	contents := []string{ff.announcementCreateCalls[0].content, ff.announcementCreateCalls[1].content}
-	if !slices.ContainsFunc(contents, func(content string) bool { return strings.Contains(content, "feidex-status-region:bot-a:bot-open") }) {
-		t.Fatalf("missing bot-a region in contents: %#v", contents)
+	if !strings.Contains(ff.announcementCreateCalls[0].content, "feidex-status-region:luban-feidex:bot-open") {
+		t.Fatalf("created content missing bot identity marker:\n%s", ff.announcementCreateCalls[0].content)
 	}
-	if !slices.ContainsFunc(contents, func(content string) bool { return strings.Contains(content, "feidex-status-region:bot-b:bot-open") }) {
-		t.Fatalf("missing bot-b region in contents: %#v", contents)
+	if ff.announcementUpdateCalls[0].blockID != "announcement-block-created" {
+		t.Fatalf("updated block id = %q, want existing same-bot block", ff.announcementUpdateCalls[0].blockID)
 	}
 	if record := a.State().GroupAnnouncementBlock("group", "chat-1"); record == nil || record.BlockID == "" {
 		t.Fatalf("bot-a record = %+v", record)

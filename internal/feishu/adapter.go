@@ -116,6 +116,8 @@ type Adapter struct {
 	client             *lark.Client
 	clientFactory      func() *lark.Client
 	wsClient           *wsClientState
+	botProfileMu       sync.Mutex
+	botProfileLastTry  time.Time
 	botOpenID          string
 	botName            string
 	groupMessagePolicy GroupMessagePolicy
@@ -232,7 +234,7 @@ func (a *Adapter) BotOpenID() string {
 	if a == nil {
 		return ""
 	}
-	return strings.TrimSpace(a.botOpenID)
+	return strings.TrimSpace(a.ensureBotProfile("bot_open_id").OpenID)
 }
 
 // BotName returns this app bot's Feishu display name once discovered during startup.
@@ -240,7 +242,59 @@ func (a *Adapter) BotName() string {
 	if a == nil {
 		return ""
 	}
-	return strings.TrimSpace(a.botName)
+	return strings.TrimSpace(a.ensureBotProfile("bot_name").Name)
+}
+
+func (a *Adapter) ensureBotProfile(reason string) botProfile {
+	if a == nil {
+		return botProfile{}
+	}
+	profile, shouldFetch := a.cachedBotProfileForFetch()
+	if !shouldFetch {
+		return profile
+	}
+	fetched := a.fetchBotProfile()
+	profile = a.storeBotProfile(fetched)
+	if profile.OpenID == "" || profile.Name == "" {
+		slog.Warn("feishu bot profile incomplete",
+			"reason", strings.TrimSpace(reason),
+			"has_open_id", profile.OpenID != "",
+			"has_name", profile.Name != "",
+		)
+	}
+	return profile
+}
+
+func (a *Adapter) cachedBotProfileForFetch() (botProfile, bool) {
+	a.botProfileMu.Lock()
+	defer a.botProfileMu.Unlock()
+	profile := botProfile{
+		OpenID: strings.TrimSpace(a.botOpenID),
+		Name:   strings.TrimSpace(a.botName),
+	}
+	if profile.OpenID != "" && profile.Name != "" {
+		return profile, false
+	}
+	if !a.botProfileLastTry.IsZero() && time.Since(a.botProfileLastTry) < 30*time.Second {
+		return profile, false
+	}
+	a.botProfileLastTry = time.Now()
+	return profile, true
+}
+
+func (a *Adapter) storeBotProfile(profile botProfile) botProfile {
+	a.botProfileMu.Lock()
+	defer a.botProfileMu.Unlock()
+	if strings.TrimSpace(profile.OpenID) != "" {
+		a.botOpenID = strings.TrimSpace(profile.OpenID)
+	}
+	if strings.TrimSpace(profile.Name) != "" {
+		a.botName = strings.TrimSpace(profile.Name)
+	}
+	return botProfile{
+		OpenID: strings.TrimSpace(a.botOpenID),
+		Name:   strings.TrimSpace(a.botName),
+	}
 }
 
 func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
@@ -252,9 +306,7 @@ func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
 
 func (a *Adapter) Start(ctx context.Context) error {
 	a.startOnce.Do(func() {
-		profile := a.fetchBotProfile()
-		a.botOpenID = profile.OpenID
-		a.botName = profile.Name
+		a.ensureBotProfile("startup")
 		dispatcher := dispatcher.NewEventDispatcher("", "").
 			OnP2MessageReceiveV1(func(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 				if a.onMessage != nil {
