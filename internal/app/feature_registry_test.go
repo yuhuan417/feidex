@@ -12,7 +12,7 @@ func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	a.claude = &fakeClaudeCore{}
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 
 	helpBody := renderHelpBodyFromRegistry(backendClaude)
 	menuButtonsByGroup := map[string]map[string]string{

@@ -118,6 +118,9 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 			pendingSkills:     appskillscmd.NewPendingSkillTracker(),
 		},
 	}
+	if err := canonicalizeStoredSessionKeys(app); err != nil {
+		return nil, err
+	}
 	if backend != "" {
 		handle, err := buildBackendRuntimeHandle(app, backend)
 		if err != nil {

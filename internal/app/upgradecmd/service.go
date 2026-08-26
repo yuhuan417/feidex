@@ -160,14 +160,14 @@ var DisplayLocation = time.Local
 // UpgradeService. These replace the former package-level mutable globals
 // and make the service safe for concurrent use.
 type UpgradeServiceDeps struct {
-	CurrentVersion         func() string
-	CurrentGOOS            func() string
-	CurrentGOARCH          func() string
-	NewReleaseClient       func() ReleaseClient
-	NewDaemonManager       func(serviceName string) (daemon.Manager, error)
-	StartDaemonUpgrade     func(spec daemon.UpgradeSpec) (string, error)
+	CurrentVersion          func() string
+	CurrentGOOS             func() string
+	CurrentGOARCH           func() string
+	NewReleaseClient        func() ReleaseClient
+	NewDaemonManager        func(serviceName string) (daemon.Manager, error)
+	StartDaemonUpgrade      func(spec daemon.UpgradeSpec) (string, error)
 	NormalizeUpgradeVersion func(raw string) (string, error)
-	RenderSystemMenuCard   func(sessionKey string) map[string]any
+	RenderSystemMenuCard    func(sessionKey string) map[string]any
 }
 
 // UpgradeService manages daemon upgrade commands for a single app instance.

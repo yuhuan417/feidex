@@ -18,7 +18,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 	a.claude = runtime
 	defer runtime.Close()
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -56,7 +56,7 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 	a.backend = backendClaude
 	a.cfg.Claude.DangerouslySkipPermissions = true
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -98,7 +98,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 	a.claude = runtime
 	defer runtime.Close()
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -136,7 +136,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 	a.claude = runtime
 	defer runtime.Close()
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

@@ -31,8 +31,31 @@ func sessionKeyChat(sessionKey string) (chatType, chatID string) {
 	return chatType, chatID
 }
 
+func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	chatType, chatID = sessionKeyChat(sessionKey)
+	if a != nil {
+		candidateKeys := []string{sessionKey, normalizeSessionKey(a, sessionKey)}
+		for _, key := range candidateKeys {
+			if key == "" {
+				continue
+			}
+			if sess := a.State().Session(key); sess != nil {
+				chatType = firstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
+				chatID = firstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
+			}
+		}
+		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {
+			if agentBindingForChat(a, "group", chatID) != nil || groupPrimaryForChat(a, "group", chatID) != nil {
+				chatType = "group"
+			}
+		}
+	}
+	return strings.TrimSpace(chatType), strings.TrimSpace(chatID)
+}
+
 func bindingForSessionKey(a *App, sessionKey string) *state.AgentBinding {
-	chatType, chatID := sessionKeyChat(sessionKey)
+	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return nil
 	}
@@ -40,7 +63,8 @@ func bindingForSessionKey(a *App, sessionKey string) *state.AgentBinding {
 }
 
 func groupBindingSessionScopeActive(a *App, sessionKey string) bool {
-	return isGroupSessionKey(sessionKey)
+	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
+	return chatType == "group" && strings.TrimSpace(chatID) != ""
 }
 
 func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
@@ -49,7 +73,7 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 		return sessionKey
 	}
 	sessionKey = normalizeSessionKey(a, sessionKey)
-	chatType, chatID := sessionKeyChat(sessionKey)
+	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return sessionKey
 	}
@@ -73,7 +97,11 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 		if !sessionBelongsToFrontend(a, sess.Key) {
 			continue
 		}
-		candidateChatType, candidateChatID := sessionKeyChat(sess.Key)
+		candidateChatType := strings.TrimSpace(sess.ChatType)
+		candidateChatID := strings.TrimSpace(sess.ChatID)
+		if candidateChatType == "" || candidateChatID == "" {
+			candidateChatType, candidateChatID = sessionKeyChatForApp(a, sess.Key)
+		}
 		if candidateChatType != "group" || candidateChatID != chatID {
 			continue
 		}

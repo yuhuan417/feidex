@@ -137,5 +137,5 @@ func renderHelpCard(a *App, sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "帮助说明"), "blue", menuCardBody("menu.help", renderHelpBodyForSession(configuredBackend(a), sessionKey)), buttons)
+	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "帮助说明"), "blue", menuCardBody("menu.help", renderHelpBodyForSession(a, configuredBackend(a), sessionKey)), buttons)
 }

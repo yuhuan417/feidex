@@ -116,8 +116,8 @@ func renderHelpBodyFromRegistry(backend string) string {
 	return renderHelpBodyFromRegistryScoped(backend, false)
 }
 
-func renderHelpBodyForSession(backend, sessionKey string) string {
-	return renderHelpBodyFromRegistryScoped(backend, isGroupSessionKey(sessionKey))
+func renderHelpBodyForSession(a *App, backend, sessionKey string) string {
+	return renderHelpBodyFromRegistryScoped(backend, groupBindingSessionScopeActive(a, sessionKey))
 }
 
 func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {

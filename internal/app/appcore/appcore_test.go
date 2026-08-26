@@ -2,7 +2,7 @@ package appcore
 
 import "testing"
 
-func TestCanonicalSessionKeyDropsGroupRoot(t *testing.T) {
+func TestCanonicalSessionKeyUsesFrontendChatIdentity(t *testing.T) {
 	tests := []struct {
 		name       string
 		frontendID string
@@ -13,25 +13,31 @@ func TestCanonicalSessionKeyDropsGroupRoot(t *testing.T) {
 			name:       "legacy group root without frontend",
 			frontendID: "frontend-a",
 			input:      "feishu:group:chat-1:root:root-1",
-			want:       "feishu:frontend:frontend-a:group:chat-1",
+			want:       "feishu:frontend:frontend-a:chat:chat-1",
 		},
 		{
 			name:       "frontend group root",
 			frontendID: "frontend-b",
 			input:      "feishu:frontend:frontend-a:group:chat-1:root:root-1",
-			want:       "feishu:frontend:frontend-a:group:chat-1",
+			want:       "feishu:frontend:frontend-a:chat:chat-1",
 		},
 		{
 			name:       "rootless group",
 			frontendID: "frontend-a",
 			input:      "feishu:group:chat-1",
-			want:       "feishu:frontend:frontend-a:group:chat-1",
+			want:       "feishu:frontend:frontend-a:chat:chat-1",
 		},
 		{
-			name:       "p2p preserves user",
+			name:       "p2p drops user",
 			frontendID: "frontend-a",
 			input:      "feishu:p2p:chat-1:user-1",
-			want:       "feishu:frontend:frontend-a:p2p:chat-1:user-1",
+			want:       "feishu:frontend:frontend-a:chat:chat-1",
+		},
+		{
+			name:       "canonical frontend chat",
+			frontendID: "frontend-b",
+			input:      "feishu:frontend:frontend-a:chat:chat-1",
+			want:       "feishu:frontend:frontend-a:chat:chat-1",
 		},
 	}
 	for _, tt := range tests {

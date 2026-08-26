@@ -24,8 +24,8 @@ func TestFrontendIdleState(t *testing.T) {
 		}, store
 	}
 
-	currentSessionKey := "feishu:frontend:frontend-a:p2p:chat-1:user-1"
-	foreignSessionKey := "feishu:frontend:frontend-b:p2p:chat-2:user-2"
+	currentSessionKey := "feishu:frontend:frontend-a:chat:chat-1"
+	foreignSessionKey := "feishu:frontend:frontend-b:chat:chat-2"
 
 	tests := []struct {
 		name     string

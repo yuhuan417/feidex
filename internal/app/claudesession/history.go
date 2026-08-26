@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/apputil"
+	appruntime "feidex/internal/app/runtime"
 )
 
 // FindSessionFile locates a Claude session JSONL file by session ID.

@@ -38,7 +38,7 @@ type RequestPayload struct {
 }
 
 type Presentation struct {
-	Kind    Kind
+	Kind     Kind
 	ThreadID string
 	TurnID   string
 	ItemID   string

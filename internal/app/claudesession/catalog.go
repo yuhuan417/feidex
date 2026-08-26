@@ -17,11 +17,11 @@ import (
 )
 
 const (
-	SessionListLimit               = 8
-	sessionMetaReadBytes     int64 = 64 * 1024
-	ProjectDirNameMax              = 80
-	TitleLimit                     = 48
-	PreviewLimit                   = 72
+	SessionListLimit           = 8
+	sessionMetaReadBytes int64 = 64 * 1024
+	ProjectDirNameMax          = 80
+	TitleLimit                 = 48
+	PreviewLimit               = 72
 )
 
 // ListSessions returns the most recent Claude sessions for the given workspace.

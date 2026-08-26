@@ -434,7 +434,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	sessionKey := "feishu:frontend:bot-a:group:chat-1"
+	sessionKey := "feishu:frontend:bot-a:chat:chat-1"
 	subID, err := a.store.CreateSubmission(&state.Submission{
 		SessionKey:       sessionKey,
 		BindingID:        "binding-client",
@@ -521,13 +521,13 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "default"
-	p2pRoot := renderCommandMenuCard(a, "feishu:frontend:default:p2p:chat-1:user-1")
+	p2pRoot := renderCommandMenuCard(a, "feishu:frontend:default:chat:chat-1")
 	p2pLabels := cardButtonLabelsByAction(p2pRoot)
 	if got := p2pLabels["menu.current_bot"]; got != "" {
 		t.Fatalf("p2p root menu labels = %+v, want no current bot", p2pLabels)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	root := renderCommandMenuCard(a, sessionKey)
 	labels := cardButtonLabelsByAction(root)
 	if got := labels["menu.current_bot"]; got != "" {
@@ -593,7 +593,7 @@ func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
 		return nil
 	}
 
-	sessionKey := "feishu:frontend:bot-a:group:chat-model-menu"
+	sessionKey := "feishu:frontend:bot-a:chat:chat-model-menu"
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-model-menu",
 		FrontendID:  "bot-a",
@@ -647,9 +647,9 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 	a.frontendID = "bot-a"
 	chatID := "chat-thread-menu"
 	bindingID := "binding-thread-menu"
-	menuKey := "feishu:frontend:bot-a:group:" + chatID
+	menuKey := "feishu:frontend:bot-a:chat:" + chatID
 	activeKey := menuKey
-	foreignFrontendKey := "feishu:frontend:bot-b:group:" + chatID
+	foreignFrontendKey := "feishu:frontend:bot-b:chat:" + chatID
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          bindingID,
 		FrontendID:  "bot-a",
@@ -730,7 +730,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, sessionID, "Claude Session", "continue work", time.Unix(100, 0))
 	chatID := "chat-claude-menu"
 	bindingID := "binding-claude-menu"
-	menuKey := "feishu:frontend:bot-a:group:" + chatID
+	menuKey := "feishu:frontend:bot-a:chat:" + chatID
 	activeKey := menuKey
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: bindingID, FrontendID: "bot-a", ChatID: chatID, ChatType: "group", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
@@ -877,7 +877,13 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 }
 
 func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
-	groupHelp := renderHelpBodyForSession(backendCodex, "feishu:frontend:bot-a:group:chat-help")
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	groupKey := "feishu:frontend:bot-a:chat:chat-help"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("bot-a", "group", "chat-help"), FrontendID: "bot-a", ChatType: "group", ChatID: "chat-help", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	groupHelp := renderHelpBodyForSession(a, backendCodex, groupKey)
 	for _, banned := range []string{"/" + "bind", "binding", "Binding", "component", "/workspace delete", "/model plan"} {
 		if strings.Contains(groupHelp, banned) {
 			t.Fatalf("group help should hide %q, got %q", banned, groupHelp)
@@ -889,7 +895,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 		}
 	}
 
-	p2pHelp := renderHelpBodyForSession(backendCodex, "feishu:frontend:bot-a:p2p:chat-help:user-1")
+	p2pHelp := renderHelpBodyForSession(a, backendCodex, "feishu:frontend:bot-a:chat:p2p-help")
 	for _, want := range []string{"直接设置全局 model。", "/workspace delete ID", "/model plan"} {
 		if !strings.Contains(p2pHelp, want) {
 			t.Fatalf("p2p help changed unexpectedly: %q, want %q", p2pHelp, want)
@@ -901,7 +907,7 @@ func TestGroupBindingScopedCardActionsUpdateBindingNotSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "server", Cwd: t.TempDir()})
-	sessionKey := "feishu:frontend:bot-a:group:chat-card"
+	sessionKey := "feishu:frontend:bot-a:chat:chat-card"
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-card",
 		FrontendID:  "bot-a",

@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	appworkspace "feidex/internal/app/workspace"
 	appcards "feidex/internal/app/cards"
+	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )

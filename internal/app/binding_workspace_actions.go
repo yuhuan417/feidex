@@ -28,7 +28,7 @@ func (s bindingService) isGroupWorkspacePending(action *feishu.CardAction, kind 
 	if pending == nil || strings.TrimSpace(pending.Kind) != strings.TrimSpace(kind) {
 		return false
 	}
-	return isGroupSessionKey(pending.SessionKey)
+	return groupBindingSessionScopeActive(s.app, pending.SessionKey)
 }
 
 func (s bindingService) completeBindingWorkspaceSettingMenu(action *feishu.CardAction, sessionKey, fieldName string) (*callback.CardActionTriggerResponse, error) {
@@ -187,7 +187,7 @@ func normalizeBindingWorkspaceSettingName(value string) string {
 func (s bindingService) completeBindingWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action, "request_id")
 	pending := s.app.State().Pending(requestID)
-	if pending == nil || pending.Kind != "workspace_new" || !isGroupSessionKey(pending.SessionKey) {
+	if pending == nil || pending.Kind != "workspace_new" || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -249,7 +249,7 @@ func (s bindingService) finishBindingWorkspaceCreated(requestID, sessionKey stri
 func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action, "request_id")
 	pending := s.app.State().Pending(requestID)
-	if pending == nil || pending.Kind != "workspace_clone" || !isGroupSessionKey(pending.SessionKey) {
+	if pending == nil || pending.Kind != "workspace_clone" || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区克隆请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {

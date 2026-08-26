@@ -91,7 +91,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 	sessionID := "12345678abcdef-session"
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, sessionID, "Claude Session", "continue work", time.Unix(100, 0))
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

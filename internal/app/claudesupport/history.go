@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	appcards "feidex/internal/app/cards"
 	appruntime "feidex/internal/app/runtime"
-	"feidex/internal/app/apputil"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

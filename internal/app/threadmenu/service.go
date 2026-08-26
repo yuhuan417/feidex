@@ -356,12 +356,12 @@ func (s *Service) interruptSurfaceSessionKeys(sessionKey string) []string {
 	if s == nil || s.app == nil {
 		return keys
 	}
-	_, chatType, chatID, _, _ := appcore.ParseSessionKey(sessionKey)
-	if chatType != "group" || strings.TrimSpace(chatID) == "" {
-		return keys
-	}
 	st := s.app.ThreadMenuAppState()
 	if st == nil {
+		return keys
+	}
+	chatType, chatID := sessionGroupChat(sessionKey, st.Session(sessionKey))
+	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return keys
 	}
 	for _, sess := range st.Sessions() {

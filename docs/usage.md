@@ -6,15 +6,14 @@
 
 ### Session
 
-单聊：
-
-- 以 `frontend_id + chat_id + user_id` 作为 session key
-
-群聊：
+单聊和群聊统一使用同一种 session 身份：
 
 - 以 `frontend_id + chat_id` 作为 session key
+- 标准 SessionKey 为 `feishu:frontend:<frontend_id>:chat:<chat_id>`
 
-也就是说，群聊中同一个 frontend 下的同一个群会共享同一个 session；不同 frontend 的 bot 即使处理同一个群，也使用各自隔离的 session。RootMessageID 只作为回复树/turn 绑定元数据保存，不参与 session key。群内工作区配置和 workspace 是 session 的本地执行元数据，也不参与 session key。
+也就是说，同一个 frontend 下的同一个 Feishu chat 会共享同一个 session；不同 frontend 的 bot 即使处理同一个 chat，也使用各自隔离的 session。`ChatType`、`UserID`、`RootMessageID`、`BindingID`、workspace 和本地 runtime 配置都只是 session/submission 元数据，不参与 session key。RootMessageID 继续用于回复树/turn 绑定元数据保存。
+
+兼容旧状态时，历史 `group` / `p2p` / `root` / `user` 形式的 key 会被解析并归一化到当前 `frontend/chat` 形式。
 
 ### Queue 与 Steer
 

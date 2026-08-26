@@ -272,7 +272,7 @@ func TestDispatchCardActionCanonicalizesLegacyRootSessionKey(t *testing.T) {
 	if resp, err := newCardActionService(a).dispatch(action); err != nil || resp == nil {
 		t.Fatalf("dispatch(menu.root) = %#v, %v", resp, err)
 	}
-	if got, _ := action.ActionValue["session_key"].(string); got != "feishu:frontend:frontend-a:group:chat-1" {
+	if got, _ := action.ActionValue["session_key"].(string); got != "feishu:frontend:frontend-a:chat:chat-1" {
 		t.Fatalf("canonical action session_key = %q", got)
 	}
 }

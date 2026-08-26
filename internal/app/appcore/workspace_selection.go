@@ -117,6 +117,9 @@ func ResolveBindingWorkspaceForSessionKey(a AppConfig, sessionKey string, sess *
 		chatType = FirstNonEmpty(chatType, parsedChatType)
 		chatID = FirstNonEmpty(chatID, parsedChatID)
 	}
+	if chatType == "" && chatID != "" && len(provider.AgentBindingsForChat("group", chatID)) > 0 {
+		chatType = "group"
+	}
 	if !strings.EqualFold(strings.TrimSpace(chatType), "group") || strings.TrimSpace(chatID) == "" {
 		return ""
 	}

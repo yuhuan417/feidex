@@ -379,7 +379,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 }
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
-	chatType, chatID, _, _ := currentBotMenuContext(sessionKey)
+	chatType, chatID, _, _ := currentBotMenuContext(s.app, sessionKey)
 	primaryLabel := onOffLabel(isGroupPrimary(s.app, chatType, chatID))
 	if binding == nil {
 		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，或使用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
@@ -463,7 +463,7 @@ func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, bind
 func renderCurrentBotMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.current_bot")
 	body := spec.Description
-	if chatType, chatID, _, _ := currentBotMenuContext(sessionKey); chatType == "group" && chatID != "" {
+	if chatType, chatID, _, _ := currentBotMenuContext(a, sessionKey); chatType == "group" && chatID != "" {
 		if binding := agentBindingForChat(a, chatType, chatID); binding != nil {
 			body += "\n\n工作区状态: `" + currentBotWorkspaceStatusLabel(a, binding) + "`"
 			body += "\nprimary: `" + onOffLabel(isGroupPrimary(a, chatType, chatID)) + "`"
@@ -490,8 +490,14 @@ func currentBotWorkspaceStatusLabel(a *App, binding *state.AgentBinding) string 
 	return "工作区已配置"
 }
 
-func currentBotMenuContext(sessionKey string) (chatType, chatID, rootMessageID, userID string) {
-	return parseSessionKeyMeta(sessionKey)
+func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMessageID, userID string) {
+	chatType, chatID, rootMessageID, userID = parseSessionKeyMeta(sessionKey)
+	if chatType == "" || chatID == "" {
+		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
+		chatType = firstNonEmpty(chatType, inferredChatType)
+		chatID = firstNonEmpty(chatID, inferredChatID)
+	}
+	return chatType, chatID, rootMessageID, userID
 }
 
 func defaultBindingID(frontendID, chatType, chatID string) string {

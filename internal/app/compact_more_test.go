@@ -213,7 +213,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 
 func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -319,7 +319,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 	}()
 	a.claude = claude
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -383,7 +383,7 @@ func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.backend = backendCodex
 	a.cfg.Feishu.Backend = backendCodex
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,

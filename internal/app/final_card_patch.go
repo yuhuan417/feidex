@@ -7,8 +7,8 @@ import (
 
 // Type aliases preserve the original names within the app package.
 type (
-	finalCardPatchTracker = appfinalcardpatch.Tracker
-	finalCardPatchState   = appfinalcardpatch.PatchState
+	finalCardPatchTracker  = appfinalcardpatch.Tracker
+	finalCardPatchState    = appfinalcardpatch.PatchState
 	finalCardPatchSnapshot = appfinalcardpatch.PatchSnapshot
 )
 

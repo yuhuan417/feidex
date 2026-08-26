@@ -14,13 +14,14 @@ import (
 // dependencies. Follows the claudesupport.Service pattern.
 type Service struct {
 	// State access
-	PendingRequests func() []*state.PendingRequest
-	Pending         func(id string) *state.PendingRequest
-	UpdatePending   func(id string, mutate func(*state.PendingRequest)) error
-	SavePending     func(req *state.PendingRequest) error
-	SetSubStatus    func(id, status string) error
-	Submission      func(id string) *state.Submission
-	Session         func(key string) *state.Session
+	PendingRequests  func() []*state.PendingRequest
+	Pending          func(id string) *state.PendingRequest
+	UpdatePending    func(id string, mutate func(*state.PendingRequest)) error
+	SavePending      func(req *state.PendingRequest) error
+	SetSubStatus     func(id, status string) error
+	Submission       func(id string) *state.Submission
+	Session          func(key string) *state.Session
+	SessionKeysEqual func(a, b string) bool
 
 	// Feishu
 	SimpleStatusCard func(title, color, body string, buttons []feishu.Button) map[string]any

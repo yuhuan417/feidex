@@ -951,23 +951,14 @@ func serialGroupExecutionKey(sess *state.Session) string {
 }
 
 func sessionGroupKeyParts(sessionKey string) (frontendID, chatID string, ok bool) {
-	parts := strings.Split(strings.TrimSpace(sessionKey), ":")
-	if len(parts) < 3 || parts[0] != "feishu" {
+	frontendID, chatType, chatID, _, _ := appcore.ParseSessionKey(sessionKey)
+	if strings.TrimSpace(chatID) == "" {
 		return "", "", false
 	}
-	offset := 1
-	if len(parts) > 3 && parts[1] == "frontend" {
-		frontendID = strings.TrimSpace(parts[2])
-		offset = 3
-	}
-	if offset >= len(parts) {
+	if chatType != "" && chatType != "group" {
 		return "", "", false
 	}
-	if len(parts) > offset+1 && parts[offset] == "group" {
-		chatID = strings.TrimSpace(parts[offset+1])
-		return frontendID, chatID, chatID != ""
-	}
-	return "", "", false
+	return strings.TrimSpace(frontendID), strings.TrimSpace(chatID), true
 }
 
 func queuedHeadSubmission(appState QueueAppStateProvider, sess *state.Session) *state.Submission {

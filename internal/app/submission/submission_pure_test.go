@@ -358,11 +358,11 @@ func TestShouldRedactInboundText(t *testing.T) {
 
 func TestCancelledPendingTitle(t *testing.T) {
 	tests := []struct {
-		name        string
-		pending     *state.PendingRequest
-		planMode    string
-		review      string
-		expect      string
+		name     string
+		pending  *state.PendingRequest
+		planMode string
+		review   string
+		expect   string
 	}{
 		{"nil pending", nil, "plan", "review", "已取消"},
 		{"plan mode", &state.PendingRequest{Kind: "plan"}, "plan", "review", "计划确认已取消"},

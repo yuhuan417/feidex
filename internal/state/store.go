@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 7
+const currentSnapshotVersion = 8
 
 type Store struct {
 	path    string
@@ -47,6 +47,9 @@ type storedSession struct {
 	Key                           string                          `json:"key"`
 	BindingID                     string                          `json:"binding_id,omitempty"`
 	WorkspaceID                   string                          `json:"workspace_id"`
+	ChatID                        string                          `json:"chat_id,omitempty"`
+	ChatType                      string                          `json:"chat_type,omitempty"`
+	RootMessageID                 string                          `json:"root_message_id,omitempty"`
 	ActiveThreadID                string                          `json:"active_thread_id"`
 	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
 	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
@@ -590,6 +593,83 @@ func (s *Store) GetSession(key string) *Session {
 	return nil
 }
 
+// CanonicalizeSessionKeys rewrites persisted session identity keys after app
+// code has resolved the current canonical key shape. It also updates pending
+// binding message references because those are persisted inside agent bindings.
+func (s *Store) CanonicalizeSessionKeys(canonical func(key, chatType, chatID, frontendID string) string) error {
+	if canonical == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	nextRuntime := make(map[string]*Session, len(s.runtime.Sessions))
+	for key, sess := range s.runtime.Sessions {
+		if sess == nil {
+			continue
+		}
+		cp := cloneSession(sess)
+		if cp == nil {
+			continue
+		}
+		oldKey := strings.TrimSpace(firstNonEmptyString(cp.Key, key))
+		chatType := strings.TrimSpace(cp.ChatType)
+		chatID := strings.TrimSpace(cp.ChatID)
+		if chatType == "" || chatID == "" {
+			if keyChatType, keyChatID, _, ok := sessionContextFromKey(oldKey); ok {
+				chatType = firstNonEmptyString(chatType, keyChatType)
+				chatID = firstNonEmptyString(chatID, keyChatID)
+			}
+		}
+		newKey := strings.TrimSpace(canonical(oldKey, chatType, chatID, ""))
+		if newKey == "" {
+			newKey = oldKey
+		}
+		if newKey != oldKey {
+			changed = true
+		}
+		cp.Key = newKey
+		if chatType != "" {
+			cp.ChatType = chatType
+		}
+		if chatID != "" {
+			cp.ChatID = chatID
+		}
+		normalizeSessionValues(cp)
+		if existing := nextRuntime[newKey]; existing != nil {
+			changed = true
+			nextRuntime[newKey] = mergeSessions(existing, cp)
+			continue
+		}
+		nextRuntime[newKey] = cp
+	}
+	for _, binding := range s.data.AgentBindings {
+		if binding == nil || binding.PendingMessage == nil {
+			continue
+		}
+		pending := binding.PendingMessage
+		oldKey := strings.TrimSpace(pending.SessionKey)
+		newKey := strings.TrimSpace(canonical(oldKey, pending.ChatType, pending.ChatID, binding.FrontendID))
+		if newKey != "" && newKey != oldKey {
+			pending.SessionKey = newKey
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	s.runtime.Sessions = nextRuntime
+	s.data.Sessions = make(map[string]*storedSession, len(nextRuntime))
+	for key, sess := range nextRuntime {
+		if sess == nil {
+			continue
+		}
+		sess.Key = key
+		s.syncPersistentSessionLocked(sess)
+	}
+	return s.saveLocked()
+}
+
 func (s *Store) UpsertSession(sess *Session) error {
 	if sess == nil {
 		return nil
@@ -602,7 +682,7 @@ func (s *Store) UpsertSession(sess *Session) error {
 	}
 	normalizeSessionValues(cp)
 	cp.UpdatedAt = time.Now().Unix()
-	s.runtime.Sessions[sess.Key] = cp
+	s.runtime.Sessions[cp.Key] = cp
 	s.syncPersistentSessionLocked(cp)
 	return s.saveLocked()
 }
@@ -1226,6 +1306,9 @@ func storedSessionFromSession(sess *Session) *storedSession {
 		Key:                           cp.Key,
 		BindingID:                     cp.BindingID,
 		WorkspaceID:                   cp.WorkspaceID,
+		ChatID:                        cp.ChatID,
+		ChatType:                      cp.ChatType,
+		RootMessageID:                 cp.RootMessageID,
 		ActiveThreadID:                cp.ActiveThreadID,
 		ActiveThreadWorkspaceID:       cp.ActiveThreadWorkspaceID,
 		ActiveThreadApprovalPolicy:    cp.ActiveThreadApprovalPolicy,
@@ -1252,6 +1335,9 @@ func sessionFromStored(sess *storedSession) *Session {
 		Key:                           sess.Key,
 		BindingID:                     strings.TrimSpace(sess.BindingID),
 		WorkspaceID:                   sess.WorkspaceID,
+		ChatID:                        strings.TrimSpace(sess.ChatID),
+		ChatType:                      strings.ToLower(strings.TrimSpace(sess.ChatType)),
+		RootMessageID:                 strings.TrimSpace(sess.RootMessageID),
 		ActiveThreadID:                sess.ActiveThreadID,
 		ActiveThreadWorkspaceID:       sess.ActiveThreadWorkspaceID,
 		ActiveThreadApprovalPolicy:    sess.ActiveThreadApprovalPolicy,
@@ -1270,9 +1356,15 @@ func sessionFromStored(sess *storedSession) *Session {
 		UpdatedAt:                     sess.UpdatedAt,
 	}
 	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
-		cp.ChatType = chatType
-		cp.ChatID = chatID
-		cp.RootMessageID = rootMessageID
+		if strings.TrimSpace(cp.ChatType) == "" {
+			cp.ChatType = chatType
+		}
+		if strings.TrimSpace(cp.ChatID) == "" {
+			cp.ChatID = chatID
+		}
+		if strings.TrimSpace(cp.RootMessageID) == "" {
+			cp.RootMessageID = rootMessageID
+		}
 	}
 	normalizeSessionValues(cp)
 	return cp
@@ -1284,6 +1376,9 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 	}
 	cp := *sess
 	cp.BindingID = strings.TrimSpace(cp.BindingID)
+	cp.ChatID = strings.TrimSpace(cp.ChatID)
+	cp.ChatType = strings.ToLower(strings.TrimSpace(cp.ChatType))
+	cp.RootMessageID = strings.TrimSpace(cp.RootMessageID)
 	cp.ActiveClaudePermissionMode = strings.TrimSpace(cp.ActiveClaudePermissionMode)
 	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
 	cp.ActiveThreadCollaborationMode = normalizeSessionCollaborationMode(cp.ActiveThreadCollaborationMode)
@@ -1424,8 +1519,23 @@ func storedSessionsEqual(a, b *storedSession) bool {
 func sessionContextFromKey(key string) (chatType, chatID, rootMessageID string, ok bool) {
 	key = strings.TrimSpace(key)
 	parts := strings.Split(key, ":")
-	if len(parts) < 3 || parts[0] != "feishu" {
+	if len(parts) < 2 || parts[0] != "feishu" {
 		return "", "", "", false
+	}
+	if len(parts) == 2 {
+		chatID = strings.TrimSpace(parts[1])
+		return "", chatID, "", chatID != ""
+	}
+	if parts[1] == "chat" {
+		if len(parts) > 2 {
+			chatID = strings.TrimSpace(parts[2])
+			return "", chatID, "", chatID != ""
+		}
+		return "", "", "", false
+	}
+	if len(parts) >= 3 && parts[1] != "frontend" && parts[1] != "group" && parts[1] != "p2p" {
+		chatID = strings.TrimSpace(parts[2])
+		return "", chatID, "", chatID != ""
 	}
 	offset := 1
 	if len(parts) > 3 && parts[1] == "frontend" {
@@ -1435,6 +1545,11 @@ func sessionContextFromKey(key string) (chatType, chatID, rootMessageID string, 
 		return "", "", "", false
 	}
 	switch parts[offset] {
+	case "chat":
+		if len(parts) <= offset+1 || strings.TrimSpace(parts[offset+1]) == "" {
+			return "", "", "", false
+		}
+		return "", strings.TrimSpace(parts[offset+1]), "", true
 	case "group":
 		if len(parts) <= offset+1 || strings.TrimSpace(parts[offset+1]) == "" {
 			return "", "", "", false
@@ -1535,6 +1650,139 @@ func (s *Store) DeleteMessageLinks(match func(*MessageLink) bool) {
 			delete(s.runtime.MessageLinks, id)
 		}
 	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func mergeSessions(a, b *Session) *Session {
+	if a == nil {
+		return cloneSession(b)
+	}
+	if b == nil {
+		return cloneSession(a)
+	}
+	primary := cloneSession(a)
+	secondary := cloneSession(b)
+	if secondary.UpdatedAt > primary.UpdatedAt {
+		primary, secondary = secondary, primary
+	}
+	fillSessionBlanks(primary, secondary)
+	primary.Queue = appendUniqueStrings(primary.Queue, secondary.Queue...)
+	primary.ActiveOperations = append(primary.ActiveOperations, secondary.ActiveOperations...)
+	primary.StagedImages = append(primary.StagedImages, secondary.StagedImages...)
+	primary.RecentWorkspaceIDs = appendUniqueStrings(primary.RecentWorkspaceIDs, secondary.RecentWorkspaceIDs...)
+	primary.BackendThreads = mergeSessionBackendThreadMaps(secondary.BackendThreads, primary.BackendThreads)
+	return primary
+}
+
+func fillSessionBlanks(dst, src *Session) {
+	if dst == nil || src == nil {
+		return
+	}
+	if strings.TrimSpace(dst.BindingID) == "" {
+		dst.BindingID = src.BindingID
+	}
+	if strings.TrimSpace(dst.WorkspaceID) == "" {
+		dst.WorkspaceID = src.WorkspaceID
+	}
+	if strings.TrimSpace(dst.ChatID) == "" {
+		dst.ChatID = src.ChatID
+	}
+	if strings.TrimSpace(dst.ChatType) == "" {
+		dst.ChatType = src.ChatType
+	}
+	if strings.TrimSpace(dst.RootMessageID) == "" {
+		dst.RootMessageID = src.RootMessageID
+	}
+	if strings.TrimSpace(dst.ActiveThreadID) == "" {
+		dst.ActiveThreadID = src.ActiveThreadID
+	}
+	if strings.TrimSpace(dst.ActiveThreadWorkspaceID) == "" {
+		dst.ActiveThreadWorkspaceID = src.ActiveThreadWorkspaceID
+	}
+	if strings.TrimSpace(dst.ActiveThreadApprovalPolicy) == "" {
+		dst.ActiveThreadApprovalPolicy = src.ActiveThreadApprovalPolicy
+	}
+	if strings.TrimSpace(dst.ActiveThreadSandboxMode) == "" {
+		dst.ActiveThreadSandboxMode = src.ActiveThreadSandboxMode
+	}
+	if strings.TrimSpace(dst.ActiveThreadMultiAgentMode) == "" {
+		dst.ActiveThreadMultiAgentMode = src.ActiveThreadMultiAgentMode
+	}
+	if strings.TrimSpace(dst.ActiveClaudePermissionMode) == "" {
+		dst.ActiveClaudePermissionMode = src.ActiveClaudePermissionMode
+	}
+	if strings.TrimSpace(dst.ActiveThreadServiceTier) == "" {
+		dst.ActiveThreadServiceTier = src.ActiveThreadServiceTier
+	}
+	if dst.ActiveThreadCollaborationMode == nil {
+		dst.ActiveThreadCollaborationMode = cloneSessionCollaborationMode(src.ActiveThreadCollaborationMode)
+	}
+	if strings.TrimSpace(dst.ActiveThreadName) == "" {
+		dst.ActiveThreadName = src.ActiveThreadName
+	}
+	if strings.TrimSpace(dst.ActiveThreadPreview) == "" {
+		dst.ActiveThreadPreview = src.ActiveThreadPreview
+	}
+	if strings.TrimSpace(dst.ActiveTurnID) == "" {
+		dst.ActiveTurnID = src.ActiveTurnID
+	}
+	if strings.TrimSpace(dst.ActiveSubmissionID) == "" {
+		dst.ActiveSubmissionID = src.ActiveSubmissionID
+	}
+	if strings.TrimSpace(dst.OwnerUserID) == "" {
+		dst.OwnerUserID = src.OwnerUserID
+	}
+	if strings.TrimSpace(dst.ModelOverride) == "" {
+		dst.ModelOverride = src.ModelOverride
+	}
+	if strings.TrimSpace(dst.Status) == "" || strings.TrimSpace(dst.Status) == SessionStatusIdle.String() && strings.TrimSpace(src.Status) != "" {
+		dst.Status = src.Status
+	}
+}
+
+func appendUniqueStrings(values []string, more ...string) []string {
+	out := append([]string(nil), values...)
+	seen := make(map[string]struct{}, len(out)+len(more))
+	for _, value := range out {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			seen[value] = struct{}{}
+		}
+	}
+	for _, value := range more {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		out = append(out, value)
+		seen[value] = struct{}{}
+	}
+	return out
+}
+
+func mergeSessionBackendThreadMaps(base, overlay map[string]SessionBackendThread) map[string]SessionBackendThread {
+	if len(base) == 0 && len(overlay) == 0 {
+		return nil
+	}
+	out := cloneSessionBackendThreads(base)
+	if out == nil {
+		out = map[string]SessionBackendThread{}
+	}
+	for key, value := range overlay {
+		out[key] = value
+	}
+	return out
 }
 
 func (s *Store) ensureSessionLocked(key string) *Session {

@@ -73,6 +73,11 @@ func commandMessageFromAction(a *App, action *feishu.CardAction, sessionKey, raw
 		msg.ChatType = firstNonEmpty(msg.ChatType, strings.TrimSpace(sess.ChatType))
 		msg.UserID = firstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))
 	}
+	if msg.ChatType == "" || msg.ChatID == "" {
+		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
+		msg.ChatType = firstNonEmpty(msg.ChatType, inferredChatType)
+		msg.ChatID = firstNonEmpty(msg.ChatID, inferredChatID)
+	}
 	if msg.ChatType == "group" && strings.TrimSpace(msg.RootMessageID) == "" {
 		msg.RootMessageID = firstNonEmpty(rootMessageID, msg.MessageID)
 	}

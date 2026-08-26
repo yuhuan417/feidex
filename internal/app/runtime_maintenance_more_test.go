@@ -87,10 +87,11 @@ func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 	a.frontendID = "default"
 	a.feishu = wrapFeishuClient(ff)
 	for _, sess := range []*state.Session{
-		{Key: "feishu:frontend:default:p2p:chat-b:ou-user-1", ChatID: "chat-b"},
-		{Key: "feishu:frontend:default:group:chat-a", ChatID: "chat-a"},
-		{Key: "feishu:frontend:default:p2p:chat-a:ou-user-2", ChatID: "chat-a"},
-		{Key: "feishu:frontend:other:p2p:chat-c:ou-user-3", ChatID: "chat-c"},
+		{Key: "feishu:frontend:default:chat:chat-b", ChatID: "chat-b", ChatType: "p2p"},
+		{Key: "feishu:frontend:default:chat:chat-a", ChatID: "chat-a", ChatType: "p2p"},
+		{Key: "feishu:frontend:default:chat:chat-a", ChatID: "chat-a", ChatType: "p2p"},
+		{Key: "feishu:frontend:default:chat:chat-group", ChatID: "chat-group", ChatType: "group"},
+		{Key: "feishu:frontend:other:chat:chat-c", ChatID: "chat-c", ChatType: "p2p"},
 	} {
 		if err := a.store.UpsertSession(sess); err != nil {
 			t.Fatalf("UpsertSession(%q) error = %v", sess.Key, err)

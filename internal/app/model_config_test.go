@@ -227,7 +227,7 @@ func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
 	a.claude = claude
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 
 	resp, err := newModelConfigService(a).completeClaudeModelOptionAdd(&feishu.CardAction{
 		ActionValue: map[string]any{
@@ -282,7 +282,7 @@ func TestCompleteClaudeModelOptionRemoveUsesSelectInputValue(t *testing.T) {
 
 	resp, err := newModelConfigService(a).completeClaudeModelOptionRemove(&feishu.CardAction{
 		ActionValue: map[string]any{
-			"session_key": "feishu:p2p:chat:user",
+			"session_key": "feishu:chat:chat",
 			"menu_action": "menu.model",
 		},
 		InputValue: "deepseek-v4-pro",
@@ -404,7 +404,7 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -441,7 +441,7 @@ func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setModelApplied: true}
 	a.claude = claude
 
@@ -482,7 +482,7 @@ func TestCompleteClaudeModelSetRejectsMessageTraffic(t *testing.T) {
 
 	resp, err := newModelConfigService(a).completeClaudeModelSet(&feishu.CardAction{
 		ActionValue: map[string]any{
-			"session_key": "feishu:p2p:chat:user",
+			"session_key": "feishu:chat:chat",
 			"menu_action": "menu.model",
 		},
 	}, "opus")
@@ -504,7 +504,7 @@ func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortApplied: true}
 	a.claude = claude
 
@@ -538,7 +538,7 @@ func TestCompleteClaudeEffortSetDefaultWarnsWhenLiveSessionCannotClear(t *testin
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortErr: claudecli.ErrEffortDefaultHotApplyUnsupported}
 	a.claude = claude
 

@@ -314,7 +314,7 @@ If Feidex adds another backend, keep these rules:
 
 Important current assumptions:
 
-- Session identity differs between p2p and group reply trees.
+- Feishu session identity is `frontend_id + chat_id`; chat type, user, root message, binding, workspace, and backend context stay as metadata.
 - Outbound message creation and patching are paced in `internal/feishu/message_rate_limit.go`.
 - New message creation is globally paced.
 - Card patching is paced per message ID.

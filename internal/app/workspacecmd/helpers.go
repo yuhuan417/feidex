@@ -106,7 +106,7 @@ type workspaceSwitchSessionService interface {
 }
 
 const (
-	workspaceSwitchActiveWorkBlockedText = "当前任务仍在运行，请先等待结束或中断后再切换工作区"
+	workspaceSwitchActiveWorkBlockedText  = "当前任务仍在运行，请先等待结束或中断后再切换工作区"
 	workspaceSwitchPendingWorkBlockedText = "当前还有待处理消息，请先处理完成后再切换工作区"
 )
 

@@ -57,8 +57,8 @@ type CardRendererFunc func(ctx context.Context, sub *state.Submission, title, co
 // ---------------------------------------------------------------------------
 
 const (
-	Timeout        = 15 * time.Second
-	IdleRetention  = 30 * time.Second
+	Timeout       = 15 * time.Second
+	IdleRetention = 30 * time.Second
 )
 
 // ---------------------------------------------------------------------------

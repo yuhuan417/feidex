@@ -44,7 +44,7 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 			},
 		},
 		WorkspaceIDForSession: func(sessionKey string, sess *state.Session) string {
-			if isGroupSessionKey(sessionKey) {
+			if groupBindingSessionScopeActive(a, sessionKey) {
 				if binding := bindingForSessionKey(a, sessionKey); binding != nil {
 					return strings.TrimSpace(binding.WorkspaceID)
 				}
@@ -53,7 +53,7 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 			return appcore.ResolveWorkspaceSelectionForSession(a, sess)
 		},
 		WorkspaceMenuBodyLines: func(sessionKey string, sess *state.Session, lines []string) []string {
-			if !isGroupSessionKey(sessionKey) {
+			if !groupBindingSessionScopeActive(a, sessionKey) {
 				return lines
 			}
 			binding := bindingForSessionKey(a, sessionKey)

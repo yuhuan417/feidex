@@ -14,7 +14,7 @@ func (s *Service) PendingTextRequest(sessionKey, userID string) *state.PendingRe
 	pending := s.PendingRequests()
 	sort.Slice(pending, func(i, j int) bool { return pending[i].CreatedAt > pending[j].CreatedAt })
 	for _, req := range pending {
-		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || req.SessionKey != sessionKey {
+		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || !s.sameSessionKey(req.SessionKey, sessionKey) {
 			continue
 		}
 		if req.OwnerUserID != "" && req.OwnerUserID != userID {
@@ -26,6 +26,13 @@ func (s *Service) PendingTextRequest(sessionKey, userID string) *state.PendingRe
 		}
 	}
 	return nil
+}
+
+func (s *Service) sameSessionKey(a, b string) bool {
+	if s != nil && s.SessionKeysEqual != nil {
+		return s.SessionKeysEqual(a, b)
+	}
+	return a == b
 }
 
 // ShouldRedactInboundText reports whether inbound text should be hidden

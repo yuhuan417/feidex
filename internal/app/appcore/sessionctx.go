@@ -74,4 +74,3 @@ func SessionResetActiveOperations(sess *state.Session) {
 func SessionHasActiveOperations(sess *state.Session) bool {
 	return sessionctx.HasActiveOperations(sess)
 }
-

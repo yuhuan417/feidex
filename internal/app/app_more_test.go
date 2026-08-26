@@ -1111,18 +1111,18 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 	}
 
 	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"})
-	if sessionKey != "feishu:group:chat" {
+	if sessionKey != "feishu:chat:chat" {
 		t.Fatalf("makeSessionKey(group) = %q", sessionKey)
 	}
 	sessionKey = makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"})
-	if sessionKey != "feishu:p2p:chat:user" {
+	if sessionKey != "feishu:chat:chat" {
 		t.Fatalf("makeSessionKey(p2p) = %q", sessionKey)
 	}
 	a.frontendID = "frontend-a"
-	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:group:chat" {
+	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:chat:chat" {
 		t.Fatalf("makeSessionKey(frontend group) = %q", got)
 	}
-	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:p2p:chat:user" {
+	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:chat:chat" {
 		t.Fatalf("makeSessionKey(frontend p2p) = %q", got)
 	}
 }
@@ -1662,7 +1662,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		ChatID:    "chat-1",
 		MessageID: "msg-1",
 		ActionValue: map[string]any{
-			"session_key": "feishu:frontend:default:p2p:chat-1:user-1",
+			"session_key": "feishu:frontend:default:chat:chat-1",
 		},
 	}
 
@@ -1691,7 +1691,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newThreadService(a).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
-			const downloadSessionKey = "feishu:group:chat-1"
+			const downloadSessionKey = "feishu:chat:chat-1"
 			if err := a.store.UpsertSession(&state.Session{
 				Key:         downloadSessionKey,
 				WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -1708,7 +1708,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}, downloadSessionKey)
 		},
 		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
-			const forkSessionKey = "feishu:group:chat-1"
+			const forkSessionKey = "feishu:chat:chat-1"
 			if err := a.store.UpsertSession(&state.Session{
 				Key:                     forkSessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -1726,7 +1726,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}}, forkSessionKey)
 		},
 		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
-			const compactSessionKey = "feishu:group:chat-1"
+			const compactSessionKey = "feishu:chat:chat-1"
 			if err := a.store.UpsertSession(&state.Session{
 				Key:                     compactSessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -1847,7 +1847,7 @@ func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
 func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -1916,7 +1916,7 @@ func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
 		{ID: "default", Name: "Default", Cwd: currentDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
 		{ID: "drop", Name: "Drop", Cwd: dropDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
 	}
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -1947,7 +1947,7 @@ func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
 
 func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 
 	rootCard := renderCommandMenuCard(a, sessionKey)
 	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：主菜单") || strings.Contains(body, "当前模式: plan") {
@@ -2063,7 +2063,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 
 func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                           sessionKey,
 		WorkspaceID:                   a.cfg.Workspaces[0].ID,
@@ -2101,7 +2101,7 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 	a.codex = nil
 	a.claude = &fakeClaudeCore{}
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 
 	toolsCard := renderToolsMenuCard(a, sessionKey)
 	toolsLabels := cardButtonLabelsByAction(toolsCard)
@@ -2132,7 +2132,7 @@ func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testi
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 
 	resp, err := newMenuActionService(a).completeMenuReview(&feishu.CardAction{
 		ActionValue: map[string]any{"session_key": sessionKey},
@@ -3281,7 +3281,7 @@ func TestNotificationHelpers(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	targetSessionKey := "feishu:group:chat-1"
+	targetSessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -3339,7 +3339,7 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	targetSessionKey := "feishu:group:chat-1"
+	targetSessionKey := "feishu:chat:chat-1"
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
@@ -3414,7 +3414,7 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 
 func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	targetSessionKey := "feishu:group:chat-1"
+	targetSessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -3777,7 +3777,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 
 func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	replySessionKey := "feishu:group:chat-1"
+	replySessionKey := "feishu:chat:chat-1"
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         replySessionKey,
@@ -4391,7 +4391,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 
 func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
@@ -4444,7 +4444,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 
 func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,

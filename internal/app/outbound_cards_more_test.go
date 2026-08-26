@@ -46,7 +46,7 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 
 func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	workspaceID := a.cfg.Workspaces[0].ID
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,

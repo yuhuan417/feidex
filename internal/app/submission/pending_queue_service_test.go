@@ -98,7 +98,7 @@ func TestPendingQueueServiceReactionWrappersAndDiscardSession(t *testing.T) {
 func TestPendingQueueServiceDiscardPendingInputByMessageID(t *testing.T) {
 	app := newPendingQueueTestApp(t)
 	svc := NewPendingQueueService(app)
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 
 	if err := app.store.UpsertSession(&state.Session{
 		Key:         sessionKey,

@@ -209,7 +209,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		liveThreads: newLiveThreadTracker(),
 	}
 
-	sessionKey := "feishu:p2p:chat-1:user-1"
+	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
@@ -340,7 +340,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		codexRecoveryState = appcodexruntime.NewRecoveryState()
 	}()
 
-	sessionKey := "feishu:p2p:chat-1:user-1"
+	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
@@ -392,7 +392,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	cfg := testCodexConfig()
 	a := &App{cfg: cfg, store: store, backend: backendClaude}
 
-	sessionKey := "feishu:p2p:chat-1:user-1"
+	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&state.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",

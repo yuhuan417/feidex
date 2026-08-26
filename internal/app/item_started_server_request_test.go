@@ -56,7 +56,7 @@ func TestApprovalActionWaitsForServerRequestResolved(t *testing.T) {
 	if pending := a.store.PendingByID("cmd-1"); pending == nil || pending.Status != "pending" {
 		t.Fatalf("pending after approval request = %+v", pending)
 	}
-	if _, err := a.ServerRequestService().CompleteApprovalAction( &feishu.CardAction{
+	if _, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "cmd-1"},
 	}, "approval.command.accept"); err != nil {

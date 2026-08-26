@@ -96,45 +96,39 @@ Workspace 是当前 frontend 可访问的物理目录及其工作区配置，例
 
 Feidex Session 是“一个 frontend 在一个 Feishu 会话里”的本地状态对象。
 
-群聊 Session 的身份是：
+Session 身份统一是：
 
 ```text
-(frontend_id, chat_type, chat_id)
+(frontend_id, chat_id)
 ```
 
 对应的 SessionKey 是：
 
 ```text
-feishu:frontend:<frontend_id>:group:<chat_id>
+feishu:frontend:<frontend_id>:chat:<chat_id>
 ```
 
-其中 `RootMessageID` 仍会保存为 session/submission 的回复树绑定元数据，用于回复续写和消息链接，但不参与 SessionKey 生成。
+其中 `ChatType`、`RootMessageID` 和 `UserID` 仍会保存为 session/submission 的元数据，用于群聊作用域判断、回复续写和消息链接，但不参与 SessionKey 生成。
 
 Session 内可以保存 `BindingID`，但 `BindingID` 只是执行元数据，不能参与 SessionKey 生成。
-
-单聊沿用现有语义：
-
-```text
-(frontend_id, chat_id, user_id)
-```
 
 ## 3. 不可违反的约束
 
 ### 3.0 Scope invariant
 
-本功能的实现边界只覆盖群聊。单聊窗口里的 `/workspace`、`/model`、`/effort`、`/fast`、菜单结构和既有 session/thread 语义必须保持原有行为。群聊新增的“当前 Bot 在本群内”作用域不能泄漏到单聊默认配置。
+本功能的实现边界只覆盖群聊作用域配置。单聊窗口里的 `/workspace`、`/model`、`/effort`、`/fast`、菜单结构和既有 thread 语义必须保持原有行为。群聊新增的“当前 Bot 在本群内”作用域不能泄漏到单聊默认配置。
 
 ### 3.1 Session identity
 
 必须保持：
 
 ```text
-group session = frontend + chat
+session = frontend + chat
 ```
 
 禁止：
 
-- 使用 `BindingID` 或 RootMessageID 参与 SessionKey。
+- 使用 `ChatType`、`UserID`、`BindingID` 或 RootMessageID 参与 SessionKey。
 - 把不同 frontend 的同一个群合并成一个 Session。
 - 因为 workspace、model 或 backend 配置变化而直接改变 SessionKey。
 - 让 Bot A 和 Bot B 共用同一个 frontend-scoped Session。

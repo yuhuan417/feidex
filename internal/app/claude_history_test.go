@@ -104,7 +104,7 @@ func TestRenderHistoryCardClaudeMarksLatestTurnRunningWhenSessionBusy(t *testing
 		fmt.Sprintf(`{"parentUuid":"user-2","isSidechain":false,"message":{"id":"msg-2","type":"message","role":"assistant","content":[{"type":"text","text":"checking"}],"stop_reason":"tool_use"},"type":"assistant","uuid":"assistant-2","timestamp":"2026-04-22T00:01:01Z","cwd":"%s","sessionId":"%s"}`, a.cfg.Workspaces[0].Cwd, sessionID),
 	})
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

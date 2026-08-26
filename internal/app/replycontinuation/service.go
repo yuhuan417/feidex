@@ -141,10 +141,7 @@ func (s *Service) PendingInputSessionKey(msg *feishu.InboundMessage) string {
 	if s.App != nil && strings.TrimSpace(s.App.FrontendID()) != "" {
 		prefix += "frontend:" + strings.TrimSpace(s.App.FrontendID()) + ":"
 	}
-	if strings.TrimSpace(msg.ChatType) == "group" {
-		return prefix + "group:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
-	}
-	return prefix + "p2p:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
+	return prefix + "chat:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
 }
 
 // CollectPendingStagedImages collects staged images from the given session

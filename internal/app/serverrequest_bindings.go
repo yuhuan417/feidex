@@ -29,6 +29,9 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		SetSubStatus:    func(id, status string) error { return a.State().SetSubmissionStatus(id, status) },
 		Submission:      func(id string) *state.Submission { return a.State().Submission(id) },
 		Session:         func(key string) *state.Session { return a.State().Session(key) },
+		SessionKeysEqual: func(left, right string) bool {
+			return sessionKeysEqual(a, left, right)
+		},
 
 		// Feishu
 		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
@@ -182,7 +185,7 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 func rootPendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest {
 	var best *state.PendingRequest
 	for _, req := range a.State().PendingRequests() {
-		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || req.SessionKey != sessionKey {
+		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || !sessionKeysEqual(a, req.SessionKey, sessionKey) {
 			continue
 		}
 		if req.OwnerUserID != "" && req.OwnerUserID != userID {

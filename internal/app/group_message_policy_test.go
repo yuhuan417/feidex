@@ -55,7 +55,7 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	if err := store.UpsertMessageLink(&state.MessageLink{
 		FrontendID: "frontend-a",
 		MessageID:  "bot-reply-1",
-		SessionKey: "feishu:frontend:frontend-a:group:chat-1",
+		SessionKey: "feishu:frontend:frontend-a:chat:chat-1",
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
@@ -72,7 +72,7 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	if err := store.UpsertMessageLink(&state.MessageLink{
 		FrontendID: "frontend-a",
 		MessageID:  "bot-parent-1",
-		SessionKey: "feishu:frontend:frontend-a:group:chat-1",
+		SessionKey: "feishu:frontend:frontend-a:chat:chat-1",
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink(parent) error = %v", err)
 	}
@@ -142,7 +142,7 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 	if err := store.UpsertMessageLink(&state.MessageLink{
 		FrontendID: "frontend-b",
 		MessageID:  "client-reply",
-		SessionKey: "feishu:frontend:frontend-b:group:chat-1",
+		SessionKey: "feishu:frontend:frontend-b:chat:chat-1",
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
@@ -211,13 +211,13 @@ func TestBindingUsesChatScopedGroupSessionKey(t *testing.T) {
 	}
 	first := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", MessageID: "m-1"})
 	second := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", MessageID: "m-2", RootMessageID: "root-2"})
-	firstWant := "feishu:frontend:frontend-a:group:chat-1"
-	secondWant := "feishu:frontend:frontend-a:group:chat-1"
+	firstWant := "feishu:frontend:frontend-a:chat:chat-1"
+	secondWant := "feishu:frontend:frontend-a:chat:chat-1"
 	if first != firstWant || second != secondWant || first != second {
 		t.Fatalf("binding session keys = %q / %q, want %q / %q", first, second, firstWant, secondWant)
 	}
 	frontendID, chatType, chatID, rootID, userID := parseSessionKey(first)
-	if frontendID != "frontend-a" || chatType != "group" || chatID != "chat-1" || rootID != "" || userID != "" {
+	if frontendID != "frontend-a" || chatType != "" || chatID != "chat-1" || rootID != "" || userID != "" {
 		t.Fatalf("parsed group session key = %q %q %q %q %q", frontendID, chatType, chatID, rootID, userID)
 	}
 }

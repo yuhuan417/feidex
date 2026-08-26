@@ -68,7 +68,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	threadID := "thread-retry-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
@@ -159,7 +159,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:p2p:chat-1:user:user-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	threadID := "thread-retry-queue-1"
 	sess := &state.Session{
 		Key:                     sessionKey,
@@ -285,7 +285,7 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	threadA := "thread-root-a"
 	sessA := seedAutoRetrySession(t, a, sessionKey, threadA)
 	sessA.RootMessageID = "root-a"
@@ -409,7 +409,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	threadID := "thread-stop-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
@@ -524,7 +524,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := "feishu:frontend:default:group:chat-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	threadID := "claude-session-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)

@@ -15,12 +15,12 @@ import (
 
 // Payload type aliases re-exported from pendingforms.
 type (
-	ToolUserInputPayload   = pendingforms.ToolUserInputPayload
-	ToolUserInputQuestion  = pendingforms.ToolUserInputQuestion
-	ToolUserInputOption    = pendingforms.ToolUserInputOption
+	ToolUserInputPayload    = pendingforms.ToolUserInputPayload
+	ToolUserInputQuestion   = pendingforms.ToolUserInputQuestion
+	ToolUserInputOption     = pendingforms.ToolUserInputOption
 	ToolUserInputFormDrafts = pendingforms.FormDrafts
-	ElicitationFormPayload = pendingforms.ElicitationFormPayload
-	ElicitationURLPayload  = pendingforms.ElicitationURLPayload
+	ElicitationFormPayload  = pendingforms.ElicitationFormPayload
+	ElicitationURLPayload   = pendingforms.ElicitationURLPayload
 )
 
 // PendingCardDelivery describes how to deliver a pending request card.

@@ -52,14 +52,14 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
-	if a.store.GetSession("feishu:p2p::") != nil {
+	if got := a.store.AllSessions(); len(got) != 0 {
 		t.Fatal("stale message should be ignored")
 	}
 
 	_ = a.deduper.Claim("dup")
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "dup"})
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",

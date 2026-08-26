@@ -18,7 +18,7 @@ func TestEnqueueSubmissionBindsStagedImagesToNextText(t *testing.T) {
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg, store: store}
 
-	sessionKey := "feishu:p2p:chat:user"
+	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:                sessionKey,
 		WorkspaceID:        "default",

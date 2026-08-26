@@ -32,7 +32,8 @@ func (s *Store) Session(key string) *state.Session {
 	if s == nil || s.Store == nil {
 		return nil
 	}
-	return s.Store.GetSession(strings.TrimSpace(key))
+	resolved := s.resolveSessionKey(key)
+	return s.Store.GetSession(resolved)
 }
 
 // Sessions returns all sessions.
@@ -52,6 +53,7 @@ func (s *Store) SaveSession(sess *state.Session) error {
 	if cp == nil {
 		return nil
 	}
+	cp.Key = s.canonicalSessionKey(cp.Key)
 	if s.Backend != "" {
 		sessionctx.StoreBackendThread(cp, s.Backend)
 	}
@@ -63,12 +65,80 @@ func (s *Store) UpdateSession(key string, mutate func(*state.Session)) (*state.S
 	if s == nil || s.Store == nil {
 		return nil, nil
 	}
-	return s.Store.UpdateSession(strings.TrimSpace(key), func(sess *state.Session) {
+	return s.Store.UpdateSession(s.resolveSessionKey(key), func(sess *state.Session) {
 		if mutate != nil {
 			mutate(sess)
 		}
+		sess.Key = s.canonicalSessionKey(sess.Key)
 		if s.Backend != "" {
 			sessionctx.StoreBackendThread(sess, s.Backend)
 		}
 	})
+}
+
+func (s *Store) canonicalSessionKey(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" || strings.Contains(key, ":workspace:") || strings.Contains(key, ":pending:") {
+		return key
+	}
+	frontendID, _, _, _, _ := appcore.ParseSessionKey(key)
+	if frontendID == "" && s.LegacyFallback {
+		frontendID = strings.TrimSpace(s.FrontendID)
+	}
+	return appcore.CanonicalSessionKey(frontendID, key)
+}
+
+func (s *Store) resolveSessionKey(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" || s == nil || s.Store == nil {
+		return key
+	}
+	canonical := s.canonicalSessionKey(key)
+	if canonical != "" && canonical != key {
+		if sess := s.Store.GetSession(canonical); sess != nil {
+			return canonical
+		}
+		if sess := s.Store.GetSession(key); sess != nil {
+			return s.promoteSessionAlias(sess, canonical)
+		}
+	} else if sess := s.Store.GetSession(key); sess != nil {
+		return key
+	}
+	if canonical != "" && canonical != key {
+		if sess := s.Store.GetSession(canonical); sess != nil {
+			return canonical
+		}
+	}
+	for _, sess := range s.Store.AllSessions() {
+		if sess == nil || strings.Contains(strings.TrimSpace(sess.Key), ":workspace:") || strings.Contains(strings.TrimSpace(sess.Key), ":pending:") {
+			continue
+		}
+		if s.canonicalSessionKey(sess.Key) == canonical {
+			return s.promoteSessionAlias(sess, canonical)
+		}
+	}
+	return firstNonEmpty(canonical, key)
+}
+
+func (s *Store) promoteSessionAlias(sess *state.Session, canonical string) string {
+	canonical = strings.TrimSpace(canonical)
+	if sess == nil || canonical == "" || s == nil || s.Store == nil {
+		return canonical
+	}
+	cp := cloneSession(sess)
+	if cp == nil {
+		return canonical
+	}
+	cp.Key = canonical
+	_ = s.Store.UpsertSession(cp)
+	return canonical
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

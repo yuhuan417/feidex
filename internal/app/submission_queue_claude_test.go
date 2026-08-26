@@ -11,7 +11,7 @@ func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testi
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 
-	sessionKey := "feishu:frontend:default:p2p:chat-1:user-1"
+	sessionKey := "feishu:frontend:default:chat:chat-1"
 	sess := &state.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,

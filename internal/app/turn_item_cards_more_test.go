@@ -107,10 +107,10 @@ func TestTurnItemCardsPrefixWorkspaceAndPlan(t *testing.T) {
 	}
 
 	replyCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnItemCardPayload{
-		ItemType:    "agent_message",
-		Title:       "最终答复",
-		Color:       "green",
-		SummaryText: "reply body",
+		ItemType:      "agent_message",
+		Title:         "最终答复",
+		Color:         "green",
+		SummaryText:   "reply body",
 		IsFinalAnswer: true,
 	}, false)
 	if got := cardHeaderTitle(t, replyCard); got != "["+a.cfg.Workspaces[0].ID+"] [plan] 最终答复" {
