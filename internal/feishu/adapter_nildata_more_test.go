@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
-	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
 
 type adapterNilDataAPI struct{}
@@ -50,9 +49,6 @@ func TestAdapterNilDataAndHelperBranches(t *testing.T) {
 		t.Fatalf("replyMessageDetailed(nil data) = %q, %v, want empty id", id, err)
 	}
 
-	if got := mentionedEveryone([]*larkim.MentionEvent{{Name: strPtr("all")}}); !got {
-		t.Fatal("mentionedEveryone() should accept English all")
-	}
 	if _, ok := extractImageAttachment(strPtr(`{}`)); ok {
 		t.Fatal("extractImageAttachment(empty) should fail")
 	}

@@ -86,8 +86,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		groupPolicyRootMessageID(msg),
 		msg.ParentMessageID,
 		msg.MentionedSelf,
-		len(msg.MentionedOpenIDs) > 0,
-		msg.MentionedEveryone,
+		msg.MentionedAny || len(msg.MentionedOpenIDs) > 0,
 	) {
 		slog.Debug("feishu group message ignored by app group policy",
 			"frontend_id", strings.TrimSpace(a.FrontendID()),
@@ -98,7 +97,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			"parent_message_id", msg.ParentMessageID,
 			"mentioned_self", msg.MentionedSelf,
 			"mention_count", len(msg.MentionedOpenIDs),
-			"mentioned_everyone", msg.MentionedEveryone,
+			"mentioned_any", msg.MentionedAny,
 		)
 		return nil
 	}

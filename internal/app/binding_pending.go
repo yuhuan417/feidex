@@ -91,7 +91,7 @@ func pendingBindingMessageFromInbound(a *App, msg *feishu.InboundMessage) *state
 		MergeForwardMessageIDs: append([]string(nil), msg.MergeForwardMessageIDs...),
 		ExpandedMergeForward:   msg.ExpandedMergeForward,
 		MentionedOpenIDs:       append([]string(nil), msg.MentionedOpenIDs...),
-		MentionedEveryone:      msg.MentionedEveryone,
+		MentionedAny:           msg.MentionedAny,
 		MentionedSelf:          msg.MentionedSelf,
 		CreatedAt:              msg.CreatedAt,
 		StoredAt:               time.Now().Unix(),
@@ -126,7 +126,7 @@ func inboundFromPendingBindingMessage(pending *state.AgentBindingPendingMessage)
 		MergeForwardMessageIDs: append([]string(nil), pending.MergeForwardMessageIDs...),
 		ExpandedMergeForward:   pending.ExpandedMergeForward,
 		MentionedOpenIDs:       append([]string(nil), pending.MentionedOpenIDs...),
-		MentionedEveryone:      pending.MentionedEveryone,
+		MentionedAny:           pending.MentionedAny,
 		MentionedSelf:          pending.MentionedSelf,
 		CreatedAt:              pending.CreatedAt,
 	}

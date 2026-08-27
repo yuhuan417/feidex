@@ -13,9 +13,6 @@ import (
 )
 
 func TestAdapterHelperNegativeBranches(t *testing.T) {
-	if mentionedEveryone(nil) {
-		t.Fatal("mentionedEveryone(nil) should be false")
-	}
 	if _, ok := extractImageAttachment(nil); ok {
 		t.Fatal("extractImageAttachment(nil) should fail")
 	}

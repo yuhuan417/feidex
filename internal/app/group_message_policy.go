@@ -24,17 +24,17 @@ func configureGroupMessagePolicy(a *App) {
 }
 
 func shouldDeliverGroupMessageToApp(a *App, input feishu.GroupMessagePolicyInput) bool {
-	mentionedAny := len(input.MentionedOpenIDs) > 0
-	if shouldAcceptGroupMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, input.MentionedSelf, mentionedAny, input.MentionedEveryone) {
+	mentionedAny := input.MentionedAny || len(input.MentionedOpenIDs) > 0
+	if shouldAcceptGroupMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, input.MentionedSelf, mentionedAny) {
 		return true
 	}
 	if _, ok := groupPrimaryAssignmentFromPolicyInput(input); ok {
 		return true
 	}
-	return shouldProbeGroupPrimaryForMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, input.MentionedSelf, mentionedAny, input.MentionedEveryone)
+	return shouldProbeGroupPrimaryForMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, input.MentionedSelf, mentionedAny)
 }
 
-func shouldProbeGroupPrimaryForMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
+func shouldProbeGroupPrimaryForMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny bool) bool {
 	if a == nil || hasGroupPrimaryState(a, "group", chatID) {
 		return false
 	}
@@ -44,27 +44,19 @@ func shouldProbeGroupPrimaryForMessage(a *App, chatID, rootMessageID, parentMess
 	if mentionedAny {
 		return false
 	}
-	if mentionedEveryone {
-		cfg := feishuConfig(a)
-		return cfg != nil && cfg.RespondToAtEveryone
-	}
 	return strings.TrimSpace(rootMessageID) == "" && strings.TrimSpace(parentMessageID) == ""
 }
 
-func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny, mentionedEveryone bool) bool {
+func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny bool) bool {
 	if a == nil {
 		return false
 	}
-	cfg := feishuConfig(a)
 	if mentionedSelf {
 		return true
 	}
-	// An explicit mention of another person or bot must not fall through to
-	// the local primary frontend.
-	if mentionedAny || mentionedEveryone {
-		if mentionedEveryone && cfg != nil && cfg.RespondToAtEveryone {
-			return isGroupPrimary(a, "group", chatID)
-		}
+	// An explicit mention of another person or bot must not fall through to the
+	// local primary frontend.
+	if mentionedAny {
 		return false
 	}
 	if rootMessageID != "" || parentMessageID != "" {

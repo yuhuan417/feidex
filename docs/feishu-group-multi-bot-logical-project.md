@@ -149,7 +149,6 @@ pending 状态收到当前 Bot 应处理的普通群消息时，必须先暂存�
 - 普通未 `@` 的顶层群消息：只有 primary Bot 接收。
 - 明确 `@` 其他 Bot：当前 Bot 不接收，不能落到 primary Bot。
 - 回复当前 Bot 已发送消息：通过 frontend-scoped MessageLink 接收。
-- `@everyone`：沿用 `RespondToAtEveryone` 配置，并要求本地 primary 才能作为默认处理者。
 - pending 状态不直接投递 Codex/Claude，只展示当前工作区配置入口并暂存原消息。
 
 当前 Bot 是否为 primary 的判断是本地判断：读取当前实例的 `GroupPrimary.OwnerBotOpenID`，再和当前 frontend 的 bot open_id 比较。同一实例内如果 A/B 两个 frontend 都在同一群，A 是 owner，则 A 会处理未 `@` 顶层消息，B 会丢弃；B 的丢弃不会阻止 A，因为二者各自有独立 adapter 和 group policy。

@@ -437,6 +437,22 @@ func TestConvertMessageTextFlow(t *testing.T) {
 		t.Fatalf("expected group message without bot mention to be ignored, got %+v", got)
 	}
 
+	unknownMentionKey := "@unknown"
+	if got := noMention.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   strPtr("msg-2a"),
+				ChatType:    &chatType,
+				MessageType: &msgType,
+				Content:     strPtr(`{"text":"@unknown ping"}`),
+				Mentions:    []*larkim.MentionEvent{{Key: &unknownMentionKey}},
+			},
+		},
+	}); got != nil {
+		t.Fatalf("expected group message with non-bot mention to be ignored, got %+v", got)
+	}
+
 	noBotID := New(config.FeishuConfig{GroupAtOnly: true})
 	if got := noBotID.convertMessage(&larkim.P2MessageReceiveV1{
 		Event: &larkim.P2MessageReceiveV1Data{
@@ -452,25 +468,6 @@ func TestConvertMessageTextFlow(t *testing.T) {
 		t.Fatalf("expected GroupAtOnly to fail closed without bot open id, got %+v", got)
 	}
 
-	everyoneKey := "@all"
-	everyoneName := "所有人"
-	allAdapter := New(config.FeishuConfig{GroupAtOnly: true, RespondToAtEveryone: true})
-	allAdapter.botOpenID = "bot-1"
-	got = allAdapter.convertMessage(&larkim.P2MessageReceiveV1{
-		Event: &larkim.P2MessageReceiveV1Data{
-			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
-			Message: &larkim.EventMessage{
-				MessageId:   strPtr("msg-3"),
-				ChatType:    &chatType,
-				MessageType: &msgType,
-				Content:     strPtr(`{"text":"@all ping"}`),
-				Mentions:    []*larkim.MentionEvent{{Key: &everyoneKey, Name: &everyoneName}},
-			},
-		},
-	})
-	if got == nil || got.Text != "@all ping" {
-		t.Fatalf("expected @all message to pass through, got %+v", got)
-	}
 }
 
 func TestConvertMessageAttachmentsRecallAndReaction(t *testing.T) {
@@ -654,20 +651,14 @@ func TestAdapterHelperFunctions(t *testing.T) {
 	}
 
 	mentionKey := "@bot"
-	everyoneKey := "@all"
-	everyoneName := "Everyone"
 	mentions := []*larkim.MentionEvent{
 		{Key: &mentionKey, Id: &larkim.UserId{OpenId: strPtr("bot-1")}},
-		{Key: &everyoneKey, Name: &everyoneName},
 	}
 	if got := stripBotMention("@bot hello", mentions, "bot-1"); got != "hello" {
 		t.Fatalf("stripBotMention() = %q, want hello", got)
 	}
 	if !mentioned(mentions, "bot-1") {
 		t.Fatal("mentioned() should find bot open id")
-	}
-	if !mentionedEveryone(mentions) {
-		t.Fatal("mentionedEveryone() should recognize @all")
 	}
 
 	if got := parseReactionUserID(&larkim.UserId{OpenId: strPtr("open"), UserId: strPtr("user"), UnionId: strPtr("union")}); got != "open" {

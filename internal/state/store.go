@@ -144,7 +144,7 @@ type AgentBindingPendingMessage struct {
 	MergeForwardMessageIDs []string                        `json:"merge_forward_message_ids,omitempty"`
 	ExpandedMergeForward   bool                            `json:"expanded_merge_forward,omitempty"`
 	MentionedOpenIDs       []string                        `json:"mentioned_open_ids,omitempty"`
-	MentionedEveryone      bool                            `json:"mentioned_everyone,omitempty"`
+	MentionedAny           bool                            `json:"mentioned_any,omitempty"`
 	MentionedSelf          bool                            `json:"mentioned_self,omitempty"`
 	CreatedAt              int64                           `json:"created_at,omitempty"`
 	StoredAt               int64                           `json:"stored_at,omitempty"`

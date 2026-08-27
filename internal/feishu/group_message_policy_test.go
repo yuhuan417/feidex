@@ -14,7 +14,8 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 		chatID, rootID, parentID string
 		text                     string
 		mentions                 []string
-		self, everyone           bool
+		any                      bool
+		self                     bool
 	}
 	a.SetGroupMessagePolicy(func(input GroupMessagePolicyInput) bool {
 		captured.chatID = input.ChatID
@@ -22,8 +23,8 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 		captured.parentID = input.ParentMessageID
 		captured.text = input.Text
 		captured.mentions = append([]string(nil), input.MentionedOpenIDs...)
+		captured.any = input.MentionedAny
 		captured.self = input.MentionedSelf
-		captured.everyone = input.MentionedEveryone
 		return true
 	})
 
@@ -55,10 +56,10 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 	if msg == nil {
 		t.Fatal("convertMessage() returned nil")
 	}
-	if captured.chatID != chatID || captured.rootID != rootID || captured.parentID != parentID || captured.text != "@other hello" || captured.self || captured.everyone || len(captured.mentions) != 1 || captured.mentions[0] != otherBotID {
+	if captured.chatID != chatID || captured.rootID != rootID || captured.parentID != parentID || captured.text != "@other hello" || captured.self || !captured.any || len(captured.mentions) != 1 || captured.mentions[0] != otherBotID {
 		t.Fatalf("group policy args = %+v", captured)
 	}
-	if len(msg.MentionedOpenIDs) != 1 || msg.MentionedOpenIDs[0] != otherBotID || msg.MentionedSelf || msg.MentionedEveryone {
+	if len(msg.MentionedOpenIDs) != 1 || msg.MentionedOpenIDs[0] != otherBotID || !msg.MentionedAny || msg.MentionedSelf {
 		t.Fatalf("inbound mention metadata = %+v", msg)
 	}
 }
@@ -69,7 +70,7 @@ func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.
 	var capturedRootID string
 	a.SetGroupMessagePolicy(func(input GroupMessagePolicyInput) bool {
 		capturedRootID = input.RootMessageID
-		return input.ChatID == "chat-1" && input.RootMessageID == "" && input.ParentMessageID == "" && !input.MentionedSelf && len(input.MentionedOpenIDs) == 0 && !input.MentionedEveryone
+		return input.ChatID == "chat-1" && input.RootMessageID == "" && input.ParentMessageID == "" && !input.MentionedAny && !input.MentionedSelf && len(input.MentionedOpenIDs) == 0
 	})
 
 	messageID := "msg-top"

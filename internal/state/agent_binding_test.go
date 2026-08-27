@@ -38,6 +38,7 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 			Text:             "original prompt",
 			RootMessageID:    " msg-1 ",
 			MentionedOpenIDs: []string{" bot-a ", ""},
+			MentionedAny:     true,
 			Attachments: []AgentBindingPendingAttachment{{
 				Kind:            " image ",
 				ResourceKey:     " img-key ",
@@ -66,7 +67,7 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 	if saved.CreatedAt == 0 || saved.UpdatedAt == 0 {
 		t.Fatalf("binding timestamps = %+v", saved)
 	}
-	if saved.PendingMessage == nil || saved.PendingMessage.ChatType != "group" || saved.PendingMessage.Text != "original prompt" || len(saved.PendingMessage.MentionedOpenIDs) != 1 || len(saved.PendingMessage.Attachments) != 1 {
+	if saved.PendingMessage == nil || saved.PendingMessage.ChatType != "group" || saved.PendingMessage.Text != "original prompt" || len(saved.PendingMessage.MentionedOpenIDs) != 1 || !saved.PendingMessage.MentionedAny || len(saved.PendingMessage.Attachments) != 1 {
 		t.Fatalf("saved pending message = %+v", saved.PendingMessage)
 	}
 

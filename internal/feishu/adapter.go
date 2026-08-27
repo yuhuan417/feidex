@@ -45,7 +45,7 @@ type InboundMessage struct {
 	MergeForwardMessageIDs []string
 	ExpandedMergeForward   bool
 	MentionedOpenIDs       []string
-	MentionedEveryone      bool
+	MentionedAny           bool
 	MentionedSelf          bool
 	CreatedAt              int64
 }
@@ -55,13 +55,13 @@ type InboundMessage struct {
 // enabled. It is evaluated before app routing, so it carries only lightweight
 // message metadata and raw text.
 type GroupMessagePolicyInput struct {
-	ChatID            string
-	RootMessageID     string
-	ParentMessageID   string
-	Text              string
-	MentionedOpenIDs  []string
-	MentionedSelf     bool
-	MentionedEveryone bool
+	ChatID           string
+	RootMessageID    string
+	ParentMessageID  string
+	Text             string
+	MentionedOpenIDs []string
+	MentionedAny     bool
+	MentionedSelf    bool
 }
 
 // GroupMessagePolicy decides whether a group message should be delivered to
@@ -1212,7 +1212,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	policyRootMessageID := groupPolicyRootMessageID(messageID, rootMessageID, parentMessageID)
 	mentionedSelf := a.botOpenID != "" && mentioned(msg.Mentions, a.botOpenID)
 	mentionedOpenIDs := mentionedOpenIDs(msg.Mentions)
-	mentionedEveryone := mentionedEveryone(msg.Mentions)
+	mentionedAny := hasMentionEvents(msg.Mentions)
 	rawText := ""
 	if messageType == "text" {
 		rawText = extractText(msg.Content)
@@ -1221,17 +1221,16 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		allowedGroupTrigger := false
 		if a.groupMessagePolicy != nil && a.botOpenID != "" {
 			allowedGroupTrigger = a.groupMessagePolicy(GroupMessagePolicyInput{
-				ChatID:            chatID,
-				RootMessageID:     policyRootMessageID,
-				ParentMessageID:   parentMessageID,
-				Text:              rawText,
-				MentionedOpenIDs:  mentionedOpenIDs,
-				MentionedSelf:     mentionedSelf,
-				MentionedEveryone: mentionedEveryone,
+				ChatID:           chatID,
+				RootMessageID:    policyRootMessageID,
+				ParentMessageID:  parentMessageID,
+				Text:             rawText,
+				MentionedOpenIDs: mentionedOpenIDs,
+				MentionedAny:     mentionedAny,
+				MentionedSelf:    mentionedSelf,
 			})
 		} else {
-			allowedGroupTrigger = a.cfg.RespondToAtEveryone && mentionedEveryone
-			allowedGroupTrigger = allowedGroupTrigger || mentionedSelf
+			allowedGroupTrigger = mentionedSelf
 		}
 		if !allowedGroupTrigger {
 			slog.Debug("feishu group message ignored by trigger policy",
@@ -1243,7 +1242,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 				"parent_message_id", parentMessageID,
 				"mentioned_self", mentionedSelf,
 				"mention_count", len(mentionedOpenIDs),
-				"mentioned_everyone", mentionedEveryone,
+				"mentioned_any", mentionedAny,
 				"has_group_policy", a.groupMessagePolicy != nil,
 				"has_bot_open_id", strings.TrimSpace(a.botOpenID) != "",
 			)
@@ -1251,15 +1250,15 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		}
 	}
 	out := &InboundMessage{
-		UserID:            userID,
-		MessageID:         messageID,
-		ChatID:            chatID,
-		ChatType:          chatType,
-		RootMessageID:     rootMessageID,
-		ParentMessageID:   parentMessageID,
-		MentionedOpenIDs:  mentionedOpenIDs,
-		MentionedEveryone: mentionedEveryone,
-		MentionedSelf:     mentionedSelf,
+		UserID:           userID,
+		MessageID:        messageID,
+		ChatID:           chatID,
+		ChatType:         chatType,
+		RootMessageID:    rootMessageID,
+		ParentMessageID:  parentMessageID,
+		MentionedOpenIDs: mentionedOpenIDs,
+		MentionedAny:     mentionedAny,
+		MentionedSelf:    mentionedSelf,
 	}
 	if out.MessageID != "" && a.duplicate(out.MessageID) {
 		slog.Debug("feishu duplicate message ignored", "message_id", out.MessageID)
@@ -1818,32 +1817,20 @@ func mentionedOpenIDs(mentions []*larkim.MentionEvent) []string {
 	return out
 }
 
+func hasMentionEvents(mentions []*larkim.MentionEvent) bool {
+	for _, mention := range mentions {
+		if mention != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func stringValue(value *string) string {
 	if value == nil {
 		return ""
 	}
 	return *value
-}
-
-func mentionedEveryone(mentions []*larkim.MentionEvent) bool {
-	for _, mention := range mentions {
-		if mention == nil {
-			continue
-		}
-		if mention.Key != nil {
-			key := strings.ToLower(strings.TrimSpace(*mention.Key))
-			if key == "@all" || strings.Contains(key, "所有人") || strings.Contains(key, "everyone") {
-				return true
-			}
-		}
-		if mention.Name != nil {
-			name := strings.ToLower(strings.TrimSpace(*mention.Name))
-			if name == "all" || strings.Contains(name, "所有人") || strings.Contains(name, "everyone") {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func parseReactionUserID(value *larkim.UserId) string {

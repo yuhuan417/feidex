@@ -31,17 +31,16 @@ type LogConfig struct {
 }
 
 type FeishuConfig struct {
-	Backend             string    `toml:"backend"`
-	AutoRetry           bool      `toml:"codex_auto_retry"`
-	AppID               string    `toml:"app_id"`
-	AppSecret           string    `toml:"app_secret"`
-	Domain              string    `toml:"domain"`
-	AllowFrom           []string  `toml:"allow_from"`
-	DebugAllowFrom      []string  `toml:"debug_allow_from"`
-	GroupAtOnly         bool      `toml:"group_at_only"`
-	RespondToAtEveryone bool      `toml:"respond_to_at_everyone"`
-	CardEnabled         bool      `toml:"card_enabled"`
-	Quiet               QuietMode `toml:"quiet"`
+	Backend        string    `toml:"backend"`
+	AutoRetry      bool      `toml:"codex_auto_retry"`
+	AppID          string    `toml:"app_id"`
+	AppSecret      string    `toml:"app_secret"`
+	Domain         string    `toml:"domain"`
+	AllowFrom      []string  `toml:"allow_from"`
+	DebugAllowFrom []string  `toml:"debug_allow_from"`
+	GroupAtOnly    bool      `toml:"group_at_only"`
+	CardEnabled    bool      `toml:"card_enabled"`
+	Quiet          QuietMode `toml:"quiet"`
 }
 
 type FrontendConfig struct {

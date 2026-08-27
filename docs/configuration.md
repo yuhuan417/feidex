@@ -16,7 +16,6 @@ app_secret = "sec_xxx"
 allow_from = []
 debug_allow_from = []
 group_at_only = true
-respond_to_at_everyone = false
 card_enabled = true
 quiet = "progress"
 
@@ -83,8 +82,6 @@ Feidex 会把这些状态写进去：
   - 允许使用 debug 功能的用户列表；控制 `/debug` 和 `/debug logs`，空表示默认不允许任何用户使用
 - `group_at_only`
   - 群聊是否仅在 `@bot` 时响应
-- `respond_to_at_everyone`
-  - 是否响应 `@所有人`
 - `card_enabled`
   - 是否启用卡片输出
 - `quiet`

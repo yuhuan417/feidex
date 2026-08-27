@@ -17,7 +17,6 @@ app_secret = "sec_xxx"
 allow_from = []
 debug_allow_from = []
 group_at_only = true
-respond_to_at_everyone = false
 card_enabled = true
 quiet = "progress"
 
