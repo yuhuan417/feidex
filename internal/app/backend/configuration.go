@@ -26,7 +26,7 @@ import (
 
 const (
 	// ClaudeWorkspaceCommandUsage is the usage string for /workspace in Claude mode.
-	ClaudeWorkspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace permissions [MODE|inherit]"
+	ClaudeWorkspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace permissions [MODE|inherit]"
 )
 
 // ConfigurationService handles backend-specific configuration display and

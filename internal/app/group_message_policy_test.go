@@ -257,3 +257,83 @@ func TestPrimaryBindingHandlesUnmentionedSlashCommand(t *testing.T) {
 		t.Fatalf("/menu reply body = %q, want main menu", body)
 	}
 }
+
+func TestGroupWorkspaceCloneWithoutURLIsHandledAsLocalCommand(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          "binding-workspace-clone",
+		FrontendID:  "bot-a",
+		ChatID:      "chat-clone",
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "clone-1",
+		ChatID:        "chat-clone",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "/workspace clone",
+		RootMessageID: "clone-1",
+		MentionedSelf: true,
+	})
+
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want clone form card", len(cards))
+	}
+	if body := cardMarkdownContent(t, cards[0]); !strings.Contains(body, "从仓库创建") || !strings.Contains(body, "Git 地址") {
+		t.Fatalf("/workspace clone reply body = %q, want clone form", body)
+	}
+	foundPending := false
+	for _, pending := range a.State().PendingRequests() {
+		if pending.Kind == "workspace_clone" && strings.Contains(pending.SessionKey, "chat-clone") {
+			foundPending = true
+		}
+	}
+	if !foundPending {
+		t.Fatalf("missing workspace_clone pending request: %+v", a.State().PendingRequests())
+	}
+}
+
+func TestGroupWorkspaceCloneMenuActionOpensCloneForm(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          "binding-workspace-clone-menu",
+		FrontendID:  "bot-a",
+		ChatID:      "chat-clone-menu",
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+
+	resp, err := newCardActionService(a).dispatch(&feishu.CardAction{
+		ActionValue: map[string]any{"action": "workspace.clone", "session_key": "feishu:frontend:bot-a:chat:chat-clone-menu"},
+		UserID:      "user-1",
+		ChatID:      "chat-clone-menu",
+		MessageID:   "menu-card-1",
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace.clone action = %#v, %v", resp, err)
+	}
+	card := callbackResponseCard(resp)
+	if body := cardMarkdownContent(t, card); !strings.Contains(body, "从仓库创建") || !strings.Contains(body, "Git 地址") {
+		t.Fatalf("workspace.clone action card body = %q, want clone form", body)
+	}
+	foundPending := false
+	for _, pending := range a.State().PendingRequests() {
+		if pending.Kind == "workspace_clone" && strings.Contains(pending.SessionKey, "chat-clone-menu") {
+			foundPending = true
+		}
+	}
+	if !foundPending {
+		t.Fatalf("missing workspace_clone pending request: %+v", a.State().PendingRequests())
+	}
+}

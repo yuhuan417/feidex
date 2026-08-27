@@ -192,6 +192,10 @@ func (s workspaceService) completeWorkspaceClonePickDir(action *feishu.CardActio
 	return s.mgmt().CompleteWorkspaceClonePickDir(action)
 }
 
+func (s workspaceService) completeWorkspaceCloneRefresh(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.mgmt().CompleteWorkspaceCloneRefresh(action)
+}
+
 func (s workspaceService) completeWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return s.mgmt().CompleteWorkspaceCloneSubmit(action)
 }

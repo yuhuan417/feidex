@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
+	"feidex/internal/app/appcore"
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -408,6 +411,178 @@ func TestWorkspaceNewCreatesWorkspaceAndActivatesGroupConfig(t *testing.T) {
 	}
 }
 
+func TestWorkspaceNewWorktreeDefaultsAreGroupScoped(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	ff.botName = "Feidex Bot"
+	initGitRepoForWorktreeTest(t, a.cfg.Workspaces[0].Cwd)
+
+	for _, chatID := range []string{"chat-alpha", "chat-beta"} {
+		msg := &feishu.InboundMessage{ChatType: "group", ChatID: chatID, MessageID: "msg-" + chatID, UserID: "user-1"}
+		if err := newBindingService(a).commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
+			t.Fatalf("/workspace new worktree(%s) error = %v", chatID, err)
+		}
+	}
+
+	alpha := worktreePendingPayloadForChat(t, a, "chat-alpha")
+	beta := worktreePendingPayloadForChat(t, a, "chat-beta")
+	if alpha.WorkspaceID == "" || beta.WorkspaceID == "" || alpha.WorkspaceID == beta.WorkspaceID {
+		t.Fatalf("workspace IDs should be populated and group-scoped: alpha=%+v beta=%+v", alpha, beta)
+	}
+	if alpha.BranchName == "" || beta.BranchName == "" || alpha.BranchName == beta.BranchName {
+		t.Fatalf("branch names should be populated and group-scoped: alpha=%+v beta=%+v", alpha, beta)
+	}
+	if !strings.Contains(alpha.WorkspaceID, "feidex-bot") || !strings.Contains(beta.WorkspaceID, "feidex-bot") {
+		t.Fatalf("workspace IDs should include bot-name-derived tokens: alpha=%q beta=%q", alpha.WorkspaceID, beta.WorkspaceID)
+	}
+	if strings.Contains(alpha.WorkspaceID, "chat-alpha") || strings.Contains(beta.WorkspaceID, "chat-beta") || strings.Contains(alpha.BranchName, "chat-alpha") || strings.Contains(beta.BranchName, "chat-beta") {
+		t.Fatalf("worktree defaults should not expose chat IDs: alpha=%+v beta=%+v", alpha, beta)
+	}
+}
+
+func TestWorkspaceWorktreeCardExplainsFormFields(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	card := newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreeCard("feishu:frontend:default:chat:chat-1", "workspace-1", appworkspacecmd.WorktreePayload{
+		BaseWorkspaceID: "default",
+		BranchName:      "work/feidex-bot",
+		WorkspaceID:     "feidex-bot",
+		DirectoryName:   "feidex-bot",
+	})
+	body := cardMarkdownContent(t, card)
+	for _, want := range []string{"下面三个输入框对应", "branch_name", "Git branch", "workspace_id", "Feidex 里显示和切换", "directory_name", "基准仓库同级目录"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("worktree card body missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	ff.botName = "Feidex Bot"
+	initGitRepoForWorktreeTest(t, a.cfg.Workspaces[0].Cwd)
+
+	origWorktreeAdd := appworkspacecmd.GitWorktreeAdd
+	defer func() { appworkspacecmd.GitWorktreeAdd = origWorktreeAdd }()
+	var gotBranch string
+	var gotTargetDir string
+	appworkspacecmd.GitWorktreeAdd = func(_ context.Context, baseRepoRoot, branchName, targetDir string) error {
+		if strings.TrimSpace(baseRepoRoot) == "" || strings.TrimSpace(branchName) == "" || strings.TrimSpace(targetDir) == "" {
+			t.Fatalf("GitWorktreeAdd received empty args: base=%q branch=%q target=%q", baseRepoRoot, branchName, targetDir)
+		}
+		gotBranch = branchName
+		gotTargetDir = targetDir
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-private", MessageID: "msg-private", UserID: "user-1"}
+	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
+		t.Fatalf("/workspace new worktree(p2p) error = %v", err)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.State().PendingRequests() {
+		if req.Kind == "workspace_worktree" && strings.Contains(req.SessionKey, "chat-private") {
+			pending = req
+			break
+		}
+	}
+	if pending == nil {
+		t.Fatalf("missing p2p worktree pending; pending=%+v", a.State().PendingRequests())
+	}
+	payload := appworkspacecmd.WorktreePayloadFromPending(pending)
+	resp, err := newWorkspaceManagementServiceInner(a).CompleteWorkspaceWorktreeSubmit(&feishu.CardAction{
+		ActionValue: map[string]any{"request_id": pending.ID},
+		UserID:      "user-1",
+		ChatID:      "chat-private",
+		MessageID:   pending.FeishuMsgID,
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("worktree submit(p2p) = %#v, %v", resp, err)
+	}
+	a.waitAsync()
+	if gotBranch != payload.BranchName || gotTargetDir != payload.TargetDir {
+		t.Fatalf("GitWorktreeAdd = branch %q target %q, want %q %q", gotBranch, gotTargetDir, payload.BranchName, payload.TargetDir)
+	}
+	if ws := findWorkspaceForTest(a, payload.WorkspaceID); ws == nil || strings.TrimSpace(ws.Cwd) != strings.TrimSpace(payload.TargetDir) {
+		t.Fatalf("created private worktree workspace = %+v, payload=%+v", ws, payload)
+	}
+	if selected := appcore.ResolveWorkspaceSelectionForMessage(a, msg, a.State().Session(makeSessionKey(a, msg))); selected != payload.WorkspaceID {
+		t.Fatalf("p2p selected workspace = %q, want %q", selected, payload.WorkspaceID)
+	}
+}
+
+func TestWorkspaceNewWorktreeSubmitActivatesOnlyCurrentGroupBinding(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	initGitRepoForWorktreeTest(t, a.cfg.Workspaces[0].Cwd)
+
+	origWorktreeAdd := appworkspacecmd.GitWorktreeAdd
+	defer func() { appworkspacecmd.GitWorktreeAdd = origWorktreeAdd }()
+	var createdBranches []string
+	appworkspacecmd.GitWorktreeAdd = func(_ context.Context, baseRepoRoot, branchName, targetDir string) error {
+		if strings.TrimSpace(baseRepoRoot) == "" || strings.TrimSpace(branchName) == "" || strings.TrimSpace(targetDir) == "" {
+			t.Fatalf("GitWorktreeAdd received empty args: base=%q branch=%q target=%q", baseRepoRoot, branchName, targetDir)
+		}
+		createdBranches = append(createdBranches, branchName)
+		return nil
+	}
+
+	for _, chatID := range []string{"chat-a", "chat-b"} {
+		msg := &feishu.InboundMessage{ChatType: "group", ChatID: chatID, MessageID: "msg-" + chatID, UserID: "user-1"}
+		if err := newBindingService(a).commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
+			t.Fatalf("/workspace new worktree(%s) error = %v", chatID, err)
+		}
+		pending := worktreePendingForChat(t, a, chatID)
+		resp, err := newBindingService(a).completeBindingWorkspaceWorktreeSubmit(&feishu.CardAction{
+			ActionValue: map[string]any{"request_id": pending.ID},
+			UserID:      "user-1",
+			ChatID:      chatID,
+			MessageID:   pending.FeishuMsgID,
+		})
+		if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+			t.Fatalf("worktree submit(%s) = %#v, %v", chatID, resp, err)
+		}
+		a.waitAsync()
+	}
+
+	if len(createdBranches) != 2 || createdBranches[0] == createdBranches[1] {
+		t.Fatalf("created branches = %+v, want two distinct group-scoped branches", createdBranches)
+	}
+	bindA := agentBindingForChat(a, "group", "chat-a")
+	bindB := agentBindingForChat(a, "group", "chat-b")
+	if bindA == nil || bindB == nil || bindA.WorkspaceID == "" || bindB.WorkspaceID == "" || bindA.WorkspaceID == bindB.WorkspaceID {
+		t.Fatalf("group bindings should point at distinct worktree workspaces: a=%+v b=%+v", bindA, bindB)
+	}
+	if selected := defaultWorkspaceID(a); selected != "default" {
+		t.Fatalf("group worktree submit should not switch global default workspace, got %q", selected)
+	}
+}
+
+func initGitRepoForWorktreeTest(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Skipf("git init unavailable for worktree test: %v", err)
+	}
+}
+
+func worktreePendingForChat(t *testing.T, a *App, chatID string) *state.PendingRequest {
+	t.Helper()
+	for _, pending := range a.State().PendingRequests() {
+		if pending.Kind == "workspace_worktree" && strings.Contains(pending.SessionKey, chatID) {
+			return pending
+		}
+	}
+	t.Fatalf("missing workspace_worktree pending for chat %q; pending=%+v", chatID, a.State().PendingRequests())
+	return nil
+}
+
+func worktreePendingPayloadForChat(t *testing.T, a *App, chatID string) appworkspacecmd.WorktreePayload {
+	t.Helper()
+	return appworkspacecmd.WorktreePayloadFromPending(worktreePendingForChat(t, a, chatID))
+}
+
 func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "bot-a"
@@ -538,7 +713,7 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	}
 	workspaceMenu := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
 	menuLabels := cardButtonLabelsByAction(workspaceMenu)
-	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.delete.menu"} {
+	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.worktree", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.delete.menu"} {
 		if got := menuLabels[wantAction]; got == "" {
 			t.Fatalf("workspace menu labels = %+v, want action %q", menuLabels, wantAction)
 		}

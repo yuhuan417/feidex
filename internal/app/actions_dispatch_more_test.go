@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -229,6 +230,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "workspace.new", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.new.takeover", "session_key": "sess-1", "workspace_id": "repo", "target_dir": t.TempDir()}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.clone", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "workspace.clone.refresh", "request_id": "workspace-clone-1"}, UserID: "user-1", ChatID: "chat-1", FormValue: map[string]any{"repo_url": "git@github.com:example/repo.git", "clone_mode": appworkspacecmd.CloneModeWorktree}},
 		{ActionValue: map[string]any{"action": "workspace.clone.pickdir", "request_id": "workspace-clone-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.clone.cancel", "request_id": "workspace-clone-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "workspace.delete.menu", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},

@@ -14,8 +14,10 @@ const (
 	PathPickerModeDirectory = "directory"
 	PathPickerModeFile      = "file"
 	PathPickerStyleDropdown = "dropdown"
+	CloneModeWorkspace      = "workspace"
+	CloneModeWorktree       = "worktree"
 
-	CommandUsage = "/workspace | /workspace list | /workspace new | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
+	CommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
 )
 
 type PathPickerPayload struct {
@@ -43,12 +45,26 @@ type NewPayload struct {
 }
 
 type ClonePayload struct {
-	RootPath          string             `json:"root_path"`
-	SelectedParentDir string             `json:"selected_parent_dir,omitempty"`
-	RepoURL           string             `json:"repo_url,omitempty"`
-	DraftID           string             `json:"draft_id,omitempty"`
-	ErrorMessage      string             `json:"error_message,omitempty"`
-	Picker            *PathPickerPayload `json:"picker,omitempty"`
+	RootPath              string             `json:"root_path"`
+	SelectedParentDir     string             `json:"selected_parent_dir,omitempty"`
+	RepoURL               string             `json:"repo_url,omitempty"`
+	DraftID               string             `json:"draft_id,omitempty"`
+	CloneMode             string             `json:"clone_mode,omitempty"`
+	WorktreeBranchName    string             `json:"worktree_branch_name,omitempty"`
+	WorktreeWorkspaceID   string             `json:"worktree_workspace_id,omitempty"`
+	WorktreeDirectoryName string             `json:"worktree_directory_name,omitempty"`
+	WorktreeTargetDir     string             `json:"worktree_target_dir,omitempty"`
+	ErrorMessage          string             `json:"error_message,omitempty"`
+	Picker                *PathPickerPayload `json:"picker,omitempty"`
+}
+
+type WorktreePayload struct {
+	BaseWorkspaceID string `json:"base_workspace_id,omitempty"`
+	BranchName      string `json:"branch_name,omitempty"`
+	WorkspaceID     string `json:"workspace_id,omitempty"`
+	DirectoryName   string `json:"directory_name,omitempty"`
+	TargetDir       string `json:"target_dir,omitempty"`
+	ErrorMessage    string `json:"error_message,omitempty"`
 }
 
 type CloneTakeoverError struct {
@@ -78,6 +94,24 @@ type ClonePlan struct {
 	RepoName    string
 	WorkspaceID string
 	TargetDir   string
+	Worktree    *CloneWorktreePlan
+}
+
+type CloneWorktreePlan struct {
+	BaseRepoRoot  string
+	BranchName    string
+	WorkspaceID   string
+	DirectoryName string
+	TargetDir     string
+}
+
+type WorktreePlan struct {
+	BaseWorkspaceID string
+	BaseRepoRoot    string
+	BranchName      string
+	WorkspaceID     string
+	DirectoryName   string
+	TargetDir       string
 }
 
 func (e *CloneTakeoverError) Error() string {

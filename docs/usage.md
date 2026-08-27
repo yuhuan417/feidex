@@ -79,7 +79,8 @@
 - workspace
   - `list` 下拉切换工作区
   - `新建工作区 /workspace new`
-  - `克隆工作区 /workspace clone`
+  - `克隆工作区 /workspace clone`（可选 clone 后直接生成 worktree）
+  - `创建 Worktree /workspace new worktree`
   - `选择工作区 /workspace choose`
   - `删除工作区 /workspace delete`
   - `配置默认沙箱 /workspace sandbox`
@@ -97,7 +98,7 @@
 
 群聊中的菜单和命令作用域规则：没有特殊 `@` 时由本群 primary bot 处理；明确 `@Bot` 时由被 `@` 的 bot 处理。群聊中的 `/workspace use`、`/workspace sandbox/policy/multiagent/permissions`、`/model set`、`/model effort`、`/effort`、`/fast` 以及对应菜单按钮，都会写入当前 bot 在当前群内的本地配置，不会切换无作用域的 session workspace 或全局模型配置。`@Bot /primary on` 会把被 `@` 的 bot 设为本群 primary owner；`/primary off` 不支持，切换 primary 要把另一个 bot 设为 owner。所有能收到这条群消息的 Feidex 实例都会同步本地 owner 副本。要操作另一个 bot，必须明确 `@Bot /menu` 或 `@Bot /workspace`，菜单里不提供 bot 选择列表或跨 bot handoff。
 
-当前 bot 在群内还没有 workspace 时，不能执行普通输入。当前 bot 收到应处理的普通群消息时，会先暂存原始消息并展示当前工作区配置入口；用户完成 `/workspace use`、`/workspace new` 或 `/workspace clone` 后，原始消息会自动继续处理。
+当前 bot 在群内还没有 workspace 时，不能执行普通输入。当前 bot 收到应处理的普通群消息时，会先暂存原始消息并展示当前工作区配置入口；用户完成 `/workspace use`、`/workspace new`、`/workspace new worktree` 或 `/workspace clone` 后，原始消息会自动继续处理。
 
 ### 本地 slash 命令
 
@@ -249,8 +250,12 @@
 - `/skills reload`
   - 刷新技能列表
 - `/workspace clone GIT_URL [ID] [--parent DIR]`
-  - clone Git 仓库创建新工作区
-  - 在群聊中，clone 后创建本机 workspace 并设为当前 bot 在本群的 workspace
+  - clone Git 仓库创建新工作区；表单里可选择 `clone 后创建 worktree`，worktree 分支、workspace_id 和目录名可留空自动推导
+  - worktree 默认名使用 bot 显示名 + base project，不暴露 frontend id 或 chat id；如果本地已有同名 workspace/pending，会自动加数字后缀
+  - 在群聊中，clone/worktree 完成后只把当前 bot 在本群的 workspace 设为新工作区；在单聊中会切换该单聊的 workspace
+- `/workspace new worktree [BRANCH] [ID]`
+  - 基于当前选中的本机 Git workspace 创建 worktree；可从工作区菜单直接打开，也可用命令打开
+  - 不填参数时，会按 bot 显示名和基准项目名自动预填分支名、workspace_id 和目录名
 - `/workspace choose`
   - 按钮式工作区选择器（按最近使用排序）
   - 在群聊中，作为当前 bot 在本群的 workspace 选择器

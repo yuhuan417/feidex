@@ -385,7 +385,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	chatType, chatID, _, _ := currentBotMenuContext(s.app, sessionKey)
 	primaryLabel := onOffLabel(isGroupPrimary(s.app, chatType, chatID))
 	if binding == nil {
-		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，或使用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
+		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，也可以用 `@Bot /workspace new worktree` 基于当前 Git 仓库创建隔离 worktree，或用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
 		return s.app.feishu.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
 	}
 	statusLine := "状态: `工作区未配置`"
@@ -411,7 +411,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"approval policy: " + renderOptionalBacktick(binding.ApprovalPolicyOverride),
 		"multi-agent: " + renderOptionalBacktick(binding.MultiAgentModeOverride),
 		"Claude permissions: " + renderOptionalBacktick(binding.ClaudePermissionMode),
-		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
+		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace new worktree [BRANCH] [ID]`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
 	}
 	if binding.PendingMessage != nil {
 		preview := pendingBindingMessagePreview(binding.PendingMessage)
@@ -443,7 +443,7 @@ func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, bind
 		"为当前 Bot 在本群选择本机已有 workspace。",
 		"当前 workspace: " + renderOptionalBacktick(binding.WorkspaceID),
 		"",
-		"如果这台机器还没有该项目目录，请使用 `@Bot /workspace new WORKSPACE_ID CWD` 或 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`。",
+		"如果这台机器还没有该项目目录，请使用 `@Bot /workspace new WORKSPACE_ID CWD`、`@Bot /workspace new worktree` 或 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`。",
 	}
 	buttons := make([]feishu.Button, 0, len(s.app.cfg.Workspaces)+1)
 	for _, ws := range s.app.cfg.Workspaces {
@@ -563,4 +563,4 @@ func renderOptionalBacktick(value string) string {
 	return "`" + value + "`"
 }
 
-const currentBotCommandUsage = "/workspace | /workspace use WORKSPACE_ID | /workspace new WORKSPACE_ID CWD | /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR] | /primary on | /model set MODEL|default | /model effort EFFORT|default | /fast fast|default|off | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"
+const currentBotCommandUsage = "/workspace | /workspace use WORKSPACE_ID | /workspace new WORKSPACE_ID CWD | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR] | /primary on | /model set MODEL|default | /model effort EFFORT|default | /fast fast|default|off | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"

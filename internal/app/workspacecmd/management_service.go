@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -32,6 +33,74 @@ func (s *ManagementService) BeginWorkspaceNew(msg *feishu.InboundMessage) error 
 		}(), "/"),
 	}
 	return s.BeginWorkspaceNewWithPayload(msg, sessionKey, payload)
+}
+
+// BeginWorkspaceWorktree starts the git worktree workspace creation flow.
+func (s *ManagementService) BeginWorkspaceWorktree(msg *feishu.InboundMessage, branchName, workspaceID string) error {
+	sessionKey, _, ws := s.currentWorkspaceForMessage(msg)
+	payload := s.DefaultWorkspaceWorktreePayload(msg, ws, branchName, workspaceID)
+	return s.BeginWorkspaceWorktreeWithPayload(msg, sessionKey, payload)
+}
+
+// BeginWorkspaceWorktreeWithPayload starts the worktree flow with a pre-filled payload.
+func (s *ManagementService) BeginWorkspaceWorktreeWithPayload(msg *feishu.InboundMessage, sessionKey string, payload WorktreePayload) error {
+	requestID, err := s.NextLocalID("workspace")
+	if err != nil {
+		return err
+	}
+	card := s.RenderWorktreeCard(sessionKey, requestID, payload)
+	msgID, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	if err != nil {
+		return err
+	}
+	return s.SavePending(&state.PendingRequest{
+		ID:          requestID,
+		Kind:        "workspace_worktree",
+		SessionKey:  sessionKey,
+		OwnerUserID: msg.UserID,
+		FeishuMsgID: msgID,
+		PayloadJSON: appcore.MustJSON(payload),
+		Status:      state.PendingRequestStatusPending.String(),
+		CreatedAt:   time.Now().Unix(),
+		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
+	})
+}
+
+// DefaultWorkspaceWorktreePayload returns a mostly pre-filled worktree payload.
+func (s *ManagementService) DefaultWorkspaceWorktreePayload(msg *feishu.InboundMessage, ws *config.Workspace, branchName, workspaceID string) WorktreePayload {
+	baseID := ""
+	if ws != nil {
+		baseID = strings.TrimSpace(ws.ID)
+	}
+	baseProject := s.worktreeBaseProjectLabel(ws)
+	botName := s.worktreeBotLabel()
+	branchName = strings.TrimSpace(branchName)
+	if branchName == "" {
+		branchName = SuggestedWorktreeBranch(baseProject, botName, "")
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		workspaceID = SuggestedWorktreeID(baseProject, botName)
+	}
+	directoryName := workspaceID
+	if repoRoot, err := gitRepoRoot(func() string {
+		if ws == nil {
+			return ""
+		}
+		return ws.Cwd
+	}()); err == nil {
+		branchName, workspaceID, directoryName = s.uniqueWorktreeDefaults(repoRoot, branchName, workspaceID, directoryName)
+	}
+	payload := WorktreePayload{
+		BaseWorkspaceID: baseID,
+		BranchName:      branchName,
+		WorkspaceID:     workspaceID,
+		DirectoryName:   directoryName,
+	}
+	if plan, err := s.PrepareWorkspaceWorktree(payload); err == nil {
+		payload.TargetDir = plan.TargetDir
+	}
+	return payload
 }
 
 // BeginWorkspaceNewWithPayload starts the new workspace creation flow with a pre-filled payload.
@@ -219,6 +288,15 @@ func (s *ManagementService) CloneWorkspaceAndSwitchInSelectedParent(msg *feishu.
 
 // PrepareWorkspaceClone validates and prepares a clone operation.
 func (s *ManagementService) PrepareWorkspaceClone(repoURL, explicitID, parentDir string) (*ClonePlan, error) {
+	payload := ClonePayload{RepoURL: strings.TrimSpace(repoURL), DraftID: strings.TrimSpace(explicitID), CloneMode: CloneModeWorkspace}
+	return s.PrepareWorkspaceClonePayload(payload, parentDir)
+}
+
+// PrepareWorkspaceClonePayload validates and prepares a clone operation,
+// including optional clone-then-worktree output.
+func (s *ManagementService) PrepareWorkspaceClonePayload(payload ClonePayload, parentDir string) (*ClonePlan, error) {
+	repoURL := strings.TrimSpace(payload.RepoURL)
+	explicitID := strings.TrimSpace(payload.DraftID)
 	repoName, err := CloneRepoName(repoURL)
 	if err != nil {
 		return nil, err
@@ -253,14 +331,371 @@ func (s *ManagementService) PrepareWorkspaceClone(repoURL, explicitID, parentDir
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if config.FindWorkspace(s.App.Config(), workspaceID) != nil {
+	if !CloneCreatesWorktree(payload) && config.FindWorkspace(s.App.Config(), workspaceID) != nil {
 		return nil, fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
 	}
-	return &ClonePlan{
+	plan := &ClonePlan{
 		RepoName:    repoName,
 		WorkspaceID: workspaceID,
 		TargetDir:   targetDir,
+	}
+	if !CloneCreatesWorktree(payload) {
+		return plan, nil
+	}
+	worktree, err := s.prepareCloneWorktreePlan(payload, repoName, parentDir, targetDir)
+	if err != nil {
+		return nil, err
+	}
+	plan.Worktree = worktree
+	return plan, nil
+}
+
+// PrepareWorkspaceWorktree validates and prepares a worktree operation.
+func (s *ManagementService) PrepareWorkspaceWorktree(payload WorktreePayload) (*WorktreePlan, error) {
+	baseWorkspaceID := strings.TrimSpace(payload.BaseWorkspaceID)
+	if baseWorkspaceID == "" {
+		return nil, fmt.Errorf("请先选择基准工作区")
+	}
+	baseWS := config.FindWorkspace(s.App.Config(), baseWorkspaceID)
+	if baseWS == nil {
+		return nil, fmt.Errorf("基准工作区 %q 不存在", baseWorkspaceID)
+	}
+	baseRepoRoot, err := gitRepoRoot(strings.TrimSpace(baseWS.Cwd))
+	if err != nil {
+		return nil, fmt.Errorf("基准工作区不是可用的 Git 目录: %w", err)
+	}
+	branchName := strings.TrimSpace(payload.BranchName)
+	if branchName == "" {
+		return nil, fmt.Errorf("请填写新分支名")
+	}
+	if err := validateGitBranchName(branchName); err != nil {
+		return nil, fmt.Errorf("分支名无效: %w", err)
+	}
+	if exists, err := gitBranchExists(baseRepoRoot, branchName); err != nil {
+		return nil, fmt.Errorf("检查分支失败: %w", err)
+	} else if exists {
+		return nil, fmt.Errorf("分支 %q 已存在，请换一个新分支名", branchName)
+	}
+	workspaceID := strings.TrimSpace(payload.WorkspaceID)
+	if workspaceID == "" {
+		workspaceID = SuggestedWorktreeID(s.worktreeBaseProjectLabel(baseWS), s.worktreeBotLabel())
+	}
+	if workspaceID == "" {
+		return nil, fmt.Errorf("无法推导 workspace_id，请手动填写")
+	}
+	directoryName := strings.TrimSpace(payload.DirectoryName)
+	if directoryName == "" {
+		directoryName = workspaceID
+	}
+	if err := validateWorktreeDirectoryName(directoryName); err != nil {
+		return nil, err
+	}
+	targetDir := filepath.Join(filepath.Dir(baseRepoRoot), directoryName)
+	if existingWS := s.WorkspaceByCWD(targetDir); existingWS != nil {
+		return nil, &CloneExistingWorkspaceError{WorkspaceID: existingWS.ID, TargetDir: targetDir}
+	}
+	if _, statErr := os.Stat(targetDir); statErr == nil {
+		return nil, &CloneExistingDirError{WorkspaceID: workspaceID, TargetDir: targetDir}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return nil, statErr
+	}
+	if existing := config.FindWorkspace(s.App.Config(), workspaceID); existing != nil {
+		if sameWorkspaceCWD(existing.Cwd, targetDir) {
+			return nil, &CloneExistingWorkspaceError{WorkspaceID: existing.ID, TargetDir: targetDir}
+		}
+		return nil, fmt.Errorf("workspace %q 已存在，请换一个 workspace_id", workspaceID)
+	}
+	return &WorktreePlan{
+		BaseWorkspaceID: baseWorkspaceID,
+		BaseRepoRoot:    baseRepoRoot,
+		BranchName:      branchName,
+		WorkspaceID:     workspaceID,
+		DirectoryName:   directoryName,
+		TargetDir:       targetDir,
 	}, nil
+}
+
+func clonePayloadWithPlan(payload ClonePayload, plan *ClonePlan) ClonePayload {
+	payload.CloneMode = NormalizeCloneMode(payload.CloneMode)
+	if plan == nil {
+		return payload
+	}
+	if strings.TrimSpace(payload.DraftID) == "" {
+		payload.DraftID = strings.TrimSpace(plan.WorkspaceID)
+	}
+	if plan.Worktree != nil {
+		payload.CloneMode = CloneModeWorktree
+		payload.WorktreeBranchName = strings.TrimSpace(plan.Worktree.BranchName)
+		payload.WorktreeWorkspaceID = strings.TrimSpace(plan.Worktree.WorkspaceID)
+		payload.WorktreeDirectoryName = strings.TrimSpace(plan.Worktree.DirectoryName)
+		payload.WorktreeTargetDir = strings.TrimSpace(plan.Worktree.TargetDir)
+	}
+	return payload
+}
+
+// ClonePayloadWithPlan returns payload with inferred clone/worktree fields from
+// a prepared plan. Callers use it before persisting the in-progress form state.
+func (s *ManagementService) ClonePayloadWithPlan(payload ClonePayload, plan *ClonePlan) ClonePayload {
+	return clonePayloadWithPlan(payload, plan)
+}
+
+// DefaultCloneWorktreePayload fills optional clone-then-worktree fields when
+// the repo URL and parent directory are already known. It intentionally avoids
+// hard validation so directory picking can stay lightweight.
+func (s *ManagementService) DefaultCloneWorktreePayload(payload ClonePayload, parentDir string) ClonePayload {
+	payload.CloneMode = NormalizeCloneMode(payload.CloneMode)
+	if !CloneCreatesWorktree(payload) {
+		return payload
+	}
+	repoName, err := CloneRepoName(payload.RepoURL)
+	if err != nil {
+		return payload
+	}
+	parentDir = strings.TrimSpace(parentDir)
+	if parentDir == "" {
+		parentDir = strings.TrimSpace(payload.SelectedParentDir)
+	}
+	baseProject := appcore.FirstNonEmpty(strings.TrimSpace(repoName), "workspace")
+	botName := s.worktreeBotLabel()
+	workspaceID := strings.TrimSpace(payload.WorktreeWorkspaceID)
+	branchName := strings.TrimSpace(payload.WorktreeBranchName)
+	directoryName := strings.TrimSpace(payload.WorktreeDirectoryName)
+	if workspaceID == "" {
+		workspaceID = SuggestedWorktreeID(baseProject, botName)
+	}
+	if branchName == "" {
+		branchName = SuggestedWorktreeBranch(baseProject, botName, "")
+	}
+	if directoryName == "" {
+		directoryName = workspaceID
+	}
+	if strings.TrimSpace(payload.WorktreeWorkspaceID) == "" && strings.TrimSpace(payload.WorktreeBranchName) == "" && strings.TrimSpace(payload.WorktreeDirectoryName) == "" && parentDir != "" {
+		branchName, workspaceID, directoryName = s.uniqueCloneWorktreeDefaults(parentDir, branchName, workspaceID, directoryName)
+	}
+	payload.WorktreeWorkspaceID = workspaceID
+	payload.WorktreeBranchName = branchName
+	payload.WorktreeDirectoryName = directoryName
+	if parentDir != "" && directoryName != "" {
+		payload.WorktreeTargetDir = filepath.Join(parentDir, directoryName)
+	}
+	return payload
+}
+
+func (s *ManagementService) prepareCloneWorktreePlan(payload ClonePayload, repoName, parentDir, cloneTargetDir string) (*CloneWorktreePlan, error) {
+	baseProject := appcore.FirstNonEmpty(strings.TrimSpace(repoName), "workspace")
+	botName := s.worktreeBotLabel()
+	workspaceID := strings.TrimSpace(payload.WorktreeWorkspaceID)
+	if workspaceID == "" {
+		workspaceID = SuggestedWorktreeID(baseProject, botName)
+	}
+	if workspaceID == "" {
+		return nil, fmt.Errorf("无法推导 worktree workspace_id，请手动填写")
+	}
+	branchName := strings.TrimSpace(payload.WorktreeBranchName)
+	if branchName == "" {
+		branchName = SuggestedWorktreeBranch(baseProject, botName, "")
+	}
+	directoryName := strings.TrimSpace(payload.WorktreeDirectoryName)
+	if directoryName == "" {
+		directoryName = workspaceID
+	}
+	if strings.TrimSpace(payload.WorktreeWorkspaceID) == "" && strings.TrimSpace(payload.WorktreeBranchName) == "" && strings.TrimSpace(payload.WorktreeDirectoryName) == "" {
+		branchName, workspaceID, directoryName = s.uniqueCloneWorktreeDefaults(parentDir, branchName, workspaceID, directoryName)
+	}
+	if err := validateGitBranchName(branchName); err != nil {
+		return nil, fmt.Errorf("worktree 分支名无效: %w", err)
+	}
+	if err := validateWorktreeDirectoryName(directoryName); err != nil {
+		return nil, err
+	}
+	targetDir := filepath.Join(parentDir, directoryName)
+	if filepath.Clean(targetDir) == filepath.Clean(cloneTargetDir) {
+		return nil, fmt.Errorf("worktree 目录不能和 clone 目录相同")
+	}
+	if existingWS := s.WorkspaceByCWD(targetDir); existingWS != nil {
+		return nil, &CloneExistingWorkspaceError{WorkspaceID: existingWS.ID, TargetDir: targetDir}
+	}
+	if _, statErr := os.Stat(targetDir); statErr == nil {
+		return nil, &CloneExistingDirError{WorkspaceID: workspaceID, TargetDir: targetDir}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return nil, statErr
+	}
+	if existing := config.FindWorkspace(s.App.Config(), workspaceID); existing != nil {
+		if sameWorkspaceCWD(existing.Cwd, targetDir) {
+			return nil, &CloneExistingWorkspaceError{WorkspaceID: existing.ID, TargetDir: targetDir}
+		}
+		return nil, fmt.Errorf("worktree workspace %q 已存在，请换一个 workspace_id", workspaceID)
+	}
+	return &CloneWorktreePlan{
+		BaseRepoRoot:  cloneTargetDir,
+		BranchName:    branchName,
+		WorkspaceID:   workspaceID,
+		DirectoryName: directoryName,
+		TargetDir:     targetDir,
+	}, nil
+}
+
+func (s *ManagementService) worktreeBotLabel() string {
+	if s != nil && s.App != nil {
+		if client := s.App.Feishu(); client != nil {
+			if name := strings.TrimSpace(client.BotName()); name != "" {
+				return name
+			}
+		}
+		if frontendID := strings.TrimSpace(s.App.FrontendID()); frontendID != "" {
+			return frontendID
+		}
+	}
+	return "bot"
+}
+
+func (s *ManagementService) worktreeBaseProjectLabel(ws *config.Workspace) string {
+	if ws == nil {
+		return "workspace"
+	}
+	if root, err := gitRepoRoot(ws.Cwd); err == nil {
+		if base := cleanPathBase(root); base != "" {
+			return base
+		}
+	}
+	if base := cleanPathBase(ws.Cwd); base != "" {
+		return base
+	}
+	return appcore.FirstNonEmpty(strings.TrimSpace(ws.Name), strings.TrimSpace(ws.ID), "workspace")
+}
+
+func cleanPathBase(pathValue string) string {
+	pathValue = strings.TrimSpace(pathValue)
+	if pathValue == "" {
+		return ""
+	}
+	base := filepath.Base(filepath.Clean(pathValue))
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	return base
+}
+
+func (s *ManagementService) uniqueWorktreeDefaults(baseRepoRoot, branchName, workspaceID, directoryName string) (string, string, string) {
+	parentDir := filepath.Dir(strings.TrimSpace(baseRepoRoot))
+	for i := 1; i <= 100; i++ {
+		candidateBranch := branchWithNumericSuffix(branchName, i)
+		candidateID := withNumericSuffix(workspaceID, i)
+		candidateDir := withNumericSuffix(directoryName, i)
+		if s.worktreeDefaultAvailable(baseRepoRoot, parentDir, candidateBranch, candidateID, candidateDir, true) {
+			return candidateBranch, candidateID, candidateDir
+		}
+	}
+	return branchName, workspaceID, directoryName
+}
+
+func (s *ManagementService) uniqueCloneWorktreeDefaults(parentDir, branchName, workspaceID, directoryName string) (string, string, string) {
+	for i := 1; i <= 100; i++ {
+		candidateBranch := branchWithNumericSuffix(branchName, i)
+		candidateID := withNumericSuffix(workspaceID, i)
+		candidateDir := withNumericSuffix(directoryName, i)
+		if s.worktreeDefaultAvailable("", parentDir, candidateBranch, candidateID, candidateDir, false) {
+			return candidateBranch, candidateID, candidateDir
+		}
+	}
+	return branchName, workspaceID, directoryName
+}
+
+func (s *ManagementService) worktreeDefaultAvailable(baseRepoRoot, parentDir, branchName, workspaceID, directoryName string, checkBranch bool) bool {
+	if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(directoryName) == "" || strings.TrimSpace(branchName) == "" {
+		return false
+	}
+	if config.FindWorkspace(s.App.Config(), workspaceID) != nil {
+		return false
+	}
+	targetDir := filepath.Join(parentDir, directoryName)
+	if s.WorkspaceByCWD(targetDir) != nil {
+		return false
+	}
+	if _, err := os.Stat(targetDir); err == nil || (err != nil && !errors.Is(err, os.ErrNotExist)) {
+		return false
+	}
+	if s.pendingWorktreeDefaultReserved(workspaceID, targetDir, branchName) {
+		return false
+	}
+	if checkBranch {
+		if exists, err := gitBranchExists(baseRepoRoot, branchName); err == nil && exists {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *ManagementService) pendingWorktreeDefaultReserved(workspaceID, targetDir, branchName string) bool {
+	if s == nil || s.App == nil || s.App.Store() == nil {
+		return false
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	targetDir = filepath.Clean(strings.TrimSpace(targetDir))
+	branchName = strings.TrimSpace(branchName)
+	for _, pending := range s.App.Store().AllPendingRequests() {
+		if pending == nil {
+			continue
+		}
+		status := state.NormalizePendingRequestStatus(pending.Status)
+		if status == state.PendingRequestStatusResolved || status == state.PendingRequestStatusExpired {
+			continue
+		}
+		switch strings.TrimSpace(pending.Kind) {
+		case "workspace_worktree":
+			payload := WorktreePayloadFromPending(pending)
+			if worktreePayloadReserves(payload.WorkspaceID, payload.TargetDir, payload.BranchName, workspaceID, targetDir, branchName) {
+				return true
+			}
+		case "workspace_clone":
+			payload := ClonePayloadFromPending(pending)
+			if !CloneCreatesWorktree(payload) {
+				continue
+			}
+			if worktreePayloadReserves(payload.WorktreeWorkspaceID, payload.WorktreeTargetDir, payload.WorktreeBranchName, workspaceID, targetDir, branchName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func worktreePayloadReserves(payloadWorkspaceID, payloadTargetDir, payloadBranchName, workspaceID, targetDir, branchName string) bool {
+	if workspaceID != "" && strings.TrimSpace(payloadWorkspaceID) == workspaceID {
+		return true
+	}
+	if branchName != "" && strings.TrimSpace(payloadBranchName) == branchName {
+		return true
+	}
+	if strings.TrimSpace(payloadTargetDir) != "" && filepath.Clean(strings.TrimSpace(payloadTargetDir)) == targetDir {
+		return true
+	}
+	return false
+}
+
+func withNumericSuffix(value string, index int) string {
+	value = strings.TrimSpace(value)
+	if index <= 1 || value == "" {
+		return value
+	}
+	return fmt.Sprintf("%s-%d", value, index)
+}
+
+func branchWithNumericSuffix(branchName string, index int) string {
+	branchName = strings.TrimSpace(branchName)
+	if index <= 1 || branchName == "" {
+		return branchName
+	}
+	idx := strings.LastIndex(branchName, "/")
+	if idx < 0 {
+		return withNumericSuffix(branchName, index)
+	}
+	prefix := strings.TrimRight(branchName[:idx+1], "/")
+	leaf := branchName[idx+1:]
+	if prefix == "" {
+		return withNumericSuffix(leaf, index)
+	}
+	return prefix + "/" + withNumericSuffix(leaf, index)
 }
 
 // SetWorkspaceCloneOperation sets a clone operation for tracking.
@@ -288,14 +723,13 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 		"repo_url", payload.RepoURL,
 		"parent_dir", parentDir,
 	)
-	workspaceID, targetDir, err := s.CloneWorkspaceInParent(
+	workspaceID, targetDir, err := s.CloneWorkspacePayloadInParent(
 		ctx,
 		sessionKey,
 		userID,
 		chatID,
 		chatType,
-		payload.RepoURL,
-		payload.DraftID,
+		payload,
 		parentDir,
 		func(line string) {
 			s.noteWorkspaceCloneProgress(op, requestID, messageID, payload, parentDir, line)
@@ -386,6 +820,68 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 	})
 	if strings.TrimSpace(messageID) != "" {
 		_ = s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
+	}
+}
+
+// FinishWorkspaceWorktreeSubmit completes a worktree operation in the background.
+func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, op *CloneOperation, requestID, messageID, sessionKey, userID, chatID, chatType string, payload WorktreePayload, plan *WorktreePlan) {
+	defer s.ClearWorkspaceCloneOperation(requestID)
+	if plan == nil {
+		planErr := "worktree 创建参数无效，请重新发起。"
+		payload.ErrorMessage = planErr
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = state.PendingRequestStatusPending.String()
+			req.PayloadJSON = appcore.MustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		if strings.TrimSpace(messageID) != "" {
+			_ = s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+		}
+		return
+	}
+	if err := s.GitWorktreeAdd(ctx, plan.BaseRepoRoot, plan.BranchName, plan.TargetDir); err != nil || ctx.Err() != nil {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		if errors.Is(err, context.Canceled) {
+			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+				req.Status = state.PendingRequestStatusResolved.String()
+				req.PayloadJSON = appcore.MustJSON(payload)
+				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+			})
+			if strings.TrimSpace(messageID) != "" {
+				_ = s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
+			}
+			return
+		}
+		payload.ErrorMessage = err.Error()
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = state.PendingRequestStatusPending.String()
+			req.PayloadJSON = appcore.MustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		if strings.TrimSpace(messageID) != "" {
+			_ = s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+		}
+		return
+	}
+	if err := s.CreateWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = state.PendingRequestStatusResolved.String()
+			req.PayloadJSON = appcore.MustJSON(payload)
+			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+		})
+		if strings.TrimSpace(messageID) != "" {
+			_ = s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
+		}
+		return
+	}
+	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = state.PendingRequestStatusResolved.String()
+		req.PayloadJSON = appcore.MustJSON(payload)
+	})
+	if strings.TrimSpace(messageID) != "" {
+		_ = s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
 	}
 }
 
@@ -531,6 +1027,7 @@ func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, se
 	payload := ClonePayload{
 		RootPath:          s.DefaultWorkspaceCloneRoot(ws),
 		SelectedParentDir: appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/"),
+		CloneMode:         CloneModeWorkspace,
 	}
 	if err := s.SavePending(&state.PendingRequest{
 		ID:          requestID,
@@ -548,6 +1045,34 @@ func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, se
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "请填写 git 地址"},
 		Card:  rawCard(s.RenderCloneCard(sessionKey, requestID, payload)),
+	}, nil
+}
+
+// CompleteWorkspaceWorktree opens the worktree creation card from the menu.
+func (s *ManagementService) CompleteWorkspaceWorktree(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	requestID, err := s.NextLocalID("workspace")
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	msg := s.CommandMessageFromAction(action, sessionKey, "/workspace new worktree")
+	_, _, ws := s.currentWorkspaceForMessage(msg)
+	payload := s.DefaultWorkspaceWorktreePayload(msg, ws, "", "")
+	if err := s.SavePending(&state.PendingRequest{
+		ID:          requestID,
+		Kind:        "workspace_worktree",
+		SessionKey:  sessionKey,
+		OwnerUserID: action.UserID,
+		FeishuMsgID: strings.TrimSpace(action.MessageID),
+		PayloadJSON: appcore.MustJSON(payload),
+		Status:      state.PendingRequestStatusPending.String(),
+		CreatedAt:   time.Now().Unix(),
+		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已打开 Worktree 创建表单"},
+		Card:  rawCard(s.RenderWorktreeCard(sessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -589,6 +1114,7 @@ func (s *ManagementService) CompleteWorkspaceClonePickDir(action *feishu.CardAct
 		_, _, ws := s.currentWorkspaceForMessage(msg)
 		currentPath = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
 	}
+	payload = s.DefaultCloneWorktreePayload(payload, currentPath)
 	payload.Picker = &PathPickerPayload{
 		Mode:        PathPickerModeDirectory,
 		Style:       PathPickerStyleDropdown,
@@ -598,6 +1124,43 @@ func (s *ManagementService) CompleteWorkspaceClonePickDir(action *feishu.CardAct
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开父目录选择"},
+		Card:  rawCard(s.RenderCloneCard(pending.SessionKey, requestID, payload)),
+	}, nil
+}
+
+// CompleteWorkspaceCloneRefresh refreshes clone form visibility after changing
+// the clone mode without starting the clone operation.
+func (s *ManagementService) CompleteWorkspaceCloneRefresh(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := s.Pending(requestID)
+	if pending == nil || pending.Kind != "workspace_clone" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := MergeCloneFormValues(ClonePayloadFromPending(pending), action.FormValue)
+	payload.ErrorMessage = ""
+	payload.Picker = nil
+	msg := s.CommandMessageFromAction(action, pending.SessionKey, "/workspace clone")
+	_, _, ws := s.currentWorkspaceForMessage(msg)
+	parentDir := strings.TrimSpace(payload.SelectedParentDir)
+	if parentDir == "" {
+		parentDir = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
+	}
+	payload.SelectedParentDir = parentDir
+	payload = s.DefaultCloneWorktreePayload(payload, parentDir)
+	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = state.PendingRequestStatusPending.String()
+		req.PayloadJSON = appcore.MustJSON(payload)
+		req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+	})
+	toast := "已更新创建方式"
+	if CloneCreatesWorktree(payload) {
+		toast = "已显示 worktree 字段"
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: toast},
 		Card:  rawCard(s.RenderCloneCard(pending.SessionKey, requestID, payload)),
 	}, nil
 }
@@ -744,6 +1307,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		}, nil
 	}
 	msg := s.CommandMessageFromAction(action, pending.SessionKey, "/workspace clone")
+	defaultMessageChatType(msg)
 	sessionKey, _, ws := s.currentWorkspaceForMessage(msg)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
@@ -761,7 +1325,8 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 			Card:  rawCard(s.RenderClonePreparingCard(requestID, payload, parentDir, snapshot)),
 		}, nil
 	}
-	if _, err := s.PrepareWorkspaceClone(payload.RepoURL, payload.DraftID, parentDir); err != nil {
+	plan, err := s.PrepareWorkspaceClonePayload(payload, parentDir)
+	if err != nil {
 		var existingWorkspaceErr *CloneExistingWorkspaceError
 		if errors.As(err, &existingWorkspaceErr) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
@@ -802,6 +1367,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 			Card:  rawCard(s.RenderCloneCard(pending.SessionKey, requestID, payload)),
 		}, nil
 	}
+	payload = clonePayloadWithPlan(payload, plan)
 	ctx, cancel := context.WithCancel(context.Background())
 	op := NewCloneOperation(cancel)
 	s.SetWorkspaceCloneOperation(requestID, op)
@@ -811,21 +1377,127 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		req.FeishuMsgID = appcore.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 	})
-	go s.FinishWorkspaceCloneSubmit(
-		ctx,
-		op,
-		requestID,
-		messageID,
-		sessionKey,
-		msg.UserID,
-		msg.ChatID,
-		msg.ChatType,
-		parentDir,
-		payload,
-	)
+	s.runWorkspaceAsync(func() {
+		s.FinishWorkspaceCloneSubmit(
+			ctx,
+			op,
+			requestID,
+			messageID,
+			sessionKey,
+			msg.UserID,
+			msg.ChatID,
+			msg.ChatType,
+			parentDir,
+			payload,
+		)
+	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已开始从仓库创建工作区"},
 		Card:  rawCard(s.RenderClonePreparingCard(requestID, payload, parentDir, op.Snapshot())),
+	}, nil
+}
+
+// CompleteWorkspaceWorktreeSubmit handles worktree submit action.
+func (s *ManagementService) CompleteWorkspaceWorktreeSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := s.Pending(requestID)
+	if pending == nil || pending.Kind != "workspace_worktree" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "Worktree 创建请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := MergeWorktreeFormValues(WorktreePayloadFromPending(pending), action.FormValue)
+	payload.ErrorMessage = ""
+	if status := state.NormalizePendingRequestStatus(pending.Status); status == state.PendingRequestStatusProcessing || status == state.PendingRequestStatusCancelling {
+		snapshot := CloneProgressSnapshot{State: status.String()}
+		if op := s.GetWorkspaceCloneOperation(requestID); op != nil {
+			snapshot = op.Snapshot()
+		}
+		plan, _ := s.PrepareWorkspaceWorktree(payload)
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "正在创建 Worktree 工作区"},
+			Card:  rawCard(s.RenderWorktreePreparingCard(requestID, payload, plan, snapshot)),
+		}, nil
+	}
+	plan, err := s.PrepareWorkspaceWorktree(payload)
+	if err != nil {
+		var existingWorkspaceErr *CloneExistingWorkspaceError
+		if errors.As(err, &existingWorkspaceErr) {
+			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+				req.Status = state.PendingRequestStatusResolved.String()
+				req.PayloadJSON = appcore.MustJSON(payload)
+				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+			})
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "info", Content: "目标目录已经由现有工作区接管，可直接切换"},
+				Card:  rawCard(s.RenderSwitchExistingCard(pending.SessionKey, existingWorkspaceErr.WorkspaceID, existingWorkspaceErr.TargetDir, "worktree 目标目录已经由现有工作区接管。")),
+			}, nil
+		}
+		payload.ErrorMessage = err.Error()
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = state.PendingRequestStatusPending.String()
+			req.PayloadJSON = appcore.MustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(s.RenderWorktreeCard(pending.SessionKey, requestID, payload)),
+		}, nil
+	}
+	payload.BaseWorkspaceID = plan.BaseWorkspaceID
+	payload.BranchName = plan.BranchName
+	payload.WorkspaceID = plan.WorkspaceID
+	payload.DirectoryName = plan.DirectoryName
+	payload.TargetDir = plan.TargetDir
+	messageID := appcore.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
+	ctx, cancel := context.WithCancel(context.Background())
+	op := NewCloneOperation(cancel)
+	s.SetWorkspaceCloneOperation(requestID, op)
+	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+		req.Status = state.PendingRequestStatusProcessing.String()
+		req.PayloadJSON = appcore.MustJSON(payload)
+		req.FeishuMsgID = appcore.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
+		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
+	})
+	msg := s.CommandMessageFromAction(action, pending.SessionKey, "/workspace new worktree")
+	defaultMessageChatType(msg)
+	s.runWorkspaceAsync(func() {
+		s.FinishWorkspaceWorktreeSubmit(ctx, op, requestID, messageID, pending.SessionKey, msg.UserID, msg.ChatID, msg.ChatType, payload, plan)
+	})
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "info", Content: "已开始创建 Worktree 工作区"},
+		Card:  rawCard(s.RenderWorktreePreparingCard(requestID, payload, plan, op.Snapshot())),
+	}, nil
+}
+
+// CompleteWorkspaceWorktreeCancel handles worktree cancel action.
+func (s *ManagementService) CompleteWorkspaceWorktreeCancel(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	requestID, _ := action.ActionValue["request_id"].(string)
+	pending := s.Pending(requestID)
+	if pending == nil || pending.Kind != "workspace_worktree" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "Worktree 创建请求已过期"}}, nil
+	}
+	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
+	}
+	payload := WorktreePayloadFromPending(pending)
+	plan, _ := s.PrepareWorkspaceWorktree(payload)
+	if op := s.GetWorkspaceCloneOperation(requestID); op != nil {
+		snapshot := op.RequestCancel()
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
+			req.Status = state.PendingRequestStatusCancelling.String()
+			req.PayloadJSON = appcore.MustJSON(payload)
+			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
+		})
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "info", Content: "已请求取消 Worktree 创建"},
+			Card:  rawCard(s.RenderWorktreePreparingCard(requestID, payload, plan, snapshot)),
+		}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "warning", Content: "当前没有进行中的 Worktree 创建"},
+		Card:  rawCard(s.RenderWorktreeCard(pending.SessionKey, requestID, payload)),
 	}, nil
 }
 
@@ -903,8 +1575,31 @@ func (s *ManagementService) currentWorkspaceForMessage(msg *feishu.InboundMessag
 	return sessionKey, sess, config.FindWorkspace(s.App.Config(), workspaceID)
 }
 
+func defaultMessageChatType(msg *feishu.InboundMessage) {
+	if msg == nil || strings.TrimSpace(msg.ChatType) != "" || strings.TrimSpace(msg.ChatID) == "" {
+		return
+	}
+	msg.ChatType = "p2p"
+}
+
+func (s *ManagementService) runWorkspaceAsync(fn func()) {
+	if fn == nil {
+		return
+	}
+	if s != nil && s.deps.Async.RunAsync != nil {
+		s.deps.Async.RunAsync(fn)
+		return
+	}
+	go fn()
+}
+
 func (s *ManagementService) CloneWorkspaceInParent(ctx context.Context, sessionKey, userID, chatID, chatType, repoURL, explicitID, parentDir string, report CloneProgressReporter) (string, string, error) {
-	plan, err := s.PrepareWorkspaceClone(repoURL, explicitID, parentDir)
+	payload := ClonePayload{RepoURL: strings.TrimSpace(repoURL), DraftID: strings.TrimSpace(explicitID), CloneMode: CloneModeWorkspace}
+	return s.CloneWorkspacePayloadInParent(ctx, sessionKey, userID, chatID, chatType, payload, parentDir, report)
+}
+
+func (s *ManagementService) CloneWorkspacePayloadInParent(ctx context.Context, sessionKey, userID, chatID, chatType string, payload ClonePayload, parentDir string, report CloneProgressReporter) (string, string, error) {
+	plan, err := s.PrepareWorkspaceClonePayload(payload, parentDir)
 	if err != nil {
 		return "", "", err
 	}
@@ -914,20 +1609,32 @@ func (s *ManagementService) CloneWorkspaceInParent(ctx context.Context, sessionK
 	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
 		return "", "", err
 	}
-	if err := s.GitClone(ctx, strings.TrimSpace(repoURL), plan.TargetDir, report); err != nil {
+	if err := s.GitClone(ctx, strings.TrimSpace(payload.RepoURL), plan.TargetDir, report); err != nil {
 		return "", "", err
 	}
 	if err := ctx.Err(); err != nil {
 		return "", "", err
 	}
-	if err := s.CreateWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
+	finalWorkspaceID := plan.WorkspaceID
+	finalTargetDir := plan.TargetDir
+	if plan.Worktree != nil {
+		if err := s.GitWorktreeAdd(ctx, plan.Worktree.BaseRepoRoot, plan.Worktree.BranchName, plan.Worktree.TargetDir); err != nil {
+			return "", "", err
+		}
+		if err := ctx.Err(); err != nil {
+			return "", "", err
+		}
+		finalWorkspaceID = plan.Worktree.WorkspaceID
+		finalTargetDir = plan.Worktree.TargetDir
+	}
+	if err := s.CreateWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, finalWorkspaceID, finalWorkspaceID, finalTargetDir); err != nil {
 		return "", "", &CloneTakeoverError{
-			WorkspaceID: plan.WorkspaceID,
-			TargetDir:   plan.TargetDir,
+			WorkspaceID: finalWorkspaceID,
+			TargetDir:   finalTargetDir,
 			Err:         err,
 		}
 	}
-	return plan.WorkspaceID, plan.TargetDir, nil
+	return finalWorkspaceID, finalTargetDir, nil
 }
 
 func (s *ManagementService) noteWorkspaceCloneProgress(op *CloneOperation, requestID, messageID string, payload ClonePayload, parentDir, line string) {
@@ -969,6 +1676,66 @@ func (s *ManagementService) updateWorkspaceDefaults(workspaceID string, mutate f
 		return nil, err
 	}
 	return config.FindWorkspace(s.App.Config(), workspaceID), nil
+}
+
+func gitRepoRoot(cwd string) (string, error) {
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		return "", fmt.Errorf("cwd is required")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return "", fmt.Errorf("未检测到 git: %w", err)
+	}
+	cmd := exec.Command("git", "-C", cwd, "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		return "", fmt.Errorf("git repo root is empty")
+	}
+	return filepath.Clean(root), nil
+}
+
+func validateGitBranchName(branchName string) error {
+	branchName = strings.TrimSpace(branchName)
+	if branchName == "" {
+		return fmt.Errorf("branch name is required")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return err
+	}
+	cmd := exec.Command("git", "check-ref-format", "--branch", branchName)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		if text := strings.TrimSpace(string(output)); text != "" {
+			return fmt.Errorf("%s", text)
+		}
+		return err
+	}
+	return nil
+}
+
+func gitBranchExists(repoRoot, branchName string) (bool, error) {
+	cmd := exec.Command("git", "-C", strings.TrimSpace(repoRoot), "show-ref", "--verify", "--quiet", "refs/heads/"+strings.TrimSpace(branchName))
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func validateWorktreeDirectoryName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("请填写本地目录名")
+	}
+	if name == "." || name == ".." || filepath.Base(name) != name || strings.ContainsAny(name, `/\\`) {
+		return fmt.Errorf("本地目录名无效，请填写不含路径分隔符的普通目录名")
+	}
+	return nil
 }
 
 // renderSandboxMenuCard is a helper that re-renders the sandbox menu card.

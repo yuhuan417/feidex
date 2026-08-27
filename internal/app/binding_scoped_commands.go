@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-const groupBindingWorkspaceUsage = "/workspace | /workspace list | /workspace choose | /workspace use ID | /workspace new ID CWD | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"
+const groupBindingWorkspaceUsage = "/workspace | /workspace list | /workspace choose | /workspace use ID | /workspace new ID CWD | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"
 
 func isGroupMessage(msg *feishu.InboundMessage) bool {
 	return msg != nil && strings.TrimSpace(msg.ChatType) == "group" && strings.TrimSpace(msg.ChatID) != ""
@@ -149,6 +150,13 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	case "use":
 		return s.commandCurrentBotGroupConfig(msg, append([]string{"use"}, args[1:]...))
 	case "new":
+		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "worktree") {
+			branchName, workspaceID, err := appworkspacecmd.ParseWorktreeArgs(args)
+			if err != nil {
+				return err
+			}
+			return newWorkspaceManagementServiceInner(s.app).BeginWorkspaceWorktree(msg, branchName, workspaceID)
+		}
 		if len(args) == 1 {
 			return newWorkspaceManagementServiceInner(s.app).BeginWorkspaceNew(msg)
 		}

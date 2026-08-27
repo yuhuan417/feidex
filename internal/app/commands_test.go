@@ -267,6 +267,10 @@ func TestIsLocalCommand(t *testing.T) {
 		"/workspace choose":          true,
 		"/workspace delete":          true,
 		"/workspace delete default":  true,
+		"/workspace new worktree":    true,
+		"/workspace new worktree work/bot/chat/default":       true,
+		"/workspace new worktree work/bot/chat/default repo2": true,
+		"/workspace clone": true,
 		"/workspace clone https://github.com/example/repo.git":                         true,
 		"/workspace clone git@github.com:example/repo.git repo-copy":                   true,
 		"/workspace clone https://github.com/example/repo.git --parent /home/yuhuan":   true,
@@ -293,6 +297,7 @@ func TestIsLocalCommand(t *testing.T) {
 		"/thread resume":                                                               false,
 		"/workspace use default extra":                                                 false,
 		"/workspace delete default extra":                                              false,
+		"/workspace new worktree work/bot/chat/default repo2 extra":                    false,
 		"/workspace clone https://github.com/example/repo.git repo-copy extra": false,
 		"/workspace clone https://github.com/example/repo.git --parent":        false,
 		"/workspace clone https://github.com/example/repo.git repo-copy /tmp":  false,
@@ -311,6 +316,21 @@ func TestIsLocalCommand(t *testing.T) {
 	}
 }
 
+func TestHandleCommandWorkspaceCloneWithoutURLOpensForm(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "msg-clone", ChatID: "chat-clone", ChatType: "p2p", UserID: "user-1"}
+	if err := handleCommand(a, msg, "/workspace clone"); err != nil {
+		t.Fatalf("handleCommand(/workspace clone) error = %v", err)
+	}
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want clone form card", len(cards))
+	}
+	if body := cardMarkdownContent(t, cards[0]); !strings.Contains(body, "从仓库创建") || !strings.Contains(body, "Git 地址") {
+		t.Fatalf("/workspace clone reply body = %q, want clone form", body)
+	}
+}
+
 func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 	cases := map[string]bool{
 		"/history":                           true,
@@ -326,6 +346,7 @@ func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 		"/workspace permissions":             true,
 		"/workspace permissions inherit":     true,
 		"/workspace choose":                  true,
+		"/workspace clone":                   true,
 		"/review":                            false,
 		"/review custom 请重点看":                false,
 		"/skills":                            false,

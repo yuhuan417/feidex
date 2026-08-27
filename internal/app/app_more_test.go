@@ -1847,6 +1847,9 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
 			return newWorkspaceService(a).completeWorkspaceClone(action, action.ActionValue["session_key"].(string))
 		},
+		"workspace.worktree": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceManagementServiceInner(a).CompleteWorkspaceWorktree(action, action.ActionValue["session_key"].(string))
+		},
 		"workspace.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
 			return newWorkspaceService(a).completeWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
@@ -1878,7 +1881,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.delete.menu", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.worktree", "workspace.delete.menu", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}

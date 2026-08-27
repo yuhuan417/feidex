@@ -115,12 +115,14 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 	if parentDir == "" {
 		parentDir = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), rootPath)
 	}
+	cloneMode := NormalizeCloneMode(payload.CloneMode)
 
 	card := appcards.NewMarkdownBodyCard("从仓库创建工作区", "orange")
 	body := "当前工作区: `" + workspaceID + "`\n" +
 		"已选父目录: `" + appcore.FirstNonEmpty(parentDir, "-") + "`\n" +
+		"创建方式: `" + cloneMode + "`\n" +
 		"浏览根目录: `" + appcore.FirstNonEmpty(rootPath, "-") + "`\n\n" +
-		"先填写 Git 地址，再按需调整父目录和可选 `workspace_id`。不填 `workspace_id` 时，会从仓库名自动推导。"
+		"先填写 Git 地址，再按需调整父目录和 `workspace_id`；`workspace_id` 留空会按仓库名自动推导。选择 `clone 后创建 worktree` 后，点「更新表单」会显示 worktree 分支、workspace_id 和目录名；这些字段留空会按 bot 显示名 + base project 自动推导，目录名默认等于 worktree workspace_id。"
 	body = s.FormatMenuBody("workspace.clone", body)
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
 		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
@@ -140,10 +142,41 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		"tag":         "input",
 		"name":        "workspace_id",
 		"required":    false,
-		"placeholder": map[string]any{"tag": "plain_text", "content": "workspace_id（可选）"},
+		"placeholder": map[string]any{"tag": "plain_text", "content": "workspace_id（留空按仓库名推导；worktree 时作底座目录名）"},
 	}
 	if value := strings.TrimSpace(payload.DraftID); value != "" {
 		workspaceIDInput["default_value"] = value
+	}
+	modeSelect := appcards.BuildFormSelectStaticElement("clone_mode", "创建方式", []appcards.SelectStaticOption{
+		{Text: "普通 clone 工作区", Value: CloneModeWorkspace},
+		{Text: "clone 后创建 worktree", Value: CloneModeWorktree},
+	}, cloneMode)
+	worktreeBranchInput := map[string]any{
+		"tag":         "input",
+		"name":        "worktree_branch_name",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "worktree 分支（留空按 bot 名 + 项目名推导）"},
+	}
+	if value := strings.TrimSpace(payload.WorktreeBranchName); value != "" {
+		worktreeBranchInput["default_value"] = value
+	}
+	worktreeWorkspaceIDInput := map[string]any{
+		"tag":         "input",
+		"name":        "worktree_workspace_id",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "worktree workspace_id（留空按 bot 名 + 项目名推导）"},
+	}
+	if value := strings.TrimSpace(payload.WorktreeWorkspaceID); value != "" {
+		worktreeWorkspaceIDInput["default_value"] = value
+	}
+	worktreeDirectoryNameInput := map[string]any{
+		"tag":         "input",
+		"name":        "worktree_directory_name",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "worktree 目录名（留空默认等于 worktree workspace_id）"},
+	}
+	if value := strings.TrimSpace(payload.WorktreeDirectoryName); value != "" {
+		worktreeDirectoryNameInput["default_value"] = value
 	}
 	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
@@ -151,6 +184,12 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 			Type:  "default",
 			Name:  "workspace_clone_pickdir",
 			Value: cardactions.RequestActionValue{Action: "workspace.clone.pickdir", RequestID: requestID}.Map(),
+		},
+		{
+			Text:  "更新表单",
+			Type:  "default",
+			Name:  "workspace_clone_refresh",
+			Value: cardactions.RequestActionValue{Action: "workspace.clone.refresh", RequestID: requestID}.Map(),
 		},
 		{
 			Text:  "确认",
@@ -171,9 +210,13 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 			continue
 		}
 		button := columns[0]["elements"].([]map[string]any)[0]
-		if idx < 2 {
+		if idx < 3 {
 			button["form_action_type"] = "submit"
 		}
+	}
+	formElements := append(append([]map[string]any{repoURLInput, modeSelect}, buttonRows...), workspaceIDInput)
+	if cloneMode == CloneModeWorktree {
+		formElements = append(formElements, worktreeBranchInput, worktreeWorkspaceIDInput, worktreeDirectoryNameInput)
 	}
 	form := map[string]any{
 		"tag":                "form",
@@ -181,7 +224,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		"direction":          "vertical",
 		"horizontal_spacing": "8px",
 		"vertical_spacing":   "8px",
-		"elements":           append(append([]map[string]any{repoURLInput}, buttonRows...), workspaceIDInput),
+		"elements":           formElements,
 	}
 	appcards.AppendMarkdownBodyCardElement(card, form)
 	return card
@@ -195,16 +238,27 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 	if workspaceID == "" {
 		workspaceID = "将从仓库名自动推导"
 	}
+	mode := NormalizeCloneMode(payload.CloneMode)
 	statusLine := "正在从仓库创建工作区。"
 	if snapshot.State == "cancelling" {
 		statusLine = "正在取消仓库克隆。"
+	} else if mode == CloneModeWorktree {
+		statusLine = "正在 clone 仓库并创建 Worktree 工作区。"
 	}
 	lines := []string{
 		statusLine,
 		"",
 		"仓库: `" + appcore.FirstNonEmpty(repoURL, "-") + "`",
 		"父目录: `" + parentDir + "`",
+		"创建方式: `" + mode + "`",
 		"workspace_id: `" + workspaceID + "`",
+	}
+	if mode == CloneModeWorktree {
+		lines = append(lines,
+			"worktree 分支: `"+appcore.FirstNonEmpty(strings.TrimSpace(payload.WorktreeBranchName), "自动推导")+"`",
+			"worktree workspace_id: `"+appcore.FirstNonEmpty(strings.TrimSpace(payload.WorktreeWorkspaceID), "自动推导")+"`",
+			"worktree 目标目录: `"+appcore.FirstNonEmpty(strings.TrimSpace(payload.WorktreeTargetDir), "自动推导")+"`",
+		)
 	}
 	if !snapshot.StartedAt.IsZero() {
 		lines = append(lines, "已运行: `"+strings.TrimSpace(strings.TrimPrefix(formatTurnElapsedLine(time.Since(snapshot.StartedAt)), "elapsed: "))+"`")
@@ -312,6 +366,7 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 		"",
 		"仓库: `" + appcore.FirstNonEmpty(repoURL, "-") + "`",
 		"父目录: `" + parentDir + "`",
+		"创建方式: `" + NormalizeCloneMode(payload.CloneMode) + "`",
 		"workspace_id: `" + workspaceID + "`",
 		"",
 		"如果目标目录有残留，请清理后重新发起。",
@@ -330,6 +385,225 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 		},
 	}
 	return s.App.Feishu().SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
+}
+
+// RenderWorkspaceWorktreeCard renders the git worktree workspace card.
+func (s *RenderService) RenderWorkspaceWorktreeCard(sessionKey, requestID string, payload WorktreePayload) map[string]any {
+	baseWorkspaceID := strings.TrimSpace(payload.BaseWorkspaceID)
+	branchName := strings.TrimSpace(payload.BranchName)
+	workspaceID := strings.TrimSpace(payload.WorkspaceID)
+	directoryName := strings.TrimSpace(payload.DirectoryName)
+	targetDir := strings.TrimSpace(payload.TargetDir)
+
+	workspaces := s.App.Config().Workspaces
+	baseOptions := make([]appcards.SelectStaticOption, 0, len(workspaces)+1)
+	seenBase := false
+	for _, ws := range workspaces {
+		id := strings.TrimSpace(ws.ID)
+		if id == "" {
+			continue
+		}
+		label := id
+		if id == baseWorkspaceID {
+			label = "当前 · " + label
+			seenBase = true
+		}
+		if cwd := strings.TrimSpace(ws.Cwd); cwd != "" {
+			label += " · " + cwd
+		}
+		baseOptions = append(baseOptions, appcards.SelectStaticOption{Text: label, Value: id})
+	}
+	if baseWorkspaceID != "" && !seenBase {
+		baseOptions = append(baseOptions, appcards.SelectStaticOption{Text: baseWorkspaceID, Value: baseWorkspaceID})
+	}
+
+	card := appcards.NewMarkdownBodyCard("从 Worktree 创建工作区", "orange")
+	body := strings.Join([]string{
+		"基准工作区: `" + appcore.FirstNonEmpty(baseWorkspaceID, "-") + "`",
+		"新分支: `" + appcore.FirstNonEmpty(branchName, "-") + "`",
+		"workspace_id: `" + appcore.FirstNonEmpty(workspaceID, "-") + "`",
+		"目录名: `" + appcore.FirstNonEmpty(directoryName, "-") + "`",
+		"目标目录: `" + appcore.FirstNonEmpty(targetDir, "确认时从基准 Git 根目录推导") + "`",
+		"",
+		"默认会用 bot 显示名和基准项目名生成分支、workspace_id 和目录名。通常只需要确认；需要隔离到其他基准仓库时再调整下拉。",
+		"",
+		"下面三个输入框对应:",
+		"- 新分支 / branch_name: 要创建的 Git branch，提交时会传给 `git worktree add -b`。",
+		"- 工作区 ID / workspace_id: Feidex 里显示和切换用的新工作区 ID。",
+		"- 目录名 / directory_name: 实际创建的 worktree 目录名，默认等于 workspace_id，位置在基准仓库同级目录。",
+	}, "\n")
+	body = s.FormatMenuBody("workspace.worktree", body)
+	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
+		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
+	}
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
+
+	baseSelect := appcards.BuildFormSelectStaticElement("base_workspace_id", "基准工作区", baseOptions, baseWorkspaceID)
+	branchInput := map[string]any{
+		"tag":         "input",
+		"name":        "branch_name",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "新分支名，例如 work/project/bot"},
+	}
+	if branchName != "" {
+		branchInput["default_value"] = branchName
+	}
+	workspaceIDInput := map[string]any{
+		"tag":         "input",
+		"name":        "workspace_id",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "workspace_id"},
+	}
+	if workspaceID != "" {
+		workspaceIDInput["default_value"] = workspaceID
+	}
+	directoryNameInput := map[string]any{
+		"tag":         "input",
+		"name":        "directory_name",
+		"required":    false,
+		"placeholder": map[string]any{"tag": "plain_text", "content": "目录名（默认等于 workspace_id）"},
+	}
+	if directoryName != "" {
+		directoryNameInput["default_value"] = directoryName
+	}
+	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
+		{
+			Text:  "确认创建",
+			Type:  "primary",
+			Name:  "workspace_worktree_submit",
+			Value: cardactions.RequestActionValue{Action: "workspace.worktree.submit", RequestID: requestID}.Map(),
+		},
+		{
+			Text:  "取消",
+			Type:  "default",
+			Name:  "workspace_worktree_cancel",
+			Value: cardactions.RequestActionValue{Action: "pending_form.cancel", RequestID: requestID}.Map(),
+		},
+	})
+	for idx, row := range buttonRows {
+		columns := row["columns"].([]map[string]any)
+		if len(columns) == 0 {
+			continue
+		}
+		button := columns[0]["elements"].([]map[string]any)[0]
+		if idx == 0 {
+			button["form_action_type"] = "submit"
+		}
+	}
+	form := map[string]any{
+		"tag":                "form",
+		"name":               "workspace_worktree_form",
+		"direction":          "vertical",
+		"horizontal_spacing": "8px",
+		"vertical_spacing":   "8px",
+		"elements":           append(append([]map[string]any{baseSelect, branchInput}, buttonRows...), workspaceIDInput, directoryNameInput),
+	}
+	appcards.AppendMarkdownBodyCardElement(card, form)
+	return card
+}
+
+// RenderWorkspaceWorktreePreparingCard renders a worktree creation progress card.
+func (s *RenderService) RenderWorkspaceWorktreePreparingCard(requestID string, payload WorktreePayload, plan *WorktreePlan, snapshot CloneProgressSnapshot) map[string]any {
+	statusLine := "正在创建 Worktree 工作区。"
+	if snapshot.State == "cancelling" {
+		statusLine = "正在取消 Worktree 创建。"
+	}
+	baseWorkspaceID := strings.TrimSpace(payload.BaseWorkspaceID)
+	branchName := strings.TrimSpace(payload.BranchName)
+	workspaceID := strings.TrimSpace(payload.WorkspaceID)
+	targetDir := strings.TrimSpace(payload.TargetDir)
+	if plan != nil {
+		baseWorkspaceID = appcore.FirstNonEmpty(strings.TrimSpace(plan.BaseWorkspaceID), baseWorkspaceID)
+		branchName = appcore.FirstNonEmpty(strings.TrimSpace(plan.BranchName), branchName)
+		workspaceID = appcore.FirstNonEmpty(strings.TrimSpace(plan.WorkspaceID), workspaceID)
+		targetDir = appcore.FirstNonEmpty(strings.TrimSpace(plan.TargetDir), targetDir)
+	}
+	lines := []string{
+		statusLine,
+		"",
+		"基准工作区: `" + appcore.FirstNonEmpty(baseWorkspaceID, "-") + "`",
+		"分支: `" + appcore.FirstNonEmpty(branchName, "-") + "`",
+		"workspace_id: `" + appcore.FirstNonEmpty(workspaceID, "-") + "`",
+		"目标目录: `" + appcore.FirstNonEmpty(targetDir, "-") + "`",
+	}
+	if !snapshot.StartedAt.IsZero() {
+		lines = append(lines, "已运行: `"+strings.TrimSpace(strings.TrimPrefix(formatTurnElapsedLine(time.Since(snapshot.StartedAt)), "elapsed: "))+"`")
+	}
+	if len(snapshot.Lines) > 0 {
+		lines = append(lines, "", "最近进度:", markdownCodeBlock(strings.Join(snapshot.Lines, "\n")))
+	} else {
+		lines = append(lines, "", "正在执行 `git worktree add`。")
+	}
+	lines = append(lines, "", "这张卡片会自动刷新。")
+	var buttons []feishu.Button
+	if snapshot.State != "cancelling" {
+		buttons = []feishu.Button{{
+			Text:  "取消创建",
+			Type:  "default",
+			Value: cardactions.RequestActionValue{Action: "workspace.worktree.cancel", RequestID: requestID}.Map(),
+		}}
+	}
+	return s.App.Feishu().SimpleStatusCard("从 Worktree 创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+}
+
+// RenderWorkspaceWorktreeSuccessCard renders the worktree success card.
+func (s *RenderService) RenderWorkspaceWorktreeSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
+	buttons := []feishu.Button{{
+		Text:  "返回工作区管理",
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
+	}}
+	body := "已从 Worktree 创建工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
+	return s.App.Feishu().SimpleStatusCard("工作区已创建", "green", body, buttons)
+}
+
+// RenderWorkspaceWorktreeManualHintCard renders the worktree manual takeover hint card.
+func (s *RenderService) RenderWorkspaceWorktreeManualHintCard(sessionKey, workspaceID, targetDir, errText string) map[string]any {
+	lines := []string{
+		"Worktree 已创建，可手动接管。",
+		"",
+		"目录: `" + appcore.FirstNonEmpty(strings.TrimSpace(targetDir), "-") + "`",
+	}
+	if workspaceID = strings.TrimSpace(workspaceID); workspaceID != "" {
+		lines = append(lines, "建议 workspace_id: `"+workspaceID+"`")
+	}
+	lines = append(lines, "", "自动创建或切换工作区失败。Worktree 目录已保留，可稍后通过 `/workspace new` 手动接管。")
+	if errText = strings.TrimSpace(errText); errText != "" {
+		lines = append(lines, "", "错误: "+errText)
+	}
+	buttons := []feishu.Button{{
+		Text:  "返回工作区管理",
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
+	}}
+	return s.App.Feishu().SimpleStatusCard("Worktree 已创建", "orange", strings.Join(lines, "\n"), buttons)
+}
+
+// RenderWorkspaceWorktreeCanceledCard renders the worktree canceled card.
+func (s *RenderService) RenderWorkspaceWorktreeCanceledCard(sessionKey string, payload WorktreePayload, plan *WorktreePlan, snapshot CloneProgressSnapshot) map[string]any {
+	targetDir := strings.TrimSpace(payload.TargetDir)
+	if plan != nil {
+		targetDir = appcore.FirstNonEmpty(strings.TrimSpace(plan.TargetDir), targetDir)
+	}
+	lines := []string{
+		"已取消 Worktree 创建。",
+		"",
+		"基准工作区: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.BaseWorkspaceID), "-") + "`",
+		"分支: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.BranchName), "-") + "`",
+		"workspace_id: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.WorkspaceID), "-") + "`",
+		"目标目录: `" + appcore.FirstNonEmpty(targetDir, "-") + "`",
+		"",
+		"如果目标目录有残留，请清理后重新发起。",
+	}
+	if len(snapshot.Lines) > 0 {
+		lines = append(lines, "", "取消前最后进度:", markdownCodeBlock(strings.Join(snapshot.Lines, "\n")))
+	}
+	buttons := []feishu.Button{{
+		Text:  "返回工作区管理",
+		Type:  "default",
+		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
+	}}
+	return s.App.Feishu().SimpleStatusCard("Worktree 创建已取消", "grey", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceMenuCard renders the workspace management menu card.
@@ -372,6 +646,14 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.clone",
+				"session_key": sessionKey,
+			},
+		},
+		feishu.Button{
+			Text: submenuCommandLabel("创建 Worktree", "/workspace new worktree"),
+			Type: "default",
+			Value: map[string]any{
+				"action":      "workspace.worktree",
 				"session_key": sessionKey,
 			},
 		},

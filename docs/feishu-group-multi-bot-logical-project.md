@@ -200,7 +200,8 @@ primary 初始化和 `AgentBinding` 无关。Bot 被加入群或首次收到群�
 - `/workspace` 展示当前 Bot 在本群内的工作区状态。
 - `/workspace use` 选择本机已有 workspace。
 - `/workspace new` 创建本机 workspace 配置并设为当前群内工作区。
-- `/workspace clone` clone 仓库、创建本机 workspace 配置并设为当前群内工作区。
+- `/workspace clone` clone 仓库、创建本机 workspace 配置并设为当前群内工作区；表单里可选择 clone 后直接生成 worktree，worktree 默认分支、workspace_id 和目录名使用 bot 显示名 + base project，并通过数字后缀处理同名冲突，不把 frontend id 或 chat id 暴露给用户。
+- `/workspace new worktree [BRANCH] [WORKSPACE_ID]` 可从工作区菜单独立打开，也可直接用命令打开，用于基于当前已选本机 Git workspace 创建隔离 worktree；默认命名同样使用 bot 显示名 + base project。
 - 工作区未配置前，当前 Bot 保持 pending；pending 状态收到当前 Bot 应处理的普通消息时，只展示 onboarding 卡并暂存原消息，不创建普通 submission。
 - 配置成功后，Feidex 自动用暂存的原始消息继续处理输入；如果 pending 期间又收到新的普通消息，以最后一条暂存消息为准。
 - 该流程只修改当前机器的本地状态，不要求其他机器共享 workspace 配置。
@@ -254,6 +255,9 @@ Session / Thread 临时覆盖
 /menu
   -> 当前 Bot
       -> 当前工作区 /workspace
+          -> 新建工作区 /workspace new
+          -> 从仓库创建 /workspace clone
+          -> 创建 Worktree /workspace new worktree
       -> 模型配置 /model
       -> 响应速度 /fast config
 ```

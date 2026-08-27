@@ -136,6 +136,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 		}
 		if pending.Kind == "workspace_clone" {
 			clonePayload.SelectedParentDir = selectedPath
+			clonePayload = newWorkspaceManagementServiceInner(a).DefaultCloneWorktreePayload(clonePayload, selectedPath)
 			clonePayload.Picker = nil
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{

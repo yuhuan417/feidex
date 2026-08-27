@@ -1,12 +1,14 @@
 package workspace
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"feidex/internal/app/apputil"
 	"feidex/internal/codexrpc"
@@ -20,13 +22,10 @@ func SuggestedID(raw string) string {
 	lastDash := false
 	for _, r := range repoName {
 		switch {
-		case r >= 'a' && r <= 'z':
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			out.WriteRune(r)
 			lastDash = false
-		case r >= '0' && r <= '9':
-			out.WriteRune(r)
-			lastDash = false
-		case r == '-' || r == '_':
+		case r == '-' || r == '_' || unicode.IsSpace(r):
 			if out.Len() > 0 && !lastDash {
 				out.WriteByte('-')
 				lastDash = true
@@ -107,7 +106,113 @@ func MergeCloneFormValues(payload ClonePayload, values map[string]any) ClonePayl
 	if value, ok := apputil.FormValueString(values, "workspace_id"); ok {
 		payload.DraftID = value
 	}
+	if value, ok := apputil.FormValueString(values, "clone_mode"); ok {
+		payload.CloneMode = NormalizeCloneMode(value)
+	}
+	if value, ok := apputil.FormValueString(values, "worktree_branch_name"); ok {
+		payload.WorktreeBranchName = value
+	}
+	if value, ok := apputil.FormValueString(values, "worktree_workspace_id"); ok {
+		payload.WorktreeWorkspaceID = value
+	}
+	if value, ok := apputil.FormValueString(values, "worktree_directory_name"); ok {
+		payload.WorktreeDirectoryName = value
+	}
 	return payload
+}
+
+// NormalizeCloneMode canonicalizes the clone output mode.
+func NormalizeCloneMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case CloneModeWorktree:
+		return CloneModeWorktree
+	default:
+		return CloneModeWorkspace
+	}
+}
+
+// CloneCreatesWorktree reports whether the clone flow should create the final
+// workspace from a git worktree rather than the cloned base repository itself.
+func CloneCreatesWorktree(payload ClonePayload) bool {
+	return NormalizeCloneMode(payload.CloneMode) == CloneModeWorktree
+}
+
+// WorktreePayloadFromPending extracts a WorktreePayload from a pending request.
+func WorktreePayloadFromPending(pending *state.PendingRequest) WorktreePayload {
+	var payload WorktreePayload
+	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	}
+	return payload
+}
+
+// MergeWorktreeFormValues merges Feishu form values into a WorktreePayload.
+func MergeWorktreeFormValues(payload WorktreePayload, values map[string]any) WorktreePayload {
+	if value, ok := apputil.FormValueString(values, "base_workspace_id"); ok {
+		payload.BaseWorkspaceID = value
+	}
+	if value, ok := apputil.FormValueString(values, "branch_name"); ok {
+		payload.BranchName = value
+	}
+	if value, ok := apputil.FormValueString(values, "workspace_id"); ok {
+		payload.WorkspaceID = value
+	}
+	if value, ok := apputil.FormValueString(values, "directory_name"); ok {
+		payload.DirectoryName = value
+	}
+	return payload
+}
+
+// ParseWorktreeArgs parses /workspace new worktree arguments. The base
+// workspace remains the current selected workspace; optional arguments only
+// prefill the branch and workspace ID.
+func ParseWorktreeArgs(args []string) (branchName, workspaceID string, err error) {
+	if len(args) < 2 || strings.TrimSpace(args[0]) != "new" || strings.TrimSpace(args[1]) != "worktree" {
+		return "", "", fmt.Errorf("usage: %s", CommandUsage)
+	}
+	switch len(args) {
+	case 2:
+		return "", "", nil
+	case 3:
+		return strings.TrimSpace(args[2]), "", nil
+	case 4:
+		return strings.TrimSpace(args[2]), strings.TrimSpace(args[3]), nil
+	default:
+		return "", "", fmt.Errorf("usage: %s", CommandUsage)
+	}
+}
+
+// SuggestedWorktreeID returns a human-readable default workspace ID for a
+// worktree based on the base project and bot name.
+func SuggestedWorktreeID(baseProject, botName string) string {
+	base := SuggestedID(baseProject)
+	if base == "" {
+		base = "workspace"
+	}
+	bot := SuggestedID(botName)
+	if bot == "" {
+		bot = "bot"
+	}
+	return base + "-" + bot
+}
+
+// SuggestedWorktreeBranch returns a human-readable default branch name for a
+// worktree based on the base project and bot name.
+func SuggestedWorktreeBranch(baseProject, botName, workspaceID string) string {
+	project := SuggestedID(baseProject)
+	if project == "" {
+		project = "workspace"
+	}
+	bot := SuggestedID(botName)
+	if bot == "" {
+		bot = "bot"
+	}
+	workspaceID = SuggestedID(workspaceID)
+	parts := []string{"work", project, bot}
+	if workspaceID != "" {
+		parts = append(parts, workspaceID)
+	}
+	return strings.Join(parts, "/")
 }
 
 // NewTakeoverNotice returns the notice text for workspace takeover.

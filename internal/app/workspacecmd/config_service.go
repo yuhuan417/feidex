@@ -26,9 +26,24 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		return s.ShowWorkspaceMenu(msg)
 	}
 	if args[0] == "new" {
+		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "worktree") {
+			branchName, workspaceID, err := ParseWorktreeArgs(args)
+			if err != nil {
+				return err
+			}
+			return mgmt.BeginWorkspaceWorktree(msg, branchName, workspaceID)
+		}
 		return mgmt.BeginWorkspaceNew(msg)
 	}
-	if len(args) >= 2 && args[0] == "clone" {
+	if args[0] == "clone" {
+		if len(args) == 1 {
+			action := s.CommandActionFromMessage(msg, map[string]any{"session_key": sessionKey})
+			resp, err := mgmt.CompleteWorkspaceClone(action, sessionKey)
+			if err != nil {
+				return err
+			}
+			return s.ReplyCommandActionResponse(msg, resp)
+		}
 		repoURL, workspaceID, parentDir, err := ParseCloneArgs(args)
 		if err != nil {
 			return err

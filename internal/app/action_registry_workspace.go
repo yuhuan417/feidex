@@ -37,6 +37,9 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceClone(action, actionSessionKey(action))
 	},
+	"workspace.worktree": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceWorktree(action, actionSessionKey(action))
+	},
 	"workspace.clone.use_existing": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
 			return newBindingService(s.app).completeBindingUse(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
@@ -46,6 +49,9 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 	"workspace.clone.pickdir": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceClonePickDir(action)
 	},
+	"workspace.clone.refresh": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceCloneRefresh(action)
+	},
 	"workspace.clone.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceCloneCancel(action)
 	},
@@ -54,6 +60,15 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 			return newBindingService(s.app).completeBindingWorkspaceCloneSubmit(action)
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceCloneSubmit(action)
+	},
+	"workspace.worktree.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		if newBindingService(s.app).isGroupWorkspacePending(action, "workspace_worktree") {
+			return newBindingService(s.app).completeBindingWorkspaceWorktreeSubmit(action)
+		}
+		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceWorktreeSubmit(action)
+	},
+	"workspace.worktree.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceWorktreeCancel(action)
 	},
 	"workspace.new.pickdir": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceNewPickDir(action)

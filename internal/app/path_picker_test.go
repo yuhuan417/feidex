@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -363,6 +364,155 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+		RootPath:          "/",
+		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
+		CloneMode:         appworkspacecmd.CloneModeWorkspace,
+	})
+	inputs := workspaceCloneFormInputs(t, card)
+	if inputs["repo_url"] == nil || inputs["workspace_id"] == nil {
+		t.Fatalf("workspace clone form missing base inputs: %+v", inputs)
+	}
+	for _, name := range []string{"worktree_branch_name", "worktree_workspace_id", "worktree_directory_name"} {
+		if inputs[name] != nil {
+			t.Fatalf("workspace clone form unexpectedly shows %s in normal mode: %+v", name, inputs[name])
+		}
+	}
+	if got := inputPlaceholderContent(t, inputs["workspace_id"]); !strings.Contains(got, "留空按仓库名推导") || strings.Contains(got, "（可选）") {
+		t.Fatalf("workspace_id placeholder = %q, want concrete inference note", got)
+	}
+	buttons := workspaceCloneFormButtons(t, card)
+	if got, _ := buttons["workspace_clone_refresh"]["form_action_type"].(string); got != "submit" {
+		t.Fatalf("workspace_clone_refresh form_action_type = %q, want submit", got)
+	}
+	if body := cardMarkdownContent(t, card); !strings.Contains(body, "点「更新表单」会显示 worktree") || strings.Contains(body, "都可留空自动推导") {
+		t.Fatalf("workspace clone body = %q, want conditional worktree guidance", body)
+	}
+}
+
+func TestWorkspaceCloneFormShowsWorktreeFieldsInWorktreeMode(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+		RootPath:          "/",
+		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
+		CloneMode:         appworkspacecmd.CloneModeWorktree,
+	})
+	inputs := workspaceCloneFormInputs(t, card)
+	wants := map[string]string{
+		"worktree_branch_name":    "留空按 bot 名 + 项目名推导",
+		"worktree_workspace_id":   "留空按 bot 名 + 项目名推导",
+		"worktree_directory_name": "留空默认等于 worktree workspace_id",
+	}
+	for name, want := range wants {
+		input := inputs[name]
+		if input == nil {
+			t.Fatalf("workspace clone form missing %s in worktree mode: %+v", name, inputs)
+		}
+		if got := inputPlaceholderContent(t, input); !strings.Contains(got, want) || strings.Contains(got, "（可选）") {
+			t.Fatalf("%s placeholder = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestWorkspaceCloneRefreshShowsWorktreeFieldsAndPrefillsDefaults(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	ff.botName = "Feidex Bot"
+	parentDir := t.TempDir()
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-refresh",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{RootPath: "/", SelectedParentDir: parentDir}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-refresh) error = %v", err)
+	}
+
+	resp, err := newWorkspaceService(a).completeWorkspaceCloneRefresh(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-refresh"},
+		FormValue: map[string]any{
+			"repo_url":   "git@github.com:example/repo.git",
+			"clone_mode": appworkspacecmd.CloneModeWorktree,
+		},
+	})
+	if err != nil || resp == nil || resp.Card == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneRefresh(worktree) = %#v, %v", resp, err)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	inputs := workspaceCloneFormInputs(t, cardData)
+	if inputs["worktree_branch_name"] == nil || inputs["worktree_workspace_id"] == nil || inputs["worktree_directory_name"] == nil {
+		t.Fatalf("workspace clone refreshed card missing worktree fields: %+v", inputs)
+	}
+	if got, _ := inputs["worktree_workspace_id"]["default_value"].(string); got != "repo-feidex-bot" {
+		t.Fatalf("worktree workspace default = %q, want repo-feidex-bot", got)
+	}
+	payload := workspaceClonePayloadFromPending(a.store.PendingByID("workspace-clone-refresh"))
+	if payload.CloneMode != appworkspacecmd.CloneModeWorktree || payload.WorktreeWorkspaceID != "repo-feidex-bot" || payload.WorktreeDirectoryName != "repo-feidex-bot" || !strings.Contains(payload.WorktreeBranchName, "repo/feidex-bot") {
+		t.Fatalf("workspace clone payload after refresh = %+v", payload)
+	}
+}
+
+func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	ff.botName = "Feidex Bot"
+	baseDir := t.TempDir()
+	parentDir := filepath.Join(baseDir, "parents")
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-prefill",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{RootPath: "/", SelectedParentDir: baseDir}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-prefill) error = %v", err)
+	}
+
+	resp, err := newWorkspaceService(a).completeWorkspaceClonePickDir(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
+		FormValue: map[string]any{
+			"repo_url":   "git@github.com:example/repo.git",
+			"clone_mode": appworkspacecmd.CloneModeWorktree,
+		},
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeWorkspaceClonePickDir(worktree) = %#v, %v", resp, err)
+	}
+	pending := a.store.PendingByID("workspace-clone-prefill")
+	payload := workspaceClonePayloadFromPending(pending)
+	if payload.WorktreeWorkspaceID != "repo-feidex-bot" || payload.WorktreeDirectoryName != "repo-feidex-bot" || !strings.Contains(payload.WorktreeBranchName, "repo/feidex-bot") {
+		t.Fatalf("worktree defaults after pickdir = %+v", payload)
+	}
+
+	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
+		Option:      encodePathPickerOption(pathPickerEntry{Name: "parents", Path: parentDir, IsDir: true}),
+	}, "path_picker.dropdown")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace clone prefill dropdown = %#v, %v", resp, err)
+	}
+	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
+	}, "path_picker.confirm")
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("workspace clone prefill confirm = %#v, %v", resp, err)
+	}
+	payload = workspaceClonePayloadFromPending(a.store.PendingByID("workspace-clone-prefill"))
+	if payload.WorktreeTargetDir != filepath.Join(parentDir, "repo-feidex-bot") {
+		t.Fatalf("worktree target after parent confirm = %+v", payload)
+	}
+}
+
 func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	baseDir := t.TempDir()
@@ -551,6 +701,113 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	body = cardMarkdownContent(t, patched[len(patched)-1])
 	if !strings.Contains(body, "已从仓库创建并切换到工作区 `repo-copy`") || !strings.Contains(body, wantTargetDir) {
 		t.Fatalf("clone status card body = %q", body)
+	}
+}
+
+func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	ff.botName = "Feidex Bot"
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	parentDir := filepath.Join(baseDir, "parents")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	origClone := workspaceGitClone
+	origWorktreeAdd := appworkspacecmd.GitWorktreeAdd
+	defer func() {
+		workspaceGitClone = origClone
+		appworkspacecmd.GitWorktreeAdd = origWorktreeAdd
+	}()
+
+	var gotCloneTarget string
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ workspaceCloneProgressReporter) error {
+		if repoURL != "git@github.com:example/repo.git" {
+			t.Fatalf("workspaceGitClone repoURL = %q", repoURL)
+		}
+		gotCloneTarget = targetDir
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+	var gotWorktreeBase string
+	var gotWorktreeBranch string
+	var gotWorktreeTarget string
+	appworkspacecmd.GitWorktreeAdd = func(_ context.Context, baseRepoRoot, branchName, targetDir string) error {
+		gotWorktreeBase = baseRepoRoot
+		gotWorktreeBranch = branchName
+		gotWorktreeTarget = targetDir
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-clone-worktree"
+			result.Thread.Name = "Clone Worktree Thread"
+			result.Thread.Preview = "Clone Worktree Preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "workspace-clone-worktree",
+		Kind:        "workspace_clone",
+		SessionKey:  "sess-1",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "msg-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(workspaceClonePayload{
+			RootPath:          "/",
+			SelectedParentDir: parentDir,
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(workspace-clone-worktree) error = %v", err)
+	}
+
+	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		MessageID:   "msg-1",
+		ActionValue: map[string]any{"request_id": "workspace-clone-worktree"},
+		FormValue: map[string]any{
+			"repo_url":   "git@github.com:example/repo.git",
+			"clone_mode": appworkspacecmd.CloneModeWorktree,
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" {
+		t.Fatalf("completeWorkspaceCloneSubmit(worktree) = %#v, %v", resp, err)
+	}
+	wantCloneTarget := filepath.Join(parentDir, "repo")
+	wantWorktreeTarget := filepath.Join(parentDir, "repo-feidex-bot")
+	waitForTestCondition(t, "workspace clone worktree success patch", func() bool {
+		pending := a.store.PendingByID("workspace-clone-worktree")
+		return pending != nil && pending.Status == "resolved"
+	})
+	if gotCloneTarget != wantCloneTarget {
+		t.Fatalf("workspaceGitClone targetDir = %q, want %q", gotCloneTarget, wantCloneTarget)
+	}
+	if gotWorktreeBase != wantCloneTarget || gotWorktreeTarget != wantWorktreeTarget || !strings.Contains(gotWorktreeBranch, "repo/feidex-bot") {
+		t.Fatalf("GitWorktreeAdd base=%q branch=%q target=%q", gotWorktreeBase, gotWorktreeBranch, gotWorktreeTarget)
+	}
+	if ws := config.FindWorkspace(a.cfg, "repo-feidex-bot"); ws == nil || filepath.Clean(ws.Cwd) != filepath.Clean(wantWorktreeTarget) {
+		t.Fatalf("created worktree workspace = %+v, want cwd %q", ws, wantWorktreeTarget)
+	}
+	if ws := config.FindWorkspace(a.cfg, "repo"); ws != nil {
+		t.Fatalf("clone base should not be registered as workspace in worktree mode: %+v", ws)
+	}
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 || !strings.Contains(cardMarkdownContent(t, patched[len(patched)-1]), "repo-feidex-bot") {
+		t.Fatalf("clone worktree success card = %+v", patched)
 	}
 }
 
@@ -1190,6 +1447,13 @@ func workspaceCloneFormInputs(t *testing.T, card map[string]any) map[string]map[
 		inputs[name] = elem
 	}
 	return inputs
+}
+
+func inputPlaceholderContent(t *testing.T, input map[string]any) string {
+	t.Helper()
+	placeholder, _ := input["placeholder"].(map[string]any)
+	content, _ := placeholder["content"].(string)
+	return content
 }
 
 func workspaceCloneFormButtons(t *testing.T, card map[string]any) map[string]map[string]any {
