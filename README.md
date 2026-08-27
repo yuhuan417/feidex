@@ -16,7 +16,7 @@
 
 ## 特性亮点
 
-- **飞书接入** —— 单聊 / 群聊（可配置仅 `@bot` 响应）、回复树内会话连续性，单进程可跑多个 bot（`[[frontend]]`）；也支持 Lark 国际版（`domain` 切换）
+- **飞书接入** —— 单聊 / 群聊（可配置仅 `@bot` 响应）、回复树内会话连续性，单进程可接多个 bot；也支持 Lark 国际版（`domain` 切换）
 - **双后端** —— Codex（thread/turn）与 Claude（session/conversation）并存，`/backend` 在线切换无需重启
 - **会话与队列** —— 新消息排队、回复消息 steer 到当前 turn、失败自动回退、暂存附件、auto-retry
 - **审批与表单** —— 命令 / 文件变更 / 权限审批，`request_user_input` 表单与手机友好的 quick-card
@@ -90,58 +90,43 @@ feidex serve --config config.toml
 
 ### 群聊多 Bot
 
-Feidex 支持一个进程同时跑多个飞书 bot。每个 bot 写成一个 `[[frontend]]`，可以指向不同后端、不同应用凭据和不同默认配置：
+你可以把多个 Feidex bot 拉进同一个飞书群：例如一个跑 Codex、一个跑 Claude Code，或者同一个后端配不同项目。用户只需要在群里明确 `@` 要操作的 bot：
 
-```toml
-[[frontend]]
-id = "pc-feidex"
-backend = "codex"
-app_id = "cli_xxx"
-app_secret = "sec_xxx"
-group_at_only = true
-
-[[frontend]]
-id = "pc-feiclaude"
-backend = "claude"
-app_id = "cli_yyy"
-app_secret = "sec_yyy"
-group_at_only = true
+```text
+@pc-feidex /workspace
+@pc-feiclaude /workspace
 ```
 
-推荐在群里把不同 bot 绑定到不同 worktree：
+常见用法：
+
+- 明确 `@Bot` 的消息由被 `@` 的 bot 处理，适合给某个 bot 配工作区、模型或权限。
+- 没有 `@` 的普通群消息只交给本群 primary bot；用 `@pc-feidex /primary on` 设置，用 `@pc-feidex /primary status` 查看。
+- 每个 bot 在每个群都有自己的工作区绑定，所以同一个 bot 在不同群可以进入不同项目或 worktree。
+- 多个 bot 在同一个群里也可以各自绑定不同 worktree，避免同时改同一个 checkout。
+- 单聊也支持 workspace / worktree；单聊不需要 primary，因为消息天然只发给当前 bot。
+
+### Worktree 工作区
+
+Worktree 适合让多个 bot、多个群或多个任务同时在同一个 Git 项目上工作，但互不踩目录、分支和会话上下文。典型场景：
+
+- 一个群里 `pc-feidex` 和 `pc-feiclaude` 都在同一仓库工作，但各自使用独立 worktree。
+- 同一个 bot 在 A 群处理线上问题，在 B 群做新需求，两边各有自己的 worktree。
+- 临时试验、review 或长任务需要隔离，不想污染主工作目录。
+
+使用时从飞书卡片进入即可：
 
 ```text
 @pc-feidex /workspace
 @pc-feidex /workspace new worktree
-
-@pc-feiclaude /workspace
-@pc-feiclaude /workspace new worktree
+@pc-feidex /workspace clone <repo-url>
 ```
 
-群聊路由规则：
+- 已经有本机 Git 项目时，用 `/workspace new worktree` 基于当前工作区创建隔离副本。
+- 还没 clone 仓库时，用 `/workspace clone <repo-url>`；卡片里可以勾选“clone 后创建 worktree”。
+- 表单通常只需要确认。能自动推导的名字会自动预填，默认使用 bot 显示名和项目名组合，保持目录和分支可读。
+- 创建完成后，这个 bot 在当前聊天里会自动切到新的 worktree 工作区。
 
-- 明确 `@Bot` 的消息永远由被 `@` 的 bot 处理，适合配置 workspace、模型、权限和 worktree。
-- 没有 `@` 的普通群消息只交给本群 primary bot；用 `@pc-feidex /primary on` 切换，用 `@pc-feidex /primary status` 查看。
-- `primary` 只决定非 `@` 消息归谁，不会改变其他 bot 的群内 workspace 绑定。
-- 群聊配置按 `frontend + chat` 隔离，所以同一个 bot 在不同群可以进入不同 worktree；不同 bot 在同一个群也可以各自绑定不同 worktree。
-- 单聊也支持同一套 workspace / worktree 能力；单聊里不需要 primary，因为消息天然只发给当前 bot。
-
-### Worktree 工作区
-
-Worktree 适合让多个 bot 或多个群同时在同一个 Git 项目上工作，但各自拥有独立目录、分支和会话上下文。Feidex 提供两个入口：
-
-```text
-/workspace new worktree [BRANCH] [WORKSPACE_ID]
-/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]
-```
-
-- `/workspace new worktree` 基于当前已选 workspace 对应的本机 Git 仓库创建 worktree；也可以从菜单进入：`/workspace` -> `创建 Worktree`。
-- `/workspace clone` 先 clone 一个 Git 仓库；在卡片里选择 `clone 后创建 worktree` 时，才会显示 worktree 字段。
-- Worktree 表单里的 `基准工作区` 是本机已有 Git clone；`新分支` 是要创建的 branch；`workspace_id` 是 Feidex 里显示和切换用的 ID；`目录名` 是基准仓库同级目录下的新目录名。
-- 能自动推导的字段都可以留空：默认用 bot 显示名和 base project 生成分支、workspace_id 和目录名，遇到重名会自动加数字后缀。
-- 默认不会用 frontend id 或 chat id 生成给人看的名字，避免出现难读的目录名和分支名。
-
-常见 Git 流程：worktree 会创建一个新的本地分支。开发完成后，通常执行 `git push -u origin <branch>` 推到远端，再发 PR 或合并到 `main`；不要把工作分支的 upstream 直接设成 `origin/main`。
+开发完成后，在对应 worktree 里提交并 push 工作分支，再发 PR 或合并回 `main`。这样每个 bot/群聊的改动都有清晰边界。
 
 ## 文档
 
