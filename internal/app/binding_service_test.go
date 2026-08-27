@@ -200,6 +200,45 @@ func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
 	}
 }
 
+func TestPrimaryCommandCardsPreferBotName(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	ff.botOpenID = "bot-a-open"
+	ff.botName = "Feidex Bot"
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary-name", MessageID: "msg-primary-name", UserID: "user-1"}
+
+	if err := newBindingService(a).commandPrimary(msg, []string{"on"}); err != nil {
+		t.Fatalf("/primary on error = %v", err)
+	}
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards after /primary on = %d, want 1", len(cards))
+	}
+	body := cardMarkdownContent(t, cards[0])
+	if !strings.Contains(body, "owner bot: `Feidex Bot`") {
+		t.Fatalf("/primary on body = %q, want bot name", body)
+	}
+	if strings.Contains(body, "owner bot open_id") || strings.Contains(body, "bot-a-open") {
+		t.Fatalf("/primary on body = %q, should hide owner open_id when bot name is known", body)
+	}
+
+	msg.MessageID = "msg-primary-status"
+	if err := newBindingService(a).commandPrimary(msg, nil); err != nil {
+		t.Fatalf("/primary status error = %v", err)
+	}
+	cards = ff.replyCardsSnapshot()
+	if len(cards) != 2 {
+		t.Fatalf("reply cards after status = %d, want 2", len(cards))
+	}
+	body = cardMarkdownContent(t, cards[1])
+	if !strings.Contains(body, "owner bot: `Feidex Bot`") || !strings.Contains(body, "当前 Bot: `Feidex Bot`") {
+		t.Fatalf("/primary status body = %q, want bot names", body)
+	}
+	if strings.Contains(body, "open_id") || strings.Contains(body, "bot-a-open") {
+		t.Fatalf("/primary status body = %q, should hide open_id when bot name is known", body)
+	}
+}
+
 func TestPrimaryOffRejectedAndKeepsOwner(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-b"

@@ -160,9 +160,9 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	}
 	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
 		body := "当前 Bot primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
-		body += "\nowner bot open_id: `" + firstNonEmpty(ownerOpenID, "(未设置)") + "`"
-		if self := currentBotOpenID(s.app); self != "" {
-			body += "\n当前 Bot open_id: `" + self + "`"
+		body += "\nowner bot: `" + groupPrimaryOwnerBotDisplayName(s.app, ownerOpenID) + "`"
+		if self := currentBotDisplayName(s.app); self != "" {
+			body += "\n当前 Bot: `" + self + "`"
 		}
 		if initErr != nil && !hasGroupPrimaryState(s.app, msg.ChatType, msg.ChatID) {
 			body += "\n\n自动读取群机器人数量失败: `" + initErr.Error() + "`"
@@ -193,7 +193,7 @@ func (s bindingService) setPrimaryOwnerForMessage(msg *feishu.InboundMessage, ta
 	}
 	body := "已更新 primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
 	if updated != nil {
-		body += "\nowner bot open_id: `" + firstNonEmpty(strings.TrimSpace(updated.OwnerBotOpenID), "(未设置)") + "`"
+		body += "\nowner bot: `" + groupPrimaryOwnerBotDisplayName(s.app, updated.OwnerBotOpenID) + "`"
 	}
 	return s.replyBindingUpdated(msg, body)
 }

@@ -19,6 +19,10 @@ type botOpenIDProvider interface {
 	BotOpenID() string
 }
 
+type botNameProvider interface {
+	BotName() string
+}
+
 type groupPrimaryAssignment struct {
 	TargetBotOpenID string
 }
@@ -114,6 +118,37 @@ func currentBotOpenID(a *App) string {
 		return ""
 	}
 	return strings.TrimSpace(provider.BotOpenID())
+}
+
+func currentBotName(a *App) string {
+	if a == nil || a.feishu == nil {
+		return ""
+	}
+	provider, ok := a.feishu.(botNameProvider)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(provider.BotName())
+}
+
+func currentBotDisplayName(a *App) string {
+	if name := currentBotName(a); name != "" {
+		return name
+	}
+	return currentBotOpenID(a)
+}
+
+func groupPrimaryOwnerBotDisplayName(a *App, ownerBotOpenID string) string {
+	ownerBotOpenID = strings.TrimSpace(ownerBotOpenID)
+	if ownerBotOpenID == "" {
+		return "(未设置)"
+	}
+	if self := currentBotOpenID(a); self != "" && self == ownerBotOpenID {
+		if name := currentBotName(a); name != "" {
+			return name
+		}
+	}
+	return ownerBotOpenID
 }
 
 func currentOrMentionedBotOpenID(a *App, msg *feishu.InboundMessage) string {
