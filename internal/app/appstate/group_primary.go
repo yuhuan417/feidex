@@ -11,11 +11,7 @@ func (s *Store) GroupPrimary(chatType, chatID string) *state.GroupPrimary {
 	if s == nil || s.Store == nil {
 		return nil
 	}
-	primaries := s.GroupPrimariesForChat(chatType, chatID)
-	if len(primaries) == 0 {
-		return nil
-	}
-	return primaries[0]
+	return s.Store.GetGroupPrimary(DefaultGroupPrimaryID(s.FrontendID, chatType, chatID))
 }
 
 // GroupPrimariesForChat returns this instance's primary records for one chat.
@@ -23,7 +19,11 @@ func (s *Store) GroupPrimariesForChat(chatType, chatID string) []*state.GroupPri
 	if s == nil || s.Store == nil {
 		return nil
 	}
-	return s.Store.GroupPrimariesByChat("", chatType, chatID)
+	primary := s.GroupPrimary(chatType, chatID)
+	if primary == nil {
+		return nil
+	}
+	return []*state.GroupPrimary{primary}
 }
 
 // SaveGroupPrimary persists primary owner state for this Feidex instance.
