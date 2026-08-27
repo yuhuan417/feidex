@@ -106,8 +106,37 @@ func TestGroupAnnouncementRefreshCreatesBlockAndSkipsStableContent(t *testing.T)
 	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("second refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
+	if len(ff.announcementListCalls) != 2 || len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
+		t.Fatalf("stable refresh should skip writes after verifying block, calls list/create/update = %d/%d/%d", len(ff.announcementListCalls), len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
+	}
+}
+
+func TestGroupAnnouncementRefreshRecreatesDeletedPersistedBlock(t *testing.T) {
+	store := newGroupAnnouncementStore(t)
+	ff := &fakeFeishuClient{botOpenID: "bot-open", botName: "luban-feidex"}
+	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
+	seedGroupAnnouncementBinding(t, a, "chat-1")
+	status := buildGroupAnnouncementStatus(a, "chat-1", time.Unix(1700000000, 0))
+	if err := a.State().SaveGroupAnnouncementBlock(&state.GroupAnnouncementBlock{
+		FrontendID:      a.FrontendID(),
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		BotOpenID:       "bot-open",
+		BlockID:         "deleted-block",
+		Marker:          status.marker,
+		LastContentHash: status.stableHash,
+	}); err != nil {
+		t.Fatalf("SaveGroupAnnouncementBlock() error = %v", err)
+	}
+
+	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
+	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
-		t.Fatalf("stable refresh should skip API, calls list/create/update = %d/%d/%d", len(ff.announcementListCalls), len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
+		t.Fatalf("deleted persisted block calls list/create/update = %d/%d/%d", len(ff.announcementListCalls), len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
+	}
+	if record := a.State().GroupAnnouncementBlock("group", "chat-1"); record == nil || record.BlockID != "announcement-block-created" || record.LastContentHash != status.stableHash {
+		t.Fatalf("recreated announcement record = %+v", record)
 	}
 }
 
@@ -218,6 +247,42 @@ func TestGroupAnnouncementRefreshUpdatesExistingCommonRegionByPrimary(t *testing
 	}
 	if record := a.State().GroupAnnouncementBlock(groupAnnouncementCommonChatType, "chat-1"); record == nil || record.BlockID != "common-block" || record.BotOpenID != "bot-open" {
 		t.Fatalf("persisted common record = %+v", record)
+	}
+}
+
+func TestGroupAnnouncementRefreshRecreatesDeletedPersistedCommonRegion(t *testing.T) {
+	store := newGroupAnnouncementStore(t)
+	ff := &fakeFeishuClient{botOpenID: "bot-open", botName: "luban-feidex"}
+	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
+	seedGroupAnnouncementBinding(t, a, "chat-1")
+	if _, err := setGroupPrimary(a, "group", "chat-1", true); err != nil {
+		t.Fatalf("setGroupPrimary() error = %v", err)
+	}
+	status := buildGroupAnnouncementCommonStatus(a, "chat-1", time.Unix(1700000000, 0))
+	if err := a.State().SaveGroupAnnouncementBlock(&state.GroupAnnouncementBlock{
+		FrontendID:      a.FrontendID(),
+		ChatID:          "chat-1",
+		ChatType:        groupAnnouncementCommonChatType,
+		BotOpenID:       "bot-open",
+		BlockID:         "deleted-common-block",
+		Marker:          status.marker,
+		LastContentHash: status.stableHash,
+	}); err != nil {
+		t.Fatalf("SaveGroupAnnouncementBlock(common) error = %v", err)
+	}
+
+	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
+	}
+	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 2 || len(ff.announcementUpdateCalls) != 0 {
+		t.Fatalf("deleted common block calls list/create/update = %d/%d/%d", len(ff.announcementListCalls), len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
+	}
+	commonCreate := ff.announcementCreateCalls[0]
+	if commonCreate.index == nil || *commonCreate.index != 0 || !strings.Contains(commonCreate.content, groupAnnouncementCommonMarker) {
+		t.Fatalf("common recreate call = %+v", commonCreate)
+	}
+	if record := a.State().GroupAnnouncementBlock(groupAnnouncementCommonChatType, "chat-1"); record == nil || record.BlockID != "announcement-block-created" || record.LastContentHash != status.stableHash {
+		t.Fatalf("recreated common record = %+v", record)
 	}
 }
 

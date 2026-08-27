@@ -192,9 +192,6 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 		return err
 	}
 	record := st.GroupAnnouncementBlock("group", chatID)
-	if record != nil && strings.TrimSpace(record.BlockID) != "" && strings.TrimSpace(record.LastContentHash) == status.stableHash {
-		return nil
-	}
 	if record == nil {
 		record = &state.GroupAnnouncementBlock{
 			ID:         appstate.DefaultGroupAnnouncementBlockID(a.FrontendID(), "group", chatID),
@@ -203,17 +200,21 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 			ChatType:   "group",
 		}
 	}
-	blockID := strings.TrimSpace(record.BlockID)
-	if blockID == "" {
-		blocks, err := loadBlocks()
-		if err != nil {
-			if feishu.IsAnnouncementRateLimit(err) {
-				slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "list", "error", err)
-				return nil
-			}
-			return err
+	blocks, err := loadBlocks()
+	if err != nil {
+		if feishu.IsAnnouncementRateLimit(err) {
+			slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "list", "error", err)
+			return nil
 		}
-		blockID = findAnnouncementBlockID(blocks, groupAnnouncementMarkerCandidates(status)...)
+		return err
+	}
+	block := findAnnouncementBlock(blocks, groupAnnouncementMarkerCandidates(status)...)
+	if strings.TrimSpace(block.BlockID) == "" {
+		block = findAnnouncementBlockByID(blocks, record.BlockID)
+	}
+	blockID := strings.TrimSpace(block.BlockID)
+	if blockID != "" && strings.TrimSpace(record.LastContentHash) == status.stableHash && strings.Contains(block.Text, status.stableContent) {
+		return nil
 	}
 	if blockID == "" {
 		created, err := a.feishu.CreateAnnouncementTextBlock(ctx, chatID, chatID, status.content, "")
@@ -269,10 +270,10 @@ func refreshGroupAnnouncementCommonStatusNow(ctx context.Context, a *App, st *ap
 	}
 	record := st.GroupAnnouncementBlock(groupAnnouncementCommonChatType, chatID)
 	block := findAnnouncementBlock(blocks, status.marker)
-	blockID := strings.TrimSpace(block.BlockID)
-	if blockID == "" && record != nil {
-		blockID = strings.TrimSpace(record.BlockID)
+	if strings.TrimSpace(block.BlockID) == "" && record != nil {
+		block = findAnnouncementBlockByID(blocks, record.BlockID)
 	}
+	blockID := strings.TrimSpace(block.BlockID)
 	if blockID == "" {
 		created, err := a.feishu.CreateAnnouncementTextBlockAt(ctx, chatID, chatID, status.content, "", 0)
 		if err != nil {
@@ -460,6 +461,20 @@ func groupAnnouncementMarkerCandidates(status groupAnnouncementStatus) []string 
 
 func findAnnouncementBlockID(blocks []feishu.AnnouncementBlock, markers ...string) string {
 	return strings.TrimSpace(findAnnouncementBlock(blocks, markers...).BlockID)
+}
+
+func findAnnouncementBlockByID(blocks []feishu.AnnouncementBlock, blockID string) feishu.AnnouncementBlock {
+	blockID = strings.TrimSpace(blockID)
+	if blockID == "" {
+		return feishu.AnnouncementBlock{}
+	}
+	for _, block := range blocks {
+		if strings.TrimSpace(block.BlockID) == blockID {
+			block.BlockID = blockID
+			return block
+		}
+	}
+	return feishu.AnnouncementBlock{}
 }
 
 func findAnnouncementBlock(blocks []feishu.AnnouncementBlock, markers ...string) feishu.AnnouncementBlock {
