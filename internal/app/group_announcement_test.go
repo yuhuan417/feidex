@@ -373,3 +373,33 @@ func TestKnownGroupAnnouncementChatIDsDoNotTreatUnknownCanonicalSessionAsGroup(t
 		t.Fatalf("knownGroupAnnouncementChatIDs(with binding) = %#v, want chat-unknown", got)
 	}
 }
+
+func TestKnownGroupAnnouncementChatIDsIncludesPersistedAnnouncementBlocks(t *testing.T) {
+	store := newGroupAnnouncementStore(t)
+	ff := &fakeFeishuClient{botOpenID: "bot-open"}
+	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
+	if err := store.UpsertGroupAnnouncementBlock(&state.GroupAnnouncementBlock{
+		ID:         "announcement-existing",
+		FrontendID: "bot-a",
+		ChatID:     "chat-from-announcement",
+		ChatType:   "group",
+		BlockID:    "old-block",
+		Marker:     groupAnnouncementMarker("bot-open", "bot-open"),
+	}); err != nil {
+		t.Fatalf("UpsertGroupAnnouncementBlock() error = %v", err)
+	}
+	if err := store.UpsertGroupAnnouncementBlock(&state.GroupAnnouncementBlock{
+		ID:         "announcement-other-frontend",
+		FrontendID: "bot-b",
+		ChatID:     "chat-other",
+		ChatType:   "group",
+		BlockID:    "other-block",
+	}); err != nil {
+		t.Fatalf("UpsertGroupAnnouncementBlock(other frontend) error = %v", err)
+	}
+
+	got := knownGroupAnnouncementChatIDs(a)
+	if len(got) != 1 || got[0] != "chat-from-announcement" {
+		t.Fatalf("knownGroupAnnouncementChatIDs() = %#v, want persisted announcement chat", got)
+	}
+}

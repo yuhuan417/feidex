@@ -515,14 +515,15 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 	if a == nil || a.State() == nil {
 		return nil
 	}
+	st := a.State()
 	seen := map[string]struct{}{}
-	for _, binding := range a.State().AgentBindings() {
+	for _, binding := range st.AgentBindings() {
 		if binding == nil || strings.ToLower(strings.TrimSpace(binding.ChatType)) != "group" || strings.TrimSpace(binding.ChatID) == "" {
 			continue
 		}
 		seen[strings.TrimSpace(binding.ChatID)] = struct{}{}
 	}
-	for _, sess := range a.State().Sessions() {
+	for _, sess := range st.Sessions() {
 		if sess == nil {
 			continue
 		}
@@ -535,6 +536,18 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 		}
 		if chatID != "" {
 			seen[chatID] = struct{}{}
+		}
+	}
+	if st.Store != nil {
+		frontendID := strings.TrimSpace(a.FrontendID())
+		for _, record := range st.Store.AllGroupAnnouncementBlocks() {
+			if record == nil || strings.TrimSpace(record.FrontendID) != frontendID || strings.TrimSpace(record.ChatID) == "" {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(record.ChatType)) {
+			case "group", groupAnnouncementCommonChatType:
+				seen[strings.TrimSpace(record.ChatID)] = struct{}{}
+			}
 		}
 	}
 	if len(seen) == 0 {
