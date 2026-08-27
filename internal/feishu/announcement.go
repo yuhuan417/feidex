@@ -125,6 +125,19 @@ func (a *Adapter) ListAnnouncementBlocks(ctx context.Context, chatID string) ([]
 // CreateAnnouncementTextBlock appends a text block under parentBlockID. For a
 // group announcement root, Feishu accepts chatID as the parent block id.
 func (a *Adapter) CreateAnnouncementTextBlock(ctx context.Context, chatID, parentBlockID, content, clientToken string) (AnnouncementBlock, error) {
+	return a.createAnnouncementTextBlock(ctx, chatID, parentBlockID, content, clientToken, nil)
+}
+
+// CreateAnnouncementTextBlockAt inserts a text block under parentBlockID at a
+// zero-based child index.
+func (a *Adapter) CreateAnnouncementTextBlockAt(ctx context.Context, chatID, parentBlockID, content, clientToken string, index int) (AnnouncementBlock, error) {
+	if index < 0 {
+		index = 0
+	}
+	return a.createAnnouncementTextBlock(ctx, chatID, parentBlockID, content, clientToken, &index)
+}
+
+func (a *Adapter) createAnnouncementTextBlock(ctx context.Context, chatID, parentBlockID, content, clientToken string, index *int) (AnnouncementBlock, error) {
 	chatID = strings.TrimSpace(chatID)
 	parentBlockID = strings.TrimSpace(parentBlockID)
 	if parentBlockID == "" {
@@ -138,13 +151,16 @@ func (a *Adapter) CreateAnnouncementTextBlock(ctx context.Context, chatID, paren
 	} else if delay > 0 {
 		slog.Debug("feishu outbound paced", "op", "announcement.create", "chat_id", chatID, "delay_ms", delay.Milliseconds())
 	}
+	body := larkdocx.NewCreateChatAnnouncementBlockChildrenReqBodyBuilder().
+		Children([]*larkdocx.Block{announcementTextBlock(content)})
+	if index != nil {
+		body.Index(*index)
+	}
 	req := larkdocx.NewCreateChatAnnouncementBlockChildrenReqBuilder().
 		ChatId(chatID).
 		BlockId(parentBlockID).
 		RevisionId(announcementLatestRevisionID).
-		Body(larkdocx.NewCreateChatAnnouncementBlockChildrenReqBodyBuilder().
-			Children([]*larkdocx.Block{announcementTextBlock(content)}).
-			Build())
+		Body(body.Build())
 	if strings.TrimSpace(clientToken) != "" {
 		req.ClientToken(strings.TrimSpace(clientToken))
 	}
@@ -211,11 +227,56 @@ func announcementTextBlock(content string) *larkdocx.Block {
 }
 
 func announcementTextElements(content string) []*larkdocx.TextElement {
-	return []*larkdocx.TextElement{
-		larkdocx.NewTextElementBuilder().
-			TextRun(larkdocx.NewTextRunBuilder().Content(content).Build()).
-			Build(),
+	parts := strings.SplitAfter(content, "\n")
+	elements := make([]*larkdocx.TextElement, 0, len(parts)*2)
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		keyEnd := announcementFieldKeyEnd(part)
+		if keyEnd <= 0 {
+			elements = append(elements, announcementTextRun(part, nil))
+			continue
+		}
+		elements = append(elements, announcementTextRun(part[:keyEnd], larkdocx.NewTextElementStyleBuilder().Bold(true).Build()))
+		if keyEnd < len(part) {
+			elements = append(elements, announcementTextRun(part[keyEnd:], nil))
+		}
 	}
+	if len(elements) == 0 {
+		return []*larkdocx.TextElement{announcementTextRun("", nil)}
+	}
+	return elements
+}
+
+func announcementTextRun(content string, style *larkdocx.TextElementStyle) *larkdocx.TextElement {
+	run := larkdocx.NewTextRunBuilder().Content(content)
+	if style != nil {
+		run.TextElementStyle(style)
+	}
+	return larkdocx.NewTextElementBuilder().TextRun(run.Build()).Build()
+}
+
+func announcementFieldKeyEnd(line string) int {
+	lineWithoutNewline := strings.TrimRight(line, "\r\n")
+	colon := strings.Index(lineWithoutNewline, ":")
+	if colon <= 0 || colon > 24 {
+		return 0
+	}
+	if colon+1 >= len(lineWithoutNewline) || lineWithoutNewline[colon+1] != ' ' {
+		return 0
+	}
+	key := strings.TrimSpace(lineWithoutNewline[:colon])
+	if key == "" {
+		return 0
+	}
+	for _, r := range key {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' || r == '-' {
+			continue
+		}
+		return 0
+	}
+	return colon + 1
 }
 
 func announcementBlockFromSDK(block *larkdocx.Block) AnnouncementBlock {

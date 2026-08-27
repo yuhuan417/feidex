@@ -194,6 +194,7 @@ func (s bindingService) setPrimaryOwnerForMessage(msg *feishu.InboundMessage, ta
 	body := "已更新 primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
 	if updated != nil {
 		body += "\nowner bot: `" + groupPrimaryOwnerBotDisplayName(s.app, updated.OwnerBotOpenID) + "`"
+		scheduleGroupAnnouncementStatusRefresh(s.app, updated.ChatID, "primary_updated")
 	}
 	return s.replyBindingUpdated(msg, body)
 }

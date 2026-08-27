@@ -172,6 +172,10 @@ func (c *CommandCaptureClient) CreateAnnouncementTextBlock(ctx context.Context, 
 	return c.Base.CreateAnnouncementTextBlock(ctx, chatID, parentBlockID, content, clientToken)
 }
 
+func (c *CommandCaptureClient) CreateAnnouncementTextBlockAt(ctx context.Context, chatID, parentBlockID, content, clientToken string, index int) (feishu.AnnouncementBlock, error) {
+	return c.Base.CreateAnnouncementTextBlockAt(ctx, chatID, parentBlockID, content, clientToken, index)
+}
+
 func (c *CommandCaptureClient) UpdateAnnouncementTextBlock(ctx context.Context, chatID, blockID, content, clientToken string) error {
 	return c.Base.UpdateAnnouncementTextBlock(ctx, chatID, blockID, content, clientToken)
 }
@@ -461,6 +465,14 @@ func (n *NotifyingFeishuClient) ListAnnouncementBlocks(ctx context.Context, chat
 
 func (n *NotifyingFeishuClient) CreateAnnouncementTextBlock(ctx context.Context, chatID, parentBlockID, content, clientToken string) (feishu.AnnouncementBlock, error) {
 	block, err := n.Base.CreateAnnouncementTextBlock(ctx, chatID, parentBlockID, content, clientToken)
+	if err != nil {
+		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
+	}
+	return block, err
+}
+
+func (n *NotifyingFeishuClient) CreateAnnouncementTextBlockAt(ctx context.Context, chatID, parentBlockID, content, clientToken string, index int) (feishu.AnnouncementBlock, error) {
+	block, err := n.Base.CreateAnnouncementTextBlockAt(ctx, chatID, parentBlockID, content, clientToken, index)
 	if err != nil {
 		n.NotifyPermissionIssue(NotifyTarget{ChatID: chatID}, err)
 	}

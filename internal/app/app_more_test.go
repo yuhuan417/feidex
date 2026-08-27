@@ -334,10 +334,18 @@ type fakeFeishuClient struct {
 	announcementCreateErr    error
 	announcementUpdateErr    error
 	announcementListCalls    []string
-	announcementCreateCalls  []struct{ chatID, parentBlockID, content, clientToken string }
+	announcementCreateCalls  []fakeAnnouncementCreateCall
 	announcementUpdateCalls  []struct{ chatID, blockID, content, clientToken string }
 	onMessage                func(*feishu.InboundMessage)
 	onBotAdded               func(*feishu.BotGroupEvent)
+}
+
+type fakeAnnouncementCreateCall struct {
+	chatID        string
+	parentBlockID string
+	content       string
+	clientToken   string
+	index         *int
 }
 
 func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
@@ -569,9 +577,22 @@ func (f *fakeFeishuClient) ListAnnouncementBlocks(_ context.Context, chatID stri
 }
 
 func (f *fakeFeishuClient) CreateAnnouncementTextBlock(_ context.Context, chatID, parentBlockID, content, clientToken string) (feishu.AnnouncementBlock, error) {
+	return f.createAnnouncementTextBlock(chatID, parentBlockID, content, clientToken, nil)
+}
+
+func (f *fakeFeishuClient) CreateAnnouncementTextBlockAt(_ context.Context, chatID, parentBlockID, content, clientToken string, index int) (feishu.AnnouncementBlock, error) {
+	return f.createAnnouncementTextBlock(chatID, parentBlockID, content, clientToken, &index)
+}
+
+func (f *fakeFeishuClient) createAnnouncementTextBlock(chatID, parentBlockID, content, clientToken string, index *int) (feishu.AnnouncementBlock, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.announcementCreateCalls = append(f.announcementCreateCalls, struct{ chatID, parentBlockID, content, clientToken string }{chatID: chatID, parentBlockID: parentBlockID, content: content, clientToken: clientToken})
+	var indexCopy *int
+	if index != nil {
+		v := *index
+		indexCopy = &v
+	}
+	f.announcementCreateCalls = append(f.announcementCreateCalls, fakeAnnouncementCreateCall{chatID: chatID, parentBlockID: parentBlockID, content: content, clientToken: clientToken, index: indexCopy})
 	if f.announcementCreateErr != nil {
 		return feishu.AnnouncementBlock{}, f.announcementCreateErr
 	}
@@ -580,7 +601,17 @@ func (f *fakeFeishuClient) CreateAnnouncementTextBlock(_ context.Context, chatID
 		blockID = blockID + "-next"
 	}
 	block := feishu.AnnouncementBlock{BlockID: blockID, Text: content}
-	f.announcementBlocks = append(f.announcementBlocks, block)
+	if index == nil || *index >= len(f.announcementBlocks) {
+		f.announcementBlocks = append(f.announcementBlocks, block)
+	} else {
+		insertAt := *index
+		if insertAt < 0 {
+			insertAt = 0
+		}
+		f.announcementBlocks = append(f.announcementBlocks, feishu.AnnouncementBlock{})
+		copy(f.announcementBlocks[insertAt+1:], f.announcementBlocks[insertAt:])
+		f.announcementBlocks[insertAt] = block
+	}
 	return block, nil
 }
 
