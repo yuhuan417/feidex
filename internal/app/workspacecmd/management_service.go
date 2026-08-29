@@ -208,7 +208,6 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
-		Model:          "",
 		ApprovalPolicy: "on-request",
 		SandboxMode:    "workspace-write",
 	})

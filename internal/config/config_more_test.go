@@ -68,6 +68,45 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	}
 }
 
+func TestLoadAndSaveDropsLegacyWorkspaceModel(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	raw := `data_dir = ".feidex-data"
+
+[feishu]
+app_id = "cli_xxx"
+app_secret = "sec_xxx"
+
+[codex]
+model = "gpt-5-bot"
+
+[[workspace]]
+id = "default"
+cwd = "."
+model = "gpt-5-workspace"
+`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Codex.Model != "gpt-5-bot" {
+		t.Fatalf("Codex.Model = %q, want bot default", cfg.Codex.Model)
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if strings.Contains(string(saved), "gpt-5-workspace") {
+		t.Fatalf("saved config still contains legacy workspace model: %s", string(saved))
+	}
+}
+
 func TestNormalizeClaudeEffort(t *testing.T) {
 	cases := []struct {
 		name    string

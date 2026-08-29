@@ -627,7 +627,6 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	a.frontendID = "bot-a"
 	a.cfg.Codex.Model = "gpt-5-global"
 	a.cfg.Codex.ReasoningEffort = "medium"
-	a.cfg.Workspaces[0].Model = "gpt-5-workspace"
 	a.cfg.Workspaces[0].ApprovalPolicy = "on-request"
 	a.cfg.Workspaces[0].SandboxMode = "workspace-write"
 	a.cfg.Workspaces[0].MultiAgentMode = "explicitRequestOnly"
@@ -1110,7 +1109,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 	}
 
 	p2pHelp := renderHelpBodyForSession(a, backendCodex, "feishu:frontend:bot-a:chat:p2p-help")
-	for _, want := range []string{"直接设置全局 model。", "/workspace delete ID", "/model plan"} {
+	for _, want := range []string{"直接设置 Bot 默认 model。", "/workspace delete ID", "/model plan"} {
 		if !strings.Contains(p2pHelp, want) {
 			t.Fatalf("p2p help changed unexpectedly: %q, want %q", p2pHelp, want)
 		}

@@ -89,7 +89,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		modelName = firstNonEmpty(selectedModel.DisplayName, selectedModel.ID, selectedModel.Model)
 		modelDescription = strings.TrimSpace(selectedModel.Description)
 	}
-	modelSource := "跟随工作区或 Bot 默认"
+	modelSource := "跟随 Bot 默认"
 	if modelOverride != "" {
 		modelSource = "当前群内显式配置"
 	}
@@ -114,9 +114,9 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	modelOptions := []cards.SelectStaticOption{{
 		Text: func() string {
 			if modelOverride == "" {
-				return "当前 · 跟随工作区或 Bot 默认"
+				return "当前 · 跟随 Bot 默认"
 			}
-			return "跟随工作区或 Bot 默认"
+			return "跟随 Bot 默认"
 		}(),
 		Value: modelConfigDefaultOptionValue,
 	}}
@@ -190,7 +190,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	effortOverride := strings.TrimSpace(binding.ReasoningEffortOverride)
 	currentModel := firstNonEmpty(modelOverride, appmodelconfig.ConfiguredClaudeModel(s.app.cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	currentEffort := firstNonEmpty(effortOverride, appmodelconfig.ConfiguredClaudeEffort(s.app.cfg), "(default)")
-	modelSource := "跟随工作区或 Bot 默认"
+	modelSource := "跟随 Bot 默认"
 	if modelOverride != "" {
 		modelSource = "当前群内显式配置"
 	}
@@ -207,9 +207,9 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	modelOptions := []cards.SelectStaticOption{{
 		Text: func() string {
 			if modelOverride == "" {
-				return "当前 · 跟随工作区或 Bot 默认"
+				return "当前 · 跟随 Bot 默认"
 			}
-			return "跟随工作区或 Bot 默认"
+			return "跟随 Bot 默认"
 		}(),
 		Value: modelConfigDefaultOptionValue,
 	}}

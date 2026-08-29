@@ -428,7 +428,6 @@ func effectiveCodexModel(a App, sess *state.Session, sub *state.Submission, ws *
 	return firstNonEmpty(
 		sessionModelOverride(sess),
 		bindingModelOverride(binding),
-		workspaceModel(ws),
 		configuredCodexModel(a),
 	)
 }
@@ -446,7 +445,6 @@ func effectiveClaudeModel(a App, sess *state.Session, sub *state.Submission, ws 
 	return firstNonEmpty(
 		sessionModelOverride(sess),
 		bindingModelOverride(binding),
-		workspaceModel(ws),
 		configuredClaudeModel(a),
 	)
 }
@@ -533,13 +531,6 @@ func bindingReasoningEffortOverride(binding *state.AgentBinding) string {
 		return ""
 	}
 	return strings.TrimSpace(binding.ReasoningEffortOverride)
-}
-
-func workspaceModel(ws *config.Workspace) string {
-	if ws == nil {
-		return ""
-	}
-	return strings.TrimSpace(ws.Model)
 }
 
 // PendingConfirmationText returns the pending confirmation text for a skill.

@@ -88,7 +88,6 @@ Workspace 是当前 frontend 可访问的物理目录及其工作区配置，例
 - sandbox
 - approval policy
 - Claude permission mode
-- workspace 默认模型等工作区级参数
 
 不同机器上的 workspace 可以指向不同目录。Feidex 当前不做跨机器目录同步或一致性校验。
 

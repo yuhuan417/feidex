@@ -424,7 +424,7 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 	runtimeCfg := s.Cfg
 	s.mu.Unlock()
 	resumeID = strings.TrimSpace(resumeID)
-	model = strings.TrimSpace(apputil.FirstNonEmpty(model, strings.TrimSpace(ws.Model), strings.TrimSpace(runtimeCfg.Model)))
+	model = strings.TrimSpace(apputil.FirstNonEmpty(model, strings.TrimSpace(runtimeCfg.Model)))
 
 	s.mu.Lock()
 	current := s.sessions[sessionKey]
@@ -484,7 +484,7 @@ func (s *Service) ForkSession(ctx context.Context, sessionKey string, ws *config
 	s.mu.Lock()
 	runtimeCfg := s.Cfg
 	s.mu.Unlock()
-	model = strings.TrimSpace(apputil.FirstNonEmpty(model, strings.TrimSpace(ws.Model), strings.TrimSpace(runtimeCfg.Model)))
+	model = strings.TrimSpace(apputil.FirstNonEmpty(model, strings.TrimSpace(runtimeCfg.Model)))
 
 	_ = s.ResetSession(sessionKey)
 	forkedID, err := s.startSession(ctx, sessionKey, ws, runtimeCfg, model, sourceSessionID, true)

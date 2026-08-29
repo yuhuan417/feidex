@@ -17,7 +17,6 @@ func effectiveCodexModel(a *App, sess *state.Session, ws *config.Workspace) stri
 	return firstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
-		workspaceModel(ws),
 		configuredGlobalModel(a.cfg),
 	)
 }
@@ -35,7 +34,6 @@ func effectiveClaudeModel(a *App, sess *state.Session, ws *config.Workspace) str
 	return firstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
-		workspaceModel(ws),
 		strings.TrimSpace(a.cfg.Claude.Model),
 	)
 }
@@ -112,11 +110,4 @@ func bindingReasoningEffortOverride(binding *state.AgentBinding) string {
 		return ""
 	}
 	return binding.ReasoningEffortOverride
-}
-
-func workspaceModel(ws *config.Workspace) string {
-	if ws == nil {
-		return ""
-	}
-	return strings.TrimSpace(ws.Model)
 }

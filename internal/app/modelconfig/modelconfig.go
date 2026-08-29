@@ -199,7 +199,7 @@ type ModelConfigService struct {
 // Codex standalone helpers
 // ---------------------------------------------------------------------------
 
-// ConfiguredGlobalModel returns the globally configured codex model ID, or empty string.
+// ConfiguredGlobalModel returns the bot-default Codex model ID, or empty string.
 func ConfiguredGlobalModel(cfg *config.Config) string {
 	if cfg == nil {
 		return ""
@@ -207,7 +207,7 @@ func ConfiguredGlobalModel(cfg *config.Config) string {
 	return strings.TrimSpace(cfg.Codex.Model)
 }
 
-// ConfiguredGlobalReasoningEffort returns the globally configured reasoning effort, or empty string.
+// ConfiguredGlobalReasoningEffort returns the bot-default reasoning effort, or empty string.
 func ConfiguredGlobalReasoningEffort(cfg *config.Config) string {
 	if cfg == nil {
 		return ""
@@ -520,11 +520,11 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	planEffortValue := ConfiguredPlanReasoningEffort(cfg)
 	modelSource := "跟随 app-server 默认"
 	if modelValue != "" {
-		modelSource = "全局显式配置"
+		modelSource = "Bot 默认显式配置"
 	}
 	effortSource := "跟随模型默认"
 	if effortValue != "" {
-		effortSource = "全局显式配置"
+		effortSource = "Bot 默认显式配置"
 	}
 	planModelSource := "跟随 default mode"
 	if planModelValue != "" {
@@ -563,7 +563,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 					return "\n\n" + modelDescription
 				}(),
 		},
-		{"tag": "markdown", "content": "选择全局模型"},
+		{"tag": "markdown", "content": "选择 Bot 默认模型"},
 	}
 	modelOptions := []cards.SelectStaticOption{{
 		Text: func() string {
@@ -590,13 +590,13 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}
 	elements = append(elements, cards.BuildSelectStaticElement(
 		"model_config_select_model",
-		"选择全局模型",
+		"选择 Bot 默认模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
 		modelOptions,
 		modelInitialOption,
 	))
 
-	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择全局推理强度"})
+	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择 Bot 默认推理强度"})
 	effortOptions := []cards.SelectStaticOption{{
 		Text: func() string {
 			if effortValue == "" {
@@ -624,7 +624,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}
 	elements = append(elements, cards.BuildSelectStaticElement(
 		"model_config_select_effort",
-		"选择全局推理强度",
+		"选择 Bot 默认推理强度",
 		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
 		effortOptions,
 		effortInitialOption,

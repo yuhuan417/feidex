@@ -145,9 +145,9 @@ feidex feishu bind --app app_id:app_secret --domain lark
 - `app_server_dir`
   - 启动 `codex app-server` 的工作目录
 - `model`
-  - Codex 全局模型
+  - Codex Bot 默认模型；群聊中可用当前 Bot 在当前群内的模型覆盖
 - `reasoning_effort`
-  - Codex 全局推理强度
+  - Codex Bot 默认推理强度；群聊中可用当前 Bot 在当前群内的推理强度覆盖
 - `plan_model`
   - Plan 模式专用模型；留空时跟随 default mode 的模型解析链路
 - `plan_reasoning_effort`

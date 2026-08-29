@@ -41,7 +41,7 @@ Treat `frontend` as the runtime isolation boundary.
 - Any frontend-scoped runtime config change that affects backend session startup or resume semantics, such as Claude model or effort changes, must follow the same idle-only rule. Reject the change while a turn is active or pending work/forms exist; do not stage deferred resets to apply it later.
 - Switching backend must preserve backend-scoped session lineage. If a user switches `codex -> claude -> codex`, the earlier Codex thread context for that frontend session should be restorable.
 - If two frontends both use Codex, each frontend still owns its own Codex runtime process; do not share a single Codex app-server across multiple Feishu frontends.
-- Workspace config is for repository path, sandbox, approval policy, model overrides, and similar worktree concerns. Backend selection must not be modeled as a workspace or thread switch.
+- Workspace config is for repository path, sandbox, approval policy, and similar worktree concerns. Model selection belongs to backend-global config or group-scoped bot bindings, not workspace config. Backend selection must not be modeled as a workspace or thread switch.
 - Shared persistent state must scope frontend-sensitive runtime keys, such as session keys, pending server requests, and message-link caches, so different frontends do not collide.
 
 ## Repository Layout

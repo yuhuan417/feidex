@@ -89,7 +89,6 @@ type Workspace struct {
 	ID                   string `toml:"id"`
 	Name                 string `toml:"name"`
 	Cwd                  string `toml:"cwd"`
-	Model                string `toml:"model"`
 	ApprovalPolicy       string `toml:"approval_policy"`
 	SandboxMode          string `toml:"sandbox_mode"`
 	MultiAgentMode       string `toml:"multi_agent_mode"`
@@ -149,7 +148,6 @@ func Default() *Config {
 				ID:                   "default",
 				Name:                 "Default",
 				Cwd:                  ".",
-				Model:                "",
 				ApprovalPolicy:       "on-request",
 				SandboxMode:          "workspace-write",
 				MultiAgentMode:       "explicitRequestOnly",

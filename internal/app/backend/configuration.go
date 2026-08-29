@@ -412,7 +412,7 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新全局模型"},
+		Toast: &callback.Toast{Type: "success", Content: "已更新 Bot 默认模型"},
 		Card:  RawCard(s.RenderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
@@ -460,7 +460,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新全局推理强度"},
+		Toast: &callback.Toast{Type: "success", Content: "已更新 Bot 默认推理强度"},
 		Card:  RawCard(s.RenderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
@@ -555,8 +555,8 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *state.Session) string 
 		"工作区: `" + workspaceID + "`",
 		"线程: " + conversationLabel,
 		"thread_id: `" + conversationID + "`",
-		"全局模型: `" + model + "`",
-		"全局推理强度: `" + effort + "`",
+		"Bot 默认模型: `" + model + "`",
+		"Bot 默认推理强度: `" + effort + "`",
 		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.App)] + "`",
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
