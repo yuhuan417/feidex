@@ -102,3 +102,36 @@ func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.
 		t.Fatalf("inbound message = %+v, want original root preserved and slash text", msg)
 	}
 }
+
+func TestConvertMessagePreservesEmptySelfMentionForPrimaryRouting(t *testing.T) {
+	a := New(config.FeishuConfig{GroupAtOnly: true})
+	a.botOpenID = "bot-self"
+
+	msgType := "text"
+	chatType := "group"
+	messageID := "msg-empty-at"
+	chatID := "chat-empty-at"
+	userID := "user-1"
+	mentionKey := "@bot"
+	content := `{"text":"@bot"}`
+
+	got := a.convertMessage(&larkim.P2MessageReceiveV1{
+		Event: &larkim.P2MessageReceiveV1Data{
+			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
+			Message: &larkim.EventMessage{
+				MessageId:   &messageID,
+				ChatId:      &chatID,
+				ChatType:    &chatType,
+				MessageType: &msgType,
+				Content:     &content,
+				Mentions:    []*larkim.MentionEvent{{Key: &mentionKey, Id: &larkim.UserId{OpenId: strPtr("bot-self")}}},
+			},
+		},
+	})
+	if got == nil {
+		t.Fatal("convertMessage() returned nil for empty self mention")
+	}
+	if got.Text != "" || !got.MentionedSelf || len(got.MentionedOpenIDs) != 1 || got.MentionedOpenIDs[0] != "bot-self" {
+		t.Fatalf("convertMessage(empty self mention) = %+v, want preserved mention metadata and empty text", got)
+	}
+}

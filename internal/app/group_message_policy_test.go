@@ -146,6 +146,34 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 	}
 }
 
+func TestEmptyGroupMentionBecomesPrimaryOn(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	ff.botOpenID = "bot-a-open"
+	a.cfg.Feishu.GroupAtOnly = true
+	msg := &feishu.InboundMessage{
+		MessageID:        "msg-empty-at",
+		ChatID:           "chat-empty-at",
+		ChatType:         "group",
+		UserID:           "user-1",
+		MentionedSelf:    true,
+		MentionedAny:     true,
+		MentionedOpenIDs: []string{"bot-a-open"},
+		Text:             "",
+	}
+	newFeishuEventRouter(a).handleMessage(msg)
+	if primary := groupPrimaryForChat(a, "group", "chat-empty-at"); primary == nil || primary.OwnerBotOpenID != "bot-a-open" {
+		t.Fatalf("group primary = %+v, want bot-a-open", primary)
+	}
+	cards := ff.replyCardsSnapshot()
+	if len(cards) == 0 {
+		t.Fatal("expected primary reply card")
+	}
+	if body := cardMarkdownContent(t, cards[len(cards)-1]); !strings.Contains(body, "已更新 primary") {
+		t.Fatalf("reply body = %q, want primary update", body)
+	}
+}
+
 func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.T) {
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {

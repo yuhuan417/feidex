@@ -1325,6 +1325,22 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		return nil
 	}
 	if strings.TrimSpace(text) == "" && len(attachments) == 0 && len(out.MergeForwardMessageIDs) == 0 {
+		if mentionedSelf {
+			slog.Info("feishu mention-only message preserved for downstream routing",
+				"app_id", strings.TrimSpace(a.cfg.AppID),
+				"message_id", messageID,
+				"chat_id", chatID,
+				"chat_type", chatType,
+				"mentioned_self", mentionedSelf,
+				"mention_count", len(mentionedOpenIDs),
+				"mentioned_any", mentionedAny,
+				"raw_text", rawText,
+				"stripped_text", "",
+			)
+			out.Text = text
+			out.Attachments = attachments
+			return out
+		}
 		return nil
 	}
 	out.Text = text
