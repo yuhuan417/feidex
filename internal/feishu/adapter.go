@@ -1326,7 +1326,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	}
 	if strings.TrimSpace(text) == "" && len(attachments) == 0 && len(out.MergeForwardMessageIDs) == 0 {
 		if mentionedSelf {
-			slog.Info("feishu mention-only message preserved for downstream routing",
+				slog.Debug("feishu mention-only message preserved for downstream routing",
 				"app_id", strings.TrimSpace(a.cfg.AppID),
 				"message_id", messageID,
 				"chat_id", chatID,

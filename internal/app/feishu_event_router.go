@@ -102,7 +102,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return nil
 	}
 	if emptyGroupAtPrimaryCommand(msg) {
-		slog.Info("feishu empty self mention promoted to primary command",
+		slog.Debug("feishu empty self mention promoted to primary command",
 			"frontend_id", strings.TrimSpace(a.FrontendID()),
 			"message_id", msg.MessageID,
 			"chat_id", msg.ChatID,
