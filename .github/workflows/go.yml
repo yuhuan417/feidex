@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  ci:
+  ci-test:
     if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     steps:
@@ -24,20 +24,105 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build
-        run: go build -v ./...
-
       - name: Test
-        run: go test -v ./...
+        run: go test ./...
 
-      - name: Cross-build (Windows)
-        run: |
-          GOOS=windows GOARCH=amd64 go build ./...
-          GOOS=windows GOARCH=arm64 go build ./...
+  ci-cross-build:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
 
-  release-dev-linux:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Cross-build Windows
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.goarch }}
+        run: go build ./...
+
+  release-dev-meta:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: ci
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      build_ts_display: ${{ steps.meta.outputs.build_ts_display }}
+    steps:
+      - name: Compute dev version
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::12}"
+          BUILD_TS="$(date +%Y%m%dT%H%M%S)"
+          BUILD_TS_DISPLAY="$(date '+%Y-%m-%d %H:%M:%S')"
+          echo "version=dev-${BUILD_TS}-${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "build_ts_display=${BUILD_TS_DISPLAY}" >> "${GITHUB_OUTPUT}"
+
+  release-dev-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: release-dev-meta
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            asset: feidex-linux-amd64
+          - goos: linux
+            goarch: arm64
+            asset: feidex-linux-aarch64
+          - goos: darwin
+            goarch: amd64
+            asset: feidex-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            asset: feidex-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            asset: feidex-windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            asset: feidex-windows-arm64.exe
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build dev binary
+        env:
+          VERSION: ${{ needs.release-dev-meta.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
+            -o "dist/${{ matrix.asset }}" ./cmd/feidex
+
+      - name: Upload dev binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 1
+
+  release-dev-publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci-test, ci-cross-build, release-dev-meta, release-dev-build]
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Shanghai
@@ -47,39 +132,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Download dev binaries
+        uses: actions/download-artifact@v4
         with:
-          go-version-file: go.mod
-
-      - name: Compute dev version
-        id: dev_meta
-        run: |
-          SHORT_SHA="${GITHUB_SHA::12}"
-          BUILD_TS="$(date +%Y%m%dT%H%M%S)"
-          BUILD_TS_DISPLAY="$(date '+%Y-%m-%d %H:%M:%S')"
-          echo "short_sha=${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
-          echo "build_ts=${BUILD_TS}" >> "${GITHUB_OUTPUT}"
-          echo "build_ts_display=${BUILD_TS_DISPLAY}" >> "${GITHUB_OUTPUT}"
-          echo "version=dev-${BUILD_TS}-${SHORT_SHA}" >> "${GITHUB_OUTPUT}"
-
-      - name: Build dev binaries
-        run: |
-          mkdir -p dist
-          VERSION="${{ steps.dev_meta.outputs.version }}"
-          for target in \
-            "linux:amd64:feidex-linux-amd64" \
-            "linux:arm64:feidex-linux-aarch64" \
-            "darwin:amd64:feidex-darwin-amd64" \
-            "darwin:arm64:feidex-darwin-arm64" \
-            "windows:amd64:feidex-windows-amd64.exe" \
-            "windows:arm64:feidex-windows-arm64.exe"; do
-            IFS=':' read -r GOOS GOARCH ASSET <<<"${target}"
-            CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-              go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
-              -o "dist/${ASSET}" \
-              ./cmd/feidex
-          done
+          pattern: dev-*
+          path: dist
+          merge-multiple: true
 
       - name: Package dev release assets
         run: |
@@ -116,10 +174,10 @@ jobs:
         with:
           tag_name: dev-latest
           target_commitish: ${{ github.sha }}
-          name: ${{ steps.dev_meta.outputs.version }}
+          name: ${{ needs.release-dev-meta.outputs.version }}
           body: |
             Development build from `${{ github.sha }}`
-            Built at: `${{ steps.dev_meta.outputs.build_ts_display }}`
+            Built at: `${{ needs.release-dev-meta.outputs.build_ts_display }}`
             Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
           prerelease: true
           make_latest: false
@@ -140,7 +198,7 @@ jobs:
             dist/feidex-windows-arm64.zip
             dist/sha256sums.txt
 
-  release-linux:
+  release-test:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
@@ -153,25 +211,71 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test ./...
 
-      - name: Build release binaries
+  release-build:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            asset: feidex-linux-amd64
+          - goos: linux
+            goarch: arm64
+            asset: feidex-linux-aarch64
+          - goos: darwin
+            goarch: amd64
+            asset: feidex-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            asset: feidex-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            asset: feidex-windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            asset: feidex-windows-arm64.exe
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build release binary
+        env:
+          VERSION: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
-          VERSION="${GITHUB_REF_NAME}"
-          for target in \
-            "linux:amd64:feidex-linux-amd64" \
-            "linux:arm64:feidex-linux-aarch64" \
-            "darwin:amd64:feidex-darwin-amd64" \
-            "darwin:arm64:feidex-darwin-arm64" \
-            "windows:amd64:feidex-windows-amd64.exe" \
-            "windows:arm64:feidex-windows-arm64.exe"; do
-            IFS=':' read -r GOOS GOARCH ASSET <<<"${target}"
-            CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-              go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
-              -o "dist/${ASSET}" \
-              ./cmd/feidex
-          done
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X feidex/internal/buildinfo.Version=${VERSION}" \
+            -o "dist/${{ matrix.asset }}" ./cmd/feidex
+
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 1
+
+  release-publish:
+    if: github.ref_type == 'tag'
+    needs: [release-test, release-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Package release assets
         run: |
