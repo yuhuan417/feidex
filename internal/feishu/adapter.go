@@ -1217,6 +1217,11 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	if messageType == "text" {
 		rawText = extractText(msg.Content)
 	}
+	synthesizedPrimaryCommand := messageType == "text" && mentionOnlyPrimaryOnCommand(rawText, msg.Mentions, mentionedOpenIDs)
+	effectiveText := rawText
+	if synthesizedPrimaryCommand {
+		effectiveText = "/primary on"
+	}
 	if chatType == "group" && a.cfg.GroupAtOnly {
 		allowedGroupTrigger := false
 		if a.groupMessagePolicy != nil && a.botOpenID != "" {
@@ -1224,13 +1229,13 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 				ChatID:           chatID,
 				RootMessageID:    policyRootMessageID,
 				ParentMessageID:  parentMessageID,
-				Text:             rawText,
+				Text:             effectiveText,
 				MentionedOpenIDs: mentionedOpenIDs,
 				MentionedAny:     mentionedAny,
 				MentionedSelf:    mentionedSelf,
 			})
 		} else {
-			allowedGroupTrigger = mentionedSelf
+			allowedGroupTrigger = mentionedSelf || synthesizedPrimaryCommand
 		}
 		if !allowedGroupTrigger {
 			slog.Debug("feishu group message ignored by trigger policy",
@@ -1324,23 +1329,20 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	default:
 		return nil
 	}
+	if synthesizedPrimaryCommand {
+		slog.Debug("feishu mention-only message synthesized as primary command",
+			"app_id", strings.TrimSpace(a.cfg.AppID),
+			"message_id", messageID,
+			"chat_id", chatID,
+			"chat_type", chatType,
+			"mentioned_self", mentionedSelf,
+			"mention_count", len(mentionedOpenIDs),
+			"mentioned_any", mentionedAny,
+			"raw_text", rawText,
+		)
+		text = "/primary on"
+	}
 	if strings.TrimSpace(text) == "" && len(attachments) == 0 && len(out.MergeForwardMessageIDs) == 0 {
-		if mentionedSelf {
-				slog.Debug("feishu mention-only message preserved for downstream routing",
-				"app_id", strings.TrimSpace(a.cfg.AppID),
-				"message_id", messageID,
-				"chat_id", chatID,
-				"chat_type", chatType,
-				"mentioned_self", mentionedSelf,
-				"mention_count", len(mentionedOpenIDs),
-				"mentioned_any", mentionedAny,
-				"raw_text", rawText,
-				"stripped_text", "",
-			)
-			out.Text = text
-			out.Attachments = attachments
-			return out
-		}
 		return nil
 	}
 	out.Text = text
@@ -1796,6 +1798,22 @@ func stripBotMention(text string, mentions []*larkim.MentionEvent, botOpenID str
 		}
 	}
 	return strings.TrimSpace(text)
+}
+
+func mentionOnlyPrimaryOnCommand(text string, mentions []*larkim.MentionEvent, mentionedOpenIDs []string) bool {
+	if len(mentionedOpenIDs) != 1 {
+		return false
+	}
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+	for _, mention := range mentions {
+		if mention == nil || mention.Key == nil {
+			continue
+		}
+		text = strings.ReplaceAll(text, *mention.Key, "")
+	}
+	return strings.TrimSpace(text) == ""
 }
 
 func mentioned(mentions []*larkim.MentionEvent, botOpenID string) bool {

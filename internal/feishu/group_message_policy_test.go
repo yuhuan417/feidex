@@ -103,7 +103,7 @@ func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.
 	}
 }
 
-func TestConvertMessagePreservesEmptySelfMentionForPrimaryRouting(t *testing.T) {
+func TestConvertMessageSynthesizesEmptySelfMentionAsPrimaryCommand(t *testing.T) {
 	a := New(config.FeishuConfig{GroupAtOnly: true})
 	a.botOpenID = "bot-self"
 
@@ -131,7 +131,7 @@ func TestConvertMessagePreservesEmptySelfMentionForPrimaryRouting(t *testing.T) 
 	if got == nil {
 		t.Fatal("convertMessage() returned nil for empty self mention")
 	}
-	if got.Text != "" || !got.MentionedSelf || len(got.MentionedOpenIDs) != 1 || got.MentionedOpenIDs[0] != "bot-self" {
-		t.Fatalf("convertMessage(empty self mention) = %+v, want preserved mention metadata and empty text", got)
+	if got.Text != "/primary on" || !got.MentionedSelf || len(got.MentionedOpenIDs) != 1 || got.MentionedOpenIDs[0] != "bot-self" {
+		t.Fatalf("convertMessage(empty self mention) = %+v, want synthesized primary command", got)
 	}
 }

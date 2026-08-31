@@ -101,20 +101,6 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		)
 		return nil
 	}
-	if emptyGroupAtPrimaryCommand(msg) {
-		slog.Debug("feishu empty self mention promoted to primary command",
-			"frontend_id", strings.TrimSpace(a.FrontendID()),
-			"message_id", msg.MessageID,
-			"chat_id", msg.ChatID,
-			"chat_type", msg.ChatType,
-			"user_id", msg.UserID,
-			"root_message_id", msg.RootMessageID,
-			"mentioned_self", msg.MentionedSelf,
-			"mention_count", len(msg.MentionedOpenIDs),
-			"raw_text", msg.Text,
-		)
-		msg = cloneInboundMessageWithText(msg, "/primary on")
-	}
 	sessionKey := makeSessionKey(a, msg)
 	logText := truncate(msg.Text, 160)
 	if a.ServerRequestService().ShouldRedactInboundText(sessionKey, msg.UserID) {
@@ -207,37 +193,6 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return err
 	}
 	return nil
-}
-
-func emptyGroupAtPrimaryCommand(msg *feishu.InboundMessage) bool {
-	if msg == nil {
-		return false
-	}
-	if strings.TrimSpace(msg.ChatType) != "group" {
-		return false
-	}
-	if !msg.MentionedSelf {
-		return false
-	}
-	if len(msg.MentionedOpenIDs) == 0 {
-		return false
-	}
-	if strings.TrimSpace(msg.Text) != "" {
-		return false
-	}
-	if len(msg.Attachments) != 0 || len(msg.MergeForwardMessageIDs) != 0 {
-		return false
-	}
-	return true
-}
-
-func cloneInboundMessageWithText(msg *feishu.InboundMessage, text string) *feishu.InboundMessage {
-	if msg == nil {
-		return nil
-	}
-	cloned := *msg
-	cloned.Text = text
-	return &cloned
 }
 
 func groupPolicyRootMessageID(msg *feishu.InboundMessage) string {
