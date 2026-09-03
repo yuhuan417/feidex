@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/feishu"
@@ -166,12 +167,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 		return s.commandCurrentBotGroupConfig(msg, append([]string{"new"}, args[1:]...))
 	case "clone":
 		if len(args) == 1 {
-			action := commandActionFromMessage(msg, map[string]any{"session_key": sessionKey})
-			resp, err := newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceClone(action, sessionKey)
-			if err != nil {
-				return err
-			}
-			return replyCommandActionResponse(s.app, msg, resp)
+			return s.beginBindingWorkspaceClone(msg, sessionKey)
 		}
 		if len(args) < 2 {
 			return fmt.Errorf("usage: /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
@@ -196,6 +192,38 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	default:
 		return fmt.Errorf("usage: %s", groupBindingWorkspaceUsage)
 	}
+}
+
+func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, sessionKey string) error {
+	mgmt := newWorkspaceManagementServiceInner(s.app)
+	requestID, err := mgmt.NextLocalID("workspace")
+	if err != nil {
+		return err
+	}
+	ws := bindingWorkspaceForSessionKey(s.app, sessionKey)
+	rootPath := mgmt.DefaultWorkspaceCloneRoot(ws)
+	parentDir := strings.TrimSpace(mgmt.DefaultWorkspaceCloneParent(ws))
+	payload := appworkspacecmd.ClonePayload{
+		RootPath:          rootPath,
+		SelectedParentDir: parentDir,
+		CloneMode:         appworkspacecmd.CloneModeWorkspace,
+	}
+	if err := s.app.State().SavePending(&state.PendingRequest{
+		ID:          requestID,
+		Kind:        "workspace_clone",
+		SessionKey:  sessionKey,
+		OwnerUserID: strings.TrimSpace(msg.UserID),
+		FeishuMsgID: strings.TrimSpace(msg.MessageID),
+		PayloadJSON: mustJSON(payload),
+		Status:      state.PendingRequestStatusPending.String(),
+		CreatedAt:   time.Now().Unix(),
+		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
+	}); err != nil {
+		return err
+	}
+	card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	return err
 }
 
 func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) error {

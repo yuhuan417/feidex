@@ -108,7 +108,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 	}
 	var sess *state.Session
 	sess = s.GetSession(sessionKey)
-	workspaceID := selectedWorkspaceIDForSession(s.App, sess)
+	workspaceID := s.WorkspaceIDForSession(sessionKey, sess)
 	ws := config.FindWorkspace(s.App.Config(), workspaceID)
 	rootPath := appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), s.DefaultWorkspaceCloneRoot(ws))
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
@@ -116,9 +116,13 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		parentDir = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), rootPath)
 	}
 	cloneMode := NormalizeCloneMode(payload.CloneMode)
+	workspaceLabel := "(未配置)"
+	if strings.TrimSpace(workspaceID) != "" {
+		workspaceLabel = "`" + workspaceID + "`"
+	}
 
 	card := appcards.NewMarkdownBodyCard("从仓库创建工作区", "orange")
-	body := "当前工作区: `" + workspaceID + "`\n" +
+	body := "当前工作区: " + workspaceLabel + "\n" +
 		"已选父目录: `" + appcore.FirstNonEmpty(parentDir, "-") + "`\n" +
 		"创建方式: `" + cloneMode + "`\n" +
 		"浏览根目录: `" + appcore.FirstNonEmpty(rootPath, "-") + "`\n\n" +
