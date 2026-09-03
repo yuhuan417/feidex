@@ -1,10 +1,14 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -291,6 +295,103 @@ func TestGroupWorkspaceCloneWithoutURLIsHandledAsLocalCommand(t *testing.T) {
 	}
 	if !foundPending {
 		t.Fatalf("missing workspace_clone pending request: %+v", a.State().PendingRequests())
+	}
+}
+
+func TestGroupWorkspaceCloneWithoutURLInNewGroupDoesNotUseDefaultWorkspace(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	defaultParent := filepath.Dir(a.cfg.Workspaces[0].Cwd)
+	configParent := filepath.Dir(a.cfgPath)
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "clone-new-group-1",
+		ChatID:        "chat-new-clone",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "/workspace clone",
+		RootMessageID: "clone-new-group-1",
+		MentionedSelf: true,
+	})
+
+	binding := agentBindingForChat(a, "group", "chat-new-clone")
+	if binding == nil || strings.TrimSpace(binding.WorkspaceID) != "" || binding.Status != state.AgentBindingStatusPending.String() {
+		t.Fatalf("new group binding = %+v, want pending with empty workspace", binding)
+	}
+	cards := ff.replyCardsSnapshot()
+	if len(cards) != 1 {
+		t.Fatalf("reply cards = %d, want clone form card", len(cards))
+	}
+	body := cardMarkdownContent(t, cards[0])
+	if !strings.Contains(body, "当前工作区: (未配置)") {
+		t.Fatalf("clone form body = %q, want unconfigured current workspace", body)
+	}
+	if strings.Contains(body, "当前工作区: `default`") || strings.Contains(body, "已选父目录: `"+defaultParent+"`") {
+		t.Fatalf("clone form leaked default workspace context: %q", body)
+	}
+	if !strings.Contains(body, "已选父目录: `"+configParent+"`") {
+		t.Fatalf("clone form body = %q, want config directory parent %q", body, configParent)
+	}
+
+	foundPending := false
+	for _, pending := range a.State().PendingRequests() {
+		if pending.Kind != "workspace_clone" || !strings.Contains(pending.SessionKey, "chat-new-clone") {
+			continue
+		}
+		foundPending = true
+		var payload appworkspacecmd.ClonePayload
+		if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+			t.Fatalf("clone payload unmarshal error = %v", err)
+		}
+		if strings.TrimSpace(payload.SelectedParentDir) != configParent {
+			t.Fatalf("clone payload selected parent = %q, want config directory parent %q", payload.SelectedParentDir, configParent)
+		}
+	}
+	if !foundPending {
+		t.Fatalf("missing workspace_clone pending request: %+v", a.State().PendingRequests())
+	}
+}
+
+func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-a"
+	defaultParent := filepath.Dir(a.cfg.Workspaces[0].Cwd)
+	configParent := filepath.Dir(a.cfgPath)
+	repoURL := "git@github.com:example/repo.git"
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+	var gotTargetDir string
+	workspaceGitClone = func(_ context.Context, _, targetDir string, _ workspaceCloneProgressReporter) error {
+		gotTargetDir = targetDir
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:     "clone-new-group-url-1",
+		ChatID:        "chat-new-clone-url",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "/workspace clone " + repoURL,
+		RootMessageID: "clone-new-group-url-1",
+		MentionedSelf: true,
+	}
+	if err := newBindingService(a).commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
+		t.Fatalf("group commandWorkspace(/workspace clone URL) error = %v", err)
+	}
+
+	if gotTargetDir == "" {
+		t.Fatal("workspaceGitClone was not called")
+	}
+	if filepath.Dir(gotTargetDir) != configParent {
+		t.Fatalf("clone target parent = %q, want config directory parent %q", filepath.Dir(gotTargetDir), configParent)
+	}
+	if filepath.Dir(gotTargetDir) == defaultParent {
+		t.Fatalf("clone target parent leaked default workspace parent %q", defaultParent)
+	}
+	binding := agentBindingForChat(a, "group", "chat-new-clone-url")
+	if binding == nil || binding.WorkspaceID != "repo" || binding.Status != state.AgentBindingStatusActive.String() {
+		t.Fatalf("binding after clone = %+v, want active repo", binding)
 	}
 }
 

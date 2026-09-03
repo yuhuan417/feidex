@@ -344,13 +344,14 @@ func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Work
 }
 
 func (s bindingService) cloneLocalWorkspace(msg *feishu.InboundMessage, args []string) (string, string, error) {
-	repoURL, workspaceID, parentDir, err := appworkspacecmd.ParseCloneArgs(args)
+	cloneArgs := append([]string{"clone"}, args...)
+	repoURL, workspaceID, parentDir, err := appworkspacecmd.ParseCloneArgs(cloneArgs)
 	if err != nil {
 		return "", "", err
 	}
 	mgmt := newWorkspaceManagementServiceInner(s.app)
 	if strings.TrimSpace(parentDir) == "" {
-		parentDir = mgmt.DefaultWorkspaceCloneParent(config.FindWorkspace(s.app.cfg, defaultWorkspaceID(s.app)))
+		parentDir = mgmt.DefaultWorkspaceCloneParent(bindingWorkspaceForMessage(s.app, msg))
 	}
 	parentDir = resolveConfigRelativePath(s.app, parentDir)
 	plan, err := mgmt.PrepareWorkspaceClone(repoURL, workspaceID, parentDir)
@@ -368,6 +369,21 @@ func (s bindingService) cloneLocalWorkspace(msg *feishu.InboundMessage, args []s
 	}
 	_ = msg
 	return plan.WorkspaceID, plan.TargetDir, nil
+}
+
+func bindingWorkspaceForMessage(a *App, msg *feishu.InboundMessage) *config.Workspace {
+	if a == nil || msg == nil {
+		return nil
+	}
+	return bindingWorkspaceForSessionKey(a, makeSessionKey(a, msg))
+}
+
+func bindingWorkspaceForSessionKey(a *App, sessionKey string) *config.Workspace {
+	binding := bindingForSessionKey(a, sessionKey)
+	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
+		return nil
+	}
+	return config.FindWorkspace(a.cfg, binding.WorkspaceID)
 }
 
 func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body string) error {
