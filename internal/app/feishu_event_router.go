@@ -214,7 +214,11 @@ func (r *feishuEventRouter) handleRecall(recall *feishu.MessageRecall) {
 	if recall == nil || strings.TrimSpace(recall.MessageID) == "" {
 		return
 	}
-	if discarded := newPendingQueueService(a).discardPendingInputByMessageID(recall.MessageID); discarded {
+	discarded := newPendingQueueService(a).discardPendingInputByMessageID(recall.MessageID)
+	if discardPendingBindingMessageByID(a, recall.MessageID) {
+		discarded = true
+	}
+	if discarded {
 		slog.Debug("feishu recall discarded pending input", "message_id", recall.MessageID, "chat_id", recall.ChatID)
 	}
 }
@@ -227,7 +231,11 @@ func (r *feishuEventRouter) handleReaction(reaction *feishu.MessageReaction) {
 	if !strings.EqualFold(strings.TrimSpace(reaction.EmojiType), discardReactionEmoji) {
 		return
 	}
-	if discarded := newPendingQueueService(a).discardPendingInputByMessageID(reaction.MessageID); discarded {
+	discarded := newPendingQueueService(a).discardPendingInputByMessageID(reaction.MessageID)
+	if discardPendingBindingMessageByID(a, reaction.MessageID) {
+		discarded = true
+	}
+	if discarded {
 		slog.Debug("feishu reaction discarded pending input",
 			"message_id", reaction.MessageID,
 			"chat_id", reaction.ChatID,

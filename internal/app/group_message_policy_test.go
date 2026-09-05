@@ -20,7 +20,6 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	cfg.Feishu.GroupAtOnly = true
 	a := &App{
 		cfg:        cfg,
 		store:      store,
@@ -156,7 +155,6 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	cfg.Feishu.GroupAtOnly = true
 	a := &App{cfg: cfg, store: store, frontendID: "frontend-auto"}
 
 	if shouldAcceptGroupMessage(a, "chat-new", "", "", false, false) {

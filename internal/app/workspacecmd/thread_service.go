@@ -288,18 +288,32 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state
 
 func (s *ThreadService) effectiveCodexModel(sess *state.Session, ws *config.Workspace) string {
 	binding := s.agentBindingForSession(sess)
+	profileModel := ""
+	if provider, ok := s.App.(interface{ BotProfile() *state.BotProfile }); ok {
+		if profile := provider.BotProfile(); profile != nil {
+			profileModel = strings.TrimSpace(profile.Model)
+		}
+	}
 	return appcore.FirstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
+		profileModel,
 		modelconfig.ConfiguredGlobalModel(s.App.Config()),
 	)
 }
 
 func (s *ThreadService) effectiveClaudeModel(sess *state.Session, ws *config.Workspace) string {
 	binding := s.agentBindingForSession(sess)
+	profileModel := ""
+	if provider, ok := s.App.(interface{ BotProfile() *state.BotProfile }); ok {
+		if profile := provider.BotProfile(); profile != nil {
+			profileModel = strings.TrimSpace(profile.ClaudeModel)
+		}
+	}
 	return appcore.FirstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
+		profileModel,
 		strings.TrimSpace(s.App.Config().Claude.Model),
 	)
 }

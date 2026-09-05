@@ -38,7 +38,6 @@ type FeishuConfig struct {
 	Domain         string    `toml:"domain"`
 	AllowFrom      []string  `toml:"allow_from"`
 	DebugAllowFrom []string  `toml:"debug_allow_from"`
-	GroupAtOnly    bool      `toml:"group_at_only"`
 	CardEnabled    bool      `toml:"card_enabled"`
 	Quiet          QuietMode `toml:"quiet"`
 }
@@ -305,7 +304,6 @@ func (c *Config) Normalize(baseDir string) error {
 
 func defaultFeishuConfig() FeishuConfig {
 	return FeishuConfig{
-		GroupAtOnly: true,
 		CardEnabled: true,
 		Quiet:       QuietModeProgress,
 	}

@@ -69,6 +69,11 @@ func groupBindingSessionScopeActive(a *App, sessionKey string) bool {
 	return chatType == "group" && strings.TrimSpace(chatID) != ""
 }
 
+func p2pSessionScopeActive(a *App, sessionKey string) bool {
+	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
+	return strings.TrimSpace(chatID) != "" && strings.EqualFold(strings.TrimSpace(chatType), "p2p")
+}
+
 func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if a == nil {

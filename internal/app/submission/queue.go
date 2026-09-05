@@ -88,6 +88,10 @@ type codexConfigResolver interface {
 	SubmissionQueueConfiguredCodexReasoningEffort() string
 }
 
+type botProfileResolver interface {
+	SubmissionQueueBotProfile() *state.BotProfile
+}
+
 // ---------------------------------------------------------------------------
 // Narrow provider interfaces
 // ---------------------------------------------------------------------------
@@ -237,7 +241,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 			Key:           sessionKey,
 			BindingID:     bindingID,
 			WorkspaceID:   workspaceID,
-			OwnerUserID:   msg.UserID,
+			OwnerUserID:   conversationOwnerUserID(msg),
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID)),
@@ -247,6 +251,9 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	sess := appState.Session(sessionKey)
 	if sess == nil {
 		sess = newSession()
+	}
+	if strings.EqualFold(strings.TrimSpace(sess.ChatType), "group") || (msg != nil && strings.EqualFold(strings.TrimSpace(msg.ChatType), "group")) {
+		sess.OwnerUserID = ""
 	}
 	if strings.TrimSpace(sess.BindingID) == "" && chatBinding != nil {
 		sess.BindingID = strings.TrimSpace(chatBinding.ID)
@@ -399,6 +406,13 @@ func resolveAgentBinding(a App, msg *feishu.InboundMessage) *state.AgentBinding 
 	return resolver.SubmissionQueueAgentBinding(msg.ChatType, msg.ChatID)
 }
 
+func conversationOwnerUserID(msg *feishu.InboundMessage) string {
+	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") {
+		return ""
+	}
+	return strings.TrimSpace(msg.UserID)
+}
+
 func resolveAgentBindingByID(a App, id string) *state.AgentBinding {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -428,6 +442,7 @@ func effectiveCodexModel(a App, sess *state.Session, sub *state.Submission, ws *
 	return firstNonEmpty(
 		sessionModelOverride(sess),
 		bindingModelOverride(binding),
+		botProfileModel(a),
 		configuredCodexModel(a),
 	)
 }
@@ -436,6 +451,7 @@ func effectiveCodexReasoningEffort(a App, sess *state.Session, sub *state.Submis
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		bindingReasoningEffortOverride(binding),
+		botProfileReasoningEffort(a),
 		configuredCodexReasoningEffort(a),
 	)
 }
@@ -445,6 +461,7 @@ func effectiveClaudeModel(a App, sess *state.Session, sub *state.Submission, ws 
 	return firstNonEmpty(
 		sessionModelOverride(sess),
 		bindingModelOverride(binding),
+		botProfileClaudeModel(a),
 		configuredClaudeModel(a),
 	)
 }
@@ -456,6 +473,9 @@ func effectiveBindingApprovalPolicy(a App, sess *state.Session, sub *state.Submi
 	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.ApprovalPolicyOverride) != "" {
 		return strings.TrimSpace(binding.ApprovalPolicyOverride)
 	}
+	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.ApprovalPolicy) != "" {
+		return strings.TrimSpace(profile.ApprovalPolicy)
+	}
 	return sessionctx.EffectiveApprovalPolicy(sess, ws)
 }
 
@@ -466,6 +486,9 @@ func effectiveBindingSandboxMode(a App, sess *state.Session, sub *state.Submissi
 	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.SandboxModeOverride) != "" {
 		return strings.TrimSpace(binding.SandboxModeOverride)
 	}
+	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.SandboxMode) != "" {
+		return strings.TrimSpace(profile.SandboxMode)
+	}
 	return sessionctx.EffectiveSandboxMode(sess, ws)
 }
 
@@ -474,9 +497,11 @@ func effectiveBindingServiceTier(a App, sess *state.Session, sub *state.Submissi
 		return strings.TrimSpace(value)
 	}
 	if binding := submissionBinding(a, sess, sub); binding != nil {
-		return strings.TrimSpace(binding.ServiceTierOverride)
+		if value := strings.TrimSpace(binding.ServiceTierOverride); value != "" {
+			return value
+		}
 	}
-	return ""
+	return strings.TrimSpace(botProfileServiceTier(a))
 }
 
 func effectiveBindingMultiAgentMode(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
@@ -486,7 +511,46 @@ func effectiveBindingMultiAgentMode(a App, sess *state.Session, sub *state.Submi
 	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.MultiAgentModeOverride) != "" {
 		return strings.TrimSpace(binding.MultiAgentModeOverride)
 	}
+	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.MultiAgentMode) != "" {
+		return strings.TrimSpace(profile.MultiAgentMode)
+	}
 	return sessionctx.EffectiveMultiAgentMode(sess, ws)
+}
+
+func submissionBotProfile(a App) *state.BotProfile {
+	resolver, ok := a.(botProfileResolver)
+	if !ok || resolver == nil {
+		return nil
+	}
+	return resolver.SubmissionQueueBotProfile()
+}
+
+func botProfileModel(a App) string {
+	if profile := submissionBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.Model)
+	}
+	return ""
+}
+
+func botProfileClaudeModel(a App) string {
+	if profile := submissionBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.ClaudeModel)
+	}
+	return ""
+}
+
+func botProfileReasoningEffort(a App) string {
+	if profile := submissionBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.ReasoningEffort)
+	}
+	return ""
+}
+
+func botProfileServiceTier(a App) string {
+	if profile := submissionBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.ServiceTier)
+	}
+	return ""
 }
 
 func configuredCodexModel(a App) string {

@@ -369,7 +369,7 @@ func TestSimpleStatusCardAndSummaries(t *testing.T) {
 }
 
 func TestConvertMessageTextFlow(t *testing.T) {
-	a := New(config.FeishuConfig{GroupAtOnly: true})
+	a := New(config.FeishuConfig{})
 	a.botOpenID = "bot-1"
 
 	msgType := "text"
@@ -419,53 +419,6 @@ func TestConvertMessageTextFlow(t *testing.T) {
 
 	if duplicate := a.convertMessage(event); duplicate != nil {
 		t.Fatalf("expected duplicate message to be suppressed, got %+v", duplicate)
-	}
-
-	noMention := New(config.FeishuConfig{GroupAtOnly: true})
-	noMention.botOpenID = "bot-1"
-	if got := noMention.convertMessage(&larkim.P2MessageReceiveV1{
-		Event: &larkim.P2MessageReceiveV1Data{
-			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
-			Message: &larkim.EventMessage{
-				MessageId:   strPtr("msg-2"),
-				ChatType:    &chatType,
-				MessageType: &msgType,
-				Content:     &content,
-			},
-		},
-	}); got != nil {
-		t.Fatalf("expected group message without bot mention to be ignored, got %+v", got)
-	}
-
-	unknownMentionKey := "@unknown"
-	if got := noMention.convertMessage(&larkim.P2MessageReceiveV1{
-		Event: &larkim.P2MessageReceiveV1Data{
-			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
-			Message: &larkim.EventMessage{
-				MessageId:   strPtr("msg-2a"),
-				ChatType:    &chatType,
-				MessageType: &msgType,
-				Content:     strPtr(`{"text":"@unknown ping"}`),
-				Mentions:    []*larkim.MentionEvent{{Key: &unknownMentionKey}},
-			},
-		},
-	}); got != nil {
-		t.Fatalf("expected group message with non-bot mention to be ignored, got %+v", got)
-	}
-
-	noBotID := New(config.FeishuConfig{GroupAtOnly: true})
-	if got := noBotID.convertMessage(&larkim.P2MessageReceiveV1{
-		Event: &larkim.P2MessageReceiveV1Data{
-			Sender: &larkim.EventSender{SenderId: &larkim.UserId{OpenId: &userID}},
-			Message: &larkim.EventMessage{
-				MessageId:   strPtr("msg-2b"),
-				ChatType:    &chatType,
-				MessageType: &msgType,
-				Content:     &content,
-			},
-		},
-	}); got != nil {
-		t.Fatalf("expected GroupAtOnly to fail closed without bot open id, got %+v", got)
 	}
 
 }

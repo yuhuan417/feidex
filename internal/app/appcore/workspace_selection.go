@@ -12,18 +12,32 @@ type agentBindingsForChatProvider interface {
 	AgentBindingsForChat(chatType, chatID string) []*state.AgentBinding
 }
 
+type botProfileWorkspaceProvider interface {
+	BotProfileWorkspaceID() string
+}
+
+type botProfileWorkspaceSetter interface {
+	SetBotProfileWorkspaceID(workspaceID string) error
+}
+
 // MakeWorkspaceSelectionKey returns the frontend-scoped session key used to
 // store the current workspace selection for a chat/user scope.
 func MakeWorkspaceSelectionKey(a AppConfig, chatType, chatID, userID string) string {
-	chatType = strings.TrimSpace(chatType)
+	chatType = strings.ToLower(strings.TrimSpace(chatType))
 	chatID = strings.TrimSpace(chatID)
 	userID = strings.TrimSpace(userID)
-	if chatType == "" || chatID == "" || userID == "" {
+	if chatType == "" || chatID == "" || (chatType != "group" && userID == "") {
 		return ""
 	}
 	frontendID := ""
 	if a != nil {
 		frontendID = strings.TrimSpace(a.FrontendID())
+	}
+	if chatType == "group" {
+		if frontendID != "" {
+			return fmt.Sprintf("feishu:frontend:%s:%s:%s:workspace", frontendID, chatType, chatID)
+		}
+		return fmt.Sprintf("feishu:%s:%s:workspace", chatType, chatID)
 	}
 	if frontendID != "" {
 		return fmt.Sprintf("feishu:frontend:%s:%s:%s:workspace:%s", frontendID, chatType, chatID, userID)
@@ -66,6 +80,13 @@ func ResolveWorkspaceSelectionForMessage(a AppConfig, msg *feishu.InboundMessage
 			}
 		}
 	}
+	if msg != nil && !strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") {
+		if provider, ok := a.(botProfileWorkspaceProvider); ok {
+			if workspaceID := strings.TrimSpace(provider.BotProfileWorkspaceID()); workspaceID != "" {
+				return workspaceID
+			}
+		}
+	}
 	if fallback != nil && strings.TrimSpace(fallback.WorkspaceID) != "" {
 		return strings.TrimSpace(fallback.WorkspaceID)
 	}
@@ -86,6 +107,13 @@ func ResolveWorkspaceSelectionForSession(a AppConfig, sess *state.Session) strin
 		if selectionKey := MakeWorkspaceSelectionKeyForSession(a, sess); selectionKey != "" {
 			if selected := store.GetSession(selectionKey); selected != nil && strings.TrimSpace(selected.WorkspaceID) != "" {
 				return strings.TrimSpace(selected.WorkspaceID)
+			}
+		}
+	}
+	if sess != nil && !strings.EqualFold(strings.TrimSpace(sess.ChatType), "group") {
+		if provider, ok := a.(botProfileWorkspaceProvider); ok {
+			if workspaceID := strings.TrimSpace(provider.BotProfileWorkspaceID()); workspaceID != "" {
+				return workspaceID
 			}
 		}
 	}
@@ -158,22 +186,34 @@ func SetWorkspaceSelection(a AppConfig, chatType, chatID, userID, workspaceID st
 		return nil
 	}
 	sess := a.Store().GetSession(key)
+	selectionOwner := strings.TrimSpace(userID)
+	if strings.EqualFold(strings.TrimSpace(chatType), "group") {
+		selectionOwner = ""
+	}
 	if sess == nil {
 		sess = &state.Session{
 			Key:         key,
 			ChatID:      strings.TrimSpace(chatID),
 			ChatType:    strings.TrimSpace(chatType),
-			OwnerUserID: strings.TrimSpace(userID),
+			OwnerUserID: selectionOwner,
 			Status:      state.SessionStatusIdle.String(),
 		}
 	}
 	sess.ChatID = strings.TrimSpace(chatID)
 	sess.ChatType = strings.TrimSpace(chatType)
-	sess.OwnerUserID = strings.TrimSpace(userID)
+	sess.OwnerUserID = selectionOwner
 	sess.WorkspaceID = workspaceID
 	sess.Status = firstNonEmptySessionStatus(sess.Status)
 	trackWorkspaceSelectionRecent(sess, workspaceID)
-	return a.Store().UpsertSession(sess)
+	if err := a.Store().UpsertSession(sess); err != nil {
+		return err
+	}
+	if !strings.EqualFold(strings.TrimSpace(chatType), "group") {
+		if setter, ok := a.(botProfileWorkspaceSetter); ok {
+			return setter.SetBotProfileWorkspaceID(workspaceID)
+		}
+	}
+	return nil
 }
 
 // SetWorkspaceSelectionForMessage persists the current workspace selection for

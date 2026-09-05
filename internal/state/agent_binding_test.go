@@ -70,6 +70,9 @@ func TestAgentBindingsPersistScopeAndClone(t *testing.T) {
 	if saved.PendingMessage == nil || saved.PendingMessage.ChatType != "group" || saved.PendingMessage.Text != "original prompt" || len(saved.PendingMessage.MentionedOpenIDs) != 1 || !saved.PendingMessage.MentionedAny || len(saved.PendingMessage.Attachments) != 1 {
 		t.Fatalf("saved pending message = %+v", saved.PendingMessage)
 	}
+	if len(saved.PendingMessages) != 1 || saved.PendingMessages[0].MessageID != "msg-1" {
+		t.Fatalf("saved pending queue = %+v", saved.PendingMessages)
+	}
 
 	saved.WorkspaceID = "changed-through-return-value"
 	saved.PendingMessage.Text = "changed-through-return-value"
@@ -166,5 +169,44 @@ func TestAgentBindingsNormalizeAndMigrateSnapshot(t *testing.T) {
 	}
 	if len(snapshot.AgentBindings) != 0 || len(snapshot.GroupPrimaries) != 0 {
 		t.Fatalf("migrated snapshot synthesized new group config state: bindings=%+v primaries=%+v", snapshot.AgentBindings, snapshot.GroupPrimaries)
+	}
+}
+
+func TestBotProfilePersistsPerFrontendAndNormalizes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if err := store.UpsertBotProfile(&BotProfile{
+		ID:              " profile-a ",
+		FrontendID:      " frontend-a ",
+		WorkspaceID:     " ws-a ",
+		Model:           " gpt-a ",
+		ReasoningEffort: " high ",
+		ServiceTier:     " FAST ",
+	}); err != nil {
+		t.Fatalf("UpsertBotProfile() error = %v", err)
+	}
+	got := store.GetBotProfile("frontend-a")
+	if got == nil || got.ID != "profile-a" || got.FrontendID != "frontend-a" || got.WorkspaceID != "ws-a" || got.Model != "gpt-a" || got.ServiceTier != "fast" {
+		t.Fatalf("normalized profile = %+v", got)
+	}
+	got.Model = "mutated"
+	if reread := store.GetBotProfile("frontend-a"); reread == nil || reread.Model != "gpt-a" {
+		t.Fatalf("profile clone = %+v", reread)
+	}
+	if err := store.UpsertBotProfile(&BotProfile{FrontendID: "frontend-b", Model: "gpt-b"}); err != nil {
+		t.Fatalf("UpsertBotProfile(second) error = %v", err)
+	}
+	if store.GetBotProfile("frontend-b") == nil || store.GetBotProfile("frontend-a") == nil {
+		t.Fatalf("frontend profiles were not isolated: %+v", store.AllBotProfiles())
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open(reopen) error = %v", err)
+	}
+	if profile := reopened.GetBotProfile("frontend-a"); profile == nil || profile.Model != "gpt-a" {
+		t.Fatalf("reopened profile = %+v", profile)
 	}
 }

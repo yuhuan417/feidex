@@ -341,7 +341,7 @@
 
 优先检查：
 
-- `group_at_only = true` 时是否真的 `@bot`
+- 是否明确 `@` 了目标 Bot；普通未 `@` 消息只由 primary Bot 处理
 - `allow_from` 是否限制了发送者
 - 飞书应用权限是否配置正确
 

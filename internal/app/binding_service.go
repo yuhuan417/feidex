@@ -430,7 +430,10 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"Claude permissions: " + renderOptionalBacktick(binding.ClaudePermissionMode),
 		"\n常用命令：`/workspace use WORKSPACE_ID`、`/workspace new WORKSPACE_ID CWD`、`/workspace new worktree [BRANCH] [ID]`、`/workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`、`/primary on`、`/model set MODEL|default`、`/model effort EFFORT|default`。",
 	}
-	if binding.PendingMessage != nil {
+	if len(binding.PendingMessages) > 0 {
+		preview := pendingBindingMessagePreview(binding.PendingMessages[0])
+		lines = append(lines, fmt.Sprintf("\n已暂存原消息 pending queue `%d`，配置工作区后按顺序继续处理；下一条: `%s`", len(binding.PendingMessages), preview))
+	} else if binding.PendingMessage != nil {
 		preview := pendingBindingMessagePreview(binding.PendingMessage)
 		lines = append(lines, "\n已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
 	}

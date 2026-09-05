@@ -17,6 +17,7 @@ func effectiveCodexModel(a *App, sess *state.Session, ws *config.Workspace) stri
 	return firstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
+		botProfileModelForApp(a),
 		configuredGlobalModel(a.cfg),
 	)
 }
@@ -25,6 +26,7 @@ func effectiveCodexReasoningEffort(a *App, sess *state.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	return firstNonEmpty(
 		strings.TrimSpace(bindingReasoningEffortOverride(binding)),
+		botProfileReasoningEffortForApp(a),
 		modelconfig.ConfiguredGlobalReasoningEffort(a.cfg),
 	)
 }
@@ -34,6 +36,7 @@ func effectiveClaudeModel(a *App, sess *state.Session, ws *config.Workspace) str
 	return firstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
+		botProfileClaudeModelForApp(a),
 		strings.TrimSpace(a.cfg.Claude.Model),
 	)
 }
@@ -46,6 +49,9 @@ func effectiveBindingApprovalPolicy(a *App, sess *state.Session, ws *config.Work
 	if binding != nil && strings.TrimSpace(binding.ApprovalPolicyOverride) != "" {
 		return strings.TrimSpace(binding.ApprovalPolicyOverride)
 	}
+	if profile := effectiveBotProfile(a); profile != nil && strings.TrimSpace(profile.ApprovalPolicy) != "" {
+		return strings.TrimSpace(profile.ApprovalPolicy)
+	}
 	return effectiveThreadApprovalPolicy(sess, ws)
 }
 
@@ -57,6 +63,9 @@ func effectiveBindingSandboxMode(a *App, sess *state.Session, ws *config.Workspa
 	if binding != nil && strings.TrimSpace(binding.SandboxModeOverride) != "" {
 		return strings.TrimSpace(binding.SandboxModeOverride)
 	}
+	if profile := effectiveBotProfile(a); profile != nil && strings.TrimSpace(profile.SandboxMode) != "" {
+		return strings.TrimSpace(profile.SandboxMode)
+	}
 	return effectiveThreadSandboxMode(sess, ws)
 }
 
@@ -65,7 +74,12 @@ func effectiveBindingServiceTier(a *App, sess *state.Session) string {
 		return strings.TrimSpace(serviceTier)
 	}
 	if binding := effectiveBindingForSession(a, sess); binding != nil {
-		return strings.TrimSpace(binding.ServiceTierOverride)
+		if value := strings.TrimSpace(binding.ServiceTierOverride); value != "" {
+			return value
+		}
+	}
+	if profile := effectiveBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.ServiceTier)
 	}
 	return ""
 }
@@ -78,6 +92,9 @@ func effectiveBindingMultiAgentMode(a *App, sess *state.Session, ws *config.Work
 	if binding != nil && strings.TrimSpace(binding.MultiAgentModeOverride) != "" {
 		return strings.TrimSpace(binding.MultiAgentModeOverride)
 	}
+	if profile := effectiveBotProfile(a); profile != nil && strings.TrimSpace(profile.MultiAgentMode) != "" {
+		return strings.TrimSpace(profile.MultiAgentMode)
+	}
 	return effectiveThreadMultiAgentMode(sess, ws)
 }
 
@@ -88,7 +105,31 @@ func effectiveBindingClaudePermissionMode(a *App, sess *state.Session, ws *confi
 	if binding := effectiveBindingForSession(a, sess); binding != nil && strings.TrimSpace(binding.ClaudePermissionMode) != "" {
 		return normalizeClaudePermissionModeValue(binding.ClaudePermissionMode)
 	}
+	if profile := effectiveBotProfile(a); profile != nil && strings.TrimSpace(profile.ClaudePermissionMode) != "" {
+		return normalizeClaudePermissionModeValue(profile.ClaudePermissionMode)
+	}
 	return effectiveClaudePermissionMode(sess, ws, cfg)
+}
+
+func botProfileModelForApp(a *App) string {
+	if profile := effectiveBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.Model)
+	}
+	return ""
+}
+
+func botProfileClaudeModelForApp(a *App) string {
+	if profile := effectiveBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.ClaudeModel)
+	}
+	return ""
+}
+
+func botProfileReasoningEffortForApp(a *App) string {
+	if profile := effectiveBotProfile(a); profile != nil {
+		return strings.TrimSpace(profile.ReasoningEffort)
+	}
+	return ""
 }
 
 func sessionModelOverride(sess *state.Session) string {

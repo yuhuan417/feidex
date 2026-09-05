@@ -15,7 +15,6 @@ app_id = "cli_xxx"
 app_secret = "sec_xxx"
 allow_from = []
 debug_allow_from = []
-group_at_only = true
 card_enabled = true
 quiet = "progress"
 
@@ -80,8 +79,6 @@ Feidex 会把这些状态写进去：
   - 允许的用户列表；空表示不限制
 - `debug_allow_from`
   - 允许使用 debug 功能的用户列表；控制 `/debug` 和 `/debug logs`，空表示默认不允许任何用户使用
-- `group_at_only`
-  - 群聊是否仅在 `@bot` 时响应
 - `card_enabled`
   - 是否启用卡片输出
 - `quiet`
@@ -190,7 +187,7 @@ Claude Code 后端配置：
   - 留空则在启动时弹出交互式选择卡片
 - `app_id` / `app_secret`
   - 该前端的飞书应用凭据
-- `allow_from` / `debug_allow_from` / `group_at_only` 等
+- `allow_from` / `debug_allow_from` 等
   - 与 `[feishu]` 下的同名字段含义相同
 - `feidex feishu setup/new/bind --frontend-id <id> [--backend ...]`
   - 可直接创建或更新这些 `[[frontend]]` 条目，无需手动编辑 TOML

@@ -87,6 +87,9 @@ func (a submissionAppAdapter) SubmissionQueueAgentBinding(chatType, chatID strin
 func (a submissionAppAdapter) SubmissionQueueAgentBindingByID(id string) *state.AgentBinding {
 	return a.app.State().AgentBinding(id)
 }
+func (a submissionAppAdapter) SubmissionQueueBotProfile() *state.BotProfile {
+	return a.app.State().BotProfile()
+}
 func (a submissionAppAdapter) SubmissionQueueWorkspace(id string) *config.Workspace {
 	return config.FindWorkspace(a.app.cfg, id)
 }

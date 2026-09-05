@@ -16,7 +16,6 @@ app_id = "cli_xxx"
 app_secret = "sec_xxx"
 allow_from = []
 debug_allow_from = []
-group_at_only = true
 card_enabled = true
 quiet = "progress"
 

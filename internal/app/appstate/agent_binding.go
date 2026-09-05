@@ -6,6 +6,42 @@ import (
 	"feidex/internal/state"
 )
 
+// BotProfile returns the default profile owned by this frontend.
+func (s *Store) BotProfile() *state.BotProfile {
+	if s == nil || s.Store == nil {
+		return nil
+	}
+	frontendID := strings.TrimSpace(s.FrontendID)
+	if frontendID == "" {
+		frontendID = "default"
+	}
+	profile := s.Store.GetBotProfile(frontendID)
+	return profile
+}
+
+// SaveBotProfile persists a profile in the current frontend scope.
+func (s *Store) SaveBotProfile(profile *state.BotProfile) error {
+	if s == nil || s.Store == nil || profile == nil {
+		return nil
+	}
+	cp := *profile
+	if strings.TrimSpace(cp.FrontendID) == "" {
+		cp.FrontendID = strings.TrimSpace(s.FrontendID)
+		if cp.FrontendID == "" {
+			cp.FrontendID = "default"
+		}
+	}
+	return s.Store.UpsertBotProfile(&cp)
+}
+
+// DeleteBotProfile removes the current frontend's default profile.
+func (s *Store) DeleteBotProfile() error {
+	if s == nil || s.Store == nil {
+		return nil
+	}
+	return s.Store.DeleteBotProfile(s.FrontendID)
+}
+
 // AgentBinding returns a binding owned by the current frontend.
 func (s *Store) AgentBinding(id string) *state.AgentBinding {
 	if s == nil || s.Store == nil {

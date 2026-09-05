@@ -8,7 +8,7 @@ import (
 )
 
 func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
-	a := New(config.FeishuConfig{GroupAtOnly: true})
+	a := New(config.FeishuConfig{})
 	a.botOpenID = "bot-self"
 	var captured struct {
 		chatID, rootID, parentID string
@@ -65,7 +65,7 @@ func TestConvertMessageUsesGroupPolicyAndPreservesMentions(t *testing.T) {
 }
 
 func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.T) {
-	a := New(config.FeishuConfig{GroupAtOnly: true})
+	a := New(config.FeishuConfig{})
 	a.botOpenID = "bot-self"
 	var capturedRootID string
 	a.SetGroupMessagePolicy(func(input GroupMessagePolicyInput) bool {
@@ -104,7 +104,7 @@ func TestConvertMessageNormalizesDefaultedTopLevelRootForGroupPolicy(t *testing.
 }
 
 func TestConvertMessageSynthesizesEmptySelfMentionAsPrimaryCommand(t *testing.T) {
-	a := New(config.FeishuConfig{GroupAtOnly: true})
+	a := New(config.FeishuConfig{})
 	a.botOpenID = "bot-self"
 
 	msgType := "text"

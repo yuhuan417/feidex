@@ -106,7 +106,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandWorkspace(msg, args)
 					}
-					return commandWorkspace(a, msg, args)
+					return commandWorkspaceProfileAware(a, msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: matchClaudeWorkspaceCommand,
@@ -135,7 +135,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandModel(msg, args)
 					}
-					return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
+					return commandModelProfileAware(a, msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: func(fields []string) bool {
@@ -149,7 +149,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandEffort(msg, args)
 					}
-					return newModelConfigService(a).commandEffort(msg, args)
+					return commandEffortProfileAware(a, msg, args)
 				},
 			},
 		},
@@ -187,6 +187,26 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return svc.completeBindingEffortSet(action, sessionKey, reasoningEffort)
 				case "model.config.add_option", "model.config.remove_option", "model.plan_config.set_model", "model.plan_config.select_model", "model.plan_config.set_effort", "model.plan_config.select_effort":
 					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "该项是 bot frontend 默认配置，请私聊该 bot 使用"}}, nil
+				}
+			}
+			if p2pSessionScopeActive(s.app, sessionKey) {
+				switch actionName {
+				case "model.config.set_model":
+					return completeBotProfileModelSet(s.app, action, actionStringValue(action, "model_id"))
+				case "model.config.select_model":
+					modelID := strings.TrimSpace(action.Option)
+					if modelID == modelConfigDefaultOptionValue {
+						modelID = ""
+					}
+					return completeBotProfileModelSet(s.app, action, modelID)
+				case "model.config.set_effort":
+					return completeBotProfileEffortSet(s.app, action, actionStringValue(action, "reasoning_effort"))
+				case "model.config.select_effort":
+					effort := strings.TrimSpace(action.Option)
+					if effort == modelConfigDefaultOptionValue {
+						effort = ""
+					}
+					return completeBotProfileEffortSet(s.app, action, effort)
 				}
 			}
 			switch actionName {
@@ -243,7 +263,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandFast(msg, args)
 					}
-					return commandFast(a, msg, args)
+					return commandFastProfileAware(a, msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: nil,
@@ -265,6 +285,9 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				case "service_tier.set":
 					return svc.completeBindingServiceTierSet(action, sessionKey, actionStringValue(action, "service_tier"))
 				}
+			}
+			if p2pSessionScopeActive(s.app, sessionKey) && actionName == "service_tier.set" {
+				return completeBotProfileServiceTierSet(s.app, action, actionStringValue(action, "service_tier"))
 			}
 			switch actionName {
 			case "menu.fast":

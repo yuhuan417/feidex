@@ -51,9 +51,8 @@ type InboundMessage struct {
 }
 
 // GroupMessagePolicyInput is the app-level context used to decide whether a
-// group message should be delivered to this local bot when group_at_only is
-// enabled. It is evaluated before app routing, so it carries only lightweight
-// message metadata and raw text.
+// group message should be delivered to this local bot. It carries only
+// lightweight message metadata and raw text.
 type GroupMessagePolicyInput struct {
 	ChatID           string
 	RootMessageID    string
@@ -65,7 +64,7 @@ type GroupMessagePolicyInput struct {
 }
 
 // GroupMessagePolicy decides whether a group message should be delivered to
-// this local bot when group_at_only is enabled.
+// this local bot.
 type GroupMessagePolicy func(GroupMessagePolicyInput) bool
 
 type MessageRecall struct {
@@ -1222,10 +1221,11 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	if synthesizedPrimaryCommand {
 		effectiveText = "/primary on"
 	}
-	if chatType == "group" && a.cfg.GroupAtOnly {
-		allowedGroupTrigger := false
-		if a.groupMessagePolicy != nil && a.botOpenID != "" {
-			allowedGroupTrigger = a.groupMessagePolicy(GroupMessagePolicyInput{
+	// All group messages are converted here and, when configured, routed by the
+	// app-level policy. The adapter itself does not apply product routing rules.
+	if chatType == "group" {
+		if a.groupMessagePolicy != nil {
+			if !a.groupMessagePolicy(GroupMessagePolicyInput{
 				ChatID:           chatID,
 				RootMessageID:    policyRootMessageID,
 				ParentMessageID:  parentMessageID,
@@ -1233,25 +1233,9 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 				MentionedOpenIDs: mentionedOpenIDs,
 				MentionedAny:     mentionedAny,
 				MentionedSelf:    mentionedSelf,
-			})
-		} else {
-			allowedGroupTrigger = mentionedSelf || synthesizedPrimaryCommand
-		}
-		if !allowedGroupTrigger {
-			slog.Debug("feishu group message ignored by trigger policy",
-				"app_id", strings.TrimSpace(a.cfg.AppID),
-				"message_id", messageID,
-				"chat_id", chatID,
-				"root_message_id", rootMessageID,
-				"policy_root_message_id", policyRootMessageID,
-				"parent_message_id", parentMessageID,
-				"mentioned_self", mentionedSelf,
-				"mention_count", len(mentionedOpenIDs),
-				"mentioned_any", mentionedAny,
-				"has_group_policy", a.groupMessagePolicy != nil,
-				"has_bot_open_id", strings.TrimSpace(a.botOpenID) != "",
-			)
-			return nil
+			}) {
+				return nil
+			}
 		}
 	}
 	out := &InboundMessage{

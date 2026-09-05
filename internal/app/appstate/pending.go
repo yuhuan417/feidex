@@ -3,6 +3,7 @@ package appstate
 import (
 	"strings"
 
+	"feidex/internal/app/appcore"
 	"feidex/internal/state"
 )
 
@@ -35,6 +36,25 @@ func (s *Store) SavePending(req *state.PendingRequest) error {
 	}
 	if strings.TrimSpace(cp.Backend) == "" {
 		cp.Backend = s.Backend
+	}
+	// Group conversations have shared permissions: pending cards and forms
+	// may be completed by any real member. Keep p2p ownership restrictions.
+	chatType := ""
+	if sess := s.Session(cp.SessionKey); sess != nil {
+		chatType = sess.ChatType
+	} else {
+		_, parsedChatType, chatID, _, _ := appcore.ParseSessionKey(cp.SessionKey)
+		chatType = parsedChatType
+		if chatType == "" && chatID != "" {
+			if bindings := s.Store.AgentBindingsByChat(s.FrontendID, "group", chatID); len(bindings) > 0 {
+				chatType = "group"
+			} else if primaries := s.Store.GroupPrimariesByChat(s.FrontendID, "group", chatID); len(primaries) > 0 {
+				chatType = "group"
+			}
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(chatType), "group") {
+		cp.OwnerUserID = ""
 	}
 	return s.Store.UpsertPending(&cp)
 }

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 9
+const currentSnapshotVersion = 10
 
 type Store struct {
 	path    string
@@ -26,6 +26,7 @@ type Snapshot struct {
 	Version                   int                                   `json:"version"`
 	Sessions                  map[string]*storedSession             `json:"sessions"`
 	AgentBindings             map[string]*AgentBinding              `json:"agent_bindings,omitempty"`
+	BotProfiles               map[string]*BotProfile                `json:"bot_profiles,omitempty"`
 	GroupPrimaries            map[string]*GroupPrimary              `json:"group_primaries,omitempty"`
 	GroupAnnouncementBlocks   map[string]*GroupAnnouncementBlock    `json:"group_announcement_blocks,omitempty"`
 	FrontendCardNotifications map[string][]FrontendCardNotification `json:"frontend_card_notifications,omitempty"`
@@ -80,22 +81,42 @@ type FrontendCardNotification struct {
 // AgentBinding maps a local frontend/bot to one logical chat project.
 // WorkspaceID and the optional model settings refer to this local instance.
 type AgentBinding struct {
-	ID                      string                      `json:"id"`
-	FrontendID              string                      `json:"frontend_id"`
-	ChatID                  string                      `json:"chat_id"`
-	ChatType                string                      `json:"chat_type"`
-	WorkspaceID             string                      `json:"workspace_id"`
-	ModelOverride           string                      `json:"model_override,omitempty"`
-	ReasoningEffortOverride string                      `json:"reasoning_effort_override,omitempty"`
-	ServiceTierOverride     string                      `json:"service_tier_override,omitempty"`
-	SandboxModeOverride     string                      `json:"sandbox_mode_override,omitempty"`
-	ApprovalPolicyOverride  string                      `json:"approval_policy_override,omitempty"`
-	MultiAgentModeOverride  string                      `json:"multi_agent_mode_override,omitempty"`
-	ClaudePermissionMode    string                      `json:"claude_permission_mode,omitempty"`
-	PendingMessage          *AgentBindingPendingMessage `json:"pending_message,omitempty"`
-	Status                  string                      `json:"status"`
-	CreatedAt               int64                       `json:"created_at"`
-	UpdatedAt               int64                       `json:"updated_at"`
+	ID                      string                        `json:"id"`
+	FrontendID              string                        `json:"frontend_id"`
+	ChatID                  string                        `json:"chat_id"`
+	ChatType                string                        `json:"chat_type"`
+	WorkspaceID             string                        `json:"workspace_id"`
+	ModelOverride           string                        `json:"model_override,omitempty"`
+	ReasoningEffortOverride string                        `json:"reasoning_effort_override,omitempty"`
+	ServiceTierOverride     string                        `json:"service_tier_override,omitempty"`
+	SandboxModeOverride     string                        `json:"sandbox_mode_override,omitempty"`
+	ApprovalPolicyOverride  string                        `json:"approval_policy_override,omitempty"`
+	MultiAgentModeOverride  string                        `json:"multi_agent_mode_override,omitempty"`
+	ClaudePermissionMode    string                        `json:"claude_permission_mode,omitempty"`
+	PendingMessage          *AgentBindingPendingMessage   `json:"pending_message,omitempty"`
+	PendingMessages         []*AgentBindingPendingMessage `json:"pending_messages,omitempty"`
+	Status                  string                        `json:"status"`
+	CreatedAt               int64                         `json:"created_at"`
+	UpdatedAt               int64                         `json:"updated_at"`
+}
+
+// BotProfile stores the frontend/Bot default configuration. It is intentionally
+// independent from a group ConversationBinding; group bindings may override
+// runtime fields but never mutate this profile.
+type BotProfile struct {
+	ID                   string `json:"id"`
+	FrontendID           string `json:"frontend_id"`
+	WorkspaceID          string `json:"workspace_id,omitempty"`
+	Model                string `json:"model,omitempty"`
+	ReasoningEffort      string `json:"reasoning_effort,omitempty"`
+	ServiceTier          string `json:"service_tier,omitempty"`
+	SandboxMode          string `json:"sandbox_mode,omitempty"`
+	ApprovalPolicy       string `json:"approval_policy,omitempty"`
+	MultiAgentMode       string `json:"multi_agent_mode,omitempty"`
+	ClaudeModel          string `json:"claude_model,omitempty"`
+	ClaudePermissionMode string `json:"claude_permission_mode,omitempty"`
+	CreatedAt            int64  `json:"created_at"`
+	UpdatedAt            int64  `json:"updated_at"`
 }
 
 // GroupPrimary stores the bot OpenID that owns unmentioned messages in one
@@ -300,6 +321,7 @@ func Open(path string) (*Store, error) {
 			Version:                   currentSnapshotVersion,
 			Sessions:                  map[string]*storedSession{},
 			AgentBindings:             map[string]*AgentBinding{},
+			BotProfiles:               map[string]*BotProfile{},
 			GroupPrimaries:            map[string]*GroupPrimary{},
 			GroupAnnouncementBlocks:   map[string]*GroupAnnouncementBlock{},
 			FrontendCardNotifications: map[string][]FrontendCardNotification{},
@@ -333,6 +355,9 @@ func Open(path string) (*Store, error) {
 	if s.data.FrontendCardNotifications == nil {
 		s.data.FrontendCardNotifications = map[string][]FrontendCardNotification{}
 	}
+	if s.data.BotProfiles == nil {
+		s.data.BotProfiles = map[string]*BotProfile{}
+	}
 	rewrite := s.data.Version != currentSnapshotVersion
 	s.data.Version = currentSnapshotVersion
 	normalizedBindings := normalizeAgentBindings(s.data.AgentBindings)
@@ -343,6 +368,14 @@ func Open(path string) (*Store, error) {
 		rewrite = true
 	}
 	s.data.AgentBindings = normalizedBindings
+	normalizedProfiles := normalizeBotProfiles(s.data.BotProfiles)
+	if normalizedProfiles == nil {
+		normalizedProfiles = map[string]*BotProfile{}
+	}
+	if !botProfilesEqual(s.data.BotProfiles, normalizedProfiles) {
+		rewrite = true
+	}
+	s.data.BotProfiles = normalizedProfiles
 	normalizedPrimaries := normalizeGroupPrimaries(s.data.GroupPrimaries)
 	if normalizedPrimaries == nil {
 		normalizedPrimaries = map[string]*GroupPrimary{}
@@ -488,6 +521,85 @@ func (s *Store) UpsertScopedAgentBinding(frontendID string, binding *AgentBindin
 		return fmt.Errorf("agent binding frontend %q does not match scope %q", cp.FrontendID, frontendID)
 	}
 	return s.UpsertAgentBinding(cp)
+}
+
+// GetBotProfile returns the profile owned by frontendID.
+func (s *Store) GetBotProfile(frontendID string) *BotProfile {
+	frontendID = strings.TrimSpace(frontendID)
+	if frontendID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, profile := range s.data.BotProfiles {
+		if profile != nil && profile.FrontendID == frontendID {
+			return cloneBotProfile(profile)
+		}
+	}
+	return nil
+}
+
+// AllBotProfiles returns deep copies of all profiles.
+func (s *Store) AllBotProfiles() []*BotProfile {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return cloneBotProfiles(s.data.BotProfiles)
+}
+
+// UpsertBotProfile persists one frontend-scoped profile.
+func (s *Store) UpsertBotProfile(profile *BotProfile) error {
+	if profile == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := cloneBotProfile(profile)
+	if cp == nil {
+		return nil
+	}
+	normalizeBotProfileValues(cp)
+	if cp.FrontendID == "" {
+		return fmt.Errorf("bot profile frontend_id is required")
+	}
+	if cp.ID == "" {
+		cp.ID = "bot-profile-" + sanitizeStateIDPart(cp.FrontendID)
+	}
+	now := time.Now().Unix()
+	if previous := s.data.BotProfiles[cp.ID]; previous != nil && cp.CreatedAt == 0 {
+		cp.CreatedAt = previous.CreatedAt
+	}
+	for id, previous := range s.data.BotProfiles {
+		if id != cp.ID && previous != nil && previous.FrontendID == cp.FrontendID {
+			delete(s.data.BotProfiles, id)
+		}
+	}
+	if cp.CreatedAt == 0 {
+		cp.CreatedAt = now
+	}
+	cp.UpdatedAt = now
+	if s.data.BotProfiles == nil {
+		s.data.BotProfiles = map[string]*BotProfile{}
+	}
+	s.data.BotProfiles[cp.ID] = cp
+	return s.saveLocked()
+}
+
+// DeleteBotProfile removes a frontend-scoped profile.
+func (s *Store) DeleteBotProfile(frontendID string) error {
+	frontendID = strings.TrimSpace(frontendID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for id, profile := range s.data.BotProfiles {
+		if profile != nil && profile.FrontendID == frontendID {
+			delete(s.data.BotProfiles, id)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return s.saveLocked()
 }
 
 // DeleteAgentBinding deletes a persisted binding by id.
@@ -670,15 +782,23 @@ func (s *Store) CanonicalizeSessionKeys(canonical func(key, chatType, chatID, fr
 		nextRuntime[newKey] = cp
 	}
 	for _, binding := range s.data.AgentBindings {
-		if binding == nil || binding.PendingMessage == nil {
+		if binding == nil {
 			continue
 		}
-		pending := binding.PendingMessage
-		oldKey := strings.TrimSpace(pending.SessionKey)
-		newKey := strings.TrimSpace(canonical(oldKey, pending.ChatType, pending.ChatID, binding.FrontendID))
-		if newKey != "" && newKey != oldKey {
-			pending.SessionKey = newKey
-			changed = true
+		pendingMessages := binding.PendingMessages
+		if len(pendingMessages) == 0 && binding.PendingMessage != nil {
+			pendingMessages = []*AgentBindingPendingMessage{binding.PendingMessage}
+		}
+		for _, pending := range pendingMessages {
+			if pending == nil {
+				continue
+			}
+			oldKey := strings.TrimSpace(pending.SessionKey)
+			newKey := strings.TrimSpace(canonical(oldKey, pending.ChatType, pending.ChatID, binding.FrontendID))
+			if newKey != "" && newKey != oldKey {
+				pending.SessionKey = newKey
+				changed = true
+			}
 		}
 	}
 	if !changed {
@@ -982,8 +1102,39 @@ func cloneAgentBinding(binding *AgentBinding) *AgentBinding {
 	}
 	cp := *binding
 	cp.PendingMessage = cloneAgentBindingPendingMessage(binding.PendingMessage)
+	if len(binding.PendingMessages) > 0 {
+		cp.PendingMessages = make([]*AgentBindingPendingMessage, 0, len(binding.PendingMessages))
+		for _, pending := range binding.PendingMessages {
+			if cloned := cloneAgentBindingPendingMessage(pending); cloned != nil {
+				cp.PendingMessages = append(cp.PendingMessages, cloned)
+			}
+		}
+	}
 	normalizeAgentBindingValues(&cp)
 	return &cp
+}
+
+func cloneBotProfile(profile *BotProfile) *BotProfile {
+	if profile == nil {
+		return nil
+	}
+	cp := *profile
+	normalizeBotProfileValues(&cp)
+	return &cp
+}
+
+func cloneBotProfiles(src map[string]*BotProfile) []*BotProfile {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]*BotProfile, 0, len(src))
+	for _, profile := range src {
+		if profile != nil {
+			out = append(out, cloneBotProfile(profile))
+		}
+	}
+	slices.SortFunc(out, func(a, b *BotProfile) int { return strings.Compare(a.ID, b.ID) })
+	return out
 }
 
 func cloneAgentBindingPendingMessage(msg *AgentBindingPendingMessage) *AgentBindingPendingMessage {
@@ -1052,7 +1203,7 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	if binding == nil {
 		return false
 	}
-	before := *binding
+	beforeJSON, _ := json.Marshal(binding)
 	binding.ID = strings.TrimSpace(binding.ID)
 	binding.FrontendID = strings.TrimSpace(binding.FrontendID)
 	binding.ChatID = strings.TrimSpace(binding.ChatID)
@@ -1066,11 +1217,51 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	binding.MultiAgentModeOverride = strings.TrimSpace(binding.MultiAgentModeOverride)
 	binding.ClaudePermissionMode = strings.TrimSpace(binding.ClaudePermissionMode)
 	binding.PendingMessage = normalizeAgentBindingPendingMessage(binding.PendingMessage)
+	queue := make([]*AgentBindingPendingMessage, 0, len(binding.PendingMessages))
+	for _, pending := range binding.PendingMessages {
+		if normalized := normalizeAgentBindingPendingMessage(pending); normalized != nil {
+			queue = append(queue, normalized)
+		}
+	}
+	if len(queue) == 0 && binding.PendingMessage != nil {
+		// Legacy snapshots had a single pending_message. Migrate it once into
+		// the new queue; subsequent queue mutations must not resurrect it.
+		queue = append(queue, binding.PendingMessage)
+	}
+	binding.PendingMessages = queue
+	if len(queue) > 0 {
+		binding.PendingMessage = queue[0]
+	} else {
+		binding.PendingMessage = nil
+	}
 	binding.Status = NormalizeAgentBindingStatus(binding.Status).String()
 	if binding.UpdatedAt == 0 && binding.CreatedAt != 0 {
 		binding.UpdatedAt = binding.CreatedAt
 	}
-	return before != *binding
+	afterJSON, _ := json.Marshal(binding)
+	return string(beforeJSON) != string(afterJSON)
+}
+
+func normalizeBotProfileValues(profile *BotProfile) bool {
+	if profile == nil {
+		return false
+	}
+	before := *profile
+	profile.ID = strings.TrimSpace(profile.ID)
+	profile.FrontendID = strings.TrimSpace(profile.FrontendID)
+	profile.WorkspaceID = strings.TrimSpace(profile.WorkspaceID)
+	profile.Model = strings.TrimSpace(profile.Model)
+	profile.ReasoningEffort = strings.TrimSpace(profile.ReasoningEffort)
+	profile.ServiceTier = normalizeStoredServiceTier(profile.ServiceTier)
+	profile.SandboxMode = strings.TrimSpace(profile.SandboxMode)
+	profile.ApprovalPolicy = strings.TrimSpace(profile.ApprovalPolicy)
+	profile.MultiAgentMode = strings.TrimSpace(profile.MultiAgentMode)
+	profile.ClaudeModel = strings.TrimSpace(profile.ClaudeModel)
+	profile.ClaudePermissionMode = strings.TrimSpace(profile.ClaudePermissionMode)
+	if profile.UpdatedAt == 0 && profile.CreatedAt != 0 {
+		profile.UpdatedAt = profile.CreatedAt
+	}
+	return before != *profile
 }
 
 func normalizeGroupPrimaryValues(primary *GroupPrimary) bool {
@@ -1164,6 +1355,30 @@ func normalizeAgentBindings(src map[string]*AgentBinding) map[string]*AgentBindi
 	return dst
 }
 
+func normalizeBotProfiles(src map[string]*BotProfile) map[string]*BotProfile {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]*BotProfile, len(src))
+	for key, profile := range src {
+		cp := cloneBotProfile(profile)
+		if cp == nil {
+			continue
+		}
+		if cp.ID == "" {
+			cp.ID = strings.TrimSpace(key)
+		}
+		if cp.ID == "" || cp.FrontendID == "" {
+			continue
+		}
+		dst[cp.ID] = cp
+	}
+	if len(dst) == 0 {
+		return nil
+	}
+	return dst
+}
+
 func normalizeGroupPrimaries(src map[string]*GroupPrimary) map[string]*GroupPrimary {
 	if len(src) == 0 {
 		return nil
@@ -1189,6 +1404,18 @@ func normalizeGroupPrimaries(src map[string]*GroupPrimary) map[string]*GroupPrim
 }
 
 func agentBindingsEqual(a, b map[string]*AgentBinding) bool {
+	ab, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	bb, err := json.Marshal(b)
+	if err != nil {
+		return false
+	}
+	return string(ab) == string(bb)
+}
+
+func botProfilesEqual(a, b map[string]*BotProfile) bool {
 	ab, err := json.Marshal(a)
 	if err != nil {
 		return false

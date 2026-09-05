@@ -1,6 +1,13 @@
 package appcore
 
-import "testing"
+import (
+	"sync"
+	"testing"
+
+	"feidex/internal/config"
+	"feidex/internal/feishu"
+	"feidex/internal/state"
+)
 
 func TestCanonicalSessionKeyUsesFrontendChatIdentity(t *testing.T) {
 	tests := []struct {
@@ -54,5 +61,35 @@ func TestReplyInThreadEnabledUsesMainConversation(t *testing.T) {
 		if ReplyInThreadEnabled(nil, chatType) {
 			t.Fatalf("ReplyInThreadEnabled(nil, %q) = true, want false", chatType)
 		}
+	}
+}
+
+type workspaceSelectionTestApp struct {
+	frontend string
+	store    *state.Store
+}
+
+func (a workspaceSelectionTestApp) Config() *config.Config   { return config.Default() }
+func (a workspaceSelectionTestApp) ConfigMu() *sync.RWMutex  { return &sync.RWMutex{} }
+func (a workspaceSelectionTestApp) Backend() string          { return "codex" }
+func (a workspaceSelectionTestApp) FrontendID() string       { return a.frontend }
+func (a workspaceSelectionTestApp) FrontendConfigIndex() int { return -1 }
+func (a workspaceSelectionTestApp) Store() *state.Store      { return a.store }
+
+func TestGroupWorkspaceSelectionIsConversationScoped(t *testing.T) {
+	store, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	a := workspaceSelectionTestApp{frontend: "bot-a", store: store}
+	if got := MakeWorkspaceSelectionKey(a, "group", "chat-1", "user-a"); got != MakeWorkspaceSelectionKey(a, "group", "chat-1", "user-b") {
+		t.Fatalf("group selection keys differ by user")
+	}
+	if err := SetWorkspaceSelection(a, "group", "chat-1", "user-a", "ws-a"); err != nil {
+		t.Fatalf("SetWorkspaceSelection() error = %v", err)
+	}
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", UserID: "user-b"}
+	if got := ResolveWorkspaceSelectionForMessage(a, msg, nil); got != "ws-a" {
+		t.Fatalf("ResolveWorkspaceSelectionForMessage() = %q, want ws-a", got)
 	}
 }

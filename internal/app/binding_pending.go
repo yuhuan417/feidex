@@ -32,8 +32,13 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 	if bindingReadyForInput(binding) {
 		return false, nil
 	}
+	pending := pendingBindingMessageFromInbound(s.app, msg)
 	_, err := s.updateBinding(binding, func(current *state.AgentBinding) {
-		current.PendingMessage = pendingBindingMessageFromInbound(s.app, msg)
+		if pending == nil {
+			return
+		}
+		current.PendingMessages = append(current.PendingMessages, pending)
+		current.PendingMessage = pending
 	})
 	if err != nil {
 		return false, err
@@ -133,34 +138,52 @@ func inboundFromPendingBindingMessage(pending *state.AgentBindingPendingMessage)
 }
 
 func (s bindingService) replayPendingBindingMessage(binding *state.AgentBinding) error {
-	if s.app == nil || binding == nil || !bindingReadyForInput(binding) || binding.PendingMessage == nil {
+	if s.app == nil || binding == nil || !bindingReadyForInput(binding) {
 		return nil
 	}
-	pending := binding.PendingMessage
-	msg := inboundFromPendingBindingMessage(pending)
-	if msg == nil {
-		return nil
-	}
-	sessionKey := strings.TrimSpace(pending.SessionKey)
-	if sessionKey == "" {
-		sessionKey = makeSessionKey(s.app, msg)
-	}
-	if err := enqueueSubmissionWithSessionKey(s.app, msg, sessionKey, false); err != nil {
-		return err
-	}
-	_, err := s.updateBinding(binding, func(current *state.AgentBinding) {
-		if current.PendingMessage == nil || strings.TrimSpace(current.PendingMessage.MessageID) == strings.TrimSpace(pending.MessageID) {
-			current.PendingMessage = nil
+	for {
+		current := s.app.State().AgentBinding(binding.ID)
+		if current == nil || len(current.PendingMessages) == 0 {
+			return nil
 		}
-	})
-	return err
+		pending := current.PendingMessages[0]
+		msg := inboundFromPendingBindingMessage(pending)
+		if msg == nil {
+			_, err := s.updateBinding(current, func(updated *state.AgentBinding) {
+				updated.PendingMessage = nil
+				if len(updated.PendingMessages) > 0 {
+					updated.PendingMessages = updated.PendingMessages[1:]
+				}
+			})
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		sessionKey := strings.TrimSpace(pending.SessionKey)
+		if sessionKey == "" {
+			sessionKey = makeSessionKey(s.app, msg)
+		}
+		if err := enqueueSubmissionWithSessionKey(s.app, msg, sessionKey, false); err != nil {
+			return err
+		}
+		_, err := s.updateBinding(current, func(updated *state.AgentBinding) {
+			updated.PendingMessage = nil
+			if len(updated.PendingMessages) > 0 && strings.TrimSpace(updated.PendingMessages[0].MessageID) == strings.TrimSpace(pending.MessageID) {
+				updated.PendingMessages = updated.PendingMessages[1:]
+			}
+		})
+		if err != nil {
+			return err
+		}
+	}
 }
 
 func (s bindingService) replayPendingBindingMessageAsync(binding *state.AgentBinding) {
-	if binding == nil || binding.PendingMessage == nil {
+	if binding == nil || len(binding.PendingMessages) == 0 {
 		return
 	}
-	messageID := strings.TrimSpace(binding.PendingMessage.MessageID)
+	messageID := strings.TrimSpace(binding.PendingMessages[0].MessageID)
 	runAsync(s.app, func() {
 		if err := s.replayPendingBindingMessage(binding); err != nil {
 			slog.Warn("binding pending message replay failed", "binding_id", binding.ID, "message_id", messageID, "error", err)
@@ -169,4 +192,37 @@ func (s bindingService) replayPendingBindingMessageAsync(binding *state.AgentBin
 			}
 		}
 	})
+}
+
+func discardPendingBindingMessageByID(a *App, messageID string) bool {
+	if a == nil || strings.TrimSpace(messageID) == "" || a.State() == nil {
+		return false
+	}
+	discarded := false
+	for _, binding := range a.State().AgentBindings() {
+		if binding == nil || len(binding.PendingMessages) == 0 {
+			continue
+		}
+		filtered := make([]*state.AgentBindingPendingMessage, 0, len(binding.PendingMessages))
+		matched := false
+		for _, pending := range binding.PendingMessages {
+			if pending != nil && strings.TrimSpace(pending.MessageID) == strings.TrimSpace(messageID) {
+				discarded = true
+				matched = true
+				continue
+			}
+			filtered = append(filtered, pending)
+		}
+		if !matched {
+			continue
+		}
+		binding.PendingMessages = filtered
+		if len(filtered) > 0 {
+			binding.PendingMessage = filtered[0]
+		} else {
+			binding.PendingMessage = nil
+		}
+		_ = a.State().SaveAgentBinding(binding)
+	}
+	return discarded
 }

@@ -60,9 +60,18 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 			if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
 				lines = append(lines, "当前 Bot 在本群还没有配置工作区。")
 			}
-			if binding != nil && binding.PendingMessage != nil {
-				if preview := pendingBindingMessagePreview(binding.PendingMessage); preview != "" {
-					lines = append(lines, "已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
+			if binding != nil {
+				pending := binding.PendingMessage
+				pendingCount := len(binding.PendingMessages)
+				if pendingCount > 0 {
+					pending = binding.PendingMessages[0]
+				}
+				if preview := pendingBindingMessagePreview(pending); preview != "" {
+					if pendingCount > 0 {
+						lines = append(lines, fmt.Sprintf("已暂存原消息 pending queue `%d`，下一条: `%s`", pendingCount, preview))
+					} else {
+						lines = append(lines, "已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
+					}
 				}
 			}
 			return lines
