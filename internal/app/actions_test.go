@@ -419,6 +419,13 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").SandboxMode; got != "read-only" {
 		t.Fatalf("persisted sandbox mode = %q, want read-only", got)
 	}
+	resp, err = newWorkspaceService(a).completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
+	if err != nil {
+		t.Fatalf("clear workspace sandbox override: %v", err)
+	}
+	if got := config.FindWorkspace(a.cfg, "default").SandboxMode; got != "danger-full-access" {
+		t.Fatalf("workspace sandbox after restore default = %q, want danger-full-access", got)
+	}
 }
 
 func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
@@ -446,6 +453,13 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	}
 	if got := config.FindWorkspace(loaded, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("persisted approval policy = %q, want never", got)
+	}
+	resp, err = newWorkspaceService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
+	if err != nil {
+		t.Fatalf("clear workspace policy override: %v", err)
+	}
+	if got := config.FindWorkspace(a.cfg, "default").ApprovalPolicy; got != "never" {
+		t.Fatalf("workspace policy after restore default = %q, want never", got)
 	}
 }
 
@@ -497,8 +511,16 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 	if sess == nil || sess.ActiveThreadSandboxMode != "read-only" {
 		t.Fatalf("unexpected thread sandbox override: %#v", sess)
 	}
-	if got := config.FindWorkspace(a.cfg, "default").SandboxMode; got != "workspace-write" {
+	if got := config.FindWorkspace(a.cfg, "default").SandboxMode; got != "danger-full-access" {
 		t.Fatalf("workspace sandbox should stay default, got %q", got)
+	}
+	resp, err = newThreadService(a).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "")
+	if err != nil {
+		t.Fatalf("clear thread sandbox override: %v", err)
+	}
+	sess = a.store.GetSession("sess-1")
+	if sess == nil || sess.ActiveThreadSandboxMode != "" {
+		t.Fatalf("expected thread sandbox override to be cleared: %#v", sess)
 	}
 }
 
@@ -529,7 +551,15 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 	if sess == nil || sess.ActiveThreadApprovalPolicy != "untrusted" {
 		t.Fatalf("unexpected thread policy override: %#v", sess)
 	}
-	if got := config.FindWorkspace(a.cfg, "default").ApprovalPolicy; got != "on-request" {
+	if got := config.FindWorkspace(a.cfg, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("workspace policy should stay default, got %q", got)
+	}
+	resp, err = newThreadService(a).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "")
+	if err != nil {
+		t.Fatalf("clear thread policy override: %v", err)
+	}
+	sess = a.store.GetSession("sess-1")
+	if sess == nil || sess.ActiveThreadApprovalPolicy != "" {
+		t.Fatalf("expected thread policy override to be cleared: %#v", sess)
 	}
 }

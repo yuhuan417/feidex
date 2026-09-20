@@ -72,6 +72,41 @@ func TestStartNextSubmissionUsesWorkspaceApprovalPolicyForTurnStart(t *testing.T
 	}
 }
 
+func TestNewThreadInheritsCurrentThreadPermissionOverrides(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces[0].ApprovalPolicy = "on-request"
+	a.cfg.Workspaces[0].SandboxMode = "workspace-write"
+	sessionKey := "sess-new-thread-overrides"
+	sess := &state.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "thread-old",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadApprovalPolicy: "never",
+		ActiveThreadSandboxMode:    "read-only",
+		Status:                     "idle",
+	}
+	if err := a.store.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	var startParams map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/start" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		startParams, _ = params.(map[string]any)
+		result := out.(*codexrpc.ThreadStartResult)
+		result.Thread.ID = "thread-new"
+		return nil
+	}
+	if _, err := newWorkspaceThreadService(a).startWorkspaceThread(sessionKey, sess, &a.cfg.Workspaces[0]); err != nil {
+		t.Fatalf("startWorkspaceThread() error = %v", err)
+	}
+	if startParams["approvalPolicy"] != "never" || startParams["sandbox"] != "read-only" {
+		t.Fatalf("thread/start params = %+v, want current thread overrides", startParams)
+	}
+}
+
 func TestStartNextSubmissionUsesThreadApprovalOverrideForTurnStart(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces[0].ApprovalPolicy = "on-request"

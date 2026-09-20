@@ -422,7 +422,8 @@ func (d codexPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, dep
 		return nil, err
 	}
 	body := "配置当前工作区默认 sandbox。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.SandboxMode + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.SandboxOptions())+1)
+	buttons := make([]feishu.Button, 0, len(appworkspace.SandboxOptions())+2)
+	buttons = append(buttons, feishu.Button{Text: "恢复默认", Type: "default", Value: cardactions.WorkspaceActionValue{Action: "workspace.sandbox.set", SessionKey: sessionKey, WorkspaceID: ws.ID}.Map()})
 	for _, opt := range appworkspace.SandboxOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -462,7 +463,8 @@ func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps
 		return nil, err
 	}
 	body := "配置当前工作区默认 approval policy。\n\n当前工作区: `" + ws.ID + "`\n当前值: `" + ws.ApprovalPolicy + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.ApprovalPolicyOptions())+1)
+	buttons := make([]feishu.Button, 0, len(appworkspace.ApprovalPolicyOptions())+2)
+	buttons = append(buttons, feishu.Button{Text: "恢复默认", Type: "default", Value: cardactions.WorkspaceActionValue{Action: "workspace.policy.set", SessionKey: sessionKey, WorkspaceID: ws.ID}.Map()})
 	for _, opt := range appworkspace.ApprovalPolicyOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -617,7 +619,7 @@ func (d claudePermissionDriver) RenderWorkspaceMultiAgentMenu(string, WorkspaceP
 }
 
 func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := false
+	valid := strings.TrimSpace(sandboxMode) == ""
 	for _, opt := range appworkspace.SandboxOptions() {
 		if opt.Value == sandboxMode {
 			valid = true
@@ -643,7 +645,7 @@ func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspace
 }
 
 func (d codexPermissionDriver) CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := false
+	valid := strings.TrimSpace(approvalPolicy) == ""
 	for _, opt := range appworkspace.ApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
 			valid = true
@@ -764,8 +766,18 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	current := appsessionctx.EffectiveSandboxMode(sess, ws)
-	body := "配置当前 thread 默认 sandbox。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.SandboxOptions())+1)
+	workspaceDefault := "-"
+	if ws != nil {
+		workspaceDefault = firstNonEmpty(ws.SandboxMode, "-")
+	}
+	override := appthreadview.RenderThreadSettingValue(sess.ActiveThreadSandboxMode, "")
+	body := "配置当前 thread 默认 sandbox。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`\nworkspace 默认: `" + workspaceDefault + "`\n当前覆盖: " + override + "\n生效值: `" + current + "`"
+	buttons := make([]feishu.Button, 0, len(appworkspace.SandboxOptions())+2)
+	followType, followLabel := "default", "跟随 workspace"
+	if strings.TrimSpace(sess.ActiveThreadSandboxMode) == "" {
+		followType, followLabel = "primary", "当前 · 跟随 workspace"
+	}
+	buttons = append(buttons, feishu.Button{Text: followLabel, Type: followType, Value: cardactions.ThreadActionValue{Action: "thread.sandbox.set", SessionKey: sessionKey, ThreadID: threadID}.Map()})
 	for _, opt := range appworkspace.SandboxOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -810,8 +822,18 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
 	current := appsessionctx.EffectiveApprovalPolicy(sess, ws)
-	body := "配置当前 thread 默认 approval policy。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.ApprovalPolicyOptions())+1)
+	workspaceDefault := "-"
+	if ws != nil {
+		workspaceDefault = firstNonEmpty(ws.ApprovalPolicy, "-")
+	}
+	override := appthreadview.RenderThreadSettingValue(sess.ActiveThreadApprovalPolicy, "")
+	body := "配置当前 thread 默认 approval policy。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`\nworkspace 默认: `" + workspaceDefault + "`\n当前覆盖: " + override + "\n生效值: `" + current + "`"
+	buttons := make([]feishu.Button, 0, len(appworkspace.ApprovalPolicyOptions())+2)
+	followType, followLabel := "default", "跟随 workspace"
+	if strings.TrimSpace(sess.ActiveThreadApprovalPolicy) == "" {
+		followType, followLabel = "primary", "当前 · 跟随 workspace"
+	}
+	buttons = append(buttons, feishu.Button{Text: followLabel, Type: followType, Value: cardactions.ThreadActionValue{Action: "thread.policy.set", SessionKey: sessionKey, ThreadID: threadID}.Map()})
 	for _, opt := range appworkspace.ApprovalPolicyOptions() {
 		btnType := "default"
 		label := opt.Label
@@ -977,7 +999,7 @@ func (d codexPermissionDriver) RenderConversationPermissionModeMenu(string, Conv
 }
 
 func (d codexPermissionDriver) CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := false
+	valid := strings.TrimSpace(sandboxMode) == ""
 	for _, opt := range appworkspace.SandboxOptions() {
 		if opt.Value == sandboxMode {
 			valid = true
@@ -1006,7 +1028,7 @@ func (d codexPermissionDriver) CompleteConversationSandboxSet(sessionKey, thread
 }
 
 func (d codexPermissionDriver) CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := false
+	valid := strings.TrimSpace(approvalPolicy) == ""
 	for _, opt := range appworkspace.ApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
 			valid = true

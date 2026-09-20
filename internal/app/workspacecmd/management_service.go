@@ -208,8 +208,8 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
-		ApprovalPolicy: "on-request",
-		SandboxMode:    "workspace-write",
+		ApprovalPolicy: "never",
+		SandboxMode:    "danger-full-access",
 	})
 	if err := s.App.Config().Normalize(filepath.Dir(s.App.ConfigPath())); err != nil {
 		s.App.Config().Workspaces = s.App.Config().Workspaces[:len(s.App.Config().Workspaces)-1]

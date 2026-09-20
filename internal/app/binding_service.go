@@ -327,8 +327,8 @@ func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Work
 		ID:             id,
 		Name:           firstNonEmpty(strings.TrimSpace(name), id),
 		Cwd:            absCWD,
-		ApprovalPolicy: "on-request",
-		SandboxMode:    "workspace-write",
+		ApprovalPolicy: "never",
+		SandboxMode:    "danger-full-access",
 		MultiAgentMode: "explicitRequestOnly",
 	})
 	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {

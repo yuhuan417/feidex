@@ -3981,6 +3981,12 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	if len(ff.replyCards) < 2 {
 		t.Fatalf("expected thread menu cards, got %d", len(ff.replyCards))
 	}
+	for _, card := range ff.replyCards[:2] {
+		body := cardMarkdownContent(t, card)
+		if !strings.Contains(body, "workspace 默认:") || !strings.Contains(body, "当前覆盖:") || !strings.Contains(body, "生效值:") {
+			t.Fatalf("thread permission menu body = %q, want workspace/current/effective values", body)
+		}
+	}
 
 	if got := renderThreadButtonLabel("Very Long Thread Name", "", "id"); got == "" {
 		t.Fatal("renderThreadButtonLabel() should produce a label")

@@ -99,6 +99,12 @@ func TestDefaultConfigUsesInfoLogLevel(t *testing.T) {
 	if cfg.Daemon.ServiceName != "feidex" {
 		t.Fatalf("default daemon service name = %q, want feidex", cfg.Daemon.ServiceName)
 	}
+	if cfg.Claude.PermissionMode != "bypassPermissions" || !cfg.Claude.DangerouslySkipPermissions {
+		t.Fatalf("default Claude permissions = mode %q, dangerously_skip_permissions=%v; want bypassPermissions/true", cfg.Claude.PermissionMode, cfg.Claude.DangerouslySkipPermissions)
+	}
+	if cfg.Workspaces[0].ApprovalPolicy != "never" || cfg.Workspaces[0].SandboxMode != "danger-full-access" {
+		t.Fatalf("default workspace permissions = policy %q, sandbox %q; want never/danger-full-access", cfg.Workspaces[0].ApprovalPolicy, cfg.Workspaces[0].SandboxMode)
+	}
 }
 
 func TestSaveUsesPrivatePermissions(t *testing.T) {

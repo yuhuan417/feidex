@@ -61,7 +61,7 @@ model = "sonnet"
 # from Feishu with /model option add <model-id> or the /model card.
 # model_options = ["deepseek-v4-pro"]
 # effort = "medium"
-permission_mode = "default"
+permission_mode = "bypassPermissions"
 permission_prompt_tool_stdio = true
 # disable_plugins = true
 # system_prompt = "..."
@@ -73,5 +73,5 @@ service_name = "feidex"
 id = "default"
 name = "Default"
 cwd = "."
-approval_policy = "on-request"
-sandbox_mode = "workspace-write"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"

@@ -57,7 +57,7 @@ func TestNormalizeFillsDefaultsAndResolvesPaths(t *testing.T) {
 	if cfg.Workspaces[0].Name != "default" {
 		t.Fatalf("Workspace.Name = %q, want default", cfg.Workspaces[0].Name)
 	}
-	if cfg.Workspaces[0].ApprovalPolicy != "on-request" || cfg.Workspaces[0].SandboxMode != "workspace-write" {
+	if cfg.Workspaces[0].ApprovalPolicy != "never" || cfg.Workspaces[0].SandboxMode != "danger-full-access" {
 		t.Fatalf("unexpected workspace defaults: %+v", cfg.Workspaces[0])
 	}
 	if !filepath.IsAbs(cfg.Workspaces[0].Cwd) || !strings.HasSuffix(cfg.Workspaces[0].Cwd, filepath.Join("workspace", "repo")) {
@@ -275,7 +275,7 @@ func TestSaveLoadAndFindWorkspaceRoundTrip(t *testing.T) {
 			Transport: "stdio",
 		},
 		Workspaces: []Workspace{
-			{ID: "default", Name: "Default", Cwd: ".", ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
+			{ID: "default", Name: "Default", Cwd: ".", ApprovalPolicy: "never", SandboxMode: "danger-full-access"},
 			{ID: "repo", Name: "Repo", Cwd: "./repo", ApprovalPolicy: "never", SandboxMode: "danger-full-access"},
 		},
 	}

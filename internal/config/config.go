@@ -135,7 +135,7 @@ func Default() *Config {
 		Claude: ClaudeConfig{
 			Command:                    "claude",
 			Model:                      "sonnet",
-			PermissionMode:             "default",
+			PermissionMode:             "bypassPermissions",
 			DangerouslySkipPermissions: true,
 			PermissionPromptToolStdio:  true,
 		},
@@ -147,8 +147,8 @@ func Default() *Config {
 				ID:                   "default",
 				Name:                 "Default",
 				Cwd:                  ".",
-				ApprovalPolicy:       "on-request",
-				SandboxMode:          "workspace-write",
+				ApprovalPolicy:       "never",
+				SandboxMode:          "danger-full-access",
 				MultiAgentMode:       "explicitRequestOnly",
 				ClaudePermissionMode: "",
 			},
@@ -276,10 +276,10 @@ func (c *Config) Normalize(baseDir string) error {
 			ws.Cwd = filepath.Clean(filepath.Join(baseDir, ws.Cwd))
 		}
 		if ws.ApprovalPolicy == "" {
-			ws.ApprovalPolicy = "on-request"
+			ws.ApprovalPolicy = "never"
 		}
 		if ws.SandboxMode == "" {
-			ws.SandboxMode = "workspace-write"
+			ws.SandboxMode = "danger-full-access"
 		}
 		if ws.MultiAgentMode == "" {
 			ws.MultiAgentMode = "explicitRequestOnly"

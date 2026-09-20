@@ -30,7 +30,7 @@ service_name = "feidex"
 # command = "claude"
 # model = "sonnet"
 # model_options = ["deepseek-v4-pro"]
-# permission_mode = "default"
+# permission_mode = "bypassPermissions"
 
 [daemon]
 service_name = "feidex"
@@ -52,9 +52,9 @@ service_name = "feidex"
 id = "default"
 name = "Default"
 cwd = "."
-approval_policy = "on-request"
-sandbox_mode = "workspace-write"
-# claude_permission_mode = "default"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+# claude_permission_mode = "bypassPermissions"
 ```
 
 ## `data_dir`
