@@ -95,6 +95,14 @@ func MatchModelCommand(fields []string) bool {
 			return false
 		}
 	case 4:
+		if strings.TrimSpace(fields[1]) == "subagent" {
+			return (strings.TrimSpace(fields[2]) == "set" || strings.TrimSpace(fields[2]) == "effort") && strings.TrimSpace(fields[3]) != ""
+		}
+		role := strings.TrimSpace(fields[1])
+		if role == "plan" || role == "review" || role == "small" {
+			verb := strings.TrimSpace(fields[2])
+			return (verb == "set" || (role == "plan" && verb == "effort")) && strings.TrimSpace(fields[3]) != ""
+		}
 		if strings.TrimSpace(fields[1]) == "option" {
 			switch strings.TrimSpace(fields[2]) {
 			case "add", "remove", "delete", "rm":

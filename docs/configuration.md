@@ -149,6 +149,12 @@ feidex feishu bind --app app_id:app_secret --domain lark
   - Plan 模式专用模型；留空时跟随 default mode 的模型解析链路
 - `plan_reasoning_effort`
   - Plan 模式专用推理强度；留空时跟随 app-server 的 plan preset，若 preset 未提供则不额外发送
+- `review_model`
+  - `/review` 使用的模型；留空时跟随主模型
+- `subagent_model`
+  - Codex 内部 subagent 使用的模型；留空时跟随主模型
+- `subagent_reasoning_effort`
+  - Codex subagent 推理强度；留空时继承主模型有效推理强度
 
 ## `[claude]`
 
@@ -158,6 +164,10 @@ Claude Code 后端配置：
   - Claude CLI 路径，默认 `claude`
 - `model`
   - 模型名称，默认 `sonnet`（可选 `opus`、`haiku`）
+- `small_model`
+  - Claude 内部 small/Haiku 模型；留空时使用 Claude 内置默认
+- `subagent_model`
+  - Claude 内部 subagent 模型；留空时跟随主模型
 - `model_options`
   - Claude `/model` 下拉框里的额外候选模型名列表
   - 推荐直接在飞书里维护：打开 `/model` 卡片，在“管理候选模型”里添加或移除

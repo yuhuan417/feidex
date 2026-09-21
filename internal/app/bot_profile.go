@@ -110,6 +110,100 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 	if len(args) == 0 {
 		return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
 	}
+	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "set") {
+		role := strings.ToLower(strings.TrimSpace(args[0]))
+		value := clearableArg(args[2])
+		if role == "plan" || role == "review" || role == "subagent" || role == "small" {
+			if err := ensureSessionModelConfigIdle(a, makeSessionKey(a, msg)); err != nil {
+				return err
+			}
+			backend := configuredBackend(a)
+			if sess := a.State().Session(makeSessionKey(a, msg)); sess != nil {
+				if _, err := a.State().UpdateSession(sess.Key, func(current *state.Session) {
+					switch role {
+					case "plan":
+						current.PlanModelOverride = value
+					case "review":
+						current.ReviewModelOverride = value
+					case "subagent":
+						current.SubagentModelOverride = value
+					case "small":
+						current.SmallModelOverride = value
+					}
+				}); err != nil {
+					return err
+				}
+				if backend == config.RuntimeBackendClaude && a.claude != nil {
+					_ = a.claude.ResetSession(sess.Key)
+				}
+				return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 "+role+" model", replyInThreadEnabled(a, msg.ChatType))
+			}
+			_, err := updateBotProfile(a, func(profile *state.BotProfile) {
+				if backend == config.RuntimeBackendClaude {
+					switch role {
+					case "small":
+						profile.ClaudeSmallModel = value
+					case "subagent":
+						profile.ClaudeSubagentModel = value
+					}
+				} else {
+					switch role {
+					case "plan":
+						profile.PlanModel = value
+					case "review":
+						profile.ReviewModel = value
+					case "subagent":
+						profile.SubagentModel = value
+					}
+				}
+			})
+			if err != nil {
+				return err
+			}
+			if backend == config.RuntimeBackendClaude && a.claude != nil {
+				if err := a.claude.ResetSession(makeSessionKey(a, msg)); err != nil {
+					return err
+				}
+			}
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 "+role+" model", replyInThreadEnabled(a, msg.ChatType))
+		}
+	}
+	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "effort") && strings.EqualFold(strings.TrimSpace(args[0]), "subagent") && configuredBackend(a) == config.RuntimeBackendCodex {
+		if err := ensureSessionModelConfigIdle(a, makeSessionKey(a, msg)); err != nil {
+			return err
+		}
+		value := clearableArg(args[2])
+		if sess := a.State().Session(makeSessionKey(a, msg)); sess != nil {
+			_, err := a.State().UpdateSession(sess.Key, func(current *state.Session) { current.SubagentReasoningEffortOverride = value })
+			if err != nil {
+				return err
+			}
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 subagent reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+		}
+		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.SubagentReasoningEffort = value })
+		if err != nil {
+			return err
+		}
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 subagent reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+	}
+	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "effort") && strings.EqualFold(strings.TrimSpace(args[0]), "plan") && configuredBackend(a) == config.RuntimeBackendCodex {
+		if err := ensureSessionModelConfigIdle(a, makeSessionKey(a, msg)); err != nil {
+			return err
+		}
+		value := clearableArg(args[2])
+		if sess := a.State().Session(makeSessionKey(a, msg)); sess != nil {
+			_, err := a.State().UpdateSession(sess.Key, func(current *state.Session) { current.PlanReasoningEffortOverride = value })
+			if err != nil {
+				return err
+			}
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 Plan reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+		}
+		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.PlanReasoningEffort = value })
+		if err != nil {
+			return err
+		}
+		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 Plan reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+	}
 	if strings.EqualFold(strings.TrimSpace(args[0]), "set") && len(args) == 2 {
 		if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, args); err != nil {
 			return err

@@ -41,6 +41,10 @@ func resolvePlanModeForActiveThread(a *App) (*state.SessionCollaborationMode, er
 	return planmode.ResolvePlanModeForActiveThread(newPlanModeAppAdapter(a))
 }
 
+func resolvePlanModeForSession(a *App, sess *state.Session) (*state.SessionCollaborationMode, error) {
+	return planmode.ResolvePlanModeForSession(newPlanModeAppAdapter(a), sess)
+}
+
 func planModeForSession(a *App, sessionKey string) *state.SessionCollaborationMode {
 	return planmode.PlanModeForSession(newPlanModeAppAdapter(a), sessionKey)
 }
@@ -230,6 +234,13 @@ func (a planModeAppAdapter) ReplyInThreadEnabled(chatType string) bool {
 
 func (a planModeAppAdapter) SessionHasActiveWork(sess *state.Session) bool {
 	return sessionHasActiveWork(sess)
+}
+
+func (a planModeAppAdapter) EffectivePlanSettings(sess *state.Session) (string, string) {
+	if a.App == nil {
+		return "", ""
+	}
+	return effectiveCodexPlanModel(a.App, sess), effectiveCodexPlanReasoningEffort(a.App, sess)
 }
 
 func (a planModeAppAdapter) ActionStringValue(action *feishu.CardAction, key string) string {

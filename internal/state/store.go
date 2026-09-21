@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const currentSnapshotVersion = 11
+const currentSnapshotVersion = 12
 
 type Store struct {
 	path    string
@@ -46,27 +46,33 @@ type Counters struct {
 }
 
 type storedSession struct {
-	Key                           string                          `json:"key"`
-	BindingID                     string                          `json:"binding_id,omitempty"`
-	WorkspaceID                   string                          `json:"workspace_id"`
-	ChatID                        string                          `json:"chat_id,omitempty"`
-	ChatType                      string                          `json:"chat_type,omitempty"`
-	RootMessageID                 string                          `json:"root_message_id,omitempty"`
-	ActiveThreadID                string                          `json:"active_thread_id"`
-	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode       string                          `json:"active_thread_sandbox_mode"`
-	ActiveThreadMultiAgentMode    string                          `json:"active_thread_multi_agent_mode,omitempty"`
-	ActiveClaudePermissionMode    string                          `json:"active_claude_permission_mode,omitempty"`
-	ActiveThreadServiceTier       string                          `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadCollaborationMode *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
-	ActiveThreadName              string                          `json:"active_thread_name"`
-	ActiveThreadPreview           string                          `json:"active_thread_preview"`
-	BackendThreads                map[string]SessionBackendThread `json:"backend_threads,omitempty"`
-	OwnerUserID                   string                          `json:"owner_user_id"`
-	ModelOverride                 string                          `json:"model_override"`
-	RecentWorkspaceIDs            []string                        `json:"recent_workspace_ids,omitempty"`
-	UpdatedAt                     int64                           `json:"updated_at"`
+	Key                             string                          `json:"key"`
+	BindingID                       string                          `json:"binding_id,omitempty"`
+	WorkspaceID                     string                          `json:"workspace_id"`
+	ChatID                          string                          `json:"chat_id,omitempty"`
+	ChatType                        string                          `json:"chat_type,omitempty"`
+	RootMessageID                   string                          `json:"root_message_id,omitempty"`
+	ActiveThreadID                  string                          `json:"active_thread_id"`
+	ActiveThreadWorkspaceID         string                          `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy      string                          `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode         string                          `json:"active_thread_sandbox_mode"`
+	ActiveThreadMultiAgentMode      string                          `json:"active_thread_multi_agent_mode,omitempty"`
+	ActiveClaudePermissionMode      string                          `json:"active_claude_permission_mode,omitempty"`
+	ActiveThreadServiceTier         string                          `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadCollaborationMode   *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
+	ActiveThreadName                string                          `json:"active_thread_name"`
+	ActiveThreadPreview             string                          `json:"active_thread_preview"`
+	BackendThreads                  map[string]SessionBackendThread `json:"backend_threads,omitempty"`
+	OwnerUserID                     string                          `json:"owner_user_id"`
+	ModelOverride                   string                          `json:"model_override"`
+	PlanModelOverride               string                          `json:"plan_model_override,omitempty"`
+	PlanReasoningEffortOverride     string                          `json:"plan_reasoning_effort_override,omitempty"`
+	ReviewModelOverride             string                          `json:"review_model_override,omitempty"`
+	SubagentModelOverride           string                          `json:"subagent_model_override,omitempty"`
+	SubagentReasoningEffortOverride string                          `json:"subagent_reasoning_effort_override,omitempty"`
+	SmallModelOverride              string                          `json:"small_model_override,omitempty"`
+	RecentWorkspaceIDs              []string                        `json:"recent_workspace_ids,omitempty"`
+	UpdatedAt                       int64                           `json:"updated_at"`
 }
 
 type FrontendCardNotification struct {
@@ -81,42 +87,55 @@ type FrontendCardNotification struct {
 // AgentBinding maps a local frontend/bot to one logical chat project.
 // WorkspaceID and the optional model settings refer to this local instance.
 type AgentBinding struct {
-	ID                      string                        `json:"id"`
-	FrontendID              string                        `json:"frontend_id"`
-	ChatID                  string                        `json:"chat_id"`
-	ChatType                string                        `json:"chat_type"`
-	WorkspaceID             string                        `json:"workspace_id"`
-	ModelOverride           string                        `json:"model_override,omitempty"`
-	ReasoningEffortOverride string                        `json:"reasoning_effort_override,omitempty"`
-	ServiceTierOverride     string                        `json:"service_tier_override,omitempty"`
-	SandboxModeOverride     string                        `json:"sandbox_mode_override,omitempty"`
-	ApprovalPolicyOverride  string                        `json:"approval_policy_override,omitempty"`
-	MultiAgentModeOverride  string                        `json:"multi_agent_mode_override,omitempty"`
-	ClaudePermissionMode    string                        `json:"claude_permission_mode,omitempty"`
-	PendingMessage          *AgentBindingPendingMessage   `json:"pending_message,omitempty"`
-	PendingMessages         []*AgentBindingPendingMessage `json:"pending_messages,omitempty"`
-	Status                  string                        `json:"status"`
-	CreatedAt               int64                         `json:"created_at"`
-	UpdatedAt               int64                         `json:"updated_at"`
+	ID                              string                        `json:"id"`
+	FrontendID                      string                        `json:"frontend_id"`
+	ChatID                          string                        `json:"chat_id"`
+	ChatType                        string                        `json:"chat_type"`
+	WorkspaceID                     string                        `json:"workspace_id"`
+	ModelOverride                   string                        `json:"model_override,omitempty"`
+	ReasoningEffortOverride         string                        `json:"reasoning_effort_override,omitempty"`
+	PlanModelOverride               string                        `json:"plan_model_override,omitempty"`
+	PlanReasoningEffortOverride     string                        `json:"plan_reasoning_effort_override,omitempty"`
+	ReviewModelOverride             string                        `json:"review_model_override,omitempty"`
+	SubagentModelOverride           string                        `json:"subagent_model_override,omitempty"`
+	SubagentReasoningEffortOverride string                        `json:"subagent_reasoning_effort_override,omitempty"`
+	SmallModelOverride              string                        `json:"small_model_override,omitempty"`
+	ServiceTierOverride             string                        `json:"service_tier_override,omitempty"`
+	SandboxModeOverride             string                        `json:"sandbox_mode_override,omitempty"`
+	ApprovalPolicyOverride          string                        `json:"approval_policy_override,omitempty"`
+	MultiAgentModeOverride          string                        `json:"multi_agent_mode_override,omitempty"`
+	ClaudePermissionMode            string                        `json:"claude_permission_mode,omitempty"`
+	PendingMessage                  *AgentBindingPendingMessage   `json:"pending_message,omitempty"`
+	PendingMessages                 []*AgentBindingPendingMessage `json:"pending_messages,omitempty"`
+	Status                          string                        `json:"status"`
+	CreatedAt                       int64                         `json:"created_at"`
+	UpdatedAt                       int64                         `json:"updated_at"`
 }
 
 // BotProfile stores the frontend/Bot default configuration. It is intentionally
 // independent from a group ConversationBinding; group bindings may override
 // runtime fields but never mutate this profile.
 type BotProfile struct {
-	ID                   string `json:"id"`
-	FrontendID           string `json:"frontend_id"`
-	WorkspaceID          string `json:"workspace_id,omitempty"`
-	Model                string `json:"model,omitempty"`
-	ReasoningEffort      string `json:"reasoning_effort,omitempty"`
-	ServiceTier          string `json:"service_tier,omitempty"`
-	SandboxMode          string `json:"sandbox_mode,omitempty"`
-	ApprovalPolicy       string `json:"approval_policy,omitempty"`
-	MultiAgentMode       string `json:"multi_agent_mode,omitempty"`
-	ClaudeModel          string `json:"claude_model,omitempty"`
-	ClaudePermissionMode string `json:"claude_permission_mode,omitempty"`
-	CreatedAt            int64  `json:"created_at"`
-	UpdatedAt            int64  `json:"updated_at"`
+	ID                      string `json:"id"`
+	FrontendID              string `json:"frontend_id"`
+	WorkspaceID             string `json:"workspace_id,omitempty"`
+	Model                   string `json:"model,omitempty"`
+	ReasoningEffort         string `json:"reasoning_effort,omitempty"`
+	PlanModel               string `json:"plan_model,omitempty"`
+	PlanReasoningEffort     string `json:"plan_reasoning_effort,omitempty"`
+	ReviewModel             string `json:"review_model,omitempty"`
+	SubagentModel           string `json:"subagent_model,omitempty"`
+	SubagentReasoningEffort string `json:"subagent_reasoning_effort,omitempty"`
+	ServiceTier             string `json:"service_tier,omitempty"`
+	SandboxMode             string `json:"sandbox_mode,omitempty"`
+	ApprovalPolicy          string `json:"approval_policy,omitempty"`
+	MultiAgentMode          string `json:"multi_agent_mode,omitempty"`
+	ClaudeModel             string `json:"claude_model,omitempty"`
+	ClaudeSmallModel        string `json:"claude_small_model,omitempty"`
+	ClaudeSubagentModel     string `json:"claude_subagent_model,omitempty"`
+	ClaudePermissionMode    string `json:"claude_permission_mode,omitempty"`
+	CreatedAt               int64  `json:"created_at"`
+	UpdatedAt               int64  `json:"updated_at"`
 }
 
 // GroupPrimary stores one frontend's local primary setting for a Feishu group.
@@ -201,33 +220,39 @@ type SessionCollaborationMode struct {
 }
 
 type Session struct {
-	Key                           string                          `json:"key"`
-	BindingID                     string                          `json:"binding_id,omitempty"`
-	WorkspaceID                   string                          `json:"workspace_id"`
-	ActiveThreadID                string                          `json:"active_thread_id"`
-	ActiveThreadWorkspaceID       string                          `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy    string                          `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode       string                          `json:"active_thread_sandbox_mode"`
-	ActiveThreadMultiAgentMode    string                          `json:"active_thread_multi_agent_mode,omitempty"`
-	ActiveClaudePermissionMode    string                          `json:"active_claude_permission_mode,omitempty"`
-	ActiveThreadServiceTier       string                          `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadCollaborationMode *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
-	ActiveThreadName              string                          `json:"active_thread_name"`
-	ActiveThreadPreview           string                          `json:"active_thread_preview"`
-	BackendThreads                map[string]SessionBackendThread `json:"backend_threads,omitempty"`
-	ActiveTurnID                  string                          `json:"active_turn_id"`
-	ActiveSubmissionID            string                          `json:"active_submission_id"`
-	OwnerUserID                   string                          `json:"owner_user_id"`
-	ChatID                        string                          `json:"chat_id"`
-	ChatType                      string                          `json:"chat_type"`
-	RootMessageID                 string                          `json:"root_message_id"`
-	ModelOverride                 string                          `json:"model_override"`
-	Status                        string                          `json:"status"`
-	Queue                         []string                        `json:"queue"`
-	ActiveOperations              []SessionActiveOperation        `json:"active_operations,omitempty"`
-	StagedImages                  []SessionStagedImage            `json:"staged_images,omitempty"`
-	RecentWorkspaceIDs            []string                        `json:"recent_workspace_ids,omitempty"`
-	UpdatedAt                     int64                           `json:"updated_at"`
+	Key                             string                          `json:"key"`
+	BindingID                       string                          `json:"binding_id,omitempty"`
+	WorkspaceID                     string                          `json:"workspace_id"`
+	ActiveThreadID                  string                          `json:"active_thread_id"`
+	ActiveThreadWorkspaceID         string                          `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy      string                          `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode         string                          `json:"active_thread_sandbox_mode"`
+	ActiveThreadMultiAgentMode      string                          `json:"active_thread_multi_agent_mode,omitempty"`
+	ActiveClaudePermissionMode      string                          `json:"active_claude_permission_mode,omitempty"`
+	ActiveThreadServiceTier         string                          `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadCollaborationMode   *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
+	ActiveThreadName                string                          `json:"active_thread_name"`
+	ActiveThreadPreview             string                          `json:"active_thread_preview"`
+	BackendThreads                  map[string]SessionBackendThread `json:"backend_threads,omitempty"`
+	ActiveTurnID                    string                          `json:"active_turn_id"`
+	ActiveSubmissionID              string                          `json:"active_submission_id"`
+	OwnerUserID                     string                          `json:"owner_user_id"`
+	ChatID                          string                          `json:"chat_id"`
+	ChatType                        string                          `json:"chat_type"`
+	RootMessageID                   string                          `json:"root_message_id"`
+	ModelOverride                   string                          `json:"model_override"`
+	PlanModelOverride               string                          `json:"plan_model_override,omitempty"`
+	PlanReasoningEffortOverride     string                          `json:"plan_reasoning_effort_override,omitempty"`
+	ReviewModelOverride             string                          `json:"review_model_override,omitempty"`
+	SubagentModelOverride           string                          `json:"subagent_model_override,omitempty"`
+	SubagentReasoningEffortOverride string                          `json:"subagent_reasoning_effort_override,omitempty"`
+	SmallModelOverride              string                          `json:"small_model_override,omitempty"`
+	Status                          string                          `json:"status"`
+	Queue                           []string                        `json:"queue"`
+	ActiveOperations                []SessionActiveOperation        `json:"active_operations,omitempty"`
+	StagedImages                    []SessionStagedImage            `json:"staged_images,omitempty"`
+	RecentWorkspaceIDs              []string                        `json:"recent_workspace_ids,omitempty"`
+	UpdatedAt                       int64                           `json:"updated_at"`
 }
 
 type SessionActiveOperation struct {
@@ -1249,6 +1274,12 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	binding.WorkspaceID = strings.TrimSpace(binding.WorkspaceID)
 	binding.ModelOverride = strings.TrimSpace(binding.ModelOverride)
 	binding.ReasoningEffortOverride = strings.TrimSpace(binding.ReasoningEffortOverride)
+	binding.PlanModelOverride = strings.TrimSpace(binding.PlanModelOverride)
+	binding.PlanReasoningEffortOverride = strings.TrimSpace(binding.PlanReasoningEffortOverride)
+	binding.ReviewModelOverride = strings.TrimSpace(binding.ReviewModelOverride)
+	binding.SubagentModelOverride = strings.TrimSpace(binding.SubagentModelOverride)
+	binding.SubagentReasoningEffortOverride = strings.TrimSpace(binding.SubagentReasoningEffortOverride)
+	binding.SmallModelOverride = strings.TrimSpace(binding.SmallModelOverride)
 	binding.ServiceTierOverride = normalizeStoredServiceTier(binding.ServiceTierOverride)
 	binding.SandboxModeOverride = strings.TrimSpace(binding.SandboxModeOverride)
 	binding.ApprovalPolicyOverride = strings.TrimSpace(binding.ApprovalPolicyOverride)
@@ -1290,11 +1321,18 @@ func normalizeBotProfileValues(profile *BotProfile) bool {
 	profile.WorkspaceID = strings.TrimSpace(profile.WorkspaceID)
 	profile.Model = strings.TrimSpace(profile.Model)
 	profile.ReasoningEffort = strings.TrimSpace(profile.ReasoningEffort)
+	profile.PlanModel = strings.TrimSpace(profile.PlanModel)
+	profile.PlanReasoningEffort = strings.TrimSpace(profile.PlanReasoningEffort)
+	profile.ReviewModel = strings.TrimSpace(profile.ReviewModel)
+	profile.SubagentModel = strings.TrimSpace(profile.SubagentModel)
+	profile.SubagentReasoningEffort = strings.TrimSpace(profile.SubagentReasoningEffort)
 	profile.ServiceTier = normalizeStoredServiceTier(profile.ServiceTier)
 	profile.SandboxMode = strings.TrimSpace(profile.SandboxMode)
 	profile.ApprovalPolicy = strings.TrimSpace(profile.ApprovalPolicy)
 	profile.MultiAgentMode = strings.TrimSpace(profile.MultiAgentMode)
 	profile.ClaudeModel = strings.TrimSpace(profile.ClaudeModel)
+	profile.ClaudeSmallModel = strings.TrimSpace(profile.ClaudeSmallModel)
+	profile.ClaudeSubagentModel = strings.TrimSpace(profile.ClaudeSubagentModel)
 	profile.ClaudePermissionMode = strings.TrimSpace(profile.ClaudePermissionMode)
 	if profile.UpdatedAt == 0 && profile.CreatedAt != 0 {
 		profile.UpdatedAt = profile.CreatedAt
@@ -1595,27 +1633,33 @@ func storedSessionFromSession(sess *Session) *storedSession {
 	}
 	normalizeSessionValues(cp)
 	return &storedSession{
-		Key:                           cp.Key,
-		BindingID:                     cp.BindingID,
-		WorkspaceID:                   cp.WorkspaceID,
-		ChatID:                        cp.ChatID,
-		ChatType:                      cp.ChatType,
-		RootMessageID:                 cp.RootMessageID,
-		ActiveThreadID:                cp.ActiveThreadID,
-		ActiveThreadWorkspaceID:       cp.ActiveThreadWorkspaceID,
-		ActiveThreadApprovalPolicy:    cp.ActiveThreadApprovalPolicy,
-		ActiveThreadSandboxMode:       cp.ActiveThreadSandboxMode,
-		ActiveThreadMultiAgentMode:    cp.ActiveThreadMultiAgentMode,
-		ActiveClaudePermissionMode:    cp.ActiveClaudePermissionMode,
-		ActiveThreadServiceTier:       cp.ActiveThreadServiceTier,
-		ActiveThreadCollaborationMode: cloneSessionCollaborationMode(cp.ActiveThreadCollaborationMode),
-		ActiveThreadName:              cp.ActiveThreadName,
-		ActiveThreadPreview:           cp.ActiveThreadPreview,
-		BackendThreads:                cloneSessionBackendThreads(cp.BackendThreads),
-		OwnerUserID:                   cp.OwnerUserID,
-		ModelOverride:                 cp.ModelOverride,
-		RecentWorkspaceIDs:            cloneStringSlice(cp.RecentWorkspaceIDs),
-		UpdatedAt:                     cp.UpdatedAt,
+		Key:                             cp.Key,
+		BindingID:                       cp.BindingID,
+		WorkspaceID:                     cp.WorkspaceID,
+		ChatID:                          cp.ChatID,
+		ChatType:                        cp.ChatType,
+		RootMessageID:                   cp.RootMessageID,
+		ActiveThreadID:                  cp.ActiveThreadID,
+		ActiveThreadWorkspaceID:         cp.ActiveThreadWorkspaceID,
+		ActiveThreadApprovalPolicy:      cp.ActiveThreadApprovalPolicy,
+		ActiveThreadSandboxMode:         cp.ActiveThreadSandboxMode,
+		ActiveThreadMultiAgentMode:      cp.ActiveThreadMultiAgentMode,
+		ActiveClaudePermissionMode:      cp.ActiveClaudePermissionMode,
+		ActiveThreadServiceTier:         cp.ActiveThreadServiceTier,
+		ActiveThreadCollaborationMode:   cloneSessionCollaborationMode(cp.ActiveThreadCollaborationMode),
+		ActiveThreadName:                cp.ActiveThreadName,
+		ActiveThreadPreview:             cp.ActiveThreadPreview,
+		BackendThreads:                  cloneSessionBackendThreads(cp.BackendThreads),
+		OwnerUserID:                     cp.OwnerUserID,
+		ModelOverride:                   cp.ModelOverride,
+		PlanModelOverride:               cp.PlanModelOverride,
+		PlanReasoningEffortOverride:     cp.PlanReasoningEffortOverride,
+		ReviewModelOverride:             cp.ReviewModelOverride,
+		SubagentModelOverride:           cp.SubagentModelOverride,
+		SubagentReasoningEffortOverride: cp.SubagentReasoningEffortOverride,
+		SmallModelOverride:              cp.SmallModelOverride,
+		RecentWorkspaceIDs:              cloneStringSlice(cp.RecentWorkspaceIDs),
+		UpdatedAt:                       cp.UpdatedAt,
 	}
 }
 
@@ -1624,28 +1668,34 @@ func sessionFromStored(sess *storedSession) *Session {
 		return nil
 	}
 	cp := &Session{
-		Key:                           sess.Key,
-		BindingID:                     strings.TrimSpace(sess.BindingID),
-		WorkspaceID:                   sess.WorkspaceID,
-		ChatID:                        strings.TrimSpace(sess.ChatID),
-		ChatType:                      strings.ToLower(strings.TrimSpace(sess.ChatType)),
-		RootMessageID:                 strings.TrimSpace(sess.RootMessageID),
-		ActiveThreadID:                sess.ActiveThreadID,
-		ActiveThreadWorkspaceID:       sess.ActiveThreadWorkspaceID,
-		ActiveThreadApprovalPolicy:    sess.ActiveThreadApprovalPolicy,
-		ActiveThreadSandboxMode:       sess.ActiveThreadSandboxMode,
-		ActiveThreadMultiAgentMode:    sess.ActiveThreadMultiAgentMode,
-		ActiveClaudePermissionMode:    sess.ActiveClaudePermissionMode,
-		ActiveThreadServiceTier:       sess.ActiveThreadServiceTier,
-		ActiveThreadCollaborationMode: cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode),
-		ActiveThreadName:              sess.ActiveThreadName,
-		ActiveThreadPreview:           sess.ActiveThreadPreview,
-		BackendThreads:                cloneSessionBackendThreads(sess.BackendThreads),
-		OwnerUserID:                   sess.OwnerUserID,
-		ModelOverride:                 sess.ModelOverride,
-		RecentWorkspaceIDs:            cloneStringSlice(sess.RecentWorkspaceIDs),
-		Status:                        SessionStatusIdle.String(),
-		UpdatedAt:                     sess.UpdatedAt,
+		Key:                             sess.Key,
+		BindingID:                       strings.TrimSpace(sess.BindingID),
+		WorkspaceID:                     sess.WorkspaceID,
+		ChatID:                          strings.TrimSpace(sess.ChatID),
+		ChatType:                        strings.ToLower(strings.TrimSpace(sess.ChatType)),
+		RootMessageID:                   strings.TrimSpace(sess.RootMessageID),
+		ActiveThreadID:                  sess.ActiveThreadID,
+		ActiveThreadWorkspaceID:         sess.ActiveThreadWorkspaceID,
+		ActiveThreadApprovalPolicy:      sess.ActiveThreadApprovalPolicy,
+		ActiveThreadSandboxMode:         sess.ActiveThreadSandboxMode,
+		ActiveThreadMultiAgentMode:      sess.ActiveThreadMultiAgentMode,
+		ActiveClaudePermissionMode:      sess.ActiveClaudePermissionMode,
+		ActiveThreadServiceTier:         sess.ActiveThreadServiceTier,
+		ActiveThreadCollaborationMode:   cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode),
+		ActiveThreadName:                sess.ActiveThreadName,
+		ActiveThreadPreview:             sess.ActiveThreadPreview,
+		BackendThreads:                  cloneSessionBackendThreads(sess.BackendThreads),
+		OwnerUserID:                     sess.OwnerUserID,
+		ModelOverride:                   sess.ModelOverride,
+		PlanModelOverride:               sess.PlanModelOverride,
+		PlanReasoningEffortOverride:     sess.PlanReasoningEffortOverride,
+		ReviewModelOverride:             sess.ReviewModelOverride,
+		SubagentModelOverride:           sess.SubagentModelOverride,
+		SubagentReasoningEffortOverride: sess.SubagentReasoningEffortOverride,
+		SmallModelOverride:              sess.SmallModelOverride,
+		RecentWorkspaceIDs:              cloneStringSlice(sess.RecentWorkspaceIDs),
+		Status:                          SessionStatusIdle.String(),
+		UpdatedAt:                       sess.UpdatedAt,
 	}
 	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
 		if strings.TrimSpace(cp.ChatType) == "" {
@@ -1672,6 +1722,13 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 	cp.ChatType = strings.ToLower(strings.TrimSpace(cp.ChatType))
 	cp.RootMessageID = strings.TrimSpace(cp.RootMessageID)
 	cp.ActiveClaudePermissionMode = strings.TrimSpace(cp.ActiveClaudePermissionMode)
+	cp.ModelOverride = strings.TrimSpace(cp.ModelOverride)
+	cp.PlanModelOverride = strings.TrimSpace(cp.PlanModelOverride)
+	cp.PlanReasoningEffortOverride = strings.TrimSpace(cp.PlanReasoningEffortOverride)
+	cp.ReviewModelOverride = strings.TrimSpace(cp.ReviewModelOverride)
+	cp.SubagentModelOverride = strings.TrimSpace(cp.SubagentModelOverride)
+	cp.SubagentReasoningEffortOverride = strings.TrimSpace(cp.SubagentReasoningEffortOverride)
+	cp.SmallModelOverride = strings.TrimSpace(cp.SmallModelOverride)
 	cp.ActiveThreadServiceTier = normalizeStoredServiceTier(cp.ActiveThreadServiceTier)
 	cp.ActiveThreadCollaborationMode = normalizeSessionCollaborationMode(cp.ActiveThreadCollaborationMode)
 	cp.BackendThreads = normalizeSessionBackendThreads(cp.BackendThreads)

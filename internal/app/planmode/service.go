@@ -62,6 +62,10 @@ type App interface {
 	StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 }
 
+type PlanSettingsProvider interface {
+	EffectivePlanSettings(sess *state.Session) (model, effort string)
+}
+
 func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 1 {
 		return fmt.Errorf("usage: %s", CommandUsage)
@@ -95,7 +99,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
 		return a.Feishu().ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	case len(args) == 0:
-		mode, err := ResolvePlanModeForActiveThread(a)
+		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
 			return err
 		}
@@ -117,7 +121,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
 		return a.Feishu().ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	default:
-		mode, err := ResolvePlanModeForActiveThread(a)
+		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
 			return err
 		}
@@ -148,6 +152,10 @@ func RenderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
 }
 
 func ResolvePlanModeForActiveThread(a App) (*state.SessionCollaborationMode, error) {
+	return ResolvePlanModeForSession(a, nil)
+}
+
+func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollaborationMode, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
@@ -169,7 +177,7 @@ func ResolvePlanModeForActiveThread(a App) (*state.SessionCollaborationMode, err
 	if err != nil {
 		return nil, err
 	}
-	model, effort, err := resolvePlanModeSettings(ctx, a, client, preset)
+	model, effort, err := resolvePlanModeSettings(ctx, a, client, preset, sess)
 	if err != nil {
 		return nil, err
 	}
@@ -446,12 +454,17 @@ func splitLeadingTitlePrefixes(title string) (prefixes []string, rest string) {
 	return prefixes, rest
 }
 
-func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, preset *codexrpc.CollaborationModeMask) (model string, effort string, err error) {
-	model = strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.Config()))
+func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, preset *codexrpc.CollaborationModeMask, sess *state.Session) (model string, effort string, err error) {
+	if provider, ok := a.(PlanSettingsProvider); ok {
+		model, effort = provider.EffectivePlanSettings(sess)
+	}
+	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
 	}
-	effort = strings.TrimSpace(modelconfig.ConfiguredPlanReasoningEffort(a.Config()))
+	if effort == "" {
+		effort = strings.TrimSpace(modelconfig.ConfiguredPlanReasoningEffort(a.Config()))
+	}
 	if effort == "" && preset != nil && preset.ReasoningEffort != nil {
 		effort = strings.TrimSpace(*preset.ReasoningEffort)
 	}

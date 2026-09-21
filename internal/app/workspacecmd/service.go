@@ -235,6 +235,7 @@ type CloneDeps struct {
 type CodexDeps struct {
 	RequireCodexClient     RequireCodexClientFn
 	BuildThreadStartParams BuildThreadStartParamsFn
+	BuildThreadConfig      func(sess *state.Session) map[string]any
 }
 
 type BackendConfigDeps struct {
@@ -1001,6 +1002,13 @@ func (s ThreadService) BuildThreadStartParams(ws *config.Workspace, sess *state.
 		return codexrpc.ThreadStartParams{}
 	}
 	return s.deps.Codex.BuildThreadStartParams(ws, sess, effectiveModel)
+}
+
+func (s ThreadService) BuildThreadConfig(sess *state.Session) map[string]any {
+	if s.deps.Codex.BuildThreadConfig == nil {
+		return nil
+	}
+	return s.deps.Codex.BuildThreadConfig(sess)
 }
 func (s ThreadService) RequireClaudeCore() (appcore.ClaudeCore, error) {
 	if s.deps.Claude.RequireClaudeCore == nil {

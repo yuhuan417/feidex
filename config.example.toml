@@ -51,6 +51,9 @@ service_name = "feidex"
 # reasoning_effort = "medium"
 # plan_model = "gpt-5.4"
 # plan_reasoning_effort = "medium"
+# review_model = "gpt-5.4"
+# subagent_model = "gpt-5.4-mini"
+# subagent_reasoning_effort = "medium"
 # app_server_dir = "/srv/shared-codex-dir"
 
 # ── Claude backend settings ──
@@ -61,6 +64,8 @@ model = "sonnet"
 # from Feishu with /model option add <model-id> or the /model card.
 # model_options = ["deepseek-v4-pro"]
 # effort = "medium"
+# small_model = "haiku"
+# subagent_model = "sonnet"
 permission_mode = "bypassPermissions"
 permission_prompt_tool_stdio = true
 # disable_plugins = true

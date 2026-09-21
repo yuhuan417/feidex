@@ -33,8 +33,9 @@ func (a convBackendConversationAdapter) StartCodexThread(app appconvbackend.App,
 func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
 	root := app.(*App)
 	return appconvbackend.ResumeCodexSelectedThread(appconvbackend.CodexResumeDeps{
-		RequireClient: func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
-		SaveSession:   root.State().SaveSession,
+		RequireClient:     func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
+		SaveSession:       root.State().SaveSession,
+		BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
 		SetThreadContext: func(sess *state.Session, workspaceID, threadID, name, preview string) {
 			setSessionThreadContext(sess, workspaceID, threadID, name, preview)
 		},
@@ -100,7 +101,8 @@ func (a convBackendConversationAdapter) RecoverCodexStartup(app appconvbackend.A
 		BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
 			return buildThreadStartParams(root, ws, sess, effectiveModel)
 		},
-		SaveSession: root.State().SaveSession,
+		BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
+		SaveSession:       root.State().SaveSession,
 		SetThreadContext: func(sess *state.Session, workspaceID, threadID, name, preview string) {
 			setSessionThreadContext(sess, workspaceID, threadID, name, preview)
 		},

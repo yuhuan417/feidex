@@ -185,6 +185,7 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 		PersistExtendedHistory: true,
 		Model:                  strings.TrimSpace(effectiveModel),
 	}
+	params.Config = s.BuildThreadConfig(sess)
 	var result codexrpc.ThreadStartResult
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

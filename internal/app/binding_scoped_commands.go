@@ -258,12 +258,25 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		return s.commandCurrentBotGroupConfig(msg, []string{"effort", args[1]})
-	case "plan":
-		return fmt.Errorf("/model plan 是当前 Bot 的默认配置；请私聊该 Bot 配置，群聊中只修改当前群内的 /model set 和 /model effort")
+	case "plan", "review", "subagent", "small":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: /model %s set MODEL|default", args[0])
+		}
+		role := strings.ToLower(strings.TrimSpace(args[0]))
+		if strings.EqualFold(strings.TrimSpace(args[1]), "effort") {
+			if role == "subagent" || role == "plan" {
+				return s.commandCurrentBotGroupConfig(msg, []string{role + "_effort", args[2]})
+			}
+			return fmt.Errorf("usage: /model %s set MODEL|default", args[0])
+		}
+		if !strings.EqualFold(strings.TrimSpace(args[1]), "set") {
+			return fmt.Errorf("usage: /model %s set MODEL|default", args[0])
+		}
+		return s.commandCurrentBotGroupConfig(msg, []string{role, args[2]})
 	case "option":
 		return fmt.Errorf("/model option 是当前 Bot 的模型候选列表配置；请私聊该 Bot 使用")
 	default:
-		return fmt.Errorf("usage: /model | /model set MODEL|default | /model effort EFFORT|default")
+		return fmt.Errorf("usage: /model | /model set MODEL|default | /model effort EFFORT|default | /model plan|review|subagent|small set MODEL|default")
 	}
 }
 
@@ -339,6 +352,9 @@ func (s bindingService) completeBindingWorkspaceChoose(action *feishu.CardAction
 }
 
 func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessionKey, modelID string) (*callback.CardActionTriggerResponse, error) {
+	if err := ensureSessionModelConfigIdle(s.app, sessionKey); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
 	modelID = clearableArg(modelID)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
 	binding, err := s.ensureBindingForMessage(msg)
@@ -356,6 +372,9 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 }
 
 func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sessionKey, effort string) (*callback.CardActionTriggerResponse, error) {
+	if err := ensureSessionModelConfigIdle(s.app, sessionKey); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
 	effort = clearableArg(effort)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model effort")
 	binding, err := s.ensureBindingForMessage(msg)

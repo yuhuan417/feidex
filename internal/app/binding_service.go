@@ -40,6 +40,9 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
+	if err := ensureSessionModelConfigIdle(s.app, makeSessionKey(s.app, msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
+		return err
+	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "use":
 		if len(args) != 2 {
@@ -112,6 +115,53 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return err
 		}
 		return s.replyBindingUpdated(msg, "已更新当前群内推理强度: "+renderOptionalBacktick(updated.ReasoningEffortOverride))
+	case "plan", "review", "subagent", "small":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /model %s MODEL|default", args[0])
+		}
+		value := clearableArg(args[1])
+		role := strings.ToLower(strings.TrimSpace(args[0]))
+		_, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+			switch role {
+			case "plan":
+				current.PlanModelOverride = value
+			case "review":
+				current.ReviewModelOverride = value
+			case "subagent":
+				current.SubagentModelOverride = value
+			case "small":
+				current.SmallModelOverride = value
+			}
+		})
+		if err != nil {
+			return err
+		}
+		if configuredBackend(s.app) == backendClaude && s.app.claude != nil {
+			if err := s.app.claude.ResetSession(makeSessionKey(s.app, msg)); err != nil {
+				return err
+			}
+		}
+		return s.replyBindingUpdated(msg, "已更新当前群内"+role+" model: "+renderOptionalBacktick(value))
+	case "subagent_effort":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
+		}
+		value := clearableArg(args[1])
+		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.SubagentReasoningEffortOverride = value })
+		if err != nil {
+			return err
+		}
+		return s.replyBindingUpdated(msg, "已更新当前群内 subagent reasoning effort: "+renderOptionalBacktick(updated.SubagentReasoningEffortOverride))
+	case "plan_effort":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: /model plan effort EFFORT|default")
+		}
+		value := clearableArg(args[1])
+		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.PlanReasoningEffortOverride = value })
+		if err != nil {
+			return err
+		}
+		return s.replyBindingUpdated(msg, "已更新当前群内 Plan reasoning effort: "+renderOptionalBacktick(updated.PlanReasoningEffortOverride))
 	case "fast":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /fast fast|default|off")

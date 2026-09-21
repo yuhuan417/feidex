@@ -33,6 +33,7 @@ func newWorkspaceThreadServiceInner(a *App) *appworkspacecmd.ThreadService {
 			BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
 				return buildThreadStartParams(a, ws, sess, effectiveModel)
 			},
+			BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
 		},
 		Claude: appworkspacecmd.ClaudeDeps{
 			RequireClaudeCore: func() (appcore.ClaudeCore, error) { return a.Claude(), nil },

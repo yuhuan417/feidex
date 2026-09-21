@@ -31,6 +31,35 @@ func effectiveCodexReasoningEffort(a *App, sess *state.Session) string {
 	)
 }
 
+func effectiveCodexPlanModel(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(
+		sessionPlanModelOverride(sess), bindingPlanModelOverride(binding), botProfilePlanModelForApp(a), strings.TrimSpace(a.cfg.Codex.PlanModel), effectiveCodexModel(a, sess, nil),
+	)
+}
+
+func effectiveCodexPlanReasoningEffort(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(
+		sessionPlanReasoningEffortOverride(sess), bindingPlanReasoningEffortOverride(binding), botProfilePlanReasoningEffortForApp(a), strings.TrimSpace(a.cfg.Codex.PlanReasoningEffort),
+	)
+}
+
+func effectiveCodexReviewModel(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(sessionReviewModelOverride(sess), bindingReviewModelOverride(binding), botProfileReviewModelForApp(a), strings.TrimSpace(a.cfg.Codex.ReviewModel), effectiveCodexModel(a, sess, nil))
+}
+
+func effectiveCodexSubagentModel(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileSubagentModelForApp(a), strings.TrimSpace(a.cfg.Codex.SubagentModel), effectiveCodexModel(a, sess, nil))
+}
+
+func effectiveCodexSubagentReasoningEffort(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(sessionSubagentReasoningEffortOverride(sess), bindingSubagentReasoningEffortOverride(binding), botProfileSubagentReasoningEffortForApp(a), strings.TrimSpace(a.cfg.Codex.SubagentReasoningEffort), effectiveCodexReasoningEffort(a, sess))
+}
+
 func effectiveClaudeModel(a *App, sess *state.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	return firstNonEmpty(
@@ -39,6 +68,19 @@ func effectiveClaudeModel(a *App, sess *state.Session, ws *config.Workspace) str
 		botProfileClaudeModelForApp(a),
 		strings.TrimSpace(a.cfg.Claude.Model),
 	)
+}
+
+func effectiveClaudeSmallModel(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	if profile := effectiveBotProfile(a); profile != nil {
+		return firstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(profile.ClaudeSmallModel), strings.TrimSpace(a.cfg.Claude.SmallModel))
+	}
+	return firstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(a.cfg.Claude.SmallModel))
+}
+
+func effectiveClaudeSubagentModel(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileClaudeSubagentModelForApp(a), strings.TrimSpace(a.cfg.Claude.SubagentModel), effectiveClaudeModel(a, sess, nil))
 }
 
 func effectiveBindingApprovalPolicy(a *App, sess *state.Session, ws *config.Workspace) string {
@@ -132,6 +174,43 @@ func botProfileReasoningEffortForApp(a *App) string {
 	return ""
 }
 
+func botProfilePlanModelForApp(a *App) string {
+	if p := effectiveBotProfile(a); p != nil {
+		return strings.TrimSpace(p.PlanModel)
+	}
+	return ""
+}
+func botProfilePlanReasoningEffortForApp(a *App) string {
+	if p := effectiveBotProfile(a); p != nil {
+		return strings.TrimSpace(p.PlanReasoningEffort)
+	}
+	return ""
+}
+func botProfileReviewModelForApp(a *App) string {
+	if p := effectiveBotProfile(a); p != nil {
+		return strings.TrimSpace(p.ReviewModel)
+	}
+	return ""
+}
+func botProfileSubagentModelForApp(a *App) string {
+	if p := effectiveBotProfile(a); p != nil {
+		return strings.TrimSpace(p.SubagentModel)
+	}
+	return ""
+}
+func botProfileSubagentReasoningEffortForApp(a *App) string {
+	if p := effectiveBotProfile(a); p != nil {
+		return strings.TrimSpace(p.SubagentReasoningEffort)
+	}
+	return ""
+}
+func botProfileClaudeSubagentModelForApp(a *App) string {
+	if p := effectiveBotProfile(a); p != nil {
+		return strings.TrimSpace(p.ClaudeSubagentModel)
+	}
+	return ""
+}
+
 func sessionModelOverride(sess *state.Session) string {
 	if sess == nil {
 		return ""
@@ -151,4 +230,94 @@ func bindingReasoningEffortOverride(binding *state.AgentBinding) string {
 		return ""
 	}
 	return binding.ReasoningEffortOverride
+}
+
+func bindingPlanModelOverride(b *state.AgentBinding) string {
+	if b != nil {
+		return b.PlanModelOverride
+	}
+	return ""
+}
+func bindingPlanReasoningEffortOverride(b *state.AgentBinding) string {
+	if b != nil {
+		return b.PlanReasoningEffortOverride
+	}
+	return ""
+}
+func bindingReviewModelOverride(b *state.AgentBinding) string {
+	if b != nil {
+		return b.ReviewModelOverride
+	}
+	return ""
+}
+func bindingSubagentModelOverride(b *state.AgentBinding) string {
+	if b != nil {
+		return b.SubagentModelOverride
+	}
+	return ""
+}
+func bindingSubagentReasoningEffortOverride(b *state.AgentBinding) string {
+	if b != nil {
+		return b.SubagentReasoningEffortOverride
+	}
+	return ""
+}
+func bindingSmallModelOverride(b *state.AgentBinding) string {
+	if b != nil {
+		return b.SmallModelOverride
+	}
+	return ""
+}
+func sessionPlanModelOverride(s *state.Session) string {
+	if s != nil {
+		return s.PlanModelOverride
+	}
+	return ""
+}
+func sessionPlanReasoningEffortOverride(s *state.Session) string {
+	if s != nil {
+		return s.PlanReasoningEffortOverride
+	}
+	return ""
+}
+func sessionReviewModelOverride(s *state.Session) string {
+	if s != nil {
+		return s.ReviewModelOverride
+	}
+	return ""
+}
+func sessionSubagentModelOverride(s *state.Session) string {
+	if s != nil {
+		return s.SubagentModelOverride
+	}
+	return ""
+}
+func sessionSubagentReasoningEffortOverride(s *state.Session) string {
+	if s != nil {
+		return s.SubagentReasoningEffortOverride
+	}
+	return ""
+}
+func sessionSmallModelOverride(s *state.Session) string {
+	if s != nil {
+		return s.SmallModelOverride
+	}
+	return ""
+}
+
+func codexAuxiliaryConfig(a *App, sess *state.Session) map[string]any {
+	if a == nil {
+		return nil
+	}
+	result := map[string]any{}
+	if value := effectiveCodexReviewModel(a, sess); value != "" {
+		result["review_model"] = value
+	}
+	if value := effectiveCodexSubagentModel(a, sess); value != "" {
+		result["agents.default_subagent_model"] = value
+	}
+	if value := effectiveCodexSubagentReasoningEffort(a, sess); value != "" {
+		result["agents.default_subagent_reasoning_effort"] = value
+	}
+	return result
 }

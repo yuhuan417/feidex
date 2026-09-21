@@ -208,6 +208,7 @@ func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, e
 		PersistExtendedHistory: true,
 		ServiceTier:            strings.TrimSpace(effectiveBindingServiceTier(a, sess)),
 		Model:                  strings.TrimSpace(effectiveModel),
+		Config:                 codexAuxiliaryConfig(a, sess),
 	}
 }
 

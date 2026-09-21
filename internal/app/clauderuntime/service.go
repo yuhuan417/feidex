@@ -51,14 +51,16 @@ type SessionState struct {
 	StartedAt   time.Time
 	MCPCleanup  func()
 
-	Mu                sync.Mutex
-	SessionID         string
-	ReadyCh           chan struct{}
-	ReadyOnce         sync.Once
-	CurrentTurnNumber int
-	InterruptPending  bool
-	Turns             map[int]*TurnState
-	LastPlanFilePath  string
+	Mu                     sync.Mutex
+	SessionID              string
+	AuxiliarySmallModel    string
+	AuxiliarySubagentModel string
+	ReadyCh                chan struct{}
+	ReadyOnce              sync.Once
+	CurrentTurnNumber      int
+	InterruptPending       bool
+	Turns                  map[int]*TurnState
+	LastPlanFilePath       string
 }
 
 // TurnState holds the runtime state for a single turn within a session.
@@ -160,6 +162,7 @@ type Deps struct {
 	Lookup                 LookupDeps
 	Permission             PermissionDeps
 	PrepareClaudeMCPConfig func(sessionKey string) (configPath string, env []string, cleanup func(), err error)
+	AuxiliaryModels        func(sessionKey string) (smallModel, subagentModel string)
 }
 
 // Service provides Claude CLI session management. All exported methods
@@ -429,8 +432,13 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 	s.mu.Lock()
 	current := s.sessions[sessionKey]
 	if current != nil && current.WorkspaceID == ws.ID {
+		desiredSmall, desiredSubagent := "", ""
+		if s.deps.AuxiliaryModels != nil {
+			desiredSmall, desiredSubagent = s.deps.AuxiliaryModels(sessionKey)
+		}
 		current.Mu.Lock()
 		currentID := strings.TrimSpace(current.SessionID)
+		auxiliaryChanged := current.AuxiliarySmallModel != strings.TrimSpace(desiredSmall) || current.AuxiliarySubagentModel != strings.TrimSpace(desiredSubagent)
 		current.Mu.Unlock()
 		currentStopped := current.Session != nil && current.Session.Stopped()
 		currentExitErr := error(nil)
@@ -438,7 +446,7 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 			currentExitErr = current.Session.ExitError()
 		}
 		s.mu.Unlock()
-		if currentStopped {
+		if currentStopped || auxiliaryChanged {
 			slog.Warn("discarding stopped Claude session before ensure",
 				"session_key", sessionKey,
 				"workspace_id", ws.ID,
@@ -844,6 +852,9 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		ReadyCh:     make(chan struct{}),
 		Turns:       map[int]*TurnState{},
 	}
+	if s.deps.AuxiliaryModels != nil {
+		state.AuxiliarySmallModel, state.AuxiliarySubagentModel = s.deps.AuxiliaryModels(sessionKey)
+	}
 	permissionMode := s.permissionModeForSession(ctx, sessionKey, ws, runtimeCfg)
 	mcpConfigPath, mcpEnv, mcpCleanup, err := s.prepareClaudeMCPConfig(sessionKey)
 	if err != nil {
@@ -851,6 +862,15 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		return "", err
 	}
 	state.MCPCleanup = mcpCleanup
+	if s.deps.AuxiliaryModels != nil {
+		smallModel, subagentModel := s.deps.AuxiliaryModels(sessionKey)
+		if strings.TrimSpace(subagentModel) != "" {
+			mcpEnv = append(mcpEnv, "CLAUDE_CODE_SUBAGENT_MODEL="+strings.TrimSpace(subagentModel))
+		}
+		if strings.TrimSpace(smallModel) != "" {
+			mcpEnv = append(mcpEnv, "ANTHROPIC_DEFAULT_HAIKU_MODEL="+strings.TrimSpace(smallModel))
+		}
+	}
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(apputil.FirstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
 		claudecli.WithWorkDir(ws.Cwd),

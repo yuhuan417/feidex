@@ -30,7 +30,7 @@ const DefaultOptionValue = "__default__"
 const ClaudeDefaultModelAlias = "sonnet"
 
 // ModelCommandUsage is the usage string for the /model command.
-const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default> | /model option add <model-id> | /model option remove <model-id> | /model plan | /model plan set <model-id|default> | /model plan effort <effort|default>"
+const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default> | /model plan set <model-id|default> | /model plan effort <effort|default> | /model review set <model-id|default> | /model subagent set <model-id|default> | /model subagent effort <effort|default> | /model small set <model-id|default>"
 
 // EffortCommandUsage is the usage string for the /effort command.
 const EffortCommandUsage = "/effort | /effort <effort|default>"
@@ -167,10 +167,11 @@ type ModelConfigService struct {
 	ReplyCard func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error)
 
 	// Claude runtime callbacks.
-	UpdateClaudeConfig func(cfg config.ClaudeConfig)
-	ClaudeSetModel     func(ctx context.Context, sessionKey, model string) (bool, error)
-	ClaudeSetEffort    func(ctx context.Context, sessionKey, effort string) (bool, error)
-	IsClaudeAvailable  func() bool
+	UpdateClaudeConfig  func(cfg config.ClaudeConfig)
+	ClaudeSetModel      func(ctx context.Context, sessionKey, model string) (bool, error)
+	ClaudeSetEffort     func(ctx context.Context, sessionKey, effort string) (bool, error)
+	ResetClaudeSessions func() error
+	IsClaudeAvailable   func() bool
 
 	// Codex client callback.
 	RequireCodexClient func() (CodexClient, error)
@@ -736,6 +737,15 @@ func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexCon
 		return fmt.Errorf("nil config")
 	}
 	mu := s.GetConfigMu()
+	blockedReason := s.FrontendIdleBlockedReason
+	if s.FrontendIdleBlockedReasonIgnoringCurrentMessage != nil {
+		blockedReason = s.FrontendIdleBlockedReasonIgnoringCurrentMessage
+	}
+	if blockedReason != nil {
+		if reason := strings.TrimSpace(blockedReason()); reason != "" {
+			return fmt.Errorf("模型配置只能在当前 frontend 空闲时切换: %s", reason)
+		}
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	mutate(&cfg.Codex)
@@ -751,6 +761,30 @@ func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexCon
 	if !ModelSupportsEffort(selectedPlanModel, cfg.Codex.PlanReasoningEffort) {
 		cfg.Codex.PlanReasoningEffort = ""
 	}
+	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
+		return err
+	}
+	return config.Save(s.GetCfgPath(), cfg)
+}
+
+func (s ModelConfigService) UpdateGlobalAuxiliaryConfig(mutate func(*config.CodexConfig)) error {
+	cfg := s.GetConfig()
+	if cfg == nil {
+		return fmt.Errorf("nil config")
+	}
+	blockedReason := s.FrontendIdleBlockedReason
+	if s.FrontendIdleBlockedReasonIgnoringCurrentMessage != nil {
+		blockedReason = s.FrontendIdleBlockedReasonIgnoringCurrentMessage
+	}
+	if blockedReason != nil {
+		if reason := strings.TrimSpace(blockedReason()); reason != "" {
+			return fmt.Errorf("模型配置只能在当前 frontend 空闲时切换: %s", reason)
+		}
+	}
+	mu := s.GetConfigMu()
+	mu.Lock()
+	defer mu.Unlock()
+	mutate(&cfg.Codex)
 	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
 		return err
 	}
@@ -898,6 +932,40 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 			default:
 				return fmt.Errorf("usage: %s", ModelCommandUsage)
 			}
+		case "review":
+			if len(args) != 3 || strings.TrimSpace(args[1]) != "set" {
+				return fmt.Errorf("usage: /model review set MODEL|default")
+			}
+			value := strings.TrimSpace(args[2])
+			if value == "default" || value == DefaultOptionValue {
+				value = ""
+			}
+			if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.ReviewModel = value }); err != nil {
+				return err
+			}
+			return s.ReplyText(context.Background(), msg.MessageID, "已更新 Codex review model", s.ReplyInThreadEnabled(msg.ChatType))
+		case "subagent":
+			if len(args) == 3 && strings.TrimSpace(args[1]) == "set" {
+				value := strings.TrimSpace(args[2])
+				if value == "default" || value == DefaultOptionValue {
+					value = ""
+				}
+				if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.SubagentModel = value }); err != nil {
+					return err
+				}
+				return s.ReplyText(context.Background(), msg.MessageID, "已更新 Codex subagent model", s.ReplyInThreadEnabled(msg.ChatType))
+			}
+			if len(args) == 3 && strings.TrimSpace(args[1]) == "effort" {
+				value := strings.TrimSpace(args[2])
+				if value == "default" || value == DefaultOptionValue {
+					value = ""
+				}
+				if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.SubagentReasoningEffort = value }); err != nil {
+					return err
+				}
+				return s.ReplyText(context.Background(), msg.MessageID, "已更新 Codex subagent reasoning effort", s.ReplyInThreadEnabled(msg.ChatType))
+			}
+			return fmt.Errorf("usage: /model subagent set MODEL|default | /model subagent effort EFFORT|default")
 		default:
 			return fmt.Errorf("usage: %s", ModelCommandUsage)
 		}
@@ -927,6 +995,16 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	cfg := s.GetConfig()
 	currentModel := firstNonEmpty(ConfiguredClaudeModel(cfg), ClaudeDefaultModelAlias)
 	currentEffort := firstNonEmpty(ConfiguredClaudeEffort(cfg), "(default)")
+	smallModel := "(Claude 内置默认)"
+	subagentModel := currentModel
+	if cfg != nil {
+		if strings.TrimSpace(cfg.Claude.SmallModel) != "" {
+			smallModel = strings.TrimSpace(cfg.Claude.SmallModel)
+		}
+		if strings.TrimSpace(cfg.Claude.SubagentModel) != "" {
+			subagentModel = strings.TrimSpace(cfg.Claude.SubagentModel)
+		}
+	}
 
 	elements := []map[string]any{
 		{
@@ -934,6 +1012,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 			"content": "当前 backend: `claude`\n" +
 				"当前模型: `" + currentModel + "`\n" +
 				"当前推理强度: `" + currentEffort + "`\n\n" +
+				"辅助模型摘要:\nsmall: `" + smallModel + "`\nsubagent: `" + subagentModel + "`\n\n" +
 				"这里提供 Claude 常用别名、已配置候选 model 与当前自定义 model。\n" +
 				"需要任意 raw model 时，请直接使用 `/model set <model-id>`。\n" +
 				"`/model set default` 会恢复为 `sonnet`。\n" +
@@ -1104,6 +1183,16 @@ func (s ModelConfigService) ensureClaudeRuntimeConfigChangeSafe(ignoreCurrentMes
 // UpdateClaudeModelConfig persists a Claude config mutation and hot-reloads.
 func (s ModelConfigService) UpdateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
 	return s.updateClaudeModelConfig(mutate, false)
+}
+
+func (s ModelConfigService) UpdateClaudeAuxiliaryConfig(mutate func(*config.ClaudeConfig)) error {
+	if err := s.updateClaudeModelConfig(mutate, true); err != nil {
+		return err
+	}
+	if s.ResetClaudeSessions != nil {
+		return s.ResetClaudeSessions()
+	}
+	return nil
 }
 
 // UpdateClaudeModelOptionsConfig persists Claude picker option changes. This
@@ -1336,6 +1425,30 @@ func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args 
 				return err
 			}
 			return s.ReplyCommandActionResponse(msg, resp)
+		case "small":
+			if len(args) != 3 || strings.TrimSpace(args[1]) != "set" {
+				return fmt.Errorf("usage: /model small set MODEL|default")
+			}
+			value := strings.TrimSpace(args[2])
+			if value == "default" || value == DefaultOptionValue {
+				value = ""
+			}
+			if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) { c.SmallModel = value }); err != nil {
+				return err
+			}
+			return s.ReplyText(context.Background(), msg.MessageID, "已更新 Claude small model", s.ReplyInThreadEnabled(msg.ChatType))
+		case "subagent":
+			if len(args) != 3 || strings.TrimSpace(args[1]) != "set" {
+				return fmt.Errorf("usage: /model subagent set MODEL|default")
+			}
+			value := strings.TrimSpace(args[2])
+			if value == "default" || value == DefaultOptionValue {
+				value = ""
+			}
+			if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) { c.SubagentModel = value }); err != nil {
+				return err
+			}
+			return s.ReplyText(context.Background(), msg.MessageID, "已更新 Claude subagent model", s.ReplyInThreadEnabled(msg.ChatType))
 		case "option":
 			if len(args) != 3 {
 				return fmt.Errorf("usage: %s", ModelCommandUsage)

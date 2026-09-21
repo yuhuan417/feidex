@@ -108,6 +108,7 @@ func ResumeClaudeSelectedThread(deps ClaudeResumeDeps, sessionKey string, sess *
 type CodexResumeDeps struct {
 	RequireClient      func() (CodexRPCClient, error)
 	SaveSession        SessionSaveFunc
+	BuildThreadConfig  func(sess *state.Session) map[string]any
 	SetThreadContext   ThreadContextSetter
 	ResetActiveOps     func(sess *state.Session)
 	MarkThreadLive     func(sessionKey, threadID string)
@@ -141,6 +142,9 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 		ThreadID:               threadID,
 		PersistExtendedHistory: true,
 		Model:                  effectiveModel,
+	}
+	if deps.BuildThreadConfig != nil {
+		params.Config = deps.BuildThreadConfig(sess)
 	}
 	slog.Debug("manual thread resume request",
 		"session_key", sessionKey,
@@ -359,6 +363,7 @@ type CodexStartupRecoveryDeps struct {
 	CurrentClient          func() CodexRPCClient
 	RuntimeRecovering      func() bool
 	BuildThreadStartParams func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams
+	BuildThreadConfig      func(sess *state.Session) map[string]any
 	SaveSession            SessionSaveFunc
 	SetThreadContext       ThreadContextSetter
 	ClearThreadContext     func(sess *state.Session)
@@ -379,6 +384,9 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 		ThreadID:               threadID,
 		PersistExtendedHistory: true,
 		Model:                  strings.TrimSpace(effectiveModel),
+	}
+	if deps.BuildThreadConfig != nil {
+		resumeParams.Config = deps.BuildThreadConfig(sess)
 	}
 	var resumeResp codexrpc.ThreadStartResult
 	slog.Debug("startup thread resume request",

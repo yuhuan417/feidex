@@ -103,7 +103,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	content := "当前模型: `" + modelName + "`\n" +
 		"模型来源: " + modelSource + "\n" +
 		"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
-		"推理来源: " + effortSource
+		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nplan: `" + firstNonEmpty(binding.PlanModelOverride, "跟随 Bot 默认") + "`\nreview: `" + firstNonEmpty(binding.ReviewModelOverride, "跟随 Bot 默认") + "`\nsubagent: `" + firstNonEmpty(binding.SubagentModelOverride, "跟随 Bot 默认") + "`"
 
 	if modelDescription != "" {
 		content += "\n\n" + modelDescription
@@ -201,7 +201,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model", "")})
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "当前模型: `" + currentModel + "`\n模型来源: " + modelSource + "\n当前推理强度: `" + currentEffort + "`\n推理来源: " + effortSource + "\n\n需要任意 raw model 时，请直接使用 `/model set <model-id>`。"})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "当前模型: `" + currentModel + "`\n模型来源: " + modelSource + "\n当前推理强度: `" + currentEffort + "`\n推理来源: " + effortSource + "\n\n辅助模型摘要:\nsmall: `" + firstNonEmpty(binding.SmallModelOverride, "跟随 Bot 默认") + "`\nsubagent: `" + firstNonEmpty(binding.SubagentModelOverride, "跟随 Bot 默认") + "`\n\n需要任意 raw model 时，请直接使用 `/model set <model-id>`。"})
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择当前群内模型"})
 
 	modelOptions := []cards.SelectStaticOption{{

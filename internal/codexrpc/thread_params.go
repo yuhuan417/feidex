@@ -11,6 +11,7 @@ type ThreadStartParams struct {
 	PersistExtendedHistory bool
 	ServiceTier            string
 	Model                  string
+	Config                 map[string]any
 }
 
 func (p ThreadStartParams) Map() map[string]any {
@@ -28,6 +29,9 @@ func (p ThreadStartParams) Map() map[string]any {
 	if value := strings.TrimSpace(p.Model); value != "" {
 		params["model"] = value
 	}
+	if len(p.Config) > 0 {
+		params["config"] = p.Config
+	}
 	return params
 }
 
@@ -35,6 +39,7 @@ type ThreadResumeParams struct {
 	ThreadID               string
 	PersistExtendedHistory bool
 	Model                  string
+	Config                 map[string]any
 }
 
 func (p ThreadResumeParams) Map() map[string]any {
@@ -44,6 +49,9 @@ func (p ThreadResumeParams) Map() map[string]any {
 	}
 	if value := strings.TrimSpace(p.Model); value != "" {
 		params["model"] = value
+	}
+	if len(p.Config) > 0 {
+		params["config"] = p.Config
 	}
 	return params
 }

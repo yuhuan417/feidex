@@ -45,6 +45,19 @@ func newModelConfigService(app *App) modelConfigService {
 				}
 				return app.claude.SetEffort(ctx, sessionKey, effort)
 			},
+			ResetClaudeSessions: func() error {
+				if app.claude == nil {
+					return nil
+				}
+				for _, sess := range app.State().Sessions() {
+					if sess != nil && sessionBelongsToFrontend(app, sess.Key) {
+						if err := app.claude.ResetSession(sess.Key); err != nil {
+							return err
+						}
+					}
+				}
+				return nil
+			},
 			IsClaudeAvailable: func() bool {
 				return app.claude != nil
 			},
