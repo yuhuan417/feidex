@@ -216,7 +216,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			if p2pSessionScopeActive(s.app, sessionKey) {
 				switch actionName {
-				case "model.aux_config.select_plan_model", "model.aux_config.select_plan_effort", "model.aux_config.select_review_model", "model.aux_config.select_subagent_model", "model.aux_config.select_subagent_effort", "model.aux_config.select_small_model":
+				case "model.aux_config.select_plan_model", "model.aux_config.select_plan_effort", "model.aux_config.select_review_model", "model.aux_config.select_subagent_model", "model.aux_config.select_subagent_effort", "model.aux_config.select_small_model", "model.plan_config.select_model", "model.plan_config.select_effort":
 					role := map[string]string{
 						"model.aux_config.select_plan_model":      "plan",
 						"model.aux_config.select_plan_effort":     "plan_effort",
@@ -224,6 +224,8 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 						"model.aux_config.select_subagent_model":  "subagent",
 						"model.aux_config.select_subagent_effort": "subagent_effort",
 						"model.aux_config.select_small_model":     "small",
+						"model.plan_config.select_model":          "plan",
+						"model.plan_config.select_effort":         "plan_effort",
 					}[actionName]
 					value := strings.TrimSpace(action.Option)
 					if value == modelConfigDefaultOptionValue {
