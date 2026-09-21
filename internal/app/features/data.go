@@ -358,6 +358,7 @@ var registry = []Spec{
 		},
 		ActionNames: []ActionName{
 			"menu.model",
+			"menu.model_auxiliary",
 			"model.config.set_model",
 			"model.config.select_model",
 			"model.config.add_option",
@@ -368,6 +369,12 @@ var registry = []Spec{
 			"model.plan_config.select_model",
 			"model.plan_config.set_effort",
 			"model.plan_config.select_effort",
+			"model.aux_config.select_review_model",
+			"model.aux_config.select_plan_model",
+			"model.aux_config.select_plan_effort",
+			"model.aux_config.select_subagent_model",
+			"model.aux_config.select_subagent_effort",
+			"model.aux_config.select_small_model",
 		},
 	},
 	{

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"sync"
+	"time"
 
 	"feidex/internal/app/modelconfig"
 	"feidex/internal/codexrpc"
@@ -14,10 +15,12 @@ import (
 
 type modelConfigService struct {
 	inner modelconfig.ModelConfigService
+	app   *App
 }
 
 func newModelConfigService(app *App) modelConfigService {
 	return modelConfigService{
+		app: app,
 		inner: modelconfig.ModelConfigService{
 			GetConfig:   func() *config.Config { return app.cfg },
 			GetCfgPath:  func() string { return app.cfgPath },
@@ -109,6 +112,67 @@ func (s modelConfigService) fetchPlanCollaborationModePreset(ctx context.Context
 
 func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	return s.inner.RenderModelConfigCard(result, planPreset, sessionKey, menuAction)
+}
+
+func (s modelConfigService) renderCodexAuxiliaryModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+	service := s.inner
+	if cfg := s.auxiliaryConfigForSession(sessionKey); cfg != nil {
+		service.GetConfig = func() *config.Config { return cfg }
+	}
+	return service.RenderCodexAuxiliaryModelConfigCard(result, planPreset, sessionKey, menuAction)
+}
+
+func (s modelConfigService) renderCodexAuxiliaryModelConfigCardForSession(sessionKey, menuAction string) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := s.fetchModelList(ctx)
+	if err != nil {
+		return nil, err
+	}
+	preset, _ := s.fetchPlanCollaborationModePreset(ctx)
+	return s.renderCodexAuxiliaryModelConfigCard(result, preset, sessionKey, menuAction), nil
+}
+
+func (s modelConfigService) renderClaudeAuxiliaryModelConfigCard(sessionKey, menuAction string) map[string]any {
+	service := s.inner
+	if cfg := s.auxiliaryConfigForSession(sessionKey); cfg != nil {
+		service.GetConfig = func() *config.Config { return cfg }
+	}
+	return service.RenderClaudeAuxiliaryModelConfigCard(sessionKey, menuAction)
+}
+
+func (s modelConfigService) auxiliaryConfigForSession(sessionKey string) *config.Config {
+	if s.app == nil || s.app.cfg == nil || !p2pSessionScopeActive(s.app, sessionKey) {
+		return nil
+	}
+	clone := *s.app.cfg
+	if profile := s.app.State().BotProfile(); profile != nil {
+		clone.Codex.PlanModel = firstNonEmpty(profile.PlanModel, clone.Codex.PlanModel)
+		clone.Codex.PlanReasoningEffort = firstNonEmpty(profile.PlanReasoningEffort, clone.Codex.PlanReasoningEffort)
+		clone.Codex.ReviewModel = firstNonEmpty(profile.ReviewModel, clone.Codex.ReviewModel)
+		clone.Codex.SubagentModel = firstNonEmpty(profile.SubagentModel, clone.Codex.SubagentModel)
+		clone.Codex.SubagentReasoningEffort = firstNonEmpty(profile.SubagentReasoningEffort, clone.Codex.SubagentReasoningEffort)
+		clone.Claude.SmallModel = firstNonEmpty(profile.ClaudeSmallModel, clone.Claude.SmallModel)
+		clone.Claude.SubagentModel = firstNonEmpty(profile.ClaudeSubagentModel, clone.Claude.SubagentModel)
+	}
+	if sess := s.app.State().Session(normalizeSessionKey(s.app, sessionKey)); sess != nil {
+		clone.Codex.PlanModel = firstNonEmpty(sess.PlanModelOverride, clone.Codex.PlanModel)
+		clone.Codex.PlanReasoningEffort = firstNonEmpty(sess.PlanReasoningEffortOverride, clone.Codex.PlanReasoningEffort)
+		clone.Codex.ReviewModel = firstNonEmpty(sess.ReviewModelOverride, clone.Codex.ReviewModel)
+		clone.Codex.SubagentModel = firstNonEmpty(sess.SubagentModelOverride, clone.Codex.SubagentModel)
+		clone.Codex.SubagentReasoningEffort = firstNonEmpty(sess.SubagentReasoningEffortOverride, clone.Codex.SubagentReasoningEffort)
+		clone.Claude.SmallModel = firstNonEmpty(sess.SmallModelOverride, clone.Claude.SmallModel)
+		clone.Claude.SubagentModel = firstNonEmpty(sess.SubagentModelOverride, clone.Claude.SubagentModel)
+	}
+	return &clone
+}
+
+func (s modelConfigService) completeCodexAuxiliaryModelSet(action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteCodexAuxiliaryModelSet(action, role, value)
+}
+
+func (s modelConfigService) completeClaudeAuxiliaryModelSet(action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
+	return s.inner.CompleteClaudeAuxiliaryModelSet(action, role, value)
 }
 
 func (s modelConfigService) updateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {

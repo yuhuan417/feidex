@@ -161,8 +161,8 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 			},
 		},
 	}, &codexrpc.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model")
-	if got := cardSelectStaticForTest(card); len(got) != 4 {
-		t.Fatalf("model config selects = %+v, want 4 select_static elements", got)
+	if got := cardSelectStaticForTest(card); len(got) != 2 {
+		t.Fatalf("model config selects = %+v, want 2 primary select_static elements", got)
 	}
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
@@ -172,6 +172,13 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("model config body missing %q: %q", want, body)
 		}
+	}
+	if firstCardActionValueForTest(card, "menu.model_auxiliary") == nil {
+		t.Fatalf("model config card missing auxiliary model entry: %+v", cardButtonsForTest(card))
+	}
+	aux := newModelConfigService(a).renderCodexAuxiliaryModelConfigCard(codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{{ReasoningEffort: "low"}}}}}, &codexrpc.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model_auxiliary")
+	if got := cardSelectStaticForTest(aux); len(got) != 5 {
+		t.Fatalf("auxiliary model config selects = %+v, want 5 select_static elements", got)
 	}
 }
 

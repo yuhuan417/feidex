@@ -631,89 +631,12 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 		effortInitialOption,
 	))
 
-	elements = append(elements,
-		map[string]any{
-			"tag": "markdown",
-			"content": "Plan 模式模型: `" + planModelName + "`\n" +
-				"模型来源: " + planModelSource + "\n" +
-				"Plan 推理强度: `" + firstNonEmpty(selectedPlanEffort, "-") + "`\n" +
-				"推理来源: " + planEffortSource + "\n\n" +
-				planPresetNotice,
-		},
-		map[string]any{"tag": "markdown", "content": "选择 Plan 模式模型"},
-	)
-
-	planModelOptions := []cards.SelectStaticOption{{
-		Text: func() string {
-			if planModelValue == "" {
-				return "当前 · 跟随 default mode"
-			}
-			return "跟随 default mode"
-		}(),
-		Value: DefaultOptionValue,
-	}}
-	planModelInitialOption := DefaultOptionValue
-	if planModelValue != "" && selectedPlanModel != nil {
-		planModelInitialOption = selectedPlanModel.ID
-	}
-	for _, item := range result.Data {
-		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
-		if selectedPlanModel != nil && item.ID == selectedPlanModel.ID && planModelValue != "" {
-			label = "当前 · " + label
-		}
-		planModelOptions = append(planModelOptions, cards.SelectStaticOption{
-			Text:  label,
-			Value: item.ID,
-		})
-	}
-	elements = append(elements, cards.BuildSelectStaticElement(
-		"model_plan_config_select_model",
-		"选择 Plan 模式模型",
-		map[string]any{"action": "model.plan_config.select_model", "session_key": sessionKey, "menu_action": menuAction},
-		planModelOptions,
-		planModelInitialOption,
-	))
-
-	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择 Plan 模式推理强度"})
-	planEffortOptions := []cards.SelectStaticOption{{
-		Text: func() string {
-			switch {
-			case planEffortValue == "" && planEffortSource == "跟随 plan preset":
-				return "当前 · 跟随 plan preset"
-			case planEffortValue == "":
-				return "当前 · 留空"
-			default:
-				if planPreset != nil && planPreset.ReasoningEffort != nil && strings.TrimSpace(*planPreset.ReasoningEffort) != "" {
-					return "跟随 plan preset"
-				}
-				return "清除显式配置"
-			}
-		}(),
-		Value: DefaultOptionValue,
-	}}
-	planEffortInitialOption := DefaultOptionValue
-	if planEffortValue != "" {
-		planEffortInitialOption = selectedPlanEffort
-	}
-	if selectedPlanModel != nil {
-		for _, item := range selectedPlanModel.SupportedReasoningEfforts {
-			label := item.ReasoningEffort
-			if item.ReasoningEffort == selectedPlanEffort && planEffortValue != "" {
-				label = "当前 · " + label
-			}
-			planEffortOptions = append(planEffortOptions, cards.SelectStaticOption{
-				Text:  label,
-				Value: item.ReasoningEffort,
-			})
-		}
-	}
-	elements = append(elements, cards.BuildSelectStaticElement(
-		"model_plan_config_select_effort",
-		"选择 Plan 模式推理强度",
-		map[string]any{"action": "model.plan_config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
-		planEffortOptions,
-		planEffortInitialOption,
-	))
+	// Plan model and effort are configured on the auxiliary page. Keep only a
+	// concise effective-value summary on the main /model page.
+	elements = append(elements, map[string]any{
+		"tag":     "markdown",
+		"content": "Plan 模式模型: `" + planModelName + "`\n模型来源: " + planModelSource + "\nPlan 推理强度: `" + firstNonEmpty(selectedPlanEffort, "-") + "`\n推理来源: " + planEffortSource + "\n\n" + planPresetNotice,
+	})
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  "返回上一级",
@@ -721,6 +644,11 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 		}}))
 	}
+	elements = append(elements, ModelCardActionRow([]feishu.Button{{
+		Text:  "配置辅助模型",
+		Type:  "default",
+		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey, "menu_action": menuAction},
+	}}))
 
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "")})
@@ -728,6 +656,82 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 		cards.AppendMarkdownBodyCardElement(card, elem)
 	}
 	return card
+}
+
+// RenderCodexAuxiliaryModelConfigCard renders the secondary Codex model page.
+func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+	cfg := s.GetConfig()
+	planModel, planEffort := EffectivePlanConfiguredModelAndEffort(cfg, result, planPreset)
+	planModelValue := ConfiguredPlanModel(cfg)
+	planEffortValue := ConfiguredPlanReasoningEffort(cfg)
+	modelOptions := modelPickerOptions(result.Data, planModel, planModelValue)
+	planEffortOptions := effortPickerOptions(planModel, planEffort, planEffortValue, planPreset)
+	reviewValue := ""
+	subagentValue := ""
+	subagentEffort := ""
+	if cfg != nil {
+		reviewValue, subagentValue, subagentEffort = cfg.Codex.ReviewModel, cfg.Codex.SubagentModel, cfg.Codex.SubagentReasoningEffort
+	}
+	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "Plan、review 和 subagent 使用的模型配置。未设置时按主模型或 Plan preset 继承。")})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_model", "选择 Plan 模型", map[string]any{"action": "model.plan_config.select_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelOptions, firstNonEmpty(planModelValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_effort", "选择 Plan 推理强度", map[string]any{"action": "model.plan_config.select_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, planEffortOptions, firstNonEmpty(planEffortValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_review_model", "选择 review 模型", map[string]any{"action": "model.aux_config.select_review_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelPickerOptions(result.Data, FindModelEntry(result, reviewValue), reviewValue), firstNonEmpty(reviewValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_model", "选择 subagent 模型", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelPickerOptions(result.Data, FindModelEntry(result, subagentValue), subagentValue), firstNonEmpty(subagentValue, DefaultOptionValue)))
+	selectedSubagent := FindModelEntry(result, subagentValue)
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_effort", "选择 subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, effortPickerOptions(selectedSubagent, subagentEffort, subagentEffort, nil), firstNonEmpty(subagentEffort, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	return card
+}
+
+func modelPickerOptions(entries []codexrpc.ModelListEntry, selected *codexrpc.ModelListEntry, configured string) []cards.SelectStaticOption {
+	options := []cards.SelectStaticOption{{Text: "跟随主模型", Value: DefaultOptionValue}}
+	for _, item := range entries {
+		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
+		if configured != "" && selected != nil && item.ID == selected.ID {
+			label = "当前 · " + label
+		}
+		options = append(options, cards.SelectStaticOption{Text: label, Value: item.ID})
+	}
+	return options
+}
+
+func effortPickerOptions(model *codexrpc.ModelListEntry, selected, configured string, preset *codexrpc.CollaborationModeMask) []cards.SelectStaticOption {
+	label := "跟随默认"
+	if configured == "" && preset != nil && preset.ReasoningEffort != nil && strings.TrimSpace(*preset.ReasoningEffort) != "" {
+		label = "跟随 Plan preset"
+	}
+	options := []cards.SelectStaticOption{{Text: label, Value: DefaultOptionValue}}
+	if model != nil {
+		for _, item := range model.SupportedReasoningEfforts {
+			options = append(options, cards.SelectStaticOption{Text: item.ReasoningEffort, Value: item.ReasoningEffort})
+		}
+	}
+	return options
+}
+
+func (s ModelConfigService) CompleteCodexAuxiliaryModelSet(action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
+	value = normalizeClearableValue(value)
+	if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) {
+		switch role {
+		case "review":
+			c.ReviewModel = value
+		case "subagent":
+			c.SubagentModel = value
+		case "subagent_effort":
+			c.SubagentReasoningEffort = value
+		}
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	resp := &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新辅助模型配置"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if result, err := s.FetchModelList(ctx); err == nil {
+		preset, _ := s.FetchPlanCollaborationModePreset(ctx)
+		resp.Card = rawCard(s.RenderCodexAuxiliaryModelConfigCard(result, preset, actionSessionKey(action), "menu.model_auxiliary"))
+	}
+	return resp, nil
 }
 
 // UpdateGlobalModelConfig persists a Codex config mutation.
@@ -1071,6 +1075,11 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 		),
 	)
 	elements = append(elements, renderClaudeModelOptionConfigElements(cfg, sessionKey, menuAction)...)
+	elements = append(elements, ModelCardActionRow([]feishu.Button{{
+		Text:  "配置辅助模型",
+		Type:  "default",
+		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey, "menu_action": menuAction},
+	}}))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  "返回上一级",
@@ -1085,6 +1094,50 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 		cards.AppendMarkdownBodyCardElement(card, elem)
 	}
 	return card
+}
+
+// RenderClaudeAuxiliaryModelConfigCard renders Claude's small/subagent page.
+func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, menuAction string) map[string]any {
+	cfg := s.GetConfig()
+	small, subagent := "", ""
+	if cfg != nil {
+		small, subagent = cfg.Claude.SmallModel, cfg.Claude.SubagentModel
+	}
+	options := make([]cards.SelectStaticOption, 0, len(ClaudeModelPickerOptions(cfg))+1)
+	options = append(options, cards.SelectStaticOption{Text: "跟随默认", Value: DefaultOptionValue})
+	for _, item := range ClaudeModelPickerOptions(cfg) {
+		options = append(options, cards.SelectStaticOption{Text: item.Label, Value: item.Value})
+	}
+	card := cards.NewMarkdownBodyCard("Claude 辅助模型配置", "blue")
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "small model 未设置时使用 Claude 内置 Haiku 默认；subagent model 未设置时跟随主模型。")})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_small_model", "选择 small model", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(small, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "选择 subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(subagent, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	return card
+}
+
+func (s ModelConfigService) CompleteClaudeAuxiliaryModelSet(action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
+	value = normalizeClearableValue(value)
+	if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) {
+		if role == "small" {
+			c.SmallModel = value
+		} else {
+			c.SubagentModel = value
+		}
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 辅助模型配置"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(actionSessionKey(action), "menu.model_auxiliary"))}, nil
+}
+
+func normalizeClearableValue(value string) string {
+	value = strings.TrimSpace(value)
+	switch strings.ToLower(value) {
+	case "", "default", "inherit", "follow", "clear", "unset", DefaultOptionValue:
+		return ""
+	default:
+		return value
+	}
 }
 
 func renderClaudeModelOptionConfigElements(cfg *config.Config, sessionKey, menuAction string) []map[string]any {

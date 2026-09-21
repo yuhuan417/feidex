@@ -158,6 +158,31 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			if groupBindingSessionScopeActive(s.app, sessionKey) {
 				svc := newBindingService(s.app)
 				switch actionName {
+				case "menu.model_auxiliary":
+					msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+					binding, err := svc.ensureBindingForMessage(msg)
+					if err != nil {
+						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+					}
+					card, err := svc.renderBindingAuxiliaryModelConfigCard(sessionKey, binding)
+					if err != nil {
+						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+					}
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开当前群内辅助模型配置"}, Card: rawCard(card)}, nil
+				case "model.aux_config.select_plan_model", "model.aux_config.select_plan_effort", "model.aux_config.select_review_model", "model.aux_config.select_subagent_model", "model.aux_config.select_subagent_effort", "model.aux_config.select_small_model":
+					role := map[string]string{
+						"model.aux_config.select_plan_model":      "plan",
+						"model.aux_config.select_plan_effort":     "plan_effort",
+						"model.aux_config.select_review_model":    "review",
+						"model.aux_config.select_subagent_model":  "subagent",
+						"model.aux_config.select_subagent_effort": "subagent_effort",
+						"model.aux_config.select_small_model":     "small",
+					}[actionName]
+					value := strings.TrimSpace(action.Option)
+					if value == modelConfigDefaultOptionValue {
+						value = ""
+					}
+					return svc.completeBindingAuxiliaryModelSet(action, sessionKey, role, value)
 				case "menu.model":
 					msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
 					binding, err := svc.ensureBindingForMessage(msg)
@@ -191,6 +216,20 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			if p2pSessionScopeActive(s.app, sessionKey) {
 				switch actionName {
+				case "model.aux_config.select_plan_model", "model.aux_config.select_plan_effort", "model.aux_config.select_review_model", "model.aux_config.select_subagent_model", "model.aux_config.select_subagent_effort", "model.aux_config.select_small_model":
+					role := map[string]string{
+						"model.aux_config.select_plan_model":      "plan",
+						"model.aux_config.select_plan_effort":     "plan_effort",
+						"model.aux_config.select_review_model":    "review",
+						"model.aux_config.select_subagent_model":  "subagent",
+						"model.aux_config.select_subagent_effort": "subagent_effort",
+						"model.aux_config.select_small_model":     "small",
+					}[actionName]
+					value := strings.TrimSpace(action.Option)
+					if value == modelConfigDefaultOptionValue {
+						value = ""
+					}
+					return completeBotProfileAuxiliaryModelSet(s.app, action, role, value)
 				case "model.config.set_model":
 					return completeBotProfileModelSet(s.app, action, actionStringValue(action, "model_id"))
 				case "model.config.select_model":
@@ -209,7 +248,44 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return completeBotProfileEffortSet(s.app, action, effort)
 				}
 			}
+			if actionName == "menu.model_auxiliary" {
+				if configuredBackend(s.app) == backendClaude {
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开 Claude 辅助模型配置"}, Card: rawCard(newModelConfigService(s.app).renderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
+				}
+				card, err := newModelConfigService(s.app).renderCodexAuxiliaryModelConfigCardForSession(sessionKey, "menu.model_auxiliary")
+				if err != nil {
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+				}
+				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开 Codex 辅助模型配置"}, Card: rawCard(card)}, nil
+			}
 			switch actionName {
+			case "model.aux_config.select_review_model":
+				value := strings.TrimSpace(action.Option)
+				if value == modelConfigDefaultOptionValue {
+					value = ""
+				}
+				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "review", value)
+			case "model.aux_config.select_subagent_model":
+				value := strings.TrimSpace(action.Option)
+				if value == modelConfigDefaultOptionValue {
+					value = ""
+				}
+				if configuredBackend(s.app) == backendClaude {
+					return newModelConfigService(s.app).completeClaudeAuxiliaryModelSet(action, "subagent", value)
+				}
+				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent", value)
+			case "model.aux_config.select_subagent_effort":
+				value := strings.TrimSpace(action.Option)
+				if value == modelConfigDefaultOptionValue {
+					value = ""
+				}
+				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent_effort", value)
+			case "model.aux_config.select_small_model":
+				value := strings.TrimSpace(action.Option)
+				if value == modelConfigDefaultOptionValue {
+					value = ""
+				}
+				return newModelConfigService(s.app).completeClaudeAuxiliaryModelSet(action, "small", value)
 			case "menu.model":
 				return newMenuActionService(s.app).completeMenuModel(action, sessionKey)
 			case "model.config.set_model":

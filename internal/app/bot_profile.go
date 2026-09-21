@@ -324,6 +324,73 @@ func completeBotProfileEffortSet(a *App, action *feishu.CardAction, effort strin
 	return resp, err
 }
 
+func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	if err := ensureSessionModelConfigIdle(a, sessionKey); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	value = clearableArg(value)
+	backend := configuredBackend(a)
+	if sess := a.State().Session(sessionKey); sess != nil {
+		if _, err := a.State().UpdateSession(sess.Key, func(current *state.Session) {
+			switch role {
+			case "plan":
+				current.PlanModelOverride = value
+			case "plan_effort":
+				current.PlanReasoningEffortOverride = value
+			case "review":
+				current.ReviewModelOverride = value
+			case "subagent":
+				current.SubagentModelOverride = value
+			case "subagent_effort":
+				current.SubagentReasoningEffortOverride = value
+			case "small":
+				current.SmallModelOverride = value
+			}
+		}); err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+		}
+		if backend == config.RuntimeBackendClaude && a.claude != nil {
+			if err := a.claude.ResetSession(sessionKey); err != nil {
+				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+			}
+		}
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 session 的辅助模型配置"}}, nil
+	}
+	_, err := updateBotProfile(a, func(profile *state.BotProfile) {
+		if backend == config.RuntimeBackendClaude {
+			switch role {
+			case "small":
+				profile.ClaudeSmallModel = value
+			case "subagent":
+				profile.ClaudeSubagentModel = value
+			}
+			return
+		}
+		switch role {
+		case "plan":
+			profile.PlanModel = value
+		case "plan_effort":
+			profile.PlanReasoningEffort = value
+		case "review":
+			profile.ReviewModel = value
+		case "subagent":
+			profile.SubagentModel = value
+		case "subagent_effort":
+			profile.SubagentReasoningEffort = value
+		}
+	})
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	if backend == config.RuntimeBackendClaude && a.claude != nil {
+		if err := a.claude.ResetSession(sessionKey); err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		}
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 Bot 的辅助模型配置"}}, nil
+}
+
 func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, serviceTier string) (*callback.CardActionTriggerResponse, error) {
 	value := normalizeServiceTier(serviceTier)
 	if strings.EqualFold(strings.TrimSpace(serviceTier), "default") || strings.EqualFold(strings.TrimSpace(serviceTier), "off") {

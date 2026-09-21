@@ -11,6 +11,8 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *state.AgentBinding) map[string]any {
@@ -174,6 +176,11 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		effortInitialOption,
 	))
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
+		Text:  "配置辅助模型",
+		Type:  "default",
+		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey},
+	}}))
+	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  "返回上一级",
 		Type:  "default",
 		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
@@ -278,12 +285,125 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		effortInitialOption,
 	))
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
+		Text:  "配置辅助模型",
+		Type:  "default",
+		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey},
+	}}))
+	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  "返回上一级",
 		Type:  "default",
 		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 	}}))
 	return card
 
+}
+
+func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
+	if binding == nil {
+		binding = bindingForSessionKey(s.app, sessionKey)
+	}
+	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；修改仅在当前会话空闲时生效。")})
+	switch configuredBackend(s.app) {
+	case backendClaude:
+		options := []cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}
+		for _, item := range appmodelconfig.ClaudeModelPickerOptions(s.app.cfg) {
+			options = append(options, cards.SelectStaticOption{Text: item.Label, Value: item.Value})
+		}
+		small, subagent := "", ""
+		if binding != nil {
+			small, subagent = binding.SmallModelOverride, binding.SubagentModelOverride
+		}
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_small", "选择 small model", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey}, options, firstNonEmpty(small, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "选择 subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, options, firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
+	default:
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		result, err := newModelConfigService(s.app).fetchModelList(ctx)
+		if err != nil {
+			return nil, err
+		}
+		planModel := ""
+		planEffort := ""
+		review, subagent, subagentEffort := "", "", ""
+		if binding != nil {
+			planModel, planEffort = binding.PlanModelOverride, binding.PlanReasoningEffortOverride
+			review, subagent, subagentEffort = binding.ReviewModelOverride, binding.SubagentModelOverride, binding.SubagentReasoningEffortOverride
+		}
+		planEntry := appmodelconfig.FindModelEntry(result, firstNonEmpty(planModel, appmodelconfig.ConfiguredGlobalModel(s.app.cfg)))
+		planOptions := []cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}
+		for _, item := range result.Data {
+			planOptions = append(planOptions, cards.SelectStaticOption{Text: firstNonEmpty(item.DisplayName, item.ID, item.Model), Value: item.ID})
+		}
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_plan", "选择 Plan model", map[string]any{"action": "model.aux_config.select_plan_model", "session_key": sessionKey}, planOptions, firstNonEmpty(planModel, modelConfigDefaultOptionValue)))
+		planEffortOptions := []cards.SelectStaticOption{{Text: "跟随 Plan preset", Value: modelConfigDefaultOptionValue}}
+		if planEntry != nil {
+			for _, item := range planEntry.SupportedReasoningEfforts {
+				planEffortOptions = append(planEffortOptions, cards.SelectStaticOption{Text: item.ReasoningEffort, Value: item.ReasoningEffort})
+			}
+		}
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_plan_effort", "选择 Plan reasoning effort", map[string]any{"action": "model.aux_config.select_plan_effort", "session_key": sessionKey}, planEffortOptions, firstNonEmpty(planEffort, modelConfigDefaultOptionValue)))
+		modelOptions := func(current string) []cards.SelectStaticOption {
+			options := []cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}
+			for _, item := range result.Data {
+				options = append(options, cards.SelectStaticOption{Text: firstNonEmpty(item.DisplayName, item.ID, item.Model), Value: item.ID})
+			}
+			return options
+		}
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_review", "选择 review model", map[string]any{"action": "model.aux_config.select_review_model", "session_key": sessionKey}, modelOptions(review), firstNonEmpty(review, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "选择 subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, modelOptions(subagent), firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
+		subagentEntry := appmodelconfig.FindModelEntry(result, subagent)
+		effortOptions := []cards.SelectStaticOption{{Text: "跟随 subagent model 默认", Value: modelConfigDefaultOptionValue}}
+		if subagentEntry != nil {
+			for _, item := range subagentEntry.SupportedReasoningEfforts {
+				effortOptions = append(effortOptions, cards.SelectStaticOption{Text: item.ReasoningEffort, Value: item.ReasoningEffort})
+			}
+		}
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "选择 subagent reasoning effort", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, firstNonEmpty(subagentEffort, modelConfigDefaultOptionValue)))
+	}
+	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	return card, nil
+}
+
+func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardAction, sessionKey, role, value string) (*callback.CardActionTriggerResponse, error) {
+	if err := ensureSessionModelConfigIdle(s.app, sessionKey); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	value = clearableArg(value)
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+	binding, err := s.ensureBindingForMessage(msg)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		switch role {
+		case "plan":
+			current.PlanModelOverride = value
+		case "plan_effort":
+			current.PlanReasoningEffortOverride = value
+		case "review":
+			current.ReviewModelOverride = value
+		case "subagent":
+			current.SubagentModelOverride = value
+		case "subagent_effort":
+			current.SubagentReasoningEffortOverride = value
+		case "small":
+			current.SmallModelOverride = value
+		}
+	})
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	if configuredBackend(s.app) == backendClaude && s.app.claude != nil {
+		if err := s.app.claude.ResetSession(sessionKey); err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		}
+	}
+	card, err := s.renderBindingAuxiliaryModelConfigCard(sessionKey, updated)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前群内辅助模型配置"}}, nil
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前群内辅助模型配置"}, Card: rawCard(card)}, nil
 }
 
 func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.AgentBinding) map[string]any {
