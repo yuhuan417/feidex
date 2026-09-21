@@ -864,12 +864,9 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 	state.MCPCleanup = mcpCleanup
 	if s.deps.AuxiliaryModels != nil {
 		smallModel, subagentModel := s.deps.AuxiliaryModels(sessionKey)
-		if strings.TrimSpace(subagentModel) != "" {
-			mcpEnv = append(mcpEnv, "CLAUDE_CODE_SUBAGENT_MODEL="+strings.TrimSpace(subagentModel))
-		}
-		if strings.TrimSpace(smallModel) != "" {
-			mcpEnv = append(mcpEnv, "ANTHROPIC_DEFAULT_HAIKU_MODEL="+strings.TrimSpace(smallModel))
-		}
+		mcpEnv = withClaudeModelEnv(mcpEnv, model, smallModel, subagentModel)
+	} else {
+		mcpEnv = withClaudeModelEnv(mcpEnv, model, "", "")
 	}
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(apputil.FirstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
@@ -958,6 +955,50 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		return resumeID, nil
 	}
 	return "", nil
+}
+
+func withClaudeModelEnv(env []string, model, smallModel, subagentModel string) []string {
+	model = strings.TrimSpace(model)
+	smallModel = strings.TrimSpace(smallModel)
+	subagentModel = strings.TrimSpace(subagentModel)
+	if model != "" {
+		env = upsertEnvValue(env, "ANTHROPIC_MODEL", model)
+		env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL", model)
+		env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL", model)
+		if smallModel == "" {
+			smallModel = model
+		}
+		if subagentModel == "" {
+			subagentModel = model
+		}
+	}
+	if smallModel != "" {
+		env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL", smallModel)
+	}
+	if subagentModel != "" {
+		env = upsertEnvValue(env, "CLAUDE_CODE_SUBAGENT_MODEL", subagentModel)
+	}
+	return env
+}
+
+func upsertEnvValue(env []string, key, value string) []string {
+	prefix := key + "="
+	result := make([]string, 0, len(env)+1)
+	replaced := false
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			if !replaced {
+				result = append(result, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		result = append(result, entry)
+	}
+	if !replaced {
+		result = append(result, prefix+value)
+	}
+	return result
 }
 
 func (s *Service) permissionModeForSession(ctx context.Context, sessionKey string, ws *config.Workspace, cfg config.ClaudeConfig) claudecli.PermissionMode {
