@@ -180,6 +180,12 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	if got := cardSelectStaticForTest(aux); len(got) != 5 {
 		t.Fatalf("auxiliary model config selects = %+v, want 5 select_static elements", got)
 	}
+	auxBody := cardMarkdownContent(t, aux)
+	for _, want := range []string{"Plan 模型", "Plan 推理强度", "review 模型", "subagent 模型", "subagent 推理强度"} {
+		if !strings.Contains(auxBody, want) {
+			t.Fatalf("auxiliary model config body missing %q: %q", want, auxBody)
+		}
+	}
 }
 
 func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {

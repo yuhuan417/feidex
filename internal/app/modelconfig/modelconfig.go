@@ -673,13 +673,17 @@ func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.
 		reviewValue, subagentValue, subagentEffort = cfg.Codex.ReviewModel, cfg.Codex.SubagentModel, cfg.Codex.SubagentReasoningEffort
 	}
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "Plan、review 和 subagent 使用的模型配置。未设置时按主模型或 Plan preset 继承。")})
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_model", "选择 Plan 模型", map[string]any{"action": "model.plan_config.select_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelOptions, firstNonEmpty(planModelValue, DefaultOptionValue)))
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_effort", "选择 Plan 推理强度", map[string]any{"action": "model.plan_config.select_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, planEffortOptions, firstNonEmpty(planEffortValue, DefaultOptionValue)))
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_review_model", "选择 review 模型", map[string]any{"action": "model.aux_config.select_review_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelPickerOptions(result.Data, FindModelEntry(result, reviewValue), reviewValue), firstNonEmpty(reviewValue, DefaultOptionValue)))
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_model", "选择 subagent 模型", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelPickerOptions(result.Data, FindModelEntry(result, subagentValue), subagentValue), firstNonEmpty(subagentValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**Plan 模型**\n用于 `/plan` 模式；未设置时跟随主模型。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_model", "Plan 模型", map[string]any{"action": "model.plan_config.select_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelOptions, firstNonEmpty(planModelValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**Plan 推理强度**\n未设置时跟随 Codex 的 Plan preset。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_effort", "Plan 推理强度", map[string]any{"action": "model.plan_config.select_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, planEffortOptions, firstNonEmpty(planEffortValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**review 模型**\n用于 `/review` 自动发起的代码审查。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_review_model", "review 模型", map[string]any{"action": "model.aux_config.select_review_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelPickerOptions(result.Data, FindModelEntry(result, reviewValue), reviewValue), firstNonEmpty(reviewValue, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 模型**\n用于 Codex 自动创建的子 agent；未设置时跟随主模型。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_model", "subagent 模型", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelPickerOptions(result.Data, FindModelEntry(result, subagentValue), subagentValue), firstNonEmpty(subagentValue, DefaultOptionValue)))
 	selectedSubagent := FindModelEntry(result, subagentValue)
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_effort", "选择 subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, effortPickerOptions(selectedSubagent, subagentEffort, subagentEffort, nil), firstNonEmpty(subagentEffort, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 推理强度**\n未设置时跟随 subagent 模型的默认强度。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, effortPickerOptions(selectedSubagent, subagentEffort, subagentEffort, nil), firstNonEmpty(subagentEffort, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card
 }
@@ -1109,9 +1113,11 @@ func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, men
 		options = append(options, cards.SelectStaticOption{Text: item.Label, Value: item.Value})
 	}
 	card := cards.NewMarkdownBodyCard("Claude 辅助模型配置", "blue")
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "small model 未设置时使用 Claude 内置 Haiku 默认；subagent model 未设置时跟随主模型。")})
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_small_model", "选择 small model", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(small, DefaultOptionValue)))
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "选择 subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(subagent, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "下面分别配置 Claude 的 small model 和 subagent model。")})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**small model（Haiku）**\nClaude 内部执行轻量任务时使用；未设置时使用 Claude 内置 Haiku 默认。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_small_model", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(small, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent model**\nClaude 内部自动创建子 agent 时使用；未设置时跟随主模型。"})
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(subagent, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card
 }

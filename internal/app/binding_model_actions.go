@@ -314,8 +314,10 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		if binding != nil {
 			small, subagent = binding.SmallModelOverride, binding.SubagentModelOverride
 		}
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_small", "选择 small model", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey}, options, firstNonEmpty(small, modelConfigDefaultOptionValue)))
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "选择 subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, options, firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**small model（Haiku）**\nClaude 内部执行轻量任务时使用；未设置时跟随 Bot 默认。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_small", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey}, options, firstNonEmpty(small, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent model**\nClaude 内部自动创建子 agent 时使用；未设置时跟随 Bot 默认。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, options, firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
 	default:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -335,14 +337,16 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		for _, item := range result.Data {
 			planOptions = append(planOptions, cards.SelectStaticOption{Text: firstNonEmpty(item.DisplayName, item.ID, item.Model), Value: item.ID})
 		}
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_plan", "选择 Plan model", map[string]any{"action": "model.aux_config.select_plan_model", "session_key": sessionKey}, planOptions, firstNonEmpty(planModel, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**Plan 模型**\n用于 `/plan` 模式；未设置时跟随 Bot 默认。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_plan", "Plan 模型", map[string]any{"action": "model.aux_config.select_plan_model", "session_key": sessionKey}, planOptions, firstNonEmpty(planModel, modelConfigDefaultOptionValue)))
 		planEffortOptions := []cards.SelectStaticOption{{Text: "跟随 Plan preset", Value: modelConfigDefaultOptionValue}}
 		if planEntry != nil {
 			for _, item := range planEntry.SupportedReasoningEfforts {
 				planEffortOptions = append(planEffortOptions, cards.SelectStaticOption{Text: item.ReasoningEffort, Value: item.ReasoningEffort})
 			}
 		}
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_plan_effort", "选择 Plan reasoning effort", map[string]any{"action": "model.aux_config.select_plan_effort", "session_key": sessionKey}, planEffortOptions, firstNonEmpty(planEffort, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**Plan 推理强度**\n未设置时跟随 Bot 默认的 Plan preset。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_plan_effort", "Plan 推理强度", map[string]any{"action": "model.aux_config.select_plan_effort", "session_key": sessionKey}, planEffortOptions, firstNonEmpty(planEffort, modelConfigDefaultOptionValue)))
 		modelOptions := func(current string) []cards.SelectStaticOption {
 			options := []cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}
 			for _, item := range result.Data {
@@ -350,8 +354,10 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 			}
 			return options
 		}
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_review", "选择 review model", map[string]any{"action": "model.aux_config.select_review_model", "session_key": sessionKey}, modelOptions(review), firstNonEmpty(review, modelConfigDefaultOptionValue)))
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "选择 subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, modelOptions(subagent), firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**review 模型**\n用于 `/review` 自动发起的代码审查；未设置时跟随 Bot 默认。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_review", "review 模型", map[string]any{"action": "model.aux_config.select_review_model", "session_key": sessionKey}, modelOptions(review), firstNonEmpty(review, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 模型**\n用于 Codex 自动创建的子 agent；未设置时跟随 Bot 默认。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "subagent 模型", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, modelOptions(subagent), firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
 		subagentEntry := appmodelconfig.FindModelEntry(result, subagent)
 		effortOptions := []cards.SelectStaticOption{{Text: "跟随 subagent model 默认", Value: modelConfigDefaultOptionValue}}
 		if subagentEntry != nil {
@@ -359,7 +365,8 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 				effortOptions = append(effortOptions, cards.SelectStaticOption{Text: item.ReasoningEffort, Value: item.ReasoningEffort})
 			}
 		}
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "选择 subagent reasoning effort", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, firstNonEmpty(subagentEffort, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 推理强度**\n未设置时跟随 subagent 模型的默认强度。"})
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, firstNonEmpty(subagentEffort, modelConfigDefaultOptionValue)))
 	}
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card, nil
