@@ -274,7 +274,13 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		}
 		return s.commandCurrentBotGroupConfig(msg, []string{role, args[2]})
 	case "option":
-		return fmt.Errorf("/model option 是当前 Bot 的模型候选列表配置；请私聊该 Bot 使用")
+		if configuredBackend(s.app) != backendClaude {
+			return fmt.Errorf("/model option 仅适用于 Claude backend")
+		}
+		if len(args) != 3 {
+			return fmt.Errorf("usage: /model option add|remove MODEL_ID")
+		}
+		return s.commandClaudeModelOption(msg, args[1:])
 	default:
 		return fmt.Errorf("usage: /model | /model set MODEL|default | /model effort EFFORT|default | /model plan|review|subagent|small set MODEL|default")
 	}

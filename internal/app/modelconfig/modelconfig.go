@@ -1208,6 +1208,12 @@ func renderClaudeModelOptionConfigElements(cfg *config.Config, sessionKey, menuA
 	return elements
 }
 
+// RenderClaudeModelOptionConfigElements exposes the shared candidate-model
+// controls for backend-specific model cards.
+func RenderClaudeModelOptionConfigElements(cfg *config.Config, sessionKey, menuAction string) []map[string]any {
+	return renderClaudeModelOptionConfigElements(cfg, sessionKey, menuAction)
+}
+
 func setFirstButtonFormAction(row map[string]any, actionType string) {
 	columns, _ := row["columns"].([]map[string]any)
 	if len(columns) == 0 {

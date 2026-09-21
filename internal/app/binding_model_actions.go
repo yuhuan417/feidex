@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -284,6 +285,9 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		effortOptions,
 		effortInitialOption,
 	))
+	for _, element := range appmodelconfig.RenderClaudeModelOptionConfigElements(s.app.cfg, sessionKey, "menu.model") {
+		cards.AppendMarkdownBodyCardElement(card, element)
+	}
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  "配置辅助模型",
 		Type:  "default",
@@ -411,6 +415,71 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前群内辅助模型配置"}}, nil
 	}
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前群内辅助模型配置"}, Card: rawCard(card)}, nil
+}
+
+func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, sessionKey string, add bool) (*callback.CardActionTriggerResponse, error) {
+	value := ""
+	if action != nil && action.FormValue != nil {
+		if raw, ok := action.FormValue["model_id"]; ok {
+			value = strings.TrimSpace(fmt.Sprint(raw))
+		}
+	}
+	if value == "" {
+		value = strings.TrimSpace(action.Option)
+	}
+	if value == "" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请输入或选择 model id"}}, nil
+	}
+	service := newModelConfigService(s.app)
+	if err := service.inner.UpdateClaudeModelOptionsConfig(func(c *config.ClaudeConfig) {
+		if add {
+			c.ModelOptions = appmodelconfig.AddClaudeModelOption(c.ModelOptions, value)
+		} else {
+			c.ModelOptions = appmodelconfig.RemoveClaudeModelOption(c.ModelOptions, value)
+		}
+	}); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	binding, err := s.ensureBindingForMessage(commandMessageFromAction(s.app, action, sessionKey, "/model"))
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	card := s.renderBindingModelConfigOrMenuCard(sessionKey, binding)
+	verb := "移除"
+	if add {
+		verb = "添加"
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已" + verb + " Claude 候选模型 `" + value + "`"}, Card: rawCard(card)}, nil
+}
+
+func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, args []string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("usage: /model option add|remove MODEL_ID")
+	}
+	value := strings.TrimSpace(args[1])
+	if value == "" {
+		return fmt.Errorf("model id must not be empty")
+	}
+	if !strings.EqualFold(strings.TrimSpace(args[0]), "add") && !strings.EqualFold(strings.TrimSpace(args[0]), "remove") && !strings.EqualFold(strings.TrimSpace(args[0]), "delete") && !strings.EqualFold(strings.TrimSpace(args[0]), "rm") {
+		return fmt.Errorf("usage: /model option add|remove MODEL_ID")
+	}
+	service := newModelConfigService(s.app)
+	if err := service.inner.UpdateClaudeModelOptionsConfig(func(c *config.ClaudeConfig) {
+		if strings.EqualFold(strings.TrimSpace(args[0]), "add") {
+			c.ModelOptions = appmodelconfig.AddClaudeModelOption(c.ModelOptions, value)
+		} else {
+			c.ModelOptions = appmodelconfig.RemoveClaudeModelOption(c.ModelOptions, value)
+		}
+	}); err != nil {
+		return err
+	}
+	binding, err := s.ensureBindingForMessage(msg)
+	if err != nil {
+		return err
+	}
+	card := s.renderBindingModelConfigOrMenuCard(makeSessionKey(s.app, msg), binding)
+	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	return err
 }
 
 func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.AgentBinding) map[string]any {

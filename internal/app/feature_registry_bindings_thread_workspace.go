@@ -210,7 +210,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 						reasoningEffort = ""
 					}
 					return svc.completeBindingEffortSet(action, sessionKey, reasoningEffort)
-				case "model.config.add_option", "model.config.remove_option", "model.plan_config.set_model", "model.plan_config.select_model", "model.plan_config.set_effort", "model.plan_config.select_effort":
+				case "model.config.add_option":
+					return svc.completeClaudeModelOption(action, sessionKey, true)
+				case "model.config.remove_option":
+					return svc.completeClaudeModelOption(action, sessionKey, false)
+				case "model.plan_config.set_model", "model.plan_config.select_model", "model.plan_config.set_effort", "model.plan_config.select_effort":
 					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "该项是 bot frontend 默认配置，请私聊该 bot 使用"}}, nil
 				}
 			}
