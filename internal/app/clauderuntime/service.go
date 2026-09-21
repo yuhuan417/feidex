@@ -963,13 +963,15 @@ func withClaudeModelEnv(env []string, model, smallModel, subagentModel string) [
 	subagentModel = strings.TrimSpace(subagentModel)
 	if model != "" {
 		env = upsertEnvValue(env, "ANTHROPIC_MODEL", model)
-		env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL", model)
-		env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL", model)
-		if smallModel == "" {
-			smallModel = model
-		}
-		if subagentModel == "" {
-			subagentModel = model
+		if !isClaudeBuiltinModel(model) {
+			env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_OPUS_MODEL", model)
+			env = upsertEnvValue(env, "ANTHROPIC_DEFAULT_SONNET_MODEL", model)
+			if smallModel == "" {
+				smallModel = model
+			}
+			if subagentModel == "" {
+				subagentModel = model
+			}
 		}
 	}
 	if smallModel != "" {
@@ -979,6 +981,11 @@ func withClaudeModelEnv(env []string, model, smallModel, subagentModel string) [
 		env = upsertEnvValue(env, "CLAUDE_CODE_SUBAGENT_MODEL", subagentModel)
 	}
 	return env
+}
+
+func isClaudeBuiltinModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return model == "opus" || model == "sonnet" || model == "haiku" || strings.HasPrefix(model, "claude-")
 }
 
 func upsertEnvValue(env []string, key, value string) []string {
