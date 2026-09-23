@@ -171,10 +171,6 @@ type Stream struct {
 	FinalCandidateMessageID string
 	ReviewFinal             bool
 	QuietWorking            *turn.QuietWorkingCard
-	// QuietWorkingReuseBlocked is set when a substantive card was sent after
-	// the current working card. In that case later final/agent output must not
-	// patch the older working card because it would reorder the visible thread.
-	QuietWorkingReuseBlocked bool
 }
 
 // FlushResult captures the result of flushing a turn stream.
@@ -347,12 +343,8 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 		stream.LastSentPlan = text
 		stream.PendingPlan = ""
 		if stream.QuietWorking != nil {
-			reuseBlocked := stream.QuietWorkingReuseBlocked
 			planBoundary = prepareStreamBoundaryLocked(stream)
-			stream.QuietWorkingReuseBlocked = false
-			if !reuseBlocked {
-				planReuseMessage = planBoundary.ReuseMessageID
-			}
+			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
 	if hasPayload && payload.ItemType == "user_input" {
@@ -392,10 +384,8 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 	}
 	if hasPayload && IsQuietBoundaryTurnPayload(payload) {
 		if stream.QuietWorking != nil {
-			reuseBlocked := stream.QuietWorkingReuseBlocked
 			itemBoundary = prepareStreamBoundaryLocked(stream)
-			stream.QuietWorkingReuseBlocked = false
-			if !reuseBlocked && strings.TrimSpace(itemReuseMessage) == "" {
+			if strings.TrimSpace(itemReuseMessage) == "" {
 				itemReuseMessage = itemBoundary.ReuseMessageID
 			}
 			if itemType == "plan" {
@@ -403,11 +393,7 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 			}
 		}
 	} else if quietWorkingCardEnabled(svc.feishuConfig()) {
-		hadQuietWorking := stream.QuietWorking != nil
 		workingUpdate = prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
-		if !hadQuietWorking && stream.QuietWorking != nil {
-			stream.QuietWorkingReuseBlocked = false
-		}
 	}
 	tracker.Mu.Unlock()
 
@@ -464,17 +450,14 @@ func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string)
 		result.FinalReuseMessageID = strings.TrimSpace(stream.FinalCandidateMessageID)
 	}
 	pendingPlan := strings.TrimSpace(stream.PendingPlan)
-	reuseBlocked := stream.QuietWorkingReuseBlocked
-	if stream.QuietWorking != nil && stream.QuietWorking.IsReasoningOnly() && !reuseBlocked && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
+	if stream.QuietWorking != nil && stream.QuietWorking.IsReasoningOnly() && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
 		result.WorkingMessageID = strings.TrimSpace(stream.QuietWorking.MessageID)
 	}
 	if pendingPlan != "" && pendingPlan != stream.LastSentPlan {
 		planText = pendingPlan
 		if stream.QuietWorking != nil {
 			planBoundary = prepareStreamBoundaryLocked(stream)
-			if !reuseBlocked {
-				planReuseMessage = planBoundary.ReuseMessageID
-			}
+			planReuseMessage = planBoundary.ReuseMessageID
 		}
 	}
 	delete(tracker.Streams, turnID)
@@ -584,7 +567,6 @@ func (svc Service) DiscardWorkingCard(turnID string) {
 		return
 	}
 	stream.QuietWorking = nil
-	stream.QuietWorkingReuseBlocked = false
 }
 
 // TakeReasoningOnlyWorkingMessageID claims a reasoning-only working card for
@@ -609,7 +591,6 @@ func (svc Service) TakeReasoningOnlyWorkingMessageID(turnID string) string {
 		return ""
 	}
 	stream.QuietWorking = nil
-	stream.QuietWorkingReuseBlocked = false
 	return messageID
 }
 
