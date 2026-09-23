@@ -186,6 +186,22 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 			t.Fatalf("auxiliary model config body missing %q: %q", want, auxBody)
 		}
 	}
+
+	assertLastModelConfigButtonIsBack := func(name string, rendered map[string]any) {
+		t.Helper()
+		buttons := cardButtonsForTest(rendered)
+		if len(buttons) == 0 {
+			t.Fatalf("%s model config card has no action buttons", name)
+		}
+		textValue, _ := buttons[len(buttons)-1]["text"].(map[string]any)
+		if got, _ := textValue["content"].(string); got != "返回上一级" {
+			t.Fatalf("%s model config last button = %q, want 返回上一级", name, got)
+		}
+	}
+	assertLastModelConfigButtonIsBack("single-chat Codex", card)
+	assertLastModelConfigButtonIsBack("group Codex", newBindingService(a).renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, codexrpc.ModelListResult{
+		Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}},
+	}))
 }
 
 func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {

@@ -564,7 +564,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 					return "\n\n" + modelDescription
 				}(),
 		},
-		{"tag": "markdown", "content": "选择 Bot 默认模型"},
+		{"tag": "markdown", "content": "选择模型"},
 	}
 	modelOptions := []cards.SelectStaticOption{{
 		Text: func() string {
@@ -591,13 +591,13 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}
 	elements = append(elements, cards.BuildSelectStaticElement(
 		"model_config_select_model",
-		"选择 Bot 默认模型",
+		"选择模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
 		modelOptions,
 		modelInitialOption,
 	))
 
-	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择 Bot 默认推理强度"})
+	elements = append(elements, map[string]any{"tag": "markdown", "content": "选择推理强度"})
 	effortOptions := []cards.SelectStaticOption{{
 		Text: func() string {
 			if effortValue == "" {
@@ -625,7 +625,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}
 	elements = append(elements, cards.BuildSelectStaticElement(
 		"model_config_select_effort",
-		"选择 Bot 默认推理强度",
+		"选择推理强度",
 		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
 		effortOptions,
 		effortInitialOption,
@@ -637,6 +637,11 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 		"tag":     "markdown",
 		"content": "Plan 模式模型: `" + planModelName + "`\n模型来源: " + planModelSource + "\nPlan 推理强度: `" + firstNonEmpty(selectedPlanEffort, "-") + "`\n推理来源: " + planEffortSource + "\n\n" + planPresetNotice,
 	})
+	elements = append(elements, ModelCardActionRow([]feishu.Button{{
+		Text:  "配置辅助模型",
+		Type:  "default",
+		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey, "menu_action": menuAction},
+	}}))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  "返回上一级",
@@ -644,11 +649,6 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 		}}))
 	}
-	elements = append(elements, ModelCardActionRow([]feishu.Button{{
-		Text:  "配置辅助模型",
-		Type:  "default",
-		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey, "menu_action": menuAction},
-	}}))
 
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "")})
@@ -1026,7 +1026,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 				"`/model set default` 会恢复为 `sonnet`。\n" +
 				"切换 Claude model / effort 只允许在当前 frontend 空闲时进行；成功后会尝试立即应用到当前会话，并用于后续对话。",
 		},
-		{"tag": "markdown", "content": "选择 Claude 默认模型"},
+		{"tag": "markdown", "content": "选择模型"},
 	}
 
 	modelOptions := make([]cards.SelectStaticOption, 0, len(ClaudeBuiltinModelOptions)+1)
@@ -1038,7 +1038,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	}
 	elements = append(elements, cards.BuildSelectStaticElement(
 		"claude_model_config_select_model",
-		"选择 Claude 默认模型",
+		"选择模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": menuAction},
 		modelOptions,
 		currentModel,
@@ -1069,10 +1069,10 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 		})
 	}
 	elements = append(elements,
-		map[string]any{"tag": "markdown", "content": "选择 Claude 推理强度"},
+		map[string]any{"tag": "markdown", "content": "选择推理强度"},
 		cards.BuildSelectStaticElement(
 			"claude_model_config_select_effort",
-			"选择 Claude 推理强度",
+			"选择推理强度",
 			map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": menuAction},
 			effortOptions,
 			effortInitialOption,

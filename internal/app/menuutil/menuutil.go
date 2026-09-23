@@ -143,10 +143,16 @@ func RenderRootMenuButtons(backend, sessionKey string, isItemVisible func(spec m
 func RenderGroupMenuButtons(groupAction, sessionKey string, getItems func(action string) []menutypes.MenuItemSpec) []feishu.Button {
 	items := getItems(groupAction)
 	buttons := make([]feishu.Button, 0, len(items))
+	backButtons := make([]feishu.Button, 0, 1)
 	for _, spec := range items {
-		buttons = append(buttons, RenderMenuButtonSpec(spec, sessionKey))
+		button := RenderMenuButtonSpec(spec, sessionKey)
+		if spec.Kind == menutypes.MenuItemBack {
+			backButtons = append(backButtons, button)
+			continue
+		}
+		buttons = append(buttons, button)
 	}
-	return buttons
+	return append(buttons, backButtons...)
 }
 
 // RenderMenuButtonSpec renders a single menu button from a spec.

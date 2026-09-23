@@ -108,7 +108,7 @@ func (s Service) RenderMenuCard(sessionKey string) map[string]any {
 			"session_key": sessionKey,
 		},
 	})
-	return s.app.Feishu().SimpleStatusCard("Service Tier", "blue", s.app.MenuCardBody("menu.fast", body), buttons)
+	return s.app.Feishu().SimpleStatusCard("响应速度", "blue", s.app.MenuCardBody("menu.fast", body), buttons)
 }
 
 func (s Service) SetThreadServiceTier(sessionKey, threadID, serviceTier string) (*state.Session, error) {

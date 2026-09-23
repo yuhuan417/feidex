@@ -73,6 +73,9 @@ Dependency direction should stay simple:
 
 - Any capability that is reachable from a Feishu menu must also be invocable directly from a slash command or equivalent command-line style entrypoint. Do not introduce menu-only product capabilities.
 - Feishu-side user experience should stay as consistent as practical across different backends. If a backend-specific user-visible behavior must differ, confirm that difference with the user first and document the reason and constraint in the repository.
+- The menu system has one general card UI contract across single-chat and group-chat scopes. Every card in a shared menu workflow (menu entry, submenu, configuration/detail page, selector, and form-result card) for the same backend and capability must use the same rendered UI structure: controls, order, labels, command hints, layout, breadcrumbs, and navigation. Command handling and persistence may branch by scope after selection. Effective values and concise scope descriptions may differ, but the available shared controls and their visual arrangement must not.
+- In every menu-workflow card that has a `返回上一级` action, that action must be the final interactive card element, after all other menu actions and controls. This applies to cards assembled in multiple steps as well as cards with controls and action rows.
+- Chat-type UI differences are limited to capabilities that exist only for one chat type and the group workspace-onboarding entry card. The group-only capabilities are primary/mention controls and current-Bot selection/status; group-only explanatory text may describe multi-Bot routing. Single-chat `BotProfile` and group `AgentBinding` are persistence scopes: show their scope in the card body when useful, but keep shared controls, order, labels, layout, breadcrumbs, and navigation identical. A group may use a separate workspace-onboarding card before a workspace is selected; after onboarding, workspace management and selection cards must use the same renderer as single-chat. Document any additional exception here with its reason before implementation.
 - Feishu card callback handlers must stay short and non-blocking. Do not perform long-running business logic, external network calls, or other high-latency work directly inside a synchronous card callback.
 - If a card action needs slow work, acknowledge the callback quickly and continue via the asynchronous card update flow or another background path that can patch or replace the card later.
 
@@ -395,6 +398,8 @@ When a change touches one of these contracts, prefer updating the existing guard
 - Workspace new, clone, and path picker flows: `internal/app/path_picker_test.go`, `internal/app/actions_dispatch_more_test.go`, `internal/app/app_more_test.go`
 - Upgrade and backend maintenance: `internal/app/upgrade_isolation_test.go`, `internal/app/upgrade_more_test.go`, `internal/app/codex_upgrade_test.go`, `internal/app/claude_upgrade_test.go`
 - Backend selection and frontend isolation: `internal/app/backend_selection_test.go`, `internal/app/frontend_idle_test.go`, `internal/app/session_lineage_test.go`
+- Menu rendering and navigation: `internal/app/menuutil/menuutil_test.go`, `internal/app/app_more_test.go`, and the relevant menu or card rendering tests. Verify single-chat and group-chat output together, including the final position of `返回上一级`.
+- Cross-scope menu parity: `internal/app/menu_render_parity_test.go` compares the rendered structure and controls for each common menu family in p2p and group scope.
 
 If a new core contract does not fit one of these buckets, add a named guard test for it instead of relying only on incidental coverage.
 
@@ -417,6 +422,12 @@ Keep these in sync:
 - `internal/app/action_registry.go`
 - `internal/app/menu_actions.go`
 - tests for dispatch and card rendering
+
+General menu-card UI contract:
+
+- This is a system-wide rule for cards in shared menu workflows, not a rule for one command or card. It covers menu entries, submenus, configuration/detail pages, selectors, and form-result cards.
+- Use the shared menu/card rendering helpers for p2p and group Conversation scope. Before merging, compare both rendered cards for the same backend and capability; shared controls, order, labels, command hints, layout, breadcrumbs, and navigation must match. Keep scope-specific values in body copy. Group workspace-onboarding may have a distinct entry card, but its completed workspace menus use the shared renderer.
+- In any such card that has `返回上一级`, keep it after every other interactive element, including action rows appended before later controls. Add or update a named rendering guard when the card is changed.
 
 Additional action-registry rule:
 

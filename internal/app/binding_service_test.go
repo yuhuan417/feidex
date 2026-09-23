@@ -836,7 +836,7 @@ func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
 	}
 	modelCard := modelResp.Card.Data.(map[string]any)
 	modelBody := cardMarkdownContent(t, modelCard)
-	if !strings.Contains(modelBody, "选择当前群内模型") || strings.Contains(modelBody, "工作区管理") || strings.Contains(modelBody, "当前工作区") {
+	if !strings.Contains(modelBody, "选择模型") || strings.Contains(modelBody, "工作区管理") || strings.Contains(modelBody, "当前工作区") {
 		t.Fatalf("group model config body = %q", modelBody)
 	}
 	if selects := cardSelectStaticForTest(modelCard); len(selects) != 2 {

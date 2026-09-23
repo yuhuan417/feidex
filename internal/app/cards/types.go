@@ -52,7 +52,51 @@ func AppendMarkdownBodyCardElement(card map[string]any, elem map[string]any) {
 		card["body"] = body
 	}
 	elements, _ := body["elements"].([]map[string]any)
-	body["elements"] = append(elements, elem)
+	elements = append(elements, elem)
+	moveBackActionRowsLast(elements)
+	body["elements"] = elements
+}
+
+func moveBackActionRowsLast(elements []map[string]any) {
+	if len(elements) < 2 {
+		return
+	}
+	backRows := make([]map[string]any, 0, 1)
+	contentRows := make([]map[string]any, 0, len(elements))
+	for _, element := range elements {
+		if isBackActionRow(element) {
+			backRows = append(backRows, element)
+			continue
+		}
+		contentRows = append(contentRows, element)
+	}
+	if len(backRows) == 0 {
+		return
+	}
+	copy(elements, contentRows)
+	copy(elements[len(contentRows):], backRows)
+}
+
+func isBackActionRow(element map[string]any) bool {
+	columns, _ := element["columns"].([]map[string]any)
+	if len(columns) == 0 {
+		return false
+	}
+	foundButton := false
+	for _, column := range columns {
+		children, _ := column["elements"].([]map[string]any)
+		for _, child := range children {
+			if child["tag"] != "button" {
+				continue
+			}
+			foundButton = true
+			textValue, _ := child["text"].(map[string]any)
+			if textValue["content"] != "返回上一级" {
+				return false
+			}
+		}
+	}
+	return foundButton
 }
 
 func BuildMarkdownBodyCardActionElement(buttons []feishu.Button) map[string]any {

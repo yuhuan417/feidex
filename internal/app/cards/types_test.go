@@ -45,3 +45,25 @@ func TestMarkdownBodyCardHelpers(t *testing.T) {
 		t.Fatalf("BuildMarkdownBodyCardActionElements(back-last) = %#v", rows)
 	}
 }
+
+func TestAppendMarkdownBodyCardElementKeepsBackActionAfterLaterControls(t *testing.T) {
+	card := NewMarkdownBodyCard("Menu", "blue")
+	AppendMarkdownBodyCardElement(card, BuildMarkdownBodyCardActionElement([]feishu.Button{{
+		Text:  "返回上一级",
+		Value: map[string]any{"action": "menu.root"},
+	}}))
+	AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "additional menu content"})
+	AppendMarkdownBodyCardElement(card, BuildMarkdownBodyCardActionElement([]feishu.Button{{
+		Text:  "Next",
+		Value: map[string]any{"action": "menu.next"},
+	}}))
+
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	columns, _ := elements[len(elements)-1]["columns"].([]map[string]any)
+	button := columns[0]["elements"].([]map[string]any)[0]
+	label := button["text"].(map[string]any)["content"]
+	if label != "返回上一级" {
+		t.Fatalf("last card action = %v, want 返回上一级", label)
+	}
+}

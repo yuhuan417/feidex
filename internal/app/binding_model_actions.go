@@ -112,7 +112,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		content += "\n\n" + modelDescription
 	}
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": content})
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择当前群内模型"})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择模型"})
 
 	modelOptions := []cards.SelectStaticOption{{
 		Text: func() string {
@@ -135,14 +135,14 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		modelOptions = append(modelOptions, cards.SelectStaticOption{Text: label, Value: item.ID})
 	}
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement(
-		"group_model_config_select_model",
-		"选择当前群内模型",
+		"model_config_select_model",
+		"选择模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": "menu.model"},
 		modelOptions,
 		modelInitialOption,
 	))
 
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择当前群内推理强度"})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择推理强度"})
 	effortOptions := []cards.SelectStaticOption{{
 		Text: func() string {
 			if effortOverride == "" {
@@ -170,12 +170,18 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		}
 	}
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement(
-		"group_model_config_select_effort",
-		"选择当前群内推理强度",
+		"model_config_select_effort",
+		"选择推理强度",
 		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": "menu.model"},
 		effortOptions,
 		effortInitialOption,
 	))
+	planModel := effectiveCodexPlanModel(s.app, s.app.State().Session(sessionKey))
+	planEffort := effectiveCodexPlanReasoningEffort(s.app, s.app.State().Session(sessionKey))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{
+		"tag":     "markdown",
+		"content": "Plan 模式模型: `" + firstNonEmpty(planModel, "(default)") + "`\nPlan 推理强度: `" + firstNonEmpty(planEffort, "-") + "`",
+	})
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  "配置辅助模型",
 		Type:  "default",
@@ -210,7 +216,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model", "")})
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "当前模型: `" + currentModel + "`\n模型来源: " + modelSource + "\n当前推理强度: `" + currentEffort + "`\n推理来源: " + effortSource + "\n\n辅助模型摘要:\nsmall: `" + firstNonEmpty(binding.SmallModelOverride, "跟随 Bot 默认") + "`\nsubagent: `" + firstNonEmpty(binding.SubagentModelOverride, "跟随 Bot 默认") + "`\n\n需要任意 raw model 时，请直接使用 `/model set <model-id>`。"})
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择当前群内模型"})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择模型"})
 
 	modelOptions := []cards.SelectStaticOption{{
 		Text: func() string {
@@ -250,14 +256,14 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		}
 	}
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement(
-		"group_claude_model_config_select_model",
-		"选择当前群内模型",
+		"claude_model_config_select_model",
+		"选择模型",
 		map[string]any{"action": "model.config.select_model", "session_key": sessionKey, "menu_action": "menu.model"},
 		modelOptions,
 		modelInitialOption,
 	))
 
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择当前群内推理强度"})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择推理强度"})
 	effortOptions := []cards.SelectStaticOption{{
 		Text: func() string {
 			if effortOverride == "" {
@@ -279,8 +285,8 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		effortOptions = append(effortOptions, cards.SelectStaticOption{Text: label, Value: effort})
 	}
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement(
-		"group_claude_model_config_select_effort",
-		"选择当前群内推理强度",
+		"claude_model_config_select_effort",
+		"选择推理强度",
 		map[string]any{"action": "model.config.select_effort", "session_key": sessionKey, "menu_action": "menu.model"},
 		effortOptions,
 		effortInitialOption,
@@ -495,7 +501,7 @@ func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.
 	defaultLabel := "跟随默认"
 	defaultType := "default"
 	if strings.TrimSpace(current) == "" {
-		defaultLabel = "当前 · " + defaultLabel
+		defaultLabel = "当前 · 默认"
 		defaultType = "primary"
 	}
 	fastLabel := "fast"
