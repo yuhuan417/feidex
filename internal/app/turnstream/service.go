@@ -563,11 +563,12 @@ func (svc Service) MarkStreamFinal(turnID string) {
 	tracker.Mu.Unlock()
 }
 
-// MarkSubstantiveOutputAfterWorking prevents future final/agent output from
-// reusing the current working-card message. The marker only applies to the
-// currently active working card; a later working card starts with a clean
-// reuse state.
-func (svc Service) MarkSubstantiveOutputAfterWorking(turnID string) {
+// DiscardWorkingCard retires the current working card after a card that is not
+// a progress card became the newest card in the conversation (a question or
+// approval card, for example). Later progress must start a new card: patching
+// the retired card would both update a card that is no longer the newest one
+// and rewrite content the user has already read.
+func (svc Service) DiscardWorkingCard(turnID string) {
 	tracker := svc.Tracker()
 	if tracker == nil {
 		return
@@ -579,10 +580,11 @@ func (svc Service) MarkSubstantiveOutputAfterWorking(turnID string) {
 	tracker.Mu.Lock()
 	defer tracker.Mu.Unlock()
 	stream := tracker.Streams[turnID]
-	if stream == nil || stream.QuietWorking == nil || strings.TrimSpace(stream.QuietWorking.MessageID) == "" {
+	if stream == nil {
 		return
 	}
-	stream.QuietWorkingReuseBlocked = true
+	stream.QuietWorking = nil
+	stream.QuietWorkingReuseBlocked = false
 }
 
 // TakeReasoningOnlyWorkingMessageID claims a reasoning-only working card for

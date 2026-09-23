@@ -71,7 +71,10 @@ func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, deli
 		}
 	}
 	now := time.Now()
-	newTurnStreamService(a).markSubstantiveOutputAfterWorking(delivery.turnID)
+	// The delivered card is the newest card now, so retire the working card:
+	// progress that resumes after this request is answered must start a new card
+	// rather than patch a card the user has already scrolled past.
+	newTurnStreamService(a).discardWorkingCard(delivery.turnID)
 	recordMessageLink(a, msgID, linkKind, sub, requestKey)
 	if err := a.State().SavePending(&state.PendingRequest{
 		ID:           requestKey,

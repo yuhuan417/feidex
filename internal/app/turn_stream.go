@@ -133,8 +133,8 @@ func (s turnStreamService) markTurnStreamFinal(turnID string) {
 	s.service.MarkStreamFinal(turnID)
 }
 
-func (s turnStreamService) markSubstantiveOutputAfterWorking(turnID string) {
-	s.service.MarkSubstantiveOutputAfterWorking(turnID)
+func (s turnStreamService) discardWorkingCard(turnID string) {
+	s.service.DiscardWorkingCard(turnID)
 }
 
 func (s turnStreamService) takeReasoningOnlyWorkingMessageID(turnID string) string {
