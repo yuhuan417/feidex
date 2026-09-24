@@ -290,7 +290,7 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 func (s *RenderService) RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
 	buttons := []feishu.Button{
 		{
-			Text:  "返回工作区管理",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
@@ -320,7 +320,7 @@ func (s *RenderService) RenderWorkspaceSwitchExistingCard(sessionKey, workspaceI
 			}.Map(),
 		},
 		{
-			Text:  "返回工作区管理",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
@@ -349,7 +349,7 @@ func (s *RenderService) RenderWorkspaceCloneManualHintCard(sessionKey, workspace
 	}
 	buttons := []feishu.Button{
 		{
-			Text:  "返回工作区管理",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
@@ -380,7 +380,7 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 	}
 	buttons := []feishu.Button{
 		{
-			Text: "返回工作区管理",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.workspace",
@@ -553,7 +553,7 @@ func (s *RenderService) RenderWorkspaceWorktreePreparingCard(requestID string, p
 // RenderWorkspaceWorktreeSuccessCard renders the worktree success card.
 func (s *RenderService) RenderWorkspaceWorktreeSuccessCard(sessionKey, workspaceID, targetDir string) map[string]any {
 	buttons := []feishu.Button{{
-		Text:  "返回工作区管理",
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
@@ -576,7 +576,7 @@ func (s *RenderService) RenderWorkspaceWorktreeManualHintCard(sessionKey, worksp
 		lines = append(lines, "", "错误: "+errText)
 	}
 	buttons := []feishu.Button{{
-		Text:  "返回工作区管理",
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
@@ -603,7 +603,7 @@ func (s *RenderService) RenderWorkspaceWorktreeCanceledCard(sessionKey string, p
 		lines = append(lines, "", "取消前最后进度:", markdownCodeBlock(strings.Join(snapshot.Lines, "\n")))
 	}
 	buttons := []feishu.Button{{
-		Text:  "返回工作区管理",
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
@@ -844,7 +844,7 @@ func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[st
 	}
 	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
-			Text: commandLabel("返回工作区", "/workspace"),
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.workspace",
@@ -884,7 +884,7 @@ func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID
 			},
 		},
 		{
-			Text: "返回删除菜单",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.delete.menu",

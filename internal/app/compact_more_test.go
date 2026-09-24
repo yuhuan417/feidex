@@ -292,7 +292,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 	if !strings.Contains(body, "已提交 `/compact`") {
 		t.Fatalf("accepted patched card body = %q", body)
 	}
-	if !cardHasButtonText(patchedCards[len(patchedCards)-1], "返回常用工具") {
+	if !cardHasButtonText(patchedCards[len(patchedCards)-1], feishu.MenuBackButtonText) {
 		t.Fatalf("accepted patched card missing return button: %#v", patchedCards[len(patchedCards)-1])
 	}
 	if sess := a.store.GetSession(sessionKey); sess == nil || sess.Status != sessionStatusCompacting {

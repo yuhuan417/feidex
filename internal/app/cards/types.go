@@ -91,7 +91,8 @@ func isBackActionRow(element map[string]any) bool {
 			}
 			foundButton = true
 			textValue, _ := child["text"].(map[string]any)
-			if textValue["content"] != "返回上一级" {
+			content, _ := textValue["content"].(string)
+			if !feishu.IsMenuBackButtonText(content) {
 				return false
 			}
 		}

@@ -443,7 +443,7 @@ func (d codexPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, dep
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  commandLabel("返回工作区", "/workspace"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
@@ -484,7 +484,7 @@ func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  commandLabel("返回工作区", "/workspace"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
@@ -524,7 +524,7 @@ func (d codexPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, 
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  commandLabel("返回工作区", "/workspace"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
@@ -591,7 +591,7 @@ func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey str
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  commandLabel("返回工作区", "/workspace"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	})
@@ -797,7 +797,7 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  deps.CommandLabel("返回 thread", "/thread"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})
@@ -853,7 +853,7 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  deps.CommandLabel("返回 thread", "/thread"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})
@@ -899,7 +899,7 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  deps.CommandLabel("返回 thread", "/thread"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})
@@ -971,7 +971,7 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  deps.CommandLabel("返回会话", "/session"),
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
 	})

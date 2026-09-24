@@ -777,7 +777,7 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	if got := workspaceLabels["workspace.use.existing"]; !strings.Contains(got, "default") {
 		t.Fatalf("workspace card labels = %+v, want workspace.use.existing", workspaceLabels)
 	}
-	if got := workspaceLabels["menu.workspace"]; !strings.Contains(got, "工作区") {
+	if got := workspaceLabels["menu.workspace"]; !strings.Contains(got, feishu.MenuBackButtonText) {
 		t.Fatalf("workspace card labels = %+v, want menu.workspace", workspaceLabels)
 	}
 }

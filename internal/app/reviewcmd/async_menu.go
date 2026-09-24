@@ -22,7 +22,7 @@ func reviewAsyncButtons(sessionKey, retryAction string) []feishu.Button {
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回代码审查",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.review",

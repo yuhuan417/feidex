@@ -684,7 +684,7 @@ func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.
 	selectedSubagent := FindModelEntry(result, subagentValue)
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 推理强度**\n未设置时跟随 subagent 模型的默认强度。"})
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, effortPickerOptions(selectedSubagent, subagentEffort, subagentEffort, nil), firstNonEmpty(subagentEffort, DefaultOptionValue)))
-	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card
 }
 
@@ -1118,7 +1118,7 @@ func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, men
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_small_model", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(small, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent model**\nClaude 内部自动创建子 agent 时使用；未设置时跟随主模型。"})
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(subagent, DefaultOptionValue)))
-	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card
 }
 

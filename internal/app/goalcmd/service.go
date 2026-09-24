@@ -557,7 +557,7 @@ func formatGoalTokens(tokens int64) string {
 
 func goalBackButtons(sessionKey string) []feishu.Button {
 	return []feishu.Button{{
-		Text:  "返回常用工具",
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Name:  "goal_back",
 		Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},

@@ -378,7 +378,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 推理强度**\n未设置时跟随 subagent 模型的默认强度。"})
 		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, firstNonEmpty(subagentEffort, modelConfigDefaultOptionValue)))
 	}
-	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{Text: "返回模型配置", Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card, nil
 }
 

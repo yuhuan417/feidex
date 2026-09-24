@@ -128,7 +128,7 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 }
 
 func groupBindingBackButton(sessionKey string) feishu.Button {
-	return feishu.Button{Text: "返回工作区", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}}
+	return feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}}
 }
 
 func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {

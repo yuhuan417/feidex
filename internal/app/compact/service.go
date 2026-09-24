@@ -136,7 +136,7 @@ func CompactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回常用工具",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.tools",
