@@ -226,7 +226,7 @@ func (s *Service) RenderSkillsCard(sessionKey string, forceReload bool) (map[str
 		SessionKey:  sessionKey,
 		FormatBody:  func(body string) string { return s.FormatMenuBody("menu.skills", body) },
 		ReloadLabel: s.CommandLabel("刷新", "/skills reload"),
-		BackLabel:   "返回上一级",
+		BackLabel:   feishu.MenuBackButtonText,
 	})
 	return card, nil
 }

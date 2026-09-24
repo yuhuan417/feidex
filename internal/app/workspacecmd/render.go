@@ -673,7 +673,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 			},
 		},
 		feishu.Button{
-			Text: "返回上一级",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.root",

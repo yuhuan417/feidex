@@ -27,7 +27,7 @@ func interruptStatusButtons(sessionKey, parentAction, targetTurnID string, inclu
 	}
 	backAction := firstNonEmpty(strings.TrimSpace(parentAction), "menu.tools")
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      backAction,

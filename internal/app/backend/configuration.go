@@ -255,7 +255,7 @@ func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[s
 	body := s.FormatMenuBody("menu.group.model", unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.App)))
 	buttons := []feishu.Button{
 		{Text: "后端选择 /backend", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.group.backend", SessionKey: sessionKey}.Map()},
-		{Text: "返回上一级", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	return s.App.Feishu().SimpleStatusCard("模型配置", "orange", body, buttons)
 }
@@ -343,7 +343,7 @@ func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[s
 	}, "\n")
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
-		{Text: "返回上一级", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	body = s.FormatMenuBody("menu.group.model", body)
 	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
@@ -368,7 +368,7 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
 		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.fast", SessionKey: sessionKey}.Map()},
-		{Text: "返回上一级", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	body = s.FormatMenuBody("menu.group.model", body)
 	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)

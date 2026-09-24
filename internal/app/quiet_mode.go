@@ -74,7 +74,7 @@ func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
 	}
 	if strings.TrimSpace(sessionKey) != "" {
 		buttons = append(buttons, feishu.Button{
-			Text:  "返回上一级",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		})

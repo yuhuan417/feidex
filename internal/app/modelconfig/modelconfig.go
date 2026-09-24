@@ -644,7 +644,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}}))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
-			Text:  "返回上一级",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 		}}))
@@ -1086,7 +1086,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	}}))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
-			Text:  "返回上一级",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
 		}}))

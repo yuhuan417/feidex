@@ -517,7 +517,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 		slog.Info("upgrade unit succeeded", "unit", unitName, "source", source)
 		body := "升级已完成，服务已重启。"
 		card = feishuClient.SimpleStatusCard("升级成功", "green", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
-			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})
 	} else {
 		errMsg := ExtractUpgradeErrorFromJournal(st.JournalTail)
@@ -527,7 +527,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 			body += "\n\n错误: " + errMsg
 		}
 		card = feishuClient.SimpleStatusCard("升级失败", "red", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
-			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})
 	}
 

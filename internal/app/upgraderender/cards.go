@@ -148,7 +148,7 @@ func RenderCodexUpgradeConfirmCard(r StatusCardRenderer, sessionKey, requestID s
 			},
 		},
 		{
-			Text: "返回上一级",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.group.backend",
@@ -367,7 +367,7 @@ func RenderClaudeUpgradeConfirmCard(r StatusCardRenderer, sessionKey, requestID 
 			},
 		},
 		{
-			Text: "返回上一级",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.group.backend",

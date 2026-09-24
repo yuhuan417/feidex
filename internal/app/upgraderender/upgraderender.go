@@ -194,7 +194,7 @@ func ClaudeUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button
 		)
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.group.backend",
@@ -353,7 +353,7 @@ func CodexUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button 
 		)
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.group.backend",

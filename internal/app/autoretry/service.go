@@ -774,7 +774,7 @@ func (s Service) RenderAutoRetryConfigCard(sessionKey string) map[string]any {
 			},
 		},
 		{
-			Text:  "返回上一级",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: map[string]any{"action": "menu.group.backend", "session_key": sessionKey},
 		},

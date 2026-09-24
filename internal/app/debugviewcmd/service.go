@@ -370,7 +370,7 @@ func (s DebugService) RenderDebugAccessDeniedCard(sessionKey, userID string) map
 		}, "\n")),
 	)
 	return s.app.DebugFeishu().SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	})
 }
 
@@ -405,7 +405,7 @@ func (s DebugService) RenderDebugLogsCard(sessionKey string) map[string]any {
 
 	buttons := []feishu.Button{
 		{Text: s.app.DebugCommandLabel("刷新日志", "/debug logs"), Type: "default", Value: map[string]any{"action": "menu.debug.logs", "session_key": sessionKey}},
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
 	for _, btn := range buttons {
 		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement([]feishu.Button{btn}))
@@ -512,7 +512,7 @@ func (s UsageService) RenderUsageCard(sessionKey string) map[string]any {
 		body = s.app.DebugConversationBackend().RenderUsageBody(sess)
 	}
 	return s.app.DebugFeishu().SimpleStatusCard("Token Usage", "blue", s.app.DebugMenuCardBody("menu.usage", body), []feishu.Button{
-		{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
 	})
 }
 

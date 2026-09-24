@@ -242,7 +242,7 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  "返回上一级",
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.tools", SessionKey: sessionKey}.Map(),
 	})
@@ -319,7 +319,7 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text:  "返回上一级",
+		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: index / HistoryPageSize}.Map(),
 	})

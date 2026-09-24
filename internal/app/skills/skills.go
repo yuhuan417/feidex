@@ -243,7 +243,7 @@ func BuildCard(p BuildCardParams) map[string]any {
 	}
 	backLabel := p.BackLabel
 	if backLabel == "" {
-		backLabel = "返回上一级"
+		backLabel = feishu.MenuBackButtonText
 	}
 
 	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{

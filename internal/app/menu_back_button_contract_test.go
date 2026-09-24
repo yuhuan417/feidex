@@ -34,11 +34,12 @@ func moduleRootForTest(t *testing.T) string {
 	}
 }
 
-// TestMenuBackButtonLabelsUseTheSharedLabel keeps a back control from being
-// labelled after its destination again (返回模型配置, 返回工作区管理, ...). The
-// label is a functional contract, not just copy: both orderings that keep the
-// back control last match on it, so a renamed back button also silently stops
-// being the final card action.
+// TestMenuBackButtonLabelsUseTheSharedLabel keeps the back control label from
+// being written out again, either as a destination name (返回模型配置,
+// 返回工作区管理, ...) or as a second copy of the shared text. The label is a
+// functional contract, not just copy: both orderings that keep the back control
+// last match on it, so a renamed back button also silently stops being the final
+// card action.
 func TestMenuBackButtonLabelsUseTheSharedLabel(t *testing.T) {
 	root := filepath.Join(moduleRootForTest(t), "internal", "app")
 	fset := token.NewFileSet()
@@ -62,7 +63,7 @@ func TestMenuBackButtonLabelsUseTheSharedLabel(t *testing.T) {
 				return true
 			}
 			value, unquoteErr := strconv.Unquote(literal.Value)
-			if unquoteErr != nil || !strings.HasPrefix(value, "返回") || value == feishu.MenuBackButtonText {
+			if unquoteErr != nil || !strings.HasPrefix(value, "返回") {
 				return true
 			}
 			rel, _ := filepath.Rel(root, path)
@@ -78,7 +79,7 @@ func TestMenuBackButtonLabelsUseTheSharedLabel(t *testing.T) {
 		t.Fatalf("no Go files scanned under %s", root)
 	}
 	if len(offenders) > 0 {
-		t.Fatalf("menu back controls must use feishu.MenuBackButtonText (%q) instead of naming the destination:\n  %s",
+		t.Fatalf("menu back controls must reference feishu.MenuBackButtonText (%q) instead of a literal:\n  %s",
 			feishu.MenuBackButtonText, strings.Join(offenders, "\n  "))
 	}
 }

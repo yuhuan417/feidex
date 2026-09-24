@@ -476,7 +476,7 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已开始升级"},
 		Card: rawCard(s.app.UpgradeFeishu().SimpleStatusCard("升级中", "orange", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
-			{Text: "返回上一级", Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
+			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})),
 	}, nil
 }
@@ -611,7 +611,7 @@ func UpgradePanelButtons(sessionKey string, confirm map[string]any, includeBack 
 	})
 	if includeBack {
 		buttons = append(buttons, feishu.Button{
-			Text: "返回上一级",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.group.system",
@@ -625,7 +625,7 @@ func UpgradePanelButtons(sessionKey string, confirm map[string]any, includeBack 
 func upgradeBackButtons(sessionKey string) []feishu.Button {
 	return []feishu.Button{
 		{
-			Text: "返回上一级",
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.group.system",

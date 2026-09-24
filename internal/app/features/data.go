@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	appruntime "feidex/internal/app/runtime"
+	"feidex/internal/feishu"
 )
 
 var helpGroupOrder = []string{
@@ -32,7 +33,7 @@ var registry = []Spec{
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.tools", Label: "常用工具", Description: "常用会话与线程工具入口。", ShowInRoot: true},
 		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.tools", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
+			{GroupAction: "menu.tools", Action: "menu.root", Label: feishu.MenuBackButtonText, Kind: MenuItemBack},
 		},
 		ActionNames: []ActionName{
 			"menu.tools",
@@ -46,7 +47,7 @@ var registry = []Spec{
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.group.model", Label: "模型配置", Description: "模型选择与响应速度配置。", ShowInRoot: true},
 		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.group.model", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
+			{GroupAction: "menu.group.model", Action: "menu.root", Label: feishu.MenuBackButtonText, Kind: MenuItemBack},
 		},
 		ActionNames: []ActionName{
 			"menu.group.model",
@@ -85,7 +86,7 @@ var registry = []Spec{
 			{GroupAction: "menu.group.system", Action: "menu.group.backend", Label: "后端管理", Kind: MenuItemSubmenu},
 			{GroupAction: "menu.group.backend", Action: "menu.backend.switch", Label: "切换后端", Slash: "/backend", Kind: MenuItemDirect},
 			{GroupAction: "menu.group.backend", Action: "menu.auto_retry", Label: "自动重试", Slash: "/backend retry", Kind: MenuItemDirect},
-			{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: "返回上一级", Kind: MenuItemBack},
+			{GroupAction: "menu.group.backend", Action: "menu.group.system", Label: feishu.MenuBackButtonText, Kind: MenuItemBack},
 		},
 		ActionNames: []ActionName{
 			"menu.group.backend",
@@ -337,7 +338,7 @@ var registry = []Spec{
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.group.system", Label: "系统运维", Description: "系统运维与帮助入口。", ShowInRoot: true},
 		MenuItems: []MenuItemSpec{
-			{GroupAction: "menu.group.system", Action: "menu.root", Label: "返回上一级", Kind: MenuItemBack},
+			{GroupAction: "menu.group.system", Action: "menu.root", Label: feishu.MenuBackButtonText, Kind: MenuItemBack},
 		},
 		ActionNames: []ActionName{
 			"menu.group.system",

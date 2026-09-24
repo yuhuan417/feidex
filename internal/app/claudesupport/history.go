@@ -128,7 +128,7 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.tools",
@@ -226,7 +226,7 @@ func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, s
 		})
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "history.page",

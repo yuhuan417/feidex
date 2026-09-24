@@ -468,7 +468,7 @@ func (s ReviewFormService) RenderReviewMenuCard(sessionKey string) map[string]an
 			Value: map[string]any{"action": "menu.review.custom", "session_key": sessionKey},
 		},
 		{
-			Text:  "返回上一级",
+			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
 			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		},

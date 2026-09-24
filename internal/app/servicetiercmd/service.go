@@ -101,7 +101,7 @@ func (s Service) RenderMenuCard(sessionKey string) map[string]any {
 		)
 	}
 	buttons = append(buttons, feishu.Button{
-		Text: "返回上一级",
+		Text: feishu.MenuBackButtonText,
 		Type: "default",
 		Value: map[string]any{
 			"action":      "menu.group.model",
