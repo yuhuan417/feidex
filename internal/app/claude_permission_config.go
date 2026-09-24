@@ -86,7 +86,6 @@ func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[strin
 		App:            a,
 		Session:        a.State().Session,
 		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
-		CommandLabel:   commandLabel,
 	})
 }
 

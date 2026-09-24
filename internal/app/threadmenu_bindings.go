@@ -124,10 +124,6 @@ func (a *App) MenuCardBodyForBackend(backend, action, body string) string {
 	return menuCardBodyForBackend(backend, action, body)
 }
 
-func (a *App) CommandLabel(label, slash string) string {
-	return commandLabel(label, slash)
-}
-
 func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
 	return newAutoRetryService(a).CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
 }

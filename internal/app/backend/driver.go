@@ -112,7 +112,6 @@ type ConversationPermissionRenderDeps struct {
 	App            PermissionApp
 	Session        func(sessionKey string) *state.Session
 	FormatMenuBody func(action, body string) string
-	CommandLabel   func(label, slash string) string
 }
 
 type WorkspacePermissionUpdateDeps struct {

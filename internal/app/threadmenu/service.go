@@ -80,8 +80,6 @@ type App interface {
 	MenuCardBody(action, body string) string
 	// MenuCardBodyForBackend formats a menu card body with backend-specific breadcrumbs.
 	MenuCardBodyForBackend(backend, action, body string) string
-	// CommandLabel formats a command label with its slash command.
-	CommandLabel(label, slash string) string
 
 	// Claude permission helpers
 	NormalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error)
@@ -693,7 +691,6 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 					App:            s.app,
 					Session:        s.app.ThreadMenuAppState().Session,
 					FormatMenuBody: s.app.MenuCardBody,
-					CommandLabel:   s.app.CommandLabel,
 				})
 				if err != nil {
 					return err
@@ -804,7 +801,6 @@ func (s *Service) RenderThreadSandboxMenuCard(sessionKey string) (map[string]any
 		App:            s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
-		CommandLabel:   s.app.CommandLabel,
 	})
 }
 
@@ -829,7 +825,6 @@ func (s *Service) RenderThreadPolicyMenuCard(sessionKey string) (map[string]any,
 		App:            s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
-		CommandLabel:   s.app.CommandLabel,
 	})
 }
 
@@ -854,7 +849,6 @@ func (s *Service) RenderThreadMultiAgentMenuCard(sessionKey string) (map[string]
 		App:            s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
-		CommandLabel:   s.app.CommandLabel,
 	})
 }
 
@@ -1047,7 +1041,6 @@ func (s *Service) CompleteClaudeSessionPermissionModeSet(action *feishu.CardActi
 				App:            s.app,
 				Session:        s.app.ThreadMenuAppState().Session,
 				FormatMenuBody: s.app.MenuCardBody,
-				CommandLabel:   s.app.CommandLabel,
 			})
 		},
 	})
