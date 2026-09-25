@@ -554,20 +554,34 @@ func (s *Session) handleLine(line []byte) {
 }
 
 func (s *Session) handleSystemMessage(msg wireSystemMessage) {
-	if msg.Subtype != "init" {
-		return
+	switch strings.TrimSpace(msg.Subtype) {
+	case "init":
+		info := &SessionInfo{
+			SessionID:      strings.TrimSpace(msg.SessionID),
+			Model:          strings.TrimSpace(msg.Model),
+			WorkDir:        strings.TrimSpace(msg.CWD),
+			Tools:          append([]string(nil), msg.Tools...),
+			PermissionMode: PermissionMode(strings.TrimSpace(msg.PermissionMode)),
+		}
+		s.mu.Lock()
+		s.info = info
+		s.mu.Unlock()
+		s.emit(ReadyEvent{Info: *info})
+	case "task_started", "task_updated", "task_notification":
+		s.emit(BackgroundTaskEvent{
+			Subtype:        strings.TrimSpace(msg.Subtype),
+			TaskID:         strings.TrimSpace(msg.TaskID),
+			ToolUseID:      strings.TrimSpace(msg.ToolUseID),
+			Description:    strings.TrimSpace(msg.Description),
+			SubagentType:   strings.TrimSpace(msg.SubagentType),
+			TaskType:       strings.TrimSpace(msg.TaskType),
+			Prompt:         strings.TrimSpace(msg.Prompt),
+			Status:         strings.TrimSpace(msg.Status),
+			Summary:        strings.TrimSpace(msg.Summary),
+			OutputFile:     strings.TrimSpace(msg.OutputFile),
+			IsBackgrounded: msg.IsBackgrounded,
+		})
 	}
-	info := &SessionInfo{
-		SessionID:      strings.TrimSpace(msg.SessionID),
-		Model:          strings.TrimSpace(msg.Model),
-		WorkDir:        strings.TrimSpace(msg.CWD),
-		Tools:          append([]string(nil), msg.Tools...),
-		PermissionMode: PermissionMode(strings.TrimSpace(msg.PermissionMode)),
-	}
-	s.mu.Lock()
-	s.info = info
-	s.mu.Unlock()
-	s.emit(ReadyEvent{Info: *info})
 }
 
 func (s *Session) handleStreamMessage(msg wireStreamMessage) {

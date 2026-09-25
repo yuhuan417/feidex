@@ -45,7 +45,7 @@ func ClassifyDynamicTool(toolName string) DynamicToolCategory {
 		return DynamicToolTodoCategory
 	case "EnterPlanMode", "AskUserQuestion", "ExitPlanMode":
 		return DynamicToolPlanCategory
-	case "Task", "TaskOutput", "TaskCreate", "TaskGet", "TaskUpdate", "TaskList", "TaskStop", "SendMessage", "TeamCreate", "TeamDelete":
+	case "Agent", "Task", "TaskOutput", "TaskCreate", "TaskGet", "TaskUpdate", "TaskList", "TaskStop", "SendMessage", "TeamCreate", "TeamDelete":
 		return DynamicToolTaskCategory
 	case "Skill", "ToolSearch", "MCPSearch":
 		return DynamicToolSkillCategory
@@ -409,7 +409,7 @@ func buildPlanToolProgressLines(toolName string, input any) []string {
 func buildTaskToolProgressLines(toolName string, input any) []string {
 	m := ToolInputMap(input)
 	switch strings.TrimSpace(toolName) {
-	case "Task":
+	case "Agent", "Task":
 		description := inputString(m, "description", "prompt", "task")
 		if description == "" {
 			return []string{"Spawn subtask"}

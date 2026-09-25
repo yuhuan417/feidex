@@ -165,6 +165,7 @@ const (
 	EventTypeThinking
 	EventTypeToolStarted
 	EventTypeToolComplete
+	EventTypeBackgroundTask
 	EventTypeTurnComplete
 	EventTypeError
 )
@@ -220,6 +221,24 @@ type ToolCompleteEvent struct {
 }
 
 func (e ToolCompleteEvent) Type() EventType { return EventTypeToolComplete }
+
+// BackgroundTaskEvent reports lifecycle changes for Claude Agent tasks that
+// run independently of the parent turn.
+type BackgroundTaskEvent struct {
+	Subtype        string
+	TaskID         string
+	ToolUseID      string
+	Description    string
+	SubagentType   string
+	TaskType       string
+	Prompt         string
+	Status         string
+	Summary        string
+	OutputFile     string
+	IsBackgrounded bool
+}
+
+func (e BackgroundTaskEvent) Type() EventType { return EventTypeBackgroundTask }
 
 type TurnCompleteEvent struct {
 	TurnNumber int

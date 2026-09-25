@@ -167,6 +167,51 @@ func TestSessionStoppedAndExitErrorAccessors(t *testing.T) {
 	}
 }
 
+func TestSessionEmitsBackgroundTaskStartedEvent(t *testing.T) {
+	session := NewSession()
+	session.handleLine([]byte(`{"type":"system","subtype":"task_started","task_id":"task-1","tool_use_id":"tool-1","description":"inspect repository","subagent_type":"Explore","task_type":"local_agent","prompt":"inspect files","is_backgrounded":true}`))
+
+	select {
+	case event := <-session.Events():
+		task, ok := event.(BackgroundTaskEvent)
+		if !ok {
+			t.Fatalf("event = %#v, want BackgroundTaskEvent", event)
+		}
+		if task.Subtype != "task_started" || task.TaskID != "task-1" || task.ToolUseID != "tool-1" {
+			t.Fatalf("unexpected task identity: %#v", task)
+		}
+		if task.Description != "inspect repository" || task.SubagentType != "Explore" || task.TaskType != "local_agent" {
+			t.Fatalf("unexpected task metadata: %#v", task)
+		}
+		if task.Prompt != "inspect files" || !task.IsBackgrounded {
+			t.Fatalf("unexpected task prompt/background flag: %#v", task)
+		}
+	default:
+		t.Fatal("task_started did not emit an event")
+	}
+}
+
+func TestSessionEmitsBackgroundTaskNotificationEvent(t *testing.T) {
+	session := NewSession()
+	session.handleLine([]byte(`{"type":"system","subtype":"task_notification","task_id":"task-1","tool_use_id":"tool-1","status":"completed","summary":"done","output_file":"/tmp/task.txt","is_backgrounded":true}`))
+
+	select {
+	case event := <-session.Events():
+		task, ok := event.(BackgroundTaskEvent)
+		if !ok {
+			t.Fatalf("event = %#v, want BackgroundTaskEvent", event)
+		}
+		if task.Subtype != "task_notification" || task.Status != "completed" || task.Summary != "done" {
+			t.Fatalf("unexpected notification: %#v", task)
+		}
+		if task.OutputFile != "/tmp/task.txt" || !task.IsBackgrounded {
+			t.Fatalf("unexpected notification output metadata: %#v", task)
+		}
+	default:
+		t.Fatal("task_notification did not emit an event")
+	}
+}
+
 func TestSessionInitializeSendsControlInitializeAndWaitsForResponse(t *testing.T) {
 	session := NewSession()
 	session.started = true
