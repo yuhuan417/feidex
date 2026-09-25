@@ -212,6 +212,46 @@ func TestSessionEmitsBackgroundTaskNotificationEvent(t *testing.T) {
 	}
 }
 
+func TestSessionEmitsBackgroundTasksChangedEvent(t *testing.T) {
+	session := NewSession()
+	session.handleLine([]byte(`{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"task-1","task_type":"local_agent","description":"inspect repository"},{"task_id":"task-2","task_type":"local_workflow","description":"run checks","ambient":true}]}`))
+
+	event := <-session.Events()
+	tasks, ok := event.(BackgroundTasksChangedEvent)
+	if !ok {
+		t.Fatalf("event = %#v, want BackgroundTasksChangedEvent", event)
+	}
+	if len(tasks.TaskIDs) != 2 {
+		t.Fatalf("task IDs = %#v, want 2 entries", tasks.TaskIDs)
+	}
+	if tasks.TaskIDs[0] != "task-1" || tasks.TaskIDs[1] != "task-2" {
+		t.Fatalf("task IDs = %#v", tasks.TaskIDs)
+	}
+}
+
+func TestSessionEmitsTurnDurationEvent(t *testing.T) {
+	session := NewSession()
+	session.handleLine([]byte(`{"type":"system","subtype":"turn_duration","duration_ms":1234,"budget_tokens":42,"budget_limit":100,"budget_nudges":3,"message_count":9,"pending_background_agent_count":2,"pending_workflow_count":1}`))
+
+	event := <-session.Events()
+	duration, ok := event.(TurnDurationEvent)
+	if !ok {
+		t.Fatalf("event = %#v, want TurnDurationEvent", event)
+	}
+	want := TurnDurationEvent{
+		DurationMs:                  1234,
+		BudgetTokens:                42,
+		BudgetLimit:                 100,
+		BudgetNudges:                3,
+		MessageCount:                9,
+		PendingBackgroundAgentCount: 2,
+		PendingWorkflowCount:        1,
+	}
+	if duration != want {
+		t.Fatalf("duration = %#v, want %#v", duration, want)
+	}
+}
+
 func TestSessionInitializeSendsControlInitializeAndWaitsForResponse(t *testing.T) {
 	session := NewSession()
 	session.started = true

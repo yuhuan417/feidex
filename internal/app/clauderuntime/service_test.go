@@ -215,3 +215,104 @@ func TestHandleBackgroundTaskEventCanNotifyAfterParentSubmissionIsGone(t *testin
 		t.Fatalf("delivery target after parent cleanup = %#v", delivered)
 	}
 }
+
+func TestHandleBackgroundTasksChangedPreservesTargetsAndReconcilesLiveSet(t *testing.T) {
+	svc := NewService(Deps{})
+	runtimeState := &SessionState{
+		SessionKey: "session-1",
+		SessionID:  "thread-1",
+		BackgroundTasks: map[string]*BackgroundTaskState{
+			"task-1": {
+				Target: BackgroundTaskTarget{
+					TaskID:           "task-1",
+					ChatID:           "chat-1",
+					TriggerMessageID: "message-1",
+					Description:      "old description",
+				},
+				Live: true,
+			},
+			"task-notified": {
+				Target:   BackgroundTaskTarget{TaskID: "task-notified"},
+				Notified: true,
+				Live:     true,
+			},
+		},
+	}
+
+	svc.HandleBackgroundTasksChanged(runtimeState, claudecli.BackgroundTasksChangedEvent{TaskIDs: []string{"task-1", "task-2"}})
+
+	runtimeState.Mu.Lock()
+	if got := runtimeState.BackgroundTasks["task-1"]; got == nil || got.Target.ChatID != "chat-1" || got.Target.TriggerMessageID != "message-1" || got.Target.Description != "old description" || !got.Live {
+		t.Fatalf("preserved task target = %#v", got)
+	}
+	unknown := runtimeState.BackgroundTasks["task-2"]
+	if unknown == nil || unknown.Target.ChatID != "" || unknown.Target.TriggerMessageID != "" || unknown.Target.Description != "" || !unknown.Live {
+		t.Fatalf("id-only task state = %#v", unknown)
+	}
+	if _, ok := runtimeState.BackgroundTasks["task-notified"]; ok {
+		t.Fatalf("notified stale task remains in snapshot state: %#v", runtimeState.BackgroundTasks)
+	}
+	runtimeState.Mu.Unlock()
+
+	// A snapshot can remove a task before its edge notification. Keep the
+	// unnotified target for that notification, but mark it no longer live.
+	svc.HandleBackgroundTasksChanged(runtimeState, claudecli.BackgroundTasksChangedEvent{})
+	runtimeState.Mu.Lock()
+	deferred := runtimeState.BackgroundTasks["task-1"]
+	if deferred == nil || deferred.Live {
+		t.Fatalf("unnotified stale task = %#v, want retained and non-live", deferred)
+	}
+	runtimeState.Mu.Unlock()
+}
+
+func TestHandleTurnDurationStoresPendingBackgroundWork(t *testing.T) {
+	svc := NewService(Deps{})
+	runtimeState := &SessionState{}
+	svc.HandleTurnDuration(runtimeState, claudecli.TurnDurationEvent{
+		DurationMs:                  1234,
+		BudgetTokens:                42,
+		BudgetLimit:                 100,
+		BudgetNudges:                3,
+		MessageCount:                9,
+		PendingBackgroundAgentCount: 2,
+		PendingWorkflowCount:        1,
+	})
+
+	runtimeState.Mu.Lock()
+	defer runtimeState.Mu.Unlock()
+	if runtimeState.LastTurnDurationMs != 1234 || runtimeState.LastTurnBudgetTokens != 42 || runtimeState.LastTurnBudgetLimit != 100 || runtimeState.LastTurnBudgetNudges != 3 || runtimeState.LastTurnMessageCount != 9 {
+		t.Fatalf("turn metadata = %+v", runtimeState)
+	}
+	if runtimeState.PendingBackgroundAgentCount != 2 || runtimeState.PendingWorkflowCount != 1 {
+		t.Fatalf("pending work counts = %d/%d", runtimeState.PendingBackgroundAgentCount, runtimeState.PendingWorkflowCount)
+	}
+}
+
+func TestBackgroundTaskNotificationStillDeliversAfterTurnDuration(t *testing.T) {
+	var delivered int
+	svc := NewService(Deps{
+		Delivery: DeliveryDeps{
+			SendBackgroundTaskNotification: func(context.Context, BackgroundTaskTarget, claudecli.BackgroundTaskEvent) {
+				delivered++
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) {
+				return "session-1", &state.Submission{WorkspaceID: "workspace-1", ChatID: "chat-1", TriggerMessageID: "message-1"}
+			},
+		},
+	})
+	runtimeState := &SessionState{
+		SessionKey:        "session-1",
+		SessionID:         "thread-1",
+		CurrentTurnNumber: 1,
+		Turns:             map[int]*TurnState{1: {TurnID: "turn-1"}},
+		BackgroundTasks:   map[string]*BackgroundTaskState{},
+	}
+	svc.HandleTurnDuration(runtimeState, claudecli.TurnDurationEvent{PendingBackgroundAgentCount: 1})
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{Subtype: "task_started", TaskID: "task-1", IsBackgrounded: true})
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{Subtype: "task_notification", TaskID: "task-1", Status: "completed", IsBackgrounded: true})
+	if delivered != 1 {
+		t.Fatalf("notification count = %d, want 1", delivered)
+	}
+}

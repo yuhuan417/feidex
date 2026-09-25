@@ -51,17 +51,24 @@ type SessionState struct {
 	StartedAt   time.Time
 	MCPCleanup  func()
 
-	Mu                     sync.Mutex
-	SessionID              string
-	AuxiliarySmallModel    string
-	AuxiliarySubagentModel string
-	ReadyCh                chan struct{}
-	ReadyOnce              sync.Once
-	CurrentTurnNumber      int
-	InterruptPending       bool
-	Turns                  map[int]*TurnState
-	BackgroundTasks        map[string]*BackgroundTaskState
-	LastPlanFilePath       string
+	Mu                          sync.Mutex
+	SessionID                   string
+	AuxiliarySmallModel         string
+	AuxiliarySubagentModel      string
+	ReadyCh                     chan struct{}
+	ReadyOnce                   sync.Once
+	CurrentTurnNumber           int
+	InterruptPending            bool
+	Turns                       map[int]*TurnState
+	BackgroundTasks             map[string]*BackgroundTaskState
+	PendingBackgroundAgentCount int
+	PendingWorkflowCount        int
+	LastTurnDurationMs          int64
+	LastTurnBudgetTokens        int
+	LastTurnBudgetLimit         int
+	LastTurnBudgetNudges        int
+	LastTurnMessageCount        int
+	LastPlanFilePath            string
 }
 
 // BackgroundTaskTarget identifies the Feishu conversation that started a
@@ -78,7 +85,9 @@ type BackgroundTaskTarget struct {
 	TurnID           string
 	TaskID           string
 	ToolUseID        string
+	TaskType         string
 	Description      string
+	Ambient          bool
 	IsBackgrounded   bool
 }
 
@@ -87,6 +96,7 @@ type BackgroundTaskTarget struct {
 type BackgroundTaskState struct {
 	Target   BackgroundTaskTarget
 	Notified bool
+	Live     bool
 }
 
 // TurnState holds the runtime state for a single turn within a session.
@@ -1148,6 +1158,10 @@ func (s *Service) runSession(state *SessionState) {
 			s.HandleToolComplete(state, e)
 		case claudecli.BackgroundTaskEvent:
 			s.HandleBackgroundTaskEvent(state, e)
+		case claudecli.BackgroundTasksChangedEvent:
+			s.HandleBackgroundTasksChanged(state, e)
+		case claudecli.TurnDurationEvent:
+			s.HandleTurnDuration(state, e)
 		case claudecli.TurnCompleteEvent:
 			s.handleTurnComplete(state, e)
 		case claudecli.ErrorEvent:
@@ -1172,6 +1186,68 @@ func (s *Service) HandleBackgroundTaskEvent(state *SessionState, event claudecli
 	case "task_notification":
 		s.notifyBackgroundTaskCompleted(state, event)
 	}
+}
+
+// HandleBackgroundTasksChanged reconciles Claude's full live-task snapshot.
+// It intentionally does not infer a Feishu destination for an ID-only entry;
+// that destination is captured only from task_started.
+func (s *Service) HandleBackgroundTasksChanged(state *SessionState, event claudecli.BackgroundTasksChangedEvent) {
+	if state == nil {
+		return
+	}
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	if state.BackgroundTasks == nil {
+		state.BackgroundTasks = map[string]*BackgroundTaskState{}
+	}
+	live := make(map[string]struct{}, len(event.TaskIDs))
+	for _, rawTaskID := range event.TaskIDs {
+		taskID := strings.TrimSpace(rawTaskID)
+		if taskID == "" {
+			continue
+		}
+		live[taskID] = struct{}{}
+		task := state.BackgroundTasks[taskID]
+		if task == nil {
+			task = &BackgroundTaskState{Target: BackgroundTaskTarget{
+				SessionKey: strings.TrimSpace(state.SessionKey),
+				ThreadID:   strings.TrimSpace(state.SessionID),
+				TaskID:     taskID,
+			}}
+			state.BackgroundTasks[taskID] = task
+		}
+		task.Live = true
+	}
+	for taskID, task := range state.BackgroundTasks {
+		if _, ok := live[taskID]; ok {
+			continue
+		}
+		if task == nil || task.Notified {
+			delete(state.BackgroundTasks, taskID)
+			continue
+		}
+		// Keep an unnotified task target until task_notification arrives. Claude
+		// does not guarantee snapshot/bookend ordering.
+		task.Live = false
+	}
+}
+
+// HandleTurnDuration stores Claude's end-of-turn metadata. Pending counts are
+// deliberately separate from turn completion: background work may outlive
+// the parent turn and still produce a later task_notification.
+func (s *Service) HandleTurnDuration(state *SessionState, event claudecli.TurnDurationEvent) {
+	if state == nil {
+		return
+	}
+	state.Mu.Lock()
+	state.LastTurnDurationMs = event.DurationMs
+	state.LastTurnBudgetTokens = event.BudgetTokens
+	state.LastTurnBudgetLimit = event.BudgetLimit
+	state.LastTurnBudgetNudges = event.BudgetNudges
+	state.LastTurnMessageCount = event.MessageCount
+	state.PendingBackgroundAgentCount = event.PendingBackgroundAgentCount
+	state.PendingWorkflowCount = event.PendingWorkflowCount
+	state.Mu.Unlock()
 }
 
 func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudecli.BackgroundTaskEvent) {
@@ -1202,6 +1278,7 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 		TurnID:         turnID,
 		TaskID:         strings.TrimSpace(event.TaskID),
 		ToolUseID:      strings.TrimSpace(event.ToolUseID),
+		TaskType:       strings.TrimSpace(event.TaskType),
 		Description:    strings.TrimSpace(event.Description),
 		IsBackgrounded: event.IsBackgrounded,
 	}
@@ -1216,7 +1293,14 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 	if state.BackgroundTasks == nil {
 		state.BackgroundTasks = map[string]*BackgroundTaskState{}
 	}
-	state.BackgroundTasks[taskKey] = &BackgroundTaskState{Target: target}
+	task := state.BackgroundTasks[taskKey]
+	if task == nil {
+		task = &BackgroundTaskState{}
+		state.BackgroundTasks[taskKey] = task
+	}
+	task.Target = target
+	task.Live = true
+	task.Notified = false
 	state.Mu.Unlock()
 }
 
@@ -1229,6 +1313,12 @@ func (s *Service) updateBackgroundTask(state *SessionState, event claudecli.Back
 	if strings.TrimSpace(event.Description) != "" {
 		task.Target.Description = strings.TrimSpace(event.Description)
 	}
+	if strings.TrimSpace(event.TaskType) != "" {
+		task.Target.TaskType = strings.TrimSpace(event.TaskType)
+	}
+	if event.IsBackgrounded {
+		task.Target.IsBackgrounded = true
+	}
 	state.Mu.Unlock()
 }
 
@@ -1238,11 +1328,14 @@ func (s *Service) notifyBackgroundTaskCompleted(state *SessionState, event claud
 		return
 	}
 	state.Mu.Lock()
-	if task.Notified || !task.Target.IsBackgrounded {
+	if task.Notified || (!task.Target.IsBackgrounded && !event.IsBackgrounded) {
 		state.Mu.Unlock()
 		return
 	}
 	task.Notified = true
+	if event.IsBackgrounded {
+		task.Target.IsBackgrounded = true
+	}
 	target := task.Target
 	state.Mu.Unlock()
 
