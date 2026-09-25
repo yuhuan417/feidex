@@ -126,6 +126,18 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 
 	_, taskLines := buildQuietWorkingCardLines("item-task", map[string]any{
 		"type": "dynamic_tool_call",
+		"tool": "Agent",
+		"input": map[string]any{
+			"description": "排查飞书卡片渲染",
+		},
+	}, workspace)
+	joinedTask := strings.Join(taskLines, "\n")
+	if !strings.Contains(joinedTask, "Spawn subtask: `排查飞书卡片渲染`") {
+		t.Fatalf("task progress lines = %q", joinedTask)
+	}
+
+	_, taskUpdateLines := buildQuietWorkingCardLines("item-task-update", map[string]any{
+		"type": "dynamic_tool_call",
 		"tool": "TaskUpdate",
 		"input": map[string]any{
 			"taskId":     "7",
@@ -133,9 +145,9 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 			"activeForm": "排查飞书卡片渲染",
 		},
 	}, workspace)
-	joinedTask := strings.Join(taskLines, "\n")
-	if !strings.Contains(joinedTask, "Update task `7` -> `in_progress`") || !strings.Contains(joinedTask, "Progress `排查飞书卡片渲染`") {
-		t.Fatalf("task progress lines = %q", joinedTask)
+	joinedTaskUpdate := strings.Join(taskUpdateLines, "\n")
+	if !strings.Contains(joinedTaskUpdate, "Update task `7` -> `in_progress`") || !strings.Contains(joinedTaskUpdate, "Progress `排查飞书卡片渲染`") {
+		t.Fatalf("task update progress lines = %q", joinedTaskUpdate)
 	}
 
 	_, unknownLines := buildQuietWorkingCardLines("item-unknown", map[string]any{

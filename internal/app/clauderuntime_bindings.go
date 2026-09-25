@@ -97,6 +97,9 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			ReplyInThread: func(sub *state.Submission) bool {
 				return replyInThreadForSubmission(app, sub)
 			},
+			SendBackgroundTaskNotification: func(ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
+				sendClaudeBackgroundTaskNotification(app, ctx, target, event)
+			},
 		},
 		Interactive: appclauderuntime.InteractiveDeps{
 			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {

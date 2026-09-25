@@ -1,6 +1,12 @@
 package clauderuntime
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"feidex/internal/claudecli"
+	"feidex/internal/state"
+)
 
 func TestWithClaudeModelEnv(t *testing.T) {
 	env := withClaudeModelEnv([]string{
@@ -92,5 +98,120 @@ func TestWithClaudeModelEnvKeepsExplicitAuxiliaryModelsForClaudeBuiltin(t *testi
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing explicit auxiliary environment variables: %#v", want)
+	}
+}
+
+func TestHandleBackgroundTaskEventCapturesTargetAndNotifiesOnce(t *testing.T) {
+	var delivered []BackgroundTaskTarget
+	var deliveredEvents []claudecli.BackgroundTaskEvent
+	svc := NewService(Deps{
+		Delivery: DeliveryDeps{
+			SendBackgroundTaskNotification: func(_ context.Context, target BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
+				delivered = append(delivered, target)
+				deliveredEvents = append(deliveredEvents, event)
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
+				if threadID != "thread-1" || turnID != "turn-1" {
+					return "", nil
+				}
+				return "session-1", &state.Submission{
+					SessionKey:       "session-1",
+					WorkspaceID:      "workspace-1",
+					ChatID:           "chat-1",
+					TriggerMessageID: "message-1",
+					UserID:           "user-1",
+				}
+			},
+		},
+	})
+	runtimeState := &SessionState{
+		SessionKey:        "session-1",
+		SessionID:         "thread-1",
+		CurrentTurnNumber: 3,
+		Turns: map[int]*TurnState{
+			3: {TurnNumber: 3, TurnID: "turn-1"},
+		},
+		BackgroundTasks: map[string]*BackgroundTaskState{},
+	}
+
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
+		Subtype:        "task_started",
+		TaskID:         "task-1",
+		ToolUseID:      "tool-1",
+		Description:    "inspect repository",
+		IsBackgrounded: true,
+	})
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
+		Subtype:   "task_notification",
+		TaskID:    "task-1",
+		Status:    "completed",
+		Summary:   "done",
+		ToolUseID: "tool-1",
+	})
+	// Claude can deliver the same completion notification more than once when
+	// the parent stream and background-task stream converge.
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
+		Subtype:   "task_notification",
+		TaskID:    "task-1",
+		Status:    "completed",
+		ToolUseID: "tool-1",
+	})
+
+	if len(delivered) != 1 || len(deliveredEvents) != 1 {
+		t.Fatalf("delivery count = %d/%d, want 1/1", len(delivered), len(deliveredEvents))
+	}
+	target := delivered[0]
+	if target.SessionKey != "session-1" || target.WorkspaceID != "workspace-1" || target.ChatID != "chat-1" || target.TriggerMessageID != "message-1" {
+		t.Fatalf("captured target = %#v", target)
+	}
+	if target.TaskID != "task-1" || target.ToolUseID != "tool-1" || target.TurnID != "turn-1" || !target.IsBackgrounded {
+		t.Fatalf("captured task target = %#v", target)
+	}
+	if deliveredEvents[0].Description != "inspect repository" || deliveredEvents[0].Summary != "done" {
+		t.Fatalf("delivered event = %#v", deliveredEvents[0])
+	}
+}
+
+func TestHandleBackgroundTaskEventCanNotifyAfterParentSubmissionIsGone(t *testing.T) {
+	var delivered BackgroundTaskTarget
+	svc := NewService(Deps{
+		Delivery: DeliveryDeps{
+			SendBackgroundTaskNotification: func(_ context.Context, target BackgroundTaskTarget, _ claudecli.BackgroundTaskEvent) {
+				delivered = target
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) {
+				return "session-1", &state.Submission{
+					WorkspaceID:      "workspace-1",
+					ChatID:           "chat-1",
+					TriggerMessageID: "message-1",
+				}
+			},
+		},
+	})
+	runtimeState := &SessionState{
+		SessionKey:        "session-1",
+		SessionID:         "thread-1",
+		CurrentTurnNumber: 1,
+		Turns:             map[int]*TurnState{1: {TurnID: "turn-1"}},
+	}
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
+		Subtype:        "task_started",
+		TaskID:         "task-1",
+		IsBackgrounded: true,
+	})
+	// The parent submission is no longer needed after task_started captured its
+	// delivery target.
+	svc.deps.Lookup.FindSubmissionByTurn = func(string, string) (string, *state.Submission) { return "", nil }
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
+		Subtype: "task_notification",
+		TaskID:  "task-1",
+		Status:  "completed",
+	})
+	if delivered.ChatID != "chat-1" || delivered.TriggerMessageID != "message-1" {
+		t.Fatalf("delivery target after parent cleanup = %#v", delivered)
 	}
 }

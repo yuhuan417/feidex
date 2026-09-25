@@ -60,7 +60,33 @@ type SessionState struct {
 	CurrentTurnNumber      int
 	InterruptPending       bool
 	Turns                  map[int]*TurnState
+	BackgroundTasks        map[string]*BackgroundTaskState
 	LastPlanFilePath       string
+}
+
+// BackgroundTaskTarget identifies the Feishu conversation that started a
+// background Claude Agent task. The originating submission may be cleaned up
+// before Claude emits task_notification, so this target intentionally stores
+// the delivery fields needed after turn completion.
+type BackgroundTaskTarget struct {
+	SessionKey       string
+	WorkspaceID      string
+	ChatID           string
+	TriggerMessageID string
+	UserID           string
+	ThreadID         string
+	TurnID           string
+	TaskID           string
+	ToolUseID        string
+	Description      string
+	IsBackgrounded   bool
+}
+
+// BackgroundTaskState tracks one background task until its completion
+// notification is delivered.
+type BackgroundTaskState struct {
+	Target   BackgroundTaskTarget
+	Notified bool
 }
 
 // TurnState holds the runtime state for a single turn within a session.
@@ -124,11 +150,12 @@ type UsageDeps struct {
 }
 
 type DeliveryDeps struct {
-	ExecuteQuietWorkingCardOp func(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp)
-	UpdateOutputSegment       func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool)
-	FinalizeOutputSegment     func(ctx context.Context, threadID, turnID, body string) bool
-	SendFinalMessages         func(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk
-	ReplyInThread             func(sub *state.Submission) bool
+	ExecuteQuietWorkingCardOp      func(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp)
+	UpdateOutputSegment            func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool)
+	FinalizeOutputSegment          func(ctx context.Context, threadID, turnID, body string) bool
+	SendFinalMessages              func(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk
+	ReplyInThread                  func(sub *state.Submission) bool
+	SendBackgroundTaskNotification func(context.Context, BackgroundTaskTarget, claudecli.BackgroundTaskEvent)
 }
 
 type InteractiveDeps struct {
@@ -315,6 +342,12 @@ func (s *Service) ReplyInThread(sub *state.Submission) bool {
 		return false
 	}
 	return s.deps.Delivery.ReplyInThread(sub)
+}
+
+func (s *Service) SendBackgroundTaskNotification(ctx context.Context, target BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
+	if s != nil && s.deps.Delivery.SendBackgroundTaskNotification != nil {
+		s.deps.Delivery.SendBackgroundTaskNotification(ctx, target, event)
+	}
 }
 
 func (s *Service) SendClaudeApprovalCard(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
@@ -843,14 +876,15 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		initialSessionID = ""
 	}
 	state := &SessionState{
-		SessionKey:  sessionKey,
-		WorkspaceID: ws.ID,
-		Ctx:         sessionCtx,
-		Cancel:      cancel,
-		StartedAt:   time.Now(),
-		SessionID:   initialSessionID,
-		ReadyCh:     make(chan struct{}),
-		Turns:       map[int]*TurnState{},
+		SessionKey:      sessionKey,
+		WorkspaceID:     ws.ID,
+		Ctx:             sessionCtx,
+		Cancel:          cancel,
+		StartedAt:       time.Now(),
+		SessionID:       initialSessionID,
+		ReadyCh:         make(chan struct{}),
+		Turns:           map[int]*TurnState{},
+		BackgroundTasks: map[string]*BackgroundTaskState{},
 	}
 	if s.deps.AuxiliaryModels != nil {
 		state.AuxiliarySmallModel, state.AuxiliarySubagentModel = s.deps.AuxiliaryModels(sessionKey)
@@ -1112,6 +1146,8 @@ func (s *Service) runSession(state *SessionState) {
 			s.HandleToolStarted(state, e)
 		case claudecli.ToolCompleteEvent:
 			s.HandleToolComplete(state, e)
+		case claudecli.BackgroundTaskEvent:
+			s.HandleBackgroundTaskEvent(state, e)
 		case claudecli.TurnCompleteEvent:
 			s.handleTurnComplete(state, e)
 		case claudecli.ErrorEvent:
@@ -1120,6 +1156,120 @@ func (s *Service) runSession(state *SessionState) {
 	}
 	state.ReadyOnce.Do(func() { close(state.ReadyCh) })
 	s.cleanupStaleSessionOps(state)
+}
+
+// HandleBackgroundTaskEvent records background Agent task lifecycle events
+// and delivers a completion card after Claude reports task_notification.
+func (s *Service) HandleBackgroundTaskEvent(state *SessionState, event claudecli.BackgroundTaskEvent) {
+	if state == nil {
+		return
+	}
+	switch strings.TrimSpace(event.Subtype) {
+	case "task_started":
+		s.recordBackgroundTaskStarted(state, event)
+	case "task_updated":
+		s.updateBackgroundTask(state, event)
+	case "task_notification":
+		s.notifyBackgroundTaskCompleted(state, event)
+	}
+}
+
+func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudecli.BackgroundTaskEvent) {
+	taskKey := strings.TrimSpace(event.TaskID)
+	if taskKey == "" {
+		taskKey = strings.TrimSpace(event.ToolUseID)
+	}
+	if taskKey == "" {
+		return
+	}
+
+	state.Mu.Lock()
+	threadID := strings.TrimSpace(state.SessionID)
+	turn := state.Turns[state.CurrentTurnNumber]
+	turnID := ""
+	if turn != nil {
+		turnID = strings.TrimSpace(turn.TurnID)
+	}
+	sessionKey := strings.TrimSpace(state.SessionKey)
+	state.Mu.Unlock()
+	if turnID == "" {
+		return
+	}
+
+	target := BackgroundTaskTarget{
+		SessionKey:     sessionKey,
+		ThreadID:       threadID,
+		TurnID:         turnID,
+		TaskID:         strings.TrimSpace(event.TaskID),
+		ToolUseID:      strings.TrimSpace(event.ToolUseID),
+		Description:    strings.TrimSpace(event.Description),
+		IsBackgrounded: event.IsBackgrounded,
+	}
+	if _, sub := s.FindSubmissionByTurn(threadID, turnID); sub != nil {
+		target.WorkspaceID = strings.TrimSpace(sub.WorkspaceID)
+		target.ChatID = strings.TrimSpace(sub.ChatID)
+		target.TriggerMessageID = strings.TrimSpace(sub.TriggerMessageID)
+		target.UserID = strings.TrimSpace(sub.UserID)
+	}
+
+	state.Mu.Lock()
+	if state.BackgroundTasks == nil {
+		state.BackgroundTasks = map[string]*BackgroundTaskState{}
+	}
+	state.BackgroundTasks[taskKey] = &BackgroundTaskState{Target: target}
+	state.Mu.Unlock()
+}
+
+func (s *Service) updateBackgroundTask(state *SessionState, event claudecli.BackgroundTaskEvent) {
+	task := s.backgroundTask(state, event)
+	if task == nil {
+		return
+	}
+	state.Mu.Lock()
+	if strings.TrimSpace(event.Description) != "" {
+		task.Target.Description = strings.TrimSpace(event.Description)
+	}
+	state.Mu.Unlock()
+}
+
+func (s *Service) notifyBackgroundTaskCompleted(state *SessionState, event claudecli.BackgroundTaskEvent) {
+	task := s.backgroundTask(state, event)
+	if task == nil {
+		return
+	}
+	state.Mu.Lock()
+	if task.Notified || !task.Target.IsBackgrounded {
+		state.Mu.Unlock()
+		return
+	}
+	task.Notified = true
+	target := task.Target
+	state.Mu.Unlock()
+
+	if strings.TrimSpace(event.Description) == "" {
+		event.Description = target.Description
+	}
+	s.SendBackgroundTaskNotification(context.Background(), target, event)
+}
+
+func (s *Service) backgroundTask(state *SessionState, event claudecli.BackgroundTaskEvent) *BackgroundTaskState {
+	if state == nil {
+		return nil
+	}
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	for _, task := range state.BackgroundTasks {
+		if task == nil {
+			continue
+		}
+		if strings.TrimSpace(event.TaskID) != "" && task.Target.TaskID == strings.TrimSpace(event.TaskID) {
+			return task
+		}
+		if strings.TrimSpace(event.ToolUseID) != "" && task.Target.ToolUseID == strings.TrimSpace(event.ToolUseID) {
+			return task
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------

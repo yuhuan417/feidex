@@ -57,6 +57,16 @@ type wireSystemMessage struct {
 	Tools          []string `json:"tools,omitempty"`
 	Model          string   `json:"model,omitempty"`
 	PermissionMode string   `json:"permissionMode,omitempty"`
+	TaskID         string   `json:"task_id,omitempty"`
+	ToolUseID      string   `json:"tool_use_id,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	SubagentType   string   `json:"subagent_type,omitempty"`
+	TaskType       string   `json:"task_type,omitempty"`
+	Prompt         string   `json:"prompt,omitempty"`
+	Status         string   `json:"status,omitempty"`
+	Summary        string   `json:"summary,omitempty"`
+	OutputFile     string   `json:"output_file,omitempty"`
+	IsBackgrounded bool     `json:"is_backgrounded,omitempty"`
 }
 
 type wireUsage struct {
