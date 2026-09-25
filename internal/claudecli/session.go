@@ -581,6 +581,24 @@ func (s *Session) handleSystemMessage(msg wireSystemMessage) {
 			OutputFile:     strings.TrimSpace(msg.OutputFile),
 			IsBackgrounded: msg.IsBackgrounded,
 		})
+	case "background_tasks_changed":
+		taskIDs := make([]string, 0, len(msg.Tasks))
+		for _, task := range msg.Tasks {
+			if taskID := strings.TrimSpace(task.TaskID); taskID != "" {
+				taskIDs = append(taskIDs, taskID)
+			}
+		}
+		s.emit(BackgroundTasksChangedEvent{TaskIDs: taskIDs})
+	case "turn_duration":
+		s.emit(TurnDurationEvent{
+			DurationMs:                  msg.DurationMs,
+			BudgetTokens:                msg.BudgetTokens,
+			BudgetLimit:                 msg.BudgetLimit,
+			BudgetNudges:                msg.BudgetNudges,
+			MessageCount:                msg.MessageCount,
+			PendingBackgroundAgentCount: msg.PendingBackgroundAgentCount,
+			PendingWorkflowCount:        msg.PendingWorkflowCount,
+		})
 	}
 }
 

@@ -50,23 +50,38 @@ func (w *ndjsonWriter) Write(v any) error {
 }
 
 type wireSystemMessage struct {
-	Type           string   `json:"type"`
-	Subtype        string   `json:"subtype"`
-	SessionID      string   `json:"session_id"`
-	CWD            string   `json:"cwd,omitempty"`
-	Tools          []string `json:"tools,omitempty"`
-	Model          string   `json:"model,omitempty"`
-	PermissionMode string   `json:"permissionMode,omitempty"`
-	TaskID         string   `json:"task_id,omitempty"`
-	ToolUseID      string   `json:"tool_use_id,omitempty"`
-	Description    string   `json:"description,omitempty"`
-	SubagentType   string   `json:"subagent_type,omitempty"`
-	TaskType       string   `json:"task_type,omitempty"`
-	Prompt         string   `json:"prompt,omitempty"`
-	Status         string   `json:"status,omitempty"`
-	Summary        string   `json:"summary,omitempty"`
-	OutputFile     string   `json:"output_file,omitempty"`
-	IsBackgrounded bool     `json:"is_backgrounded,omitempty"`
+	Type                        string               `json:"type"`
+	Subtype                     string               `json:"subtype"`
+	SessionID                   string               `json:"session_id"`
+	CWD                         string               `json:"cwd,omitempty"`
+	Tools                       []string             `json:"tools,omitempty"`
+	Model                       string               `json:"model,omitempty"`
+	PermissionMode              string               `json:"permissionMode,omitempty"`
+	TaskID                      string               `json:"task_id,omitempty"`
+	ToolUseID                   string               `json:"tool_use_id,omitempty"`
+	Description                 string               `json:"description,omitempty"`
+	SubagentType                string               `json:"subagent_type,omitempty"`
+	TaskType                    string               `json:"task_type,omitempty"`
+	Prompt                      string               `json:"prompt,omitempty"`
+	Status                      string               `json:"status,omitempty"`
+	Summary                     string               `json:"summary,omitempty"`
+	OutputFile                  string               `json:"output_file,omitempty"`
+	IsBackgrounded              bool                 `json:"is_backgrounded,omitempty"`
+	Tasks                       []wireBackgroundTask `json:"tasks,omitempty"`
+	DurationMs                  int64                `json:"duration_ms,omitempty"`
+	BudgetTokens                int                  `json:"budget_tokens,omitempty"`
+	BudgetLimit                 int                  `json:"budget_limit,omitempty"`
+	BudgetNudges                int                  `json:"budget_nudges,omitempty"`
+	MessageCount                int                  `json:"message_count,omitempty"`
+	PendingBackgroundAgentCount int                  `json:"pending_background_agent_count,omitempty"`
+	PendingWorkflowCount        int                  `json:"pending_workflow_count,omitempty"`
+}
+
+type wireBackgroundTask struct {
+	TaskID      string `json:"task_id"`
+	TaskType    string `json:"task_type,omitempty"`
+	Description string `json:"description,omitempty"`
+	Ambient     bool   `json:"ambient,omitempty"`
 }
 
 type wireUsage struct {

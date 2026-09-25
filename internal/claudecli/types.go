@@ -166,6 +166,8 @@ const (
 	EventTypeToolStarted
 	EventTypeToolComplete
 	EventTypeBackgroundTask
+	EventTypeBackgroundTasksChanged
+	EventTypeTurnDuration
 	EventTypeTurnComplete
 	EventTypeError
 )
@@ -239,6 +241,28 @@ type BackgroundTaskEvent struct {
 }
 
 func (e BackgroundTaskEvent) Type() EventType { return EventTypeBackgroundTask }
+
+// BackgroundTasksChangedEvent reports the complete set of live background
+// tasks for the Claude CLI process.
+type BackgroundTasksChangedEvent struct {
+	TaskIDs []string
+}
+
+func (e BackgroundTasksChangedEvent) Type() EventType { return EventTypeBackgroundTasksChanged }
+
+// TurnDurationEvent reports turn timing and work that remains after the main
+// turn finishes. It is metadata only; it is not a second turn completion.
+type TurnDurationEvent struct {
+	DurationMs                  int64
+	BudgetTokens                int
+	BudgetLimit                 int
+	BudgetNudges                int
+	MessageCount                int
+	PendingBackgroundAgentCount int
+	PendingWorkflowCount        int
+}
+
+func (e TurnDurationEvent) Type() EventType { return EventTypeTurnDuration }
 
 type TurnCompleteEvent struct {
 	TurnNumber int
