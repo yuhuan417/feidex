@@ -165,12 +165,9 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		t.Fatalf("model config selects = %+v, want 2 primary select_static elements", got)
 	}
 	body := cardMarkdownContent(t, card)
-	for _, want := range []string{
-		"Plan 模式模型",
-		"跟随 plan preset",
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("model config body missing %q: %q", want, body)
+	for _, unwanted := range []string{"Plan 模式模型", "Plan 推理强度", "跟随 plan preset"} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("model config body still contains legacy Plan summary %q: %q", unwanted, body)
 		}
 	}
 	if firstCardActionValueForTest(card, "menu.model_auxiliary") == nil {
@@ -199,9 +196,13 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		}
 	}
 	assertLastModelConfigButtonIsBack("single-chat Codex", card)
-	assertLastModelConfigButtonIsBack("group Codex", newBindingService(a).renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, codexrpc.ModelListResult{
+	groupCard := newBindingService(a).renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, codexrpc.ModelListResult{
 		Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}},
-	}))
+	})
+	if groupBody := cardMarkdownContent(t, groupCard); strings.Contains(groupBody, "Plan 模式模型") || strings.Contains(groupBody, "Plan 推理强度") {
+		t.Fatalf("group model config body still contains legacy Plan summary: %q", groupBody)
+	}
+	assertLastModelConfigButtonIsBack("group Codex", groupCard)
 }
 
 func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {

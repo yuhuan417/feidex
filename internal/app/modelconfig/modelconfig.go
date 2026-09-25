@@ -501,14 +501,13 @@ func (s ModelConfigService) FetchPlanCollaborationModePreset(ctx context.Context
 }
 
 // RenderModelConfigCard renders the Codex model configuration card.
-func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResult, _ *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	menuAction = strings.TrimSpace(menuAction)
 	if menuAction == "" {
 		menuAction = "menu.model"
 	}
 	cfg := s.GetConfig()
 	selectedModel, selectedEffort := EffectiveConfiguredModelAndEffort(cfg, result)
-	selectedPlanModel, selectedPlanEffort := EffectivePlanConfiguredModelAndEffort(cfg, result, planPreset)
 	modelName := "(default)"
 	modelDescription := ""
 	if selectedModel != nil {
@@ -517,8 +516,6 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	}
 	modelValue := ConfiguredGlobalModel(cfg)
 	effortValue := ConfiguredGlobalReasoningEffort(cfg)
-	planModelValue := ConfiguredPlanModel(cfg)
-	planEffortValue := ConfiguredPlanReasoningEffort(cfg)
 	modelSource := "跟随 app-server 默认"
 	if modelValue != "" {
 		modelSource = "Bot 默认显式配置"
@@ -527,29 +524,6 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	if effortValue != "" {
 		effortSource = "Bot 默认显式配置"
 	}
-	planModelSource := "跟随 default mode"
-	if planModelValue != "" {
-		planModelSource = "Plan 显式配置"
-	}
-	planEffortSource := "未设置"
-	switch {
-	case planEffortValue != "":
-		planEffortSource = "Plan 显式配置"
-	case planPreset != nil && planPreset.ReasoningEffort != nil && strings.TrimSpace(*planPreset.ReasoningEffort) != "":
-		planEffortSource = "跟随 plan preset"
-	}
-	planModelName := "(default)"
-	if selectedPlanModel != nil {
-		planModelName = firstNonEmpty(selectedPlanModel.DisplayName, selectedPlanModel.ID, selectedPlanModel.Model)
-	}
-	planPresetNotice := "Plan preset: 未提供 `reasoning_effort`，留空时不会额外发送。"
-	switch {
-	case cfg != nil && !cfg.Codex.ExperimentalAPI:
-		planPresetNotice = "Plan 模式需要 `[codex].experimental_api = true`。"
-	case planPreset != nil:
-		planPresetNotice = "Plan preset: 已从 app-server 读取，留空时跟随 preset。"
-	}
-
 	elements := []map[string]any{
 		{
 			"tag": "markdown",
@@ -631,12 +605,6 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 		effortInitialOption,
 	))
 
-	// Plan model and effort are configured on the auxiliary page. Keep only a
-	// concise effective-value summary on the main /model page.
-	elements = append(elements, map[string]any{
-		"tag":     "markdown",
-		"content": "Plan 模式模型: `" + planModelName + "`\n模型来源: " + planModelSource + "\nPlan 推理强度: `" + firstNonEmpty(selectedPlanEffort, "-") + "`\n推理来源: " + planEffortSource + "\n\n" + planPresetNotice,
-	})
 	elements = append(elements, ModelCardActionRow([]feishu.Button{{
 		Text:  "配置辅助模型",
 		Type:  "default",
@@ -799,18 +767,6 @@ func (s ModelConfigService) UpdateGlobalAuxiliaryConfig(mutate func(*config.Code
 	return config.Save(s.GetCfgPath(), cfg)
 }
 
-func (s ModelConfigService) fetchPlanPresetForRender(ctx context.Context) *codexrpc.CollaborationModeMask {
-	cfg := s.GetConfig()
-	if cfg == nil || !cfg.Codex.ExperimentalAPI {
-		return nil
-	}
-	preset, err := s.FetchPlanCollaborationModePreset(ctx)
-	if err != nil {
-		return nil
-	}
-	return preset
-}
-
 // CompleteCodexPlanModelSet handles the plan-mode model selection card action.
 func (s ModelConfigService) CompleteCodexPlanModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
@@ -835,7 +791,7 @@ func (s ModelConfigService) CompleteCodexPlanModelSet(action *feishu.CardAction,
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 Plan 模式模型"},
-		Card:  rawCard(s.RenderModelConfigCard(result, s.fetchPlanPresetForRender(ctx), sessionKey, menuAction)),
+		Card:  rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction)),
 	}, nil
 }
 
@@ -864,7 +820,7 @@ func (s ModelConfigService) CompleteCodexPlanReasoningEffortSet(action *feishu.C
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 Plan 模式推理强度"},
-		Card:  rawCard(s.RenderModelConfigCard(result, s.fetchPlanPresetForRender(ctx), sessionKey, menuAction)),
+		Card:  rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction)),
 	}, nil
 }
 
@@ -984,8 +940,7 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 	if err != nil {
 		return err
 	}
-	planPreset := s.fetchPlanPresetForRender(ctx)
-	card := s.RenderModelConfigCard(result, planPreset, sessionKey, "menu.model")
+	card := s.RenderModelConfigCard(result, nil, sessionKey, "menu.model")
 	_, err = s.ReplyCard(context.Background(), msg.MessageID, card, s.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }

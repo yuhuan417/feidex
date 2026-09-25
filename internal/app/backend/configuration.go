@@ -156,24 +156,7 @@ func (s ConfigurationService) RenderModelConfigCard(result codexrpc.ModelListRes
 	if s.deps.Codex.RenderModelConfigCard == nil {
 		return nil
 	}
-	return s.deps.Codex.RenderModelConfigCard(result, s.fetchPlanCollaborationModePresetForRender(), sessionKey, menuAction)
-}
-
-func (s ConfigurationService) fetchPlanCollaborationModePresetForRender() *codexrpc.CollaborationModeMask {
-	if s.deps.Codex.FetchPlanCollaborationModePreset == nil {
-		return nil
-	}
-	cfg := s.App.Config()
-	if cfg == nil || !cfg.Codex.ExperimentalAPI {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	preset, err := s.deps.Codex.FetchPlanCollaborationModePreset(ctx)
-	if err != nil {
-		return nil
-	}
-	return preset
+	return s.deps.Codex.RenderModelConfigCard(result, nil, sessionKey, menuAction)
 }
 
 // ---------------------------------------------------------------------------

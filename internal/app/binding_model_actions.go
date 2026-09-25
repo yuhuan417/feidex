@@ -176,12 +176,6 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		effortOptions,
 		effortInitialOption,
 	))
-	planModel := effectiveCodexPlanModel(s.app, s.app.State().Session(sessionKey))
-	planEffort := effectiveCodexPlanReasoningEffort(s.app, s.app.State().Session(sessionKey))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":     "markdown",
-		"content": "Plan 模式模型: `" + firstNonEmpty(planModel, "(default)") + "`\nPlan 推理强度: `" + firstNonEmpty(planEffort, "-") + "`",
-	})
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  "配置辅助模型",
 		Type:  "default",
