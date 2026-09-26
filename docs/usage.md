@@ -259,6 +259,9 @@
 - `/workspace choose`
   - 按钮式工作区选择器（按最近使用排序）
   - 在群聊中，作为当前 bot 在本群的 workspace 选择器
+- `/workspace unbind`
+  - 仅在群聊中解除当前 bot 在本群的 workspace 绑定
+  - 会回到 workspace 配置流程，不删除本机 workspace 配置或磁盘目录
 - `/workspace delete [ID]`
   - 删除工作区配置（不删磁盘文件）
   - 如果该 workspace 仍被当前 frontend 的群内配置引用，会拒绝删除；先在群里用 `/workspace use` 切到其他 workspace

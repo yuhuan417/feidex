@@ -663,15 +663,28 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 		},
 	)
 	buttons = append(buttons, s.BackendWorkspaceConfigButtons(sessionKey)...)
-	buttons = append(buttons,
-		feishu.Button{
+	if s.deps.WorkspaceMenuIsGroup != nil && s.deps.WorkspaceMenuIsGroup(sessionKey) {
+		if currentID != "" {
+			buttons = append(buttons, feishu.Button{
+				Text: "解除本群绑定",
+				Type: "default",
+				Value: map[string]any{
+					"action":      "workspace.binding.unbind",
+					"session_key": sessionKey,
+				},
+			})
+		}
+	} else {
+		buttons = append(buttons, feishu.Button{
 			Text: submenuCommandLabel("删除工作区", "/workspace delete"),
 			Type: "default",
 			Value: map[string]any{
 				"action":      "workspace.delete.menu",
 				"session_key": sessionKey,
 			},
-		},
+		})
+	}
+	buttons = append(buttons,
 		feishu.Button{
 			Text: feishu.MenuBackButtonText,
 			Type: "default",

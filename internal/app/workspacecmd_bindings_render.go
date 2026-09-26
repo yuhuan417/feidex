@@ -52,6 +52,9 @@ func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
 			}
 			return appcore.ResolveWorkspaceSelectionForSession(a, sess)
 		},
+		WorkspaceMenuIsGroup: func(sessionKey string) bool {
+			return groupBindingSessionScopeActive(a, sessionKey)
+		},
 		WorkspaceMenuBodyLines: func(sessionKey string, sess *state.Session, lines []string) []string {
 			if !groupBindingSessionScopeActive(a, sessionKey) {
 				return lines

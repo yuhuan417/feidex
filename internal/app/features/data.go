@@ -324,6 +324,7 @@ var registry = []Spec{
 			{Action: "workspace.permission_mode.menu", Label: "默认权限", Parent: "menu.workspace"},
 			{Action: "workspace.delete.menu", Label: "删除工作区", Parent: "menu.workspace"},
 			{Action: "workspace.delete.confirm", Label: "确认删除", Parent: "workspace.delete.menu"},
+			{Action: "workspace.binding.unbind", Label: "解除本群绑定", Parent: "menu.workspace"},
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.workspace", Label: "工作区管理", Description: "查看当前工作区状态，并通过下拉切换工作区。", ShowInRoot: true},
 		ActionNames: []ActionName{

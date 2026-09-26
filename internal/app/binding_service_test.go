@@ -82,6 +82,53 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	}
 }
 
+func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.frontendID = "bot-unbind"
+	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-unbind", MessageID: "msg-unbind", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          defaultBindingID(a.frontendID, "group", msg.ChatID),
+		FrontendID:  a.frontendID,
+		ChatType:    msg.ChatType,
+		ChatID:      msg.ChatID,
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if err := a.State().SaveSession(&state.Session{
+		Key:                     sessionKey,
+		ChatType:                msg.ChatType,
+		ChatID:                  msg.ChatID,
+		WorkspaceID:             "default",
+		ActiveThreadID:          "thread-unbind",
+		ActiveThreadWorkspaceID: "default",
+	}); err != nil {
+		t.Fatalf("SaveSession() error = %v", err)
+	}
+
+	if err := newBindingService(a).commandWorkspace(msg, []string{"unbind"}); err != nil {
+		t.Fatalf("commandWorkspace(unbind) error = %v", err)
+	}
+	binding := agentBindingForChat(a, msg.ChatType, msg.ChatID)
+	if binding == nil || binding.Status != state.AgentBindingStatusPending.String() || binding.WorkspaceID != "" {
+		t.Fatalf("binding after unbind = %+v, want pending without workspace", binding)
+	}
+	sess := a.State().Session(sessionKey)
+	if sess == nil || sess.WorkspaceID != "" || sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != "" {
+		t.Fatalf("session after unbind = %+v, want cleared workspace and thread", sess)
+	}
+	if config.FindWorkspace(a.cfg, "default") == nil {
+		t.Fatal("unbind removed the local workspace configuration")
+	}
+	card := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+	labels := cardButtonLabelsByAction(card)
+	if labels["workspace.delete.menu"] != "" {
+		t.Fatalf("workspace menu exposed delete after unbind: %q", labels["workspace.delete.menu"])
+	}
+}
+
 func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
@@ -747,12 +794,18 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	if got := labels["menu.workspace"]; !strings.Contains(got, "工作区管理") {
 		t.Fatalf("group root menu labels = %+v, want workspace management", labels)
 	}
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("default", "group", "chat-1"), FrontendID: "default", ChatType: "group", ChatID: "chat-1", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
 	workspaceMenu := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
 	menuLabels := cardButtonLabelsByAction(workspaceMenu)
-	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.worktree", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.delete.menu"} {
+	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.worktree", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.binding.unbind"} {
 		if got := menuLabels[wantAction]; got == "" {
 			t.Fatalf("workspace menu labels = %+v, want action %q", menuLabels, wantAction)
 		}
+	}
+	if got := menuLabels["workspace.delete.menu"]; got != "" {
+		t.Fatalf("group workspace menu exposed deletion action: %q", got)
 	}
 	for _, oldAction := range []string{"menu.current_bot", "menu.binding", "bind.choose", "bind.use", "current_workspace.choose", "current_workspace.use"} {
 		if got := menuLabels[oldAction]; got != "" {
@@ -764,9 +817,6 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 		t.Fatalf("workspace menu should not expose bot selector or old binding terms: %q", body)
 	}
 
-	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("default", "group", "chat-1"), FrontendID: "default", ChatType: "group", ChatID: "chat-1", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
-		t.Fatalf("SaveAgentBinding() error = %v", err)
-	}
 	workspaceCard := newBindingService(a).renderBindingStatusCard(sessionKey, agentBindingForChat(a, "group", "chat-1"))
 	workspaceLabels := cardButtonLabelsByAction(workspaceCard)
 	for _, oldAction := range []string{"menu.current_bot", "menu.binding", "bind.choose", "bind.use", "current_workspace.choose", "current_workspace.use"} {

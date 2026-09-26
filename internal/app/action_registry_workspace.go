@@ -22,6 +22,9 @@ var workspaceCardActionHandlers = map[string]cardActionHandler{
 		}
 		return newWorkspaceManagementServiceInner(s.app).CompleteWorkspaceUseExisting(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
 	},
+	"workspace.binding.unbind": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return newBindingService(s.app).completeBindingWorkspaceUnbind(action, actionSessionKey(action))
+	},
 	"workspace.new": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
 			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace new", "menu.workspace")
