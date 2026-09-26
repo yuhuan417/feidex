@@ -60,6 +60,60 @@ func TestParseQuestionAnswersAndToolUserInputResponse(t *testing.T) {
 	if len(answers) != 1 || answers[0] != "Fast" {
 		t.Fatalf("ParseQuestionAnswers(options) = %+v, want canonical label", answers)
 	}
+	commaLabel := "Local server, you give me the key (Recommended)"
+	commaQuestion := ToolUserInputQuestion{
+		ID:      "q1",
+		Options: []ToolUserInputOption{{Label: commaLabel}, {Label: "Read the key off the host"}},
+	}
+	commaAnswers, err := ParseQuestionAnswers(commaLabel, commaQuestion)
+	if err != nil || len(commaAnswers) != 1 || commaAnswers[0] != commaLabel {
+		t.Fatalf("ParseQuestionAnswers(comma label) = %+v, %v; want complete option", commaAnswers, err)
+	}
+	commaSelections := ToolUserInputSelectionsFromDrafts(
+		ToolUserInputPayload{Questions: []ToolUserInputQuestion{commaQuestion}},
+		FormDrafts{Values: map[string]string{"q1": commaLabel}},
+	)
+	if commaSelections["q1"] != EscapeAnswerParts([]string{commaLabel}) {
+		t.Fatalf("single-select comma value = %q, want escaped %q", commaSelections["q1"], EscapeAnswerParts([]string{commaLabel}))
+	}
+	commaResult, _, err := BuildToolUserInputResponseFromSelections(
+		ToolUserInputPayload{Questions: []ToolUserInputQuestion{commaQuestion}}, commaSelections,
+	)
+	if err != nil {
+		t.Fatalf("BuildToolUserInputResponseFromSelections(comma label) error = %v", err)
+	}
+	commaAnswerMap, _ := commaResult["answers"].(map[string]any)
+	commaEntry, _ := commaAnswerMap["q1"].(map[string]any)
+	commaValues, _ := commaEntry["answers"].([]string)
+	if len(commaValues) != 1 || commaValues[0] != commaLabel {
+		t.Fatalf("single-select comma response = %+v, want complete option", commaValues)
+	}
+	multiCommaQuestion := ToolUserInputQuestion{
+		ID: "targets",
+		Options: []ToolUserInputOption{
+			{Label: commaLabel},
+			{Label: "Safe, isolated host"},
+			{Label: "Ordinary option"},
+		},
+		MultiSelect: true,
+	}
+	multiCommaPayload := ToolUserInputPayload{Questions: []ToolUserInputQuestion{multiCommaQuestion}}
+	multiCommaSelections := ToolUserInputSelectionsFromDrafts(multiCommaPayload, FormDrafts{
+		Multi: map[string][]string{"targets": {commaLabel, "Ordinary option"}},
+	})
+	multiCommaResult, _, err := BuildToolUserInputResponseFromSelections(multiCommaPayload, multiCommaSelections)
+	if err != nil {
+		t.Fatalf("BuildToolUserInputResponseFromSelections(multi comma label) error = %v", err)
+	}
+	multiCommaAnswerMap, _ := multiCommaResult["answers"].(map[string]any)
+	multiCommaEntry, _ := multiCommaAnswerMap["targets"].(map[string]any)
+	multiCommaValues, _ := multiCommaEntry["answers"].([]string)
+	if len(multiCommaValues) != 2 || multiCommaValues[0] != commaLabel || multiCommaValues[1] != "Ordinary option" {
+		t.Fatalf("multi-select comma response = %+v, want original options", multiCommaValues)
+	}
+	if got := SplitAnswerParts(EscapeAnswerParts([]string{`A\\B, C`, "D"})); len(got) != 2 || got[0] != `A\\B, C` || got[1] != "D" {
+		t.Fatalf("escaped answer round trip = %+v, want original parts", got)
+	}
 	if _, err := ParseQuestionAnswers("fast, safe", question); err == nil {
 		t.Fatal("expected single-select question to reject multiple answers")
 	}

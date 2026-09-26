@@ -450,11 +450,16 @@ func ParseQuestionAnswers(raw string, q ToolUserInputQuestion) ([]string, error)
 	if len(q.Options) == 0 {
 		return []string{raw}, nil
 	}
-	parts := SplitAnswerParts(raw)
 	allowed := map[string]string{}
 	for _, opt := range q.Options {
 		allowed[strings.ToLower(strings.TrimSpace(opt.Label))] = opt.Label
 	}
+	if !q.MultiSelect {
+		if matched, ok := allowed[strings.ToLower(raw)]; ok {
+			return []string{matched}, nil
+		}
+	}
+	parts := SplitAnswerParts(raw)
 	var answers []string
 	for _, part := range parts {
 		if matched, ok := allowed[strings.ToLower(part)]; ok {
@@ -476,10 +481,36 @@ func ParseQuestionAnswers(raw string, q ToolUserInputQuestion) ([]string, error)
 	return answers, nil
 }
 
-// SplitAnswerParts splits a raw answer string by commas and newlines.
+// EscapeAnswerParts encodes answer values for comma-delimited transport.
+func EscapeAnswerParts(parts []string) string {
+	encoded := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.ReplaceAll(part, `\`, `\\`)
+		part = strings.ReplaceAll(part, ",", `\,`)
+		encoded = append(encoded, part)
+	}
+	return strings.Join(encoded, ", ")
+}
+
+// SplitAnswerParts splits comma-delimited answers, honoring escaped commas and backslashes.
 func SplitAnswerParts(raw string) []string {
-	raw = strings.ReplaceAll(raw, "\n", ",")
-	parts := strings.Split(raw, ",")
+	var parts []string
+	var current strings.Builder
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		if ch == '\\' && i+1 < len(raw) && (raw[i+1] == ',' || raw[i+1] == '\\') {
+			i++
+			current.WriteByte(raw[i])
+			continue
+		}
+		if ch == ',' || ch == '\n' {
+			parts = append(parts, current.String())
+			current.Reset()
+			continue
+		}
+		current.WriteByte(ch)
+	}
+	parts = append(parts, current.String())
 	out := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
@@ -547,13 +578,16 @@ func ToolUserInputSelectionsFromDrafts(payload ToolUserInputPayload, drafts Form
 			if q.IsOther {
 				parts = append(parts, SplitAnswerParts(ToolUserInputDraftValue(drafts, ToolUserInputOtherFieldName(q)))...)
 			}
-			selections[q.ID] = strings.Join(parts, ", ")
+			selections[q.ID] = EscapeAnswerParts(parts)
 		case len(q.Options) > 0:
-			parts := SplitAnswerParts(ToolUserInputDraftValue(drafts, q.ID))
+			selection := ToolUserInputDraftValue(drafts, q.ID)
 			if q.IsOther {
-				parts = append(parts, SplitAnswerParts(ToolUserInputDraftValue(drafts, ToolUserInputOtherFieldName(q)))...)
+				other := ToolUserInputDraftValue(drafts, ToolUserInputOtherFieldName(q))
+				if other != "" {
+					selection = other
+				}
 			}
-			selections[q.ID] = strings.Join(parts, ", ")
+			selections[q.ID] = EscapeAnswerParts([]string{selection})
 		default:
 			selections[q.ID] = ToolUserInputDraftValue(drafts, q.ID)
 		}
