@@ -339,6 +339,7 @@ type RenderDeps struct {
 	Management             RenderManagementDeps
 	WorkspaceIDForSession  WorkspaceIDForSessionFn
 	WorkspaceMenuBodyLines WorkspaceMenuBodyLinesFn
+	WorkspaceMenuIsGroup   func(sessionKey string) bool
 }
 
 type ThreadServiceDeps struct {

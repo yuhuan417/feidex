@@ -123,6 +123,12 @@ func workspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string 
 	return ""
 }
 
+// WorkspaceSwitchBlockedReason reports whether a workspace binding can be
+// changed for the given session.
+func WorkspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string {
+	return workspaceSwitchBlockedReason(sess, hasInFlight)
+}
+
 func sessionCanRetargetWorkspace(sess *state.Session, hasInFlight bool) bool {
 	return workspaceSwitchBlockedReason(sess, hasInFlight) == ""
 }

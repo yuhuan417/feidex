@@ -280,6 +280,44 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	}, nil
 }
 
+func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
+	if s.app == nil || !groupBindingSessionScopeActive(s.app, sessionKey) {
+		return fmt.Errorf("解除 workspace 绑定只能在群聊中使用")
+	}
+	binding := bindingForSessionKey(s.app, sessionKey)
+	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
+		return fmt.Errorf("当前群没有已绑定的 workspace")
+	}
+	sess := s.app.State().Session(sessionKey)
+	if reason := appworkspacecmd.WorkspaceSwitchBlockedReason(sess, sessionHasInFlightSubmission(sess)); reason != "" {
+		return fmt.Errorf("%s", reason)
+	}
+	if _, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		current.WorkspaceID = ""
+		current.Status = state.AgentBindingStatusPending.String()
+	}); err != nil {
+		return err
+	}
+	if sess != nil {
+		switchSessionWorkspace(sess, "")
+		clearSessionLiveThread(s.app, sess.Key)
+		if err := s.app.State().SaveSession(sess); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if err := s.unbindGroupWorkspace(sessionKey); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已解除本群绑定，请重新选择工作区"},
+		Card:  rawCard(newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)),
+	}, nil
+}
+
 func (s bindingService) ensureBindingForMessage(msg *feishu.InboundMessage) (*state.AgentBinding, error) {
 	if s.app == nil || msg == nil {
 		return nil, fmt.Errorf("app not initialized")

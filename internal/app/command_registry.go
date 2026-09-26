@@ -141,6 +141,7 @@ func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {
 	}
 	if groupScoped {
 		sections["workspace"] = append(sections["workspace"], menutypes.HelpCommandSpec{Command: "@Bot /primary on", Summary: "把被 @ 的 Bot 设为本群 primary，处理未明确 @ 的消息。"})
+		sections["workspace"] = append(sections["workspace"], menutypes.HelpCommandSpec{Command: "/workspace unbind", Summary: "解除当前 Bot 在本群的 workspace 绑定；不会删除本机配置或目录。"})
 	}
 	lines = appendHelpCommands(lines, intro)
 	for _, group := range helpGroupOrder {

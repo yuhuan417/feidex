@@ -211,7 +211,7 @@ func MatchWorkspaceCommand(fields []string) bool {
 		return true
 	}
 	switch strings.TrimSpace(fields[1]) {
-	case "list", "choose":
+	case "list", "choose", "unbind":
 		return len(fields) == 2
 	case "new":
 		if len(fields) >= 3 && strings.TrimSpace(fields[2]) == "worktree" {
@@ -241,7 +241,7 @@ func MatchClaudeWorkspaceCommand(fields []string) bool {
 		return true
 	}
 	switch strings.TrimSpace(fields[1]) {
-	case "list", "choose":
+	case "list", "choose", "unbind":
 		return len(fields) == 2
 	case "new":
 		if len(fields) >= 3 && strings.TrimSpace(fields[2]) == "worktree" {

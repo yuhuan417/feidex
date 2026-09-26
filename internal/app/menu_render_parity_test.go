@@ -78,6 +78,17 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		t.Run(family.name, func(t *testing.T) {
 			p2p := menuCardSignature(t, family.p2p)
 			group := menuCardSignature(t, family.group)
+			if family.name == "workspace" {
+				if containsMenuAction(family.group, "workspace.delete.menu") {
+					t.Fatal("group workspace menu must not expose workspace deletion")
+				}
+				if !containsMenuAction(family.group, "workspace.binding.unbind") {
+					t.Fatal("group workspace menu must expose workspace unbinding")
+				}
+				assertBackActionIsLast(t, family.p2p)
+				assertBackActionIsLast(t, family.group)
+				return
+			}
 			if !reflect.DeepEqual(p2p, group) {
 				t.Fatalf("p2p/group menu rendering differs:\np2p:   %#v\ngroup: %#v", p2p, group)
 			}
@@ -95,6 +106,23 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	}
 	assertBackActionIsLast(t, p2pClaudeModelConfig)
 	assertBackActionIsLast(t, groupClaudeModelConfig)
+}
+
+func containsMenuAction(card map[string]any, actionName string) bool {
+	for _, button := range cardButtonsForTest(card) {
+		value, _ := button["value"].(map[string]any)
+		if action, _ := value["action"].(string); action == actionName {
+			return true
+		}
+		behaviors, _ := button["behaviors"].([]map[string]any)
+		for _, behavior := range behaviors {
+			value, _ := behavior["value"].(map[string]any)
+			if action, _ := value["action"].(string); action == actionName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type menuSignature struct {

@@ -13,7 +13,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-const groupBindingWorkspaceUsage = "/workspace | /workspace list | /workspace choose | /workspace use ID | /workspace new ID CWD | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"
+const groupBindingWorkspaceUsage = "/workspace | /workspace list | /workspace choose | /workspace use ID | /workspace unbind | /workspace new ID CWD | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace sandbox MODE|default | /workspace policy POLICY|default | /workspace multiagent MODE|default | /workspace permissions MODE|default"
 
 func isGroupMessage(msg *feishu.InboundMessage) bool {
 	return msg != nil && strings.TrimSpace(msg.ChatType) == "group" && strings.TrimSpace(msg.ChatID) != ""
@@ -193,7 +193,17 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 		}
 		return s.commandCurrentBotGroupConfig(msg, append([]string{strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...))
 	case "delete":
-		return fmt.Errorf("群聊中的 workspace 是当前 Bot 在本群的工作区配置；删除本机 workspace 请私聊该 Bot 使用 /workspace delete")
+		return fmt.Errorf("群聊不能移除本机 workspace 配置；如需停止本群使用当前 workspace，请使用 /workspace unbind")
+	case "unbind":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: /workspace unbind")
+		}
+		if err := s.unbindGroupWorkspace(sessionKey); err != nil {
+			return err
+		}
+		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)
+		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		return err
 	default:
 		return fmt.Errorf("usage: %s", groupBindingWorkspaceUsage)
 	}
