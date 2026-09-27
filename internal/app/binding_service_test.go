@@ -816,20 +816,22 @@ func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
 
+	// menu.group.model 现在直接打开模型配置页面，不再显示中间菜单
 	parentResp, err := newMenuActionService(a).completeMenuGroupModel(&feishu.CardAction{ActionValue: map[string]any{"session_key": sessionKey}, UserID: "user-1", ChatID: "chat-model-menu", MessageID: "card-parent"}, sessionKey)
 	if err != nil || parentResp == nil || parentResp.Card == nil {
 		t.Fatalf("completeMenuGroupModel() = %#v, %v", parentResp, err)
 	}
 	parentCard := parentResp.Card.Data.(map[string]any)
 	parentBody := cardMarkdownContent(t, parentCard)
-	if !strings.Contains(parentBody, "配置当前 Bot 在本群的模型相关设置") || strings.Contains(parentBody, "工作区管理") {
-		t.Fatalf("group model parent body = %q", parentBody)
+	// 验证直接返回的是模型配置页面
+	if !strings.Contains(parentBody, "选择模型") || strings.Contains(parentBody, "工作区管理") || strings.Contains(parentBody, "当前工作区") {
+		t.Fatalf("group model config body = %q", parentBody)
 	}
-	parentLabels := cardButtonLabelsByAction(parentCard)
-	if parentLabels["menu.model"] == "" || parentLabels["menu.fast"] == "" || parentLabels["menu.workspace"] != "" {
-		t.Fatalf("group model parent labels = %+v", parentLabels)
+	if selects := cardSelectStaticForTest(parentCard); len(selects) != 2 {
+		t.Fatalf("group model config selects = %d, want 2", len(selects))
 	}
 
+	// 验证 menu.model 也能正常工作
 	modelResp, err := newCardActionService(a).dispatch(&feishu.CardAction{ActionValue: map[string]any{"action": "menu.model", "session_key": sessionKey}, UserID: "user-1", ChatID: "chat-model-menu", MessageID: "card-model"})
 	if err != nil || modelResp == nil || modelResp.Card == nil {
 		t.Fatalf("dispatch(menu.model) = %#v, %v", modelResp, err)
