@@ -79,6 +79,9 @@ func newModelConfigService(app *App) modelConfigService {
 			ReplyInThreadEnabled: func(chatType string) bool {
 				return replyInThreadEnabled(app, chatType)
 			},
+			SessionConfig: func(sessionKey string) *config.Config {
+				return sessionScopedConfigForApp(app, sessionKey)
+			},
 			CompleteGlobalModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 				return newBackendConfigurationService(app).completeGlobalModelSet(action, modelID)
 			},
@@ -142,11 +145,18 @@ func (s modelConfigService) renderClaudeAuxiliaryModelConfigCard(sessionKey, men
 }
 
 func (s modelConfigService) auxiliaryConfigForSession(sessionKey string) *config.Config {
-	if s.app == nil || s.app.cfg == nil || !p2pSessionScopeActive(s.app, sessionKey) {
+	return sessionScopedConfigForApp(s.app, sessionKey)
+}
+
+// sessionScopedConfigForApp clones the global config with session- and
+// profile-level overrides merged in. It returns nil for sessions that are not
+// scoped to a p2p frontend, or when the app has no config yet.
+func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
+	if a == nil || a.cfg == nil || !p2pSessionScopeActive(a, sessionKey) {
 		return nil
 	}
-	clone := *s.app.cfg
-	if profile := s.app.State().BotProfile(); profile != nil {
+	clone := *a.cfg
+	if profile := a.State().BotProfile(); profile != nil {
 		clone.Codex.PlanModel = firstNonEmpty(profile.PlanModel, clone.Codex.PlanModel)
 		clone.Codex.PlanReasoningEffort = firstNonEmpty(profile.PlanReasoningEffort, clone.Codex.PlanReasoningEffort)
 		clone.Codex.ReviewModel = firstNonEmpty(profile.ReviewModel, clone.Codex.ReviewModel)
@@ -155,7 +165,7 @@ func (s modelConfigService) auxiliaryConfigForSession(sessionKey string) *config
 		clone.Claude.SmallModel = firstNonEmpty(profile.ClaudeSmallModel, clone.Claude.SmallModel)
 		clone.Claude.SubagentModel = firstNonEmpty(profile.ClaudeSubagentModel, clone.Claude.SubagentModel)
 	}
-	if sess := s.app.State().Session(normalizeSessionKey(s.app, sessionKey)); sess != nil {
+	if sess := a.State().Session(normalizeSessionKey(a, sessionKey)); sess != nil {
 		clone.Codex.PlanModel = firstNonEmpty(sess.PlanModelOverride, clone.Codex.PlanModel)
 		clone.Codex.PlanReasoningEffort = firstNonEmpty(sess.PlanReasoningEffortOverride, clone.Codex.PlanReasoningEffort)
 		clone.Codex.ReviewModel = firstNonEmpty(sess.ReviewModelOverride, clone.Codex.ReviewModel)

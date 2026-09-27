@@ -635,3 +635,31 @@ func TestUpdateClaudeModelConfigRejectsActiveFrontend(t *testing.T) {
 		t.Fatalf("Claude model should stay unchanged after rejection, got %q", got)
 	}
 }
+
+func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+
+	sessionKey := "feishu:chat:chat-p2p"
+	if err := a.store.UpsertSession(&state.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		OwnerUserID:        "user",
+		ChatID:             "chat-p2p",
+		ChatType:           "p2p",
+		Status:             "idle",
+		SmallModelOverride: "deepseek",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	card := newModelConfigService(a).renderClaudeModelConfigCard(sessionKey, "menu.model")
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "small: `deepseek`") {
+		t.Fatalf("Claude model card body = %q, want the session-scoped small model", body)
+	}
+	if strings.Contains(body, "Claude 内置默认") {
+		t.Fatalf("Claude model card body = %q, should not fall back to the built-in small model", body)
+	}
+}

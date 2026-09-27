@@ -183,6 +183,12 @@ type ModelConfigService struct {
 	SessionBelongsToFrontend func(sessionKey string) bool
 	ReplyInThreadEnabled     func(chatType string) bool
 
+	// SessionConfig returns a config clone with session- and profile-level
+	// overrides merged in for scoped sessions (for example p2p), or nil when
+	// the session has no scoped config. Model cards render from it so the
+	// values they show match what the runtime actually applies.
+	SessionConfig func(sessionKey string) *config.Config
+
 	// Backend configuration delegate callbacks.
 	CompleteGlobalModelSet           func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error)
 	CompleteGlobalReasoningEffortSet func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error)
@@ -195,6 +201,17 @@ type ModelConfigService struct {
 
 	// Card action response callback.
 	ReplyCommandActionResponse func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
+}
+
+// configForSession resolves the config a session's model cards render from: the
+// session-scoped clone when one applies, otherwise the global config.
+func (s ModelConfigService) configForSession(sessionKey string) *config.Config {
+	if s.SessionConfig != nil {
+		if cfg := s.SessionConfig(sessionKey); cfg != nil {
+			return cfg
+		}
+	}
+	return s.GetConfig()
 }
 
 // ---------------------------------------------------------------------------
@@ -507,7 +524,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	if menuAction == "" {
 		menuAction = "menu.model"
 	}
-	cfg := s.GetConfig()
+	cfg := s.configForSession(sessionKey)
 	selectedModel, selectedEffort := EffectiveConfiguredModelAndEffort(cfg, result)
 	modelName := "(default)"
 	modelDescription := ""
@@ -956,7 +973,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	if menuAction == "" {
 		menuAction = "menu.model"
 	}
-	cfg := s.GetConfig()
+	cfg := s.configForSession(sessionKey)
 	currentModel := firstNonEmpty(ConfiguredClaudeModel(cfg), ClaudeDefaultModelAlias)
 	currentEffort := firstNonEmpty(ConfiguredClaudeEffort(cfg), "(default)")
 
