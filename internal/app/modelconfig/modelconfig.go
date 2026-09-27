@@ -959,15 +959,17 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	cfg := s.GetConfig()
 	currentModel := firstNonEmpty(ConfiguredClaudeModel(cfg), ClaudeDefaultModelAlias)
 	currentEffort := firstNonEmpty(ConfiguredClaudeEffort(cfg), "(default)")
-	smallModel := "(Claude 内置默认)"
+
+	// 显示 small 模型的实际生效值
+	smallModel := "(Claude 内置默认: haiku)"
+	if cfg != nil && strings.TrimSpace(cfg.Claude.SmallModel) != "" {
+		smallModel = strings.TrimSpace(cfg.Claude.SmallModel)
+	}
+
+	// 显示 subagent 模型的实际生效值
 	subagentModel := currentModel
-	if cfg != nil {
-		if strings.TrimSpace(cfg.Claude.SmallModel) != "" {
-			smallModel = strings.TrimSpace(cfg.Claude.SmallModel)
-		}
-		if strings.TrimSpace(cfg.Claude.SubagentModel) != "" {
-			subagentModel = strings.TrimSpace(cfg.Claude.SubagentModel)
-		}
+	if cfg != nil && strings.TrimSpace(cfg.Claude.SubagentModel) != "" {
+		subagentModel = strings.TrimSpace(cfg.Claude.SubagentModel)
 	}
 
 	elements := []map[string]any{
