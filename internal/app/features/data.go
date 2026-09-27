@@ -352,7 +352,7 @@ var registry = []Spec{
 			{ID: "effort", Names: []string{"/effort"}, HelpGroup: "model", HelpEntries: []HelpCommandSpec{{Command: "/effort", Summary: "打开模型与推理强度配置。"}, {Command: "/effort <effort>", Summary: "直接设置 Bot 默认推理强度。"}, {Command: "/effort default", Summary: "恢复默认推理强度。"}}},
 		},
 		Nodes: []MenuNode{
-			{Action: "menu.model", Label: "模型配置", Parent: "menu.group.model"},
+			{Action: "menu.model", Label: "模型配置", Parent: "menu.root"},
 		},
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.model", Action: "menu.model", Label: "模型配置", Slash: "/model", Kind: MenuItemSubmenu},

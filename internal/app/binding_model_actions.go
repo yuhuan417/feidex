@@ -64,7 +64,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 			"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 			unsupportedGroupModelBackendMessage(configuredBackend(s.app)),
 		}, "\n")
-		return s.app.feishu.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}}}), nil
+		return s.app.feishu.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
 	}
 
 }
@@ -217,7 +217,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
-		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
 	return card
 
@@ -347,7 +347,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
-		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
 	return card
 
