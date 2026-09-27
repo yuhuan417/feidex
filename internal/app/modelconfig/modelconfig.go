@@ -196,6 +196,7 @@ type ModelConfigService struct {
 
 	// Menu helper callbacks.
 	FormatMenuBody                                  func(action, body string) string
+	MenuBackAction                                  func(action string) string
 	FrontendIdleBlockedReason                       func() string
 	FrontendIdleBlockedReasonIgnoringCurrentMessage func() string
 
@@ -212,6 +213,26 @@ func (s ModelConfigService) configForSession(sessionKey string) *config.Config {
 		}
 	}
 	return s.GetConfig()
+}
+
+// backAction resolves the action a card's back control returns to.
+func (s ModelConfigService) backAction(action string) string {
+	if s.MenuBackAction != nil {
+		if resolved := strings.TrimSpace(s.MenuBackAction(action)); resolved != "" {
+			return resolved
+		}
+	}
+	return "menu.root"
+}
+
+// auxModelRef renders one auxiliary-model summary entry: the value in effect,
+// annotated with whether it was explicitly configured.
+func auxModelRef(configured, fallback string) string {
+	configured = strings.TrimSpace(configured)
+	if configured != "" {
+		return "`" + configured + "` (显式配置)"
+	}
+	return "`" + strings.TrimSpace(fallback) + "` (跟随默认)"
 }
 
 // ---------------------------------------------------------------------------
@@ -542,13 +563,22 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	if effortValue != "" {
 		effortSource = "Bot 默认显式配置"
 	}
+	// review and subagent models are configured on the auxiliary page. Keep
+	// their effective values visible here.
+	reviewValue, subagentValue := "", ""
+	if cfg != nil {
+		reviewValue = strings.TrimSpace(cfg.Codex.ReviewModel)
+		subagentValue = strings.TrimSpace(cfg.Codex.SubagentModel)
+	}
 	elements := []map[string]any{
 		{
 			"tag": "markdown",
 			"content": "当前模型: `" + modelName + "`\n" +
 				"模型来源: " + modelSource + "\n" +
 				"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
-				"推理来源: " + effortSource +
+				"推理来源: " + effortSource + "\n\n" +
+				"辅助模型摘要:\nreview: " + auxModelRef(reviewValue, modelName) +
+				"\nsubagent: " + auxModelRef(subagentValue, modelName) +
 				func() string {
 					if modelDescription == "" {
 						return ""
@@ -632,7 +662,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
-			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+			Value: map[string]any{"action": s.backAction(menuAction), "session_key": sessionKey},
 		}}))
 	}
 
@@ -977,16 +1007,11 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	currentModel := firstNonEmpty(ConfiguredClaudeModel(cfg), ClaudeDefaultModelAlias)
 	currentEffort := firstNonEmpty(ConfiguredClaudeEffort(cfg), "(default)")
 
-	// 显示 small 模型的实际生效值
-	smallModel := "(Claude 内置默认: haiku)"
-	if cfg != nil && strings.TrimSpace(cfg.Claude.SmallModel) != "" {
-		smallModel = strings.TrimSpace(cfg.Claude.SmallModel)
-	}
-
-	// 显示 subagent 模型的实际生效值
-	subagentModel := currentModel
-	if cfg != nil && strings.TrimSpace(cfg.Claude.SubagentModel) != "" {
-		subagentModel = strings.TrimSpace(cfg.Claude.SubagentModel)
+	// 辅助模型摘要显示实际生效值。
+	smallValue, subagentValue := "", ""
+	if cfg != nil {
+		smallValue = strings.TrimSpace(cfg.Claude.SmallModel)
+		subagentValue = strings.TrimSpace(cfg.Claude.SubagentModel)
 	}
 
 	elements := []map[string]any{
@@ -995,7 +1020,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 			"content": "当前 backend: `claude`\n" +
 				"当前模型: `" + currentModel + "`\n" +
 				"当前推理强度: `" + currentEffort + "`\n\n" +
-				"辅助模型摘要:\nsmall: `" + smallModel + "`\nsubagent: `" + subagentModel + "`\n\n" +
+				"辅助模型摘要:\nsmall: " + auxModelRef(smallValue, "Claude 内置 haiku") + "\nsubagent: " + auxModelRef(subagentValue, currentModel) + "\n\n" +
 				"这里提供 Claude 常用别名、已配置候选 model 与当前自定义 model。\n" +
 				"需要任意 raw model 时，请直接使用 `/model set <model-id>`。\n" +
 				"`/model set default` 会恢复为 `sonnet`。\n" +
@@ -1063,7 +1088,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  feishu.MenuBackButtonText,
 			Type:  "default",
-			Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+			Value: map[string]any{"action": s.backAction(menuAction), "session_key": sessionKey},
 		}}))
 	}
 

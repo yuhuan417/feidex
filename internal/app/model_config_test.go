@@ -663,3 +663,56 @@ func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 		t.Fatalf("Claude model card body = %q, should not fall back to the built-in small model", body)
 	}
 }
+
+func TestModelCardBackReturnsToParentMenu(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+
+	card := newModelConfigService(a).renderClaudeModelConfigCard("feishu:frontend:default:chat:chat-1", "menu.model")
+	labels := cardButtonLabelsByAction(card)
+	if labels["menu.root"] == "" {
+		t.Fatalf("Claude model card labels = %+v, want a back control to menu.root", labels)
+	}
+	if labels["menu.group.model"] != "" {
+		t.Fatalf("Claude model card labels = %+v, back control must not point at the card itself", labels)
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "当前位置：主菜单 / 模型配置") {
+		t.Fatalf("Claude model card body = %q, want a single 模型配置 breadcrumb", body)
+	}
+	if strings.Contains(body, "模型配置 / 模型配置") {
+		t.Fatalf("Claude model card body = %q, breadcrumb still repeats 模型配置", body)
+	}
+}
+
+func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendCodex
+	a.cfg.Feishu.Backend = backendCodex
+	a.cfg.Codex.ReviewModel = "gpt-5-mini"
+	a.cfg.Codex.SubagentModel = "gpt-5-nano"
+
+	result := codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{
+		ID:                     "gpt-5",
+		DisplayName:            "GPT-5",
+		IsDefault:              true,
+		DefaultReasoningEffort: "medium",
+		SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+			{ReasoningEffort: "medium"},
+		},
+	}}}
+
+	card := newModelConfigService(a).renderModelConfigCard(result, nil, "feishu:frontend:default:chat:chat-1", "menu.model")
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "review: `gpt-5-mini`") {
+		t.Fatalf("Codex model card body = %q, want the effective review model", body)
+	}
+	if !strings.Contains(body, "subagent: `gpt-5-nano`") {
+		t.Fatalf("Codex model card body = %q, want the effective subagent model", body)
+	}
+	labels := cardButtonLabelsByAction(card)
+	if labels["menu.root"] == "" || labels["menu.group.model"] != "" {
+		t.Fatalf("Codex model card labels = %+v, want the back control to leave the card", labels)
+	}
+}

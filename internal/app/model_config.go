@@ -82,6 +82,7 @@ func newModelConfigService(app *App) modelConfigService {
 			SessionConfig: func(sessionKey string) *config.Config {
 				return sessionScopedConfigForApp(app, sessionKey)
 			},
+			MenuBackAction: menuBackAction,
 			CompleteGlobalModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 				return newBackendConfigurationService(app).completeGlobalModelSet(action, modelID)
 			},

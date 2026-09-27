@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	appmenuutil "feidex/internal/app/menuutil"
 )
 
@@ -26,6 +28,21 @@ func menuCardBodyForSession(a *App, sessionKey, action, body string) string {
 
 func menuCardBodyForBackendForSession(a *App, sessionKey, backend, action, body string) string {
 	return menuCardBodyForBackend(backend, action, body)
+}
+
+// menuBackAction returns the action a card rendered for the given menu action
+// returns to when the user taps the back control: the node's parent, falling
+// back to the root menu.
+func menuBackAction(action string) string {
+	action = strings.TrimSpace(action)
+	if action != "" {
+		if node, ok := menuNodes[action]; ok {
+			if parent := strings.TrimSpace(node.Parent); parent != "" {
+				return parent
+			}
+		}
+	}
+	return "menu.root"
 }
 
 func menuNodeLabelForBackend(action, label, backend string) string {

@@ -64,7 +64,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 			"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
 			unsupportedGroupModelBackendMessage(configuredBackend(s.app)),
 		}, "\n")
-		return s.app.feishu.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}}}), nil
+		return s.app.feishu.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
 	}
 
 }
@@ -124,7 +124,6 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, effectiveCodexPlanModel(s.app, sess), modelName)
 	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, effectiveCodexReviewModel(s.app, sess), modelName)
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, effectiveCodexSubagentModel(s.app, sess), modelName)
 
@@ -133,7 +132,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	content := "当前模型: `" + modelName + "`\n" +
 		"模型来源: " + modelSource + "\n" +
 		"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
-		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nplan: " + planModelDisplay + "\nreview: " + reviewModelDisplay + "\nsubagent: " + subagentModelDisplay
+		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nreview: " + reviewModelDisplay + "\nsubagent: " + subagentModelDisplay
 
 	if modelDescription != "" {
 		content += "\n\n" + modelDescription
@@ -211,7 +210,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
-		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
 	return card
 
@@ -341,7 +340,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
-		Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey},
+		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
 	return card
 
