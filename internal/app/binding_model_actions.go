@@ -92,12 +92,33 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		modelName = firstNonEmpty(selectedModel.DisplayName, selectedModel.ID, selectedModel.Model)
 		modelDescription = strings.TrimSpace(selectedModel.Description)
 	}
+
+	// 改进来源显示：显示实际生效的值
 	modelSource := "跟随 Bot 默认"
-	if modelOverride != "" {
+	if modelOverride == "" {
+		// 显示实际生效的 Bot 默认值
+		botDefault := appmodelconfig.ConfiguredGlobalModel(s.app.cfg)
+		if botDefault != "" {
+			modelSource = "跟随 Bot 默认 (`" + botDefault + "`)"
+		} else {
+			modelSource = "跟随 Bot 默认 (app-server 默认)"
+		}
+	} else {
 		modelSource = "当前群内显式配置"
 	}
+
 	effortSource := "跟随模型或 Bot 默认"
-	if effortOverride != "" {
+	if effortOverride == "" {
+		// 显示实际生效的值
+		botEffort := appmodelconfig.ConfiguredGlobalReasoningEffort(s.app.cfg)
+		if botEffort != "" {
+			effortSource = "跟随 Bot 默认 (`" + botEffort + "`)"
+		} else if selectedModel != nil && selectedModel.DefaultReasoningEffort != "" {
+			effortSource = "跟随模型默认 (`" + selectedModel.DefaultReasoningEffort + "`)"
+		} else {
+			effortSource = "跟随模型或 Bot 默认"
+		}
+	} else {
 		effortSource = "当前群内显式配置"
 	}
 
@@ -204,12 +225,25 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	effortOverride := strings.TrimSpace(binding.ReasoningEffortOverride)
 	currentModel := firstNonEmpty(modelOverride, appmodelconfig.ConfiguredClaudeModel(s.app.cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	currentEffort := firstNonEmpty(effortOverride, appmodelconfig.ConfiguredClaudeEffort(s.app.cfg), "(default)")
+
+	// 改进来源显示：显示实际生效的值
 	modelSource := "跟随 Bot 默认"
-	if modelOverride != "" {
+	if modelOverride == "" {
+		botModel := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(s.app.cfg), appmodelconfig.ClaudeDefaultModelAlias)
+		modelSource = "跟随 Bot 默认 (`" + botModel + "`)"
+	} else {
 		modelSource = "当前群内显式配置"
 	}
+
 	effortSource := "跟随 Bot 默认"
-	if effortOverride != "" {
+	if effortOverride == "" {
+		botEffort := appmodelconfig.ConfiguredClaudeEffort(s.app.cfg)
+		if botEffort != "" {
+			effortSource = "跟随 Bot 默认 (`" + botEffort + "`)"
+		} else {
+			effortSource = "跟随 Bot 默认 (default)"
+		}
+	} else {
 		effortSource = "当前群内显式配置"
 	}
 
