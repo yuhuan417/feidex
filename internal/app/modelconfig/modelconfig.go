@@ -43,6 +43,7 @@ const EffortCommandUsage = "/effort | /effort <effort|default>"
 var ClaudeBuiltinModelOptions = []runtime.ClaudeModelOption{
 	{Value: "sonnet", Label: "Sonnet (`sonnet`)"},
 	{Value: "opus", Label: "Opus (`opus`)"},
+	{Value: "fable", Label: "Fable (`fable`)"},
 	{Value: "haiku", Label: "Haiku (`haiku`)"},
 }
 
