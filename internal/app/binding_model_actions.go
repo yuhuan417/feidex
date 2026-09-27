@@ -122,12 +122,43 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		effortSource = "当前群内显式配置"
 	}
 
+	// 显示 Codex 辅助模型的实际生效值
+	planModelDisplay := binding.PlanModelOverride
+	if planModelDisplay == "" {
+		botPlan := appmodelconfig.ConfiguredPlanModel(s.app.cfg)
+		if botPlan != "" {
+			planModelDisplay = "跟随 Bot 默认 (`" + botPlan + "`)"
+		} else {
+			planModelDisplay = "跟随主模型 (`" + modelName + "`)"
+		}
+	}
+
+	reviewModelDisplay := binding.ReviewModelOverride
+	if reviewModelDisplay == "" {
+		botReview := appmodelconfig.ConfiguredGlobalModel(s.app.cfg)
+		if botReview != "" {
+			reviewModelDisplay = "跟随 Bot 默认 (`" + botReview + "`)"
+		} else {
+			reviewModelDisplay = "跟随 Bot 默认"
+		}
+	}
+
+	subagentModelDisplay := binding.SubagentModelOverride
+	if subagentModelDisplay == "" {
+		botSubagent := appmodelconfig.ConfiguredGlobalModel(s.app.cfg)
+		if botSubagent != "" {
+			subagentModelDisplay = "跟随 Bot 默认 (`" + botSubagent + "`)"
+		} else {
+			subagentModelDisplay = "跟随主模型 (`" + modelName + "`)"
+		}
+	}
+
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model", "")})
 	content := "当前模型: `" + modelName + "`\n" +
 		"模型来源: " + modelSource + "\n" +
 		"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
-		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nplan: `" + firstNonEmpty(binding.PlanModelOverride, "跟随 Bot 默认") + "`\nreview: `" + firstNonEmpty(binding.ReviewModelOverride, "跟随 Bot 默认") + "`\nsubagent: `" + firstNonEmpty(binding.SubagentModelOverride, "跟随 Bot 默认") + "`"
+		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nplan: `" + planModelDisplay + "`\nreview: `" + reviewModelDisplay + "`\nsubagent: `" + subagentModelDisplay + "`"
 
 	if modelDescription != "" {
 		content += "\n\n" + modelDescription
@@ -247,9 +278,25 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		effortSource = "当前群内显式配置"
 	}
 
+	// 显示辅助模型的实际生效值
+	smallModelDisplay := binding.SmallModelOverride
+	if smallModelDisplay == "" {
+		botSmall := appmodelconfig.ConfiguredClaudeModel(s.app.cfg)
+		if botSmall != "" {
+			smallModelDisplay = "跟随 Bot 默认 (`" + botSmall + "`)"
+		} else {
+			smallModelDisplay = "跟随 Bot 默认 (Claude 内置: haiku)"
+		}
+	}
+
+	subagentModelDisplay := binding.SubagentModelOverride
+	if subagentModelDisplay == "" {
+		subagentModelDisplay = "跟随 Bot 默认 (`" + currentModel + "`)"
+	}
+
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model", "")})
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "当前模型: `" + currentModel + "`\n模型来源: " + modelSource + "\n当前推理强度: `" + currentEffort + "`\n推理来源: " + effortSource + "\n\n辅助模型摘要:\nsmall: `" + firstNonEmpty(binding.SmallModelOverride, "跟随 Bot 默认") + "`\nsubagent: `" + firstNonEmpty(binding.SubagentModelOverride, "跟随 Bot 默认") + "`\n\n需要任意 raw model 时，请直接使用 `/model set <model-id>`。"})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "当前模型: `" + currentModel + "`\n模型来源: " + modelSource + "\n当前推理强度: `" + currentEffort + "`\n推理来源: " + effortSource + "\n\n辅助模型摘要:\nsmall: `" + smallModelDisplay + "`\nsubagent: `" + subagentModelDisplay + "`\n\n需要任意 raw model 时，请直接使用 `/model set <model-id>`。"})
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择模型"})
 
 	modelOptions := []cards.SelectStaticOption{{
