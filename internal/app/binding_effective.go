@@ -83,6 +83,15 @@ func effectiveClaudeSubagentModel(a *App, sess *state.Session) string {
 	return firstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileClaudeSubagentModelForApp(a), strings.TrimSpace(a.cfg.Claude.SubagentModel), effectiveClaudeModel(a, sess, nil))
 }
 
+func effectiveClaudeReasoningEffort(a *App, sess *state.Session) string {
+	binding := effectiveBindingForSession(a, sess)
+	return firstNonEmpty(
+		strings.TrimSpace(bindingReasoningEffortOverride(binding)),
+		botProfileReasoningEffortForApp(a),
+		strings.TrimSpace(a.cfg.Claude.Effort),
+	)
+}
+
 func effectiveBindingApprovalPolicy(a *App, sess *state.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {

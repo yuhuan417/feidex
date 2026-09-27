@@ -411,6 +411,26 @@ func (s bindingService) hotApplyClaudeModel(sessionKey string) bool {
 	return err == nil && applied
 }
 
+// hotApplyClaudeEffort applies the effective Claude reasoning effort to the
+// group's live session so the change lands without waiting for the next
+// session start. A false result is not an error: the runtime will use the new
+// effort on the next turn if hot-apply didn't work.
+func (s bindingService) hotApplyClaudeEffort(sessionKey string) bool {
+	if configuredBackend(s.app) != backendClaude || s.app.claude == nil {
+		return false
+	}
+	sessionKey = normalizeSessionKey(s.app, sessionKey)
+	if sessionKey == "" {
+		return false
+	}
+	effort := effectiveClaudeReasoningEffort(s.app, s.app.State().Session(sessionKey))
+	if strings.TrimSpace(effort) == "" {
+		return false
+	}
+	applied, err := s.app.claude.SetEffort(context.Background(), sessionKey, effort)
+	return err == nil && applied
+}
+
 func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sessionKey, effort string) (*callback.CardActionTriggerResponse, error) {
 	if err := ensureSessionModelConfigIdle(s.app, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -425,8 +445,12 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	toastContent := "已更新当前群内推理强度；后续对话会使用新配置"
+	if s.hotApplyClaudeEffort(sessionKey) {
+		toastContent = "已更新当前群内推理强度；当前会话与后续对话会使用新配置"
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内推理强度"},
+		Toast: &callback.Toast{Type: "success", Content: toastContent},
 		Card:  rawCard(s.renderBindingModelConfigOrMenuCard(sessionKey, updated)),
 	}, nil
 }

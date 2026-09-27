@@ -147,6 +147,10 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
 			return effectiveClaudeSmallModel(app, sess), effectiveClaudeSubagentModel(app, sess)
 		},
+		ReasoningEffort: func(sessionKey string) string {
+			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
+			return effectiveClaudeReasoningEffort(app, sess)
+		},
 	})
 
 	return &claudeRuntime{app: app, service: svc}

@@ -201,6 +201,7 @@ type Deps struct {
 	Permission             PermissionDeps
 	PrepareClaudeMCPConfig func(sessionKey string) (configPath string, env []string, cleanup func(), err error)
 	AuxiliaryModels        func(sessionKey string) (smallModel, subagentModel string)
+	ReasoningEffort        func(sessionKey string) string
 }
 
 // Service provides Claude CLI session management. All exported methods
@@ -982,7 +983,13 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 	if runtimeCfg.DangerouslySkipPermissions {
 		opts = append(opts, claudecli.WithDangerouslySkipPermissions())
 	}
-	if effort := strings.TrimSpace(runtimeCfg.Effort); effort != "" {
+	effort := strings.TrimSpace(runtimeCfg.Effort)
+	if s.deps.ReasoningEffort != nil {
+		if sessionEffort := s.deps.ReasoningEffort(sessionKey); strings.TrimSpace(sessionEffort) != "" {
+			effort = strings.TrimSpace(sessionEffort)
+		}
+	}
+	if effort != "" {
 		opts = append(opts, claudecli.WithEffort(effort))
 	}
 	if runtimeCfg.PermissionPromptToolStdio {
