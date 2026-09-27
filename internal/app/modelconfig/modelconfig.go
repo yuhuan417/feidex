@@ -563,10 +563,11 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	if effortValue != "" {
 		effortSource = "Bot 默认显式配置"
 	}
-	// review and subagent models are configured on the auxiliary page. Keep
-	// their effective values visible here.
-	reviewValue, subagentValue := "", ""
+	// plan, review and subagent models are configured on the auxiliary page.
+	// Keep their effective values visible here.
+	planValue, reviewValue, subagentValue := "", "", ""
 	if cfg != nil {
+		planValue = strings.TrimSpace(cfg.Codex.PlanModel)
 		reviewValue = strings.TrimSpace(cfg.Codex.ReviewModel)
 		subagentValue = strings.TrimSpace(cfg.Codex.SubagentModel)
 	}
@@ -577,7 +578,8 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 				"模型来源: " + modelSource + "\n" +
 				"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
 				"推理来源: " + effortSource + "\n\n" +
-				"辅助模型摘要:\nreview: " + auxModelRef(reviewValue, modelName) +
+				"辅助模型摘要:\nplan: " + auxModelRef(planValue, modelName) +
+				"\nreview: " + auxModelRef(reviewValue, modelName) +
 				"\nsubagent: " + auxModelRef(subagentValue, modelName) +
 				func() string {
 					if modelDescription == "" {
