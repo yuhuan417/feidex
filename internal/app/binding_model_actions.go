@@ -124,6 +124,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
+	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, effectiveCodexPlanModel(s.app, sess), modelName)
 	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, effectiveCodexReviewModel(s.app, sess), modelName)
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, effectiveCodexSubagentModel(s.app, sess), modelName)
 
@@ -132,7 +133,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	content := "当前模型: `" + modelName + "`\n" +
 		"模型来源: " + modelSource + "\n" +
 		"当前推理强度: `" + firstNonEmpty(selectedEffort, "-") + "`\n" +
-		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nreview: " + reviewModelDisplay + "\nsubagent: " + subagentModelDisplay
+		"推理来源: " + effortSource + "\n\n辅助模型摘要:\nplan: " + planModelDisplay + "\nreview: " + reviewModelDisplay + "\nsubagent: " + subagentModelDisplay
 
 	if modelDescription != "" {
 		content += "\n\n" + modelDescription

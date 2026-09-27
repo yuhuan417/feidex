@@ -690,6 +690,7 @@ func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendCodex
 	a.cfg.Feishu.Backend = backendCodex
+	a.cfg.Codex.PlanModel = "gpt-5-plan"
 	a.cfg.Codex.ReviewModel = "gpt-5-mini"
 	a.cfg.Codex.SubagentModel = "gpt-5-nano"
 
@@ -705,6 +706,9 @@ func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 
 	card := newModelConfigService(a).renderModelConfigCard(result, nil, "feishu:frontend:default:chat:chat-1", "menu.model")
 	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "plan: `gpt-5-plan`") {
+		t.Fatalf("Codex model card body = %q, want the effective plan model", body)
+	}
 	if !strings.Contains(body, "review: `gpt-5-mini`") {
 		t.Fatalf("Codex model card body = %q, want the effective review model", body)
 	}
