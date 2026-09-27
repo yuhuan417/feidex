@@ -1234,3 +1234,74 @@ func TestWorkspaceDeletionBlockedWhenReferencedByLocalBinding(t *testing.T) {
 func findWorkspaceForTest(a *App, id string) *config.Workspace {
 	return config.FindWorkspace(a.cfg, id)
 }
+
+func TestGroupModelSetHotAppliesClaudeModel(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.frontendID = "claude-test"
+	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Claude.Model = "opus"
+	claude := &fakeClaudeCore{setModelApplied: true}
+	a.claude = claude
+
+	const chatID = "chat-hot-apply"
+	sessionKey := "feishu:frontend:" + a.frontendID + ":chat:" + chatID
+	bindingID := defaultBindingID(a.FrontendID(), "group", chatID)
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          bindingID,
+		FrontendID:  a.frontendID,
+		ChatID:      chatID,
+		ChatType:    "group",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if err := a.store.UpsertSession(&state.Session{
+		Key:         sessionKey,
+		BindingID:   bindingID,
+		ChatID:      chatID,
+		ChatType:    "group",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:      state.SessionStatusIdle.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	resp, err := newBindingService(a).completeBindingModelSet(&feishu.CardAction{
+		ActionValue: map[string]any{"session_key": sessionKey},
+	}, sessionKey, "claude-fable-5")
+	if err != nil {
+		t.Fatalf("completeBindingModelSet() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || !strings.Contains(resp.Toast.Content, "当前会话与后续对话会使用新配置") {
+		t.Fatalf("completeBindingModelSet() toast = %#v, want the live session to be updated", resp)
+	}
+	binding := agentBindingForChat(a, "group", chatID)
+	if binding == nil || binding.ModelOverride != "claude-fable-5" {
+		t.Fatalf("group binding = %+v, want the Claude model override", binding)
+	}
+	if len(claude.setModelCalls) != 1 || claude.setModelCalls[0].sessionKey != sessionKey || claude.setModelCalls[0].model != "claude-fable-5" {
+		t.Fatalf("Claude SetModel calls = %+v, want the group override hot-applied", claude.setModelCalls)
+	}
+
+	// Clearing the override hot-applies the effective fallback, not the override.
+	msg := &feishu.InboundMessage{
+		SessionKey:    sessionKey,
+		ChatID:        chatID,
+		ChatType:      "group",
+		MessageID:     "msg-hot-apply",
+		RootMessageID: "msg-hot-apply",
+		UserID:        "user-1",
+		Text:          "/model set default",
+	}
+	if err := newBindingService(a).commandCurrentBotGroupConfig(msg, []string{"model", "default"}); err != nil {
+		t.Fatalf("commandCurrentBotGroupConfig() error = %v", err)
+	}
+	if binding := agentBindingForChat(a, "group", chatID); binding == nil || binding.ModelOverride != "" {
+		t.Fatalf("group binding after clear = %+v, want an empty override", binding)
+	}
+	if len(claude.setModelCalls) != 2 || claude.setModelCalls[1].model != "opus" {
+		t.Fatalf("Claude SetModel calls = %+v, want the Bot default after clearing", claude.setModelCalls)
+	}
+}

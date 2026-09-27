@@ -467,42 +467,57 @@ func RemoveClaudeModelOption(values []string, model string) []string {
 	return out
 }
 
-// ClaudeModelPickerOptions builds the list of Claude model picker options with the current selection marked.
+// ClaudeModelPickerOptions builds the Claude model candidate list: the built-in
+// aliases followed by the configured candidate models. Labels carry no current
+// selection marker; each picker marks its own value via ClaudeModelSelectOptions.
 func ClaudeModelPickerOptions(cfg *config.Config) []runtime.ClaudeModelOption {
 	configuredOptions := ConfiguredClaudeModelOptions(cfg)
-	options := make([]runtime.ClaudeModelOption, 0, len(ClaudeBuiltinModelOptions)+len(configuredOptions)+1)
+	options := make([]runtime.ClaudeModelOption, 0, len(ClaudeBuiltinModelOptions)+len(configuredOptions))
 	seen := map[string]struct{}{}
-	current := ConfiguredClaudeModel(cfg)
 	for _, item := range ClaudeBuiltinModelOptions {
-		label := item.Label
-		if item.Value == current {
-			label = "当前 · " + label
+		if _, ok := seen[item.Value]; ok {
+			continue
 		}
-		options = append(options, runtime.ClaudeModelOption{
-			Value: item.Value,
-			Label: label,
-		})
+		options = append(options, item)
 		seen[item.Value] = struct{}{}
 	}
 	for _, model := range configuredOptions {
 		if _, ok := seen[model]; ok {
 			continue
 		}
-		label := "配置 · `" + model + "`"
-		if model == current {
-			label = "当前 · 配置 (`" + model + "`)"
-		}
 		options = append(options, runtime.ClaudeModelOption{
 			Value: model,
-			Label: label,
+			Label: "配置 (`" + model + "`)",
 		})
 		seen[model] = struct{}{}
 	}
+	return options
+}
+
+// ClaudeModelSelectOptions renders one Claude model picker, marking the entry
+// that matches the value that picker is currently set to. An empty current
+// marks nothing; a current value outside the candidate list is appended as a
+// custom entry so the picker can display it.
+func ClaudeModelSelectOptions(cfg *config.Config, current string) []cards.SelectStaticOption {
+	current = strings.TrimSpace(current)
+	if current == DefaultOptionValue {
+		current = ""
+	}
+	options := make([]cards.SelectStaticOption, 0, len(ClaudeBuiltinModelOptions)+len(ConfiguredClaudeModelOptions(cfg))+1)
+	seen := map[string]struct{}{}
+	for _, item := range ClaudeModelPickerOptions(cfg) {
+		label := item.Label
+		if current != "" && item.Value == current {
+			label = "当前 · " + label
+		}
+		options = append(options, cards.SelectStaticOption{Text: label, Value: item.Value})
+		seen[item.Value] = struct{}{}
+	}
 	if current != "" {
 		if _, ok := seen[current]; !ok {
-			options = append(options, runtime.ClaudeModelOption{
+			options = append(options, cards.SelectStaticOption{
+				Text:  "当前 · 自定义 (`" + current + "`)",
 				Value: current,
-				Label: "当前 · 自定义 (`" + current + "`)",
 			})
 		}
 	}
@@ -1031,13 +1046,8 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 		{"tag": "markdown", "content": "选择模型"},
 	}
 
-	modelOptions := make([]cards.SelectStaticOption, 0, len(ClaudeBuiltinModelOptions)+1)
-	for _, item := range ClaudeModelPickerOptions(cfg) {
-		modelOptions = append(modelOptions, cards.SelectStaticOption{
-			Text:  item.Label,
-			Value: item.Value,
-		})
-	}
+	// The picker marks the configured model, not the fallback alias it defaults to.
+	modelOptions := ClaudeModelSelectOptions(cfg, ConfiguredClaudeModel(cfg))
 	elements = append(elements, cards.BuildSelectStaticElement(
 		"claude_model_config_select_model",
 		"选择模型",
@@ -1109,17 +1119,15 @@ func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, men
 	if cfg != nil {
 		small, subagent = cfg.Claude.SmallModel, cfg.Claude.SubagentModel
 	}
-	options := make([]cards.SelectStaticOption, 0, len(ClaudeModelPickerOptions(cfg))+1)
-	options = append(options, cards.SelectStaticOption{Text: "跟随默认", Value: DefaultOptionValue})
-	for _, item := range ClaudeModelPickerOptions(cfg) {
-		options = append(options, cards.SelectStaticOption{Text: item.Label, Value: item.Value})
-	}
+	// Each dropdown marks its own value: small and subagent are independent picks.
+	smallOptions := append([]cards.SelectStaticOption{{Text: "跟随默认", Value: DefaultOptionValue}}, ClaudeModelSelectOptions(cfg, small)...)
+	subagentOptions := append([]cards.SelectStaticOption{{Text: "跟随默认", Value: DefaultOptionValue}}, ClaudeModelSelectOptions(cfg, subagent)...)
 	card := cards.NewMarkdownBodyCard("Claude 辅助模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "下面分别配置 Claude 的 small model 和 subagent model。")})
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**small model（Haiku）**\nClaude 内部执行轻量任务时使用；未设置时使用 Claude 内置 Haiku 默认。"})
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_small_model", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(small, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_small_model", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, smallOptions, firstNonEmpty(small, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent model**\nClaude 内部自动创建子 agent 时使用；未设置时跟随主模型。"})
-	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, options, firstNonEmpty(subagent, DefaultOptionValue)))
+	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, subagentOptions, firstNonEmpty(subagent, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	return card
 }

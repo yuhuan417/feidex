@@ -53,6 +53,7 @@ type SessionState struct {
 
 	Mu                          sync.Mutex
 	SessionID                   string
+	Model                       string
 	AuxiliarySmallModel         string
 	AuxiliarySubagentModel      string
 	ReadyCh                     chan struct{}
@@ -481,7 +482,7 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 		}
 		current.Mu.Lock()
 		currentID := strings.TrimSpace(current.SessionID)
-		auxiliaryChanged := current.AuxiliarySmallModel != strings.TrimSpace(desiredSmall) || current.AuxiliarySubagentModel != strings.TrimSpace(desiredSubagent)
+		currentModel := strings.TrimSpace(current.Model)
 		current.Mu.Unlock()
 		currentStopped := current.Session != nil && current.Session.Stopped()
 		currentExitErr := error(nil)
@@ -489,13 +490,16 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 			currentExitErr = current.Session.ExitError()
 		}
 		s.mu.Unlock()
-		if currentStopped || auxiliaryChanged {
-			slog.Warn("discarding stopped Claude session before ensure",
+		if reason := sessionRestartReason(current, currentStopped, model, desiredSmall, desiredSubagent); reason != "" {
+			slog.Warn("discarding stale Claude session before ensure",
 				"session_key", sessionKey,
 				"workspace_id", ws.ID,
 				"resume_id", resumeID,
 				"session_id", currentID,
 				"exit_error", currentExitErr,
+				"reason", reason,
+				"model", model,
+				"session_model", currentModel,
 			)
 		} else {
 			switch {
@@ -511,6 +515,29 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 
 	_ = s.ResetSession(sessionKey)
 	return s.startSession(ctx, sessionKey, ws, runtimeCfg, model, resumeID, false)
+}
+
+// sessionRestartReason reports why a live session cannot serve the desired
+// model and auxiliary models, and must be rebuilt instead of reused. The
+// primary model only reaches a Claude process at launch (--model plus the
+// ANTHROPIC_* environment), so a changed model needs a fresh process. It
+// returns "" when the live session can be reused.
+func sessionRestartReason(state *SessionState, stopped bool, model, smallModel, subagentModel string) string {
+	if stopped {
+		return "process_stopped"
+	}
+	if state == nil {
+		return ""
+	}
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	if strings.TrimSpace(state.Model) != strings.TrimSpace(model) {
+		return "primary_model_changed"
+	}
+	if state.AuxiliarySmallModel != strings.TrimSpace(smallModel) || state.AuxiliarySubagentModel != strings.TrimSpace(subagentModel) {
+		return "auxiliary_models_changed"
+	}
+	return ""
 }
 
 // ForkSession starts a new session forked from an existing one.
@@ -646,7 +673,16 @@ func (s *Service) SetModel(ctx context.Context, sessionKey, model string) (bool,
 		)
 		return false, nil
 	}
-	return true, state.Session.SetModel(ctx, strings.TrimSpace(model))
+	model = strings.TrimSpace(model)
+	if err := state.Session.SetModel(ctx, model); err != nil {
+		return true, err
+	}
+	// The live process now runs this model, so a later EnsureSession must not
+	// rebuild it for the same value.
+	state.Mu.Lock()
+	state.Model = model
+	state.Mu.Unlock()
+	return true, nil
 }
 
 // SetEffort hot-applies an effort change to the named session.
@@ -892,6 +928,7 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		Cancel:          cancel,
 		StartedAt:       time.Now(),
 		SessionID:       initialSessionID,
+		Model:           model,
 		ReadyCh:         make(chan struct{}),
 		Turns:           map[int]*TurnState{},
 		BackgroundTasks: map[string]*BackgroundTaskState{},

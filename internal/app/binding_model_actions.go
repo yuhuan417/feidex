@@ -257,7 +257,8 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "当前模型: `" + currentModel + "`\n模型来源: " + modelSource + "\n当前推理强度: `" + currentEffort + "`\n推理来源: " + effortSource + "\n\n辅助模型摘要:\nsmall: " + smallModelDisplay + "\nsubagent: " + subagentModelDisplay + "\n\n需要任意 raw model 时，请直接使用 `/model set <model-id>`。"})
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "选择模型"})
 
-	modelOptions := []cards.SelectStaticOption{{
+	// The picker marks the group override, never the Bot default it falls back to.
+	modelOptions := append([]cards.SelectStaticOption{{
 		Text: func() string {
 			if modelOverride == "" {
 				return "当前 · 跟随 Bot 默认"
@@ -265,34 +266,10 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 			return "跟随 Bot 默认"
 		}(),
 		Value: modelConfigDefaultOptionValue,
-	}}
+	}}, appmodelconfig.ClaudeModelSelectOptions(s.app.cfg, modelOverride)...)
 	modelInitialOption := modelConfigDefaultOptionValue
 	if modelOverride != "" {
 		modelInitialOption = modelOverride
-	}
-	seen := map[string]struct{}{modelConfigDefaultOptionValue: {}}
-	for _, item := range appmodelconfig.ClaudeModelPickerOptions(s.app.cfg) {
-		value := strings.TrimSpace(item.Value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		label := strings.TrimSpace(item.Label)
-		if label == "" {
-			label = value
-		}
-		if value == modelOverride && modelOverride != "" {
-			label = "当前 · " + label
-		}
-		modelOptions = append(modelOptions, cards.SelectStaticOption{Text: label, Value: value})
-	}
-	if modelOverride != "" {
-		if _, ok := seen[modelOverride]; !ok {
-			modelOptions = append(modelOptions, cards.SelectStaticOption{Text: "当前 · 自定义 (`" + modelOverride + "`)", Value: modelOverride})
-		}
 	}
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement(
 		"claude_model_config_select_model",
@@ -355,18 +332,18 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；修改仅在当前会话空闲时生效。")})
 	switch configuredBackend(s.app) {
 	case backendClaude:
-		options := []cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}
-		for _, item := range appmodelconfig.ClaudeModelPickerOptions(s.app.cfg) {
-			options = append(options, cards.SelectStaticOption{Text: item.Label, Value: item.Value})
-		}
 		small, subagent := "", ""
 		if binding != nil {
 			small, subagent = binding.SmallModelOverride, binding.SubagentModelOverride
 		}
+		// Each dropdown marks its own override; the Bot default stays unmarked.
+		auxModelOptions := func(current string) []cards.SelectStaticOption {
+			return append([]cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}, appmodelconfig.ClaudeModelSelectOptions(s.app.cfg, current)...)
+		}
 		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**small model（Haiku）**\nClaude 内部执行轻量任务时使用；未设置时跟随 Bot 默认。"})
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_small", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey}, options, firstNonEmpty(small, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_small", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey}, auxModelOptions(small), firstNonEmpty(small, modelConfigDefaultOptionValue)))
 		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent model**\nClaude 内部自动创建子 agent 时使用；未设置时跟随 Bot 默认。"})
-		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, options, firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey}, auxModelOptions(subagent), firstNonEmpty(subagent, modelConfigDefaultOptionValue)))
 	default:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()

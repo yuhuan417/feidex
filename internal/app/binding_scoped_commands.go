@@ -381,10 +381,34 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	toastContent := "已更新当前群内模型；后续对话会使用新配置"
+	if s.hotApplyClaudeModel(sessionKey) {
+		toastContent = "已更新当前群内模型；当前会话与后续对话会使用新配置"
+	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新当前群内模型"},
+		Toast: &callback.Toast{Type: "success", Content: toastContent},
 		Card:  rawCard(s.renderBindingModelConfigOrMenuCard(sessionKey, updated)),
 	}, nil
+}
+
+// hotApplyClaudeModel applies the effective Claude model to the group's live
+// session so the change lands without waiting for the next session start. A
+// false result is not an error: the runtime rebuilds the session on the next
+// ensure when the launched model no longer matches.
+func (s bindingService) hotApplyClaudeModel(sessionKey string) bool {
+	if configuredBackend(s.app) != backendClaude || s.app.claude == nil {
+		return false
+	}
+	sessionKey = normalizeSessionKey(s.app, sessionKey)
+	if sessionKey == "" {
+		return false
+	}
+	model := effectiveClaudeModel(s.app, s.app.State().Session(sessionKey), nil)
+	if strings.TrimSpace(model) == "" {
+		return false
+	}
+	applied, err := newModelConfigService(s.app).hotApplyClaudeModelToCurrentSession(sessionKey, model)
+	return err == nil && applied
 }
 
 func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sessionKey, effort string) (*callback.CardActionTriggerResponse, error) {

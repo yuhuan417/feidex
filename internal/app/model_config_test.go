@@ -2,6 +2,7 @@ package app
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -718,5 +719,137 @@ func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 	labels := cardButtonLabelsByAction(card)
 	if labels["menu.root"] == "" || labels["menu.group.model"] != "" {
 		t.Fatalf("Codex model card labels = %+v, want the back control to leave the card", labels)
+	}
+}
+
+// claudeSelectOptionTextsForTest returns the option labels of one select_static
+// element, addressed by the element name.
+func claudeSelectOptionTextsForTest(t *testing.T, card map[string]any, name string) []string {
+	t.Helper()
+	for _, sel := range cardSelectStaticForTest(card) {
+		selName, _ := sel["name"].(string)
+		if selName != name {
+			continue
+		}
+		options, _ := sel["options"].([]map[string]any)
+		texts := make([]string, 0, len(options))
+		for _, option := range options {
+			text, _ := option["text"].(map[string]any)
+			content, _ := text["content"].(string)
+			texts = append(texts, content)
+		}
+		return texts
+	}
+	t.Fatalf("select %q not found in card", name)
+	return nil
+}
+
+func markedClaudeOptionTexts(texts []string) []string {
+	var marked []string
+	for _, text := range texts {
+		if strings.HasPrefix(text, "当前 · ") && !strings.Contains(text, "跟随") {
+			marked = append(marked, text)
+		}
+	}
+	return marked
+}
+
+func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Claude.Model = "opus"
+	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
+	binding := &state.AgentBinding{
+		ID:            "binding_claude-test_group_chat-1",
+		FrontendID:    a.frontendID,
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		WorkspaceID:   a.cfg.Workspaces[0].ID,
+		Status:        state.AgentBindingStatusActive.String(),
+		ModelOverride: "claude-fable-5",
+	}
+
+	card, err := newBindingService(a).renderBindingModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
+	if err != nil {
+		t.Fatalf("renderBindingModelConfigCard() error = %v", err)
+	}
+	texts := claudeSelectOptionTextsForTest(t, card, "claude_model_config_select_model")
+	marked := markedClaudeOptionTexts(texts)
+	if len(marked) != 1 || marked[0] != "当前 · 配置 (`claude-fable-5`)" {
+		t.Fatalf("group Claude model picker marks %q, want only the group override: %q", marked, texts)
+	}
+	for _, text := range texts {
+		if strings.Contains(text, "opus") && strings.HasPrefix(text, "当前") {
+			t.Fatalf("group Claude model picker still marks the Bot model: %q", texts)
+		}
+	}
+
+	// An override outside the candidate list is still selectable and marked.
+	binding.ModelOverride = "raw-model-x"
+	card, err = newBindingService(a).renderBindingModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
+	if err != nil {
+		t.Fatalf("renderBindingModelConfigCard() error = %v", err)
+	}
+	texts = claudeSelectOptionTextsForTest(t, card, "claude_model_config_select_model")
+	if want := []string{"当前 · 自定义 (`raw-model-x`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(texts), want) {
+		t.Fatalf("group Claude model picker marks %q, want %q", markedClaudeOptionTexts(texts), want)
+	}
+}
+
+func TestRenderBindingClaudeAuxiliaryCardMarksEachOverride(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Claude.Model = "opus"
+	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
+	binding := &state.AgentBinding{
+		ID:                    "binding_claude-test_group_chat-1",
+		FrontendID:            a.frontendID,
+		ChatID:                "chat-1",
+		ChatType:              "group",
+		WorkspaceID:           a.cfg.Workspaces[0].ID,
+		Status:                state.AgentBindingStatusActive.String(),
+		ModelOverride:         "claude-fable-5",
+		SmallModelOverride:    "haiku",
+		SubagentModelOverride: "opus",
+	}
+
+	card, err := newBindingService(a).renderBindingAuxiliaryModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
+	if err != nil {
+		t.Fatalf("renderBindingAuxiliaryModelConfigCard() error = %v", err)
+	}
+	smallTexts := claudeSelectOptionTextsForTest(t, card, "group_aux_small")
+	if want := []string{"当前 · Haiku (`haiku`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(smallTexts), want) {
+		t.Fatalf("group small model picker marks %q, want %q", markedClaudeOptionTexts(smallTexts), want)
+	}
+	subagentTexts := claudeSelectOptionTextsForTest(t, card, "group_aux_subagent")
+	if want := []string{"当前 · Opus (`opus`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(subagentTexts), want) {
+		t.Fatalf("group subagent model picker marks %q, want %q", markedClaudeOptionTexts(subagentTexts), want)
+	}
+}
+
+func TestRenderClaudeModelCardsMarkEachPickerValue(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.backend = backendClaude
+	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Claude.Model = "opus"
+	a.cfg.Claude.SmallModel = "haiku"
+	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
+
+	mainCard := newModelConfigService(a).renderClaudeModelConfigCard("sess-1", "menu.model")
+	mainTexts := claudeSelectOptionTextsForTest(t, mainCard, "claude_model_config_select_model")
+	if want := []string{"当前 · Opus (`opus`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(mainTexts), want) {
+		t.Fatalf("Claude model picker marks %q, want %q", markedClaudeOptionTexts(mainTexts), want)
+	}
+
+	auxCard := newModelConfigService(a).renderClaudeAuxiliaryModelConfigCard("sess-1", "menu.model_auxiliary")
+	smallTexts := claudeSelectOptionTextsForTest(t, auxCard, "claude_aux_small_model")
+	if want := []string{"当前 · Haiku (`haiku`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(smallTexts), want) {
+		t.Fatalf("Claude small model picker marks %q, want %q", markedClaudeOptionTexts(smallTexts), want)
+	}
+	subagentTexts := claudeSelectOptionTextsForTest(t, auxCard, "claude_aux_subagent_model")
+	if marked := markedClaudeOptionTexts(subagentTexts); len(marked) != 0 {
+		t.Fatalf("Claude subagent model picker marks %q, want nothing for an unset subagent model", marked)
 	}
 }

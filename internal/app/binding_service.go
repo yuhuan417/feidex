@@ -102,6 +102,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		if err != nil {
 			return err
 		}
+		s.hotApplyClaudeModel(makeSessionKey(s.app, msg))
 		return s.replyBindingUpdated(msg, "已更新当前群内模型: "+renderOptionalBacktick(updated.ModelOverride))
 	case "effort":
 		if len(args) != 2 {

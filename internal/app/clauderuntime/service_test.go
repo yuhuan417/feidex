@@ -316,3 +316,27 @@ func TestBackgroundTaskNotificationStillDeliversAfterTurnDuration(t *testing.T) 
 		t.Fatalf("notification count = %d, want 1", delivered)
 	}
 }
+
+func TestSessionRestartReasonCoversModelAndAuxiliaryChanges(t *testing.T) {
+	live := &SessionState{
+		Model:                  "deepseek-flash[1m]",
+		AuxiliarySmallModel:    "haiku",
+		AuxiliarySubagentModel: "opus",
+	}
+
+	if got := sessionRestartReason(live, false, "deepseek-flash[1m]", "haiku", "opus"); got != "" {
+		t.Fatalf("unchanged session restart reason = %q, want reuse", got)
+	}
+	if got := sessionRestartReason(live, false, " claude-fable-5 ", "haiku", "opus"); got != "primary_model_changed" {
+		t.Fatalf("changed primary model restart reason = %q, want primary_model_changed", got)
+	}
+	if got := sessionRestartReason(live, false, "deepseek-flash[1m]", "sonnet", "opus"); got != "auxiliary_models_changed" {
+		t.Fatalf("changed small model restart reason = %q, want auxiliary_models_changed", got)
+	}
+	if got := sessionRestartReason(live, true, "deepseek-flash[1m]", "haiku", "opus"); got != "process_stopped" {
+		t.Fatalf("stopped session restart reason = %q, want process_stopped", got)
+	}
+	if got := sessionRestartReason(live, false, "", "", ""); got != "primary_model_changed" {
+		t.Fatalf("cleared model restart reason = %q, want primary_model_changed", got)
+	}
+}
