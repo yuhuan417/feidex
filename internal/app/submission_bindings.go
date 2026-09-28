@@ -185,12 +185,18 @@ func (a submissionAppAdapter) SubmissionQueueClaudeClient() appsubmission.QueueC
 	return claudeClientAdapter{claude: a.app.claude}
 }
 func (a submissionAppAdapter) SubmissionQueueConfiguredClaudeModel() string {
+	a.app.ConfigMu().RLock()
+	defer a.app.ConfigMu().RUnlock()
 	return strings.TrimSpace(a.app.cfg.Claude.Model)
 }
 func (a submissionAppAdapter) SubmissionQueueConfiguredCodexModel() string {
+	a.app.ConfigMu().RLock()
+	defer a.app.ConfigMu().RUnlock()
 	return strings.TrimSpace(a.app.cfg.Codex.Model)
 }
 func (a submissionAppAdapter) SubmissionQueueConfiguredCodexReasoningEffort() string {
+	a.app.ConfigMu().RLock()
+	defer a.app.ConfigMu().RUnlock()
 	return strings.TrimSpace(a.app.cfg.Codex.ReasoningEffort)
 }
 func (a submissionAppAdapter) SubmissionQueueNextLocalID(prefix string) (string, error) {
@@ -327,4 +333,11 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 
 func newPendingQueueServiceFromApp(a *App) appsubmission.PendingQueueService {
 	return appsubmission.NewPendingQueueService(pendingQueueAppAdapter{app: a})
+}
+
+func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
+	if runtime, ok := a.claude.(interface{ CanRetryFreshSession(string) bool }); ok {
+		return runtime.CanRetryFreshSession(sessionKey)
+	}
+	return true
 }

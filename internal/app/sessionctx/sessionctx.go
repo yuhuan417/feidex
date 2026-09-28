@@ -16,6 +16,8 @@ func ClearThreadContext(sess *state.Session) {
 	if sess == nil {
 		return
 	}
+	sess.AppliedModelConfig = state.ModelConfigSnapshot{}
+	sess.ModelConfigError = ""
 	sess.ActiveThreadID = ""
 	sess.ActiveThreadWorkspaceID = ""
 	sess.ActiveThreadApprovalPolicy = ""

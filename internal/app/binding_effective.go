@@ -318,15 +318,16 @@ func codexAuxiliaryConfig(a *App, sess *state.Session) map[string]any {
 	if a == nil {
 		return nil
 	}
+	snapshot := modelConfigSnapshot(a, sess, backendCodex)
 	result := map[string]any{}
-	if value := effectiveCodexReviewModel(a, sess); value != "" {
-		result["review_model"] = value
+	if snapshot.ReviewModel != "" {
+		result["review_model"] = snapshot.ReviewModel
 	}
-	if value := effectiveCodexSubagentModel(a, sess); value != "" {
-		result["agents.default_subagent_model"] = value
+	if snapshot.SubagentModel != "" {
+		result["agents.default_subagent_model"] = snapshot.SubagentModel
 	}
-	if value := effectiveCodexSubagentReasoningEffort(a, sess); value != "" {
-		result["agents.default_subagent_reasoning_effort"] = value
+	if snapshot.SubagentEffort != "" {
+		result["agents.default_subagent_reasoning_effort"] = snapshot.SubagentEffort
 	}
 	return result
 }

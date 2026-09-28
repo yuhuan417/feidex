@@ -83,6 +83,12 @@ type agentBindingByIDResolver interface {
 	SubmissionQueueAgentBindingByID(id string) *state.AgentBinding
 }
 
+// Optional for narrow queue hosts; the production adapter captures all model
+// fields together, after dequeue and before any backend I/O.
+type modelConfigResolver interface {
+	SubmissionQueueResolveModelConfig(*state.Session, *state.Submission) state.ModelConfigSnapshot
+}
+
 type codexConfigResolver interface {
 	SubmissionQueueConfiguredCodexModel() string
 	SubmissionQueueConfiguredCodexReasoningEffort() string
@@ -1065,12 +1071,21 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		threadID = ""
 		sessionctx.ClearThreadContext(sess)
 	}
-	effectiveModel := effectiveCodexModel(a, sess, sub, ws)
-	effectiveReasoningEffort := effectiveCodexReasoningEffort(a, sess, sub)
+	if resolver, ok := a.(modelConfigResolver); ok {
+		sub.ModelConfig = resolver.SubmissionQueueResolveModelConfig(sess, sub)
+		if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) { current.ModelConfig = sub.ModelConfig }); err != nil {
+			return err
+		}
+	}
+	effectiveModel, effectiveReasoningEffort := sub.ModelConfig.Model, sub.ModelConfig.Effort
+	if !sub.ModelConfig.Valid {
+		effectiveModel, effectiveReasoningEffort = effectiveCodexModel(a, sess, sub, ws), effectiveCodexReasoningEffort(a, sess, sub)
+	}
 	effectiveApprovalPolicy := effectiveBindingApprovalPolicy(a, sess, sub, ws)
 	effectiveSandboxMode := effectiveBindingSandboxMode(a, sess, sub, ws)
 	effectiveServiceTier := effectiveBindingServiceTier(a, sess, sub)
 	effectiveMultiAgentMode := effectiveBindingMultiAgentMode(a, sess, sub, ws)
+	createdThread := threadID == ""
 	if threadID == "" {
 		client, err := a.SubmissionQueueRequireCodexClient()
 		if err != nil {
@@ -1079,6 +1094,21 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			return err
 		}
 		threadParams := a.SubmissionQueueBuildThreadStartParams(ws, sess, effectiveModel)
+		if sub.ModelConfig.Valid {
+			if threadParams.Config == nil {
+				threadParams.Config = map[string]any{}
+			}
+			for key, value := range map[string]string{
+				"review_model":                             sub.ModelConfig.ReviewModel,
+				"agents.default_subagent_model":            sub.ModelConfig.SubagentModel,
+				"agents.default_subagent_reasoning_effort": sub.ModelConfig.SubagentEffort,
+			} {
+				delete(threadParams.Config, key)
+				if strings.TrimSpace(value) != "" {
+					threadParams.Config[key] = value
+				}
+			}
+		}
 		var threadResp codexrpc.ThreadStartResult
 		slog.Debug("thread start request",
 			"session_key", sessionKey,
@@ -1146,6 +1176,18 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		turnID, turnErr = a.SubmissionQueueStartSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort, effectiveMultiAgentMode)
 	}
 	turnCancel()
+	if turnErr == nil && sub.ModelConfig.Valid {
+		applied := sub.ModelConfig
+		// Thread initialization settings are unchanged for an already-live thread.
+		if sess.AppliedModelConfig.Valid && sess.AppliedModelConfig.Backend == "codex" && !createdThread {
+			applied.ReviewModel = sess.AppliedModelConfig.ReviewModel
+			applied.SubagentModel = sess.AppliedModelConfig.SubagentModel
+			applied.SubagentEffort = sess.AppliedModelConfig.SubagentEffort
+		}
+		sess.AppliedModelConfig = applied
+		sess.ModelConfigError = ""
+	}
+
 	if turnErr != nil {
 		if errors.Is(turnErr, context.DeadlineExceeded) {
 			slog.Warn("turn start timed out; waiting for delayed notification",

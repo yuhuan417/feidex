@@ -146,3 +146,7 @@ func claudePlanFilePathFromTool(toolName string, input map[string]interface{}) s
 func isFatalClaudeSessionError(state *claudeSessionState, event claudecli.ErrorEvent) bool {
 	return appclauderuntime.IsFatalSessionErrorFromState(state, event)
 }
+
+func (r *claudeRuntime) CanRetryFreshSession(sessionKey string) bool {
+	return r.service.CanRetryFreshSession(sessionKey)
+}

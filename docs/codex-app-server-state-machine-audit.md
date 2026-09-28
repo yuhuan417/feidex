@@ -206,6 +206,15 @@
 - 修改建议:
   - 保持现状即可；如果后续仍有其他明确不用消费的流式通知，也可继续加入 opt-out。
 
+#### 2026-09-28 模型配置在轮次边界应用
+
+- 模型配置保存不再要求 frontend/session 无活动任务、队列、暂存图片或表单；保存仅改变目标配置，不改变已有 turn 的运行态。
+- 本地 submission 启动时记录 model/effort/Plan 配置快照，普通排队输入使用启动时的最新值；同一 RPC 构造不再混合不同配置版本。collaborationMode 使用同一快照，避免旧 mode 中的 model/effort 覆盖新配置。
+- review/subagent 仍通过 thread/start、thread/resume 配置，不伪造 turn 级热更新。界面明确标注其生效边界。
+- SM-05 steer 继续属于原 turn，不应用新配置；SM-06 仍等待真实终态；SM-09/10/11/22/23 的 pending → replied → resolved 边界不变。
+- SM-25 后台 goal 自动续跑不经过本地 turn/start，不能承诺下一次自动续跑采用新配置。SM-26 未回答的异步问题不阻塞目标配置保存，答案继续沿用原 thread 的普通 continuation 路径。
+- 这是对 DEVELOPER.md 原模型配置 idle-only 产品策略的有意调整，未放宽 backend 切换/维护的限制，也不通过重置会话制造空闲状态。
+
 ### SM-05 `TurnSteerContinuation`
 
 - 结论: `兼容实现`

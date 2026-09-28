@@ -52,13 +52,19 @@ func updateBotProfile(a *App, mutate func(*state.BotProfile)) (*state.BotProfile
 	if err != nil {
 		return nil, err
 	}
+	store := a.State()
+	a.ConfigMu().Lock()
+	defer a.ConfigMu().Unlock()
+	if latest := store.BotProfile(); latest != nil {
+		profile = latest
+	}
 	if mutate != nil {
 		mutate(profile)
 	}
-	if err := a.State().SaveBotProfile(profile); err != nil {
+	if err := store.SaveBotProfile(profile); err != nil {
 		return nil, err
 	}
-	return a.State().BotProfile(), nil
+	return store.BotProfile(), nil
 }
 
 func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
@@ -114,7 +120,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		role := strings.ToLower(strings.TrimSpace(args[0]))
 		value := clearableArg(args[2])
 		if role == "plan" || role == "review" || role == "subagent" || role == "small" {
-			if err := ensureSessionModelConfigIdle(a, makeSessionKey(a, msg)); err != nil {
+			if err := ensureSessionModelConfigWritable(a, makeSessionKey(a, msg)); err != nil {
 				return err
 			}
 			backend := configuredBackend(a)
@@ -132,9 +138,6 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 					}
 				}); err != nil {
 					return err
-				}
-				if backend == config.RuntimeBackendClaude && a.claude != nil {
-					_ = a.claude.ResetSession(sess.Key)
 				}
 				return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 "+role+" model", replyInThreadEnabled(a, msg.ChatType))
 			}
@@ -160,16 +163,11 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			if err != nil {
 				return err
 			}
-			if backend == config.RuntimeBackendClaude && a.claude != nil {
-				if err := a.claude.ResetSession(makeSessionKey(a, msg)); err != nil {
-					return err
-				}
-			}
 			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 "+role+" model", replyInThreadEnabled(a, msg.ChatType))
 		}
 	}
 	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "effort") && strings.EqualFold(strings.TrimSpace(args[0]), "subagent") && configuredBackend(a) == config.RuntimeBackendCodex {
-		if err := ensureSessionModelConfigIdle(a, makeSessionKey(a, msg)); err != nil {
+		if err := ensureSessionModelConfigWritable(a, makeSessionKey(a, msg)); err != nil {
 			return err
 		}
 		value := clearableArg(args[2])
@@ -187,7 +185,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 subagent reasoning effort", replyInThreadEnabled(a, msg.ChatType))
 	}
 	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "effort") && strings.EqualFold(strings.TrimSpace(args[0]), "plan") && configuredBackend(a) == config.RuntimeBackendCodex {
-		if err := ensureSessionModelConfigIdle(a, makeSessionKey(a, msg)); err != nil {
+		if err := ensureSessionModelConfigWritable(a, makeSessionKey(a, msg)); err != nil {
 			return err
 		}
 		value := clearableArg(args[2])
@@ -326,7 +324,7 @@ func completeBotProfileEffortSet(a *App, action *feishu.CardAction, effort strin
 
 func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey := actionSessionKey(action)
-	if err := ensureSessionModelConfigIdle(a, sessionKey); err != nil {
+	if err := ensureSessionModelConfigWritable(a, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
@@ -350,12 +348,7 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 		}); err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 		}
-		if backend == config.RuntimeBackendClaude && a.claude != nil {
-			if err := a.claude.ResetSession(sessionKey); err != nil {
-				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-			}
-		}
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 session 的辅助模型配置"}}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前 session 的辅助模型配置；待对应会话边界生效"}}, nil
 	}
 	_, err := updateBotProfile(a, func(profile *state.BotProfile) {
 		if backend == config.RuntimeBackendClaude {
@@ -383,12 +376,7 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if backend == config.RuntimeBackendClaude && a.claude != nil {
-		if err := a.claude.ResetSession(sessionKey); err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 Bot 的辅助模型配置"}}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前 Bot 的辅助模型配置；待对应会话边界生效"}}, nil
 }
 
 func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, serviceTier string) (*callback.CardActionTriggerResponse, error) {

@@ -36,31 +36,6 @@ func newModelConfigService(app *App) modelConfigService {
 					app.claude.UpdateConfig(cfg)
 				}
 			},
-			ClaudeSetModel: func(ctx context.Context, sessionKey, model string) (bool, error) {
-				if app.claude == nil {
-					return false, nil
-				}
-				return app.claude.SetModel(ctx, sessionKey, model)
-			},
-			ClaudeSetEffort: func(ctx context.Context, sessionKey, effort string) (bool, error) {
-				if app.claude == nil {
-					return false, nil
-				}
-				return app.claude.SetEffort(ctx, sessionKey, effort)
-			},
-			ResetClaudeSessions: func() error {
-				if app.claude == nil {
-					return nil
-				}
-				for _, sess := range app.State().Sessions() {
-					if sess != nil && sessionBelongsToFrontend(app, sess.Key) {
-						if err := app.claude.ResetSession(sess.Key); err != nil {
-							return err
-						}
-					}
-				}
-				return nil
-			},
 			IsClaudeAvailable: func() bool {
 				return app.claude != nil
 			},
@@ -92,13 +67,9 @@ func newModelConfigService(app *App) modelConfigService {
 			HandleBackendModelCommand: func(msg *feishu.InboundMessage, args []string) error {
 				return newBackendConfigurationService(app).handleBackendModelCommand(msg, args)
 			},
-			FormatMenuBody: menuCardBody,
-			FrontendIdleBlockedReason: func() string {
-				return frontendIdleBlockedReason(app)
-			},
-			FrontendIdleBlockedReasonIgnoringCurrentMessage: func() string {
-				return frontendIdleBlockedReasonIgnoringCurrentMessage(app)
-			},
+			FormatMenuBody:           menuCardBody,
+			ModelConfigBlockedReason: func() string { return modelConfigBlockedReason(app) },
+			ModelConfigStatus:        func(sessionKey string) string { return modelConfigStatus(app, sessionKey) },
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 				return replyCommandActionResponse(app, msg, resp)
 			},
@@ -156,7 +127,7 @@ func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
 	if a == nil || a.cfg == nil || !p2pSessionScopeActive(a, sessionKey) {
 		return nil
 	}
-	clone := *a.cfg
+	clone := *modelConfigReadCopy(a)
 	if profile := a.State().BotProfile(); profile != nil {
 		clone.Codex.PlanModel = firstNonEmpty(profile.PlanModel, clone.Codex.PlanModel)
 		clone.Codex.PlanReasoningEffort = firstNonEmpty(profile.PlanReasoningEffort, clone.Codex.PlanReasoningEffort)

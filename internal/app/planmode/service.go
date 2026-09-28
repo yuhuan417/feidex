@@ -185,6 +185,9 @@ func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollab
 		Mode:  "plan",
 		Model: model,
 	}
+	if preset != nil && preset.ReasoningEffort != nil {
+		mode.PresetReasoningEffort = strings.TrimSpace(*preset.ReasoningEffort)
+	}
 	if strings.TrimSpace(effort) != "" {
 		mode.ReasoningEffort = strings.TrimSpace(effort)
 	}

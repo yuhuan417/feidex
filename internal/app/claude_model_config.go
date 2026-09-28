@@ -11,20 +11,8 @@ func (s modelConfigService) renderClaudeModelConfigCard(sessionKey, menuAction s
 	return s.inner.RenderClaudeModelConfigCard(sessionKey, menuAction)
 }
 
-func (s modelConfigService) ensureClaudeRuntimeConfigChangeSafe() error {
-	return s.inner.EnsureClaudeRuntimeConfigChangeSafe()
-}
-
 func (s modelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
 	return s.inner.UpdateClaudeModelConfig(mutate)
-}
-
-func (s modelConfigService) hotApplyClaudeModelToCurrentSession(sessionKey, model string) (bool, error) {
-	return s.inner.HotApplyClaudeModelToCurrentSession(sessionKey, model)
-}
-
-func (s modelConfigService) hotApplyClaudeEffortToCurrentSession(sessionKey, effort string) (bool, error) {
-	return s.inner.HotApplyClaudeEffortToCurrentSession(sessionKey, effort)
 }
 
 func (s modelConfigService) completeClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {

@@ -264,7 +264,7 @@ func runAsync(a *App, fn func()) {
 
 func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if strings.TrimSpace(effectiveModel) == "" {
-		effectiveModel = effectiveCodexModel(a, sess, ws)
+		effectiveModel = modelConfigSnapshot(a, sess, backendCodex).Model
 	}
 	return codexrpc.ThreadStartParams{
 		Cwd:                    ws.Cwd,
@@ -372,7 +372,19 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 	if strings.TrimSpace(multiAgentMode) != "" {
 		turnParams["multiAgentMode"] = strings.TrimSpace(multiAgentMode)
 	}
-	if collaborationMode := codexCollaborationModeForTurnStart(a, sessionKey, threadID); collaborationMode != nil {
+	if snapshot := sub.ModelConfig; snapshot.Valid {
+		if snapshot.CollaborationMode != "" {
+			selectedModel, selectedEffort := snapshot.Model, snapshot.Effort
+			if snapshot.CollaborationMode == "plan" {
+				selectedModel, selectedEffort = snapshot.PlanModel, snapshot.PlanEffort
+			}
+			if selectedModel != "" {
+				turnParams["collaborationMode"] = codexCollaborationModeFromState(&state.SessionCollaborationMode{
+					Mode: snapshot.CollaborationMode, Model: selectedModel, ReasoningEffort: selectedEffort,
+				})
+			}
+		}
+	} else if collaborationMode := codexCollaborationModeForTurnStart(a, sessionKey, threadID); collaborationMode != nil {
 		turnParams["collaborationMode"] = collaborationMode
 	}
 	slog.Debug("turn start request",

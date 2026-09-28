@@ -162,6 +162,8 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
 	sess.ActiveThreadCollaborationMode = nil
+	sess.AppliedModelConfig = state.CodexResumedThreadConfig(params.Model, params.Config)
+	sess.ModelConfigError = ""
 	if deps.SetThreadContext != nil {
 		deps.SetThreadContext(
 			sess,
@@ -406,6 +408,8 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 	err := client.Call(resumeCtx, "thread/resume", resumeParams.Map(), &resumeResp)
 	resumeCancel()
 	if err == nil {
+		sess.AppliedModelConfig = state.CodexResumedThreadConfig(resumeParams.Model, resumeParams.Config)
+		sess.ModelConfigError = ""
 		if deps.SetThreadContext != nil {
 			deps.SetThreadContext(sess,
 				workspaceID,
