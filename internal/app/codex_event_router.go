@@ -28,11 +28,12 @@ func newCodexEventRouter(app *App) *codexEventRouter {
 func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	a := r.app
 	router := appbackend.NewCodexEventRouter()
+	router.Context = a.Context
 	router.NoteTurnItemStarted = func(threadID, turnID string, item turnitem.ProtocolItem) {
 		newRuntimeStateService(a).noteTurnItemStartedPayload(threadID, turnID, item)
 		noteStandaloneCompactItemStarted(a, threadID, turnID, item.MergedRaw())
 		if normalizeTurnItemType(item.Type) == "mcp_tool_call" {
-			newTurnStreamService(a).updateInFlightTurnItemPayload(context.Background(), threadID, turnID, item.EffectiveID(""), item)
+			newTurnStreamService(a).updateInFlightTurnItemPayload(a.Context(), threadID, turnID, item.EffectiveID(""), item)
 		}
 	}
 	router.CompleteTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {

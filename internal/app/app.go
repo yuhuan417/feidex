@@ -36,6 +36,11 @@ type App struct {
 	claude                 ClaudeCore
 	feishu                 FeishuClient
 	started                time.Time
+	lifecycleMu            sync.Mutex
+	asyncWG                sync.WaitGroup
+	stopping               bool
+	lifecycleCtx           context.Context
+	lifecycleCancel        context.CancelFunc
 	deduper                *inboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
@@ -118,6 +123,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		backend:             backend,
 		feishu:              FeishuClient,
 		started:             time.Now(),
+		lifecycleCtx:        context.Background(),
 		deduper:             newInboundDeduper(),
 		liveThreads:         newLiveThreadTracker(),
 		autoRetries:         newAutoRetryTracker(),
@@ -149,10 +155,17 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 }
 
 func (a *App) Start(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	a.beginLifecycle(ctx)
+	ctx = a.Context()
 	if err := startMCPService(a, ctx); err != nil {
+		a.lifecycleCancel()
 		return err
 	}
 	if err := startBackend(a, ctx); err != nil {
+		a.lifecycleCancel()
 		_ = stopMCPService(a, context.Background())
 		return err
 	}
@@ -160,6 +173,7 @@ func (a *App) Start(ctx context.Context) error {
 	recoverSharedRuntimeState(a)
 	recoverFrontendRuntimeState(a)
 	if err := startFrontend(a, ctx); err != nil {
+		a.lifecycleCancel()
 		_ = currentBackendRuntimeHandle(a).close()
 		_ = stopMCPService(a, context.Background())
 		return err
@@ -171,22 +185,75 @@ func (a *App) Start(ctx context.Context) error {
 	return nil
 }
 
+func (a *App) beginLifecycle(ctx context.Context) {
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if a.lifecycleCancel != nil {
+		a.lifecycleCancel()
+	}
+	a.lifecycleCtx, a.lifecycleCancel = context.WithCancel(ctx)
+	a.stopping = false
+}
+
 func (a *App) Stop(ctx context.Context) error {
-	a.feishu.Stop()
 	if a == nil {
 		return nil
 	}
+	a.lifecycleMu.Lock()
+	a.stopping = true
+	if a.lifecycleCancel != nil {
+		a.lifecycleCancel()
+	}
+	a.lifecycleMu.Unlock()
+	if a.feishu != nil {
+		a.feishu.Stop()
+	}
 	backendErr := currentBackendRuntimeHandle(a).close()
 	mcpErr := stopMCPService(a, ctx)
+	done := make(chan struct{})
+	go func() { a.asyncWG.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	if backendErr != nil {
 		return backendErr
 	}
 	return mcpErr
 }
 
+// Context returns the application lifecycle context for background work.
+// It is cancelled before runtime shutdown so external calls can stop promptly.
+func (a *App) Context() context.Context {
+	if a == nil {
+		return context.Background()
+	}
+	a.lifecycleMu.Lock()
+	defer a.lifecycleMu.Unlock()
+	if a.lifecycleCtx == nil {
+		return context.Background()
+	}
+	return a.lifecycleCtx
+}
+
 func runAsync(a *App, fn func()) {
 	if fn == nil {
 		return
+	}
+	if a != nil {
+		a.lifecycleMu.Lock()
+		if a.stopping || (a.lifecycleCtx != nil && a.lifecycleCtx.Err() != nil) {
+			a.lifecycleMu.Unlock()
+			return
+		}
+		a.asyncWG.Add(1)
+		a.lifecycleMu.Unlock()
+		original := fn
+		fn = func() { defer a.asyncWG.Done(); original() }
 	}
 	if a != nil && a.asyncRunner != nil {
 		a.asyncRunner(fn)

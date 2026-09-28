@@ -36,6 +36,7 @@ func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
 	}
 
 	adapter := &appupgradecmd.DefaultApp{
+		ContextFunc: app.Context,
 		FeishuClientFunc: func() appupgradecmd.FeishuClient {
 			return app.feishu
 		},

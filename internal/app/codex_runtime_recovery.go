@@ -17,7 +17,8 @@ var codexRecoveryState = appcodexruntime.NewRecoveryState()
 // callback is set separately to avoid circular initialization.
 func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 	return appcodexruntime.RecoveryService{
-		State: codexRecoveryState,
+		State:   codexRecoveryState,
+		Context: a.Context,
 		FrontendID: func() string {
 			return a.frontendID
 		},

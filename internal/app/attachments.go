@@ -27,7 +27,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 	}
 
 	dir := sessionAttachmentDir(workspace.Cwd, sessionKey, msg.MessageID)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
 	defer cancel()
 
 	att := make([]state.SubmissionAttachment, 0, len(msg.Attachments))

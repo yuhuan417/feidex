@@ -29,6 +29,7 @@ Keep these rules visible in day-to-day work:
 - Slow workflows must follow `fast callback ack -> async work -> card patch/follow-up`. Do not run clone, review, upgrade, download, or similar work inline in card callbacks.
 - Backend switching and frontend-scoped runtime-config changes are idle-only operations. Do not allow them while active work, queued/staged input, or pending approvals/forms exist.
 - New user-visible item or workflow types must update normalization, rendering, quiet-mode behavior, and tests together.
+- Each frontend owns an App lifecycle context. Background network/process work must derive cancellation from `App.Context()` (or `appcore.Context(host)` across capability interfaces); keep operation-specific timeouts. Shutdown cancels this context before closing transports, rejects new `runAsync` work, and waits for admitted work up to the shutdown deadline. Cleanup itself uses the separate shutdown context. Backend startup probe timeouts must not become the lifetime of an already-started backend process.
 
 ## Frontend Topology
 

@@ -42,6 +42,8 @@ func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, s
 
 type submissionAppAdapter struct{ app *App }
 
+func (a submissionAppAdapter) Context() context.Context { return a.app.Context() }
+
 func (a submissionAppAdapter) SubmissionQueueAppState() appsubmission.QueueAppStateProvider {
 	return a.app.State()
 }

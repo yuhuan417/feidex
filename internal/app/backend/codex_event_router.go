@@ -17,6 +17,7 @@ import (
 // CodexEventRouter dispatches Codex notifications and server requests.
 // All host-app dependencies are injected as callback function fields.
 type CodexEventRouter struct {
+	Context func() context.Context
 	// ---- notification callbacks ----
 
 	// NoteTurnItemStarted records that a turn item started.
@@ -189,7 +190,7 @@ func (r *CodexEventRouter) handleItemCompleted(params json.RawMessage) {
 		p.ItemID = strings.TrimSpace(stringValue(p.Item["id"]))
 	}
 	if r.CompleteTurnItem != nil {
-		r.CompleteTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, turnitem.NewProtocolItemWithID(p.ItemID, p.Item))
+		r.CompleteTurnItem(r.context(), p.ThreadID, p.TurnID, p.ItemID, turnitem.NewProtocolItemWithID(p.ItemID, p.Item))
 	}
 }
 
@@ -212,7 +213,7 @@ func (r *CodexEventRouter) handleMCPToolCallProgress(params json.RawMessage) {
 		"status":  "in_progress",
 		"message": strings.TrimSpace(p.Message),
 	})
-	r.UpdateInFlightTurnItem(context.Background(), p.ThreadID, p.TurnID, p.ItemID, item)
+	r.UpdateInFlightTurnItem(r.context(), p.ThreadID, p.TurnID, p.ItemID, item)
 }
 
 func (r *CodexEventRouter) handleTurnPlanUpdated(params json.RawMessage) {
@@ -531,4 +532,11 @@ func stringValue(v any) string {
 		return s
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+func (r *CodexEventRouter) context() context.Context {
+	if r.Context != nil {
+		return r.Context()
+	}
+	return context.Background()
 }

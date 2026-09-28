@@ -6,6 +6,7 @@ package clauderuntime
 import (
 	"context"
 	"errors"
+	"feidex/internal/app/appcore"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -459,7 +460,7 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 		return "", fmt.Errorf("claude runtime not initialized")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = appcore.Context(s.App)
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
@@ -547,7 +548,7 @@ func (s *Service) ForkSession(ctx context.Context, sessionKey string, ws *config
 		return "", fmt.Errorf("claude runtime not initialized")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = appcore.Context(s.App)
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
@@ -917,7 +918,7 @@ func (s *Service) storePending(requestID string, pending *PendingInteraction) {
 // ---------------------------------------------------------------------------
 
 func (s *Service) startSession(ctx context.Context, sessionKey string, ws *config.Workspace, runtimeCfg config.ClaudeConfig, model, resumeID string, fork bool) (string, error) {
-	sessionCtx, cancel := context.WithCancel(context.Background())
+	sessionCtx, cancel := context.WithCancel(appcore.Context(s.App))
 	initialSessionID := resumeID
 	if fork {
 		initialSessionID = ""
@@ -1386,7 +1387,7 @@ func (s *Service) notifyBackgroundTaskCompleted(state *SessionState, event claud
 	if strings.TrimSpace(event.Description) == "" {
 		event.Description = target.Description
 	}
-	s.SendBackgroundTaskNotification(context.Background(), target, event)
+	s.SendBackgroundTaskNotification(appcore.Context(s.App), target, event)
 }
 
 func (s *Service) backgroundTask(state *SessionState, event claudecli.BackgroundTaskEvent) *BackgroundTaskState {
@@ -1445,7 +1446,7 @@ func (s *Service) HandleThinkingEvent(state *SessionState, event claudecli.Think
 	op := s.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
 	}, workspaceCwd)
-	s.ExecuteQuietWorkingCardOp(context.Background(), sub, op)
+	s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, op)
 }
 
 func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent) {
@@ -1474,9 +1475,9 @@ func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent
 	}
 	sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turnID)
 	if sub != nil {
-		s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
+		s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, appturn.QuietWorkingCardOp{})
 	}
-	chunks, ok := s.UpdateOutputSegment(context.Background(), threadID, turnID, body, reuseMessageID)
+	chunks, ok := s.UpdateOutputSegment(appcore.Context(s.App), threadID, turnID, body, reuseMessageID)
 	if !ok {
 		return
 	}
@@ -1509,7 +1510,7 @@ func (s *Service) HandleToolStarted(state *SessionState, event claudecli.ToolSta
 			"status": "completed",
 			"input":  event.Input,
 		})
-		s.CompleteTurnItemPayload(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+		s.CompleteTurnItemPayload(appcore.Context(s.App), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 		return
 	}
 	item := turnitem.NewProtocolItemWithID(strings.TrimSpace(event.ID), map[string]any{
@@ -1520,7 +1521,7 @@ func (s *Service) HandleToolStarted(state *SessionState, event claudecli.ToolSta
 		"input":  event.Input,
 	})
 	s.NoteTurnItemStarted(threadID, turn.TurnID, item)
-	s.UpdateInFlightTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+	s.UpdateInFlightTurnItem(appcore.Context(s.App), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 }
 
 func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCompleteEvent) {
@@ -1541,7 +1542,7 @@ func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCo
 		"status": "completed",
 		"input":  event.Input,
 	})
-	s.CompleteTurnItemPayload(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+	s.CompleteTurnItemPayload(appcore.Context(s.App), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 }
 
 func (s *Service) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
@@ -1630,7 +1631,7 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
+				s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, appturn.QuietWorkingCardOp{})
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(reuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
@@ -1644,11 +1645,11 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 				}
 				footerLines := s.turnFinalFooterLines(turn.TurnID, completedAt)
 				inThread := s.ReplyInThread(sub)
-				results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
+				results := s.SendFinalMessages(appcore.Context(s.App), sub, finalText, footerLines, inThread, reuseMessageIDs)
 				if len(results) > 0 {
 					s.MarkTurnStreamFinal(turn.TurnID)
-				} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-					s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+				} else if !s.FinalizeOutputSegment(appcore.Context(s.App), threadID, turn.TurnID, finalText) {
+					s.CompleteTurnItem(appcore.Context(s.App), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
 						"text":  finalText,
@@ -1665,26 +1666,26 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
+				s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, appturn.QuietWorkingCardOp{})
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(reuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
 				footerLines := s.turnFinalFooterLines(turn.TurnID, completedAt)
 				inThread := s.ReplyInThread(sub)
-				results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
+				results := s.SendFinalMessages(appcore.Context(s.App), sub, finalText, footerLines, inThread, reuseMessageIDs)
 				if len(results) > 0 {
 					s.MarkTurnStreamFinal(turn.TurnID)
-				} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-					s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+				} else if !s.FinalizeOutputSegment(appcore.Context(s.App), threadID, turn.TurnID, finalText) {
+					s.CompleteTurnItem(appcore.Context(s.App), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
 						"text":  finalText,
 						"phase": "final_answer",
 					})
 				}
-			} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-				s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+			} else if !s.FinalizeOutputSegment(appcore.Context(s.App), threadID, turn.TurnID, finalText) {
+				s.CompleteTurnItem(appcore.Context(s.App), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 					"type":  "agent_message",
 					"id":    "claude-agent-" + turn.TurnID,
 					"text":  finalText,

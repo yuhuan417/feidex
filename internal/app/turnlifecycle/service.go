@@ -466,7 +466,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		return
 	}
 
-	flush := w.turnStream().FlushTurnStream(context.Background(), threadID, turnID)
+	flush := w.turnStream().FlushTurnStream(appcore.Context(w.app), threadID, turnID)
 
 	switch status {
 	case "completed":
@@ -530,7 +530,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	}
 	if terminalText != "" && !suppressTerminalCard {
 		w.outboundCard().ReplaceTurnEventCardWithReuse(
-			context.Background(),
+			appcore.Context(w.app),
 			sub,
 			"任务状态",
 			"grey",
@@ -589,7 +589,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	if sub != nil && state.NormalizeSubmissionStatus(sub.Status) == state.SubmissionStatusCompleted && !flush.SawFinal && !planExitPromptSent {
 		if flush.ShouldUsePlanExitPrompt && strings.TrimSpace(flush.PlanMarkdown) != "" {
 			w.outboundCard().ReplaceTurnEventCardWithReuse(
-				context.Background(),
+				appcore.Context(w.app),
 				sub,
 				"计划更新",
 				"blue",
@@ -600,14 +600,14 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			)
 		} else if strings.TrimSpace(flush.FinalText) != "" {
 			w.app.SendFinalMessagesWithReuse(
-				context.Background(), sub,
+				appcore.Context(w.app), sub,
 				strings.TrimSpace(flush.FinalText),
 				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
 				strings.TrimSpace(flush.FinalReuseMessageID),
 			)
 		} else {
 			w.app.SendEmptyFinalCardWithReuse(
-				context.Background(), sub,
+				appcore.Context(w.app), sub,
 				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
 				reuseMessageID,
 			)

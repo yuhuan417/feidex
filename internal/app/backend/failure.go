@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"feidex/internal/app/appcore"
 	"strings"
 	"time"
 
@@ -368,7 +369,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	}
 	flush := appturnstream.FlushResult{}
 	if turnID != "" {
-		flush = s.FlushTurnStream(context.Background(), threadID, turnID)
+		flush = s.FlushTurnStream(appcore.Context(s.App), threadID, turnID)
 	}
 	s.ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
 	_ = s.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
@@ -407,7 +408,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 		attentionUserID := s.TurnStopAttentionUserID(sub, turnID)
 		body := s.PrependAttentionMention(terminalText, attentionUserID)
 		s.ReplaceTurnEventCard(
-			context.Background(),
+			appcore.Context(s.App),
 			sub,
 			"任务状态",
 			"grey",

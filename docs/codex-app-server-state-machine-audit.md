@@ -121,6 +121,8 @@
   - 来源: OpenAI 官方页面 `Initialization`
 - 我们当前实现:
   - `internal/codexrpc/client.go` 在 transport 启动后立即发送 `initialize`，收到响应后立刻发送 `initialized`。
+  - stdio reader 直接分发 RPC response；server request 和 notification 进入每个 client 独立的 256 项有界队列，由单个 dispatcher 按接收顺序处理。业务回调等待 RPC 不再阻塞响应读取；队列溢出显式触发 transport failure 并关闭 client，不能阻塞 reader 或静默丢弃事件。
+  - EOF 先释放等待中的 RPC，再在已接收事件处理后通知 transport failure；主动 Close 停止后续事件分发并释放等待中的 RPC。`serverRequest/resolved` 仍是审批和同步表单的最终确认边界。
 - 差异点:
   - 无。
 - 修改建议:

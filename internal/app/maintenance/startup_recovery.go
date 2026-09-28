@@ -200,7 +200,7 @@ func (s RuntimeMaintenanceService) SendStartupReadyNotifications() {
 	}
 	const text = "feidex 已就绪，可继续发送消息。"
 	for _, chatID := range chatIDs {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(appcore.Context(s.app), 10*time.Second)
 		err := s.app.Feishu().SendText(ctx, chatID, text)
 		cancel()
 		if err != nil {

@@ -48,18 +48,21 @@ func NewService(cfg *config.Config, cfgPath string) (*Service, error) {
 func (s *Service) Start(ctx context.Context) error {
 	started := make([]*App, 0, len(s.apps))
 	for _, app := range s.apps {
-		if err := startMCPService(app, ctx); err != nil {
+		app.beginLifecycle(ctx)
+		if err := startMCPService(app, app.Context()); err != nil {
+			app.lifecycleCancel()
 			_ = stopApps(ctx, started)
 			return err
 		}
 		started = append(started, app)
-		if err := startBackend(app, ctx); err != nil {
+		if err := startBackend(app, app.Context()); err != nil {
+			app.lifecycleCancel()
 			_ = stopApps(ctx, started)
 			return err
 		}
 	}
 	for _, app := range s.apps {
-		startInboundDeduperLoop(app, ctx)
+		startInboundDeduperLoop(app, app.Context())
 	}
 	if len(s.apps) > 0 {
 		recoverSharedRuntimeState(s.apps[0])
@@ -68,14 +71,14 @@ func (s *Service) Start(ctx context.Context) error {
 		recoverFrontendRuntimeState(app)
 	}
 	for _, app := range s.apps {
-		if err := startFrontend(app, ctx); err != nil {
+		if err := startFrontend(app, app.Context()); err != nil {
 			_ = stopApps(ctx, s.apps)
 			return err
 		}
 	}
 	for _, app := range s.apps {
-		newRuntimeMaintenanceService(app).StartDriveArtifactGCLoop(ctx)
-		newRuntimeMaintenanceService(app).StartUpgradeCheckLoop(ctx)
+		newRuntimeMaintenanceService(app).StartDriveArtifactGCLoop(app.Context())
+		newRuntimeMaintenanceService(app).StartUpgradeCheckLoop(app.Context())
 		go sendStartupReadyNotifications(app)
 	}
 	return nil

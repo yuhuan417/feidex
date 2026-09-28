@@ -27,7 +27,7 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 			snapshot.Message = message
 		},
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 30*time.Second)
 	probe, err := manager.Probe(ctx)
 	cancel()
 	if err != nil {
@@ -53,7 +53,7 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 	}
 
 	update("installing", "正在运行 Claude 自升级命令 `"+firstNonEmpty(probe.Command, "claude")+" "+updateCommand+"`")
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 5*time.Minute)
 	err = manager.InstallVersion(ctx, cliSelfUpdateInstallTarget)
 	cancel()
 	if err != nil {
@@ -61,7 +61,7 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 		return
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 30*time.Second)
 	afterProbe, probeErr := manager.Probe(ctx)
 	cancel()
 	installedVersion := previousVersion
@@ -80,7 +80,7 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 	}
 
 	update("smoke_testing", "正在验证 Claude runtime")
-	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 45*time.Second)
 	switched, err := newBackendUpgradeService(s.app).refreshClaudeRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
@@ -107,7 +107,7 @@ func (s backendUpgradeService) claudeSmokeTest(ctx context.Context) error {
 		return fmt.Errorf("claude app not initialized")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = s.app.Context()
 	}
 	workdir := "."
 	for _, ws := range s.app.cfg.Workspaces {
@@ -141,7 +141,7 @@ func (s backendUpgradeService) claudeSmokeTest(ctx context.Context) error {
 		opts = append(opts, claudecli.WithPermissionPromptToolStdio())
 	}
 	session := claudecli.NewSession(opts...)
-	sessionCtx, sessionCancel := context.WithCancel(context.Background())
+	sessionCtx, sessionCancel := context.WithCancel(s.app.Context())
 	defer sessionCancel()
 	if err := session.Start(sessionCtx); err != nil {
 		return err
@@ -266,7 +266,7 @@ func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey s
 	)
 
 	update("restarting", "正在校验 Claude runtime 状态")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 30*time.Second)
 	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	probe, err := manager.Probe(ctx)
 	cancel()
@@ -284,7 +284,7 @@ func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey s
 
 	update("restarting", "正在准备新的 Claude runtime")
 	update("smoke_testing", "正在验证重启后的 runtime")
-	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 45*time.Second)
 	switched, err := newBackendUpgradeService(s.app).refreshClaudeRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {

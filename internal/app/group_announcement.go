@@ -140,7 +140,7 @@ func (t *groupAnnouncementTracker) Execute(a *App, chatID string) {
 	t.lastAttempt[chatID] = time.Now()
 	t.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), groupAnnouncementRefreshTimeout)
+	ctx, cancel := context.WithTimeout(a.Context(), groupAnnouncementRefreshTimeout)
 	err := refreshGroupAnnouncementStatusNow(ctx, a, chatID)
 	cancel()
 	if err != nil {

@@ -281,7 +281,7 @@ func startInlineReviewFromMessage(a App, msg *feishu.InboundMessage, target appr
 	if err != nil {
 		return err
 	}
-	return a.ReviewFeishu().ReplyText(context.Background(), msg.MessageID, confirmation, a.ReviewReplyInThreadEnabled(msg.ChatType))
+	return a.ReviewFeishu().ReplyText(appcore.Context(a), msg.MessageID, confirmation, a.ReviewReplyInThreadEnabled(msg.ChatType))
 }
 
 // StartInlineReview starts an inline review for the given target.
@@ -395,7 +395,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 		}
 	}
 	a.ReviewMarkSubmissionQueuedReactions(sub)
-	a.ReviewSendSubmissionQueuedNotice(context.Background(), sub)
+	a.ReviewSendSubmissionQueuedNotice(appcore.Context(a), sub)
 	return nil
 }
 
@@ -521,7 +521,7 @@ func (s ReviewFormService) BeginReviewForm(msg *feishu.InboundMessage, mode stri
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.ReviewFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.ReviewFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}

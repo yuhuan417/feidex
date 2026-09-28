@@ -5,6 +5,7 @@ package upgradecmd
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/app/appcore"
 	"fmt"
 	"log/slog"
 	"os"
@@ -80,6 +81,7 @@ type FeishuClient interface {
 
 // DefaultApp provides an App implementation backed by function callbacks.
 type DefaultApp struct {
+	ContextFunc              func() context.Context
 	FeishuClientFunc         func() FeishuClient
 	StateFunc                func() UpgradeState
 	CurrentWorkspaceFunc     func(msg *feishu.InboundMessage) (string, *config.Workspace)
@@ -226,7 +228,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
 	defer cancel()
 
 	current := s.deps.CurrentVersion()
@@ -384,7 +386,7 @@ func (s UpgradeService) ReplyUpgradeCard(msg *feishu.InboundMessage, targetVersi
 	if err != nil {
 		return err
 	}
-	_, err = s.app.UpgradeFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.UpgradeFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -397,7 +399,7 @@ func (s UpgradeService) ReplyUpgradeDevCard(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.UpgradeFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.UpgradeFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -689,4 +691,11 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func (a *DefaultApp) Context() context.Context {
+	if a.ContextFunc != nil {
+		return a.ContextFunc()
+	}
+	return context.Background()
 }

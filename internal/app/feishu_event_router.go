@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"log/slog"
 	"strings"
 
@@ -73,7 +72,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 	}
 	if msg.ChatType == "group" {
 		scheduleGroupAnnouncementStatusRefresh(a, msg.ChatID, "group_message")
-		if _, err := ensureGroupPrimaryInitialized(context.Background(), a, msg.ChatType, msg.ChatID); err != nil {
+		if _, err := ensureGroupPrimaryInitialized(a.Context(), a, msg.ChatType, msg.ChatID); err != nil {
 			slog.Warn("group primary auto init failed during message processing",
 				"frontend_id", strings.TrimSpace(a.FrontendID()),
 				"message_id", msg.MessageID,
@@ -271,6 +270,6 @@ func (r *feishuEventRouter) handleBotMenu(click *feishu.BotMenuClick) {
 		Text:     click.Command,
 	}
 	if err := handleCommand(a, msg, click.Command); err != nil {
-		_ = a.feishu.SendText(context.Background(), click.UserID, "命令执行失败: "+err.Error())
+		_ = a.feishu.SendText(a.Context(), click.UserID, "命令执行失败: "+err.Error())
 	}
 }

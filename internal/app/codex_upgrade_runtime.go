@@ -60,7 +60,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 			snapshot.Message = message
 		},
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 30*time.Second)
 	probe, err := manager.Probe(ctx)
 	cancel()
 	if err != nil {
@@ -86,7 +86,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 	}
 
 	update("installing", "正在运行 Codex 自升级命令 `"+firstNonEmpty(probe.Command, "codex")+" "+updateCommand+"`")
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 5*time.Minute)
 	err = manager.InstallVersion(ctx, cliSelfUpdateInstallTarget)
 	cancel()
 	if err != nil {
@@ -94,7 +94,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 		return
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 30*time.Second)
 	afterProbe, probeErr := manager.Probe(ctx)
 	cancel()
 	installedVersion := previousVersion
@@ -113,7 +113,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 	}
 
 	update("smoke_testing", "正在验证 Codex runtime")
-	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 45*time.Second)
 	switched, err := newBackendUpgradeService(s.app).refreshCodexRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {
@@ -189,7 +189,7 @@ func (s backendUpgradeService) runCodexRestartOperation(messageID, sessionKey st
 		},
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 30*time.Second)
 	manager := newCodexInstallManager(s.app.cfg.Codex.Command)
 	probe, err := manager.Probe(ctx)
 	cancel()
@@ -207,7 +207,7 @@ func (s backendUpgradeService) runCodexRestartOperation(messageID, sessionKey st
 
 	update("restarting", "正在准备新的 Codex runtime")
 	update("smoke_testing", "正在验证重启后的 runtime")
-	ctx, cancel = context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel = context.WithTimeout(s.app.Context(), 45*time.Second)
 	switched, err := newBackendUpgradeService(s.app).refreshCodexRuntimeAfterMaintenance(ctx)
 	cancel()
 	if err != nil {

@@ -1,7 +1,6 @@
 package planmode
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -190,7 +189,7 @@ func InvalidateCodexPlanModeExitArtifactsForSession(a App, sessionKey, reason st
 	})
 	if pending.FeishuMsgID != "" {
 		body := appcore.FirstNonEmpty(reason, "This confirmation is no longer valid.")
-		_ = a.Feishu().PatchCard(context.Background(), pending.FeishuMsgID, ExitExpiredCard(a, sessionKey, "", body))
+		_ = a.Feishu().PatchCard(appcore.Context(a), pending.FeishuMsgID, ExitExpiredCard(a, sessionKey, "", body))
 	}
 }
 
@@ -261,12 +260,12 @@ func sendCodexPlanModeExitPrompt(a App, sub *state.Submission, planMarkdown, reu
 	msgID := ""
 	reuseMessageID = strings.TrimSpace(reuseMessageID)
 	if reuseMessageID != "" {
-		if err := a.Feishu().PatchCard(context.Background(), reuseMessageID, card); err == nil {
+		if err := a.Feishu().PatchCard(appcore.Context(a), reuseMessageID, card); err == nil {
 			msgID = reuseMessageID
 		}
 	}
 	if msgID == "" {
-		msgID, err = a.Feishu().ReplyCard(context.Background(), sub.TriggerMessageID, card, a.ReplyInThreadForSubmission(sub))
+		msgID, err = a.Feishu().ReplyCard(appcore.Context(a), sub.TriggerMessageID, card, a.ReplyInThreadForSubmission(sub))
 		if err != nil {
 			return err
 		}
@@ -359,7 +358,7 @@ func sendCodexPlanModeExitFollowupCard(a App, pending *state.PendingRequest, act
 	} else if sess := a.State().Session(strings.TrimSpace(pending.SessionKey)); sess != nil {
 		replyInThread = sess.ChatType == "group" && a.ReplyInThreadEnabled(sess.ChatType)
 	}
-	_, err := a.SendLocalTurnFollowupCard(context.Background(), messageID, card, replyInThread, sub, ExitFollowupKind)
+	_, err := a.SendLocalTurnFollowupCard(appcore.Context(a), messageID, card, replyInThread, sub, ExitFollowupKind)
 	return err
 }
 

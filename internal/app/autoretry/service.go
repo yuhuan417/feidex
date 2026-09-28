@@ -368,6 +368,9 @@ func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, upda
 
 // RunAutoRetryTimer is the callback invoked when the backoff timer fires.
 func (s Service) RunAutoRetryTimer(sessionKey string, expectedSeq uint64) {
+	if appcore.Context(s.app).Err() != nil {
+		return
+	}
 	if s.app == nil {
 		return
 	}
@@ -653,7 +656,7 @@ func (s Service) DeliverAutoRetryCard(snapshot RetryState, card map[string]any) 
 	if s.app == nil || s.app.Feishu() == nil || card == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 5*time.Second)
 	defer cancel()
 	messageID := strings.TrimSpace(snapshot.StatusMessageID)
 	if messageID != "" {
@@ -807,7 +810,7 @@ func (s Service) CommandAutoRetry(msg *feishu.InboundMessage, args []string) err
 	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "status" {
 		card := s.RenderAutoRetryConfigCard(appcore.MakeSessionKey(s.app, msg))
-		_, err := s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+		_, err := s.app.Feishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	enabled := false

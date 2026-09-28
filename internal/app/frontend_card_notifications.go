@@ -78,7 +78,7 @@ func sendFrontendCardNotification(a *App, target feishuNotifyTarget, note state.
 	if color == "" {
 		color = "blue"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 5*time.Second)
 	defer cancel()
 	sentMessageID, err := a.feishu.SendCard(ctx, chatID, a.feishu.SimpleStatusCard(title, color, body, nil))
 	if err != nil {

@@ -52,7 +52,7 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 	if chatID == "" {
 		return
 	}
-	if _, err := ensureGroupPrimaryInitialized(context.Background(), a, "group", chatID); err != nil {
+	if _, err := ensureGroupPrimaryInitialized(a.Context(), a, "group", chatID); err != nil {
 		slog.Warn("group primary auto init failed after bot added",
 			"frontend_id", strings.TrimSpace(a.FrontendID()),
 			"chat_id", chatID,

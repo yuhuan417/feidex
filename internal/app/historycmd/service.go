@@ -118,7 +118,7 @@ func (s Service) CommandHistory(msg *feishu.InboundMessage, args []string) error
 		if err != nil {
 			return err
 		}
-		_, err = s.app.HistoryFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.HistoryReplyInThreadEnabled(msg.ChatType))
+		_, err = s.app.HistoryFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.HistoryReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	sessionKey := s.app.HistoryMakeSessionKey(msg)
@@ -126,7 +126,7 @@ func (s Service) CommandHistory(msg *feishu.InboundMessage, args []string) error
 	if err != nil {
 		return err
 	}
-	_, err = s.app.HistoryFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.HistoryReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.HistoryFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.HistoryReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -341,7 +341,7 @@ func (s Service) FetchCurrentThreadHistory(sessionKey string) (*state.Session, *
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
 	defer cancel()
 	var result codexrpc.ThreadReadResult
 	client, err := s.app.HistoryCodexClient()

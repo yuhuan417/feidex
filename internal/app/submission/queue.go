@@ -294,7 +294,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	skillResolution := a.SubmissionQueueSkillResolver().ResolveSubmissionSkill(sessionKey, workspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
 		a.SubmissionQueueSkillResolver().SetSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
-		if err := a.SubmissionQueueReplyText(context.Background(), msg.MessageID, PendingConfirmationText(skillResolution.PendingReplacement.Name), a.SubmissionQueueReplyInThreadEnabled(msg.ChatType)); err != nil {
+		if err := a.SubmissionQueueReplyText(appcore.Context(a), msg.MessageID, PendingConfirmationText(skillResolution.PendingReplacement.Name), a.SubmissionQueueReplyInThreadEnabled(msg.ChatType)); err != nil {
 			return err
 		}
 		return nil
@@ -386,7 +386,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		}
 	}
 	a.SubmissionQueueMarkSubmissionQueuedReactions(sub)
-	a.SubmissionQueueSendQueuedNotice(context.Background(), sub)
+	a.SubmissionQueueSendQueuedNotice(appcore.Context(a), sub)
 	if serialBindingBlocked && !autoRetryBlocked {
 		a.SubmissionQueueRunAsync(func() {
 			s.StartNextSubmissionAsync(sessionKey, "serialBindingQueued")
@@ -833,7 +833,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	if notifyFailure && sub != nil {
 		willContinue := shouldStartNext
-		a.SubmissionQueueSendStartFailureNotice(context.Background(), sub, err, willContinue)
+		a.SubmissionQueueSendStartFailureNotice(appcore.Context(a), sub, err, willContinue)
 	}
 	a.SubmissionQueueRuntimeMaintenance().CleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
@@ -1087,7 +1087,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			"cwd", ws.Cwd,
 			"model", effectiveModel,
 		)
-		threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		threadCtx, threadCancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 		err = client.Call(threadCtx, "thread/start", threadParams.Map(), &threadResp)
 		threadCancel()
 		if err != nil {
@@ -1137,7 +1137,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	}
 	a.SubmissionQueueMarkSubmissionRunningReactions(sub)
 	a.SubmissionQueueLogSessionState("startNextSubmission session starting", sessionKey, appState.Session(sessionKey))
-	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	turnCtx, turnCancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 	turnID := ""
 	var turnErr error
 	if a.SubmissionQueueIsReviewSubmission(sub) {
