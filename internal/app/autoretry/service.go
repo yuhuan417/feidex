@@ -244,7 +244,7 @@ func (s Service) CurrentAutoRetryState(sessionKey string) (RetryState, bool) {
 // ObserveAutoRetryTerminal inspects a terminal turn status. On failure it
 // schedules an auto-retry; on other terminals it cleans up retry state.
 // Returns true if a retry is pending after the observation.
-func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID string) bool {
+func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 	if s.app == nil {
 		return false
 	}
@@ -258,7 +258,7 @@ func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, u
 		s.FinishAutoRetryOnTerminal(sessionKey, threadID, status)
 		return false
 	}
-	return s.ScheduleAutoRetryAfterFailure(sessionKey, threadID, updatedSess, sub, reuseMessageID)
+	return s.ScheduleAutoRetryAfterFailure(sessionKey, threadID, updatedSess, sub, reuseMessageID, lastError)
 }
 
 // FinishAutoRetryOnTerminal cleans up retry state on non-failure terminal
@@ -304,7 +304,7 @@ func (s Service) FinishAutoRetryOnTerminal(sessionKey, threadID, status string) 
 
 // ScheduleAutoRetryAfterFailure attempts to schedule an auto-retry after a
 // failed turn. Returns true if a retry is now pending.
-func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *state.Session, sub *state.Submission, reuseMessageID string) bool {
+func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 	if s.app == nil {
 		return false
 	}
@@ -345,6 +345,7 @@ func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, upda
 		return false
 	}
 	RefreshState(st, updatedSess, sub, threadID)
+	st.LastError = strings.TrimSpace(lastError)
 	if strings.TrimSpace(st.StatusMessageID) == "" {
 		st.StatusMessageID = strings.TrimSpace(reuseMessageID)
 	}
@@ -712,6 +713,8 @@ func (s Service) RenderAutoRetryLoopCard(snapshot RetryState, phase, notice stri
 	if text := strings.TrimSpace(notice); text != "" {
 		lines = append([]string{text, ""}, lines...)
 	}
+	failure := apputil.FirstNonEmpty(strings.TrimSpace(snapshot.LastError), "后端未提供具体错误信息。")
+	lines = append(lines, "", "最近一次失败原因:\n"+apputil.Truncate(failure, 2000))
 	lines = append(lines, "", "如需终止，请发送 `/stop`。")
 	color := "blue"
 	switch strings.TrimSpace(phase) {

@@ -1,6 +1,10 @@
 package codexrpc
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"strings"
+)
 
 type ThreadReadResult struct {
 	Thread ThreadReadThread `json:"thread"`
@@ -22,8 +26,30 @@ type ThreadReadTurn struct {
 }
 
 type ThreadReadTurnError struct {
-	Message           string  `json:"message"`
-	AdditionalDetails *string `json:"additionalDetails"`
+	Message           string          `json:"message"`
+	AdditionalDetails *string         `json:"additionalDetails"`
+	CodexErrorInfo    json.RawMessage `json:"codexErrorInfo"`
+}
+
+// DisplayText retains diagnostic fields supplied alongside the error message.
+func (e *ThreadReadTurnError) DisplayText() string {
+	if e == nil {
+		return ""
+	}
+	parts := []string{}
+	if message := strings.TrimSpace(e.Message); message != "" {
+		parts = append(parts, message)
+	}
+	var info bytes.Buffer
+	if json.Compact(&info, e.CodexErrorInfo) == nil && info.String() != "null" {
+		parts = append(parts, "错误信息: "+info.String())
+	}
+	if e.AdditionalDetails != nil {
+		if details := strings.TrimSpace(*e.AdditionalDetails); details != "" {
+			parts = append(parts, details)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 type ThreadReadItem struct {

@@ -262,7 +262,8 @@
   - 协议节点: `error -> turn/completed(status=failed)`
   - 来源: OpenAI 官方页面 `Notifications`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 记录 `error`。
+  - `internal/app/codex_event_router.go` 记录 `error`，保留 message、codexErrorInfo（含上游 HTTP 状态码）和 additionalDetails；`turn/completed` 自带的 error 同样在 finalize 前记录。
+  - 自动重试卡片展示最近一次失败原因，在等待和重试过程中保留；每次失败刷新，无详情时明确提示后端未提供。错误通知本身不触发重试，仍以 failed 终态为边界。
   - `internal/app/turn_lifecycle.go` 最终仍在 `turn/completed` 处 finalize。
   - `/stop` 标记取消的 auto-retry 在迟到的 `failed` 终态到达时只清理，不得重新置为未取消或创建新定时器；已派发的旧 timer callback 也不能启动后来的新重试循环。
 - 差异点:

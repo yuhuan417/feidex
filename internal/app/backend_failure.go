@@ -153,8 +153,8 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 			},
 		},
 		Cards: appbackend.FailureCardDeps{
-			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool {
-				return newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID)
+			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+				return newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 			},
 			ReplaceTurnEventCard: func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
 				newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)

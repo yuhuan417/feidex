@@ -258,8 +258,9 @@ func (r *CodexEventRouter) handleTurnCompleted(params json.RawMessage) {
 	var p struct {
 		ThreadID string `json:"threadId"`
 		Turn     struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
+			ID     string                        `json:"id"`
+			Status string                        `json:"status"`
+			Error  *codexrpc.ThreadReadTurnError `json:"error"`
 		} `json:"turn"`
 	}
 	if json.Unmarshal(params, &p) != nil {
@@ -270,6 +271,9 @@ func (r *CodexEventRouter) handleTurnCompleted(params json.RawMessage) {
 		"turn_id", p.Turn.ID,
 		"status", p.Turn.Status,
 	)
+	if message := p.Turn.Error.DisplayText(); message != "" && r.RecordTurnError != nil {
+		r.RecordTurnError(p.ThreadID, p.Turn.ID, message)
+	}
 	if r.OnTurnCompleted != nil {
 		r.OnTurnCompleted(p.ThreadID, p.Turn.ID, p.Turn.Status)
 	}
@@ -307,25 +311,24 @@ func (r *CodexEventRouter) handleThreadGoalCleared(params json.RawMessage) {
 
 func (r *CodexEventRouter) handleError(params json.RawMessage) {
 	var p struct {
-		ThreadID string `json:"threadId"`
-		TurnID   string `json:"turnId"`
-		Error    struct {
-			Message string `json:"message"`
-		} `json:"error"`
+		ThreadID string                       `json:"threadId"`
+		TurnID   string                       `json:"turnId"`
+		Error    codexrpc.ThreadReadTurnError `json:"error"`
 	}
 	if json.Unmarshal(params, &p) != nil {
 		return
 	}
+	message := p.Error.DisplayText()
 	slog.Error("codex turn error",
 		"thread_id", p.ThreadID,
 		"turn_id", p.TurnID,
-		"message", p.Error.Message,
+		"message", message,
 	)
-	if r.FailStandaloneCompactTurn != nil && r.FailStandaloneCompactTurn(p.ThreadID, p.TurnID, p.Error.Message) {
+	if r.FailStandaloneCompactTurn != nil && r.FailStandaloneCompactTurn(p.ThreadID, p.TurnID, message) {
 		return
 	}
 	if r.RecordTurnError != nil {
-		r.RecordTurnError(p.ThreadID, p.TurnID, p.Error.Message)
+		r.RecordTurnError(p.ThreadID, p.TurnID, message)
 	}
 	if r.UpdateSubmissionByTurn != nil {
 		r.UpdateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {

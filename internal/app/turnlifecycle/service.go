@@ -126,7 +126,7 @@ type SubmissionDispatchProvider interface {
 // AutoRetryProvider narrows auto-retry access to the methods used by the
 // service.
 type AutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 }
 
 // RuntimeMaintenanceProvider narrows runtime maintenance access to the
@@ -526,7 +526,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			"has_in_flight", sessionHasActiveWork(updatedSess),
 		)
 		w.app.LogSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
-		suppressTerminalCard = w.autoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
+		suppressTerminalCard = w.autoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID, flush.LastError)
 	}
 	if terminalText != "" && !suppressTerminalCard {
 		w.outboundCard().ReplaceTurnEventCardWithReuse(

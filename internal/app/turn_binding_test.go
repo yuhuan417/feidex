@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -178,6 +179,10 @@ func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	markSessionThreadLive(a, "sess-1", "thread-1")
 
+	newCodexEventRouter(a).handleNotification("error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"upstream rejected","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":501}},"additionalDetails":"Not Implemented"}}`))
+	if len(ff.replyCards) != 0 {
+		t.Fatal("error notification must not start retry before completion")
+	}
 	finishTurn(a, "thread-1", "turn-1", "failed")
 
 	if len(ff.replyCards) != 1 {
@@ -186,7 +191,7 @@ func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "Codex 自动重试" {
 		t.Fatalf("reply card title = %q, want Codex 自动重试", got)
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "自动发送“继续”") {
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !containsAll(body, "自动发送“继续”", "upstream rejected", "501", "Not Implemented") {
 		t.Fatalf("auto retry card body = %q", body)
 	}
 	if len(ff.patchedCards) != 0 {

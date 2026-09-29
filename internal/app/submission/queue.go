@@ -184,7 +184,7 @@ type QueueTurnStreamProvider interface {
 
 // QueueAutoRetryProvider narrows auto retry.
 type QueueAutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 	HasBlockingAutoRetry(sessionKey string) bool
 }
 
@@ -831,7 +831,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 			"error", saveErr,
 		)
 	} else if sess != nil {
-		retryPending := a.SubmissionQueueAutoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+		retryPending := a.SubmissionQueueAutoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", err.Error())
 		shouldStartNext = !retryPending && s.NextQueuedSessionKey(sessionKey) != ""
 	}
 	if clearedThreadLineage {
