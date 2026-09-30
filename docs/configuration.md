@@ -123,8 +123,8 @@ feidex feishu bind --app app_id:app_secret --domain lark
 接入 Feidex 时，在后台需要：
 
 - 启用 **机器人 / Bot** 能力（卡片菜单/审批需要 **消息卡片**）
-- **事件与回调**订阅方式选 **长连接 / persistent connection**（无需公网回调 URL），并订阅 `im.message.receive_v1`、卡片回调 `card.action.trigger`
-- **权限 scopes** 至少 `im:message`、`im:message:send_as_bot`；用附件/下载再加 `im:resource`、`drive:drive`
+- **事件与回调**订阅方式选 **长连接 / persistent connection**（无需公网回调 URL），并订阅 `im.message.receive_v1`、`im.message.reaction.created_v1`，配置卡片回调 `card.action.trigger`
+- **权限 scopes**：最小权限集与按功能追加的清单见 [飞书权限与事件订阅清单](feishu-permissions.md)
 - 配置改动后**创建并发布版本**才生效
 
 > 提示：消息相关 scope 不全时，长连接能建立但**收不到消息事件**（连得上却不回复）。若 bot 不响应，优先核对上面的消息权限并重新发布。

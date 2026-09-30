@@ -30,7 +30,7 @@
 ### 必需
 
 - 已安装 `codex` CLI，并且 `codex app-server` 可启动
-- 一个可用的飞书应用 `app_id / app_secret`（也支持 Lark 国际版，设 `domain = "lark"`，详见[配置参考](docs/configuration.md#区域--region飞书-vs-lark)）
+- 一个可用的飞书应用 `app_id / app_secret`（也支持 Lark 国际版，设 `domain = "lark"`，详见[配置参考](docs/configuration.md#区域--region飞书-vs-lark)；所需权限与事件订阅见[飞书权限与事件订阅清单](docs/feishu-permissions.md)）
 
 ### 可选
 

@@ -15,6 +15,7 @@ Read these documents before making non-trivial changes:
 - `docs/codex-app-server-state-machine-audit.md` is the protocol contract for Codex app-server behavior.
 - If a change touches `internal/app`, `internal/codexrpc`, approvals, turn lifecycle, thread lifecycle, review flow, compaction, tool input, or server requests, you must explicitly check it against the state machine audit.
 - Do not introduce behavior that contradicts the documented protocol state unless you also update the audit document and explain the reason.
+- Feishu event subscriptions must always pair with a handler in code: never subscribe an event the code does not handle, and remove the subscription when its handler is removed. A no-op handler is not handling. See `docs/feishu-permissions.md`.
 - Prefer shared helpers and existing abstractions over duplicating similar logic in multiple packages.
 
 ## Practical Expectation

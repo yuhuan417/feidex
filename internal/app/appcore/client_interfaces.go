@@ -45,7 +45,7 @@ type ClaudeCore interface {
 
 // FeishuClient is the interface for the Feishu bot client.
 type FeishuClient interface {
-	SetHandlers(func(*feishu.InboundMessage), func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), func(*feishu.BotMenuClick), func(*feishu.MessageRecall), func(*feishu.MessageReaction))
+	SetHandlers(func(*feishu.InboundMessage), func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), func(*feishu.MessageRecall), func(*feishu.MessageReaction))
 	Start(context.Context) error
 	Stop()
 	ConfigureLocalFileLinks(string, string)

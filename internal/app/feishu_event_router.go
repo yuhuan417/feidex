@@ -258,18 +258,3 @@ func (r *feishuEventRouter) handleReaction(reaction *feishu.MessageReaction) {
 	}
 }
 
-func (r *feishuEventRouter) handleBotMenu(click *feishu.BotMenuClick) {
-	a := r.app
-	if click == nil {
-		return
-	}
-	msg := &feishu.InboundMessage{
-		UserID:   click.UserID,
-		ChatID:   click.UserID,
-		ChatType: "p2p",
-		Text:     click.Command,
-	}
-	if err := handleCommand(a, msg, click.Command); err != nil {
-		_ = a.feishu.SendText(a.Context(), click.UserID, "命令执行失败: "+err.Error())
-	}
-}

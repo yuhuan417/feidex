@@ -348,7 +348,7 @@ type fakeAnnouncementCreateCall struct {
 	index         *int
 }
 
-func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.BotMenuClick), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
+func (f *fakeFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), _ func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), _ func(*feishu.MessageRecall), _ func(*feishu.MessageReaction)) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.onMessage = onMessage
@@ -1183,11 +1183,6 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 	}
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "执行失败: boom2") {
 		t.Fatalf("replyError() did not send fallback text: %+v", ff.sentTexts)
-	}
-
-	a.HandleBotMenu(&feishu.BotMenuClick{UserID: "u-1", Command: "/unknown"})
-	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[len(ff.sentTexts)-1], "命令执行失败") {
-		t.Fatalf("handleBotMenu() did not send command failure: %+v", ff.sentTexts)
 	}
 
 	if !isStaleInboundMessage(a.started, &feishu.InboundMessage{CreatedAt: a.started.Add(-31 * time.Second).Unix()}) {

@@ -147,7 +147,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		}
 		handle.install(app)
 	}
-	app.feishu.SetHandlers(app.HandleFeishuMessage, app.HandleCardAction, app.HandleBotMenu, app.HandleFeishuRecall, app.HandleFeishuReaction)
+	app.feishu.SetHandlers(app.HandleFeishuMessage, app.HandleCardAction, app.HandleFeishuRecall, app.HandleFeishuReaction)
 	configureGroupMessagePolicy(app)
 	configureGroupPrimaryEvents(app)
 	app.feishu.ConfigureLocalFileLinks("", "")
@@ -305,10 +305,6 @@ func nonZero(values ...int64) int64 {
 		}
 	}
 	return 0
-}
-
-func (a *App) HandleBotMenu(click *feishu.BotMenuClick) {
-	newFeishuEventRouter(a).handleBotMenu(click)
 }
 
 func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

@@ -24,7 +24,6 @@ import (
 	larkcache "github.com/larksuite/oapi-sdk-go/v3/cache"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
-	larkapplication "github.com/larksuite/oapi-sdk-go/v3/service/application/v6"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 )
@@ -98,12 +97,6 @@ type CardAction struct {
 	Checked     bool
 }
 
-type BotMenuClick struct {
-	UserID   string
-	UserName string
-	Command  string
-}
-
 type BotGroupEvent struct {
 	ChatID   string
 	ChatName string
@@ -135,7 +128,6 @@ type Adapter struct {
 
 	onMessage    func(*InboundMessage)
 	onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error)
-	onBotMenu    func(*BotMenuClick)
 	onBotAdded   func(*BotGroupEvent)
 	onRecall     func(*MessageRecall)
 	onReaction   func(*MessageReaction)
@@ -212,10 +204,9 @@ func New(cfg config.FeishuConfig) *Adapter {
 	}
 }
 
-func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*BotMenuClick), onRecall func(*MessageRecall), onReaction func(*MessageReaction)) {
+func (a *Adapter) SetHandlers(onMessage func(*InboundMessage), onCardAction func(*CardAction) (*callback.CardActionTriggerResponse, error), onRecall func(*MessageRecall), onReaction func(*MessageReaction)) {
 	a.onMessage = onMessage
 	a.onCardAction = onCardAction
-	a.onBotMenu = onBotMenu
 	a.onRecall = onRecall
 	a.onReaction = onReaction
 }
@@ -328,11 +319,6 @@ func (a *Adapter) Start(ctx context.Context) error {
 				}
 				return nil
 			}).
-			OnP2MessageReadV1(func(ctx context.Context, event *larkim.P2MessageReadV1) error {
-				// We don't currently consume read receipts, but registering a
-				// handler prevents the SDK from treating them as unhandled events.
-				return nil
-			}).
 			OnP2MessageRecalledV1(func(ctx context.Context, event *larkim.P2MessageRecalledV1) error {
 				if a.onRecall != nil {
 					if recall := a.convertMessageRecall(event); recall != nil {
@@ -349,32 +335,8 @@ func (a *Adapter) Start(ctx context.Context) error {
 				}
 				return nil
 			}).
-			OnP2MessageReactionDeletedV1(func(ctx context.Context, event *larkim.P2MessageReactionDeletedV1) error {
-				// We don't currently need user reaction-deleted semantics, but
-				// registering a handler prevents the SDK from logging it as an
-				// unhandled callback event.
-				return nil
-			}).
 			OnP2CardActionTrigger(func(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
 				return a.handleCardActionEvent(ctx, event)
-			}).
-			OnP2BotMenuV6(func(ctx context.Context, event *larkapplication.P2BotMenuV6) error {
-				if a.onBotMenu == nil || event == nil || event.Event == nil || event.Event.EventKey == nil {
-					return nil
-				}
-				userID := ""
-				if event.Event.Operator != nil && event.Event.Operator.OperatorId != nil && event.Event.Operator.OperatorId.OpenId != nil {
-					userID = *event.Event.Operator.OperatorId.OpenId
-				}
-				if !a.allowed(userID) {
-					return nil
-				}
-				cmd := *event.Event.EventKey
-				if !strings.HasPrefix(cmd, "/") {
-					cmd = "/" + cmd
-				}
-				go a.onBotMenu(&BotMenuClick{UserID: userID, Command: cmd})
-				return nil
 			}).
 			OnP2ChatMemberBotAddedV1(func(ctx context.Context, event *larkim.P2ChatMemberBotAddedV1) error {
 				if a.onBotAdded == nil || event == nil || event.Event == nil || event.Event.ChatId == nil {
