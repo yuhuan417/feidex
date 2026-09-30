@@ -38,9 +38,26 @@ type State struct {
 	AppScopes       []string
 	OnlineVersion   string
 	OnlineVersionID string
-	VersionScopes   []string
-	VersionEvents   []string
+	// OnlineVersionStatus is the online version's audit status, using the
+	// platform enum mirrored by AppVersionStatus* constants.
+	OnlineVersionStatus int
+	// UnauditVersionID is the version currently under audit, if any. Publishing
+	// a change that needs review leaves the online version untouched and parks
+	// the new one here.
+	UnauditVersionID string
+	VersionScopes    []string
+	VersionEvents    []string
 }
+
+// Application version audit status, mirrored from the official SDK
+// (service/application/v6 AppVersionStatus*).
+const (
+	AppVersionStatusUnknown    = 0 // 未知状态
+	AppVersionStatusAudited    = 1 // 审核通过
+	AppVersionStatusReject     = 2 // 审核拒绝
+	AppVersionStatusUnderAudit = 3 // 审核中
+	AppVersionStatusUnaudit    = 4 // 未提交审核
+)
 
 // HasScope reports whether the application has been granted the scope.
 func (s *State) HasScope(scope string) bool {
@@ -145,7 +162,8 @@ func (c *Client) FetchState(ctx context.Context) (*State, error) {
 				Scopes []struct {
 					Scope string `json:"scope"`
 				} `json:"scopes"`
-				OnlineVersionID string `json:"online_version_id"`
+				OnlineVersionID  string `json:"online_version_id"`
+				UnauditVersionID string `json:"unaudit_version_id"`
 			} `json:"app"`
 		} `json:"data"`
 	}
@@ -155,7 +173,8 @@ func (c *Client) FetchState(ctx context.Context) (*State, error) {
 		return nil, err
 	}
 	state := &State{
-		OnlineVersionID: strings.TrimSpace(appResp.Data.App.OnlineVersionID),
+		OnlineVersionID:  strings.TrimSpace(appResp.Data.App.OnlineVersionID),
+		UnauditVersionID: strings.TrimSpace(appResp.Data.App.UnauditVersionID),
 	}
 	for _, scope := range appResp.Data.App.Scopes {
 		if value := strings.TrimSpace(scope.Scope); value != "" {
@@ -169,6 +188,7 @@ func (c *Client) FetchState(ctx context.Context) (*State, error) {
 		Data struct {
 			AppVersion struct {
 				Version string `json:"version"`
+				Status  int    `json:"status"`
 				Scopes  []struct {
 					Scope string `json:"scope"`
 				} `json:"scopes"`
@@ -185,6 +205,7 @@ func (c *Client) FetchState(ctx context.Context) (*State, error) {
 	}
 	version := versionResp.Data.AppVersion
 	state.OnlineVersion = strings.TrimSpace(version.Version)
+	state.OnlineVersionStatus = version.Status
 	for _, scope := range version.Scopes {
 		if value := strings.TrimSpace(scope.Scope); value != "" {
 			state.VersionScopes = append(state.VersionScopes, value)

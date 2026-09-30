@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -14,6 +16,11 @@ import (
 type fakeAppConfigHealClient struct {
 	state      *appconfig.State
 	stateAfter *appconfig.State
+	// states, when set, is an explicit per-call sequence; the last entry
+	// repeats. It models the platform promoting a version after a delay.
+	states []*appconfig.State
+	// fetchErr, when set, is returned for every fetch after the first one.
+	fetchErr   error
 	fetchCalls int
 	fixes      []appconfig.FixPlan
 	publishes  []string
@@ -22,11 +29,40 @@ type fakeAppConfigHealClient struct {
 }
 
 func (f *fakeAppConfigHealClient) FetchState(context.Context) (*appconfig.State, error) {
+	index := f.fetchCalls
 	f.fetchCalls++
-	if f.fetchCalls > 1 && f.stateAfter != nil {
+	if f.fetchErr != nil && index > 0 {
+		return nil, f.fetchErr
+	}
+	if len(f.states) > 0 {
+		if index >= len(f.states) {
+			index = len(f.states) - 1
+		}
+		return f.states[index], nil
+	}
+	if index > 0 && f.stateAfter != nil {
 		return f.stateAfter, nil
 	}
 	return f.state, nil
+}
+
+// withFastHealPolling shrinks the post-publish poll window so tests do not
+// wait for the real one.
+func withFastHealPolling(t *testing.T) {
+	t.Helper()
+	prevInterval, prevTimeout := feishuAppConfigHealPollInterval, feishuAppConfigHealPollTimeout
+	feishuAppConfigHealPollInterval = time.Millisecond
+	feishuAppConfigHealPollTimeout = 20 * time.Millisecond
+	t.Cleanup(func() {
+		feishuAppConfigHealPollInterval, feishuAppConfigHealPollTimeout = prevInterval, prevTimeout
+	})
+}
+
+// driftedHealState returns an in-sync state with one scope missing.
+func driftedHealState() *appconfig.State {
+	drifted := inSyncHealState()
+	drifted.VersionScopes = dropString(drifted.VersionScopes, "drive:drive")
+	return drifted
 }
 
 func (f *fakeAppConfigHealClient) ApplyFix(_ context.Context, plan appconfig.FixPlan) error {
@@ -107,11 +143,11 @@ func TestFeishuAppConfigHealRequestsAuthorizationWithoutPatch(t *testing.T) {
 func TestFeishuAppConfigHealRepairsDriftAndReports(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.AppID = "cli_test"
-	drifted := inSyncHealState()
-	drifted.VersionScopes = dropString(drifted.VersionScopes, "drive:drive")
+	drifted := driftedHealState()
 	drifted.VersionEvents = append(drifted.VersionEvents, "im.message.message_read_v1")
 	fake := &fakeAppConfigHealClient{state: drifted, stateAfter: inSyncHealState()}
 	withFakeHealClient(t, fake)
+	withFastHealPolling(t)
 
 	runFeishuAppConfigHeal(a)
 
@@ -143,10 +179,10 @@ func TestFeishuAppConfigHealRepairsDriftAndReports(t *testing.T) {
 func TestFeishuAppConfigHealReportsPendingPublish(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.AppID = "cli_test"
-	drifted := inSyncHealState()
-	drifted.VersionScopes = dropString(drifted.VersionScopes, "drive:drive")
+	drifted := driftedHealState()
 	fake := &fakeAppConfigHealClient{state: drifted, stateAfter: drifted}
 	withFakeHealClient(t, fake)
+	withFastHealPolling(t)
 
 	runFeishuAppConfigHeal(a)
 
@@ -202,4 +238,118 @@ func dropString(values []string, drop string) []string {
 		}
 	}
 	return out
+}
+
+// The platform promotes a published version asynchronously, so the first
+// re-fetch may still see the old online version. The heal must keep polling
+// and report success once it flips, instead of reporting "等待生效" purely
+// because it sampled too early.
+func TestFeishuAppConfigHealWaitsForVersionPromotion(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.AppID = "cli_test"
+	withFastHealPolling(t)
+	promoted := inSyncHealState()
+	promoted.OnlineVersion = "1.0.10"
+	fake := &fakeAppConfigHealClient{states: []*appconfig.State{driftedHealState(), driftedHealState(), promoted}}
+	withFakeHealClient(t, fake)
+
+	runFeishuAppConfigHeal(a)
+
+	notes := a.State().FrontendCardNotifications()
+	if len(notes) != 1 || notes[0].Title != "飞书配置已自动修复" {
+		t.Fatalf("card = %+v, want the success card after the version was promoted", notes)
+	}
+	if fake.fetchCalls != 3 {
+		t.Fatalf("fetch calls = %d, want the heal to poll until the version was online", fake.fetchCalls)
+	}
+}
+
+// A version parked in review must be reported as such, not as a generic wait.
+func TestFeishuAppConfigHealReportsAuditPending(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.AppID = "cli_test"
+	withFastHealPolling(t)
+	underAudit := driftedHealState()
+	underAudit.UnauditVersionID = "oav_under_audit"
+	fake := &fakeAppConfigHealClient{states: []*appconfig.State{driftedHealState(), underAudit}}
+	withFakeHealClient(t, fake)
+
+	runFeishuAppConfigHeal(a)
+
+	notes := a.State().FrontendCardNotifications()
+	if len(notes) != 1 || notes[0].Title != "飞书配置修复等待审核" {
+		t.Fatalf("card = %+v, want the audit-pending card", notes)
+	}
+	if !strings.Contains(notes[0].Body, "oav_under_audit") {
+		t.Fatalf("card body = %q, want the version under audit", notes[0].Body)
+	}
+}
+
+// A verification that cannot reach the platform must not be reported as an
+// audit wait.
+func TestFeishuAppConfigHealReportsVerifyFailure(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.AppID = "cli_test"
+	withFastHealPolling(t)
+	fake := &fakeAppConfigHealClient{state: driftedHealState(), fetchErr: errors.New("connection reset")}
+	withFakeHealClient(t, fake)
+
+	runFeishuAppConfigHeal(a)
+
+	notes := a.State().FrontendCardNotifications()
+	if len(notes) != 1 || notes[0].Title != "飞书配置修复已提交,复查失败" {
+		t.Fatalf("card = %+v, want the verify-failure card", notes)
+	}
+	if !strings.Contains(notes[0].Body, "connection reset") {
+		t.Fatalf("card body = %q, want the fetch error", notes[0].Body)
+	}
+}
+
+// If our own version is online and the configuration still disagrees, the
+// repair did not land and the owner has to look at the console.
+func TestFeishuAppConfigHealReportsMismatchWhenOwnVersionIsOnline(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.AppID = "cli_test"
+	withFastHealPolling(t)
+	stillDrifted := driftedHealState()
+	stillDrifted.OnlineVersion = "1.0.10" // the version Publish reported
+	fake := &fakeAppConfigHealClient{states: []*appconfig.State{driftedHealState(), stillDrifted}}
+	withFakeHealClient(t, fake)
+
+	runFeishuAppConfigHeal(a)
+
+	notes := a.State().FrontendCardNotifications()
+	if len(notes) != 1 || notes[0].Title != "飞书配置修复未完全生效" {
+		t.Fatalf("card = %+v, want the mismatch card", notes)
+	}
+	if !strings.Contains(notes[0].Body, "drive:drive") {
+		t.Fatalf("card body = %q, want the remaining drift", notes[0].Body)
+	}
+}
+
+// A version already waiting for review must stop the heal from piling up more
+// versions on every startup: report and wait instead of patching again.
+func TestFeishuAppConfigHealWaitsWhenVersionAlreadyUnderAudit(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.AppID = "cli_test"
+	drifted := driftedHealState()
+	drifted.UnauditVersionID = "oav_pending_from_last_startup"
+	fake := &fakeAppConfigHealClient{state: drifted, stateAfter: inSyncHealState()}
+	withFakeHealClient(t, fake)
+
+	runFeishuAppConfigHeal(a)
+
+	if len(fake.fixes) != 0 || len(fake.publishes) != 0 {
+		t.Fatalf("fixes = %v, publishes = %v; want no new submission while a version is under audit", fake.fixes, fake.publishes)
+	}
+	if fake.fetchCalls != 1 {
+		t.Fatalf("fetch calls = %d, want the heal to stop after the first read", fake.fetchCalls)
+	}
+	notes := a.State().FrontendCardNotifications()
+	if len(notes) != 1 || notes[0].Title != "飞书配置修复等待审核" {
+		t.Fatalf("card = %+v, want the audit-pending card", notes)
+	}
+	if !strings.Contains(notes[0].Body, "oav_pending_from_last_startup") {
+		t.Fatalf("card body = %q, want the version under audit", notes[0].Body)
+	}
 }

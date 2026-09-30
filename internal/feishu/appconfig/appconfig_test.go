@@ -69,9 +69,10 @@ func TestFetchStateReadsScopesAndPublishedVersion(t *testing.T) {
 	server, recorded := newMockAPI(t, map[string]any{
 		"POST /open-apis/auth/v3/tenant_access_token/internal": `{"code":0,"tenant_access_token":"tok-1"}`,
 		"GET /open-apis/application/v6/applications/cli_test": `{"code":0,"data":{"app":{"scopes":[` +
-			`{"scope":"im:message"},{"scope":"application:application:patch"}],"online_version_id":"oav_1"}}}`,
+			`{"scope":"im:message"},{"scope":"application:application:patch"}],"online_version_id":"oav_1",` +
+			`"unaudit_version_id":"oav_audit_1"}}}`,
 		"GET /open-apis/application/v6/applications/cli_test/app_versions/oav_1": `{"code":0,"data":{"app_version":{` +
-			`"version":"1.0.9","scopes":[{"scope":"im:message"}],` +
+			`"version":"1.0.9","status":1,"scopes":[{"scope":"im:message"}],` +
 			`"event_infos":[{"event_type":"im.message.receive_v1"},{"event_type":"im.message.recalled_v1"}]}}}`,
 	})
 	client := newMockClient(server)
@@ -88,6 +89,12 @@ func TestFetchStateReadsScopesAndPublishedVersion(t *testing.T) {
 	}
 	if len(state.VersionEvents) != 2 || state.VersionEvents[0] != "im.message.receive_v1" {
 		t.Fatalf("FetchState() version events = %v", state.VersionEvents)
+	}
+	if state.OnlineVersionStatus != AppVersionStatusAudited {
+		t.Fatalf("FetchState() version status = %d, want %d", state.OnlineVersionStatus, AppVersionStatusAudited)
+	}
+	if state.UnauditVersionID != "oav_audit_1" {
+		t.Fatalf("FetchState() unaudit version = %q", state.UnauditVersionID)
 	}
 	for _, req := range *recorded {
 		if req.path != "/open-apis/auth/v3/tenant_access_token/internal" && req.auth != "Bearer tok-1" {
