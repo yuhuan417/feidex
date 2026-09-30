@@ -77,6 +77,7 @@ func (s *Service) Start(ctx context.Context) error {
 		newRuntimeMaintenanceService(app).StartDriveArtifactGCLoop(ctx)
 		newRuntimeMaintenanceService(app).StartUpgradeCheckLoop(ctx)
 		go sendStartupReadyNotifications(app)
+		runAsync(app, func() { runFeishuAppConfigHeal(app) })
 	}
 	return nil
 }

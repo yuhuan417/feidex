@@ -1131,6 +1131,42 @@ func (s *Store) AppendFrontendCardNotification(frontendID string, note FrontendC
 	return s.saveLocked()
 }
 
+// DeleteFrontendCardNotificationsByCollapseKey removes queued notifications
+// that share the given collapse key, so a stale notice can be dropped once
+// the condition it described has been resolved.
+func (s *Store) DeleteFrontendCardNotificationsByCollapseKey(frontendID, collapseKey string) error {
+	collapseKey = strings.TrimSpace(collapseKey)
+	if collapseKey == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	frontendID = strings.TrimSpace(frontendID)
+	existing := s.data.FrontendCardNotifications[frontendID]
+	if len(existing) == 0 {
+		return nil
+	}
+	target := "collapse|" + collapseKey
+	next := make([]FrontendCardNotification, 0, len(existing))
+	removed := false
+	for _, note := range existing {
+		if frontendCardNotificationKey(note) == target {
+			removed = true
+			continue
+		}
+		next = append(next, note)
+	}
+	if !removed {
+		return nil
+	}
+	if len(next) == 0 {
+		delete(s.data.FrontendCardNotifications, frontendID)
+	} else {
+		s.data.FrontendCardNotifications[frontendID] = next
+	}
+	return s.saveLocked()
+}
+
 func (s *Store) DrainFrontendCardNotifications(frontendID string) ([]FrontendCardNotification, error) {
 	frontendID = strings.TrimSpace(frontendID)
 	s.mu.Lock()

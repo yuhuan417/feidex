@@ -129,6 +129,8 @@ feidex feishu bind --app app_id:app_secret --domain lark
 
 > 提示：消息相关 scope 不全时，长连接能建立但**收不到消息事件**（连得上却不回复）。若 bot 不响应，优先核对上面的消息权限并重新发布。
 
+> 自愈：Feidex 启动时会自动把应用权限与事件订阅校准到当前二进制需要的清单（定义在代码里）。缺少 `application:application:patch` 时会发一张带申请链接的卡片；授权后下次启动自动完成剩余配置。细节见[飞书权限与事件订阅清单](feishu-permissions.md#启动自愈)。
+
 ## `[codex]`
 
 - `command`

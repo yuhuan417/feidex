@@ -16,6 +16,7 @@ Read these documents before making non-trivial changes:
 - If a change touches `internal/app`, `internal/codexrpc`, approvals, turn lifecycle, thread lifecycle, review flow, compaction, tool input, or server requests, you must explicitly check it against the state machine audit.
 - Do not introduce behavior that contradicts the documented protocol state unless you also update the audit document and explain the reason.
 - Feishu event subscriptions must always pair with a handler in code: never subscribe an event the code does not handle, and remove the subscription when its handler is removed. A no-op handler is not handling. See `docs/feishu-permissions.md`.
+- The Feishu scopes and events a binary needs are self-contained in code (`internal/feishu/appconfig/requirements.go`, `internal/feishu/events.go`) and are auto-reconciled with the platform at startup; update those declarations alongside features and never rely on an external document as the runtime source of truth.
 - Prefer shared helpers and existing abstractions over duplicating similar logic in multiple packages.
 
 ## Practical Expectation

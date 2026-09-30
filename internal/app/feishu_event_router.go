@@ -258,4 +258,3 @@ func (r *feishuEventRouter) handleReaction(reaction *feishu.MessageReaction) {
 		)
 	}
 }
-

@@ -168,6 +168,7 @@ func (a *App) Start(ctx context.Context) error {
 	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
 	scheduleStartupGroupAnnouncementRefreshes(a)
 	go sendStartupReadyNotifications(a)
+	runAsync(a, func() { runFeishuAppConfigHeal(a) })
 	return nil
 }
 

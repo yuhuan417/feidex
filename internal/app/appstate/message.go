@@ -68,6 +68,15 @@ func (s *Store) QueueFrontendCardNotification(note state.FrontendCardNotificatio
 	return s.Store.AppendFrontendCardNotification(strings.TrimSpace(s.FrontendID), note)
 }
 
+// DeleteFrontendCardNotificationsByCollapseKey drops queued notifications of
+// one collapse key for this frontend.
+func (s *Store) DeleteFrontendCardNotificationsByCollapseKey(collapseKey string) error {
+	if s == nil || s.Store == nil {
+		return nil
+	}
+	return s.Store.DeleteFrontendCardNotificationsByCollapseKey(strings.TrimSpace(s.FrontendID), collapseKey)
+}
+
 // FrontendCardNotifications returns pending frontend-scoped card notifications.
 func (s *Store) FrontendCardNotifications() []state.FrontendCardNotification {
 	if s == nil || s.Store == nil {

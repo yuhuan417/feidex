@@ -310,46 +310,7 @@ func (a *Adapter) SetBotGroupAddedHandler(handler func(*BotGroupEvent)) {
 func (a *Adapter) Start(ctx context.Context) error {
 	a.startOnce.Do(func() {
 		a.ensureBotProfile("startup")
-		dispatcher := dispatcher.NewEventDispatcher("", "").
-			OnP2MessageReceiveV1(func(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
-				if a.onMessage != nil {
-					if msg := a.convertMessage(event); msg != nil {
-						go a.onMessage(msg)
-					}
-				}
-				return nil
-			}).
-			OnP2MessageRecalledV1(func(ctx context.Context, event *larkim.P2MessageRecalledV1) error {
-				if a.onRecall != nil {
-					if recall := a.convertMessageRecall(event); recall != nil {
-						go a.onRecall(recall)
-					}
-				}
-				return nil
-			}).
-			OnP2MessageReactionCreatedV1(func(ctx context.Context, event *larkim.P2MessageReactionCreatedV1) error {
-				if a.onReaction != nil {
-					if reaction := a.convertMessageReaction(event); reaction != nil {
-						go a.onReaction(reaction)
-					}
-				}
-				return nil
-			}).
-			OnP2CardActionTrigger(func(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
-				return a.handleCardActionEvent(ctx, event)
-			}).
-			OnP2ChatMemberBotAddedV1(func(ctx context.Context, event *larkim.P2ChatMemberBotAddedV1) error {
-				if a.onBotAdded == nil || event == nil || event.Event == nil || event.Event.ChatId == nil {
-					return nil
-				}
-				chatName := ""
-				if event.Event.Name != nil {
-					chatName = *event.Event.Name
-				}
-				go a.onBotAdded(&BotGroupEvent{ChatID: *event.Event.ChatId, ChatName: chatName})
-				return nil
-			})
-		a.wsDispatcher = dispatcher
+		a.wsDispatcher = a.buildEventDispatcher()
 		a.wsFragments = larkcache.New(30 * time.Second)
 		a.wsPingInterval = wsDefaultPingInterval
 		a.wsReconnectInterval = wsDefaultReconnectInterval
