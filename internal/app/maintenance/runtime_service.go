@@ -84,9 +84,8 @@ type App interface {
 	// MaintenanceClearSessionLiveThread clears live-thread tracking for the
 	// session.
 	MaintenanceClearSessionLiveThread(sessionKey string)
-	// MaintenanceConfiguredGlobalModel returns the effective global model used
-	// for startup thread recovery.
-	MaintenanceConfiguredGlobalModel() string
+	// MaintenanceEffectiveModel resolves startup recovery settings for this session.
+	MaintenanceEffectiveModel(sess *state.Session) string
 	// MaintenanceRecoverStartupConversation rebuilds backend-specific startup
 	// conversation state for an active thread.
 	MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)

@@ -97,7 +97,6 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 	if appState == nil {
 		return
 	}
-	effectiveModel := s.app.MaintenanceConfiguredGlobalModel()
 	for _, sess := range appState.Sessions() {
 		if sess == nil {
 			continue
@@ -133,6 +132,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 			s.app.MaintenanceClearSessionLiveThread(sessionKey)
 			continue
 		}
+		effectiveModel := s.app.MaintenanceEffectiveModel(sess)
 		s.app.MaintenanceRecoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
 	}
 }

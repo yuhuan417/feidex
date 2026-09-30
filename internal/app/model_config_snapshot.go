@@ -77,19 +77,30 @@ func modelConfigStatus(a *App, sessionKey string) string {
 	if sess == nil {
 		return notice
 	}
+	desired := modelConfigSnapshot(a, sess, backend)
+	nextModel, nextEffort := modelConfigTurnSettings(desired)
+	notice += "\n下一轮本地启动模型：`" + firstNonEmpty(nextModel, "默认") + "`；推理强度：`" + firstNonEmpty(nextEffort, "默认") + "`。"
 	if sess.ModelConfigError != "" {
 		notice += "\n配置应用失败/待生效：" + sess.ModelConfigError
 	}
 	applied := sess.AppliedModelConfig
 	if applied.Valid && applied.Backend == backend && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		notice += "\n最近已应用模型：`" + firstNonEmpty(applied.Model, "默认") + "`；推理强度：`" + firstNonEmpty(applied.Effort, "默认") + "`。"
-		if modelConfigSnapshot(a, sess, backend) != applied {
+		appliedModel, appliedEffort := modelConfigTurnSettings(applied)
+		notice += "\n最近已应用模型：`" + firstNonEmpty(appliedModel, "默认") + "`；推理强度：`" + firstNonEmpty(appliedEffort, "默认") + "`。"
+		if desired != applied {
 			notice += "\n已保存配置与当前应用值不同，待对应边界生效。"
 		}
 	} else {
 		notice += "\n当前会话尚无已确认的配置应用记录。"
 	}
 	return notice
+}
+
+func modelConfigTurnSettings(snapshot state.ModelConfigSnapshot) (string, string) {
+	if snapshot.Backend == backendCodex && snapshot.CollaborationMode == "plan" {
+		return firstNonEmpty(snapshot.PlanModel, snapshot.Model), snapshot.PlanEffort
+	}
+	return snapshot.Model, snapshot.Effort
 }
 
 func modelConfigReadCopy(a *App) *config.Config {

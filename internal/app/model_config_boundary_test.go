@@ -83,6 +83,10 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 	if got := a.store.GetSession(sub.SessionKey).AppliedModelConfig; got.Model != "new" {
 		t.Fatalf("applied snapshot lost: %+v", got)
 	}
+	if got := modelConfigStatus(a, sub.SessionKey); !strings.Contains(got, "最近已应用模型：`new-plan`；推理强度：`high`") ||
+		!strings.Contains(got, "下一轮本地启动模型：`new-plan`；推理强度：`high`") {
+		t.Fatalf("plan status did not reflect collaboration mode: %s", got)
+	}
 }
 
 func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
@@ -165,6 +169,164 @@ func TestModelConfigCodexResumeAcknowledgesAuxiliarySettings(t *testing.T) {
 	if !applied.Valid || applied.ReviewModel != "new-review" || applied.SubagentModel != "new-subagent" || applied.SubagentEffort != "high" || applied.Effort != "" {
 		t.Fatalf("resume acknowledgment = %+v", applied)
 	}
+}
+
+func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
+	for _, resumeFails := range []bool{false, true} {
+		t.Run(fmt.Sprintf("resumeFails=%t", resumeFails), func(t *testing.T) {
+			a, _, fc := newTestApp(t)
+			a.frontendID = "bot-a"
+			a.cfg.Codex.Model = "config-default"
+			if err := a.State().SaveBotProfile(&state.BotProfile{Model: "gpt-5.6-sol"}); err != nil {
+				t.Fatal(err)
+			}
+			models := map[string]string{
+				"p2p": "gpt-5.6-sol", "group-a": "gpt-6-astra",
+				"group-b": "gpt-6.1-sol", "session": "session-model",
+			}
+			for chat, model := range models {
+				sess := &state.Session{
+					Key: "feishu:frontend:bot-a:chat:" + chat, ChatID: chat, ChatType: "group",
+					WorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+					ActiveThreadID: chat, Status: "idle",
+				}
+				if chat == "p2p" {
+					sess.ChatType = "p2p"
+				} else {
+					sess.BindingID = "binding-" + chat
+					if err := a.State().SaveAgentBinding(&state.AgentBinding{
+						ID: sess.BindingID, ChatID: chat, ChatType: "group", ModelOverride: model,
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if chat == "session" {
+					sess.ModelOverride = model
+					if err := a.State().SaveAgentBinding(&state.AgentBinding{
+						ID: sess.BindingID, ChatID: chat, ChatType: "group", ModelOverride: "binding-model",
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := a.State().SaveSession(sess); err != nil {
+					t.Fatal(err)
+				}
+			}
+			foreign := &state.Session{
+				Key: "feishu:frontend:bot-b:chat:foreign", WorkspaceID: a.cfg.Workspaces[0].ID,
+				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadID: "foreign", Status: "idle",
+			}
+			if err := a.store.UpsertSession(foreign); err != nil {
+				t.Fatal(err)
+			}
+			seen := map[string]int{}
+			fc.callHook = func(_ context.Context, method string, params any, out any) error {
+				p := params.(map[string]any)
+				model, _ := p["model"].(string)
+				switch method {
+				case "thread/resume":
+					chat := p["threadId"].(string)
+					if model != models[chat] || model == "" {
+						t.Fatalf("resume %s model = %q, want %q", chat, model, models[chat])
+					}
+					seen[chat]++
+					if resumeFails {
+						return errors.New("thread not found")
+					}
+					out.(*codexrpc.ThreadStartResult).Thread.ID = chat
+				case "thread/start":
+					chat := ""
+					for candidate, expected := range models {
+						if model == expected {
+							chat = candidate
+						}
+					}
+					if !resumeFails || chat == "" {
+						t.Fatalf("unexpected fresh thread model = %q", model)
+					}
+					seen[chat]++
+					out.(*codexrpc.ThreadStartResult).Thread.ID = chat
+				default:
+					t.Fatalf("unexpected method %s", method)
+				}
+				return nil
+			}
+			recoverFrontendRuntimeState(a)
+			for chat, model := range models {
+				wantCalls := 1
+				if resumeFails {
+					wantCalls = 2
+				}
+				if seen[chat] != wantCalls {
+					t.Fatalf("%s calls = %d, want %d", chat, seen[chat], wantCalls)
+				}
+				if !resumeFails {
+					key := "feishu:frontend:bot-a:chat:" + chat
+					if got := a.State().Session(key).AppliedModelConfig.Model; got != model {
+						t.Fatalf("%s applied model = %q, want %q", chat, got, model)
+					}
+					if got := modelConfigStatus(a, key); !strings.Contains(got, "最近已应用模型：`"+model+"`") {
+						t.Fatalf("%s status = %s", chat, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.frontendID = "bot-a"
+	a.cfg.Codex.Model = "gpt-5.6-sol"
+	a.cfg.Codex.ReviewModel, a.cfg.Codex.SubagentModel = "review-model", "subagent-model"
+	key := "feishu:frontend:bot-a:chat:group-model"
+	binding := &state.AgentBinding{ID: "binding-model", ChatID: "group-model", ChatType: "group", ModelOverride: "gpt-6-astra"}
+	if err := a.State().SaveAgentBinding(binding); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.State().SaveSession(&state.Session{
+		Key: key, ChatID: binding.ChatID, ChatType: "group", BindingID: binding.ID,
+		WorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveThreadID: "group-thread", Status: "idle",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method != "thread/resume" {
+			t.Fatalf("unexpected method %s", method)
+		}
+		out.(*codexrpc.ThreadStartResult).Thread.ID = "group-thread"
+		return nil
+	}
+	recoverFrontendRuntimeState(a)
+	binding.ModelOverride = "gpt-6.1-sol"
+	if err := a.State().SaveAgentBinding(binding); err != nil {
+		t.Fatal(err)
+	}
+	assertStatus := func(applied string, pending bool) {
+		t.Helper()
+		card := newBindingService(a).renderBindingCodexModelConfigCard(key, binding, codexrpc.ModelListResult{
+			Data: []codexrpc.ModelListEntry{{ID: "gpt-6.1-sol", Model: "gpt-6.1-sol"}},
+		})
+		got := mustJSON(card)
+		if strings.Contains(got, "gpt-5.6-sol") || !strings.Contains(got, "下一轮本地启动模型：`gpt-6.1-sol`") ||
+			!strings.Contains(got, "最近已应用模型：`"+applied+"`") || strings.Contains(got, "已保存配置与当前应用值不同") != pending {
+			t.Fatalf("incorrect model menu: %s", got)
+		}
+	}
+	assertStatus("gpt-6-astra", true)
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/start" || params.(map[string]any)["model"] != "gpt-6.1-sol" {
+			t.Fatalf("unexpected turn: %s %+v", method, params)
+		}
+		out.(*codexrpc.TurnStartResult).Turn.ID = "new-turn"
+		return nil
+	}
+	modelBoundaryQueuedSubmission(t, a, key, "group-thread", "next")
+	if err := startNextSubmission(a, key); err != nil {
+		t.Fatal(err)
+	}
+	assertStatus("gpt-6.1-sol", false)
 }
 
 func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
