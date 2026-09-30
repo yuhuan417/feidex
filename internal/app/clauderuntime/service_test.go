@@ -2,8 +2,13 @@ package clauderuntime
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	appapproval "feidex/internal/app/approval"
+	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/state"
 )
@@ -339,4 +344,492 @@ func TestSessionRestartReasonCoversModelAndAuxiliaryChanges(t *testing.T) {
 	if got := sessionRestartReason(live, false, "", "", ""); got != "primary_model_changed" {
 		t.Fatalf("cleared model restart reason = %q, want primary_model_changed", got)
 	}
+}
+
+// A background agent can ask for permission after the turn that spawned it was
+// cleaned up. The request must be delivered to the conversation instead of
+// being denied, and it must stay answerable.
+func TestHandlePermissionDeliversDetachedCardAfterTurnCleanup(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		gotID     string
+		gotTarget InteractionTarget
+	)
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			SendDetachedApprovalCard: func(requestID string, target InteractionTarget, presentation appapproval.Presentation) error {
+				mu.Lock()
+				gotID, gotTarget = requestID, target
+				mu.Unlock()
+				return nil
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			GetSession: func(string) *state.Session {
+				return &state.Session{
+					Key:            "session-1",
+					ChatID:         "chat-1",
+					RootMessageID:  "root-1",
+					OwnerUserID:    "user-1",
+					ActiveThreadID: "thread-1",
+				}
+			},
+		},
+	})
+	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
+
+	done := make(chan *claudecli.PermissionResponse, 1)
+	go func() {
+		resp, _ := svc.handlePermission(context.Background(), runtimeState, &claudecli.PermissionRequest{
+			RequestID: "req-detached",
+			ToolName:  "Bash",
+		})
+		done <- resp
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		delivered := gotID != ""
+		mu.Unlock()
+		if delivered {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("detached approval card was never delivered")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	target := gotTarget
+	mu.Unlock()
+	if !target.Detached() {
+		t.Fatalf("target = %#v, want a detached request", target)
+	}
+	if target.ChatID != "chat-1" || target.TriggerMessageID != "root-1" || target.UserID != "user-1" {
+		t.Fatalf("target anchors = %#v, want the session's Feishu anchors", target)
+	}
+
+	if err := svc.ResolveApproval("req-detached", appruntime.ClaudeApprovalResolution{Behavior: "allow"}); err != nil {
+		t.Fatalf("ResolveApproval() error = %v", err)
+	}
+	select {
+	case resp := <-done:
+		if resp == nil || resp.Behavior != claudecli.PermissionAllow {
+			t.Fatalf("permission response = %#v, want allow", resp)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("permission handler did not resume after the answer")
+	}
+}
+
+// Without a live turn and without any conversation anchor there is nobody to
+// ask, which is the only case that may be denied locally.
+func TestHandlePermissionDeniesWithoutAnyDeliveryTarget(t *testing.T) {
+	svc := NewService(Deps{
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+		},
+	})
+	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
+	resp, err := svc.handlePermission(context.Background(), runtimeState, &claudecli.PermissionRequest{
+		RequestID: "req-orphan",
+		ToolName:  "Bash",
+	})
+	if err != nil {
+		t.Fatalf("handlePermission() error = %v", err)
+	}
+	if resp == nil || resp.Behavior != claudecli.PermissionDeny {
+		t.Fatalf("permission response = %#v, want deny", resp)
+	}
+}
+
+func TestResetSessionExpiresInteractionCards(t *testing.T) {
+	var (
+		gotSession string
+		gotIDs     []string
+		gotReason  string
+	)
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			ExpireInteractionCards: func(sessionKey string, requestIDs []string, reason string) {
+				gotSession, gotIDs, gotReason = sessionKey, requestIDs, reason
+			},
+		},
+	})
+	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
+	svc.storePending("req-1", &PendingInteraction{
+		Kind:    "command",
+		Session: runtimeState,
+		RespCh:  make(chan PendingResponse, 1),
+	})
+
+	if err := svc.ResetSession("session-1"); err != nil {
+		t.Fatalf("ResetSession() error = %v", err)
+	}
+	if gotSession != "session-1" || len(gotIDs) != 1 || gotIDs[0] != "req-1" || gotReason != "session reset" {
+		t.Fatalf("expire call = (%q, %#v, %q), want session-1/[req-1]/session reset", gotSession, gotIDs, gotReason)
+	}
+	if _, ok := svc.pending["req-1"]; ok {
+		t.Fatal("pending interaction should be released on reset")
+	}
+}
+
+// The event loop only exits when the CLI process is gone, so even a session
+// with no active turn must release its pending cards.
+func TestCleanupStaleSessionOpsReleasesPendingCards(t *testing.T) {
+	var gotIDs []string
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			ExpireInteractionCards: func(sessionKey string, requestIDs []string, reason string) {
+				gotIDs = requestIDs
+			},
+		},
+		Lookup: LookupDeps{
+			GetSession:          func(string) *state.Session { return &state.Session{Key: "session-1"} },
+			SessionHasActiveOps: func(*state.Session) bool { return false },
+		},
+	})
+	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
+	svc.storePending("req-detached", &PendingInteraction{
+		Kind:    "command",
+		Session: runtimeState,
+		RespCh:  make(chan PendingResponse, 1),
+	})
+
+	svc.cleanupStaleSessionOps(runtimeState)
+
+	if len(gotIDs) != 1 || gotIDs[0] != "req-detached" {
+		t.Fatalf("expired ids = %#v, want the session's pending request", gotIDs)
+	}
+	if _, ok := svc.pending["req-detached"]; ok {
+		t.Fatal("pending interaction should be released when the event loop exits")
+	}
+}
+
+// A request the CLI withdrew (turn interrupted while the card was open) must
+// release the handler and close out the card instead of leaving it clickable.
+func TestHandlePermissionWithdrawnRequestExpiresCard(t *testing.T) {
+	var (
+		gotIDs    []string
+		gotReason string
+	)
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			SendDetachedApprovalCard: func(string, InteractionTarget, appapproval.Presentation) error { return nil },
+			ExpireInteractionCards: func(_ string, requestIDs []string, reason string) {
+				gotIDs, gotReason = requestIDs, reason
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			GetSession:           func(string) *state.Session { return &state.Session{Key: "session-1", ChatID: "chat-1"} },
+		},
+	})
+	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = svc.handlePermission(ctx, runtimeState, &claudecli.PermissionRequest{
+			RequestID: "req-withdrawn",
+			ToolName:  "Bash",
+		})
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		svc.mu.Lock()
+		_, registered := svc.pending["req-withdrawn"]
+		svc.mu.Unlock()
+		if registered {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("permission request was never registered")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	cancel(claudecli.ErrControlRequestWithdrawn)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler was not released by the withdrawal")
+	}
+	if len(gotIDs) != 1 || gotIDs[0] != "req-withdrawn" || gotReason != "request withdrawn" {
+		t.Fatalf("expire call = (%#v, %q), want req-withdrawn/request withdrawn", gotIDs, gotReason)
+	}
+	if _, ok := svc.pending["req-withdrawn"]; ok {
+		t.Fatal("withdrawn interaction should be released")
+	}
+}
+
+func newSubagentSessionState() *SessionState {
+	return &SessionState{
+		SessionKey: "session-1",
+		SessionID:  "thread-current",
+		BackgroundTasks: map[string]*BackgroundTaskState{
+			"agent-7": {
+				Live: true,
+				Target: BackgroundTaskTarget{
+					SessionKey:       "session-1",
+					WorkspaceID:      "ws-old",
+					ChatID:           "chat-old",
+					TriggerMessageID: "trigger-old",
+					UserID:           "user-old",
+					ThreadID:         "thread-old",
+					TurnID:           "turn-old",
+					TaskID:           "agent-7",
+					Description:      "inspect repo",
+					IsBackgrounded:   true,
+				},
+			},
+		},
+	}
+}
+
+// A subagent request must be routed by agent_id to the task that spawned it,
+// not to whichever turn happens to be current.
+func TestHandlePermissionAttributesSubagentRequestToItsTask(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		gotTarget InteractionTarget
+		gotBody   string
+		gotID     string
+	)
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			SendDetachedApprovalCard: func(requestID string, target InteractionTarget, presentation appapproval.Presentation) error {
+				mu.Lock()
+				gotID, gotTarget, gotBody = requestID, target, presentation.Body
+				mu.Unlock()
+				return nil
+			},
+		},
+		Lookup: LookupDeps{
+			// The spawning turn is gone: the task target must still be used.
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			GetSession:           func(string) *state.Session { return &state.Session{Key: "session-1", ChatID: "chat-new"} },
+		},
+	})
+	runtimeState := newSubagentSessionState()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = svc.handlePermission(context.Background(), runtimeState, &claudecli.PermissionRequest{
+			RequestID: "req-agent",
+			ToolName:  "Write",
+			ToolUseID: "call-subagent-1",
+			AgentID:   "agent-7",
+		})
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		delivered := gotID != ""
+		mu.Unlock()
+		if delivered {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("subagent approval card was never delivered")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	target, body := gotTarget, gotBody
+	mu.Unlock()
+	if target.ChatID != "chat-old" || target.TriggerMessageID != "trigger-old" || target.TurnID != "turn-old" {
+		t.Fatalf("target = %#v, want the spawning task's conversation anchors", target)
+	}
+	if !target.Detached() {
+		t.Fatalf("target = %#v, want detached because the spawning turn is gone", target)
+	}
+	if !strings.Contains(body, "后台 Agent「inspect repo」") {
+		t.Fatalf("card body = %q, want the source background agent", body)
+	}
+
+	if err := svc.ResolveApproval("req-agent", appruntime.ClaudeApprovalResolution{Behavior: "allow"}); err != nil {
+		t.Fatalf("ResolveApproval() error = %v", err)
+	}
+	<-done
+}
+
+// A foreground subagent's request stays bound to the submission of the turn
+// that spawned it, even when that is not the current turn.
+func TestHandlePermissionBindsForegroundSubagentToSpawningTurn(t *testing.T) {
+	var (
+		mu           sync.Mutex
+		gotSub       *state.Submission
+		gotSession   string
+		detachedUsed bool
+	)
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+				mu.Lock()
+				gotSession, gotSub = sessionKey, sub
+				mu.Unlock()
+				return nil
+			},
+			SendDetachedApprovalCard: func(string, InteractionTarget, appapproval.Presentation) error {
+				mu.Lock()
+				detachedUsed = true
+				mu.Unlock()
+				return nil
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
+				if threadID == "thread-old" && turnID == "turn-old" {
+					return "session-1", &state.Submission{
+						ID: "sub-old", SessionKey: "session-1", WorkspaceID: "ws-old",
+						ChatID: "chat-old", TriggerMessageID: "trigger-old", UserID: "user-old",
+						ThreadID: "thread-old", TurnID: "turn-old",
+					}
+				}
+				return "", nil
+			},
+		},
+	})
+	runtimeState := newSubagentSessionState()
+	runtimeState.SessionID = "thread-current"
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = svc.handlePermission(context.Background(), runtimeState, &claudecli.PermissionRequest{
+			RequestID: "req-agent-fg",
+			ToolName:  "Write",
+			AgentID:   "agent-7",
+		})
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		bound := gotSub != nil
+		mu.Unlock()
+		if bound {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("approval card was never delivered to the spawning submission")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	sub, sessionKey, detached := gotSub, gotSession, detachedUsed
+	mu.Unlock()
+	if sub == nil || sub.ID != "sub-old" || sessionKey != "session-1" {
+		t.Fatalf("bound delivery = (%q, %#v), want the spawning turn's submission", sessionKey, sub)
+	}
+	if detached {
+		t.Fatal("foreground subagent request must not be delivered detached")
+	}
+
+	if err := svc.ResolveApproval("req-agent-fg", appruntime.ClaudeApprovalResolution{Behavior: "allow"}); err != nil {
+		t.Fatalf("ResolveApproval() error = %v", err)
+	}
+	<-done
+}
+
+// A task registered without a live turn (a resumed subagent is always
+// registered in the background) must still capture the session anchors, so a
+// much later permission request can be attributed to it.
+func TestBackgroundTaskRegisteredWithoutTurnKeepsSessionAnchors(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		gotTarget InteractionTarget
+		gotID     string
+	)
+	svc := NewService(Deps{
+		Interactive: InteractiveDeps{
+			SendDetachedApprovalCard: func(requestID string, target InteractionTarget, presentation appapproval.Presentation) error {
+				mu.Lock()
+				gotID, gotTarget = requestID, target
+				mu.Unlock()
+				return nil
+			},
+		},
+		Lookup: LookupDeps{
+			// The resumed task has no submission of its own.
+			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			GetSession: func(string) *state.Session {
+				return &state.Session{
+					Key:            "session-1",
+					WorkspaceID:    "ws-1",
+					ChatID:         "chat-1",
+					RootMessageID:  "root-1",
+					OwnerUserID:    "user-1",
+					ActiveThreadID: "thread-1",
+					ActiveTurnID:   "turn-current",
+				}
+			},
+		},
+	})
+	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
+
+	// Registered with no current turn at all.
+	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
+		Subtype:        "task_started",
+		TaskID:         "agent-resumed",
+		IsBackgrounded: true,
+		Description:    "resumed task",
+	})
+	runtimeState.Mu.Lock()
+	task := runtimeState.BackgroundTasks["agent-resumed"]
+	runtimeState.Mu.Unlock()
+	if task == nil {
+		t.Fatal("task_started without a live turn was dropped")
+	}
+	if task.Target.TurnID != "" {
+		t.Fatalf("target turn = %q, want empty for a turn-less task", task.Target.TurnID)
+	}
+	if task.Target.ChatID != "chat-1" || task.Target.TriggerMessageID != "root-1" || task.Target.UserID != "user-1" {
+		t.Fatalf("target = %#v, want the session's Feishu anchors", task.Target)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = svc.handlePermission(context.Background(), runtimeState, &claudecli.PermissionRequest{
+			RequestID: "req-resumed",
+			ToolName:  "Write",
+			AgentID:   "agent-resumed",
+		})
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		mu.Lock()
+		delivered := gotID != ""
+		mu.Unlock()
+		if delivered {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("permission request from the resumed task was never delivered")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	target := gotTarget
+	mu.Unlock()
+	if !target.Detached() || target.ChatID != "chat-1" || target.TriggerMessageID != "root-1" {
+		t.Fatalf("target = %#v, want a detached delivery to the session anchors", target)
+	}
+	if err := svc.ResolveApproval("req-resumed", appruntime.ClaudeApprovalResolution{Behavior: "allow"}); err != nil {
+		t.Fatalf("ResolveApproval() error = %v", err)
+	}
+	<-done
 }

@@ -379,6 +379,21 @@ McpElicitation
 - `turn/plan/updated` 在 Codex 里只是 checklist 更新展示；Claude 当前也没有它的稳定等价原语。
 - 如果 Feidex 继续保留“执行中 checklist 实时更新”卡片，Claude backend 第一阶段需要降级成“仅在退出 plan mode 时展示一次计划确认”。
 
+### 交互请求的生命周期（实现约束）
+
+Claude 的交互请求（`can_use_tool`、`AskUserQuestion`、`ExitPlanMode`）没有 `serverRequest/resolved`，完成边界是**写回 `control_response` 的那一刻**，不是 turn 结束。实现上必须满足：
+
+- **读循环不被阻塞**：交互 handler 在独立 goroutine 上等待用户回答（`internal/claudecli/session.go`），否则一张没人回答的卡片会冻结整个 session 的 stdout 读取——后续 `result`、`task_notification`、`control_response` 全部读不到，连 CLI 进程退出都发现不了。stdin 写入由 `ndjsonWriter` 的内部锁串行化。
+- **不自动 deny**：请求到达时优先绑定当前 turn 的活跃 submission；绑定不到时（后台 Agent 比父 turn 活得久，或 turn 在用户思考期间已收尾）改用会话自身的投递锚点（store `state.Session` 的 `ChatID` / `RootMessageID` / `OwnerUserID` / `ActiveThreadID`，与后台任务完成通知同一套字段）投递卡片。只有连会话锚点都没有（启动自检、probe session）才拒绝，并记录 warn 日志。
+- **pending 不随 turn 清理**：turn 收尾时保留仍 open 的 Claude 交互 pending 及其 message link（`internal/app/lifecycle/pending.go` 的 `OutlivesTurn`），后台 Agent 的审批与延迟回答因此仍然有效。`TurnID` 保留原值即可：过期 turn 不会触发 thread 兜底查找，后续清理也不会再命中。
+- **会话真正结束才失效**：`ResetSession`、会话事件循环退出、transport failure 会走 `Service.expireSessionInteractions` → `ExpireClaudeInteractionCards`，把对应卡片标为 expired 并 patch 成状态卡，避免留一张点了才报错的死卡。这不是自动 deny：此时 CLI 请求已经随进程一起消失。
+- **CLI 撤回即释放**：CLI 用 `control_cancel_request` 声明它不再等待某个请求的答复（最典型的是 turn 被中断时仍挂着的 `can_use_tool`）。收到后 `internal/claudecli` 释放对应 handler 并且**不再写回 `control_response`**（CLI 会忽略撤回请求的响应），`clauderuntime` 用 `context.Cause` 区分"被撤回"与"会话重置"，把卡片置为 expired 并 patch 成"请求已撤回"，goroutine 不会一直挂着。对我们自己发出的请求（`set_model` 等），同样的消息会解除等待方的阻塞。
+- **精确归属（已实测）**：`can_use_tool` 带 `tool_use_id`（必填）与 `agent_id`（仅 subagent 有）。实测 claude 2.1.285：**`agent_id` 与 `system/task_started.task_id` 完全相等**，而 `tool_use_id` 是 subagent 自己的那次工具调用（不是 Task 工具块的 id），所以关联键只能是 `agent_id`。subagent 的请求因此按 `agent_id` 路由到生成它的那个 task：`state.BackgroundTasks[agent_id].Target` 里已经保存了 spawn 时的 turn / chat / trigger message / user / workspace；spawn turn 的 submission 还活着就照常绑定（前台 subagent 被中断时也能绑对），已经收尾就 detached 投递到那个会话。卡片正文会附一行「来源：后台 Agent「<描述>」」。
+  - `task_started` 注册时若没有活跃 turn（恢复出来的 subagent 总是以后台方式注册），同样会记录 target：此时用会话自身的锚点（`ChatID` / `RootMessageID` / `OwnerUserID` / `WorkspaceID`），但**不**复制会话当前的 `ActiveTurnID`——该 task 不是从那个 turn 起的，复制会导致错误绑定。这类 task 的请求一律 detached 投递。
+  - 实测同时复现了本项目的原始问题：prompt 顺序为 `system/task_started` → `result`（主 turn 正常结束）→ `can_use_tool`（后台 subagent 才来要权限），即后台 Agent 的审批天然晚于父 turn 结束。
+  - 探针：`internal/claudecli/probe_live_test.go`（`FEIDEX_CLAUDE_RUN_TOKEN_TESTS=1` 手动触发，默认跳过）。
+- 回答路径不依赖活跃 submission：`ResolveApproval` / `ResolveUserInput` / `ResolvePlanFeedback` 只依赖进程内的 `PendingInteraction`，`ResumeSubmissionAfterRequest` 找不到 submission 时是 no-op。
+
 ## 对现有代码结构的影响
 
 ### `internal/app`

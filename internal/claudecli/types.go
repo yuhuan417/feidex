@@ -31,6 +31,10 @@ var (
 	ErrNotStarted                       = errors.New("session not started")
 	ErrStopping                         = errors.New("session is stopping")
 	ErrEffortDefaultHotApplyUnsupported = errors.New("claude live session does not support clearing effort to default")
+	// ErrControlRequestWithdrawn is the cancellation cause for an interactive
+	// request the CLI withdrew with control_cancel_request. The request is no
+	// longer waiting for an answer, so nothing may be written back for it.
+	ErrControlRequestWithdrawn = errors.New("control request withdrawn by CLI")
 )
 
 type SessionConfig struct {
@@ -289,6 +293,13 @@ type PermissionRequest struct {
 	Input                 map[string]any
 	BlockedPath           *string
 	PermissionSuggestions []map[string]any
+	// ToolUseID identifies the tool call the request belongs to. Present on
+	// every can_use_tool request.
+	ToolUseID string
+	// AgentID identifies the subagent that issued the tool call. Empty when the
+	// call came from the main conversation, which is what distinguishes a
+	// subagent (possibly background) request from a top-level one.
+	AgentID string
 }
 
 type PermissionResponse struct {

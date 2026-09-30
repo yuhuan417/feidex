@@ -114,6 +114,21 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			SendClaudePlanModeCard: func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
 				return sendClaudePlanModeCard(app, requestID, sessionKey, sub, threadID, turnID, body)
 			},
+			SendDetachedApprovalCard: func(requestID string, target appclauderuntime.InteractionTarget, presentation appapproval.Presentation) error {
+				return newClaudeSupportService(app).SendDetachedApprovalCard(requestID, target, presentation)
+			},
+			SendDetachedUserInputCard: func(requestID string, target appclauderuntime.InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
+				return newClaudeSupportService(app).SendDetachedUserInputCard(requestID, target, payload)
+			},
+			SendDetachedUserInputFormCard: func(requestID string, target appclauderuntime.InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
+				return newClaudeSupportService(app).SendDetachedUserInputFormCard(requestID, target, payload)
+			},
+			SendDetachedPlanModeCard: func(requestID string, target appclauderuntime.InteractionTarget, body string) error {
+				return newClaudeSupportService(app).SendDetachedPlanModeCard(requestID, target, body)
+			},
+			ExpireInteractionCards: func(sessionKey string, requestIDs []string, reason string) {
+				ExpireClaudeInteractionCards(app, sessionKey, requestIDs, reason)
+			},
 		},
 		Lookup: appclauderuntime.LookupDeps{
 			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {

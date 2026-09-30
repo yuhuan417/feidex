@@ -68,6 +68,10 @@ func (a *App) handleCodexTransportError(client CodexClient, err error) {
 }
 
 func failClaudeSessionActiveWork(a *App, sessionKey, threadID string, err error) {
+	// The Claude runtime just reported that the session broke. Close out the
+	// cards that were still waiting for an answer before the terminal-failure
+	// sweep marks them resolved, otherwise they stay clickable and fail later.
+	ExpireClaudeInteractionCards(a, sessionKey, nil, "transport failure")
 	newBackendFailureService(a).FailClaudeSessionActiveWork(sessionKey, threadID, err)
 }
 

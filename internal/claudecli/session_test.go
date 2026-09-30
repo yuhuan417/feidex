@@ -3,6 +3,7 @@ package claudecli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -762,4 +764,244 @@ func sessionProcessAlive(pid int) bool {
 		return false
 	}
 	return proc.Signal(syscall.Signal(0)) == nil
+}
+
+// lockedBuffer is a concurrency-safe sink for writer tests.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func waitForBufferContains(t *testing.T, buf *lockedBuffer, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(buf.String(), want) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("buffer never contained %q; got %q", want, buf.String())
+}
+
+func newInteractiveTestSession(handler PermissionHandler) (*Session, *lockedBuffer) {
+	session := NewSession()
+	session.cfg.PermissionHandler = handler
+	buf := &lockedBuffer{}
+	session.writer = newNDJSONWriter(buf)
+	session.current = &turnState{
+		Number:        1,
+		Tools:         map[string]*toolState{},
+		SeenAssistant: map[string]bool{},
+	}
+	session.turns[1] = session.current
+	return session, buf
+}
+
+// A pending permission card must never freeze the stream: while the handler
+// waits for a human answer, later messages still have to be processed.
+func TestSessionKeepsReadingWhilePermissionRequestPending(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	handlerRelease := make(chan struct{})
+	session, buf := newInteractiveTestSession(PermissionHandlerFunc(func(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
+		close(handlerStarted)
+		select {
+		case <-handlerRelease:
+			return &PermissionResponse{Behavior: PermissionAllow}, nil
+		case <-ctx.Done():
+			return &PermissionResponse{Behavior: PermissionDeny, Message: ctx.Err().Error()}, nil
+		}
+	}))
+
+	session.handleLine([]byte(`{"type":"control_request","request_id":"req-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"}}}`))
+	select {
+	case <-handlerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("permission handler never started")
+	}
+
+	session.handleLine([]byte(`{"type":"assistant","message":{"id":"msg-1","role":"assistant","content":[{"type":"text","text":"still streaming"}]}}`))
+	event := readTextEvent(t, session.Events())
+	if event.Text != "still streaming" {
+		t.Fatalf("TextEvent = %#v, want the stream to keep flowing", event)
+	}
+
+	close(handlerRelease)
+	waitForBufferContains(t, buf, `"request_id":"req-1"`)
+	if !strings.Contains(buf.String(), `"behavior":"allow"`) {
+		t.Fatalf("control response = %q, want an allow response", buf.String())
+	}
+}
+
+func TestSessionStopCancelsPendingInteractiveHandler(t *testing.T) {
+	handlerDone := make(chan error, 1)
+	session, _ := newInteractiveTestSession(PermissionHandlerFunc(func(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
+		<-ctx.Done()
+		handlerDone <- ctx.Err()
+		return &PermissionResponse{Behavior: PermissionDeny}, nil
+	}))
+	session.started = true
+
+	session.handleLine([]byte(`{"type":"control_request","request_id":"req-stop","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}`))
+	if err := session.Stop(); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+
+	select {
+	case err := <-handlerDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("handler ctx error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler still blocked after Stop")
+	}
+}
+
+func TestNDJSONWriterSerialisesConcurrentFrames(t *testing.T) {
+	buf := &lockedBuffer{}
+	writer := newNDJSONWriter(buf)
+	const (
+		writerCount = 8
+		perWriter   = 40
+	)
+	pad := strings.Repeat("x", 8192) // larger than a pipe buffer
+
+	var wg sync.WaitGroup
+	for i := 0; i < writerCount; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < perWriter; j++ {
+				if err := writer.Write(map[string]any{"writer": id, "seq": j, "pad": pad}); err != nil {
+					t.Errorf("Write() error = %v", err)
+					return
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != writerCount*perWriter {
+		t.Fatalf("frame count = %d, want %d", len(lines), writerCount*perWriter)
+	}
+	for _, line := range lines {
+		if !json.Valid([]byte(line)) {
+			t.Fatalf("corrupt frame: %q", line[:min(len(line), 80)])
+		}
+	}
+}
+
+// The CLI withdraws a pending prompt when it stops waiting (for example a turn
+// interrupted while the card was open). The handler must be released and no
+// control response may be written for the withdrawn request.
+func TestSessionControlCancelRequestReleasesHandlerWithoutResponding(t *testing.T) {
+	handlerCtxErr := make(chan error, 1)
+	session, buf := newInteractiveTestSession(PermissionHandlerFunc(func(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
+		<-ctx.Done()
+		handlerCtxErr <- context.Cause(ctx)
+		return &PermissionResponse{Behavior: PermissionAllow}, nil
+	}))
+
+	session.handleLine([]byte(`{"type":"control_request","request_id":"req-withdraw","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}`))
+	waitForInteractiveRegistration(t, session, "req-withdraw")
+
+	session.handleLine([]byte(`{"type":"control_cancel_request","request_id":"req-withdraw"}`))
+
+	select {
+	case err := <-handlerCtxErr:
+		if !errors.Is(err, ErrControlRequestWithdrawn) {
+			t.Fatalf("cancel cause = %v, want ErrControlRequestWithdrawn", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler was not released by control_cancel_request")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := buf.String(); strings.TrimSpace(got) != "" {
+		t.Fatalf("wrote a response for a withdrawn request: %q", got)
+	}
+}
+
+// A cancel for one of our own in-flight requests must unblock its waiter.
+func TestSessionControlCancelRequestUnblocksOutboundWaiter(t *testing.T) {
+	session := NewSession()
+	session.writer = newNDJSONWriter(&lockedBuffer{})
+	session.started = true
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Initialize(context.Background())
+	}()
+	requestID := waitForPendingControlRequest(t, session)
+
+	session.handleLine([]byte(`{"type":"control_cancel_request","request_id":"` + requestID + `"}`))
+
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), ErrControlRequestWithdrawn.Error()) {
+			t.Fatalf("Initialize() error = %v, want the withdrawal error", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("outbound waiter was not released by control_cancel_request")
+	}
+}
+
+func waitForInteractiveRegistration(t *testing.T, session *Session, requestID string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		session.mu.Lock()
+		_, ok := session.interactive[requestID]
+		session.mu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("interactive request %q was never registered", requestID)
+}
+
+// A replayed control_request frame for a request that is still open must not
+// produce a second card or a second response.
+func TestSessionIgnoresReplayedInteractiveRequest(t *testing.T) {
+	handlerStarted := make(chan struct{}, 4)
+	release := make(chan struct{})
+	session, buf := newInteractiveTestSession(PermissionHandlerFunc(func(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
+		handlerStarted <- struct{}{}
+		select {
+		case <-release:
+			return &PermissionResponse{Behavior: PermissionAllow}, nil
+		case <-ctx.Done():
+			return &PermissionResponse{Behavior: PermissionDeny}, nil
+		}
+	}))
+
+	frame := []byte(`{"type":"control_request","request_id":"req-replay","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}`)
+	session.handleLine(frame)
+	<-handlerStarted
+	session.handleLine(frame)
+
+	select {
+	case <-handlerStarted:
+		t.Fatal("replayed frame started a second handler")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+	waitForBufferContains(t, buf, `"request_id":"req-replay"`)
+	if got := strings.Count(buf.String(), `"request_id":"req-replay"`); got != 1 {
+		t.Fatalf("wrote %d responses for one request, want 1:\n%s", got, buf.String())
+	}
 }

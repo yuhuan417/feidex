@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 )
 
 type ndjsonReader struct {
@@ -31,8 +32,13 @@ func (r *ndjsonReader) ReadLine() ([]byte, error) {
 	return nil, io.EOF
 }
 
+// ndjsonWriter serialises NDJSON frames onto the CLI's stdin. Interactive
+// control responses are written from handler goroutines while turn input is
+// written from service goroutines, so the lock is required to keep frames
+// whole (a single large frame can otherwise be split across syscalls).
 type ndjsonWriter struct {
-	w io.Writer
+	mu sync.Mutex
+	w  io.Writer
 }
 
 func newNDJSONWriter(w io.Writer) *ndjsonWriter {
@@ -45,6 +51,8 @@ func (w *ndjsonWriter) Write(v any) error {
 		return err
 	}
 	data = append(data, '\n')
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	_, err = w.w.Write(data)
 	return err
 }
@@ -169,6 +177,14 @@ type wireControlRequest struct {
 	Request   json.RawMessage `json:"request"`
 }
 
+// wireControlCancelRequest tells us the CLI no longer needs the answer to one
+// of its own in-flight control requests (for example a pending can_use_tool
+// prompt after the turn was interrupted).
+type wireControlCancelRequest struct {
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+}
+
 type wireControlResponse struct {
 	Type     string                     `json:"type"`
 	Response wireControlResponsePayload `json:"response"`
@@ -239,6 +255,8 @@ type wireToolUseRequest struct {
 	Input                 map[string]any   `json:"input"`
 	PermissionSuggestions []map[string]any `json:"permission_suggestions,omitempty"`
 	BlockedPath           *string          `json:"blocked_path,omitempty"`
+	ToolUseID             string           `json:"tool_use_id,omitempty"`
+	AgentID               string           `json:"agent_id,omitempty"`
 }
 
 func parseToolUseRequest(raw json.RawMessage) (*wireToolUseRequest, error) {
@@ -489,6 +507,9 @@ func parseWireMessage(line []byte) (any, error) {
 		return msg, json.Unmarshal(line, &msg)
 	case "control_request":
 		var msg wireControlRequest
+		return msg, json.Unmarshal(line, &msg)
+	case "control_cancel_request":
+		var msg wireControlCancelRequest
 		return msg, json.Unmarshal(line, &msg)
 	case "control_response":
 		var msg wireControlResponse

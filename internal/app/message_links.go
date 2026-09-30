@@ -9,18 +9,25 @@ import (
 )
 
 func recordMessageLink(a *App, messageID, kind string, sub *state.Submission, requestID string) {
+	if sub == nil {
+		return
+	}
+	recordMessageLinkForAnchor(a, messageID, kind, anchorForSubmission(a, sub), requestID)
+}
+
+// recordMessageLinkForAnchor records the link for an already resolved anchor,
+// which may have no submission behind it (detached interactive cards).
+func recordMessageLinkForAnchor(a *App, messageID, kind string, anchor pendingCardAnchor, requestID string) {
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}
 	link := &state.MessageLink{
-		Backend:   configuredBackend(a),
-		MessageID: messageID,
-	}
-	if sub != nil {
-		link.SessionKey = sub.SessionKey
-		link.SubmissionID = sub.ID
-		link.ThreadID = sub.ThreadID
-		link.TurnID = sub.TurnID
+		Backend:      configuredBackend(a),
+		MessageID:    messageID,
+		SessionKey:   anchor.sessionKey,
+		SubmissionID: anchor.submissionID,
+		ThreadID:     anchor.threadID,
+		TurnID:       anchor.turnID,
 	}
 	_ = a.State().SaveMessageLink(link)
 }

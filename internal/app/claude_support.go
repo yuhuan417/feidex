@@ -7,6 +7,7 @@ import (
 	"time"
 
 	appapproval "feidex/internal/app/approval"
+	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/claudesupport"
 	"feidex/internal/app/pendingforms"
 	appruntime "feidex/internal/app/runtime"
@@ -39,6 +40,21 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 				waitingStatus:   waitingStatus,
 				linkKind:        linkKind,
 				ttl:             ttl,
+			})
+		},
+		DeliverDetachedPendingCard: func(card map[string]any, target appclauderuntime.InteractionTarget, reqKey, reqIDStored, backend, kind, payloadJSON, linkKind string) error {
+			return deliverDetachedPendingCard(a, detachedCardAnchor(target), card, pendingCardDelivery{
+				requestKey:      reqKey,
+				requestIDStored: reqIDStored,
+				backend:         backend,
+				kind:            kind,
+				sessionKey:      strings.TrimSpace(target.SessionKey),
+				threadID:        strings.TrimSpace(target.ThreadID),
+				turnID:          strings.TrimSpace(target.TurnID),
+				itemID:          reqKey,
+				ownerUserID:     strings.TrimSpace(target.UserID),
+				payloadJSON:     payloadJSON,
+				linkKind:        linkKind,
 			})
 		},
 		RenderApprovalCard: func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {

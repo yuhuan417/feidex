@@ -135,6 +135,30 @@ type PendingResponse struct {
 	Err      error
 }
 
+// InteractionTarget is the Feishu delivery anchor for an interactive request.
+//
+// Background agents keep running after the turn that spawned them completes,
+// so a permission or question request can arrive when no submission is left
+// to deliver it. The anchor is captured while the turn is still live and
+// reused afterwards. A nil Submission means the request is detached from any
+// live turn: the card is still delivered and answerable because the
+// Claude-side request stays open until its control response is written.
+type InteractionTarget struct {
+	SessionKey       string
+	WorkspaceID      string
+	ChatID           string
+	TriggerMessageID string
+	UserID           string
+	ThreadID         string
+	TurnID           string
+	Submission       *state.Submission
+}
+
+// Detached reports whether the request outlived the submission that produced it.
+func (t InteractionTarget) Detached() bool {
+	return t.Submission == nil
+}
+
 type LifecycleDeps struct {
 	BindClaudeSessionThread func(sessionKey, turnID, threadID string)
 	FinishTurn              func(threadID, turnID, status string)
@@ -174,6 +198,16 @@ type InteractiveDeps struct {
 	SendClaudeUserInputCard     func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
 	SendClaudeUserInputFormCard func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
 	SendClaudePlanModeCard      func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error
+	// Detached variants deliver cards for requests whose producing turn is
+	// already gone (background agents outlive their parent submission).
+	SendDetachedApprovalCard      func(requestID string, target InteractionTarget, presentation appapproval.Presentation) error
+	SendDetachedUserInputCard     func(requestID string, target InteractionTarget, payload apppendingforms.ToolUserInputPayload) error
+	SendDetachedUserInputFormCard func(requestID string, target InteractionTarget, payload apppendingforms.ToolUserInputPayload) error
+	SendDetachedPlanModeCard      func(requestID string, target InteractionTarget, body string) error
+	// ExpireInteractionCards closes out cards whose backend request died with
+	// the session. An empty requestIDs slice means every open interaction of
+	// that session.
+	ExpireInteractionCards func(sessionKey string, requestIDs []string, reason string)
 }
 
 type LookupDeps struct {
@@ -746,19 +780,13 @@ func (s *Service) ResetSession(sessionKey string) error {
 	s.mu.Lock()
 	state := s.sessions[sessionKey]
 	delete(s.sessions, sessionKey)
-	for requestID, pending := range s.pending {
-		if pending == nil || pending.Session == nil {
-			continue
-		}
-		if strings.TrimSpace(pending.Session.SessionKey) == sessionKey {
-			delete(s.pending, requestID)
-			select {
-			case pending.RespCh <- PendingResponse{Err: errors.New("session reset")}:
-			default:
-			}
-		}
-	}
 	s.mu.Unlock()
+
+	// The Claude process is going away, so any request it is still waiting on
+	// can never be answered. Close those interactions out and let the frontend
+	// replace the now dead cards instead of leaving them clickable.
+	s.expireSessionInteractions(sessionKey, "session reset")
+
 	if state == nil {
 		return nil
 	}
@@ -767,6 +795,36 @@ func (s *Service) ResetSession(sessionKey string) error {
 		state.MCPCleanup()
 	}
 	return state.Session.Stop()
+}
+
+// expireSessionInteractions releases in-memory interactions for a session that
+// is going away. It returns the request IDs it released.
+func (s *Service) expireSessionInteractions(sessionKey, reason string) []string {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if sessionKey == "" {
+		return nil
+	}
+	s.mu.Lock()
+	requestIDs := make([]string, 0, 4)
+	for requestID, pending := range s.pending {
+		if pending == nil || pending.Session == nil {
+			continue
+		}
+		if strings.TrimSpace(pending.Session.SessionKey) != sessionKey {
+			continue
+		}
+		delete(s.pending, requestID)
+		requestIDs = append(requestIDs, requestID)
+		select {
+		case pending.RespCh <- PendingResponse{Err: errors.New(reason)}:
+		default:
+		}
+	}
+	s.mu.Unlock()
+	if len(requestIDs) > 0 && s.deps.Interactive.ExpireInteractionCards != nil {
+		s.deps.Interactive.ExpireInteractionCards(sessionKey, requestIDs, reason)
+	}
+	return requestIDs
 }
 
 // ResolveApproval resolves a pending permission approval request.
@@ -1312,9 +1370,6 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 	}
 	sessionKey := strings.TrimSpace(state.SessionKey)
 	state.Mu.Unlock()
-	if turnID == "" {
-		return
-	}
 
 	target := BackgroundTaskTarget{
 		SessionKey:     sessionKey,
@@ -1326,11 +1381,34 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 		Description:    strings.TrimSpace(event.Description),
 		IsBackgrounded: event.IsBackgrounded,
 	}
-	if _, sub := s.FindSubmissionByTurn(threadID, turnID); sub != nil {
-		target.WorkspaceID = strings.TrimSpace(sub.WorkspaceID)
-		target.ChatID = strings.TrimSpace(sub.ChatID)
-		target.TriggerMessageID = strings.TrimSpace(sub.TriggerMessageID)
-		target.UserID = strings.TrimSpace(sub.UserID)
+	if turnID != "" {
+		if _, sub := s.FindSubmissionByTurn(threadID, turnID); sub != nil {
+			target.WorkspaceID = strings.TrimSpace(sub.WorkspaceID)
+			target.ChatID = strings.TrimSpace(sub.ChatID)
+			target.TriggerMessageID = strings.TrimSpace(sub.TriggerMessageID)
+			target.UserID = strings.TrimSpace(sub.UserID)
+		}
+	}
+	if target.ChatID == "" && target.TriggerMessageID == "" {
+		// The task was registered without a live turn — a resumed subagent is
+		// always registered in the background, and its permission requests can
+		// arrive much later. Capture the session's own Feishu anchors now so
+		// the request can still be attributed to this task.
+		//
+		// The session's active turn is deliberately NOT copied: this task did
+		// not start in that turn, and binding to it would mis-attribute the
+		// card.
+		if s.deps.Lookup.GetSession != nil && target.SessionKey != "" {
+			if sess := s.deps.Lookup.GetSession(target.SessionKey); sess != nil {
+				target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), target.WorkspaceID)
+				target.ChatID = strings.TrimSpace(sess.ChatID)
+				target.TriggerMessageID = strings.TrimSpace(sess.RootMessageID)
+				target.UserID = strings.TrimSpace(sess.OwnerUserID)
+				if target.ThreadID == "" {
+					target.ThreadID = strings.TrimSpace(sess.ActiveThreadID)
+				}
+			}
+		}
 	}
 
 	state.Mu.Lock()
@@ -1756,6 +1834,11 @@ func (s *Service) cleanupStaleSessionOps(state *SessionState) {
 	if sessionKey == "" {
 		return
 	}
+	// The event loop only exits when the CLI process is gone, so any request
+	// still waiting for an answer died with it — including requests whose turn
+	// already completed (background agents).
+	s.expireSessionInteractions(sessionKey, "session ended")
+
 	sess := s.GetSession(sessionKey)
 	if sess == nil || !s.SessionHasActiveOps(sess) {
 		return
@@ -1780,34 +1863,250 @@ func (s *Service) cleanupStaleSessionOps(state *SessionState) {
 // Permission and interactive tool handlers
 // ---------------------------------------------------------------------------
 
+// currentTurnID returns the turn the session's stream is currently inside.
+func (s *Service) currentTurnID(state *SessionState) (threadID, turnID string) {
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	threadID = strings.TrimSpace(state.SessionID)
+	if turn := state.Turns[state.CurrentTurnNumber]; turn != nil {
+		turnID = strings.TrimSpace(turn.TurnID)
+	}
+	return threadID, turnID
+}
+
+// interactionTarget resolves where an interactive card must be delivered.
+//
+// A live submission bound to the turn wins, which keeps foreground approvals
+// in the same reply context as their turn. When the producing turn is already
+// gone (background agents, or a turn that completed while the user was
+// deciding) the session's durable Feishu anchors are used instead, so the
+// request is still shown to the user rather than denied.
+func (s *Service) interactionTarget(state *SessionState, sessionKey string, sub *state.Submission, threadID, turnID string) InteractionTarget {
+	target := InteractionTarget{
+		SessionKey: strings.TrimSpace(sessionKey),
+		ThreadID:   strings.TrimSpace(threadID),
+		TurnID:     strings.TrimSpace(turnID),
+	}
+	if state != nil {
+		if target.SessionKey == "" {
+			target.SessionKey = strings.TrimSpace(state.SessionKey)
+		}
+		if target.ThreadID == "" {
+			target.ThreadID = strings.TrimSpace(state.SessionID)
+		}
+		target.WorkspaceID = strings.TrimSpace(state.WorkspaceID)
+	}
+	if sub != nil {
+		target.Submission = sub
+		target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), target.WorkspaceID)
+		target.ChatID = strings.TrimSpace(sub.ChatID)
+		target.TriggerMessageID = strings.TrimSpace(sub.TriggerMessageID)
+		target.UserID = strings.TrimSpace(sub.UserID)
+		return target
+	}
+	if s != nil && s.deps.Lookup.GetSession != nil && target.SessionKey != "" {
+		if sess := s.deps.Lookup.GetSession(target.SessionKey); sess != nil {
+			target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), target.WorkspaceID)
+			target.ChatID = strings.TrimSpace(sess.ChatID)
+			target.TriggerMessageID = strings.TrimSpace(sess.RootMessageID)
+			target.UserID = strings.TrimSpace(sess.OwnerUserID)
+			if target.ThreadID == "" {
+				target.ThreadID = strings.TrimSpace(sess.ActiveThreadID)
+			}
+			if target.TurnID == "" {
+				target.TurnID = strings.TrimSpace(sess.ActiveTurnID)
+			}
+		}
+	}
+	return target
+}
+
+// backgroundTaskTargetForAgent resolves the task that spawned a subagent.
+//
+// can_use_tool carries agent_id for subagent-originated requests, and the CLI
+// uses the same id as system/task_started's task_id (verified against
+// claude 2.1.285). Matching them gives the request the exact turn, chat and
+// trigger message of the task that produced it, instead of guessing from
+// whichever turn happens to be current.
+func (s *Service) backgroundTaskTargetForAgent(state *SessionState, agentID string) (BackgroundTaskTarget, bool) {
+	agentID = strings.TrimSpace(agentID)
+	if state == nil || agentID == "" {
+		return BackgroundTaskTarget{}, false
+	}
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	task := state.BackgroundTasks[agentID]
+	if task == nil {
+		return BackgroundTaskTarget{}, false
+	}
+	return task.Target, true
+}
+
+// interactionTargetForTask builds the delivery anchor from a background task's
+// captured target. The spawning turn's submission is used when it is still
+// live (foreground subagents), otherwise the request is delivered detached to
+// the conversation that started the task.
+func (s *Service) interactionTargetForTask(state *SessionState, task BackgroundTaskTarget) InteractionTarget {
+	target := InteractionTarget{
+		SessionKey:       strings.TrimSpace(task.SessionKey),
+		WorkspaceID:      strings.TrimSpace(task.WorkspaceID),
+		ChatID:           strings.TrimSpace(task.ChatID),
+		TriggerMessageID: strings.TrimSpace(task.TriggerMessageID),
+		UserID:           strings.TrimSpace(task.UserID),
+		ThreadID:         strings.TrimSpace(task.ThreadID),
+		TurnID:           strings.TrimSpace(task.TurnID),
+	}
+	// Only a task that recorded its own turn may bind a live submission. A task
+	// registered without one (resumed subagent) must not be bound to whatever
+	// turn happens to be running.
+	if target.TurnID != "" {
+		if sessionKey, sub := s.FindSubmissionByTurn(target.ThreadID, target.TurnID); sub != nil {
+			target.Submission = sub
+			if trimmed := strings.TrimSpace(sessionKey); trimmed != "" {
+				target.SessionKey = trimmed
+			}
+			target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), target.WorkspaceID)
+		}
+	}
+	if state != nil && target.SessionKey == "" {
+		target.SessionKey = strings.TrimSpace(state.SessionKey)
+	}
+	return target
+}
+
+// deliverable reports whether the target can reach the user at all. A live
+// submission is always attempted; a detached request needs an actual chat or
+// message to reply to (a session key alone is not a destination).
+func (t InteractionTarget) deliverable() bool {
+	if t.Submission != nil {
+		return true
+	}
+	return strings.TrimSpace(t.ChatID) != "" || strings.TrimSpace(t.TriggerMessageID) != ""
+}
+
+// releaseUnansweredInteraction releases a pending interaction whose wait ended
+// without an answer and closes out its card.
+//
+// A withdrawn request means the CLI stopped waiting — typically a turn that was
+// interrupted while the card was still open. The card is expired so it cannot
+// be answered afterwards, and nothing is written back: the CLI ignores
+// responses for withdrawn requests. Any other cause is a session teardown,
+// where expireSessionInteractions owns the same cleanup.
+func (s *Service) releaseUnansweredInteraction(state *SessionState, requestID string, ctx context.Context) {
+	reason := "session reset"
+	if errors.Is(context.Cause(ctx), claudecli.ErrControlRequestWithdrawn) {
+		reason = "request withdrawn"
+	}
+	_ = s.CancelPending(requestID, reason)
+	if s == nil || s.deps.Interactive.ExpireInteractionCards == nil || state == nil {
+		return
+	}
+	sessionKey := strings.TrimSpace(state.SessionKey)
+	if sessionKey == "" {
+		return
+	}
+	s.deps.Interactive.ExpireInteractionCards(sessionKey, []string{requestID}, reason)
+}
+
+func (s *Service) sendApprovalCard(requestID string, target InteractionTarget, presentation appapproval.Presentation) error {
+	if !target.Detached() {
+		return s.SendClaudeApprovalCard(requestID, target.SessionKey, target.Submission, presentation)
+	}
+	if s.deps.Interactive.SendDetachedApprovalCard == nil {
+		return fmt.Errorf("claude approval delivery unavailable")
+	}
+	return s.deps.Interactive.SendDetachedApprovalCard(requestID, target, presentation)
+}
+
+func (s *Service) sendUserInputCard(requestID string, target InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
+	if !target.Detached() {
+		return s.SendClaudeUserInputCard(requestID, target.SessionKey, target.Submission, payload)
+	}
+	if s.deps.Interactive.SendDetachedUserInputCard == nil {
+		return fmt.Errorf("claude question delivery unavailable")
+	}
+	return s.deps.Interactive.SendDetachedUserInputCard(requestID, target, payload)
+}
+
+func (s *Service) sendUserInputFormCard(requestID string, target InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
+	if !target.Detached() {
+		return s.SendClaudeUserInputFormCard(requestID, target.SessionKey, target.Submission, payload)
+	}
+	if s.deps.Interactive.SendDetachedUserInputFormCard == nil {
+		return fmt.Errorf("claude question delivery unavailable")
+	}
+	return s.deps.Interactive.SendDetachedUserInputFormCard(requestID, target, payload)
+}
+
+func (s *Service) sendPlanModeCard(requestID string, target InteractionTarget, body string) error {
+	if !target.Detached() {
+		return s.SendClaudePlanModeCard(requestID, target.SessionKey, target.Submission, target.ThreadID, target.TurnID, body)
+	}
+	if s.deps.Interactive.SendDetachedPlanModeCard == nil {
+		return fmt.Errorf("claude plan confirmation unavailable")
+	}
+	return s.deps.Interactive.SendDetachedPlanModeCard(requestID, target, body)
+}
+
 func (s *Service) handlePermission(ctx context.Context, state *SessionState, req *claudecli.PermissionRequest) (*claudecli.PermissionResponse, error) {
 	if state == nil || req == nil {
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "invalid permission request"}, nil
 	}
-	state.Mu.Lock()
-	threadID := strings.TrimSpace(state.SessionID)
-	turnID := ""
-	if turn := state.Turns[state.CurrentTurnNumber]; turn != nil {
-		turnID = strings.TrimSpace(turn.TurnID)
-	}
-	state.Mu.Unlock()
+	threadID, turnID := s.currentTurnID(state)
 
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
-	if sub == nil {
+	target := s.interactionTarget(state, sessionKey, sub, threadID, turnID)
+	// A subagent request is attributed to the task that spawned it: agent_id is
+	// the CLI's task_id, so the card is delivered to the turn and conversation
+	// that actually produced it rather than to whatever turn is current.
+	sourceTask := BackgroundTaskTarget{}
+	if task, ok := s.backgroundTaskTargetForAgent(state, req.AgentID); ok {
+		if taskTarget := s.interactionTargetForTask(state, task); taskTarget.deliverable() {
+			target = taskTarget
+			sourceTask = task
+		}
+	}
+	if !target.deliverable() {
+		// No live turn and no conversation to ask (warmup or probe sessions):
+		// the only case where a permission request is denied without asking.
+		slog.Warn("claude permission request has no delivery target",
+			"session_key", state.SessionKey,
+			"thread_id", threadID,
+			"turn_id", turnID,
+			"tool", req.ToolName,
+			"agent_id", req.AgentID,
+		)
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: "no active submission for approval"}, nil
 	}
 
 	requestID := strings.TrimSpace(req.RequestID)
 	sessionUpdates := SafeClaudeSessionPermissionUpdates(req.PermissionSuggestions)
 	sessionLabel := DescribeClaudeSessionPermissionUpdates(sessionUpdates)
-	presentation := s.approvalPresentation(sub.WorkspaceID, req)
-	presentation.ThreadID = threadID
-	presentation.TurnID = turnID
+	presentation := s.approvalPresentation(target.WorkspaceID, req)
+	presentation.ThreadID = target.ThreadID
+	presentation.TurnID = target.TurnID
 	presentation.ItemID = requestID
 	presentation.Payload.SessionActionLabel = sessionLabel
-
-	if err := s.SendClaudeApprovalCard(requestID, sessionKey, sub, presentation); err != nil {
-		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: err.Error()}, nil
+	if strings.TrimSpace(req.AgentID) != "" {
+		// Subagent-originated request: record which agent asked, which task it
+		// belongs to, and whether it could still be bound to that turn.
+		slog.Debug("claude subagent permission request",
+			"session_key", target.SessionKey,
+			"thread_id", target.ThreadID,
+			"turn_id", target.TurnID,
+			"agent_id", req.AgentID,
+			"tool_use_id", req.ToolUseID,
+			"tool", req.ToolName,
+			"detached", target.Detached(),
+			"attributed_task", sourceTask.TaskID,
+		)
+	}
+	if description := strings.TrimSpace(sourceTask.Description); description != "" {
+		label := "子 Agent"
+		if sourceTask.IsBackgrounded {
+			label = "后台 Agent"
+		}
+		presentation.Body = strings.TrimSpace(presentation.Body) + "\n\n来源：" + label + "「" + description + "」"
 	}
 
 	pending := &PendingInteraction{
@@ -1817,10 +2116,26 @@ func (s *Service) handlePermission(ctx context.Context, state *SessionState, req
 		SessionPermissionUpdates: CopySessionPermissionUpdates(sessionUpdates),
 		RespCh:                   make(chan PendingResponse, 1),
 	}
+	// Register before delivering the card so an immediate click can never
+	// race the delivery.
 	s.storePending(requestID, pending)
+	if err := s.sendApprovalCard(requestID, target, presentation); err != nil {
+		_ = s.takePending(requestID)
+		slog.Error("claude approval card delivery failed, denying request",
+			"session_key", target.SessionKey,
+			"thread_id", target.ThreadID,
+			"turn_id", target.TurnID,
+			"request_id", requestID,
+			"agent_id", req.AgentID,
+			"tool_use_id", req.ToolUseID,
+			"detached", target.Detached(),
+			"error", err,
+		)
+		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: err.Error()}, nil
+	}
 	select {
 	case <-ctx.Done():
-		_ = s.CancelPending(requestID, ctx.Err().Error())
+		s.releaseUnansweredInteraction(state, requestID, ctx)
 		return &claudecli.PermissionResponse{Behavior: claudecli.PermissionDeny, Message: ctx.Err().Error()}, nil
 	case resp := <-pending.RespCh:
 		if resp.Err != nil {
@@ -1834,16 +2149,11 @@ func (s *Service) handlePermission(ctx context.Context, state *SessionState, req
 }
 
 func (s *Service) handleAskUserQuestion(ctx context.Context, state *SessionState, questions []claudecli.Question) (map[string]string, error) {
-	state.Mu.Lock()
-	threadID := strings.TrimSpace(state.SessionID)
-	turnID := ""
-	if turn := state.Turns[state.CurrentTurnNumber]; turn != nil {
-		turnID = strings.TrimSpace(turn.TurnID)
-	}
-	state.Mu.Unlock()
+	threadID, turnID := s.currentTurnID(state)
 
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
-	if sub == nil {
+	target := s.interactionTarget(state, sessionKey, sub, threadID, turnID)
+	if !target.deliverable() {
 		return nil, fmt.Errorf("no active submission for question")
 	}
 
@@ -1852,8 +2162,8 @@ func (s *Service) handleAskUserQuestion(ctx context.Context, state *SessionState
 		requestID = nextID
 	}
 	payload := apppendingforms.ToolUserInputPayload{
-		ThreadID:  threadID,
-		TurnID:    turnID,
+		ThreadID:  target.ThreadID,
+		TurnID:    target.TurnID,
 		ItemID:    requestID,
 		Questions: QuestionsAsToolUserInput(questions),
 	}
@@ -1861,24 +2171,27 @@ func (s *Service) handleAskUserQuestion(ctx context.Context, state *SessionState
 		return nil, fmt.Errorf("Claude question payload was empty")
 	}
 
-	if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 && !payload.Questions[0].MultiSelect && !payload.Questions[0].IsOther {
-		if err := s.SendClaudeUserInputCard(requestID, sessionKey, sub, payload); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := s.SendClaudeUserInputFormCard(requestID, sessionKey, sub, payload); err != nil {
-			return nil, err
-		}
-	}
-
 	pending := &PendingInteraction{
 		Kind:   "question",
 		RespCh: make(chan PendingResponse, 1),
 	}
+	// Register before delivering the card so an immediate click can never
+	// race the delivery.
 	s.storePending(requestID, pending)
+
+	var err error
+	if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 && !payload.Questions[0].MultiSelect && !payload.Questions[0].IsOther {
+		err = s.sendUserInputCard(requestID, target, payload)
+	} else {
+		err = s.sendUserInputFormCard(requestID, target, payload)
+	}
+	if err != nil {
+		_ = s.takePending(requestID)
+		return nil, err
+	}
 	select {
 	case <-ctx.Done():
-		_ = s.CancelPending(requestID, ctx.Err().Error())
+		s.releaseUnansweredInteraction(state, requestID, ctx)
 		return nil, ctx.Err()
 	case resp := <-pending.RespCh:
 		if resp.Err != nil {
@@ -1892,23 +2205,21 @@ func (s *Service) handleAskUserQuestion(ctx context.Context, state *SessionState
 }
 
 func (s *Service) HandleExitPlanMode(ctx context.Context, state *SessionState, plan claudecli.PlanInfo) (string, error) {
+	threadID, turnID := s.currentTurnID(state)
+
 	state.Mu.Lock()
-	threadID := strings.TrimSpace(state.SessionID)
-	turnID := ""
-	if turn := state.Turns[state.CurrentTurnNumber]; turn != nil {
-		turnID = strings.TrimSpace(turn.TurnID)
-	}
 	workspaceID := strings.TrimSpace(state.WorkspaceID)
 	planFilePath := strings.TrimSpace(state.LastPlanFilePath)
 	startedAt := state.StartedAt
 	state.Mu.Unlock()
 
 	sessionKey, sub := s.FindSubmissionByTurn(threadID, turnID)
-	if sub == nil {
+	target := s.interactionTarget(state, sessionKey, sub, threadID, turnID)
+	if !target.deliverable() {
 		return "", fmt.Errorf("no active submission for plan confirmation")
 	}
 
-	workspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), workspaceID)
+	workspaceID = apputil.FirstNonEmpty(target.WorkspaceID, workspaceID)
 	workspaceCwdVal := s.WorkspaceCwd(workspaceID)
 	plan = EnrichPlanForDisplay(plan, planFilePath, workspaceCwdVal, startedAt)
 
@@ -1916,18 +2227,21 @@ func (s *Service) HandleExitPlanMode(ctx context.Context, state *SessionState, p
 	if nextID, err := s.NextLocalID("claude-plan"); err == nil && strings.TrimSpace(nextID) != "" {
 		requestID = nextID
 	}
-	if err := s.SendClaudePlanModeCard(requestID, sessionKey, sub, threadID, turnID, PlanModeBody(plan)); err != nil {
-		return "", err
-	}
 
 	pending := &PendingInteraction{
 		Kind:   "plan",
 		RespCh: make(chan PendingResponse, 1),
 	}
+	// Register before delivering the card so an immediate click can never
+	// race the delivery.
 	s.storePending(requestID, pending)
+	if err := s.sendPlanModeCard(requestID, target, PlanModeBody(plan)); err != nil {
+		_ = s.takePending(requestID)
+		return "", err
+	}
 	select {
 	case <-ctx.Done():
-		_ = s.CancelPending(requestID, ctx.Err().Error())
+		s.releaseUnansweredInteraction(state, requestID, ctx)
 		return "", ctx.Err()
 	case resp := <-pending.RespCh:
 		if resp.Err != nil {

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -28,17 +29,21 @@ type Session struct {
 	stopped bool
 	exitErr error
 
-	done       chan struct{}
-	doneOnce   sync.Once
-	eventsOnce sync.Once
-	events     chan Event
-	waitDone   chan struct{}
-	turnNumber int
-	current    *turnState
-	pending    []int
-	turns      map[int]*turnState
-	info       *SessionInfo
-	pendingCtl map[string]chan wireControlResponsePayload
+	done        chan struct{}
+	doneOnce    sync.Once
+	eventsOnce  sync.Once
+	eventsMu    sync.RWMutex
+	events      chan Event
+	waitDone    chan struct{}
+	ctx         context.Context
+	cancel      context.CancelFunc
+	interactive map[string]*interactiveRequest
+	turnNumber  int
+	current     *turnState
+	pending     []int
+	turns       map[int]*turnState
+	info        *SessionInfo
+	pendingCtl  map[string]chan wireControlResponsePayload
 }
 
 type turnState struct {
@@ -46,6 +51,15 @@ type turnState struct {
 	StartTime     time.Time
 	Tools         map[string]*toolState
 	SeenAssistant map[string]bool
+}
+
+// interactiveRequest tracks one interactive control request we are answering.
+// The CLI may withdraw the request with control_cancel_request while a human
+// is still deciding; the handler is then released and no control_response is
+// written for it.
+type interactiveRequest struct {
+	cancel    context.CancelCauseFunc
+	withdrawn atomic.Bool
 }
 
 type toolState struct {
@@ -61,14 +75,20 @@ func NewSession(opts ...SessionOption) *Session {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	// handlerCtx bounds interactive handlers (permission prompts, questions,
+	// plan confirmation) to the lifetime of the session.
+	handlerCtx, cancel := context.WithCancel(context.Background())
 	return &Session{
-		cfg:        cfg,
-		done:       make(chan struct{}),
-		events:     make(chan Event, cfg.EventBufferSize),
-		waitDone:   make(chan struct{}),
-		turns:      map[int]*turnState{},
-		pending:    []int{},
-		pendingCtl: map[string]chan wireControlResponsePayload{},
+		cfg:         cfg,
+		done:        make(chan struct{}),
+		events:      make(chan Event, cfg.EventBufferSize),
+		waitDone:    make(chan struct{}),
+		ctx:         handlerCtx,
+		cancel:      cancel,
+		turns:       map[int]*turnState{},
+		pending:     []int{},
+		pendingCtl:  map[string]chan wireControlResponsePayload{},
+		interactive: map[string]*interactiveRequest{},
 	}
 }
 
@@ -548,6 +568,8 @@ func (s *Session) handleLine(line []byte) {
 		s.handleResultMessage(value)
 	case wireControlRequest:
 		s.handleControlRequest(value)
+	case wireControlCancelRequest:
+		s.handleControlCancelRequest(value)
 	case wireControlResponse:
 		s.handleControlResponse(value)
 	}
@@ -861,9 +883,18 @@ func (s *Session) handleResultMessage(msg wireResultMessage) {
 	})
 }
 
+// handleControlRequest dispatches one CLI control request. Interactive
+// requests (can_use_tool, AskUserQuestion, ExitPlanMode) wait for a human
+// answer, which can take arbitrarily long and may well arrive after the
+// producing turn has already completed. They are therefore answered on their
+// own goroutine: the read loop must keep consuming the stream so results,
+// task notifications and control responses are never stuck behind a pending
+// card.
 func (s *Session) handleControlRequest(msg wireControlRequest) {
-	ctx := context.Background()
-
+	requestID := strings.TrimSpace(msg.RequestID)
+	if requestID == "" {
+		return
+	}
 	toolReq, err := parseToolUseRequest(msg.Request)
 	if err != nil {
 		s.emitError(err, "parse_control_request")
@@ -873,23 +904,112 @@ func (s *Session) handleControlRequest(msg wireControlRequest) {
 		return
 	}
 
+	go s.answerControlRequest(requestID, toolReq)
+}
+
+// handleControlCancelRequest releases an in-flight request the CLI withdrew.
+//
+// The CLI sends this when it stops waiting for an answer — most importantly
+// when a turn is interrupted while a permission prompt is still open. The
+// handler is released, and because the CLI ignores responses for withdrawn
+// requests, none is written.
+func (s *Session) handleControlCancelRequest(msg wireControlCancelRequest) {
+	requestID := strings.TrimSpace(msg.RequestID)
+	if requestID == "" {
+		return
+	}
+	s.mu.Lock()
+	interactive := s.interactive[requestID]
+	respCh := s.pendingCtl[requestID]
+	s.mu.Unlock()
+
+	if interactive != nil {
+		interactive.withdrawn.Store(true)
+		interactive.cancel(ErrControlRequestWithdrawn)
+		slog.Debug("claude control request withdrawn by CLI", "request_id", requestID)
+		return
+	}
+	if respCh != nil {
+		// One of our own in-flight requests: unblock the waiter instead of
+		// letting it run into its context deadline.
+		select {
+		case respCh <- wireControlResponsePayload{
+			Subtype:   "error",
+			RequestID: requestID,
+			Error:     ErrControlRequestWithdrawn.Error(),
+		}:
+		default:
+		}
+	}
+}
+
+// registerInteractive tracks an interactive request and returns the context its
+// handler must observe. Cancelling that context (withdrawn request or session
+// stop) releases the handler.
+//
+// A replayed frame for a request that is still being answered is rejected, so
+// the same request_id only ever produces one card and one response.
+func (s *Session) registerInteractive(requestID string) (context.Context, *interactiveRequest, bool) {
+	// Resolve the parent context before taking the lock: handlerContext locks too.
+	parent := s.handlerContext()
+
+	s.mu.Lock()
+	if s.interactive == nil {
+		s.interactive = map[string]*interactiveRequest{}
+	}
+	if _, exists := s.interactive[requestID]; exists {
+		s.mu.Unlock()
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancelCause(parent)
+	request := &interactiveRequest{cancel: cancel}
+	s.interactive[requestID] = request
+	s.mu.Unlock()
+	return ctx, request, true
+}
+
+func (s *Session) releaseInteractive(requestID string, request *interactiveRequest) {
+	s.mu.Lock()
+	if current := s.interactive[requestID]; current == request {
+		delete(s.interactive, requestID)
+	}
+	s.mu.Unlock()
+	request.cancel(nil)
+}
+
+// answerControlRequest runs one interactive handler to completion and writes
+// the resulting control response back to the CLI.
+func (s *Session) answerControlRequest(requestID string, toolReq *wireToolUseRequest) {
+	ctx, request, ok := s.registerInteractive(requestID)
+	if !ok {
+		// Replayed frame for a request that is already being answered.
+		return
+	}
+	defer s.releaseInteractive(requestID, request)
+
+	var resp *wireControlResponse
+	label := "send_permission_response"
 	switch toolReq.ToolName {
 	case "AskUserQuestion":
 		if s.cfg.InteractiveToolHandler != nil {
-			resp := s.buildAskUserQuestionResponse(ctx, msg.RequestID, toolReq)
-			s.writeControlResponse(resp, "send_control_response")
-			return
+			resp = s.buildAskUserQuestionResponse(ctx, requestID, toolReq)
+			label = "send_control_response"
 		}
 	case "ExitPlanMode":
 		if s.cfg.InteractiveToolHandler != nil {
-			resp := s.buildExitPlanModeResponse(ctx, msg.RequestID, toolReq)
-			s.writeControlResponse(resp, "send_control_response")
-			return
+			resp = s.buildExitPlanModeResponse(ctx, requestID, toolReq)
+			label = "send_control_response"
 		}
 	}
-
-	resp := s.buildPermissionResponse(ctx, msg.RequestID, toolReq)
-	s.writeControlResponse(resp, "send_permission_response")
+	if resp == nil {
+		resp = s.buildPermissionResponse(ctx, requestID, toolReq)
+	}
+	if request.withdrawn.Load() {
+		// The CLI no longer waits for this request and ignores any response
+		// that still arrives for it.
+		return
+	}
+	s.writeControlResponse(resp, label)
 }
 
 func (s *Session) handleControlResponse(msg wireControlResponse) {
@@ -976,8 +1096,11 @@ func (s *Session) writeControlResponse(resp *wireControlResponse, contextLabel s
 	}
 	s.mu.Lock()
 	writer := s.writer
+	stopped := s.stopped
 	s.mu.Unlock()
-	if writer == nil {
+	// A late answer for a session that already stopped is not an error: the
+	// CLI process is gone and the request died with it.
+	if writer == nil || stopped {
 		return
 	}
 	if err := writer.Write(resp); err != nil {
@@ -1019,6 +1142,9 @@ func denyControlResponse(requestID, message string, interrupt bool) *wireControl
 }
 
 func (s *Session) emit(event Event) {
+	s.eventsMu.RLock()
+	defer s.eventsMu.RUnlock()
+
 	select {
 	case <-s.done:
 		return
@@ -1068,6 +1194,9 @@ func (s *Session) emitProcessExit(contextLabel string) {
 func (s *Session) closeDone() {
 	s.doneOnce.Do(func() {
 		close(s.done)
+		if s.cancel != nil {
+			s.cancel()
+		}
 	})
 }
 
@@ -1077,8 +1206,25 @@ func (s *Session) closeEvents() {
 		s.mu.Lock()
 		s.stopped = true
 		s.mu.Unlock()
+		// emit() may run on handler goroutines; hold the write lock so a
+		// concurrent send can never race with closing the channel.
+		s.eventsMu.Lock()
+		defer s.eventsMu.Unlock()
 		close(s.events)
 	})
+}
+
+// handlerContext is the context handed to interactive handlers. It is
+// cancelled when the session stops, so a handler waiting for a user answer
+// can never block shutdown indefinitely.
+func (s *Session) handlerContext() context.Context {
+	s.mu.Lock()
+	ctx := s.ctx
+	s.mu.Unlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 func (s *Session) isStopped() bool {

@@ -16,7 +16,6 @@ import (
 	appattachments "feidex/internal/app/attachments"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/app/lifecycle"
-	"feidex/internal/app/pendingforms"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -269,18 +268,19 @@ func (s RuntimeMaintenanceService) CleanupSubmissionRuntimeState(sub *state.Subm
 	submissionID := strings.TrimSpace(sub.ID)
 	turnID := strings.TrimSpace(sub.TurnID)
 	threadID := strings.TrimSpace(sub.ThreadID)
-	// Async questions can be answered after their producing turn completes.
-	// Keep their local form and reply anchor while clearing turn runtime state.
-	asyncRequests := map[string]bool{}
-	asyncMessages := map[string]bool{}
+	// Async questions and Claude interactive requests can be answered after
+	// their producing turn completes. Keep their local form and reply anchor
+	// while clearing turn runtime state.
+	survivingRequests := map[string]bool{}
+	survivingMessages := map[string]bool{}
 	for _, req := range stateProvider.PendingRequests() {
-		if req != nil && req.TurnID == turnID && req.Kind == pendingforms.AsyncUserInputPendingKind && lifecycle.IsPendingRequestOpen(req) {
-			asyncRequests[req.ID] = true
-			asyncMessages[req.FeishuMsgID] = true
+		if req != nil && req.TurnID == turnID && lifecycle.OutlivesTurn(req) {
+			survivingRequests[req.ID] = true
+			survivingMessages[req.FeishuMsgID] = true
 		}
 	}
 	stateProvider.DeleteMessageLinks(func(link *state.MessageLink) bool {
-		if link == nil || asyncMessages[link.MessageID] {
+		if link == nil || survivingMessages[link.MessageID] {
 			return false
 		}
 		if submissionID != "" && strings.TrimSpace(link.SubmissionID) == submissionID {
@@ -293,7 +293,7 @@ func (s RuntimeMaintenanceService) CleanupSubmissionRuntimeState(sub *state.Subm
 	})
 	if turnID != "" {
 		stateProvider.DeletePendingRequests(func(req *state.PendingRequest) bool {
-			return req != nil && strings.TrimSpace(req.TurnID) == turnID && !asyncRequests[req.ID]
+			return req != nil && strings.TrimSpace(req.TurnID) == turnID && !survivingRequests[req.ID]
 		})
 	}
 	if submissionID != "" {

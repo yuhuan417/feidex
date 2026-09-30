@@ -27,8 +27,54 @@ type pendingCardDelivery struct {
 	ttl             time.Duration
 }
 
+// pendingCardAnchor identifies where a pending card is delivered. A live
+// submission is optional: a request from a background agent can outlive the
+// submission that produced it and is then delivered against the session's
+// durable Feishu anchors instead.
+type pendingCardAnchor struct {
+	sessionKey       string
+	chatID           string
+	triggerMessageID string
+	submissionID     string
+	threadID         string
+	turnID           string
+	ownerUserID      string
+	replyInThread    bool
+}
+
+func anchorForSubmission(a *App, sub *state.Submission) pendingCardAnchor {
+	if sub == nil {
+		return pendingCardAnchor{}
+	}
+	return pendingCardAnchor{
+		sessionKey:       strings.TrimSpace(sub.SessionKey),
+		chatID:           strings.TrimSpace(sub.ChatID),
+		triggerMessageID: strings.TrimSpace(sub.TriggerMessageID),
+		submissionID:     strings.TrimSpace(sub.ID),
+		threadID:         strings.TrimSpace(sub.ThreadID),
+		turnID:           strings.TrimSpace(sub.TurnID),
+		ownerUserID:      strings.TrimSpace(sub.UserID),
+		replyInThread:    replyInThreadForSubmission(a, sub),
+	}
+}
+
 func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, delivery pendingCardDelivery) error {
-	if a == nil || a.feishu == nil || sub == nil {
+	if sub == nil {
+		return fmt.Errorf("pending card delivery unavailable")
+	}
+	return deliverPendingCardWithAnchor(a, anchorForSubmission(a, sub), card, delivery)
+}
+
+// deliverDetachedPendingCard delivers a card for a request that outlived its
+// producing turn, so there is no submission left to attach it to. The card is
+// non-blocking by definition: it must not touch submission status.
+func deliverDetachedPendingCard(a *App, anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
+	delivery.nonBlocking = true
+	return deliverPendingCardWithAnchor(a, anchor, card, delivery)
+}
+
+func deliverPendingCardWithAnchor(a *App, anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
+	if a == nil || a.feishu == nil {
 		return fmt.Errorf("pending card delivery unavailable")
 	}
 	requestKey := strings.TrimSpace(delivery.requestKey)
@@ -60,12 +106,12 @@ func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, deli
 		}
 	}
 	if msgID == "" {
-		if triggerMessageID := strings.TrimSpace(sub.TriggerMessageID); triggerMessageID != "" {
-			msgID, err = a.feishu.ReplyCard(ctx, triggerMessageID, card, replyInThreadForSubmission(a, sub))
+		if triggerMessageID := strings.TrimSpace(anchor.triggerMessageID); triggerMessageID != "" {
+			msgID, err = a.feishu.ReplyCard(ctx, triggerMessageID, card, anchor.replyInThread)
 		}
 	}
 	if err != nil || strings.TrimSpace(msgID) == "" {
-		msgID, err = a.feishu.SendCard(ctx, sub.ChatID, card)
+		msgID, err = a.feishu.SendCard(ctx, anchor.chatID, card)
 		if err != nil {
 			return err
 		}
@@ -75,7 +121,7 @@ func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, deli
 	// progress that resumes after this request is answered must start a new card
 	// rather than patch a card the user has already scrolled past.
 	newTurnStreamService(a).discardWorkingCard(delivery.turnID)
-	recordMessageLink(a, msgID, linkKind, sub, requestKey)
+	recordMessageLinkForAnchor(a, msgID, linkKind, anchor, requestKey)
 	if err := a.State().SavePending(&state.PendingRequest{
 		ID:           requestKey,
 		RequestIDRaw: strings.TrimSpace(delivery.requestIDStored),
@@ -94,8 +140,8 @@ func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, deli
 	}); err != nil {
 		return err
 	}
-	if waitingStatus != "" {
-		return a.State().SetSubmissionStatus(sub.ID, waitingStatus)
+	if waitingStatus != "" && anchor.submissionID != "" {
+		return a.State().SetSubmissionStatus(anchor.submissionID, waitingStatus)
 	}
 	return nil
 }

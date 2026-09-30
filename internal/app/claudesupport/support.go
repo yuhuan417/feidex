@@ -76,6 +76,11 @@ func normalizePermissionModeValue(value string) string {
 // DeliverPendingCardFunc delivers a card and creates a pending request record.
 type DeliverPendingCardFunc func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error
 
+// DeliverDetachedPendingCardFunc delivers a card for a request whose producing
+// turn is already gone (background agents outlive their parent submission).
+// Detached cards never touch submission status.
+type DeliverDetachedPendingCardFunc func(card map[string]any, target appclauderuntime.InteractionTarget, reqKey, reqIDStored, backend, kind, payloadJSON, linkKind string) error
+
 // RenderApprovalCardFunc renders an approval card.
 type RenderApprovalCardFunc func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any
 
@@ -113,14 +118,15 @@ type PendingLookupFunc func(requestID string) *state.PendingRequest
 // dependencies.
 type Service struct {
 	// Card delivery
-	DeliverPendingCard DeliverPendingCardFunc
-	RenderApprovalCard RenderApprovalCardFunc
-	SimpleStatusCard   SimpleStatusCardFunc
-	PatchCard          PatchCardFunc
-	PrepareMentionText PrepareMentionTextFunc
-	RenderFormCard     RenderFormCardFunc
-	ContentCardTitle   func(sessionKey, workspaceID, title string) string
-	BackendClaude      string
+	DeliverPendingCard         DeliverPendingCardFunc
+	DeliverDetachedPendingCard DeliverDetachedPendingCardFunc
+	RenderApprovalCard         RenderApprovalCardFunc
+	SimpleStatusCard           SimpleStatusCardFunc
+	PatchCard                  PatchCardFunc
+	PrepareMentionText         PrepareMentionTextFunc
+	RenderFormCard             RenderFormCardFunc
+	ContentCardTitle           func(sessionKey, workspaceID, title string) string
+	BackendClaude              string
 	// Plan mode
 	ResolvePlanFeedback  ResolvePlanFeedbackFunc
 	FinalizePendingReply FinalizePendingReplyFunc
@@ -323,19 +329,11 @@ func ClaudePlanOriginalBody(pending *state.PendingRequest) string {
 
 // ---------- Service methods — card delivery ----------
 
-// SendApprovalCardWithPayload sends a Claude approval card with an optional
-// request payload.
-func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, requestID, sessionKey, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
-	if sub == nil {
-		return fmt.Errorf("claude approval delivery unavailable")
-	}
-	requestKey := strings.TrimSpace(requestID)
-	if requestKey == "" {
-		return fmt.Errorf("missing request id")
-	}
-
+// BuildApprovalContent normalises the card title and stored payload for an
+// approval request. Shared by the submission-bound and detached delivery
+// paths so both render identical decisions.
+func BuildApprovalContent(kind, body string, requestPayload map[string]any, sessionActionLabel string) (string, appapproval.RequestPayload) {
 	title := "等待审批"
-	buttons := ClaudeApprovalButtons(kind, requestKey, sessionActionLabel)
 	payload := appapproval.RequestPayload{
 		Body:               strings.TrimSpace(body),
 		Request:            requestPayload,
@@ -347,7 +345,22 @@ func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, reque
 			payload.Permissions = appapproval.CloneJSONMap(permissions)
 		}
 	}
+	return title, payload
+}
 
+// SendApprovalCardWithPayload sends a Claude approval card with an optional
+// request payload.
+func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, requestID, sessionKey, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+	if sub == nil {
+		return fmt.Errorf("claude approval delivery unavailable")
+	}
+	requestKey := strings.TrimSpace(requestID)
+	if requestKey == "" {
+		return fmt.Errorf("missing request id")
+	}
+
+	title, payload := BuildApprovalContent(kind, body, requestPayload, sessionActionLabel)
+	buttons := ClaudeApprovalButtons(kind, requestKey, sessionActionLabel)
 	card := s.RenderApprovalCard(sub, title, "orange", strings.TrimSpace(body), buttons)
 	return s.DeliverPendingCard(sub, card,
 		requestKey,
@@ -363,6 +376,115 @@ func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, reque
 		state.SubmissionStatusWaitingApproval.String(),
 		"approval_card",
 		0,
+	)
+}
+
+// ---------- Service methods — detached card delivery ----------
+
+// SendDetachedApprovalCard delivers an approval card for a request that
+// outlived its producing turn. The request stays answerable because the
+// Claude-side control request is still open until we reply to it.
+func (s *Service) SendDetachedApprovalCard(requestID string, target appclauderuntime.InteractionTarget, presentation appapproval.Presentation) error {
+	if s.DeliverDetachedPendingCard == nil {
+		return fmt.Errorf("claude approval delivery unavailable")
+	}
+	requestKey := strings.TrimSpace(requestID)
+	if requestKey == "" {
+		return fmt.Errorf("missing request id")
+	}
+	kind := presentation.Kind.String()
+	title, payload := BuildApprovalContent(kind, presentation.Body, presentation.Payload.Request, presentation.Payload.SessionActionLabel)
+	title = s.ContentCardTitle(target.SessionKey, target.WorkspaceID, title)
+	buttons := ClaudeApprovalButtons(kind, requestKey, presentation.Payload.SessionActionLabel)
+	card := s.SimpleStatusCard(title, "orange", s.PrepareMentionText(strings.TrimSpace(presentation.Body), target.UserID), buttons)
+	return s.DeliverDetachedPendingCard(card, target,
+		requestKey,
+		ClaudeRequestIDStored(requestKey),
+		s.BackendClaude,
+		strings.TrimSpace(kind),
+		payload.MarshalJSONText(),
+		"approval_card",
+	)
+}
+
+// SendDetachedUserInputCard delivers a quick-answer question card for a
+// request that outlived its producing turn.
+func (s *Service) SendDetachedUserInputCard(requestID string, target appclauderuntime.InteractionTarget, payload pendingforms.ToolUserInputPayload) error {
+	if s.DeliverDetachedPendingCard == nil {
+		return fmt.Errorf("claude question delivery unavailable")
+	}
+	requestKey := strings.TrimSpace(requestID)
+	if requestKey == "" || len(payload.Questions) == 0 {
+		return fmt.Errorf("missing request id")
+	}
+	q := payload.Questions[0]
+	buttons := make([]feishu.Button, 0, len(q.Options))
+	for _, opt := range q.Options {
+		buttons = append(buttons, feishu.Button{
+			Text: opt.Label,
+			Type: "default",
+			Value: map[string]any{
+				"action":      "user_input.answer",
+				"request_id":  requestKey,
+				"question_id": q.ID,
+				"answer":      opt.Label,
+			},
+		})
+	}
+	card := s.SimpleStatusCard("需要补充输入", "orange", s.PrepareMentionText(pendingforms.RenderToolUserInputQuickBody(q), target.UserID), buttons)
+	return s.DeliverDetachedPendingCard(card, target,
+		requestKey,
+		ClaudeRequestIDStored(requestKey),
+		s.BackendClaude,
+		"tool_request_user_input",
+		mustJSON(payload),
+		"user_input_card",
+	)
+}
+
+// SendDetachedUserInputFormCard delivers a question form for a request that
+// outlived its producing turn.
+func (s *Service) SendDetachedUserInputFormCard(requestID string, target appclauderuntime.InteractionTarget, payload pendingforms.ToolUserInputPayload) error {
+	if s.DeliverDetachedPendingCard == nil {
+		return fmt.Errorf("claude question delivery unavailable")
+	}
+	requestKey := strings.TrimSpace(requestID)
+	if requestKey == "" {
+		return fmt.Errorf("missing request id")
+	}
+	card := s.RenderFormCard(requestKey, payload, pendingforms.FormDrafts{}, target.UserID)
+	return s.DeliverDetachedPendingCard(card, target,
+		requestKey,
+		ClaudeRequestIDStored(requestKey),
+		s.BackendClaude,
+		"tool_request_user_input_form",
+		mustJSON(payload),
+		"user_input_card",
+	)
+}
+
+// SendDetachedPlanModeCard delivers a plan confirmation for a request that
+// outlived its producing turn.
+func (s *Service) SendDetachedPlanModeCard(requestID string, target appclauderuntime.InteractionTarget, body string) error {
+	if s.DeliverDetachedPendingCard == nil {
+		return fmt.Errorf("claude plan confirmation unavailable")
+	}
+	requestKey := strings.TrimSpace(requestID)
+	if requestKey == "" {
+		return fmt.Errorf("missing request id")
+	}
+	title := s.ContentCardTitle(target.SessionKey, target.WorkspaceID, "Claude 计划确认")
+	card := s.SimpleStatusCard(title, "orange", s.PrepareMentionText(strings.TrimSpace(body), target.UserID), []feishu.Button{
+		{Text: "批准", Type: "primary", Value: map[string]any{"action": "pending_form.plan_approve", "request_id": requestKey}},
+		{Text: "拒绝", Type: "danger", Value: map[string]any{"action": "pending_form.plan_reject", "request_id": requestKey}},
+	})
+	return s.DeliverDetachedPendingCard(card, target,
+		requestKey,
+		ClaudeRequestIDStored(requestKey),
+		s.BackendClaude,
+		"claude_exit_plan_mode",
+		mustJSON(map[string]any{"body": strings.TrimSpace(body)}),
+		"claude_plan_card",
 	)
 }
 
