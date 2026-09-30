@@ -111,6 +111,7 @@ type fakeClaudeCore struct {
 	setModelApplied     bool
 	setEffortApplied    bool
 	permissionModeCalls []fakeClaudePermissionModeCall
+	permissionModeErr   error
 	approvalCalls       []fakeClaudeApprovalCall
 	userInputCalls      []fakeClaudeUserInputCall
 	planCalls           []fakeClaudePlanCall
@@ -251,7 +252,7 @@ func (f *fakeClaudeCore) SetPermissionMode(_ context.Context, sessionKey, mode s
 		sessionKey: sessionKey,
 		mode:       mode,
 	})
-	return nil
+	return f.permissionModeErr
 }
 
 func (f *fakeClaudeCore) ResolveApproval(requestID string, resolution appruntime.ClaudeApprovalResolution) error {

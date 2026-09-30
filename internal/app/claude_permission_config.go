@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	appbackend "feidex/internal/app/backend"
+	"feidex/internal/app/cards"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -79,6 +81,57 @@ func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return a.claude.SetPermissionMode(ctx, sessionKey, mode)
+}
+
+// applyClaudePermissionModeToRuntimeAsync applies the stored permission mode
+// off the Feishu ack path.
+//
+// Card callbacks must answer within the platform's callback deadline, and this
+// apply is a CLI round-trip (set_permission_mode + its control response). The
+// mode is re-read from the session when the task runs, so two rapid changes
+// converge on the latest stored value instead of racing.
+func applyClaudePermissionModeToRuntimeAsync(a *App, messageID, sessionKey, fallbackMode string) {
+	runAsync(a, func() {
+		mode := strings.TrimSpace(fallbackMode)
+		if cfg := a.Config(); cfg != nil {
+			if sess := a.State().Session(sessionKey); sess != nil {
+				mode = effectiveBindingClaudePermissionMode(a, sess, config.FindWorkspace(cfg, sess.WorkspaceID), cfg.Claude)
+			}
+		}
+		if err := applyClaudePermissionModeToRuntime(a, sessionKey, mode); err != nil {
+			patchClaudePermissionMenuRuntimeFailure(a, messageID, sessionKey, err)
+		}
+	})
+}
+
+// patchClaudePermissionMenuRuntimeFailure re-renders the permission menu with a
+// warning so the card does not claim a runtime change that never landed.
+func patchClaudePermissionMenuRuntimeFailure(a *App, messageID, sessionKey string, applyErr error) {
+	messageID = strings.TrimSpace(messageID)
+	if a == nil || a.feishu == nil || messageID == "" {
+		slog.Warn("claude permission mode runtime apply failed",
+			"session_key", sessionKey,
+			"error", applyErr,
+		)
+		return
+	}
+	card, err := renderClaudeSessionPermissionMenuCard(a, sessionKey)
+	if err != nil || card == nil {
+		slog.Warn("render claude permission menu for failure patch failed",
+			"session_key", sessionKey,
+			"error", err,
+		)
+		return
+	}
+	warning := "⚠️ 运行时未生效：" + applyErr.Error() + "（设置已保存，将在会话重启后生效）"
+	card = cards.PrependMarkdownWarning(card, warning)
+	if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
+		slog.Warn("patch claude permission menu failed",
+			"session_key", sessionKey,
+			"message_id", messageID,
+			"error", err,
+		)
+	}
 }
 
 func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {

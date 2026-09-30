@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -166,6 +167,13 @@ type ModelConfigService struct {
 	// Feishu client callbacks.
 	ReplyText func(ctx context.Context, msgID string, text string, replyInThread bool) error
 	ReplyCard func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error)
+	// PatchCard replaces a card by message id. Used to report runtime work that
+	// failed after the card callback had already been answered.
+	PatchCard func(messageID string, card map[string]any) error
+	// RunAsync runs work after the card callback has been answered. Card
+	// callbacks must return within the platform deadline, while a Claude model
+	// or effort change is a CLI round-trip.
+	RunAsync func(fn func())
 
 	// Claude runtime callbacks.
 	UpdateClaudeConfig  func(cfg config.ClaudeConfig)
@@ -1134,6 +1142,23 @@ func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, men
 
 func (s ModelConfigService) CompleteClaudeAuxiliaryModelSet(action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
 	value = normalizeClearableValue(value)
+	sessionKey := actionSessionKey(action)
+	if s.RunAsync != nil && hasCardMessage(action) {
+		// Card callback: persisting auxiliary models restarts the session, which
+		// stops the CLI process — too slow for the callback ack path.
+		s.runRuntimeApplyAsync(action, func() error {
+			return s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) {
+				if role == "small" {
+					c.SmallModel = value
+				} else {
+					c.SubagentModel = value
+				}
+			})
+		}, func() map[string]any {
+			return s.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary")
+		}, "辅助模型配置应用失败")
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 辅助模型配置，正在后台重启会话"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
+	}
 	if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) {
 		if role == "small" {
 			c.SmallModel = value
@@ -1143,7 +1168,7 @@ func (s ModelConfigService) CompleteClaudeAuxiliaryModelSet(action *feishu.CardA
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 辅助模型配置"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(actionSessionKey(action), "menu.model_auxiliary"))}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 辅助模型配置"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
 }
 
 func normalizeClearableValue(value string) string {
@@ -1367,6 +1392,19 @@ func (s ModelConfigService) completeClaudeModelSet(action *feishu.CardAction, mo
 	}, ignoreCurrentMessage); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	if !ignoreCurrentMessage && s.RunAsync != nil && hasCardMessage(action) {
+		// Card callback: answer now, hot-apply off the ack path.
+		s.runRuntimeApplyAsync(action, func() error {
+			_, err := s.HotApplyClaudeModelToCurrentSession(sessionKey, model)
+			return err
+		}, func() map[string]any {
+			return s.RenderClaudeModelConfigCard(sessionKey, menuAction)
+		}, "当前会话热更新失败")
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 模型；后续对话会使用新配置，当前会话正在后台切换"},
+			Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
+		}, nil
+	}
 	toastType := "success"
 	toastContent := "已更新 Claude 模型；后续对话会使用新配置"
 	if applied, err := s.HotApplyClaudeModelToCurrentSession(sessionKey, model); err != nil {
@@ -1379,6 +1417,45 @@ func (s ModelConfigService) completeClaudeModelSet(action *feishu.CardAction, mo
 		Toast: &callback.Toast{Type: toastType, Content: toastContent},
 		Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
+}
+
+// hasCardMessage reports whether an action came from a real card callback.
+// Programmatic and command fallbacks carry no message id and may run inline.
+func hasCardMessage(action *feishu.CardAction) bool {
+	return action != nil && strings.TrimSpace(action.MessageID) != ""
+}
+
+// runRuntimeApplyAsync runs a Claude runtime application after the callback has
+// been answered and patches the card when it fails, so the card never claims a
+// runtime change that never landed.
+func (s ModelConfigService) runRuntimeApplyAsync(action *feishu.CardAction, apply func() error, renderCard func() map[string]any, failureLabel string) {
+	messageID := ""
+	if action != nil {
+		messageID = strings.TrimSpace(action.MessageID)
+	}
+	s.RunAsync(func() {
+		err := apply()
+		if err == nil {
+			return
+		}
+		warning := "⚠️ " + failureLabel + "：" + err.Error() + "（配置已保存，将在会话重启后生效）"
+		if errors.Is(err, claudecli.ErrEffortDefaultHotApplyUnsupported) {
+			warning = "⚠️ 当前会话暂不支持热切回默认（配置已保存，将在会话重启后生效）"
+		}
+		if messageID == "" || s.PatchCard == nil || renderCard == nil {
+			slog.Warn("claude runtime apply failed after card ack",
+				"message_id", messageID,
+				"error", err,
+			)
+			return
+		}
+		if patchErr := s.PatchCard(messageID, cards.PrependMarkdownWarning(renderCard(), warning)); patchErr != nil {
+			slog.Warn("patch claude config card after runtime failure failed",
+				"message_id", messageID,
+				"error", patchErr,
+			)
+		}
+	})
 }
 
 // CompleteClaudeModelOptionAdd handles the Claude picker option add form.
@@ -1446,6 +1523,19 @@ func (s ModelConfigService) completeClaudeEffortSet(action *feishu.CardAction, e
 		c.Effort = normalized
 	}, ignoreCurrentMessage); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	if !ignoreCurrentMessage && s.RunAsync != nil && hasCardMessage(action) {
+		// Card callback: answer now, hot-apply off the ack path.
+		s.runRuntimeApplyAsync(action, func() error {
+			_, err := s.HotApplyClaudeEffortToCurrentSession(sessionKey, normalized)
+			return err
+		}, func() map[string]any {
+			return s.RenderClaudeModelConfigCard(sessionKey, menuAction)
+		}, "当前会话热更新失败")
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 推理强度；后续对话会使用新配置，当前会话正在后台切换"},
+			Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
+		}, nil
 	}
 	toastType := "success"
 	toastContent := "已更新 Claude 推理强度；后续对话会使用新配置"

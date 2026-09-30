@@ -180,3 +180,42 @@ func buildSelectStaticBase(name, placeholder string, options []SelectStaticOptio
 func firstNonEmpty(values ...string) string {
 	return apputil.FirstNonEmpty(values...)
 }
+
+// PrependMarkdownWarning puts a warning line above the card's first markdown
+// element, keeping the rest of the card (menu body, buttons) intact. It is used
+// to report work that failed after the card callback was already answered.
+func PrependMarkdownWarning(card map[string]any, warning string) map[string]any {
+	warning = strings.TrimSpace(warning)
+	if card == nil || warning == "" {
+		return card
+	}
+	body, _ := card["body"].(map[string]any)
+	if body == nil {
+		return card
+	}
+	switch elements := body["elements"].(type) {
+	case []map[string]any:
+		if len(elements) == 0 {
+			return card
+		}
+		content, _ := elements[0]["content"].(string)
+		if strings.TrimSpace(content) == "" {
+			return card
+		}
+		elements[0]["content"] = warning + "\n\n" + content
+	case []any:
+		if len(elements) == 0 {
+			return card
+		}
+		first, _ := elements[0].(map[string]any)
+		if first == nil {
+			return card
+		}
+		content, _ := first["content"].(string)
+		if strings.TrimSpace(content) == "" {
+			return card
+		}
+		first["content"] = warning + "\n\n" + content
+	}
+	return card
+}

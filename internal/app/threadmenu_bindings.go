@@ -136,6 +136,12 @@ func (a *App) ApplyClaudePermissionModeToRuntime(sessionKey, mode string) error 
 	return applyClaudePermissionModeToRuntime(a, sessionKey, mode)
 }
 
+// ApplyClaudePermissionModeToRuntimeAsync enqueues the runtime apply so a card
+// callback can ack immediately; a failure patches the menu card.
+func (a *App) ApplyClaudePermissionModeToRuntimeAsync(messageID, sessionKey, mode string) {
+	applyClaudePermissionModeToRuntimeAsync(a, messageID, sessionKey, mode)
+}
+
 func (a *App) RenderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error) {
 	return renderClaudeSessionPermissionMenuCard(a, sessionKey)
 }

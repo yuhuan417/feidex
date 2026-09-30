@@ -1005,3 +1005,67 @@ func TestSessionIgnoresReplayedInteractiveRequest(t *testing.T) {
 		t.Fatalf("wrote %d responses for one request, want 1:\n%s", got, buf.String())
 	}
 }
+
+// Menu actions such as /session permissions send their own control request and
+// wait for the CLI's response. While a permission card is parked, that
+// response must still be read and dispatched — otherwise the Feishu card
+// callback runs into its ack deadline and reports a timeout.
+func TestSessionDeliversControlResponseWhilePermissionPending(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	handlerRelease := make(chan struct{})
+	session, buf := newInteractiveTestSession(PermissionHandlerFunc(func(ctx context.Context, req *PermissionRequest) (*PermissionResponse, error) {
+		close(handlerStarted)
+		select {
+		case <-handlerRelease:
+			return &PermissionResponse{Behavior: PermissionAllow}, nil
+		case <-ctx.Done():
+			return &PermissionResponse{Behavior: PermissionDeny}, nil
+		}
+	}))
+	session.started = true
+
+	// A subagent's permission prompt is parked, waiting for the user.
+	session.handleLine([]byte(`{"type":"control_request","request_id":"req-parked","request":{"subtype":"can_use_tool","tool_name":"Write","input":{},"agent_id":"agent-1"}}`))
+	select {
+	case <-handlerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("permission handler never started")
+	}
+
+	// The user opens the menu and changes the session permission mode.
+	applied := make(chan error, 1)
+	go func() {
+		applied <- session.SetPermissionMode(context.Background(), PermissionModeAcceptEdits)
+	}()
+
+	var requestID string
+	deadline := time.Now().Add(2 * time.Second)
+	for requestID == "" {
+		session.mu.Lock()
+		for id := range session.pendingCtl {
+			requestID = id
+		}
+		session.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatal("permission mode control request was never sent")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// The CLI answers while the permission card is still parked.
+	session.handleLine([]byte(`{"type":"control_response","response":{"subtype":"success","request_id":"` + requestID + `"}}`))
+
+	select {
+	case err := <-applied:
+		if err != nil {
+			t.Fatalf("SetPermissionMode() error = %v, want it to complete while the card is parked", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SetPermissionMode() did not complete while a permission card was parked")
+	}
+	if !strings.Contains(buf.String(), `"mode":"acceptEdits"`) {
+		t.Fatalf("control request not written: %q", buf.String())
+	}
+
+	close(handlerRelease)
+}

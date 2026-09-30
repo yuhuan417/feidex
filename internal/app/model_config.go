@@ -31,6 +31,12 @@ func newModelConfigService(app *App) modelConfigService {
 			ReplyCard: func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error) {
 				return app.feishu.ReplyCard(ctx, msgID, card, replyInThread)
 			},
+			PatchCard: func(messageID string, card map[string]any) error {
+				return app.feishu.PatchCard(context.Background(), messageID, card)
+			},
+			RunAsync: func(fn func()) {
+				runAsync(app, fn)
+			},
 			UpdateClaudeConfig: func(cfg config.ClaudeConfig) {
 				if app.claude != nil {
 					app.claude.UpdateConfig(cfg)

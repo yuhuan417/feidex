@@ -351,9 +351,9 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 		}
 		if backend == config.RuntimeBackendClaude && a.claude != nil {
-			if err := a.claude.ResetSession(sessionKey); err != nil {
-				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-			}
+			// Restarting the session is blocking; keep it off the ack path.
+			resetClaudeSessionAfterAuxModelChange(a, actionMessageIDValue(action), sessionKey)
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 session 的辅助模型配置，会话正在后台重启"}}, nil
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 session 的辅助模型配置"}}, nil
 	}
@@ -384,9 +384,9 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	if backend == config.RuntimeBackendClaude && a.claude != nil {
-		if err := a.claude.ResetSession(sessionKey); err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
+		// Restarting the session is blocking; keep it off the ack path.
+		resetClaudeSessionAfterAuxModelChange(a, actionMessageIDValue(action), sessionKey)
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 Bot 的辅助模型配置，会话正在后台重启"}}, nil
 	}
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 Bot 的辅助模型配置"}}, nil
 }

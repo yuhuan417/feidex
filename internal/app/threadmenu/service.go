@@ -84,6 +84,9 @@ type App interface {
 	// Claude permission helpers
 	NormalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error)
 	ApplyClaudePermissionModeToRuntime(sessionKey, mode string) error
+	// ApplyClaudePermissionModeToRuntimeAsync enqueues the runtime apply so a
+	// card callback can answer within the platform deadline.
+	ApplyClaudePermissionModeToRuntimeAsync(messageID, sessionKey, mode string)
 	RenderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error)
 	ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage) error
 }
@@ -699,7 +702,9 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 				return err
 			},
 			CompleteConversationPermissionModeSet: func(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-				return s.CompleteClaudeSessionPermissionModeSet(action, sessionKey, threadID, rawMode)
+				// Slash command path: no card ack deadline, apply synchronously
+				// so the reply reflects the actual runtime result.
+				return s.completeClaudeSessionPermissionModeSet(action, sessionKey, threadID, rawMode, false)
 			},
 			ReplyCommandActionResponse: s.app.ReplyCommandActionResponse,
 			CommandActionFromMessage:   CommandActionFromMessage,
@@ -1025,9 +1030,28 @@ func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, th
 // Claude session permission mode (from claude_permission_config.go)
 // ---------------------------------------------------------------------------
 
-// CompleteClaudeSessionPermissionModeSet handles setting the Claude session permission mode.
+// CompleteClaudeSessionPermissionModeSet handles the session permission mode
+// card action. The runtime apply is enqueued so the Feishu callback can answer
+// immediately; a failure patches the menu card with a warning.
 func (s *Service) CompleteClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+	return s.completeClaudeSessionPermissionModeSet(action, sessionKey, threadID, rawMode, true)
+}
+
+// completeClaudeSessionPermissionModeSet applies the mode synchronously when it
+// is not on the card callback ack path (slash commands have no ack deadline).
+func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string, asyncRuntimeApply bool) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
+	applyRuntime := s.app.ApplyClaudePermissionModeToRuntime
+	if asyncRuntimeApply {
+		messageID := ""
+		if action != nil {
+			messageID = strings.TrimSpace(action.MessageID)
+		}
+		applyRuntime = func(key, mode string) error {
+			s.app.ApplyClaudePermissionModeToRuntimeAsync(messageID, key, mode)
+			return nil
+		}
+	}
 	return appbackend.DriverForApp(s.app).Permission().CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode, appbackend.ConversationPermissionModeUpdateDeps{
 		App:         s.app,
 		Session:     s.app.ThreadMenuAppState().Session,
@@ -1035,7 +1059,7 @@ func (s *Service) CompleteClaudeSessionPermissionModeSet(action *feishu.CardActi
 		NormalizeRequested: func(raw string) (string, string, error) {
 			return s.app.NormalizeRequestedClaudePermissionMode(context.Background(), raw)
 		},
-		ApplyRuntime: s.app.ApplyClaudePermissionModeToRuntime,
+		ApplyRuntime: applyRuntime,
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
 			return appbackend.DriverForApp(s.app).Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 				App:            s.app,

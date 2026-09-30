@@ -178,12 +178,20 @@
 
 ### 同步风险
 
-截至 2026-07-10，当前没有已知仍在 Claude 卡片 callback 同步 ack 路径执行长 runtime / CLI 往返的动作。
+2026-09-30 更新：此前"Claude 卡片 callback 没有长 runtime / CLI 往返"的结论不成立，漏掉了两类 **control_request 往返**（写 `control_request` 后等 CLI 的 `control_response`）。它们在 Claude session 的 stdout 读循环被挂起审批卡阻塞时会更慢，因为响应根本读不到。
+
+| Action | 重流程来源 | 当前状态 |
+| --- | --- | --- |
+| `thread.permission_mode.set` | `SetPermissionMode` control 往返（5s ctx） | 已异步化：状态先落库、菜单卡与 toast 立即返回，运行时应用放后台；失败时把菜单卡 patch 成带"运行时未生效"告警的版本（`applyClaudePermissionModeToRuntimeAsync`） |
+| `model.config.set_model` / `select_model` / `set_effort` / `select_effort` | `HotApplyClaudeModelToCurrentSession` / `HotApplyClaudeEffortToCurrentSession`（10s ctx） | 已异步化：配置先落库、菜单卡与 toast 立即返回（"当前会话正在后台切换"），热更新放后台；失败时把菜单卡 patch 成带告警的版本（`ModelConfigService.runRuntimeApplyAsync`）。"切回默认 effort 不支持热更新"的告警文案保留 |
+| `model.aux_config.select_*`（辅助模型） | `ResetClaudeSessions` / `ResetSession`：要停掉 CLI 进程 | 已异步化：session 覆盖与 bot profile 先落库，会话重启放后台；失败时回一条文本提示并提供 `/claude restart` 兜底 |
 
 补充说明:
 
 - `menu.interrupt` 最终仍会走 Claude runtime，再由活跃 CLI session 发送 interrupt control request；但当前已通过 `CompleteAsyncCommandAction` 先返回 preparing card。
 - Codex backend 的 `menu.interrupt` 走本地 `turn/interrupt` 控制路径，仍按快路径处理。
+- `/session permissions MODE`（slash command）不走 ack 路径，保留同步应用，回复里能直接反映运行时结果。
+- Claude 模型 / 强度 / 辅助模型的异步分支只对**带 MessageID 的真实卡片回调**生效；无 MessageID 的编程式调用仍同步执行（沿用本文既有的 fallback 约定），因此失败 patch 有明确落点。
 
 ### 重流程但已异步保护
 
