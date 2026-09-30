@@ -170,8 +170,6 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if got := nonZero(0, 0); got != 0 {
 		t.Fatalf("nonZero(all zero) = %d, want 0", got)
 	}
-	a.HandleBotMenu(nil)
-
 	sessionKey := "sess-err"
 	if err := a.store.UpsertSession(&state.Session{
 		Key:         sessionKey,

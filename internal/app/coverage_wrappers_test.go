@@ -171,7 +171,7 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 	}
 
 	called := false
-	client.SetHandlers(func(*feishu.InboundMessage) { called = true }, func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error) { return nil, nil }, nil, nil, nil)
+	client.SetHandlers(func(*feishu.InboundMessage) { called = true }, func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error) { return nil, nil }, nil, nil)
 	if base.onMessage == nil {
 		t.Fatal("SetHandlers() should delegate")
 	}
@@ -246,7 +246,7 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 	capture := &commandCaptureClient{Base: base, ReplyMessageID: "reply-1"}
 
 	handled := false
-	capture.SetHandlers(func(*feishu.InboundMessage) { handled = true }, nil, nil, nil, nil)
+	capture.SetHandlers(func(*feishu.InboundMessage) { handled = true }, nil, nil, nil)
 	base.onMessage(&feishu.InboundMessage{})
 	if !handled {
 		t.Fatal("SetHandlers() should delegate")

@@ -52,7 +52,7 @@ func TestAdapterStartInitializesWithoutBlocking(t *testing.T) {
 	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
 	a.SetHandlers(func(*InboundMessage) {}, func(*CardAction) (*callback.CardActionTriggerResponse, error) {
 		return &callback.CardActionTriggerResponse{}, nil
-	}, func(*BotMenuClick) {}, func(*MessageRecall) {}, func(*MessageReaction) {})
+	}, func(*MessageRecall) {}, func(*MessageReaction) {})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

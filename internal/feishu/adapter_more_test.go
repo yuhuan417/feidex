@@ -34,7 +34,7 @@ func TestNewConfiguresAllowListAndLifecycleHelpers(t *testing.T) {
 	}
 
 	called := false
-	a.SetHandlers(func(*InboundMessage) {}, nil, nil, nil, nil)
+	a.SetHandlers(func(*InboundMessage) {}, nil, nil, nil)
 	a.cancel = func() { called = true }
 	a.Stop()
 	if !called {

@@ -40,8 +40,8 @@ type CommandCaptureFeishuClient interface {
 	CaptureCommandOutput(replyMessageID string, fn func() error) (string, map[string]any, error)
 }
 
-func (c *CommandCaptureClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*feishu.BotMenuClick), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
-	c.Base.SetHandlers(onMessage, onCardAction, onBotMenu, onRecall, onReaction)
+func (c *CommandCaptureClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
+	c.Base.SetHandlers(onMessage, onCardAction, onRecall, onReaction)
 }
 
 func (c *CommandCaptureClient) SetGroupMessagePolicy(policy feishu.GroupMessagePolicy) {
@@ -254,8 +254,8 @@ func (n *NotifyingFeishuClient) commandCaptureForMessageLocked(messageID string)
 	return nil
 }
 
-func (n *NotifyingFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onBotMenu func(*feishu.BotMenuClick), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
-	n.Base.SetHandlers(onMessage, onCardAction, onBotMenu, onRecall, onReaction)
+func (n *NotifyingFeishuClient) SetHandlers(onMessage func(*feishu.InboundMessage), onCardAction func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error), onRecall func(*feishu.MessageRecall), onReaction func(*feishu.MessageReaction)) {
+	n.Base.SetHandlers(onMessage, onCardAction, onRecall, onReaction)
 }
 
 func (n *NotifyingFeishuClient) SetGroupMessagePolicy(policy feishu.GroupMessagePolicy) {
