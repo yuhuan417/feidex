@@ -40,7 +40,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
-	if err := ensureSessionModelConfigIdle(s.app, makeSessionKey(s.app, msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
+	if err := ensureSessionModelConfigWritable(s.app, makeSessionKey(s.app, msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -102,8 +102,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		if err != nil {
 			return err
 		}
-		s.hotApplyClaudeModel(makeSessionKey(s.app, msg))
-		return s.replyBindingUpdated(msg, "已更新当前群内模型: "+renderOptionalBacktick(updated.ModelOverride))
+		return s.replyBindingUpdated(msg, "已保存当前群内模型（下一轮启动前应用）: "+renderOptionalBacktick(updated.ModelOverride))
 	case "effort":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /model effort EFFORT|default")
@@ -115,7 +114,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		if err != nil {
 			return err
 		}
-		return s.replyBindingUpdated(msg, "已更新当前群内推理强度: "+renderOptionalBacktick(updated.ReasoningEffortOverride))
+		return s.replyBindingUpdated(msg, "已保存当前群内推理强度（下一轮启动前应用）: "+renderOptionalBacktick(updated.ReasoningEffortOverride))
 	case "plan", "review", "subagent", "small":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /model %s MODEL|default", args[0])
@@ -137,12 +136,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		if err != nil {
 			return err
 		}
-		if configuredBackend(s.app) == backendClaude && s.app.claude != nil {
-			if err := s.app.claude.ResetSession(makeSessionKey(s.app, msg)); err != nil {
-				return err
-			}
-		}
-		return s.replyBindingUpdated(msg, "已更新当前群内"+role+" model: "+renderOptionalBacktick(value))
+		return s.replyBindingUpdated(msg, "已更新当前群内"+role+" model（待对应会话边界生效）: "+renderOptionalBacktick(value))
 	case "subagent_effort":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
@@ -374,6 +368,12 @@ func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*
 	if binding == nil {
 		return nil, fmt.Errorf("当前 Bot 工作区配置未初始化")
 	}
+	store := s.app.State()
+	s.app.ConfigMu().Lock()
+	defer s.app.ConfigMu().Unlock()
+	if latest := store.AgentBinding(binding.ID); latest != nil {
+		binding = latest
+	}
 	current := *binding
 	if mutate != nil {
 		mutate(&current)
@@ -381,10 +381,10 @@ func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*
 	if strings.TrimSpace(current.WorkspaceID) != "" {
 		current.Status = state.AgentBindingStatusActive.String()
 	}
-	if err := s.app.State().SaveAgentBinding(&current); err != nil {
+	if err := store.SaveAgentBinding(&current); err != nil {
 		return nil, err
 	}
-	updated := s.app.State().AgentBinding(current.ID)
+	updated := store.AgentBinding(current.ID)
 	if updated == nil {
 		return nil, fmt.Errorf("当前 Bot 工作区配置 %q 更新后未找到", current.ID)
 	}

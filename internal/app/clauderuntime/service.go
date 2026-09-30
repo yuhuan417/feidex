@@ -6,6 +6,7 @@ package clauderuntime
 import (
 	"context"
 	"errors"
+	"feidex/internal/app/appcore"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -54,6 +55,8 @@ type SessionState struct {
 	Mu                          sync.Mutex
 	SessionID                   string
 	Model                       string
+	AppliedModelConfig          state.ModelConfigSnapshot
+	PreserveResumeOnFailure     bool
 	AuxiliarySmallModel         string
 	AuxiliarySubagentModel      string
 	ReadyCh                     chan struct{}
@@ -235,7 +238,8 @@ type Deps struct {
 	Permission             PermissionDeps
 	PrepareClaudeMCPConfig func(sessionKey string) (configPath string, env []string, cleanup func(), err error)
 	AuxiliaryModels        func(sessionKey string) (smallModel, subagentModel string)
-	ReasoningEffort        func(sessionKey string) string
+	ModelSettings          func(sessionKey string) state.ModelConfigSnapshot
+	ModelSettingsApplied   func(sessionKey string, settings state.ModelConfigSnapshot)
 }
 
 // Service provides Claude CLI session management. All exported methods
@@ -245,9 +249,11 @@ type Service struct {
 	Cfg  config.ClaudeConfig
 	deps Deps
 
-	mu       sync.Mutex
-	sessions map[string]*SessionState
-	pending  map[string]*PendingInteraction
+	mu            sync.Mutex
+	sessions      map[string]*SessionState
+	pending       map[string]*PendingInteraction
+	configLocks   sync.Map
+	configPending sync.Map
 }
 
 // NewService creates a new Service.
@@ -493,7 +499,7 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 		return "", fmt.Errorf("claude runtime not initialized")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = appcore.Context(s.App)
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
@@ -502,54 +508,72 @@ func (s *Service) EnsureSession(ctx context.Context, sessionKey string, ws *conf
 	if ws == nil {
 		return "", fmt.Errorf("workspace not found")
 	}
+	lock, _ := s.configLocks.LoadOrStore(sessionKey, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
 	s.mu.Lock()
 	runtimeCfg := s.Cfg
-	s.mu.Unlock()
-	resumeID = strings.TrimSpace(resumeID)
-	model = strings.TrimSpace(apputil.FirstNonEmpty(model, strings.TrimSpace(runtimeCfg.Model)))
-
-	s.mu.Lock()
 	current := s.sessions[sessionKey]
+	s.mu.Unlock()
+	desired := s.desiredModelSettings(sessionKey, runtimeCfg, model)
+	model = desired.Model
+	runtimeCfg.Effort = desired.Effort
+	runtimeCfg.SmallModel, runtimeCfg.SubagentModel = desired.SmallModel, desired.SubagentModel
+	resumeID = strings.TrimSpace(resumeID)
 	if current != nil && current.WorkspaceID == ws.ID {
-		desiredSmall, desiredSubagent := "", ""
-		if s.deps.AuxiliaryModels != nil {
-			desiredSmall, desiredSubagent = s.deps.AuxiliaryModels(sessionKey)
-		}
 		current.Mu.Lock()
-		currentID := strings.TrimSpace(current.SessionID)
-		currentModel := strings.TrimSpace(current.Model)
+		currentID, applied := strings.TrimSpace(current.SessionID), current.AppliedModelConfig
 		current.Mu.Unlock()
-		currentStopped := current.Session != nil && current.Session.Stopped()
-		currentExitErr := error(nil)
-		if current.Session != nil {
-			currentExitErr = current.Session.ExitError()
-		}
-		s.mu.Unlock()
-		if reason := sessionRestartReason(current, currentStopped, model, desiredSmall, desiredSubagent); reason != "" {
-			slog.Warn("discarding stale Claude session before ensure",
-				"session_key", sessionKey,
-				"workspace_id", ws.ID,
-				"resume_id", resumeID,
-				"session_id", currentID,
-				"exit_error", currentExitErr,
-				"reason", reason,
-				"model", model,
-				"session_model", currentModel,
-			)
-		} else {
-			switch {
-			case resumeID == "":
-				return currentID, nil
-			case resumeID != "" && currentID == resumeID:
+		stopped := current.Session != nil && current.Session.Stopped()
+		sameConversation := resumeID == "" || currentID == resumeID
+		if !stopped && sameConversation {
+			if desired == applied {
+				s.noteModelSettingsApplied(current, desired)
 				return currentID, nil
 			}
+			if reason := s.modelChangeBlockedReason(current); reason != "" {
+				return "", fmt.Errorf("%w: %s", claudecli.ErrModelConfigApply, reason)
+			}
+			restart := !applied.Valid || desired.SmallModel != applied.SmallModel || desired.SubagentModel != applied.SubagentModel ||
+				(desired.Effort != applied.Effort && desired.Effort == "") ||
+				(desired.Model != applied.Model && (!isClaudeBuiltinModel(desired.Model) || !isClaudeBuiltinModel(applied.Model)))
+			s.configPending.Store(sessionKey, true)
+			if !restart {
+				if err := applyModelSettings(ctx, current.Session, applied, desired); err != nil {
+					current.Mu.Lock()
+					current.AppliedModelConfig.Valid = false
+					current.Mu.Unlock()
+					return "", fmt.Errorf("%w: %v", claudecli.ErrModelConfigApply, err)
+				}
+				s.noteModelSettingsApplied(current, desired)
+				return currentID, nil
+			}
+			// Reinitialize only this idle process, retaining its conversation ID.
+			if currentID != "" {
+				resumeID = currentID
+			}
 		}
-	} else {
-		s.mu.Unlock()
 	}
-
-	_ = s.ResetSession(sessionKey)
-	return s.startSession(ctx, sessionKey, ws, runtimeCfg, model, resumeID, false)
+	if err := s.ResetSession(sessionKey); err != nil {
+		return "", fmt.Errorf("%w: %v", claudecli.ErrModelConfigApply, err)
+	}
+	id, err := s.startSession(ctx, sessionKey, ws, runtimeCfg, model, resumeID, false)
+	if err != nil {
+		if _, pending := s.configPending.Load(sessionKey); pending {
+			return "", fmt.Errorf("%w: %v", claudecli.ErrModelConfigApply, err)
+		}
+		return "", err
+	}
+	if current, stateErr := s.sessionState(sessionKey); stateErr == nil {
+		if _, changed := s.configPending.Load(sessionKey); changed && resumeID != "" {
+			current.Mu.Lock()
+			current.PreserveResumeOnFailure = true
+			current.Mu.Unlock()
+		}
+		s.noteModelSettingsApplied(current, desired)
+	}
+	return id, nil
 }
 
 // sessionRestartReason reports why a live session cannot serve the desired
@@ -581,7 +605,7 @@ func (s *Service) ForkSession(ctx context.Context, sessionKey string, ws *config
 		return "", fmt.Errorf("claude runtime not initialized")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = appcore.Context(s.App)
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
@@ -597,7 +621,9 @@ func (s *Service) ForkSession(ctx context.Context, sessionKey string, ws *config
 	s.mu.Lock()
 	runtimeCfg := s.Cfg
 	s.mu.Unlock()
-	model = strings.TrimSpace(apputil.FirstNonEmpty(model, strings.TrimSpace(runtimeCfg.Model)))
+	settings := s.desiredModelSettings(sessionKey, runtimeCfg, model)
+	model, runtimeCfg.Effort = settings.Model, settings.Effort
+	runtimeCfg.SmallModel, runtimeCfg.SubagentModel = settings.SmallModel, settings.SubagentModel
 
 	_ = s.ResetSession(sessionKey)
 	forkedID, err := s.startSession(ctx, sessionKey, ws, runtimeCfg, model, sourceSessionID, true)
@@ -638,6 +664,7 @@ func (s *Service) StartTurn(ctx context.Context, sessionKey, threadID, turnID, p
 		return err
 	}
 	state.Mu.Lock()
+	state.PreserveResumeOnFailure = false
 	if turn := state.Turns[turnNumber]; turn != nil {
 		turn.SuppressFailedCompletion = false
 	}
@@ -975,7 +1002,7 @@ func (s *Service) storePending(requestID string, pending *PendingInteraction) {
 // ---------------------------------------------------------------------------
 
 func (s *Service) startSession(ctx context.Context, sessionKey string, ws *config.Workspace, runtimeCfg config.ClaudeConfig, model, resumeID string, fork bool) (string, error) {
-	sessionCtx, cancel := context.WithCancel(context.Background())
+	sessionCtx, cancel := context.WithCancel(appcore.Context(s.App))
 	initialSessionID := resumeID
 	if fork {
 		initialSessionID = ""
@@ -992,9 +1019,8 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		Turns:           map[int]*TurnState{},
 		BackgroundTasks: map[string]*BackgroundTaskState{},
 	}
-	if s.deps.AuxiliaryModels != nil {
-		state.AuxiliarySmallModel, state.AuxiliarySubagentModel = s.deps.AuxiliaryModels(sessionKey)
-	}
+	state.AuxiliarySmallModel, state.AuxiliarySubagentModel = runtimeCfg.SmallModel, runtimeCfg.SubagentModel
+	state.AppliedModelConfig = modelSettingsFromConfig(runtimeCfg, model)
 	permissionMode := s.permissionModeForSession(ctx, sessionKey, ws, runtimeCfg)
 	mcpConfigPath, mcpEnv, mcpCleanup, err := s.prepareClaudeMCPConfig(sessionKey)
 	if err != nil {
@@ -1002,12 +1028,7 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		return "", err
 	}
 	state.MCPCleanup = mcpCleanup
-	if s.deps.AuxiliaryModels != nil {
-		smallModel, subagentModel := s.deps.AuxiliaryModels(sessionKey)
-		mcpEnv = withClaudeModelEnv(mcpEnv, model, smallModel, subagentModel)
-	} else {
-		mcpEnv = withClaudeModelEnv(mcpEnv, model, "", "")
-	}
+	mcpEnv = withClaudeModelEnv(mcpEnv, model, runtimeCfg.SmallModel, runtimeCfg.SubagentModel)
 	opts := []claudecli.SessionOption{
 		claudecli.WithCLIPath(apputil.FirstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
 		claudecli.WithWorkDir(ws.Cwd),
@@ -1042,11 +1063,6 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 		opts = append(opts, claudecli.WithDangerouslySkipPermissions())
 	}
 	effort := strings.TrimSpace(runtimeCfg.Effort)
-	if s.deps.ReasoningEffort != nil {
-		if sessionEffort := s.deps.ReasoningEffort(sessionKey); strings.TrimSpace(sessionEffort) != "" {
-			effort = strings.TrimSpace(sessionEffort)
-		}
-	}
 	if effort != "" {
 		opts = append(opts, claudecli.WithEffort(effort))
 	}
@@ -1464,7 +1480,7 @@ func (s *Service) notifyBackgroundTaskCompleted(state *SessionState, event claud
 	if strings.TrimSpace(event.Description) == "" {
 		event.Description = target.Description
 	}
-	s.SendBackgroundTaskNotification(context.Background(), target, event)
+	s.SendBackgroundTaskNotification(appcore.Context(s.App), target, event)
 }
 
 func (s *Service) backgroundTask(state *SessionState, event claudecli.BackgroundTaskEvent) *BackgroundTaskState {
@@ -1523,7 +1539,7 @@ func (s *Service) HandleThinkingEvent(state *SessionState, event claudecli.Think
 	op := s.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, "claude-thinking-"+turnID, map[string]any{
 		"type": "reasoning",
 	}, workspaceCwd)
-	s.ExecuteQuietWorkingCardOp(context.Background(), sub, op)
+	s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, op)
 }
 
 func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent) {
@@ -1552,9 +1568,9 @@ func (s *Service) HandleTextEvent(state *SessionState, event claudecli.TextEvent
 	}
 	sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turnID)
 	if sub != nil {
-		s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
+		s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, appturn.QuietWorkingCardOp{})
 	}
-	chunks, ok := s.UpdateOutputSegment(context.Background(), threadID, turnID, body, reuseMessageID)
+	chunks, ok := s.UpdateOutputSegment(appcore.Context(s.App), threadID, turnID, body, reuseMessageID)
 	if !ok {
 		return
 	}
@@ -1587,7 +1603,7 @@ func (s *Service) HandleToolStarted(state *SessionState, event claudecli.ToolSta
 			"status": "completed",
 			"input":  event.Input,
 		})
-		s.CompleteTurnItemPayload(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+		s.CompleteTurnItemPayload(appcore.Context(s.App), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 		return
 	}
 	item := turnitem.NewProtocolItemWithID(strings.TrimSpace(event.ID), map[string]any{
@@ -1598,7 +1614,7 @@ func (s *Service) HandleToolStarted(state *SessionState, event claudecli.ToolSta
 		"input":  event.Input,
 	})
 	s.NoteTurnItemStarted(threadID, turn.TurnID, item)
-	s.UpdateInFlightTurnItem(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+	s.UpdateInFlightTurnItem(appcore.Context(s.App), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 }
 
 func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCompleteEvent) {
@@ -1619,7 +1635,7 @@ func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCo
 		"status": "completed",
 		"input":  event.Input,
 	})
-	s.CompleteTurnItemPayload(context.Background(), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
+	s.CompleteTurnItemPayload(appcore.Context(s.App), threadID, turn.TurnID, strings.TrimSpace(event.ID), item)
 }
 
 func (s *Service) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
@@ -1708,7 +1724,7 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
+				s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, appturn.QuietWorkingCardOp{})
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(reuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
@@ -1722,11 +1738,11 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 				}
 				footerLines := s.turnFinalFooterLines(turn.TurnID, completedAt)
 				inThread := s.ReplyInThread(sub)
-				results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
+				results := s.SendFinalMessages(appcore.Context(s.App), sub, finalText, footerLines, inThread, reuseMessageIDs)
 				if len(results) > 0 {
 					s.MarkTurnStreamFinal(turn.TurnID)
-				} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-					s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+				} else if !s.FinalizeOutputSegment(appcore.Context(s.App), threadID, turn.TurnID, finalText) {
+					s.CompleteTurnItem(appcore.Context(s.App), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
 						"text":  finalText,
@@ -1743,26 +1759,26 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
-				s.ExecuteQuietWorkingCardOp(context.Background(), sub, appturn.QuietWorkingCardOp{})
+				s.ExecuteQuietWorkingCardOp(appcore.Context(s.App), sub, appturn.QuietWorkingCardOp{})
 				reuseMessageIDs := []string(nil)
 				if id := strings.TrimSpace(reuseMessageID); id != "" {
 					reuseMessageIDs = append(reuseMessageIDs, id)
 				}
 				footerLines := s.turnFinalFooterLines(turn.TurnID, completedAt)
 				inThread := s.ReplyInThread(sub)
-				results := s.SendFinalMessages(context.Background(), sub, finalText, footerLines, inThread, reuseMessageIDs)
+				results := s.SendFinalMessages(appcore.Context(s.App), sub, finalText, footerLines, inThread, reuseMessageIDs)
 				if len(results) > 0 {
 					s.MarkTurnStreamFinal(turn.TurnID)
-				} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-					s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+				} else if !s.FinalizeOutputSegment(appcore.Context(s.App), threadID, turn.TurnID, finalText) {
+					s.CompleteTurnItem(appcore.Context(s.App), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 						"type":  "agent_message",
 						"id":    "claude-agent-" + turn.TurnID,
 						"text":  finalText,
 						"phase": "final_answer",
 					})
 				}
-			} else if !s.FinalizeOutputSegment(context.Background(), threadID, turn.TurnID, finalText) {
-				s.CompleteTurnItem(context.Background(), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
+			} else if !s.FinalizeOutputSegment(appcore.Context(s.App), threadID, turn.TurnID, finalText) {
+				s.CompleteTurnItem(appcore.Context(s.App), threadID, turn.TurnID, "claude-agent-"+turn.TurnID, map[string]any{
 					"type":  "agent_message",
 					"id":    "claude-agent-" + turn.TurnID,
 					"text":  finalText,
@@ -2320,4 +2336,16 @@ func IsFatalSessionErrorFromState(state *SessionState, event claudecli.ErrorEven
 		exitErr = state.Session.ExitError() != nil
 	}
 	return IsFatalSessionError(stopped, exitErr, event.Error)
+}
+
+// CanRetryFreshSession keeps a configuration-driven resume failure from silently
+// discarding context. A successful first turn releases this extra protection.
+func (s *Service) CanRetryFreshSession(sessionKey string) bool {
+	current, err := s.sessionState(sessionKey)
+	if err != nil {
+		return true
+	}
+	current.Mu.Lock()
+	defer current.Mu.Unlock()
+	return !current.PreserveResumeOnFailure
 }

@@ -97,7 +97,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
+		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	case len(args) == 0:
 		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
@@ -108,7 +108,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(context.Background(), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
+		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	case strings.TrimSpace(args[0]) == "off":
 		defaultMode, err := ResolveDefaultCodexCollaborationModeForSession(a, sess)
 		if err != nil {
@@ -119,7 +119,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(context.Background(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
+		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	default:
 		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
@@ -130,7 +130,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(context.Background(), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
+		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	}
 }
 
@@ -166,7 +166,7 @@ func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollab
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
 	defer cancel()
 
 	var listResp codexrpc.CollaborationModeListResponse
@@ -184,6 +184,9 @@ func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollab
 	mode := &state.SessionCollaborationMode{
 		Mode:  "plan",
 		Model: model,
+	}
+	if preset != nil && preset.ReasoningEffort != nil {
+		mode.PresetReasoningEffort = strings.TrimSpace(*preset.ReasoningEffort)
 	}
 	if strings.TrimSpace(effort) != "" {
 		mode.ReasoningEffort = strings.TrimSpace(effort)
@@ -238,7 +241,7 @@ func ResolveDefaultCodexCollaborationModeForSession(a App, sess *state.Session) 
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
 	defer cancel()
 	model, effort, err := resolveDefaultCollaborationModeSettings(ctx, a, client)
 	if err != nil {

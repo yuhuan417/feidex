@@ -121,6 +121,8 @@
   - 来源: OpenAI 官方页面 `Initialization`
 - 我们当前实现:
   - `internal/codexrpc/client.go` 在 transport 启动后立即发送 `initialize`，收到响应后立刻发送 `initialized`。
+  - stdio reader 直接分发 RPC response；server request 和 notification 进入每个 client 独立的 256 项有界队列，由单个 dispatcher 按接收顺序处理。业务回调等待 RPC 不再阻塞响应读取；队列溢出显式触发 transport failure 并关闭 client，不能阻塞 reader 或静默丢弃事件。
+  - EOF 先释放等待中的 RPC，再在已接收事件处理后通知 transport failure；主动 Close 停止后续事件分发并释放等待中的 RPC。`serverRequest/resolved` 仍是审批和同步表单的最终确认边界。
 - 差异点:
   - 无。
 - 修改建议:
@@ -204,6 +206,16 @@
 - 修改建议:
   - 保持现状即可；如果后续仍有其他明确不用消费的流式通知，也可继续加入 opt-out。
 
+#### 2026-09-28 模型配置在轮次边界应用
+
+- 模型配置保存不再要求 frontend/session 无活动任务、队列、暂存图片或表单；保存仅改变目标配置，不改变已有 turn 的运行态。
+- 本地 submission 启动时记录 model/effort/Plan 配置快照，普通排队输入使用启动时的最新值；同一 RPC 构造不再混合不同配置版本。collaborationMode 使用同一快照，避免旧 mode 中的 model/effort 覆盖新配置。
+- 启动恢复线程时按各 frontend/session 的模型覆盖、群绑定和 Bot 默认配置解析 model，不能把单聊的 Bot 默认模型统一应用到所有群；模型菜单分别显示下一轮本地启动的配置与最近确认的应用记录。
+- review/subagent 仍通过 thread/start、thread/resume 配置，不伪造 turn 级热更新。界面明确标注其生效边界。
+- SM-05 steer 继续属于原 turn，不应用新配置；SM-06 仍等待真实终态；SM-09/10/11/22/23 的 pending → replied → resolved 边界不变。
+- SM-25 后台 goal 自动续跑不经过本地 turn/start，不能承诺下一次自动续跑采用新配置。SM-26 未回答的异步问题不阻塞目标配置保存，答案继续沿用原 thread 的普通 continuation 路径。
+- 这是对 DEVELOPER.md 原模型配置 idle-only 产品策略的有意调整，未放宽 backend 切换/维护的限制，也不通过重置会话制造空闲状态。
+
 ### SM-05 `TurnSteerContinuation`
 
 - 结论: `兼容实现`
@@ -251,7 +263,8 @@
   - 协议节点: `error -> turn/completed(status=failed)`
   - 来源: OpenAI 官方页面 `Notifications`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 记录 `error`。
+  - `internal/app/codex_event_router.go` 记录 `error`，保留 message、codexErrorInfo（含上游 HTTP 状态码）和 additionalDetails；`turn/completed` 自带的 error 同样在 finalize 前记录。
+  - 自动重试卡片展示最近一次失败原因，在等待和重试过程中保留；每次失败刷新，无详情时明确提示后端未提供。错误通知本身不触发重试，仍以 failed 终态为边界。
   - `internal/app/turn_lifecycle.go` 最终仍在 `turn/completed` 处 finalize。
   - `/stop` 标记取消的 auto-retry 在迟到的 `failed` 终态到达时只清理，不得重新置为未取消或创建新定时器；已派发的旧 timer callback 也不能启动后来的新重试循环。
 - 差异点:

@@ -27,6 +27,7 @@ type SessionLookupFunc func(sessionKey string) *state.Session
 type ThreadContextSetter func(sess *state.Session, workspaceID, threadID, name, preview string)
 
 type ClaudeResumeDeps struct {
+	Context            func() context.Context
 	FindSessionEntry   func(threadID string) (*codexrpc.ThreadListEntry, error)
 	EnsureSession      ClaudeSessionClient
 	SaveSession        SessionSaveFunc
@@ -67,7 +68,7 @@ func ResumeClaudeSelectedThread(deps ClaudeResumeDeps, sessionKey string, sess *
 	if deps.ResolveModel != nil {
 		model = strings.TrimSpace(deps.ResolveModel(sess, ws))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(dependencyContext(deps.Context), 30*time.Second)
 	defer cancel()
 	resumedID, err := deps.EnsureSession.EnsureSession(ctx, sessionKey, ws, threadID, model)
 	if err != nil {
@@ -106,6 +107,7 @@ func ResumeClaudeSelectedThread(deps ClaudeResumeDeps, sessionKey string, sess *
 }
 
 type CodexResumeDeps struct {
+	Context            func() context.Context
 	RequireClient      func() (CodexRPCClient, error)
 	SaveSession        SessionSaveFunc
 	BuildThreadConfig  func(sess *state.Session) map[string]any
@@ -152,7 +154,7 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 		"model", effectiveModel,
 	)
 	var result codexrpc.ThreadStartResult
-	if err := client.Call(context.Background(), "thread/resume", params.Map(), &result); err != nil {
+	if err := client.Call(dependencyContext(deps.Context), "thread/resume", params.Map(), &result); err != nil {
 		return nil, err
 	}
 	boundThreadID := firstNonEmpty(strings.TrimSpace(result.Thread.ID), threadID)
@@ -160,6 +162,8 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
 	sess.ActiveThreadCollaborationMode = nil
+	sess.AppliedModelConfig = state.CodexResumedThreadConfig(params.Model, params.Config)
+	sess.ModelConfigError = ""
 	if deps.SetThreadContext != nil {
 		deps.SetThreadContext(
 			sess,
@@ -190,6 +194,7 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 }
 
 type CodexInterruptDeps struct {
+	Context       func() context.Context
 	RequireClient func() (CodexRPCClient, error)
 }
 
@@ -211,6 +216,7 @@ func InterruptCodexActiveTurn(deps CodexInterruptDeps, ctx context.Context, sess
 }
 
 type CodexContinueDeps struct {
+	Context       func() context.Context
 	RequireClient func() (CodexRPCClient, error)
 	GetSession    SessionLookupFunc
 }
@@ -234,7 +240,7 @@ func ContinueCodexActiveTurn(deps CodexContinueDeps, sessionKey, text string) er
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(dependencyContext(deps.Context), 20*time.Second)
 	defer cancel()
 	return client.Call(ctx, "turn/steer", map[string]any{
 		"threadId":       sess.ActiveThreadID,
@@ -246,6 +252,7 @@ func ContinueCodexActiveTurn(deps CodexContinueDeps, sessionKey, text string) er
 }
 
 type CodexReplyContinuationDeps struct {
+	Context                    func() context.Context
 	RequireClient              func() (CodexRPCClient, error)
 	ResolveInboundAttachments  func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error)
 	PendingInputSessionKey     func(msg *feishu.InboundMessage) string
@@ -318,7 +325,7 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 	if err != nil {
 		return false, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(dependencyContext(deps.Context), 20*time.Second)
 	defer cancel()
 	if err := client.Call(ctx, "turn/steer", map[string]any{
 		"threadId":       threadID,
@@ -342,6 +349,7 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 }
 
 type ClaudeStartupRecoveryDeps struct {
+	Context        func() context.Context
 	MarkThreadLive func(sessionKey, threadID string)
 }
 
@@ -360,6 +368,7 @@ func RecoverClaudeStartupConversation(deps ClaudeStartupRecoveryDeps, sessionKey
 }
 
 type CodexStartupRecoveryDeps struct {
+	Context                func() context.Context
 	CurrentClient          func() CodexRPCClient
 	RuntimeRecovering      func() bool
 	BuildThreadStartParams func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams
@@ -395,10 +404,12 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 		"workspace_id", workspaceID,
 		"model", effectiveModel,
 	)
-	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	resumeCtx, resumeCancel := context.WithTimeout(dependencyContext(deps.Context), 30*time.Second)
 	err := client.Call(resumeCtx, "thread/resume", resumeParams.Map(), &resumeResp)
 	resumeCancel()
 	if err == nil {
+		sess.AppliedModelConfig = state.CodexResumedThreadConfig(resumeParams.Model, resumeParams.Config)
+		sess.ModelConfigError = ""
 		if deps.SetThreadContext != nil {
 			deps.SetThreadContext(sess,
 				workspaceID,
@@ -470,7 +481,7 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 		"cwd", ws.Cwd,
 		"model", effectiveModel,
 	)
-	threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	threadCtx, threadCancel := context.WithTimeout(dependencyContext(deps.Context), 30*time.Second)
 	err = client.Call(threadCtx, "thread/start", threadParams.Map(), &threadResp)
 	threadCancel()
 	if err != nil {
@@ -541,4 +552,11 @@ func valueOrFalse(fn func() bool) bool {
 		return false
 	}
 	return fn()
+}
+
+func dependencyContext(get func() context.Context) context.Context {
+	if get != nil {
+		return get()
+	}
+	return context.Background()
 }

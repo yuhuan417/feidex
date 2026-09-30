@@ -77,11 +77,11 @@ func (a *App) MaintenanceClearSessionLiveThread(sessionKey string) {
 	clearSessionLiveThread(a, sessionKey)
 }
 
-func (a *App) MaintenanceConfiguredGlobalModel() string {
+func (a *App) MaintenanceEffectiveModel(sess *state.Session) string {
 	if a == nil {
 		return ""
 	}
-	return configuredGlobalModel(a.cfg)
+	return modelConfigSnapshot(a, sess, configuredBackend(a)).Model
 }
 
 func (a *App) MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {

@@ -43,7 +43,7 @@ type CommitOption struct {
 	Subject  string
 }
 
-type GitService struct{}
+type GitService struct{ Context context.Context }
 
 func NewGitService() GitService { return GitService{} }
 
@@ -316,7 +316,7 @@ func (s GitService) HasDiffFromBase(cwd, branch string) (bool, error) {
 }
 
 func (s GitService) CommandHasDiff(cwd string, args ...string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(s.context(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
 	output, err := cmd.CombinedOutput()
@@ -338,7 +338,7 @@ func (s GitService) CommandHasDiff(cwd string, args ...string) (bool, error) {
 }
 
 func (s GitService) Output(cwd string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(s.context(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
 	output, err := cmd.CombinedOutput()
@@ -350,4 +350,11 @@ func (s GitService) Output(cwd string, args ...string) (string, error) {
 		return "", fmt.Errorf("git %s failed: %s", strings.Join(args, " "), message)
 	}
 	return string(output), nil
+}
+
+func (s GitService) context() context.Context {
+	if s.Context != nil {
+		return s.Context
+	}
+	return context.Background()
 }

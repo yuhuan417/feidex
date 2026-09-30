@@ -213,6 +213,7 @@ type SessionBackendThread struct {
 }
 
 type SessionCollaborationMode struct {
+	PresetReasoningEffort string  `json:"preset_reasoning_effort,omitempty"`
 	Mode                  string  `json:"mode"`
 	Model                 string  `json:"model"`
 	ReasoningEffort       string  `json:"reasoning_effort,omitempty"`
@@ -220,6 +221,8 @@ type SessionCollaborationMode struct {
 }
 
 type Session struct {
+	AppliedModelConfig              ModelConfigSnapshot             `json:"applied_model_config,omitempty"`
+	ModelConfigError                string                          `json:"model_config_error,omitempty"`
 	Key                             string                          `json:"key"`
 	BindingID                       string                          `json:"binding_id,omitempty"`
 	WorkspaceID                     string                          `json:"workspace_id"`
@@ -283,6 +286,7 @@ type SubmissionSkill struct {
 }
 
 type Submission struct {
+	ModelConfig          ModelConfigSnapshot    `json:"model_config,omitempty"`
 	ID                   string                 `json:"id"`
 	SessionKey           string                 `json:"session_key"`
 	BindingID            string                 `json:"binding_id,omitempty"`

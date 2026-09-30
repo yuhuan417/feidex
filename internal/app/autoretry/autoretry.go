@@ -55,6 +55,7 @@ type RetryState struct {
 	RetryCount           int
 	BackoffStep          int
 	StatusMessageID      string
+	LastError            string
 	Timer                DelayedTask
 	TimerSeq             uint64
 	Canceled             bool

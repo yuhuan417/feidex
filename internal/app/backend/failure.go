@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"feidex/internal/app/appcore"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ type FailureRuntimeDeps struct {
 }
 
 type FailureCardDeps struct {
-	ObserveAutoRetryTerminal func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	ObserveAutoRetryTerminal func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 	ReplaceTurnEventCard     func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string)
 	PrependAttentionMention  func(text, userID string) string
 	TurnStopAttentionUserID  func(sub *state.Submission, turnID string) string
@@ -150,11 +151,11 @@ func (s BackendFailureService) BackendRuntimeHandleTransportFailure(backend, ses
 	}
 }
 
-func (s BackendFailureService) ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool {
+func (s BackendFailureService) ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 	if s.deps.Cards.ObserveAutoRetryTerminal == nil {
 		return false
 	}
-	return s.deps.Cards.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID)
+	return s.deps.Cards.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 }
 
 func (s BackendFailureService) ReplaceTurnEventCard(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
@@ -368,7 +369,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	}
 	flush := appturnstream.FlushResult{}
 	if turnID != "" {
-		flush = s.FlushTurnStream(context.Background(), threadID, turnID)
+		flush = s.FlushTurnStream(appcore.Context(s.App), threadID, turnID)
 	}
 	s.ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
 	_ = s.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
@@ -401,13 +402,13 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	})
 	suppressTerminalCard := false
 	if updatedSess != nil {
-		suppressTerminalCard = s.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub, reuseMessageID)
+		suppressTerminalCard = s.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, sub, reuseMessageID, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
 	}
 	if terminalText != "" && !suppressTerminalCard {
 		attentionUserID := s.TurnStopAttentionUserID(sub, turnID)
 		body := s.PrependAttentionMention(terminalText, attentionUserID)
 		s.ReplaceTurnEventCard(
-			context.Background(),
+			appcore.Context(s.App),
 			sub,
 			"任务状态",
 			"grey",

@@ -83,6 +83,12 @@ type agentBindingByIDResolver interface {
 	SubmissionQueueAgentBindingByID(id string) *state.AgentBinding
 }
 
+// Optional for narrow queue hosts; the production adapter captures all model
+// fields together, after dequeue and before any backend I/O.
+type modelConfigResolver interface {
+	SubmissionQueueResolveModelConfig(*state.Session, *state.Submission) state.ModelConfigSnapshot
+}
+
 type codexConfigResolver interface {
 	SubmissionQueueConfiguredCodexModel() string
 	SubmissionQueueConfiguredCodexReasoningEffort() string
@@ -178,7 +184,7 @@ type QueueTurnStreamProvider interface {
 
 // QueueAutoRetryProvider narrows auto retry.
 type QueueAutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 	HasBlockingAutoRetry(sessionKey string) bool
 }
 
@@ -294,7 +300,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	skillResolution := a.SubmissionQueueSkillResolver().ResolveSubmissionSkill(sessionKey, workspaceID, msg.Text, attachments)
 	if skillResolution.PendingReplacement != nil && strings.TrimSpace(skillResolution.InputText) == "" && len(attachments) == 0 {
 		a.SubmissionQueueSkillResolver().SetSessionPendingSkill(sessionKey, *skillResolution.PendingReplacement)
-		if err := a.SubmissionQueueReplyText(context.Background(), msg.MessageID, PendingConfirmationText(skillResolution.PendingReplacement.Name), a.SubmissionQueueReplyInThreadEnabled(msg.ChatType)); err != nil {
+		if err := a.SubmissionQueueReplyText(appcore.Context(a), msg.MessageID, PendingConfirmationText(skillResolution.PendingReplacement.Name), a.SubmissionQueueReplyInThreadEnabled(msg.ChatType)); err != nil {
 			return err
 		}
 		return nil
@@ -386,7 +392,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		}
 	}
 	a.SubmissionQueueMarkSubmissionQueuedReactions(sub)
-	a.SubmissionQueueSendQueuedNotice(context.Background(), sub)
+	a.SubmissionQueueSendQueuedNotice(appcore.Context(a), sub)
 	if serialBindingBlocked && !autoRetryBlocked {
 		a.SubmissionQueueRunAsync(func() {
 			s.StartNextSubmissionAsync(sessionKey, "serialBindingQueued")
@@ -825,7 +831,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 			"error", saveErr,
 		)
 	} else if sess != nil {
-		retryPending := a.SubmissionQueueAutoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+		retryPending := a.SubmissionQueueAutoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", err.Error())
 		shouldStartNext = !retryPending && s.NextQueuedSessionKey(sessionKey) != ""
 	}
 	if clearedThreadLineage {
@@ -833,7 +839,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	if notifyFailure && sub != nil {
 		willContinue := shouldStartNext
-		a.SubmissionQueueSendStartFailureNotice(context.Background(), sub, err, willContinue)
+		a.SubmissionQueueSendStartFailureNotice(appcore.Context(a), sub, err, willContinue)
 	}
 	a.SubmissionQueueRuntimeMaintenance().CleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
@@ -1065,12 +1071,21 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		threadID = ""
 		sessionctx.ClearThreadContext(sess)
 	}
-	effectiveModel := effectiveCodexModel(a, sess, sub, ws)
-	effectiveReasoningEffort := effectiveCodexReasoningEffort(a, sess, sub)
+	if resolver, ok := a.(modelConfigResolver); ok {
+		sub.ModelConfig = resolver.SubmissionQueueResolveModelConfig(sess, sub)
+		if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) { current.ModelConfig = sub.ModelConfig }); err != nil {
+			return err
+		}
+	}
+	effectiveModel, effectiveReasoningEffort := sub.ModelConfig.Model, sub.ModelConfig.Effort
+	if !sub.ModelConfig.Valid {
+		effectiveModel, effectiveReasoningEffort = effectiveCodexModel(a, sess, sub, ws), effectiveCodexReasoningEffort(a, sess, sub)
+	}
 	effectiveApprovalPolicy := effectiveBindingApprovalPolicy(a, sess, sub, ws)
 	effectiveSandboxMode := effectiveBindingSandboxMode(a, sess, sub, ws)
 	effectiveServiceTier := effectiveBindingServiceTier(a, sess, sub)
 	effectiveMultiAgentMode := effectiveBindingMultiAgentMode(a, sess, sub, ws)
+	createdThread := threadID == ""
 	if threadID == "" {
 		client, err := a.SubmissionQueueRequireCodexClient()
 		if err != nil {
@@ -1079,6 +1094,21 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			return err
 		}
 		threadParams := a.SubmissionQueueBuildThreadStartParams(ws, sess, effectiveModel)
+		if sub.ModelConfig.Valid {
+			if threadParams.Config == nil {
+				threadParams.Config = map[string]any{}
+			}
+			for key, value := range map[string]string{
+				"review_model":                             sub.ModelConfig.ReviewModel,
+				"agents.default_subagent_model":            sub.ModelConfig.SubagentModel,
+				"agents.default_subagent_reasoning_effort": sub.ModelConfig.SubagentEffort,
+			} {
+				delete(threadParams.Config, key)
+				if strings.TrimSpace(value) != "" {
+					threadParams.Config[key] = value
+				}
+			}
+		}
 		var threadResp codexrpc.ThreadStartResult
 		slog.Debug("thread start request",
 			"session_key", sessionKey,
@@ -1087,7 +1117,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			"cwd", ws.Cwd,
 			"model", effectiveModel,
 		)
-		threadCtx, threadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		threadCtx, threadCancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 		err = client.Call(threadCtx, "thread/start", threadParams.Map(), &threadResp)
 		threadCancel()
 		if err != nil {
@@ -1137,7 +1167,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	}
 	a.SubmissionQueueMarkSubmissionRunningReactions(sub)
 	a.SubmissionQueueLogSessionState("startNextSubmission session starting", sessionKey, appState.Session(sessionKey))
-	turnCtx, turnCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	turnCtx, turnCancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 	turnID := ""
 	var turnErr error
 	if a.SubmissionQueueIsReviewSubmission(sub) {
@@ -1146,6 +1176,18 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		turnID, turnErr = a.SubmissionQueueStartSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort, effectiveMultiAgentMode)
 	}
 	turnCancel()
+	if turnErr == nil && sub.ModelConfig.Valid {
+		applied := sub.ModelConfig
+		// Thread initialization settings are unchanged for an already-live thread.
+		if sess.AppliedModelConfig.Valid && sess.AppliedModelConfig.Backend == "codex" && !createdThread {
+			applied.ReviewModel = sess.AppliedModelConfig.ReviewModel
+			applied.SubagentModel = sess.AppliedModelConfig.SubagentModel
+			applied.SubagentEffort = sess.AppliedModelConfig.SubagentEffort
+		}
+		sess.AppliedModelConfig = applied
+		sess.ModelConfigError = ""
+	}
+
 	if turnErr != nil {
 		if errors.Is(turnErr, context.DeadlineExceeded) {
 			slog.Warn("turn start timed out; waiting for delayed notification",

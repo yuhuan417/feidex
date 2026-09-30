@@ -132,12 +132,3 @@ func actionIndexOption(action *feishu.CardAction, warning string) (*callback.Car
 	}
 	return nil, index, true
 }
-
-// actionMessageIDValue returns the card message the action came from, which is
-// the anchor for reporting work that finishes after the callback was answered.
-func actionMessageIDValue(action *feishu.CardAction) string {
-	if action == nil {
-		return ""
-	}
-	return strings.TrimSpace(action.MessageID)
-}

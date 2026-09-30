@@ -1235,7 +1235,7 @@ func findWorkspaceForTest(a *App, id string) *config.Workspace {
 	return config.FindWorkspace(a.cfg, id)
 }
 
-func TestGroupModelSetHotAppliesClaudeModel(t *testing.T) {
+func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.frontendID = "claude-test"
@@ -1274,18 +1274,18 @@ func TestGroupModelSetHotAppliesClaudeModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("completeBindingModelSet() error = %v", err)
 	}
-	if resp == nil || resp.Toast == nil || !strings.Contains(resp.Toast.Content, "当前会话与后续对话会使用新配置") {
-		t.Fatalf("completeBindingModelSet() toast = %#v, want the live session to be updated", resp)
+	if resp == nil || resp.Toast == nil || !strings.Contains(resp.Toast.Content, "下一轮启动前应用") {
+		t.Fatalf("completeBindingModelSet() toast = %#v, want deferred application", resp)
 	}
 	binding := agentBindingForChat(a, "group", chatID)
 	if binding == nil || binding.ModelOverride != "claude-fable-5" {
 		t.Fatalf("group binding = %+v, want the Claude model override", binding)
 	}
-	if len(claude.setModelCalls) != 1 || claude.setModelCalls[0].sessionKey != sessionKey || claude.setModelCalls[0].model != "claude-fable-5" {
-		t.Fatalf("Claude SetModel calls = %+v, want the group override hot-applied", claude.setModelCalls)
+	if len(claude.setModelCalls) != 0 {
+		t.Fatalf("Claude SetModel calls = %+v, want no apply during save", claude.setModelCalls)
 	}
 
-	// Clearing the override hot-applies the effective fallback, not the override.
+	// Clearing the override also waits for the next turn boundary.
 	msg := &feishu.InboundMessage{
 		SessionKey:    sessionKey,
 		ChatID:        chatID,
@@ -1301,7 +1301,7 @@ func TestGroupModelSetHotAppliesClaudeModel(t *testing.T) {
 	if binding := agentBindingForChat(a, "group", chatID); binding == nil || binding.ModelOverride != "" {
 		t.Fatalf("group binding after clear = %+v, want an empty override", binding)
 	}
-	if len(claude.setModelCalls) != 2 || claude.setModelCalls[1].model != "opus" {
-		t.Fatalf("Claude SetModel calls = %+v, want the Bot default after clearing", claude.setModelCalls)
+	if len(claude.setModelCalls) != 0 {
+		t.Fatalf("Claude SetModel calls = %+v, want no apply during clear", claude.setModelCalls)
 	}
 }

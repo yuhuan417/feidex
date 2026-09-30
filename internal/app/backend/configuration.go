@@ -315,14 +315,14 @@ func (s ConfigurationService) RenderModelMenuCard(sessionKey string) map[string]
 
 // RenderClaudeModelMenuCard renders the Claude model menu card.
 func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[string]any {
-	cfg := s.App.Config()
+	cfg := configurationSnapshot(s.App)
 	modelValue := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	effortValue := firstNonEmpty(appmodelconfig.ConfiguredClaudeEffort(cfg), "(default)")
 	body := strings.Join([]string{
 		"当前 model: `" + modelValue + "`",
 		"当前 effort: `" + effortValue + "`",
-		"Claude model / effort 只允许在 frontend 空闲时切换。",
-		"切换成功后会尝试立即应用到当前会话；后续新会话会使用新配置。",
+		"模型配置可随时保存，本轮不变。",
+		"下一轮启动前应用最新配置，包括尚未启动的排队消息。",
 	}, "\n")
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
@@ -334,7 +334,7 @@ func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[s
 
 // RenderCodexModelMenuCard renders the Codex model menu card.
 func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[string]any {
-	cfg := s.App.Config()
+	cfg := configurationSnapshot(s.App)
 	modelValue := firstNonEmpty(appmodelconfig.ConfiguredGlobalModel(cfg), "(default)")
 	effortValue := firstNonEmpty(appmodelconfig.ConfiguredGlobalReasoningEffort(cfg), "(default)")
 	fastValue := "-"
@@ -395,7 +395,7 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 Bot 默认模型"},
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Bot 默认模型；本轮不变，下一轮启动前应用"},
 		Card:  RawCard(s.RenderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
@@ -433,7 +433,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	selectedModel, _ := appmodelconfig.EffectiveConfiguredModelAndEffort(s.App.Config(), result)
+	selectedModel, _ := appmodelconfig.EffectiveConfiguredModelAndEffort(configurationSnapshot(s.App), result)
 	if strings.TrimSpace(reasoningEffort) != "" && !appmodelconfig.ModelSupportsEffort(selectedModel, reasoningEffort) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前模型不支持这个推理强度"}}, nil
 	}
@@ -443,7 +443,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 Bot 默认推理强度"},
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Bot 默认推理强度；本轮不变，下一轮启动前应用"},
 		Card:  RawCard(s.RenderModelConfigCard(result, sessionKey, menuAction)),
 	}, nil
 }
@@ -478,7 +478,7 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *state.Session) string
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
-	cfg := s.App.Config()
+	cfg := configurationSnapshot(s.App)
 	ws = config.FindWorkspace(cfg, workspaceID)
 	model := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	effort := firstNonEmpty(appmodelconfig.ConfiguredClaudeEffort(cfg), "(follow Claude default)")
@@ -519,7 +519,7 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *state.Session) string 
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
-	cfg := s.App.Config()
+	cfg := configurationSnapshot(s.App)
 	ws = config.FindWorkspace(cfg, workspaceID)
 	model := appmodelconfig.ConfiguredGlobalModel(cfg)
 	effort := appmodelconfig.ConfiguredGlobalReasoningEffort(cfg)
@@ -547,4 +547,10 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *state.Session) string 
 	lines = DriverForApp(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
+}
+
+func configurationSnapshot(app appcore.AppConfig) *config.Config {
+	app.ConfigMu().RLock()
+	defer app.ConfigMu().RUnlock()
+	return config.Clone(app.Config())
 }

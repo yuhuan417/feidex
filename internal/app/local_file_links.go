@@ -78,7 +78,7 @@ func scheduleLocalFileLinkPatch(a *App, sub *state.Submission, messageID, title,
 		if managed {
 			defer newFinalCardPatchService(a).markFinalCardPreviewDone(messageID)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(a.Context(), 2*time.Minute)
 		defer cancel()
 		rewritten := rewriteLocalFileLinksText(a, ctx, sub, body)
 		if strings.TrimSpace(rewritten) == "" || strings.TrimSpace(rewritten) == body {
@@ -87,9 +87,9 @@ func scheduleLocalFileLinkPatch(a *App, sub *state.Submission, messageID, title,
 		if managed && newFinalCardPatchService(a).updateFinalCardPatchBody(messageID, rewritten) {
 			return
 		}
-		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, rewritten, nil, true)
+		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(a.Context(), sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, rewritten, nil, true)
 		appendReplyCardFooter(card, footerLines)
-		patchCtx, patchCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		patchCtx, patchCancel := context.WithTimeout(a.Context(), 15*time.Second)
 		defer patchCancel()
 		if err := a.feishu.PatchCard(patchCtx, messageID, card); err != nil {
 			slog.Warn("local file link patch failed",

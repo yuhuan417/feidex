@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	appapproval "feidex/internal/app/approval"
@@ -158,13 +159,22 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {
 			return prepareClaudeMCPConfig(app, sessionKey)
 		},
+		ModelSettings: func(sessionKey string) state.ModelConfigSnapshot {
+			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
+			return modelConfigSnapshot(app, sess, backendClaude)
+		},
+		ModelSettingsApplied: func(sessionKey string, settings state.ModelConfigSnapshot) {
+			_, err := app.State().UpdateSession(sessionKey, func(sess *state.Session) {
+				sess.AppliedModelConfig = settings
+				sess.ModelConfigError = ""
+			})
+			if err != nil {
+				slog.Warn("record Claude model settings failed", "session_key", sessionKey, "error", err)
+			}
+		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
 			return effectiveClaudeSmallModel(app, sess), effectiveClaudeSubagentModel(app, sess)
-		},
-		ReasoningEffort: func(sessionKey string) string {
-			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
-			return effectiveClaudeReasoningEffort(app, sess)
 		},
 	})
 

@@ -59,7 +59,7 @@ func (a reviewAppAdapter) ReviewWorkspaceProvider() appreviewcmd.WorkspaceProvid
 }
 
 func (a reviewAppAdapter) ReviewGitProvider() appreviewcmd.ReviewGitProvider {
-	return reviewGitProviderAdapter{}
+	return reviewGitProviderAdapter{app: a.App}
 }
 
 func (a reviewAppAdapter) ReviewCodexClient() (appreviewcmd.CodexClient, error) {
@@ -157,16 +157,16 @@ func (a reviewWorkspaceProviderAdapter) ReviewFindWorkspace(workspaceID string) 
 	return config.FindWorkspace(a.app.cfg, workspaceID)
 }
 
-type reviewGitProviderAdapter struct{}
+type reviewGitProviderAdapter struct{ app *App }
 
-func (reviewGitProviderAdapter) ReviewResolveTarget(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
-	return appreview.NewGitService().ResolveTarget(cwd, target)
+func (a reviewGitProviderAdapter) ReviewResolveTarget(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
+	return (appreview.GitService{Context: a.app.Context()}).ResolveTarget(cwd, target)
 }
 
-func (reviewGitProviderAdapter) ReviewListBranches(cwd string) ([]appreview.BranchOption, error) {
-	return appreview.NewGitService().ListBranches(cwd)
+func (a reviewGitProviderAdapter) ReviewListBranches(cwd string) ([]appreview.BranchOption, error) {
+	return (appreview.GitService{Context: a.app.Context()}).ListBranches(cwd)
 }
 
-func (reviewGitProviderAdapter) ReviewListCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
-	return appreview.NewGitService().ListCommits(cwd, limit)
+func (a reviewGitProviderAdapter) ReviewListCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
+	return (appreview.GitService{Context: a.app.Context()}).ListCommits(cwd, limit)
 }

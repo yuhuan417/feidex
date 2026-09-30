@@ -1,9 +1,9 @@
 package upgradecmd
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"feidex/internal/app/appcore"
 	"fmt"
 	"io"
 	"os"
@@ -67,7 +67,7 @@ func (s UpgradeService) CommandUpgradeLocalPick(msg *feishu.InboundMessage) erro
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.UpgradeFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.UpgradeFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (s UpgradeService) CommandUpgradeLocalPath(msg *feishu.InboundMessage, rawP
 		return err
 	}
 	card := s.RenderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, s.UpgradeLocalConfirmLines(payload.BinaryPath))
-	msgID, err := s.app.UpgradeFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.UpgradeFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}

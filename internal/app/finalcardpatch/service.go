@@ -5,6 +5,7 @@ package finalcardpatch
 
 import (
 	"context"
+	"feidex/internal/app/appcore"
 	"strings"
 	"sync"
 	"time"
@@ -291,7 +292,7 @@ func (svc Service) runPatchLoop(messageID string) {
 		if !ok {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+		ctx, cancel := context.WithTimeout(appcore.Context(svc.app), Timeout)
 		err := svc.patchSnapshot(ctx, messageID, snapshot)
 		cancel()
 		_ = err

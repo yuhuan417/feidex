@@ -237,7 +237,7 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		"当前 backend: `claude`",
 		"/model set <model-id>",
 		"管理候选模型",
-		"frontend 空闲",
+		"模型配置可随时保存",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("claude model config body missing %q: %q", want, body)
@@ -468,7 +468,7 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	}
 }
 
-func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
+func TestCompleteClaudeModelSetDefersCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -488,13 +488,13 @@ func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
 	if resp == nil || resp.Toast == nil {
 		t.Fatal("completeClaudeModelSet() missing toast")
 	}
-	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "当前会话与后续对话会使用新配置") {
+	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "下一轮启动前应用") {
 		t.Fatalf("completeClaudeModelSet() toast = %#v", resp.Toast)
 	}
 	if got := a.cfg.Claude.Model; got != "opus" {
 		t.Fatalf("Claude model = %q, want opus", got)
 	}
-	if len(claude.setModelCalls) != 1 || claude.setModelCalls[0].sessionKey != sessionKey || claude.setModelCalls[0].model != "opus" {
+	if len(claude.setModelCalls) != 0 {
 		t.Fatalf("Claude SetModel calls = %+v", claude.setModelCalls)
 	}
 	if claude.resetCalls != 0 {
@@ -502,7 +502,7 @@ func TestCompleteClaudeModelSetHotAppliesCurrentSession(t *testing.T) {
 	}
 }
 
-func TestCompleteClaudeModelSetRejectsMessageTraffic(t *testing.T) {
+func TestCompleteClaudeModelSetAllowsMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -520,18 +520,18 @@ func TestCompleteClaudeModelSetRejectsMessageTraffic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("completeClaudeModelSet() error = %v", err)
 	}
-	if resp == nil || resp.Toast == nil || resp.Toast.Type != "error" || !strings.Contains(resp.Toast.Content, "当前仍有消息处理中") {
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "下一轮启动前应用") {
 		t.Fatalf("completeClaudeModelSet() response = %#v", resp)
 	}
-	if got := a.cfg.Claude.Model; got == "opus" {
-		t.Fatalf("Claude model changed despite message traffic: %q", got)
+	if got := a.cfg.Claude.Model; got != "opus" {
+		t.Fatalf("Claude model was not saved during message traffic: %q", got)
 	}
-	if len(claude.updatedConfigs) != 0 {
-		t.Fatalf("updated Claude configs = %+v, want none", claude.updatedConfigs)
+	if len(claude.updatedConfigs) != 1 {
+		t.Fatalf("updated Claude configs = %+v, want desired configuration", claude.updatedConfigs)
 	}
 }
 
-func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
+func TestCompleteClaudeEffortSetDefersCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -551,13 +551,13 @@ func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
 	if resp == nil || resp.Toast == nil {
 		t.Fatal("completeClaudeEffortSet() missing toast")
 	}
-	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "当前会话与后续对话会使用新配置") {
+	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "下一轮启动前应用") {
 		t.Fatalf("completeClaudeEffortSet() toast = %#v", resp.Toast)
 	}
 	if got := a.cfg.Claude.Effort; got != "high" {
 		t.Fatalf("Claude effort = %q, want high", got)
 	}
-	if len(claude.setEffortCalls) != 1 || claude.setEffortCalls[0].sessionKey != sessionKey || claude.setEffortCalls[0].effort != "high" {
+	if len(claude.setEffortCalls) != 0 {
 		t.Fatalf("Claude SetEffort calls = %+v", claude.setEffortCalls)
 	}
 	if claude.resetCalls != 0 {
@@ -565,7 +565,7 @@ func TestCompleteClaudeEffortSetHotAppliesCurrentSession(t *testing.T) {
 	}
 }
 
-func TestCompleteClaudeEffortSetDefaultWarnsWhenLiveSessionCannotClear(t *testing.T) {
+func TestCompleteClaudeEffortSetDefaultDefersReinitialization(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -585,13 +585,13 @@ func TestCompleteClaudeEffortSetDefaultWarnsWhenLiveSessionCannotClear(t *testin
 	if resp == nil || resp.Toast == nil {
 		t.Fatal("completeClaudeEffortSet(default) missing toast")
 	}
-	if resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "暂不支持热切回默认") {
+	if resp.Toast.Type != "success" || !strings.Contains(resp.Toast.Content, "下一轮启动前应用") {
 		t.Fatalf("completeClaudeEffortSet(default) toast = %#v", resp.Toast)
 	}
 	if got := a.cfg.Claude.Effort; got != "" {
 		t.Fatalf("Claude effort = %q, want empty default", got)
 	}
-	if len(claude.setEffortCalls) != 1 || claude.setEffortCalls[0].sessionKey != sessionKey || claude.setEffortCalls[0].effort != "" {
+	if len(claude.setEffortCalls) != 0 {
 		t.Fatalf("Claude SetEffort calls = %+v", claude.setEffortCalls)
 	}
 	if claude.resetCalls != 0 {
@@ -599,7 +599,7 @@ func TestCompleteClaudeEffortSetDefaultWarnsWhenLiveSessionCannotClear(t *testin
 	}
 }
 
-func TestUpdateClaudeModelConfigRejectsActiveFrontend(t *testing.T) {
+func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
@@ -618,8 +618,8 @@ func TestUpdateClaudeModelConfigRejectsActiveFrontend(t *testing.T) {
 
 	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
 		c.Model = "haiku"
-	}); err == nil || !strings.Contains(err.Error(), "frontend 空闲") {
-		t.Fatalf("updateClaudeModelConfig() error = %v, want frontend idle rejection", err)
+	}); err != nil {
+		t.Fatalf("updateClaudeModelConfig() error = %v, want saved desired configuration", err)
 	}
 
 	sess := a.store.GetSession(sessionKey)
@@ -632,8 +632,8 @@ func TestUpdateClaudeModelConfigRejectsActiveFrontend(t *testing.T) {
 	if claude.resetCalls != 0 {
 		t.Fatalf("Claude reset should not run after rejection, got %d", claude.resetCalls)
 	}
-	if got := a.cfg.Claude.Model; got == "haiku" {
-		t.Fatalf("Claude model should stay unchanged after rejection, got %q", got)
+	if got := a.cfg.Claude.Model; got != "haiku" {
+		t.Fatalf("Claude model should be saved, got %q", got)
 	}
 }
 

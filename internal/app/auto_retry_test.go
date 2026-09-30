@@ -83,7 +83,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		Status:               "failed",
 	}
 
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "HTTP 403 Forbidden")
 
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
@@ -136,12 +136,12 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	}
 	if cards := ff.replyCardsSnapshot(); len(cards) != 1 {
 		t.Fatalf("reply cards = %d, want 1 waiting card", len(cards))
-	} else if body := cardMarkdownContent(t, cards[0]); body == "" || !containsAll(body, "自动发送“继续”", "下一次自动重试") {
+	} else if body := cardMarkdownContent(t, cards[0]); body == "" || !containsAll(body, "自动发送“继续”", "下一次自动重试", "HTTP 403 Forbidden") {
 		t.Fatalf("waiting card body = %q", body)
 	}
 	if patched := ff.patchedCardsSnapshot(); len(patched) != 1 {
 		t.Fatalf("patched cards = %d, want 1 running patch", len(patched))
-	} else if body := cardMarkdownContent(t, patched[0]); body == "" || !containsAll(body, "已自动发送“继续”", "累计已重试: `1` 次") {
+	} else if body := cardMarkdownContent(t, patched[0]); body == "" || !containsAll(body, "已自动发送“继续”", "累计已重试: `1` 次", "HTTP 403 Forbidden") {
 		t.Fatalf("running card body = %q", body)
 	}
 }
@@ -206,7 +206,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		Status:               state.SubmissionStatusFailed.String(),
 	}
 
-	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, failedSub, "") {
+	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, failedSub, "", "") {
 		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
 	}
 	if len(scheduled) != 1 {
@@ -320,7 +320,7 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	}
 	updatedA := a.State().Session(sessionKey)
 
-	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadA, "failed", updatedA, failedSub, "") {
+	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadA, "failed", updatedA, failedSub, "", "") {
 		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
 	}
 	if len(scheduled) != 1 {
@@ -423,7 +423,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
 
 	msg := &feishu.InboundMessage{
 		SessionKey: sessionKey,
@@ -474,7 +474,7 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1 before /stop", len(scheduled))
 	}
@@ -539,7 +539,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		Status:               "failed",
 	}
 
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "")
+	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1 before timer fires", len(scheduled))
 	}
@@ -701,7 +701,7 @@ func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 	key := makeSessionKey(a, msg)
 	sess := seedAutoRetrySession(t, a, key, "thread-1")
 	markSessionThreadLive(a, key, "thread-1")
-	if !retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "") {
+	if !retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "", "") {
 		t.Fatal("retry not scheduled")
 	}
 	timers[0].fire() // Callback dispatched, but not run yet.
@@ -709,7 +709,7 @@ func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A later independent task may fail and create a new loop for the same session.
-	if !retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "") {
+	if !retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "", "") {
 		t.Fatal("new retry not scheduled")
 	}
 	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
@@ -736,7 +736,7 @@ func TestStopWaitsForRetryStartupAndInterruptsStartedTurn(t *testing.T) {
 	key := makeSessionKey(a, msg)
 	sess := seedAutoRetrySession(t, a, key, "thread-1")
 	markSessionThreadLive(a, key, "thread-1")
-	retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "")
+	retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "", "")
 	snapshot, _ := retry.CurrentAutoRetryState(key)
 	starting, release, interrupted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -814,5 +814,34 @@ func TestStopDoesNotFinalizeUnconfirmedTurnAfterInterruptError(t *testing.T) {
 	}
 	if sess := a.State().Session(key); sess.ActiveTurnID != "turn-1" {
 		t.Fatal("unconfirmed turn finalized")
+	}
+}
+
+func TestAutoRetryCardUsesLatestFailureAndExplicitMissingDetails(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	retry := newAutoRetryService(a)
+	retry.AutoRetryTracker().After = func(time.Duration, func()) delayedTask { return &fakeDelayedTask{} }
+	if err := retry.UpdateAutoRetryEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	sess := seedAutoRetrySession(t, a, "sess-1", "thread-1")
+	for _, reason := range []string{"HTTP 403 Forbidden", "HTTP 501 Not Implemented", ""} {
+		if !retry.ObserveAutoRetryTerminal("sess-1", "thread-1", "failed", sess, nil, "", reason) {
+			t.Fatal("retry not scheduled")
+		}
+		snapshot, ok := retry.CurrentAutoRetryState("sess-1")
+		if !ok || snapshot.LastError != reason {
+			t.Fatalf("last error = %q, want %q", snapshot.LastError, reason)
+		}
+	}
+	cards := ff.patchedCardsSnapshot()
+	if len(cards) != 2 {
+		t.Fatalf("patches = %d, want 2", len(cards))
+	}
+	if body := cardMarkdownContent(t, cards[0]); !strings.Contains(body, "HTTP 501") || strings.Contains(body, "HTTP 403") {
+		t.Fatalf("stale error: %q", body)
+	}
+	if body := cardMarkdownContent(t, cards[1]); !strings.Contains(body, "后端未提供具体错误信息") || strings.Contains(body, "HTTP 501") {
+		t.Fatalf("missing diagnostic fallback: %q", body)
 	}
 }

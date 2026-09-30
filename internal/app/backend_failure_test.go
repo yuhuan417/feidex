@@ -89,7 +89,7 @@ func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAu
 	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "Codex 自动重试" {
 		t.Fatalf("reply card title = %q, want Codex 自动重试", got)
 	}
-	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "自动发送“继续”") {
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !containsAll(body, "自动发送“继续”", "Codex 后端异常退出：stdio EOF") {
 		t.Fatalf("auto retry card body = %q", body)
 	}
 	if len(ff.patchedCards) != 0 {

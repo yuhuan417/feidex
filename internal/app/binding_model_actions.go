@@ -70,15 +70,16 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 }
 
 func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result codexrpc.ModelListResult) map[string]any {
+	cfg := modelConfigReadCopy(s.app)
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
 	modelOverride := strings.TrimSpace(binding.ModelOverride)
 	effortOverride := strings.TrimSpace(binding.ReasoningEffortOverride)
-	selectedModel := appmodelconfig.FindModelEntry(result, firstNonEmpty(modelOverride, appmodelconfig.ConfiguredGlobalModel(s.app.cfg)))
+	selectedModel := appmodelconfig.FindModelEntry(result, firstNonEmpty(modelOverride, appmodelconfig.ConfiguredGlobalModel(cfg)))
 	selectedEffort := effortOverride
 	if selectedEffort == "" {
-		selectedEffort = appmodelconfig.ConfiguredGlobalReasoningEffort(s.app.cfg)
+		selectedEffort = appmodelconfig.ConfiguredGlobalReasoningEffort(cfg)
 	}
 	if selectedEffort == "" && selectedModel != nil {
 		selectedEffort = strings.TrimSpace(selectedModel.DefaultReasoningEffort)
@@ -213,23 +214,23 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
 	return card
 
 }
 
 func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, binding *state.AgentBinding) map[string]any {
+	cfg := modelConfigReadCopy(s.app)
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
 	modelOverride := strings.TrimSpace(binding.ModelOverride)
 	effortOverride := strings.TrimSpace(binding.ReasoningEffortOverride)
-	currentModel := firstNonEmpty(modelOverride, appmodelconfig.ConfiguredClaudeModel(s.app.cfg), appmodelconfig.ClaudeDefaultModelAlias)
-	currentEffort := firstNonEmpty(effortOverride, appmodelconfig.ConfiguredClaudeEffort(s.app.cfg), "(default)")
-
-	// 改进来源显示：显示实际生效的值
+	currentModel := firstNonEmpty(modelOverride, appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
+	currentEffort := firstNonEmpty(effortOverride, appmodelconfig.ConfiguredClaudeEffort(cfg), "(default)")
 	modelSource := "跟随 Bot 默认"
 	if modelOverride == "" {
-		botModel := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(s.app.cfg), appmodelconfig.ClaudeDefaultModelAlias)
+		botModel := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
 		modelSource = "跟随 Bot 默认 (`" + botModel + "`)"
 	} else {
 		modelSource = "当前群内显式配置"
@@ -237,7 +238,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 
 	effortSource := "跟随 Bot 默认"
 	if effortOverride == "" {
-		botEffort := appmodelconfig.ConfiguredClaudeEffort(s.app.cfg)
+		botEffort := appmodelconfig.ConfiguredClaudeEffort(cfg)
 		if botEffort != "" {
 			effortSource = "跟随 Bot 默认 (`" + botEffort + "`)"
 		} else {
@@ -266,7 +267,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 			return "跟随 Bot 默认"
 		}(),
 		Value: modelConfigDefaultOptionValue,
-	}}, appmodelconfig.ClaudeModelSelectOptions(s.app.cfg, modelOverride)...)
+	}}, appmodelconfig.ClaudeModelSelectOptions(cfg, modelOverride)...)
 	modelInitialOption := modelConfigDefaultOptionValue
 	if modelOverride != "" {
 		modelInitialOption = modelOverride
@@ -307,7 +308,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		effortOptions,
 		effortInitialOption,
 	))
-	for _, element := range appmodelconfig.RenderClaudeModelOptionConfigElements(s.app.cfg, sessionKey, "menu.model") {
+	for _, element := range appmodelconfig.RenderClaudeModelOptionConfigElements(cfg, sessionKey, "menu.model") {
 		cards.AppendMarkdownBodyCardElement(card, element)
 	}
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
@@ -320,16 +321,18 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
 	return card
 
 }
 
 func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
+	cfg := modelConfigReadCopy(s.app)
 	if binding == nil {
 		binding = bindingForSessionKey(s.app, sessionKey)
 	}
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；修改仅在当前会话空闲时生效。")})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；可随时保存，待对应会话边界生效。")})
 	switch configuredBackend(s.app) {
 	case backendClaude:
 		small, subagent := "", ""
@@ -338,7 +341,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		}
 		// Each dropdown marks its own override; the Bot default stays unmarked.
 		auxModelOptions := func(current string) []cards.SelectStaticOption {
-			return append([]cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}, appmodelconfig.ClaudeModelSelectOptions(s.app.cfg, current)...)
+			return append([]cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}, appmodelconfig.ClaudeModelSelectOptions(cfg, current)...)
 		}
 		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**small model（Haiku）**\nClaude 内部执行轻量任务时使用；未设置时跟随 Bot 默认。"})
 		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_small", "small model（Haiku）", map[string]any{"action": "model.aux_config.select_small_model", "session_key": sessionKey}, auxModelOptions(small), firstNonEmpty(small, modelConfigDefaultOptionValue)))
@@ -358,7 +361,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 			planModel, planEffort = binding.PlanModelOverride, binding.PlanReasoningEffortOverride
 			review, subagent, subagentEffort = binding.ReviewModelOverride, binding.SubagentModelOverride, binding.SubagentReasoningEffortOverride
 		}
-		planEntry := appmodelconfig.FindModelEntry(result, firstNonEmpty(planModel, appmodelconfig.ConfiguredGlobalModel(s.app.cfg)))
+		planEntry := appmodelconfig.FindModelEntry(result, firstNonEmpty(planModel, appmodelconfig.ConfiguredGlobalModel(cfg)))
 		planOptions := []cards.SelectStaticOption{{Text: "跟随 Bot 默认", Value: modelConfigDefaultOptionValue}}
 		for _, item := range result.Data {
 			planOptions = append(planOptions, cards.SelectStaticOption{Text: firstNonEmpty(item.DisplayName, item.ID, item.Model), Value: item.ID})
@@ -395,11 +398,12 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, firstNonEmpty(subagentEffort, modelConfigDefaultOptionValue)))
 	}
 	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
 	return card, nil
 }
 
 func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardAction, sessionKey, role, value string) (*callback.CardActionTriggerResponse, error) {
-	if err := ensureSessionModelConfigIdle(s.app, sessionKey); err != nil {
+	if err := ensureSessionModelConfigWritable(s.app, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
@@ -427,16 +431,11 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if configuredBackend(s.app) == backendClaude && s.app.claude != nil {
-		if err := s.app.claude.ResetSession(sessionKey); err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
 	card, err := s.renderBindingAuxiliaryModelConfigCard(sessionKey, updated)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前群内辅助模型配置"}}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前群内辅助模型配置；待对应会话边界生效"}}, nil
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前群内辅助模型配置"}, Card: rawCard(card)}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前群内辅助模型配置；待对应会话边界生效"}, Card: rawCard(card)}, nil
 }
 
 func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, sessionKey string, add bool) (*callback.CardActionTriggerResponse, error) {

@@ -66,7 +66,7 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 			},
 		},
 		Cards: FailureCardDeps{
-			ObserveAutoRetryTerminal: func(string, string, string, *state.Session, *state.Submission, string) bool {
+			ObserveAutoRetryTerminal: func(string, string, string, *state.Session, *state.Submission, string, string) bool {
 				return true
 			},
 		},

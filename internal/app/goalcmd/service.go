@@ -254,7 +254,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 			return s.replyGoalCard(msg, sessionKey, threadID, nil)
 		}
 		card := s.renderGoalEditCard(sessionKey, threadID, *goal)
-		_, err = a.Feishu().ReplyCard(context.Background(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
+		_, err = a.Feishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 		s.recordContext(sessionKey, threadID, msg)
 		return err
 	default:
@@ -268,7 +268,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 		}
 		if existing != nil && shouldConfirmBeforeReplacingGoal(*existing) {
 			card := s.renderGoalReplaceConfirmCard(sessionKey, threadID, *existing, objective)
-			_, err := a.Feishu().ReplyCard(context.Background(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
+			_, err := a.Feishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 			s.recordContext(sessionKey, threadID, msg)
 			return err
 		}
@@ -289,7 +289,7 @@ func (s Service) replyGoalSetText(msg *feishu.InboundMessage, sessionKey, thread
 		return nil
 	}
 	s.recordContext(sessionKey, threadID, msg)
-	return s.app.Feishu().ReplyText(context.Background(), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
+	return s.app.Feishu().ReplyText(appcore.Context(s.app), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
 }
 
 func goalCommandTail(raw string, args []string) string {
@@ -348,7 +348,7 @@ func (s Service) threadGoalGet(threadID string) (*codexrpc.ThreadGoal, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
 	defer cancel()
 	var resp codexrpc.ThreadGoalGetResponse
 	if err := client.Call(ctx, "thread/goal/get", map[string]any{"threadId": strings.TrimSpace(threadID)}, &resp); err != nil {
@@ -383,7 +383,7 @@ func (s Service) threadGoalSetObjective(threadID, objective string, status codex
 	if tokenBudget != nil {
 		params.TokenBudget = codexrpc.NewNullableInt64(tokenBudget)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
 	defer cancel()
 	var resp codexrpc.ThreadGoalSetResponse
 	if err := client.Call(ctx, "thread/goal/set", params, &resp); err != nil {
@@ -398,7 +398,7 @@ func (s Service) threadGoalClear(threadID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
 	defer cancel()
 	var resp codexrpc.ThreadGoalClearResponse
 	if err := client.Call(ctx, "thread/goal/clear", map[string]any{"threadId": strings.TrimSpace(threadID)}, &resp); err != nil {
@@ -431,7 +431,7 @@ func goalFriendlyError(action string, err error) string {
 
 func (s Service) replyGoalCard(msg *feishu.InboundMessage, sessionKey, threadID string, goal *codexrpc.ThreadGoal) error {
 	card := s.renderGoalCard(sessionKey, threadID, goal)
-	_, err := s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.Feishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
@@ -446,7 +446,7 @@ func (s Service) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey, th
 		title = "Goal cleared"
 	}
 	card := s.app.Feishu().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))
-	_, err := s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.Feishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
@@ -1041,7 +1041,7 @@ func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string,
 	}
 	ordinal := s.app.Tracker().NextContinuationOrdinal(threadID)
 	card := s.renderGoalContinuationCard(sessionKey, threadID, turnID, goal, ordinal)
-	messageID, err := s.app.Feishu().SendCard(context.Background(), anchor.ChatID, card)
+	messageID, err := s.app.Feishu().SendCard(appcore.Context(s.app), anchor.ChatID, card)
 	if err != nil {
 		return Anchor{}, false
 	}

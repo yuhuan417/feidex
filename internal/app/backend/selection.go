@@ -203,11 +203,11 @@ func (s SelectionService) ReplyBackendSelectionCard(msg *feishu.InboundMessage, 
 	}
 	card := s.RenderBackendSelectionCard(sessionKey, appcore.FirstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
 	if msg != nil && strings.TrimSpace(msg.MessageID) != "" {
-		_, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		_, err := s.App.Feishu().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 		return err
 	}
 	if msg != nil && strings.TrimSpace(msg.ChatID) != "" {
-		_, err := s.App.Feishu().SendCard(context.Background(), msg.ChatID, card)
+		_, err := s.App.Feishu().SendCard(appcore.Context(s.App), msg.ChatID, card)
 		return err
 	}
 	return fmt.Errorf("backend not configured")
@@ -266,7 +266,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 		}, nil
 	}
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		if err := s.SwitchBackend(context.Background(), target); err != nil {
+		if err := s.SwitchBackend(appcore.Context(s.App), target); err != nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "error", Content: err.Error()},
 				Card:  RawCard(s.RenderBackendSelectionCard(sessionKey, "切换失败: "+err.Error())),
@@ -280,7 +280,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 
 	messageID := strings.TrimSpace(action.MessageID)
 	go func() {
-		err := s.SwitchBackend(context.Background(), target)
+		err := s.SwitchBackend(appcore.Context(s.App), target)
 		notice := "已切换到 `" + target + "`。"
 		if err != nil {
 			notice = "切换失败: " + err.Error()
@@ -291,7 +291,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 				"error", err,
 			)
 		}
-		if patchErr := s.App.Feishu().PatchCard(context.Background(), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
+		if patchErr := s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
 			slog.Warn("backend switch patch failed",
 				"frontend_id", s.App.FrontendID(),
 				"target_backend", target,

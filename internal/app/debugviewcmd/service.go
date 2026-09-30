@@ -302,7 +302,7 @@ func (s DebugService) CommandDebug(msg *feishu.InboundMessage, args []string) er
 	}
 	if !NewDebugService(s.app).DebugAccessAllowed(msg.UserID) {
 		card := NewDebugService(s.app).RenderDebugAccessDeniedCard(s.app.DebugMakeSessionKey(msg), msg.UserID)
-		_, err := s.app.DebugFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+		_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	enabled, err := DesiredDebugEnabled(args)
@@ -310,7 +310,7 @@ func (s DebugService) CommandDebug(msg *feishu.InboundMessage, args []string) er
 		return err
 	}
 	level := NewDebugService(s.app).SetRuntimeDebug(enabled)
-	return s.app.DebugFeishu().ReplyText(context.Background(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	return s.app.DebugFeishu().ReplyText(appcore.Context(s.app), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.DebugReplyInThreadEnabled(msg.ChatType))
 }
 
 // CompleteMenuDebug handles the debug menu card action.
@@ -328,11 +328,11 @@ func (s DebugService) CommandDebugLogs(msg *feishu.InboundMessage, args []string
 	}
 	if !NewDebugService(s.app).DebugAccessAllowed(msg.UserID) {
 		card := NewDebugService(s.app).RenderDebugAccessDeniedCard(s.app.DebugMakeSessionKey(msg), msg.UserID)
-		_, err := s.app.DebugFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+		_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	card := NewDebugService(s.app).RenderDebugLogsCard(s.app.DebugMakeSessionKey(msg))
-	_, err := s.app.DebugFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -500,7 +500,7 @@ func (s UsageService) CommandUsage(msg *feishu.InboundMessage, args []string) er
 		return fmt.Errorf("usage: /usage")
 	}
 	card := NewUsageService(s.app).RenderUsageCard(s.app.DebugMakeSessionKey(msg))
-	_, err := s.app.DebugFeishu().ReplyCard(context.Background(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -570,7 +570,7 @@ func CommandDownload(a App, msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return err
 	}
-	msgID, err := a.DebugFeishu().ReplyCard(context.Background(), msg.MessageID, card, a.DebugReplyInThreadEnabled(msg.ChatType))
+	msgID, err := a.DebugFeishu().ReplyCard(appcore.Context(a), msg.MessageID, card, a.DebugReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -651,7 +651,7 @@ func CompleteDownloadFileConfirm(a App, action *feishu.CardAction, pending *stat
 // FinishDownloadFileShare completes the download file sharing workflow.
 func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
 	appState := a.DebugAppState()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 	defer cancel()
 	slog.Debug("download share started",
 		"request_id", requestID,
@@ -680,10 +680,10 @@ func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPic
 				"message_id", messageID,
 				"error", renderErr,
 			)
-			_ = a.DebugFeishu().PatchCard(context.Background(), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
+			_ = a.DebugFeishu().PatchCard(appcore.Context(a), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
 			return
 		}
-		_ = a.DebugFeishu().PatchCard(context.Background(), messageID, card)
+		_ = a.DebugFeishu().PatchCard(appcore.Context(a), messageID, card)
 		return
 	}
 	slog.Debug("download share completed",
@@ -699,7 +699,7 @@ func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPic
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = a.DebugFeishu().PatchCard(context.Background(), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
+	_ = a.DebugFeishu().PatchCard(appcore.Context(a), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
 }
 
 // RenderDownloadPreparingCard renders the download preparing card.

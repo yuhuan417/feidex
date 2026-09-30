@@ -2,13 +2,16 @@ package submission
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
+	"feidex/internal/app/appcore"
 	"feidex/internal/app/attachments"
 	"feidex/internal/app/sessionctx"
+	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -74,11 +77,27 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 		return err
 	}
 
-	model := effectiveClaudeModel(a, sess, sub, ws)
-	ensureCtx, ensureCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if steer {
+		_, _, err := s.startClaudeSubmissionAttempt(claude, sessionKey, sess, sub, threadID, prompt, true)
+		if err != nil {
+			s.HandleSubmissionStartFailure(sessionKey, threadID, sub, err, notifyFailure)
+		}
+		return err
+	}
+
+	model := ""
+	if resolver, ok := a.(modelConfigResolver); ok {
+		model = resolver.SubmissionQueueResolveModelConfig(sess, sub).Model
+	} else {
+		model = effectiveClaudeModel(a, sess, sub, ws)
+	}
+	ensureCtx, ensureCancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 	resumeThreadID := threadID
 	claudeThreadID, err := claude.EnsureSession(ensureCtx, sessionKey, ws, resumeThreadID, model)
 	ensureCancel()
+	if errors.Is(err, claudecli.ErrModelConfigApply) {
+		return s.deferClaudeModelConfig(sessionKey, sub, err, notifyFailure)
+	}
 	if err != nil && resumeThreadID != "" {
 		slog.Warn("Claude session resume failed; starting fresh session",
 			"session_key", sessionKey,
@@ -91,7 +110,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 		if saveErr := appState.SaveSession(sess); saveErr != nil {
 			return saveErr
 		}
-		ensureCtx, ensureCancel = context.WithTimeout(context.Background(), 30*time.Second)
+		ensureCtx, ensureCancel = context.WithTimeout(appcore.Context(a), 30*time.Second)
 		claudeThreadID, err = claude.EnsureSession(ensureCtx, sessionKey, ws, "", model)
 		ensureCancel()
 	}
@@ -108,7 +127,19 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 	}
 
 	updatedSess, turnID, err := s.startClaudeSubmissionAttempt(claude, sessionKey, sess, sub, claudeThreadID, prompt, steer)
-	if err != nil && strings.TrimSpace(resumeThreadID) != "" {
+	if errors.Is(err, claudecli.ErrModelConfigApply) {
+		if _, _, rollbackErr := s.rollbackClaudeSubmissionStartState(sessionKey, sub, turnID, true); rollbackErr != nil {
+			return rollbackErr
+		}
+		return s.deferClaudeModelConfig(sessionKey, sub, err, notifyFailure)
+	}
+	if err != nil && strings.TrimSpace(resumeThreadID) != "" && !canRetryFreshClaudeSession(claude, sessionKey) {
+		if _, _, rollbackErr := s.rollbackClaudeSubmissionStartState(sessionKey, sub, turnID, true); rollbackErr != nil {
+			return rollbackErr
+		}
+		return s.deferClaudeModelConfig(sessionKey, sub, fmt.Errorf("%w: %v", claudecli.ErrModelConfigApply, err), notifyFailure)
+	}
+	if err != nil && strings.TrimSpace(resumeThreadID) != "" && canRetryFreshClaudeSession(claude, sessionKey) {
 		slog.Warn("Claude resumed session turn start failed; retrying fresh session",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -116,8 +147,8 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 			"workspace_id", sub.WorkspaceID,
 			"error", err,
 		)
-		sess, sub, err = s.rollbackClaudeSubmissionStartState(sessionKey, sub, turnID)
-		ensureCtx, ensureCancel = context.WithTimeout(context.Background(), 30*time.Second)
+		sess, sub, err = s.rollbackClaudeSubmissionStartState(sessionKey, sub, turnID, false)
+		ensureCtx, ensureCancel = context.WithTimeout(appcore.Context(a), 30*time.Second)
 		claudeThreadID, err = claude.EnsureSession(ensureCtx, sessionKey, ws, "", model)
 		ensureCancel()
 		if err == nil {
@@ -181,7 +212,7 @@ func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeC
 	a.SubmissionQueueRuntimeState().MarkTurnStartedAt(turnID, time.Now())
 	a.SubmissionQueueMarkSubmissionRunningReactions(sub)
 
-	turnCtx, turnCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	turnCtx, turnCancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
 	err = claude.StartTurn(turnCtx, sessionKey, claudeThreadID, turnID, prompt)
 	turnCancel()
 	if err != nil {
@@ -210,7 +241,7 @@ func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeCl
 	}
 	a.SubmissionQueueMarkSubmissionRunningReactions(sub)
 
-	turnCtx, turnCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	turnCtx, turnCancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
 	err = claude.StartSteerTurn(turnCtx, sessionKey, claudeThreadID, turnID, prompt, sub.ID)
 	turnCancel()
 	if err != nil {
@@ -219,7 +250,7 @@ func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeCl
 	return updatedSess, turnID, nil
 }
 
-func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string) (*state.Session, *state.Submission, error) {
+func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string, preserveLineage bool) (*state.Session, *state.Submission, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	submissionID := ""
@@ -244,10 +275,14 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 				}
 			}
 		case len(current.Queue) > 0 || len(current.StagedImages) > 0:
-			sessionctx.ClearThreadContext(current)
+			if !preserveLineage {
+				sessionctx.ClearThreadContext(current)
+			}
 			current.Status = state.SessionStatusQueued.String()
 		default:
-			sessionctx.ClearThreadContext(current)
+			if !preserveLineage {
+				sessionctx.ClearThreadContext(current)
+			}
 			current.Status = state.SessionStatusIdle.String()
 		}
 	})
@@ -283,7 +318,7 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 		a.SubmissionQueueTurnStream().DeleteTurnStream(turnID)
 	}
 
-	if updatedSess == nil || !sessionctx.HasActiveOperations(updatedSess) {
+	if !preserveLineage && (updatedSess == nil || !sessionctx.HasActiveOperations(updatedSess)) {
 		a.SubmissionQueueLiveThread().ClearSessionLiveThread(sessionKey)
 	}
 	return updatedSess, refreshedSub, nil
@@ -362,4 +397,46 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// Keep the failed prompt at the head and do not schedule further work. A later
+// input/queue retry re-attempts with the latest desired settings; /stop can
+// still cancel it. No auto-retry, finalization or fresh-session fallback.
+func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *state.Submission, applyErr error, notify bool) error {
+	appState := s.App.SubmissionQueueAppState()
+	if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) {
+		current.Status = state.SubmissionStatusQueued.String()
+		current.TurnID = ""
+	}); err != nil {
+		return err
+	}
+	_, err := appState.UpdateSession(sessionKey, func(current *state.Session) {
+		sessionctx.RemoveActiveOperation(current, sub.ID, "")
+		queue := []string{sub.ID}
+		for _, id := range current.Queue {
+			if id != sub.ID {
+				queue = append(queue, id)
+			}
+		}
+		current.Queue = queue
+		current.ModelConfigError = applyErr.Error()
+		if !sessionctx.HasActiveOperations(current) {
+			current.Status = state.SessionStatusQueued.String()
+		}
+	})
+	if err != nil {
+		return err
+	}
+	s.App.SubmissionQueueMarkSubmissionQueuedReactions(sub)
+	if notify {
+		s.App.SubmissionQueueSendStartFailureNotice(appcore.Context(s.App), sub, fmt.Errorf("%w；消息已保留在队首，请修正模型配置后发送新消息重试队列，或 /stop 取消", applyErr), false)
+	}
+	return applyErr
+}
+
+func canRetryFreshClaudeSession(claude QueueClaudeClient, sessionKey string) bool {
+	if runtime, ok := claude.(interface{ CanRetryFreshSession(string) bool }); ok {
+		return runtime.CanRetryFreshSession(sessionKey)
+	}
+	return true
 }

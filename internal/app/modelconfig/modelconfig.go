@@ -2,9 +2,7 @@ package modelconfig
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -12,7 +10,6 @@ import (
 
 	"feidex/internal/app/cards"
 	"feidex/internal/app/runtime"
-	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -167,20 +164,10 @@ type ModelConfigService struct {
 	// Feishu client callbacks.
 	ReplyText func(ctx context.Context, msgID string, text string, replyInThread bool) error
 	ReplyCard func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error)
-	// PatchCard replaces a card by message id. Used to report runtime work that
-	// failed after the card callback had already been answered.
-	PatchCard func(messageID string, card map[string]any) error
-	// RunAsync runs work after the card callback has been answered. Card
-	// callbacks must return within the platform deadline, while a Claude model
-	// or effort change is a CLI round-trip.
-	RunAsync func(fn func())
 
 	// Claude runtime callbacks.
-	UpdateClaudeConfig  func(cfg config.ClaudeConfig)
-	ClaudeSetModel      func(ctx context.Context, sessionKey, model string) (bool, error)
-	ClaudeSetEffort     func(ctx context.Context, sessionKey, effort string) (bool, error)
-	ResetClaudeSessions func() error
-	IsClaudeAvailable   func() bool
+	UpdateClaudeConfig func(cfg config.ClaudeConfig)
+	IsClaudeAvailable  func() bool
 
 	// Codex client callback.
 	RequireCodexClient func() (CodexClient, error)
@@ -203,10 +190,10 @@ type ModelConfigService struct {
 	HandleBackendModelCommand        func(msg *feishu.InboundMessage, args []string) error
 
 	// Menu helper callbacks.
-	FormatMenuBody                                  func(action, body string) string
-	MenuBackAction                                  func(action string) string
-	FrontendIdleBlockedReason                       func() string
-	FrontendIdleBlockedReasonIgnoringCurrentMessage func() string
+	FormatMenuBody           func(action, body string) string
+	MenuBackAction           func(action string) string
+	ModelConfigBlockedReason func() string
+	ModelConfigStatus        func(sessionKey string) string
 
 	// Card action response callback.
 	ReplyCommandActionResponse func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
@@ -220,7 +207,7 @@ func (s ModelConfigService) configForSession(sessionKey string) *config.Config {
 			return cfg
 		}
 	}
-	return s.GetConfig()
+	return s.configSnapshot()
 }
 
 // backAction resolves the action a card's back control returns to.
@@ -696,12 +683,13 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 	for _, elem := range elements {
 		cards.AppendMarkdownBodyCardElement(card, elem)
 	}
+	s.appendApplyStatus(card, sessionKey)
 	return card
 }
 
 // RenderCodexAuxiliaryModelConfigCard renders the secondary Codex model page.
 func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
-	cfg := s.GetConfig()
+	cfg := s.configSnapshot()
 	planModel, planEffort := EffectivePlanConfiguredModelAndEffort(cfg, result, planPreset)
 	planModelValue := ConfiguredPlanModel(cfg)
 	planEffortValue := ConfiguredPlanReasoningEffort(cfg)
@@ -726,6 +714,7 @@ func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 推理强度**\n未设置时跟随 subagent 模型的默认强度。"})
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, effortPickerOptions(selectedSubagent, subagentEffort, subagentEffort, nil), firstNonEmpty(subagentEffort, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	s.appendApplyStatus(card, sessionKey)
 	return card
 }
 
@@ -769,7 +758,7 @@ func (s ModelConfigService) CompleteCodexAuxiliaryModelSet(action *feishu.CardAc
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	resp := &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新辅助模型配置"}}
+	resp := &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存辅助模型配置；待对应会话边界生效"}}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	if result, err := s.FetchModelList(ctx); err == nil {
@@ -786,17 +775,13 @@ func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexCon
 		return fmt.Errorf("nil config")
 	}
 	mu := s.GetConfigMu()
-	blockedReason := s.FrontendIdleBlockedReason
-	if s.FrontendIdleBlockedReasonIgnoringCurrentMessage != nil {
-		blockedReason = s.FrontendIdleBlockedReasonIgnoringCurrentMessage
-	}
-	if blockedReason != nil {
-		if reason := strings.TrimSpace(blockedReason()); reason != "" {
-			return fmt.Errorf("模型配置只能在当前 frontend 空闲时切换: %s", reason)
-		}
+	if err := s.ensureModelConfigWritable(); err != nil {
+		return err
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	live := cfg
+	cfg = config.Clone(cfg)
 	mutate(&cfg.Codex)
 	cfg.Codex.Model = strings.TrimSpace(cfg.Codex.Model)
 	cfg.Codex.ReasoningEffort = strings.TrimSpace(cfg.Codex.ReasoningEffort)
@@ -813,7 +798,11 @@ func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexCon
 	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
 		return err
 	}
-	return config.Save(s.GetCfgPath(), cfg)
+	if err := config.Save(s.GetCfgPath(), cfg); err != nil {
+		return err
+	}
+	publishCodexModelConfig(&live.Codex, cfg.Codex)
+	return nil
 }
 
 func (s ModelConfigService) UpdateGlobalAuxiliaryConfig(mutate func(*config.CodexConfig)) error {
@@ -821,23 +810,23 @@ func (s ModelConfigService) UpdateGlobalAuxiliaryConfig(mutate func(*config.Code
 	if cfg == nil {
 		return fmt.Errorf("nil config")
 	}
-	blockedReason := s.FrontendIdleBlockedReason
-	if s.FrontendIdleBlockedReasonIgnoringCurrentMessage != nil {
-		blockedReason = s.FrontendIdleBlockedReasonIgnoringCurrentMessage
-	}
-	if blockedReason != nil {
-		if reason := strings.TrimSpace(blockedReason()); reason != "" {
-			return fmt.Errorf("模型配置只能在当前 frontend 空闲时切换: %s", reason)
-		}
+	if err := s.ensureModelConfigWritable(); err != nil {
+		return err
 	}
 	mu := s.GetConfigMu()
 	mu.Lock()
 	defer mu.Unlock()
+	live := cfg
+	cfg = config.Clone(cfg)
 	mutate(&cfg.Codex)
 	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
 		return err
 	}
-	return config.Save(s.GetCfgPath(), cfg)
+	if err := config.Save(s.GetCfgPath(), cfg); err != nil {
+		return err
+	}
+	publishCodexModelConfig(&live.Codex, cfg.Codex)
+	return nil
 }
 
 // CompleteCodexPlanModelSet handles the plan-mode model selection card action.
@@ -863,7 +852,7 @@ func (s ModelConfigService) CompleteCodexPlanModelSet(action *feishu.CardAction,
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 Plan 模式模型"},
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Plan 模式模型；下一次 Plan 轮次应用"},
 		Card:  rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction)),
 	}, nil
 }
@@ -881,7 +870,7 @@ func (s ModelConfigService) CompleteCodexPlanReasoningEffortSet(action *feishu.C
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	selectedPlanModel, _ := EffectivePlanConfiguredModelAndEffort(s.GetConfig(), result, nil)
+	selectedPlanModel, _ := EffectivePlanConfiguredModelAndEffort(s.configSnapshot(), result, nil)
 	reasoningEffort = strings.TrimSpace(reasoningEffort)
 	if reasoningEffort != "" && !ModelSupportsEffort(selectedPlanModel, reasoningEffort) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "Plan 模式模型不支持这个推理强度"}}, nil
@@ -892,7 +881,7 @@ func (s ModelConfigService) CompleteCodexPlanReasoningEffortSet(action *feishu.C
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 Plan 模式推理强度"},
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Plan 模式推理强度；下一次 Plan 轮次应用"},
 		Card:  rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction)),
 	}, nil
 }
@@ -980,7 +969,7 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 			if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.ReviewModel = value }); err != nil {
 				return err
 			}
-			return s.ReplyText(context.Background(), msg.MessageID, "已更新 Codex review model", s.ReplyInThreadEnabled(msg.ChatType))
+			return s.ReplyText(context.Background(), msg.MessageID, "已保存 Codex review model；待下次新建或恢复 thread 生效", s.ReplyInThreadEnabled(msg.ChatType))
 		case "subagent":
 			if len(args) == 3 && strings.TrimSpace(args[1]) == "set" {
 				value := strings.TrimSpace(args[2])
@@ -990,7 +979,7 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 				if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.SubagentModel = value }); err != nil {
 					return err
 				}
-				return s.ReplyText(context.Background(), msg.MessageID, "已更新 Codex subagent model", s.ReplyInThreadEnabled(msg.ChatType))
+				return s.ReplyText(context.Background(), msg.MessageID, "已保存 Codex subagent model；待下次新建或恢复 thread 生效", s.ReplyInThreadEnabled(msg.ChatType))
 			}
 			if len(args) == 3 && strings.TrimSpace(args[1]) == "effort" {
 				value := strings.TrimSpace(args[2])
@@ -1000,7 +989,7 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 				if err := s.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.SubagentReasoningEffort = value }); err != nil {
 					return err
 				}
-				return s.ReplyText(context.Background(), msg.MessageID, "已更新 Codex subagent reasoning effort", s.ReplyInThreadEnabled(msg.ChatType))
+				return s.ReplyText(context.Background(), msg.MessageID, "已保存 Codex subagent reasoning effort；待下次新建或恢复 thread 生效", s.ReplyInThreadEnabled(msg.ChatType))
 			}
 			return fmt.Errorf("usage: /model subagent set MODEL|default | /model subagent effort EFFORT|default")
 		default:
@@ -1049,7 +1038,7 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 				"这里提供 Claude 常用别名、已配置候选 model 与当前自定义 model。\n" +
 				"需要任意 raw model 时，请直接使用 `/model set <model-id>`。\n" +
 				"`/model set default` 会恢复为 `sonnet`。\n" +
-				"切换 Claude model / effort 只允许在当前 frontend 空闲时进行；成功后会尝试立即应用到当前会话，并用于后续对话。",
+				"模型配置可随时保存；本轮不变，排队消息在下一轮启动前应用最新配置。",
 		},
 		{"tag": "markdown", "content": "选择模型"},
 	}
@@ -1117,12 +1106,13 @@ func (s ModelConfigService) RenderClaudeModelConfigCard(sessionKey, menuAction s
 	for _, elem := range elements {
 		cards.AppendMarkdownBodyCardElement(card, elem)
 	}
+	s.appendApplyStatus(card, sessionKey)
 	return card
 }
 
 // RenderClaudeAuxiliaryModelConfigCard renders Claude's small/subagent page.
 func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, menuAction string) map[string]any {
-	cfg := s.GetConfig()
+	cfg := s.configSnapshot()
 	small, subagent := "", ""
 	if cfg != nil {
 		small, subagent = cfg.Claude.SmallModel, cfg.Claude.SubagentModel
@@ -1137,28 +1127,12 @@ func (s ModelConfigService) RenderClaudeAuxiliaryModelConfigCard(sessionKey, men
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent model**\nClaude 内部自动创建子 agent 时使用；未设置时跟随主模型。"})
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("claude_aux_subagent_model", "subagent model", map[string]any{"action": "model.aux_config.select_subagent_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, subagentOptions, firstNonEmpty(subagent, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	s.appendApplyStatus(card, sessionKey)
 	return card
 }
 
 func (s ModelConfigService) CompleteClaudeAuxiliaryModelSet(action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
 	value = normalizeClearableValue(value)
-	sessionKey := actionSessionKey(action)
-	if s.RunAsync != nil && hasCardMessage(action) {
-		// Card callback: persisting auxiliary models restarts the session, which
-		// stops the CLI process — too slow for the callback ack path.
-		s.runRuntimeApplyAsync(action, func() error {
-			return s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) {
-				if role == "small" {
-					c.SmallModel = value
-				} else {
-					c.SubagentModel = value
-				}
-			})
-		}, func() map[string]any {
-			return s.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary")
-		}, "辅助模型配置应用失败")
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 辅助模型配置，正在后台重启会话"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
-	}
 	if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) {
 		if role == "small" {
 			c.SmallModel = value
@@ -1168,7 +1142,7 @@ func (s ModelConfigService) CompleteClaudeAuxiliaryModelSet(action *feishu.CardA
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 辅助模型配置"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存 Claude 辅助模型配置；待下一轮安全边界生效"}, Card: rawCard(s.RenderClaudeAuxiliaryModelConfigCard(actionSessionKey(action), "menu.model_auxiliary"))}, nil
 }
 
 func normalizeClearableValue(value string) string {
@@ -1261,38 +1235,22 @@ func setFirstButtonFormAction(row map[string]any, actionType string) {
 	elements[0]["form_action_type"] = actionType
 }
 
-// EnsureClaudeRuntimeConfigChangeSafe checks that the frontend is idle before
-// allowing a Claude model/effort configuration change.
-func (s ModelConfigService) EnsureClaudeRuntimeConfigChangeSafe() error {
-	return s.ensureClaudeRuntimeConfigChangeSafe(false)
-}
-
-func (s ModelConfigService) ensureClaudeRuntimeConfigChangeSafe(ignoreCurrentMessage bool) error {
-	blockedReason := s.FrontendIdleBlockedReason
-	if ignoreCurrentMessage && s.FrontendIdleBlockedReasonIgnoringCurrentMessage != nil {
-		blockedReason = s.FrontendIdleBlockedReasonIgnoringCurrentMessage
-	}
-	if blockedReason != nil {
-		if reason := strings.TrimSpace(blockedReason()); reason != "" {
-			return fmt.Errorf("Claude model / effort 只能在当前 frontend 空闲时切换: %s", reason)
+func (s ModelConfigService) ensureModelConfigWritable() error {
+	if s.ModelConfigBlockedReason != nil {
+		if reason := strings.TrimSpace(s.ModelConfigBlockedReason()); reason != "" {
+			return fmt.Errorf("模型配置暂不可保存: %s", reason)
 		}
 	}
 	return nil
 }
 
-// UpdateClaudeModelConfig persists a Claude config mutation and hot-reloads.
+// UpdateClaudeModelConfig persists desired Claude settings for the next turn boundary.
 func (s ModelConfigService) UpdateClaudeModelConfig(mutate func(*config.ClaudeConfig)) error {
 	return s.updateClaudeModelConfig(mutate, false)
 }
 
 func (s ModelConfigService) UpdateClaudeAuxiliaryConfig(mutate func(*config.ClaudeConfig)) error {
-	if err := s.updateClaudeModelConfig(mutate, true); err != nil {
-		return err
-	}
-	if s.ResetClaudeSessions != nil {
-		return s.ResetClaudeSessions()
-	}
-	return nil
+	return s.updateClaudeModelConfig(mutate, true)
 }
 
 // UpdateClaudeModelOptionsConfig persists Claude picker option changes. This
@@ -1310,11 +1268,17 @@ func (s ModelConfigService) UpdateClaudeModelOptionsConfig(mutate func(*config.C
 	mu := s.GetConfigMu()
 	mu.Lock()
 	defer mu.Unlock()
+	live := cfg
+	cfg = config.Clone(cfg)
 	mutate(&cfg.Claude)
 	if err := cfg.Normalize(filepath.Dir(cfgPath)); err != nil {
 		return err
 	}
-	return config.Save(cfgPath, cfg)
+	if err := config.Save(cfgPath, cfg); err != nil {
+		return err
+	}
+	publishClaudeModelConfig(&live.Claude, cfg.Claude)
+	return nil
 }
 
 func (s ModelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeConfig), ignoreCurrentMessage bool) error {
@@ -1326,12 +1290,14 @@ func (s ModelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeCo
 	if strings.TrimSpace(cfgPath) == "" {
 		return fmt.Errorf("missing config path")
 	}
-	if err := s.ensureClaudeRuntimeConfigChangeSafe(ignoreCurrentMessage); err != nil {
+	if err := s.ensureModelConfigWritable(); err != nil {
 		return err
 	}
 	mu := s.GetConfigMu()
 	mu.Lock()
 	defer mu.Unlock()
+	live := cfg
+	cfg = config.Clone(cfg)
 	mutate(&cfg.Claude)
 	if err := cfg.Normalize(filepath.Dir(cfgPath)); err != nil {
 		return err
@@ -1339,40 +1305,11 @@ func (s ModelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeCo
 	if err := config.Save(cfgPath, cfg); err != nil {
 		return err
 	}
+	publishClaudeModelConfig(&live.Claude, cfg.Claude)
 	if s.IsClaudeAvailable() {
 		s.UpdateClaudeConfig(cfg.Claude)
 	}
 	return nil
-}
-
-// HotApplyClaudeModelToCurrentSession attempts to hot-apply a model change to
-// the active Claude session.
-func (s ModelConfigService) HotApplyClaudeModelToCurrentSession(sessionKey, model string) (bool, error) {
-	if !s.IsClaudeAvailable() {
-		return false, nil
-	}
-	sessionKey = s.NormalizeSessionKey(sessionKey)
-	if sessionKey == "" || !s.SessionBelongsToFrontend(sessionKey) {
-		return false, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return s.ClaudeSetModel(ctx, sessionKey, strings.TrimSpace(model))
-}
-
-// HotApplyClaudeEffortToCurrentSession attempts to hot-apply an effort change
-// to the active Claude session.
-func (s ModelConfigService) HotApplyClaudeEffortToCurrentSession(sessionKey, effort string) (bool, error) {
-	if !s.IsClaudeAvailable() {
-		return false, nil
-	}
-	sessionKey = s.NormalizeSessionKey(sessionKey)
-	if sessionKey == "" || !s.SessionBelongsToFrontend(sessionKey) {
-		return false, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return s.ClaudeSetEffort(ctx, sessionKey, strings.TrimSpace(effort))
 }
 
 // CompleteClaudeModelSet handles the Claude model selection card action.
@@ -1392,70 +1329,10 @@ func (s ModelConfigService) completeClaudeModelSet(action *feishu.CardAction, mo
 	}, ignoreCurrentMessage); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if !ignoreCurrentMessage && s.RunAsync != nil && hasCardMessage(action) {
-		// Card callback: answer now, hot-apply off the ack path.
-		s.runRuntimeApplyAsync(action, func() error {
-			_, err := s.HotApplyClaudeModelToCurrentSession(sessionKey, model)
-			return err
-		}, func() map[string]any {
-			return s.RenderClaudeModelConfigCard(sessionKey, menuAction)
-		}, "当前会话热更新失败")
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 模型；后续对话会使用新配置，当前会话正在后台切换"},
-			Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
-		}, nil
-	}
-	toastType := "success"
-	toastContent := "已更新 Claude 模型；后续对话会使用新配置"
-	if applied, err := s.HotApplyClaudeModelToCurrentSession(sessionKey, model); err != nil {
-		toastType = "warning"
-		toastContent = "已更新 Claude 模型；当前会话热更新失败，仅后续对话会使用新配置"
-	} else if applied {
-		toastContent = "已更新 Claude 模型；当前会话与后续对话会使用新配置"
-	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: toastType, Content: toastContent},
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Claude 模型；本轮不变，下一轮启动前应用"},
 		Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
-}
-
-// hasCardMessage reports whether an action came from a real card callback.
-// Programmatic and command fallbacks carry no message id and may run inline.
-func hasCardMessage(action *feishu.CardAction) bool {
-	return action != nil && strings.TrimSpace(action.MessageID) != ""
-}
-
-// runRuntimeApplyAsync runs a Claude runtime application after the callback has
-// been answered and patches the card when it fails, so the card never claims a
-// runtime change that never landed.
-func (s ModelConfigService) runRuntimeApplyAsync(action *feishu.CardAction, apply func() error, renderCard func() map[string]any, failureLabel string) {
-	messageID := ""
-	if action != nil {
-		messageID = strings.TrimSpace(action.MessageID)
-	}
-	s.RunAsync(func() {
-		err := apply()
-		if err == nil {
-			return
-		}
-		warning := "⚠️ " + failureLabel + "：" + err.Error() + "（配置已保存，将在会话重启后生效）"
-		if errors.Is(err, claudecli.ErrEffortDefaultHotApplyUnsupported) {
-			warning = "⚠️ 当前会话暂不支持热切回默认（配置已保存，将在会话重启后生效）"
-		}
-		if messageID == "" || s.PatchCard == nil || renderCard == nil {
-			slog.Warn("claude runtime apply failed after card ack",
-				"message_id", messageID,
-				"error", err,
-			)
-			return
-		}
-		if patchErr := s.PatchCard(messageID, cards.PrependMarkdownWarning(renderCard(), warning)); patchErr != nil {
-			slog.Warn("patch claude config card after runtime failure failed",
-				"message_id", messageID,
-				"error", patchErr,
-			)
-		}
-	})
 }
 
 // CompleteClaudeModelOptionAdd handles the Claude picker option add form.
@@ -1524,34 +1401,8 @@ func (s ModelConfigService) completeClaudeEffortSet(action *feishu.CardAction, e
 	}, ignoreCurrentMessage); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if !ignoreCurrentMessage && s.RunAsync != nil && hasCardMessage(action) {
-		// Card callback: answer now, hot-apply off the ack path.
-		s.runRuntimeApplyAsync(action, func() error {
-			_, err := s.HotApplyClaudeEffortToCurrentSession(sessionKey, normalized)
-			return err
-		}, func() map[string]any {
-			return s.RenderClaudeModelConfigCard(sessionKey, menuAction)
-		}, "当前会话热更新失败")
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已更新 Claude 推理强度；后续对话会使用新配置，当前会话正在后台切换"},
-			Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
-		}, nil
-	}
-	toastType := "success"
-	toastContent := "已更新 Claude 推理强度；后续对话会使用新配置"
-	if applied, applyErr := s.HotApplyClaudeEffortToCurrentSession(sessionKey, normalized); applyErr != nil {
-		toastType = "warning"
-		switch {
-		case errors.Is(applyErr, claudecli.ErrEffortDefaultHotApplyUnsupported):
-			toastContent = "已更新 Claude 推理强度；当前会话暂不支持热切回默认，仅后续对话会使用新配置"
-		default:
-			toastContent = "已更新 Claude 推理强度；当前会话热更新失败，仅后续对话会使用新配置"
-		}
-	} else if applied {
-		toastContent = "已更新 Claude 推理强度；当前会话与后续对话会使用新配置"
-	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: toastType, Content: toastContent},
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Claude 推理强度；本轮不变，下一轮启动前应用"},
 		Card:  rawCard(s.RenderClaudeModelConfigCard(sessionKey, menuAction)),
 	}, nil
 }
@@ -1601,7 +1452,7 @@ func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args 
 			if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) { c.SmallModel = value }); err != nil {
 				return err
 			}
-			return s.ReplyText(context.Background(), msg.MessageID, "已更新 Claude small model", s.ReplyInThreadEnabled(msg.ChatType))
+			return s.ReplyText(context.Background(), msg.MessageID, "已保存 Claude small model；待下一轮安全边界生效", s.ReplyInThreadEnabled(msg.ChatType))
 		case "subagent":
 			if len(args) != 3 || strings.TrimSpace(args[1]) != "set" {
 				return fmt.Errorf("usage: /model subagent set MODEL|default")
@@ -1613,7 +1464,7 @@ func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args 
 			if err := s.UpdateClaudeAuxiliaryConfig(func(c *config.ClaudeConfig) { c.SubagentModel = value }); err != nil {
 				return err
 			}
-			return s.ReplyText(context.Background(), msg.MessageID, "已更新 Claude subagent model", s.ReplyInThreadEnabled(msg.ChatType))
+			return s.ReplyText(context.Background(), msg.MessageID, "已保存 Claude subagent model；待下一轮安全边界生效", s.ReplyInThreadEnabled(msg.ChatType))
 		case "option":
 			if len(args) != 3 {
 				return fmt.Errorf("usage: %s", ModelCommandUsage)
@@ -1655,4 +1506,23 @@ func (s ModelConfigService) CommandEffort(msg *feishu.InboundMessage, args []str
 	default:
 		return fmt.Errorf("usage: %s", EffortCommandUsage)
 	}
+}
+
+// Publish only model fields: unrelated runtime settings remain immutable to
+// readers that do not participate in the model configuration lock.
+func publishCodexModelConfig(live *config.CodexConfig, next config.CodexConfig) {
+	live.Model, live.ReasoningEffort = next.Model, next.ReasoningEffort
+	live.PlanModel, live.PlanReasoningEffort = next.PlanModel, next.PlanReasoningEffort
+	live.ReviewModel, live.SubagentModel, live.SubagentReasoningEffort = next.ReviewModel, next.SubagentModel, next.SubagentReasoningEffort
+}
+func publishClaudeModelConfig(live *config.ClaudeConfig, next config.ClaudeConfig) {
+	live.Model, live.Effort = next.Model, next.Effort
+	live.SmallModel, live.SubagentModel, live.ModelOptions = next.SmallModel, next.SubagentModel, next.ModelOptions
+}
+
+func (s ModelConfigService) configSnapshot() *config.Config {
+	mu := s.GetConfigMu()
+	mu.RLock()
+	defer mu.RUnlock()
+	return config.Clone(s.GetConfig())
 }

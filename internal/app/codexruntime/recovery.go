@@ -45,7 +45,8 @@ func (s *RecoveryState) SetRecoveringForTest() {
 // RecoveryService manages Codex transport recovery. All host-app
 // dependencies are injected as callback function fields.
 type RecoveryService struct {
-	State *RecoveryState
+	State   *RecoveryState
+	Context func() context.Context
 
 	// FrontendID returns the frontend identifier for logging.
 	FrontendID func() string
@@ -222,7 +223,11 @@ func (s RecoveryService) RecoverAfterTransportFailure(failed CodexClient, skipFr
 		}()
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	parent := context.Background()
+	if s.Context != nil {
+		parent = s.Context()
+	}
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
 	if s.StartVerifiedCodexClient == nil {

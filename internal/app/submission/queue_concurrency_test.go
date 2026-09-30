@@ -429,7 +429,7 @@ func (concurrentStartNoopTurnStream) DeleteTurnStream(string)                   
 
 type concurrentStartNoopAutoRetry struct{}
 
-func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, string, *state.Session, *state.Submission, string) bool {
+func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, string, *state.Session, *state.Submission, string, string) bool {
 	return false
 }
 

@@ -126,7 +126,7 @@ type SubmissionDispatchProvider interface {
 // AutoRetryProvider narrows auto-retry access to the methods used by the
 // service.
 type AutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 }
 
 // RuntimeMaintenanceProvider narrows runtime maintenance access to the
@@ -466,7 +466,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		return
 	}
 
-	flush := w.turnStream().FlushTurnStream(context.Background(), threadID, turnID)
+	flush := w.turnStream().FlushTurnStream(appcore.Context(w.app), threadID, turnID)
 
 	switch status {
 	case "completed":
@@ -526,11 +526,11 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			"has_in_flight", sessionHasActiveWork(updatedSess),
 		)
 		w.app.LogSessionState("finishTurn after session cleanup", sessionKey, updatedSess)
-		suppressTerminalCard = w.autoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID)
+		suppressTerminalCard = w.autoRetry().ObserveAutoRetryTerminal(sessionKey, threadID, sub.Status, updatedSess, sub, reuseMessageID, flush.LastError)
 	}
 	if terminalText != "" && !suppressTerminalCard {
 		w.outboundCard().ReplaceTurnEventCardWithReuse(
-			context.Background(),
+			appcore.Context(w.app),
 			sub,
 			"任务状态",
 			"grey",
@@ -589,7 +589,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	if sub != nil && state.NormalizeSubmissionStatus(sub.Status) == state.SubmissionStatusCompleted && !flush.SawFinal && !planExitPromptSent {
 		if flush.ShouldUsePlanExitPrompt && strings.TrimSpace(flush.PlanMarkdown) != "" {
 			w.outboundCard().ReplaceTurnEventCardWithReuse(
-				context.Background(),
+				appcore.Context(w.app),
 				sub,
 				"计划更新",
 				"blue",
@@ -600,14 +600,14 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			)
 		} else if strings.TrimSpace(flush.FinalText) != "" {
 			w.app.SendFinalMessagesWithReuse(
-				context.Background(), sub,
+				appcore.Context(w.app), sub,
 				strings.TrimSpace(flush.FinalText),
 				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
 				strings.TrimSpace(flush.FinalReuseMessageID),
 			)
 		} else {
 			w.app.SendEmptyFinalCardWithReuse(
-				context.Background(), sub,
+				appcore.Context(w.app), sub,
 				w.runtimeState().TurnFinalFooterLines(turnID, time.Now()),
 				reuseMessageID,
 			)

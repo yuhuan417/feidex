@@ -27,8 +27,9 @@ Keep these rules visible in day-to-day work:
 - `internal/app` owns product semantics. Backend-specific protocol methods, envelope quirks, and transport details belong in backend adapters, not in app orchestration.
 - Any capability exposed in a Feishu menu must also have a direct slash-command style entrypoint.
 - Slow workflows must follow `fast callback ack -> async work -> card patch/follow-up`. Do not run clone, review, upgrade, download, or similar work inline in card callbacks.
-- Backend switching and frontend-scoped runtime-config changes are idle-only operations. Do not allow them while active work, queued/staged input, or pending approvals/forms exist.
+- Backend switching remains idle-only. Model configuration writes save desired settings and are allowed during active work, queued/staged input and open forms; applying them must respect the turn/session boundaries below.
 - New user-visible item or workflow types must update normalization, rendering, quiet-mode behavior, and tests together.
+- Each frontend owns an App lifecycle context. Background network/process work must derive cancellation from `App.Context()` (or `appcore.Context(host)` across capability interfaces); keep operation-specific timeouts. Shutdown cancels this context before closing transports, rejects new `runAsync` work, and waits for admitted work up to the shutdown deadline. Cleanup itself uses the separate shutdown context. Backend startup probe timeouts must not become the lifetime of an already-started backend process.
 
 ## Frontend Topology
 
@@ -38,7 +39,10 @@ Treat `frontend` as the runtime isolation boundary.
 - A frontend backend may start unset; Feidex should force an explicit backend selection before queuing user work.
 - One frontend must not multiplex between Codex and Claude concurrently at thread, session, or workspace scope.
 - Backend switching is a frontend-level operation. It is allowed only when that frontend is fully idle: no active work, no queued/staged inputs, and no open pending approvals/forms.
-- Any frontend-scoped runtime config change that affects backend session startup or resume semantics, such as Claude model or effort changes, must follow the same idle-only rule. Reject the change while a turn is active or pending work/forms exist; do not stage deferred resets to apply it later.
+- Model/effort/auxiliary-model changes save desired configuration without mutating active turns or resetting sessions in command/card handlers. Validate and persist a detached configuration before publishing it. Capture model settings at locally initiated turn startup; queued inputs use the latest settings at startup, while steer and approval answers stay in the original turn.
+- Claude compares desired and acknowledged settings per session before a new turn. Apply supported live controls only at a safe boundary; initialization-only changes (including clearing effort to default) may recreate only that idle process and resume the same conversation. Active operations, pending runtime interactions and live background tasks block application, not saving. Failed application retains the prompt at the queue head and its conversation lineage; do not fall back to a fresh conversation or start subsequent work with stale settings. A later input retries the queue; `/stop` can cancel it.
+- Codex main/Plan model and effort are captured for local `turn/start`; review/subagent initialization settings apply on subsequent thread creation/resume. Backend-driven goal continuations are not local turn starts and are not promised new settings. UI must distinguish saved settings from confirmed application and show pending/failed application. Model settings may not bypass backend-switch or maintenance exclusion.
+- Backend switching, shared-runtime restart/upgrade and non-model runtime changes retain their existing conservative lifecycle rules. Maintenance draining is not part of the model-config workflow.
 - Switching backend must preserve backend-scoped session lineage. If a user switches `codex -> claude -> codex`, the earlier Codex thread context for that frontend session should be restorable.
 - If two frontends both use Codex, each frontend still owns its own Codex runtime process; do not share a single Codex app-server across multiple Feishu frontends.
 - Workspace config is for repository path, sandbox, approval policy, and similar worktree concerns. Model selection belongs to backend-global config or group-scoped bot bindings, not workspace config. Backend selection must not be modeled as a workspace or thread switch.

@@ -21,7 +21,7 @@ func forkClaudeActiveConversation(a *App, sessionKey string, sess *state.Session
 	currentName := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude")
 	currentPreview := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
 	defer cancel()
 	forkedID, err := a.claude.ForkSession(ctx, sessionKey, ws, currentThreadID, model)
 	if err != nil {
@@ -54,7 +54,7 @@ func forkCodexActiveConversation(a *App, sessionKey string, sess *state.Session,
 	}
 
 	var result codexrpc.ThreadStartResult
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 20*time.Second)
 	defer cancel()
 	if err := client.Call(ctx, "thread/fork", params, &result); err != nil {
 		return "", err

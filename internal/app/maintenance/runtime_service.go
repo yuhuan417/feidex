@@ -83,9 +83,8 @@ type App interface {
 	// MaintenanceClearSessionLiveThread clears live-thread tracking for the
 	// session.
 	MaintenanceClearSessionLiveThread(sessionKey string)
-	// MaintenanceConfiguredGlobalModel returns the effective global model used
-	// for startup thread recovery.
-	MaintenanceConfiguredGlobalModel() string
+	// MaintenanceEffectiveModel resolves startup recovery settings for this session.
+	MaintenanceEffectiveModel(sess *state.Session) string
 	// MaintenanceRecoverStartupConversation rebuilds backend-specific startup
 	// conversation state for an active thread.
 	MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)
@@ -341,7 +340,7 @@ func (s RuntimeMaintenanceService) RunDriveArtifactGC(source string) {
 	if feishuClient == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), ArtifactGCTimeout)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), ArtifactGCTimeout)
 	defer cancel()
 	result, err := feishuClient.CleanupArtifactsBefore(ctx, time.Now().Add(-ArtifactRetention))
 	if err != nil {
@@ -531,7 +530,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 		})
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 10*time.Second)
 	defer cancel()
 	if err := feishuClient.PatchCard(ctx, feishuMsgID, card); err != nil {
 		slog.Error("upgrade check: patch card failed", "unit", unitName, "msg_id", feishuMsgID, "error", err)

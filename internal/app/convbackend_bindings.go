@@ -33,6 +33,7 @@ func (a convBackendConversationAdapter) StartCodexThread(app appconvbackend.App,
 func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
 	root := app.(*App)
 	return appconvbackend.ResumeCodexSelectedThread(appconvbackend.CodexResumeDeps{
+		Context:           root.Context,
 		RequireClient:     func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
 		SaveSession:       root.State().SaveSession,
 		BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
@@ -49,6 +50,7 @@ func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App
 func (a convBackendConversationAdapter) InterruptCodexTurn(app appconvbackend.App, ctx context.Context, sess *state.Session) error {
 	root := app.(*App)
 	err := appconvbackend.InterruptCodexActiveTurn(appconvbackend.CodexInterruptDeps{
+		Context:       root.Context,
 		RequireClient: func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
 	}, ctx, sess)
 	if err != nil && sess != nil {
@@ -65,6 +67,7 @@ func (a convBackendConversationAdapter) InterruptCodexTurn(app appconvbackend.Ap
 func (a convBackendConversationAdapter) ContinueCodexTurn(app appconvbackend.App, sessionKey, text string) error {
 	root := app.(*App)
 	return appconvbackend.ContinueCodexActiveTurn(appconvbackend.CodexContinueDeps{
+		Context:       root.Context,
 		RequireClient: func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
 		GetSession:    root.State().Session,
 	}, sessionKey, text)
@@ -74,6 +77,7 @@ func (a convBackendConversationAdapter) TryCodexReplyContinuation(app appconvbac
 	root := app.(*App)
 	replySvc := newReplyContinuationService(root)
 	return appconvbackend.TryCodexReplyContinuation(appconvbackend.CodexReplyContinuationDeps{
+		Context:       root.Context,
 		RequireClient: func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
 		ResolveInboundAttachments: func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
 			return resolveInboundAttachments(root, msg, workspaceID, sessionKey)
@@ -94,6 +98,7 @@ func (a convBackendConversationAdapter) ForkCodexConversation(app appconvbackend
 func (a convBackendConversationAdapter) RecoverCodexStartup(app appconvbackend.App, sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
 	root := app.(*App)
 	appconvbackend.RecoverCodexStartupConversation(appconvbackend.CodexStartupRecoveryDeps{
+		Context:       root.Context,
 		CurrentClient: func() appconvbackend.CodexRPCClient { return currentCodexClient(root) },
 		RuntimeRecovering: func() bool {
 			return codexRuntimeRecovering(root)
@@ -127,6 +132,7 @@ func (a convBackendConversationAdapter) StartClaudeThread(app appconvbackend.App
 func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
 	root := app.(*App)
 	return appconvbackend.ResumeClaudeSelectedThread(appconvbackend.ClaudeResumeDeps{
+		Context:          root.Context,
 		FindSessionEntry: findClaudeSessionEntry,
 		EnsureSession:    root.claude,
 		SaveSession:      root.State().SaveSession,
@@ -167,6 +173,7 @@ func (a convBackendConversationAdapter) ForkClaudeConversation(app appconvbacken
 
 func (a convBackendConversationAdapter) RecoverClaudeStartup(app appconvbackend.App, sessionKey, workspaceID string, sess *state.Session) {
 	appconvbackend.RecoverClaudeStartupConversation(appconvbackend.ClaudeStartupRecoveryDeps{
+		Context:        app.(*App).Context,
 		MarkThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(app.(*App), sessionKey, threadID) },
 	}, sessionKey, workspaceID, sess)
 }

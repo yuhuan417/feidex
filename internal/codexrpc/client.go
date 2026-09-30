@@ -35,20 +35,32 @@ type Client struct {
 	stdout io.ReadCloser
 	mcp    mcpServerPublication
 
-	nextID    atomic.Int64
-	writeMu   sync.Mutex
-	pendingMu sync.Mutex
-	pending   map[int64]chan responseEnvelope
-	stateMu   sync.Mutex
-	closing   bool
-	exitErr   error
-	waitDone  chan struct{}
-	userAgent string
-	errorOnce sync.Once
+	nextID       atomic.Int64
+	writeMu      sync.Mutex
+	pendingMu    sync.Mutex
+	pending      map[int64]chan responseEnvelope
+	stateMu      sync.Mutex
+	closing      bool
+	transportErr error
+	exitErr      error
+	waitDone     chan struct{}
+	userAgent    string
+	errorOnce    sync.Once
+	eventCh      chan clientEvent
+	eventStop    chan struct{}
+	eventOnce    sync.Once
+	dispatchOnce sync.Once
 
 	onNotification func(string, json.RawMessage)
 	onRequest      func(RequestEnvelope)
 	onError        func(error)
+}
+
+type clientEvent struct {
+	method  string
+	params  json.RawMessage
+	request *RequestEnvelope
+	err     error
 }
 
 var nextClientID atomic.Uint64
@@ -89,10 +101,12 @@ func New(cfg config.CodexConfig) *Client {
 		cfg.Command = "codex"
 	}
 	return &Client{
-		id:       nextClientID.Add(1),
-		cfg:      cfg,
-		pending:  map[int64]chan responseEnvelope{},
-		waitDone: make(chan struct{}),
+		id:        nextClientID.Add(1),
+		cfg:       cfg,
+		pending:   map[int64]chan responseEnvelope{},
+		waitDone:  make(chan struct{}),
+		eventCh:   make(chan clientEvent, 256),
+		eventStop: make(chan struct{}),
 	}
 }
 
@@ -123,6 +137,7 @@ func (c *Client) Start(ctx context.Context, experimentalAPI bool) error {
 	if err := c.startStdio(); err != nil {
 		return err
 	}
+	c.startDispatcher()
 	started := false
 	defer func() {
 		if started {
@@ -227,6 +242,12 @@ func (c *Client) Close() error {
 	c.stateMu.Lock()
 	c.closing = true
 	c.stateMu.Unlock()
+	c.eventOnce.Do(func() {
+		if c.eventStop != nil {
+			close(c.eventStop)
+		}
+	})
+	c.failPending(errors.New("codex client closed"))
 	slog.Info("codex app-server closing",
 		"client_id", c.id,
 		"pid", c.pid(),
@@ -240,7 +261,59 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// dispatchEvents keeps protocol I/O independent from application callbacks.
+// Callbacks run in wire order. Overflow fails the transport instead of
+// blocking responses needed by a callback or silently losing lifecycle events.
+func (c *Client) dispatchEvents() {
+	for {
+		select {
+		case <-c.eventStop:
+			return
+		case event := <-c.eventCh:
+			select {
+			case <-c.eventStop:
+				return
+			default:
+			}
+			if event.err != nil {
+				c.emitTransportError(event.err)
+				return
+			}
+			if event.request != nil {
+				if c.onRequest != nil {
+					c.onRequest(*event.request)
+				}
+				continue
+			}
+			if c.onNotification != nil {
+				c.onNotification(event.method, event.params)
+			}
+		}
+	}
+}
+
+func (c *Client) startDispatcher() {
+	c.dispatchOnce.Do(func() { go c.dispatchEvents() })
+}
+
+func (c *Client) enqueueEvent(event clientEvent) {
+	c.startDispatcher()
+	select {
+	case <-c.eventStop:
+		return
+	case c.eventCh <- event:
+	default:
+		// Never block the reader: callbacks may be waiting for an RPC response.
+		// Treat overflow as transport failure rather than silently dropping events.
+		c.emitTransportError(errors.New("codex event queue overflow"))
+		_ = c.Close()
+	}
+}
+
 func (c *Client) Call(ctx context.Context, method string, params any, out any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	id := c.nextID.Add(1)
 	ch := make(chan responseEnvelope, 1)
 	c.pendingMu.Lock()
@@ -296,6 +369,15 @@ func (c *Client) send(v any) error {
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	c.stateMu.Lock()
+	closing, transportErr := c.closing, c.transportErr
+	c.stateMu.Unlock()
+	if closing {
+		return errors.New("codex client closed")
+	}
+	if transportErr != nil {
+		return transportErr
+	}
 	if c.stdin == nil {
 		return errors.New("client not started")
 	}
@@ -326,7 +408,13 @@ func (c *Client) readLoop() {
 		"pid", c.pid(),
 		"error", err,
 	)
-	c.emitTransportError(err)
+	// Release pending RPCs immediately, but deliver the terminal transport
+	// failure after already-read lifecycle events (including turn/completed).
+	c.stateMu.Lock()
+	c.transportErr = err
+	c.stateMu.Unlock()
+	c.failPending(err)
+	c.enqueueEvent(clientEvent{err: err})
 }
 
 func (c *Client) startStdio() error {
@@ -409,8 +497,8 @@ func (c *Client) handleIncoming(line []byte) {
 	if rawID, ok := obj["id"]; ok {
 		if _, hasMethod := obj["method"]; hasMethod {
 			var req RequestEnvelope
-			if err := json.Unmarshal(line, &req); err == nil && c.onRequest != nil {
-				c.onRequest(req)
+			if err := json.Unmarshal(line, &req); err == nil {
+				c.enqueueEvent(clientEvent{request: &req})
 			}
 			return
 		}
@@ -430,8 +518,8 @@ func (c *Client) handleIncoming(line []byte) {
 		return
 	}
 	var notif notificationEnvelope
-	if err := json.Unmarshal(line, &notif); err == nil && notif.Method != "" && c.onNotification != nil {
-		c.onNotification(notif.Method, notif.Params)
+	if err := json.Unmarshal(line, &notif); err == nil && notif.Method != "" {
+		c.enqueueEvent(clientEvent{method: notif.Method, params: notif.Params})
 	}
 }
 
@@ -485,6 +573,9 @@ func (c *Client) emitTransportError(err error) {
 		err = io.EOF
 	}
 	c.errorOnce.Do(func() {
+		c.stateMu.Lock()
+		c.transportErr = err
+		c.stateMu.Unlock()
 		c.failPending(err)
 		if c.onError != nil {
 			c.onError(err)
