@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/install"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -17,15 +16,6 @@ const (
 	claudeUpgradePendingKind  = "claude_self_upgrade"
 	claudeUpgradeCommandUsage = "usage: /claude | /claude check | /claude upgrade | /claude restart"
 )
-
-type claudeUpgradeView struct {
-	Probe         install.Probe
-	LatestVersion string
-	LatestError   string
-	BusyReason    string
-	Snapshot      appbackend.BackendUpgradeSnapshot
-	Restart       appbackend.BackendRestartSnapshot
-}
 
 func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
@@ -77,13 +67,13 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	return nil
 }
 
-func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (claudeUpgradeView, error) {
+func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (backendUpgradeView, error) {
 	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	probe, err := manager.Probe(ctx)
 	if err != nil {
-		return claudeUpgradeView{}, err
+		return backendUpgradeView{}, err
 	}
-	view := claudeUpgradeView{
+	view := backendUpgradeView{
 		Probe:      probe,
 		BusyReason: appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
 		Snapshot:   appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeState(),

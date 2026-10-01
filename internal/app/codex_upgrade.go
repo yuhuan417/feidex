@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/install"
+	"feidex/internal/app/upgraderender"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -26,14 +26,8 @@ const (
 	codexUpgradeCommandUsage = "usage: /codex | /codex check | /codex upgrade | /codex restart"
 )
 
-type codexUpgradeView struct {
-	Probe         install.Probe
-	LatestVersion string
-	LatestError   string
-	BusyReason    string
-	Snapshot      appbackend.BackendUpgradeSnapshot
-	Restart       appbackend.BackendRestartSnapshot
-}
+// backendUpgradeView is the upgrade snapshot both backends render from.
+type backendUpgradeView = upgraderender.UpgradeView
 
 func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
@@ -85,13 +79,13 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 	return nil
 }
 
-func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (codexUpgradeView, error) {
+func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (backendUpgradeView, error) {
 	manager := newCodexInstallManager(s.app.cfg.Codex.Command)
 	probe, err := manager.Probe(ctx)
 	if err != nil {
-		return codexUpgradeView{}, err
+		return backendUpgradeView{}, err
 	}
-	view := codexUpgradeView{
+	view := backendUpgradeView{
 		Probe:      probe,
 		BusyReason: appbackend.NewMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
 		Snapshot:   appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState(),

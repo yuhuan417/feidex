@@ -6,11 +6,11 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/buildinfo"
-	"feidex/internal/install"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
+	"feidex/internal/install"
 	"feidex/internal/release"
 )
 
