@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,17 +10,6 @@ import (
 	"feidex/internal/state"
 )
 
-type attachmentDownloadFeishuStub struct {
-	*fakeFeishuClient
-	downloadPath string
-	messageIDs   []string
-}
-
-func (s *attachmentDownloadFeishuStub) DownloadMessageResource(_ context.Context, messageID string, _ feishu.Attachment, _ string) (string, string, error) {
-	s.messageIDs = append(s.messageIDs, messageID)
-	return s.downloadPath, filepath.Base(s.downloadPath), nil
-}
-
 func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
 	workspace := t.TempDir()
 	cfg := config.Default()
@@ -30,7 +18,7 @@ func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
 	if err := os.WriteFile(downloadPath, []byte("png"), 0o644); err != nil {
 		t.Fatalf("WriteFile(downloadPath) error = %v", err)
 	}
-	stub := &attachmentDownloadFeishuStub{
+	stub := &downloadFeishuStub{
 		fakeFeishuClient: &fakeFeishuClient{},
 		downloadPath:     downloadPath,
 	}

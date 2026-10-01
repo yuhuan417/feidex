@@ -19,15 +19,6 @@ import (
 	"feidex/internal/state"
 )
 
-type appDownloadFeishuStub struct {
-	*fakeFeishuClient
-	downloadPath string
-}
-
-func (s *appDownloadFeishuStub) DownloadMessageResource(context.Context, string, feishu.Attachment, string) (string, string, error) {
-	return s.downloadPath, filepath.Base(s.downloadPath), nil
-}
-
 func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	cfg := config.Default()
 	cfg.Feishu.Backend = backendCodex
@@ -40,7 +31,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	if err := os.WriteFile(downloadPath, []byte("png"), 0o644); err != nil {
 		t.Fatalf("WriteFile(download) error = %v", err)
 	}
-	ff := &appDownloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
+	ff := &downloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
 	fc := &fakeCodexClient{}
 	a := &App{
 		cfg:         cfg,

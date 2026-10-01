@@ -3,8 +3,10 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -199,5 +201,49 @@ func TestManagerLatestVersionAndInstallVersionUseSelfUpdate(t *testing.T) {
 				t.Fatal("InstallVersion(specific version) should fail")
 			}
 		})
+	}
+}
+
+func TestCodexUserAgentLookupUsesInitializeResponse(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "rpc.log")
+	scriptPath := filepath.Join(tempDir, "codex-rpc.sh")
+	const wantUserAgent = "codex_cli_rs/0.132.0 (Debian 13.0.0; x86_64) dumb (codex_cli_rs; 0.132.0)"
+	script := fmt.Sprintf(`#!/bin/sh
+logfile=%q
+while IFS= read -r line; do
+  printf '%%s\n' "$line" >> "$logfile"
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '%%s\n' '{"id":1,"result":{"userAgent":"%s","codexHome":"/tmp/codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+    *'"method":"initialized"'*)
+      exit 0
+      ;;
+  esac
+done
+`, logPath, wantUserAgent)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile(script) error = %v", err)
+	}
+
+	got, err := codexUserAgentLookup(context.Background(), scriptPath)
+	if err != nil {
+		t.Fatalf("codexUserAgentLookup() error = %v", err)
+	}
+	if got != wantUserAgent {
+		t.Fatalf("codexUserAgentLookup() = %q, want %q", got, wantUserAgent)
+	}
+
+	logBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile(logPath) error = %v", err)
+	}
+	logText := string(logBytes)
+	if !strings.Contains(logText, `"method":"initialize"`) {
+		t.Fatalf("rpc log = %q, want initialize", logText)
+	}
+	if !strings.Contains(logText, `"name":"codex_cli_rs"`) {
+		t.Fatalf("rpc log = %q, want standard Codex CLI clientInfo", logText)
 	}
 }
