@@ -59,6 +59,9 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 			"error", err,
 		)
 	}
+	// The bot is in this chat again, so undo any earlier "no longer a member"
+	// mark; otherwise its announcement would stay disabled forever.
+	clearGroupAnnouncementBotAbsent(a, chatID)
 	scheduleGroupAnnouncementStatusRefresh(a, chatID, "bot_added")
 }
 

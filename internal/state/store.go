@@ -167,6 +167,12 @@ type GroupAnnouncementBlock struct {
 	LastUpdatedAt   int64  `json:"last_updated_at,omitempty"`
 	CreatedAt       int64  `json:"created_at"`
 	UpdatedAt       int64  `json:"updated_at"`
+
+	// BotAbsent records that Feishu reported the app is no longer a member of
+	// ChatID (announcement code 1772003). Refreshes are skipped while it is set
+	// so a chat the bot has left stops costing a doomed API call on every
+	// start. It is cleared when the bot is added back to the chat.
+	BotAbsent bool `json:"bot_absent,omitempty"`
 }
 
 // AgentBindingPendingMessage stores one inbound group message while a binding

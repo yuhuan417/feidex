@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,11 +14,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/larksuite/oapi-sdk-go/v3/scene/registration"
 	qrterminal "github.com/mdp/qrterminal/v3"
 	"rsc.io/qr"
 )
 
 const accountsBaseURL = "https://accounts.feishu.cn"
+
+// defaultRegistrationTimeout bounds how long the QR self-registration flow
+// waits for the user to scan and approve.
+const defaultRegistrationTimeout = 10 * time.Minute
 
 type FeishuSetupMode string
 
@@ -46,22 +52,6 @@ type registrationInitResponse struct {
 	ErrorDescription     string   `json:"error_description"`
 }
 
-type registrationBeginResponse struct {
-	DeviceCode              string `json:"device_code"`
-	VerificationURIComplete string `json:"verification_uri_complete"`
-	Interval                int    `json:"interval"`
-	ExpireIn                int    `json:"expire_in"`
-	Error                   string `json:"error"`
-	ErrorDescription        string `json:"error_description"`
-}
-
-type registrationPollResponse struct {
-	ClientID         string `json:"client_id"`
-	ClientSecret     string `json:"client_secret"`
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
-}
-
 type tenantTokenResponse struct {
 	Code              int    `json:"code"`
 	Msg               string `json:"msg"`
@@ -70,7 +60,7 @@ type tenantTokenResponse struct {
 
 func SetupFeishu(mode FeishuSetupMode, opts FeishuSetupOptions) error {
 	if opts.Timeout <= 0 {
-		opts.Timeout = 10 * time.Minute
+		opts.Timeout = defaultRegistrationTimeout
 	}
 	cfgPath := opts.ConfigPath
 	if cfgPath == "" {
@@ -234,82 +224,88 @@ func validateFeishuCredentials(appID, appSecret, domain string) error {
 	return nil
 }
 
+// runRegistrationFlow runs the QR self-registration flow.
+//
+// The flow is delegated to the SDK (scene/registration). It performs the same
+// device-code dance this file used to hand-roll against the same accounts host
+// — its begin request was verified to send identical parameters
+// (archetype=PersonalAgent, auth_method=client_secret, request_user_info=open_id)
+// — and additionally switches to the Lark accounts domain by itself when the
+// scanning user's tenant turns out to be Lark.
+//
+// QR rendering stays here: the SDK hands back only the verification URL, it
+// does not encode or draw a QR image.
 func runRegistrationFlow(timeout time.Duration, qrImagePath string) (string, string, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
+	if timeout <= 0 {
+		timeout = defaultRegistrationTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	var initResp registrationInitResponse
-	if err := registrationCall(client, "init", nil, &initResp); err != nil {
-		return "", "", err
-	}
-	if initResp.Error != "" {
-		return "", "", fmt.Errorf("%s: %s", initResp.Error, initResp.ErrorDescription)
-	}
-
-	var beginResp registrationBeginResponse
-	if err := registrationCall(client, "begin", map[string]string{
-		"archetype":         "PersonalAgent",
-		"auth_method":       "client_secret",
-		"request_user_info": "open_id",
-	}, &beginResp); err != nil {
-		return "", "", err
-	}
-	if beginResp.Error != "" {
-		return "", "", fmt.Errorf("%s: %s", beginResp.Error, beginResp.ErrorDescription)
-	}
-	if beginResp.VerificationURIComplete == "" || beginResp.DeviceCode == "" {
-		return "", "", errors.New("registration flow returned incomplete QR response")
-	}
-
-	fmt.Println("请使用飞书手机客户端扫码完成应用创建与授权：")
-	fmt.Printf("URL: %s\n\n", beginResp.VerificationURIComplete)
-	printQRCode(beginResp.VerificationURIComplete)
-	if qrImagePath != "" {
-		if err := saveQRCode(beginResp.VerificationURIComplete, qrImagePath); err != nil {
-			fmt.Fprintf(os.Stderr, "保存二维码失败: %v\n", err)
-		} else {
-			fmt.Printf("二维码已保存到 %s\n", qrImagePath)
+	result, err := registration.RegisterApp(ctx, &registration.Options{
+		Domain:   accountsBaseURL,
+		OnQRCode: func(info *registration.QRCodeInfo) {
+			renderRegistrationQR(info, qrImagePath)
+		},
+	})
+	if err != nil {
+		// Map the SDK's typed errors back onto the wording this command has
+		// always shown. The SDK collapses two different situations into
+		// ExpiredError — the server reporting the QR session expired, and our
+		// own context deadline firing while waiting between polls — so those are
+		// told apart by inspecting our context rather than the error type.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return "", "", errors.New("timed out waiting for Feishu onboarding result")
 		}
-	}
-
-	interval := time.Duration(beginResp.Interval) * time.Second
-	if interval <= 0 {
-		interval = 5 * time.Second
-	}
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		var pollResp registrationPollResponse
-		if err := registrationCall(client, "poll", map[string]string{"device_code": beginResp.DeviceCode}, &pollResp); err != nil {
-			return "", "", err
-		}
-		if pollResp.ClientID != "" && pollResp.ClientSecret != "" {
-			return pollResp.ClientID, pollResp.ClientSecret, nil
-		}
-		switch pollResp.Error {
-		case "", "authorization_pending":
-		case "slow_down":
-			interval += 5 * time.Second
-		case "access_denied":
+		var denied *registration.AccessDeniedError
+		if errors.As(err, &denied) {
 			return "", "", errors.New("authorization denied by user")
-		case "expired_token":
+		}
+		var expired *registration.ExpiredError
+		if errors.As(err, &expired) {
 			return "", "", errors.New("QR onboarding session expired")
-		default:
-			if pollResp.Error != "" {
-				return "", "", fmt.Errorf("%s: %s", pollResp.Error, pollResp.ErrorDescription)
-			}
 		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			break
-		}
-		if interval > remaining {
-			time.Sleep(remaining)
-			break
-		}
-		time.Sleep(interval)
+		return "", "", err
 	}
-	return "", "", errors.New("timed out waiting for Feishu onboarding result")
+	if result == nil || strings.TrimSpace(result.ClientID) == "" || strings.TrimSpace(result.ClientSecret) == "" {
+		return "", "", errors.New("registration flow returned incomplete credentials")
+	}
+	return result.ClientID, result.ClientSecret, nil
 }
 
+// renderRegistrationQR prints the verification URL as a scannable QR code and
+// optionally saves it as a PNG.
+func renderRegistrationQR(info *registration.QRCodeInfo, qrImagePath string) {
+	if info == nil {
+		return
+	}
+	content := strings.TrimSpace(info.URL)
+	if content == "" {
+		return
+	}
+	fmt.Println("请使用飞书手机客户端扫码完成应用创建与授权：")
+	fmt.Printf("URL: %s\n\n", content)
+	printQRCode(content)
+	if qrImagePath == "" {
+		return
+	}
+	if err := saveQRCode(content, qrImagePath); err != nil {
+		fmt.Fprintf(os.Stderr, "保存二维码失败: %v\n", err)
+		return
+	}
+	fmt.Printf("二维码已保存到 %s\n", qrImagePath)
+}
+
+// registrationCall posts a single action to the app-registration endpoint.
+//
+// Retained deliberately, not dead weight: the SDK's RegisterApp goes straight
+// to "begin" and skips the "init" handshake this flow used to perform first. If
+// that turns out to matter in production, the fallback is to call
+//
+//	registrationCall(client, "init", nil, &registrationInitResponse{})
+//
+// before RegisterApp. Keep it until the SDK-driven flow has been exercised
+// against a real tenant.
 func registrationCall(client *http.Client, action string, params map[string]string, out any) error {
 	form := url.Values{}
 	form.Set("action", action)
@@ -331,13 +327,6 @@ func registrationCall(client *http.Client, action string, params map[string]stri
 		return err
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if action == "poll" {
-			if pollResp, ok := out.(*registrationPollResponse); ok && resp.StatusCode == http.StatusBadRequest {
-				if err := json.Unmarshal(body, pollResp); err == nil && pollResp.Error != "" {
-					return nil
-				}
-			}
-		}
 		return fmt.Errorf("registration request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return json.Unmarshal(body, out)

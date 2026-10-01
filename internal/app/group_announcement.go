@@ -57,6 +57,58 @@ func scheduleGroupAnnouncementStatusRefresh(a *App, chatID, reason string) {
 	a.trackers.groupAnnouncements.Schedule(a, chatID, reason)
 }
 
+// markGroupAnnouncementBotAbsent records that Feishu reports the app is no
+// longer a member of chatID, so later refreshes skip it instead of retrying a
+// request that cannot succeed. Cleared by clearGroupAnnouncementBotAbsent when
+// the bot is added back.
+func markGroupAnnouncementBotAbsent(a *App, st *appstate.Store, chatID string) {
+	chatID = strings.TrimSpace(chatID)
+	if a == nil || st == nil || chatID == "" {
+		return
+	}
+	record := st.GroupAnnouncementBlock("group", chatID)
+	if record == nil {
+		record = &state.GroupAnnouncementBlock{
+			ID:         appstate.DefaultGroupAnnouncementBlockID(a.FrontendID(), "group", chatID),
+			FrontendID: strings.TrimSpace(a.FrontendID()),
+			ChatID:     chatID,
+			ChatType:   "group",
+		}
+	}
+	if record.BotAbsent {
+		return
+	}
+	record.BotAbsent = true
+	if err := st.SaveGroupAnnouncementBlock(record); err != nil {
+		slog.Warn("failed to record group announcement bot absence", "chat_id", chatID, "error", err)
+		return
+	}
+	slog.Info("group announcement refresh disabled: bot is no longer a member of the chat", "chat_id", chatID)
+}
+
+// clearGroupAnnouncementBotAbsent re-enables refreshes for a chat the bot has
+// been added back to.
+func clearGroupAnnouncementBotAbsent(a *App, chatID string) {
+	chatID = strings.TrimSpace(chatID)
+	if a == nil || chatID == "" {
+		return
+	}
+	st := a.State()
+	if st == nil {
+		return
+	}
+	record := st.GroupAnnouncementBlock("group", chatID)
+	if record == nil || !record.BotAbsent {
+		return
+	}
+	record.BotAbsent = false
+	if err := st.SaveGroupAnnouncementBlock(record); err != nil {
+		slog.Warn("failed to clear group announcement bot absence", "chat_id", chatID, "error", err)
+		return
+	}
+	slog.Info("group announcement refresh re-enabled: bot rejoined the chat", "chat_id", chatID)
+}
+
 func scheduleAllGroupAnnouncementStatusRefreshes(a *App, reason string) {
 	for _, chatID := range knownGroupAnnouncementChatIDs(a) {
 		scheduleGroupAnnouncementStatusRefresh(a, chatID, reason)
@@ -175,6 +227,12 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 	if st == nil {
 		return nil
 	}
+	// A chat the bot has left stays in state forever (there is no handler for
+	// being removed), so skip it rather than paying for a request that can only
+	// fail. handleBotGroupAdded clears the mark when the bot is added back.
+	if existing := st.GroupAnnouncementBlock("group", chatID); existing != nil && existing.BotAbsent {
+		return nil
+	}
 	var (
 		blocks       []feishu.AnnouncementBlock
 		blocksErr    error
@@ -189,6 +247,10 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 		return blocks, blocksErr
 	}
 	if err := refreshGroupAnnouncementCommonStatusNow(ctx, a, st, chatID, updatedAt, loadBlocks); err != nil {
+		if feishu.IsAnnouncementBotAbsent(err) {
+			markGroupAnnouncementBotAbsent(a, st, chatID)
+			return nil
+		}
 		return err
 	}
 	record := st.GroupAnnouncementBlock("group", chatID)
@@ -204,6 +266,10 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 	if err != nil {
 		if feishu.IsAnnouncementRateLimit(err) {
 			slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "list", "error", err)
+			return nil
+		}
+		if feishu.IsAnnouncementBotAbsent(err) {
+			markGroupAnnouncementBotAbsent(a, st, chatID)
 			return nil
 		}
 		return err
@@ -223,12 +289,20 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 				slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "create", "error", err)
 				return nil
 			}
+			if feishu.IsAnnouncementBotAbsent(err) {
+				markGroupAnnouncementBotAbsent(a, st, chatID)
+				return nil
+			}
 			return err
 		}
 		blockID = strings.TrimSpace(created.BlockID)
 	} else if err := a.feishu.UpdateAnnouncementTextBlock(ctx, chatID, blockID, status.content, ""); err != nil {
 		if feishu.IsAnnouncementRateLimit(err) {
 			slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "update", "error", err)
+			return nil
+		}
+		if feishu.IsAnnouncementBotAbsent(err) {
+			markGroupAnnouncementBotAbsent(a, st, chatID)
 			return nil
 		}
 		return err

@@ -468,3 +468,54 @@ func TestKnownGroupAnnouncementChatIDsIncludesPersistedAnnouncementBlocks(t *tes
 		t.Fatalf("knownGroupAnnouncementChatIDs() = %#v, want persisted announcement chat", got)
 	}
 }
+
+// A chat the bot has been removed from stays in state forever (there is no
+// handler for being removed), so its announcement refresh used to fail on every
+// start: a warning plus a call against a rate-limited endpoint. The first
+// failure must mark the chat and later refreshes must skip it without touching
+// the API.
+func TestGroupAnnouncementRefreshSkipsChatAfterBotAbsent(t *testing.T) {
+	store := newGroupAnnouncementStore(t)
+	ff := &fakeFeishuClient{
+		botOpenID: "bot-open",
+		botName:   "luban-feidex",
+		announcementListErr: &feishu.AnnouncementAPIError{
+			Op:         "docx.chat_announcement_block.list",
+			HTTPStatus: http.StatusBadRequest,
+			Code:       1772003,
+			Msg:        "Operator can NOT be out of the chat.",
+		},
+	}
+	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
+	seedGroupAnnouncementBinding(t, a, "chat-1")
+
+	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+		t.Fatalf("bot-absent refresh should be absorbed, got error = %v", err)
+	}
+	record := a.State().GroupAnnouncementBlock("group", "chat-1")
+	if record == nil || !record.BotAbsent {
+		t.Fatalf("expected the chat to be marked bot-absent, record = %+v", record)
+	}
+	callsAfterFirst := len(ff.announcementListCalls)
+
+	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+		t.Fatalf("second refresh error = %v", err)
+	}
+	if got := len(ff.announcementListCalls); got != callsAfterFirst {
+		t.Fatalf("marked chat must not be refreshed again: calls went %d -> %d", callsAfterFirst, got)
+	}
+
+	// Re-adding the bot clears the mark, so the chat converges back to normal.
+	ff.announcementListErr = nil
+	ff.announcementBlocks = nil
+	clearGroupAnnouncementBotAbsent(a, "chat-1")
+	if record := a.State().GroupAnnouncementBlock("group", "chat-1"); record == nil || record.BotAbsent {
+		t.Fatalf("mark should be cleared after the bot rejoins, record = %+v", record)
+	}
+	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+		t.Fatalf("refresh after clearing mark error = %v", err)
+	}
+	if got := len(ff.announcementListCalls); got <= callsAfterFirst {
+		t.Fatalf("cleared chat should be refreshed again, calls stayed at %d", got)
+	}
+}

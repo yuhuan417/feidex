@@ -9,6 +9,16 @@ const ReplyCardMaxTables = 5
 const ReplyCardMaxPayloadBytes = 20000
 const ReplyCardMaxComponentCount = 200
 
+// ReplyTextMaxBytes bounds one message on the text fallback path — the path
+// taken when a card reply fails and the body has to go out as plain text.
+// Without a bound the whole body went as a single message, so a long reply plus
+// a failed card send produced a message that itself failed to send, silently.
+//
+// This is a delivery policy rather than a measured API ceiling: the exact limit
+// for im.message.create text content was not verified. It mirrors the card
+// payload budget so both fallbacks chunk at the same magnitude.
+const ReplyTextMaxBytes = 20000
+
 var markdownTableSeparatorLineRe = regexp.MustCompile(`^\s*\|?(?:\s*:?-{3,}:?\s*\|)+(?:\s*:?-{3,}:?\s*)\|?\s*$`)
 
 type MarkdownSplitBlock struct {

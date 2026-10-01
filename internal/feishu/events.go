@@ -18,26 +18,30 @@ type eventRegistration struct {
 	// callback marks registrations that are delivered through the card
 	// callback channel rather than the event subscription list.
 	callback bool
-	register func(a *Adapter, d *dispatcher.EventDispatcher)
+	// viaChannel marks events whose dispatcher handler is registered by the
+	// SDK channel package instead of by this table (see channel_runtime.go).
+	// They MUST stay in this table: they are still subscribed on the platform,
+	// so RequiredEventTypes has to keep listing them. What they must not do is
+	// register here — the dispatcher panics on a duplicate registration for the
+	// same event type, and channel registers these lazily when the
+	// corresponding On* method is called.
+	//
+	// Handler ownership still lives in this table's spirit: the invariant that
+	// "an event is never subscribed without a real handler" holds, the handler
+	// just lives in channel_runtime.go rather than in a register func.
+	viaChannel bool
+	register   func(a *Adapter, d *dispatcher.EventDispatcher)
 }
 
 func eventRegistrations() []eventRegistration {
 	return []eventRegistration{
 		{
-			eventType: "im.message.receive_v1",
-			register: func(a *Adapter, d *dispatcher.EventDispatcher) {
-				d.OnP2MessageReceiveV1(func(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
-					if a.onMessage != nil {
-						if msg := a.convertMessage(event); msg != nil {
-							go a.onMessage(msg)
-						}
-					}
-					return nil
-				})
-			},
+			eventType:  "im.message.receive_v1",
+			viaChannel: true,
 		},
 		{
 			eventType: "im.message.recalled_v1",
+			// channel does not handle message recall, so this one stays ours.
 			register: func(a *Adapter, d *dispatcher.EventDispatcher) {
 				d.OnP2MessageRecalledV1(func(ctx context.Context, event *larkim.P2MessageRecalledV1) error {
 					if a.onRecall != nil {
@@ -50,21 +54,15 @@ func eventRegistrations() []eventRegistration {
 			},
 		},
 		{
-			eventType: "im.message.reaction.created_v1",
-			register: func(a *Adapter, d *dispatcher.EventDispatcher) {
-				d.OnP2MessageReactionCreatedV1(func(ctx context.Context, event *larkim.P2MessageReactionCreatedV1) error {
-					if a.onReaction != nil {
-						if reaction := a.convertMessageReaction(event); reaction != nil {
-							go a.onReaction(reaction)
-						}
-					}
-					return nil
-				})
-			},
+			eventType:  "im.message.reaction.created_v1",
+			viaChannel: true,
 		},
 		{
 			eventType: "card.action.trigger",
 			callback:  true,
+			// Card callbacks stay ours: channel's OnCardAction discards the
+			// callback response, and 98% of this project's card paths return a
+			// toast through it. See docs/oapi-sdk-v3.12.0-upgrade-plan.md 3.2.
 			register: func(a *Adapter, d *dispatcher.EventDispatcher) {
 				d.OnP2CardActionTrigger(func(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
 					return a.handleCardActionEvent(ctx, event)
@@ -72,20 +70,8 @@ func eventRegistrations() []eventRegistration {
 			},
 		},
 		{
-			eventType: "im.chat.member.bot.added_v1",
-			register: func(a *Adapter, d *dispatcher.EventDispatcher) {
-				d.OnP2ChatMemberBotAddedV1(func(ctx context.Context, event *larkim.P2ChatMemberBotAddedV1) error {
-					if a.onBotAdded == nil || event == nil || event.Event == nil || event.Event.ChatId == nil {
-						return nil
-					}
-					chatName := ""
-					if event.Event.Name != nil {
-						chatName = *event.Event.Name
-					}
-					go a.onBotAdded(&BotGroupEvent{ChatID: *event.Event.ChatId, ChatName: chatName})
-					return nil
-				})
-			},
+			eventType:  "im.chat.member.bot.added_v1",
+			viaChannel: true,
 		},
 	}
 }
@@ -107,11 +93,15 @@ func RequiredEventTypes() []string {
 	return out
 }
 
-// buildEventDispatcher wires every registered event handler onto a fresh
-// dispatcher.
+// buildEventDispatcher wires every event handler this project owns onto a
+// fresh dispatcher. Events marked viaChannel are skipped: channel registers
+// those itself, and a second registration would panic.
 func (a *Adapter) buildEventDispatcher() *dispatcher.EventDispatcher {
 	d := dispatcher.NewEventDispatcher("", "")
 	for _, reg := range eventRegistrations() {
+		if reg.viaChannel {
+			continue
+		}
 		reg.register(a, d)
 	}
 	return d

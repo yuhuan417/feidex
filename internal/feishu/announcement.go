@@ -17,6 +17,11 @@ const (
 	announcementLatestRevisionID = -1
 	announcementTextBlockType    = 2
 	announcementRateLimitCode    = 99991400
+	// announcementBotAbsentCode is returned when the app is not a member of the
+	// chat it is addressing ("Operator can NOT be out of the chat"). It means
+	// the bot was removed (or the chat was disbanded), not that the request was
+	// malformed — retrying can never succeed.
+	announcementBotAbsentCode = 1772003
 )
 
 // AnnouncementBlock is the minimal block projection the app layer needs for
@@ -79,6 +84,29 @@ func IsAnnouncementRateLimit(err error) bool {
 	return errors.As(err, &codeErr) && codeErr.Code == announcementRateLimitCode
 }
 
+// IsAnnouncementBotAbsent reports whether err says the app is no longer a
+// member of the chat. This project has no handler for the bot being removed
+// from a group, so a chat the bot has left stays in state forever; without this
+// check every process start retries the announcement of a chat it cannot reach,
+// logging a warning and spending quota on a rate-limited endpoint.
+//
+// Callers should stop refreshing that chat until the bot is added back.
+func IsAnnouncementBotAbsent(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *AnnouncementAPIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code == announcementBotAbsentCode
+	}
+	var codeErrPtr *larkcore.CodeError
+	if errors.As(err, &codeErrPtr) && codeErrPtr != nil {
+		return codeErrPtr.Code == announcementBotAbsentCode
+	}
+	var codeErr larkcore.CodeError
+	return errors.As(err, &codeErr) && codeErr.Code == announcementBotAbsentCode
+}
+
 // ListAnnouncementBlocks lists the current upgraded group announcement blocks.
 func (a *Adapter) ListAnnouncementBlocks(ctx context.Context, chatID string) ([]AnnouncementBlock, error) {
 	chatID = strings.TrimSpace(chatID)
@@ -99,7 +127,6 @@ func (a *Adapter) ListAnnouncementBlocks(ctx context.Context, chatID string) ([]
 			return client.Docx.V1.ChatAnnouncementBlock.List(ctx, builder.Build())
 		})
 		if err != nil {
-			a.noteOutboundTransportFailure(err)
 			return nil, err
 		}
 		if resp == nil || !resp.Success() {
@@ -168,7 +195,6 @@ func (a *Adapter) createAnnouncementTextBlock(ctx context.Context, chatID, paren
 		return client.Docx.V1.ChatAnnouncementBlockChildren.Create(ctx, req.Build())
 	})
 	if err != nil {
-		a.noteOutboundTransportFailure(err)
 		return AnnouncementBlock{}, err
 	}
 	if resp == nil || !resp.Success() {
@@ -210,7 +236,6 @@ func (a *Adapter) UpdateAnnouncementTextBlock(ctx context.Context, chatID, block
 		return client.Docx.V1.ChatAnnouncementBlock.BatchUpdate(ctx, req.Build())
 	})
 	if err != nil {
-		a.noteOutboundTransportFailure(err)
 		return err
 	}
 	if resp == nil || !resp.Success() {

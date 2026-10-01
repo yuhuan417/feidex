@@ -184,7 +184,6 @@ func (a *Adapter) createMessage(ctx context.Context, req *larkim.CreateMessageRe
 		return client.Im.Message.Create(ctx, req)
 	})
 	if err != nil {
-		a.noteOutboundTransportFailure(err)
 	}
 	return resp, err
 }
@@ -199,7 +198,6 @@ func (a *Adapter) patchMessage(ctx context.Context, messageID string, req *larki
 		return client.Im.Message.Patch(ctx, req)
 	})
 	if err != nil {
-		a.noteOutboundTransportFailure(err)
 	}
 	return resp, err
 }

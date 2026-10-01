@@ -81,7 +81,7 @@ func sendReplyChunk(a *App, ctx context.Context, sub *state.Submission, spec rep
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := appendFooterText(strings.TrimSpace(spec.Body), spec.FooterLines)
-		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, fallback, inThread)
+		id, err = replyTextChunked(ctx, a.feishu, sub.TriggerMessageID, fallback, inThread)
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		return appdelivery.SentReplyChunk{}, false

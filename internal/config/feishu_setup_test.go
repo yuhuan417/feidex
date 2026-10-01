@@ -142,17 +142,17 @@ func TestValidateFeishuCredentialsAndRegistrationCall(t *testing.T) {
 	client := &http.Client{Transport: setupRoundTripper(func(req *http.Request) (*http.Response, error) {
 		body, _ := io.ReadAll(req.Body)
 		values, _ := url.ParseQuery(string(body))
-		if values.Get("action") != "poll" || values.Get("device_code") != "device-1" {
+		if values.Get("action") != "init" {
 			t.Fatalf("unexpected registration request body: %q", string(body))
 		}
-		return testHTTPResponse(`{"client_id":"cli","client_secret":"secret"}`), nil
+		return testHTTPResponse(`{"supported_auth_methods":["client_secret"]}`), nil
 	})}
-	var poll registrationPollResponse
-	if err := registrationCall(client, "poll", map[string]string{"device_code": "device-1"}, &poll); err != nil {
+	var initResp registrationInitResponse
+	if err := registrationCall(client, "init", nil, &initResp); err != nil {
 		t.Fatalf("registrationCall() error = %v", err)
 	}
-	if poll.ClientID != "cli" || poll.ClientSecret != "secret" {
-		t.Fatalf("registrationCall() = %+v, want parsed credentials", poll)
+	if len(initResp.SupportedAuthMethods) != 1 || initResp.SupportedAuthMethods[0] != "client_secret" {
+		t.Fatalf("registrationCall() = %+v, want parsed auth methods", initResp)
 	}
 }
 

@@ -2,12 +2,55 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	appdelivery "feidex/internal/app/delivery"
 	"strings"
 
 	"feidex/internal/config"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/channel/outbound"
 )
+
+// replyTextChunked replies in chunks when the body is too long for one message.
+//
+// The text fallback carries the same body the card was rendered from, so it can
+// be arbitrarily long; sending it whole meant a long reply plus a failed card
+// send yielded a message that failed on its own, leaving the user with nothing.
+// Splitting keeps code fences intact, which matters for agent output.
+//
+// Returns the first delivered message id. If the first chunk fails the error is
+// propagated; if a later chunk fails, what already reached the user is reported
+// as delivered so the caller can still record the link.
+func replyTextChunked(ctx context.Context, client feishuTextReplier, messageID, text string, inThread bool) (string, error) {
+	chunks := outbound.SplitWithCodeFences(text, appdelivery.ReplyTextMaxBytes)
+	firstID := ""
+	for i, chunk := range chunks {
+		id, err := client.ReplyTextWithID(ctx, messageID, chunk, inThread)
+		if err != nil {
+			if firstID == "" {
+				return "", err
+			}
+			slog.Warn("feishu reply text fallback partially delivered",
+				"message_id", messageID,
+				"chunk", i+1,
+				"chunks", len(chunks),
+				"error", err,
+			)
+			return firstID, nil
+		}
+		if firstID == "" {
+			firstID = strings.TrimSpace(id)
+		}
+	}
+	return firstID, nil
+}
+
+// feishuTextReplier is the slice of the Feishu client the chunked fallback
+// needs, so the helper stays testable without a full client.
+type feishuTextReplier interface {
+	ReplyTextWithID(context.Context, string, string, bool) (string, error)
+}
 
 func sendTurnEventMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
 	return sendReplyMessages(a, ctx, sub, text, inThread, kind)
@@ -77,7 +120,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 		cardID = strings.TrimSpace(id)
 	}
 	if err != nil {
-		id, err = a.feishu.ReplyTextWithID(ctx, sub.TriggerMessageID, text, inThread)
+		id, err = replyTextChunked(ctx, a.feishu, sub.TriggerMessageID, text, inThread)
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		return nil

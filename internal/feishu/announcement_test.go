@@ -233,3 +233,21 @@ func TestIsAnnouncementRateLimit(t *testing.T) {
 		t.Fatal("generic error should not be classified as announcement rate limit")
 	}
 }
+
+func TestIsAnnouncementBotAbsent(t *testing.T) {
+	if !IsAnnouncementBotAbsent(&AnnouncementAPIError{Code: announcementBotAbsentCode, Msg: "Operator can NOT be out of the chat."}) {
+		t.Fatal("announcement 1772003 should be classified as bot absent")
+	}
+	if !IsAnnouncementBotAbsent(&larkcore.CodeError{Code: announcementBotAbsentCode}) {
+		t.Fatal("SDK CodeError 1772003 should be classified as bot absent")
+	}
+	if IsAnnouncementBotAbsent(&AnnouncementAPIError{Code: announcementRateLimitCode}) {
+		t.Fatal("rate limit must not be classified as bot absent; they need different handling")
+	}
+	if IsAnnouncementBotAbsent(errors.New("boom")) {
+		t.Fatal("generic error should not be classified as bot absent")
+	}
+	if IsAnnouncementBotAbsent(nil) {
+		t.Fatal("nil error should not be classified as bot absent")
+	}
+}

@@ -435,15 +435,15 @@ func TestAdapterLookupMessageSenderAndUrgentAppUseOpenID(t *testing.T) {
 	if userID != "ou_lookup" {
 		t.Fatalf("LookupMessageSenderOpenID() = %q, want ou_lookup", userID)
 	}
-	if lookupUserIDType != larkim.UserIdTypeGetMessageOpenId {
-		t.Fatalf("LookupMessageSenderOpenID() user_id_type = %q, want %q", lookupUserIDType, larkim.UserIdTypeGetMessageOpenId)
+	if lookupUserIDType != larkim.GetMessageContentV1UserIDTypeOpenId {
+		t.Fatalf("LookupMessageSenderOpenID() user_id_type = %q, want %q", lookupUserIDType, larkim.GetMessageContentV1UserIDTypeOpenId)
 	}
 
 	if err := a.UrgentApp(context.Background(), "msg-urgent", "ou_lookup"); err != nil {
 		t.Fatalf("UrgentApp() error = %v", err)
 	}
-	if urgentUserIDType != larkim.UserIdTypeUrgentAppMessageOpenId {
-		t.Fatalf("UrgentApp() user_id_type = %q, want %q", urgentUserIDType, larkim.UserIdTypeUrgentAppMessageOpenId)
+	if urgentUserIDType != larkim.UrgentAppV1UserIDTypeOpenId {
+		t.Fatalf("UrgentApp() user_id_type = %q, want %q", urgentUserIDType, larkim.UrgentAppV1UserIDTypeOpenId)
 	}
 }
 
