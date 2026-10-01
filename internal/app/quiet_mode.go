@@ -7,34 +7,17 @@ import (
 	"strings"
 
 	"feidex/internal/app/quietmode"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
-
-type quietModeOption = quietmode.Option
-
-var quietModeOptions = quietmode.Options
-
-var quietMode = quietmode.Mode
-
-var quietModeEnabled = quietmode.Enabled
-
-var quietWorkingCardEnabled = quietmode.WorkingCardEnabled
-
-var quietModeStatusText = quietmode.StatusText
-
-var shouldDeliverTurnKindInQuiet = quietmode.ShouldDeliverTurnKind
 
 func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFinalAnswer bool) bool {
 	return quietmode.ShouldDeliverTurnItem(mode, itemType, isFinalAnswer)
 }
 
-func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnItemCardPayload) bool {
+func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnitem.CardPayload) bool {
 	return quietmode.ShouldDeliverTurnItemPayload(mode, payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)
-}
-
-func isClaudeTodoToolPayload(payload turnItemCardPayload) bool {
-	return quietmode.IsClaudeTodoToolPayload(payload.ProtocolItemType, payload.ToolName)
 }
 
 func renderQuietModeCard(a *App) map[string]any {
@@ -42,16 +25,16 @@ func renderQuietModeCard(a *App) map[string]any {
 }
 
 func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
-	mode := quietMode(feishuConfig(a))
+	mode := quietmode.Mode(feishuConfig(a))
 	lines := []string{
-		"当前模式: `" + quietModeStatusText(mode) + "`",
+		"当前模式: `" + quietmode.StatusText(mode) + "`",
 		"",
 	}
-	for _, option := range quietModeOptions {
+	for _, option := range quietmode.Options {
 		lines = append(lines, "- `"+option.Title+"`: "+option.Description)
 	}
-	buttons := make([]feishu.Button, 0, len(quietModeOptions)+1)
-	for _, option := range quietModeOptions {
+	buttons := make([]feishu.Button, 0, len(quietmode.Options)+1)
+	for _, option := range quietmode.Options {
 		buttons = append(buttons, feishu.Button{
 			Text: func() string {
 				if option.Mode == mode {
@@ -136,7 +119,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if err := updateQuietMode(a, mode); err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietModeStatusText(mode)+"`。", replyInThreadEnabled(a, msg.ChatType))
+			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。", replyInThreadEnabled(a, msg.ChatType))
 		}
 	}
 	return nil

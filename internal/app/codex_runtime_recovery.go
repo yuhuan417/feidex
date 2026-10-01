@@ -108,14 +108,6 @@ func replyCodexError(a *App, requestID json.RawMessage, code int, message string
 	buildCodexRecoveryService(a).ReplyError(requestID, code, message)
 }
 
-func completeCodexTransportRecovery(a *App, next CodexClient) bool {
-	if ok := buildCodexRecoveryService(a).CompleteRecovery(next); ok {
-		setCodex(a, next)
-		return true
-	}
-	return false
-}
-
 func beginCodexAutoThreadRecoveryScope(a *App) func() {
 	return buildCodexRecoveryService(a).BeginAutoThreadRecoveryScope()
 }
@@ -135,11 +127,4 @@ func recoverCodexRuntimeAfterTransportFailure(a *App, failed CodexClient, skipFr
 			setCodex(a, next)
 		}
 	}
-}
-
-func resumeQueuedFrontendSessionsAfterCodexRecovery(a *App) {
-	if a == nil || a.store == nil {
-		return
-	}
-	buildCodexRecoveryService(a).ResumeQueuedSessions()
 }

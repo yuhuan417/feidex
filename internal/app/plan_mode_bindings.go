@@ -15,11 +15,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type codexPlanModeExitPayload = planmode.ExitPayload
-
 const (
-	planCommandUsage = planmode.CommandUsage
-
 	codexPlanModeExitPendingKind            = planmode.ExitPendingKind
 	codexPlanModeExitImplementCurrentAction = planmode.ExitImplementCurrentAction
 	codexPlanModeExitImplementFreshAction   = planmode.ExitImplementFreshAction
@@ -31,26 +27,6 @@ const (
 
 func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
 	return planmode.CommandPlan(newPlanModeAppAdapter(a), msg, args)
-}
-
-func renderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
-	return planmode.RenderPlanModeStatusText(mode)
-}
-
-func resolvePlanModeForActiveThread(a *App) (*state.SessionCollaborationMode, error) {
-	return planmode.ResolvePlanModeForActiveThread(newPlanModeAppAdapter(a))
-}
-
-func resolvePlanModeForSession(a *App, sess *state.Session) (*state.SessionCollaborationMode, error) {
-	return planmode.ResolvePlanModeForSession(newPlanModeAppAdapter(a), sess)
-}
-
-func planModeForSession(a *App, sessionKey string) *state.SessionCollaborationMode {
-	return planmode.PlanModeForSession(newPlanModeAppAdapter(a), sessionKey)
-}
-
-func resolveDefaultCodexCollaborationModeForSession(a *App, sess *state.Session) (*state.SessionCollaborationMode, error) {
-	return planmode.ResolveDefaultCodexCollaborationModeForSession(newPlanModeAppAdapter(a), sess)
 }
 
 func (a *App) PlanModeTitleForSession(sessionKey, title string) string {
@@ -81,48 +57,12 @@ func codexCollaborationModeFromState(mode *state.SessionCollaborationMode) *code
 	return planmode.CodexCollaborationModeFromState(mode)
 }
 
-func defaultCollaborationModeWithConfiguredEffort(a *App, mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
-	return planmode.DefaultCollaborationModeWithConfiguredEffort(newPlanModeAppAdapter(a), mode)
-}
-
 func normalizeThreadCollaborationMode(mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
 	return planmode.NormalizeThreadCollaborationMode(mode)
 }
 
-func codexPlanModeExitPayloadFromPending(pending *state.PendingRequest) codexPlanModeExitPayload {
-	return planmode.ExitPayloadFromPending(pending)
-}
-
-func codexPlanModeExitPromptButtons(requestID string) []feishu.Button {
-	return planmode.ExitPromptButtons(requestID)
-}
-
-func codexPlanModeExitPromptCard(a *App, sessionKey, workspaceID, planMarkdown, requestID string) map[string]any {
-	return planmode.ExitPromptCard(newPlanModeAppAdapter(a), sessionKey, workspaceID, planMarkdown, requestID)
-}
-
-func codexPlanModeExitSuccessCard(a *App, sessionKey, workspaceID, title, body string) map[string]any {
-	return planmode.ExitSuccessCard(newPlanModeAppAdapter(a), sessionKey, workspaceID, title, body)
-}
-
-func codexPlanModeExitFailureCard(a *App, sessionKey, workspaceID, body string) map[string]any {
-	return planmode.ExitFailureCard(newPlanModeAppAdapter(a), sessionKey, workspaceID, body)
-}
-
-func codexPlanModeExitExpiredCard(a *App, sessionKey, workspaceID, body string) map[string]any {
-	return planmode.ExitExpiredCard(newPlanModeAppAdapter(a), sessionKey, workspaceID, body)
-}
-
 func codexPlanModeExitPendingRequest(a *App, sessionKey string) *state.PendingRequest {
 	return planmode.ExitPendingRequest(newPlanModeAppAdapter(a), sessionKey)
-}
-
-func codexPlanModeExitOtherOpenPendingExists(a *App, sessionKey, excludeID string) bool {
-	return planmode.ExitOtherOpenPendingExists(newPlanModeAppAdapter(a), sessionKey, excludeID)
-}
-
-func codexPlanModeExitSessionHasPlanExitBlockers(sess *state.Session) bool {
-	return planmode.SessionHasPlanExitBlockers(newPlanModeAppAdapter(nil), sess)
 }
 
 func invalidateCodexPlanModeExitArtifactsForSession(a *App, sessionKey, reason string) {
@@ -184,14 +124,6 @@ func planActionReplyInThread(a *App, sessionKey string) bool {
 		return replyInThreadEnabled(a, sess.ChatType)
 	}
 	return false
-}
-
-func codexPlanModeExitFreshPrompt(planMarkdown string) string {
-	return planmode.FreshPrompt(planMarkdown)
-}
-
-func codexPlanModeExitPlanMarkdownFromPending(pending *state.PendingRequest) string {
-	return planmode.PlanMarkdownFromPending(pending)
 }
 
 func clearCodexPlanModeForSession(a *App, sessionKey string) (bool, error) {

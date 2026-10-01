@@ -9,9 +9,6 @@ import (
 	"feidex/internal/state"
 )
 
-const feishuReplyCardMaxPayloadBytes = appdelivery.ReplyCardMaxPayloadBytes
-const feishuReplyCardMaxComponentCount = appdelivery.ReplyCardMaxComponentCount
-
 func fitReplyCardChunks(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if len(chunks) == 0 {
 		return nil
@@ -39,7 +36,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submissio
 		block := blocks[0]
 		blocks = blocks[1:]
 		candidate := current
-		candidate.Body = joinReplyChunkBodies(current.Body, block.Text)
+		candidate.Body = appdelivery.JoinReplyChunkBodies(current.Body, block.Text)
 		if replyCardChunkFits(a, ctx, sub, title, color, candidate, enablePreview) {
 			current = candidate
 			continue
@@ -56,7 +53,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submissio
 			current = appdelivery.ReplyCardChunk{ShowHeader: false}
 			continue
 		}
-		parts := splitReplyTextBlockToFit(block.Text, func(part string) bool {
+		parts := appdelivery.SplitReplyTextBlockToFit(block.Text, func(part string) bool {
 			return replyCardChunkFits(a, ctx, sub, title, color, appdelivery.ReplyCardChunk{
 				Body:       part,
 				ShowHeader: current.ShowHeader,
@@ -102,16 +99,6 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submissio
 	return result
 }
 
-var splitReplyTextBlockToFit = appdelivery.SplitReplyTextBlockToFit
-
-var splitReplyTextByRunes = appdelivery.SplitReplyTextByRunes
-
-var splitIndexNearMiddle = appdelivery.SplitIndexNearMiddle
-
-var splitReplyTextAt = appdelivery.SplitReplyTextAt
-
-var joinReplyChunkBodies = appdelivery.JoinReplyChunkBodies
-
 func replyCardChunkFits(a *App, ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
@@ -119,8 +106,8 @@ func replyCardChunkFits(a *App, ctx context.Context, sub *state.Submission, titl
 	if err != nil {
 		return false
 	}
-	if len(payload) > feishuReplyCardMaxPayloadBytes {
+	if len(payload) > appdelivery.ReplyCardMaxPayloadBytes {
 		return false
 	}
-	return appdelivery.CountCardComponentNodes(card) < feishuReplyCardMaxComponentCount
+	return appdelivery.CountCardComponentNodes(card) < appdelivery.ReplyCardMaxComponentCount
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	appapproval "feidex/internal/app/approval"
-	"feidex/internal/app/apputil"
 	"feidex/internal/app/cardactions"
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/pendingforms"
@@ -21,57 +20,10 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-// ---------- small local helpers (keep unexported) ----------
-
 func mustJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
-
-func stringValue(v any) string { return apputil.StringValue(v) }
-
-func firstNonEmptyValue(values ...any) any {
-	for _, value := range values {
-		switch x := value.(type) {
-		case nil:
-			continue
-		case string:
-			if strings.TrimSpace(x) != "" {
-				return value
-			}
-		case []any:
-			if len(x) > 0 {
-				return value
-			}
-		case map[string]any:
-			if len(x) > 0 {
-				return value
-			}
-		default:
-			return value
-		}
-	}
-	return nil
-}
-
-// normalizePermissionModeValue normalizes a Claude permission mode string
-// using the canonical appruntime constants.
-func normalizePermissionModeValue(value string) string {
-	switch strings.TrimSpace(value) {
-	case "", "default":
-		return string(appruntime.ClaudePermissionModeDefault)
-	case string(appruntime.ClaudePermissionModeAcceptEdits):
-		return string(appruntime.ClaudePermissionModeAcceptEdits)
-	case string(appruntime.ClaudePermissionModeBypass):
-		return string(appruntime.ClaudePermissionModeBypass)
-	case string(appruntime.ClaudePermissionModePlan):
-		return string(appruntime.ClaudePermissionModePlan)
-	default:
-		return strings.TrimSpace(value)
-	}
-}
-
-// ---------- callback types for app/ dependencies ----------
 
 // DeliverPendingCardFunc delivers a card and creates a pending request record.
 type DeliverPendingCardFunc func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error
@@ -112,8 +64,6 @@ type RawCardFunc func(card map[string]any) *callback.Card
 // PendingLookupFunc looks up a pending request by ID.
 type PendingLookupFunc func(requestID string) *state.PendingRequest
 
-// ---------- Service ----------
-
 // Service manages Claude support operations with callbacks for app/
 // dependencies.
 type Service struct {
@@ -134,8 +84,6 @@ type Service struct {
 	RawCard              RawCardFunc
 	PendingLookup        PendingLookupFunc
 }
-
-// ---------- exported pure helper functions ----------
 
 // ClaudeRequestIDStored normalises a request ID for storage.
 func ClaudeRequestIDStored(requestID string) string {
@@ -327,8 +275,6 @@ func ClaudePlanOriginalBody(pending *state.PendingRequest) string {
 	return strings.TrimSpace(payload.Body)
 }
 
-// ---------- Service methods — card delivery ----------
-
 // BuildApprovalContent normalises the card title and stored payload for an
 // approval request. Shared by the submission-bound and detached delivery
 // paths so both render identical decisions.
@@ -378,8 +324,6 @@ func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, reque
 		0,
 	)
 }
-
-// ---------- Service methods — detached card delivery ----------
 
 // SendDetachedApprovalCard delivers an approval card for a request that
 // outlived its producing turn. The request stays answerable because the
@@ -589,8 +533,6 @@ func (s *Service) SendPlanModeCard(sub *state.Submission, requestID, sessionKey,
 		0,
 	)
 }
-
-// ---------- Service methods — plan mode completion ----------
 
 // CompletePlanModeText completes a plan mode text submission.
 func (s *Service) CompletePlanModeText(feedback string, pending *state.PendingRequest) error {

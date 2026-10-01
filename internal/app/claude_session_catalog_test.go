@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/claudesession"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -25,31 +27,31 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, workspace.Cwd, "session-newer", "Named Session", "newer prompt", time.Unix(200, 0))
 	writeClaudeSessionFixture(t, configDir, altCwd, "session-alt", "Alt Session", "alt prompt", time.Unix(300, 0))
 
-	items, err := listClaudeSessions("sess-1", workspace, false)
+	items, err := claudesession.ListSessions("sess-1", workspace, false)
 	if err != nil {
-		t.Fatalf("listClaudeSessions(workspace) error = %v", err)
+		t.Fatalf("claudesession.ListSessions(workspace) error = %v", err)
 	}
 	if len(items) != 2 {
-		t.Fatalf("listClaudeSessions(workspace) count = %d, want 2", len(items))
+		t.Fatalf("claudesession.ListSessions(workspace) count = %d, want 2", len(items))
 	}
 	if items[0].ID != "session-newer" || items[0].Name != "Named Session" || items[0].Preview != "newer prompt" {
-		t.Fatalf("listClaudeSessions(workspace)[0] = %+v", items[0])
+		t.Fatalf("claudesession.ListSessions(workspace)[0] = %+v", items[0])
 	}
 	for _, item := range items {
 		if item.ID == "session-alt" {
-			t.Fatalf("listClaudeSessions(workspace) should filter alt session: %+v", items)
+			t.Fatalf("claudesession.ListSessions(workspace) should filter alt session: %+v", items)
 		}
 	}
 
-	itemsAll, err := listClaudeSessions("sess-1", workspace, true)
+	itemsAll, err := claudesession.ListSessions("sess-1", workspace, true)
 	if err != nil {
-		t.Fatalf("listClaudeSessions(all) error = %v", err)
+		t.Fatalf("claudesession.ListSessions(all) error = %v", err)
 	}
 	if len(itemsAll) != 3 {
-		t.Fatalf("listClaudeSessions(all) count = %d, want 3", len(itemsAll))
+		t.Fatalf("claudesession.ListSessions(all) count = %d, want 3", len(itemsAll))
 	}
 	if itemsAll[0].ID != "session-alt" {
-		t.Fatalf("listClaudeSessions(all)[0] = %+v, want alt session first by mtime", itemsAll[0])
+		t.Fatalf("claudesession.ListSessions(all)[0] = %+v, want alt session first by mtime", itemsAll[0])
 	}
 }
 
@@ -206,7 +208,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
+	resp, err := appthreadmenu.NewService(a).CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
 	if err != nil {
 		t.Fatalf("completeThreadResume() error = %v", err)
 	}
@@ -220,7 +222,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 
 func writeClaudeSessionFixture(t *testing.T, configDir, cwd, sessionID, title, lastPrompt string, modTime time.Time) string {
 	t.Helper()
-	projectDir := filepath.Join(configDir, "projects", sanitizeClaudeProjectDirName(cwd))
+	projectDir := filepath.Join(configDir, "projects", claudesession.SanitizeProjectDirName(cwd))
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) error = %v", projectDir, err)
 	}

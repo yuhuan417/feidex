@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -24,7 +25,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 		t.Fatalf("patchedCards after event reuse = %d, want 1", len(ff.patchedCards))
 	}
 
-	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemType:    "agent_message",
 		SummaryText: "reply body",
 	}, "reuse-reply"); got != "reuse-reply" {
@@ -42,9 +43,9 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 
 	ff.replyCardErr = errors.New("boom")
 	ff.replyTextWithIDs = nil
-	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemType:    "command_execution",
-		SummaryText: "命令执行:\n" + markdownCodeBlock("pwd"),
+		SummaryText: "命令执行:\n" + turnitem.MarkdownCodeBlock("pwd"),
 	}, ""); got != "" {
 		t.Fatalf("sendTurnItemCardWithReuse(fallback) = %q, want empty return on fallback", got)
 	}
@@ -106,7 +107,7 @@ func TestTurnItemCardsPrefixWorkspaceAndPlan(t *testing.T) {
 		t.Fatalf("UpdateSession(plan mode) error = %v", err)
 	}
 
-	replyCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnItemCardPayload{
+	replyCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnitem.CardPayload{
 		ItemType:      "agent_message",
 		Title:         "最终答复",
 		Color:         "green",
@@ -120,7 +121,7 @@ func TestTurnItemCardsPrefixWorkspaceAndPlan(t *testing.T) {
 		t.Fatalf("reply item body = %q, want no plan banner", body)
 	}
 
-	compactCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnItemCardPayload{
+	compactCard := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, turnitem.CardPayload{
 		ItemType:    "command_execution",
 		Title:       "命令执行",
 		Color:       "blue",
@@ -139,9 +140,9 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
-	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemType:    "command_execution",
-		SummaryText: "命令执行:\n" + markdownCodeBlock("pwd"),
+		SummaryText: "命令执行:\n" + turnitem.MarkdownCodeBlock("pwd"),
 	}, ""); got != "" {
 		t.Fatalf("sendTurnItemCardWithReuse(quiet gated) = %q", got)
 	}
@@ -152,16 +153,16 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	ff.patchCardErr = errors.New("patch boom")
 	ff.replyCardID = "fresh-card-id"
-	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemType:    "command_execution",
-		SummaryText: "命令执行:\n" + markdownCodeBlock("pwd"),
+		SummaryText: "命令执行:\n" + turnitem.MarkdownCodeBlock("pwd"),
 	}, "reuse-item"); got != "fresh-card-id" {
 		t.Fatalf("sendTurnItemCardWithReuse(reuse fallback) = %q", got)
 	}
 
 	ff.patchCardErr = nil
 	ff.replyCardID = "reply-item-id"
-	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemType:    "agent_message",
 		SummaryText: "reply body",
 	}, ""); got != "reply-item-id" {
@@ -185,7 +186,7 @@ func TestTurnItemFinalAnswerSchedulesLocalFileLinkPatch(t *testing.T) {
 	ff.replyCardID = "final-card-id"
 	ff.rewriteLocalFileLinksOut = "patched preview body"
 
-	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	if got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemType:      "agent_message",
 		SummaryText:   "See [README](README.md)",
 		IsFinalAnswer: true,
@@ -222,7 +223,7 @@ func TestTurnItemFinalAnswerFooterStaysOnLastSplitCard(t *testing.T) {
 	})
 
 	longParagraph := strings.Repeat("payload-limit-text ", 1400)
-	got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnItemCardPayload{
+	got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{
 		ItemID:        "item-final",
 		ItemType:      "agent_message",
 		Title:         "最终答复",

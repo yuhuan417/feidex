@@ -7,10 +7,6 @@ import (
 	"feidex/internal/state"
 )
 
-var attentionMentionMarkdown = apputil.AttentionMentionMarkdown
-
-var prependAttentionMentionMarkdown = apputil.PrependAttentionMentionMarkdown
-
 func turnStopAttentionUserID(a *App, sub *state.Submission, turnID string) string {
 	if !shouldMentionOnTurnStop(a, sub, turnID) {
 		return ""
@@ -22,7 +18,7 @@ func shouldMentionOnTurnStop(a *App, sub *state.Submission, turnID string) bool 
 	if a == nil || sub == nil || strings.TrimSpace(sub.UserID) == "" {
 		return false
 	}
-	turnID = firstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
+	turnID = apputil.FirstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
 	sess := a.State().Session(sub.SessionKey)
 	if sess == nil {
 		return true

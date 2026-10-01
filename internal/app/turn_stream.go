@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"
@@ -84,8 +85,6 @@ func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context,
 	sendSubmissionStartedNotice(s.app, ctx, sub)
 }
 
-// All remaining methods delegate to the turnstream sub-package service.
-
 func (s turnStreamService) updatePendingPlan(turnID, plan string) {
 	s.service.UpdatePendingPlan(turnID, plan)
 }
@@ -119,10 +118,6 @@ func (s turnStreamService) turnStreamSawFinal(turnID string) bool {
 	return s.service.StreamSawFinal(turnID)
 }
 
-func (s turnStreamService) ensureTurnStreamLocked(tracker *turnStreamTracker, sessionKey string, sub *state.Submission) *turnStream {
-	return s.service.EnsureStreamLocked(tracker, sessionKey, sub)
-}
-
 func (s turnStreamService) deleteTurnStream(turnID string) {
 	s.service.DeleteStream(turnID)
 }
@@ -141,15 +136,11 @@ func (s turnStreamService) takeReasoningOnlyWorkingMessageID(turnID string) stri
 	return s.service.TakeReasoningOnlyWorkingMessageID(turnID)
 }
 
-func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) quietWorkingBoundary {
+func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) turn.QuietWorkingBoundary {
 	return s.service.PrepareStreamQuietBoundary(turnID)
 }
 
-func (s turnStreamService) prepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
-	return s.prepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, turnitem.NewProtocolItemWithID(itemID, item), workspaceCwd)
-}
-
-func (s turnStreamService) prepareTurnStreamQuietUpdatePayload(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) quietWorkingCardOp {
+func (s turnStreamService) prepareTurnStreamQuietUpdatePayload(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
 	return s.service.PrepareStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 }
 
@@ -163,6 +154,3 @@ func (s turnStreamService) commitTurnStreamQuietRender(turnID, messageID, body s
 }
 
 // isQuietBoundaryTurnPayload is a local helper that delegates to the turnstream package.
-func isQuietBoundaryTurnPayload(payload turnItemCardPayload) bool {
-	return appturnstream.IsQuietBoundaryTurnPayload(payload)
-}

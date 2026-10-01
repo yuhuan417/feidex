@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	appcore "feidex/internal/app/appcore"
+	"feidex/internal/app/attachments"
+	"feidex/internal/app/claudesession"
 	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -85,7 +87,7 @@ func (a convBackendConversationAdapter) TryCodexReplyContinuation(app appconvbac
 		PendingInputSessionKey:     replySvc.pendingInputSessionKey,
 		CollectPendingStagedImages: replySvc.collectPendingStagedImages,
 		ClearPendingStagedImages:   replySvc.clearPendingStagedImages,
-		BuildTurnInputs:            buildTurnInputs,
+		BuildTurnInputs:            attachments.BuildTurnInputs,
 		SaveSession:                root.State().SaveSession,
 		DefaultWorkspaceID:         func() string { return defaultWorkspaceID(root) },
 	}, msg, link, sessionKey, sess)
@@ -118,7 +120,7 @@ func (a convBackendConversationAdapter) RecoverCodexStartup(app appconvbackend.A
 }
 
 func (a convBackendConversationAdapter) ListClaudeThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return listClaudeSessions(sessionKey, ws, includeAll)
+	return claudesession.ListSessions(sessionKey, ws, includeAll)
 }
 
 func (a convBackendConversationAdapter) EnsureClaudeBinding(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
@@ -133,7 +135,7 @@ func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.Ap
 	root := app.(*App)
 	return appconvbackend.ResumeClaudeSelectedThread(appconvbackend.ClaudeResumeDeps{
 		Context:          root.Context,
-		FindSessionEntry: findClaudeSessionEntry,
+		FindSessionEntry: claudesession.FindSessionEntry,
 		EnsureSession:    root.claude,
 		SaveSession:      root.State().SaveSession,
 		ClearThreadContext: func(sess *state.Session) {

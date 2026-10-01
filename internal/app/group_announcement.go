@@ -13,6 +13,7 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/appstate"
+	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -419,17 +420,17 @@ func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Ti
 }
 
 func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
-	frontendID := firstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
+	frontendID := apputil.FirstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
 	botOpenID := groupAnnouncementBotOpenID(a, chatID)
 	botName := groupAnnouncementBotName(a, botOpenID)
 	marker := groupAnnouncementMarker(botName, botOpenID)
 	stableLines := []string{
 		groupAnnouncementDivider,
 		groupAnnouncementField("Bot", botName),
-		groupAnnouncementField("Machine IP", firstNonEmpty(localAnnouncementMachineIP(), "unknown")),
+		groupAnnouncementField("Machine IP", apputil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
 		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a, chatID)),
-		groupAnnouncementField("Backend", firstNonEmpty(configuredBackend(a), "unset")),
-		groupAnnouncementField("Thread", firstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
+		groupAnnouncementField("Backend", apputil.FirstNonEmpty(configuredBackend(a), "unset")),
+		groupAnnouncementField("Thread", apputil.FirstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
 		groupAnnouncementField("Marker", marker),
 	}
 	stableContent := strings.Join(stableLines, "\n")
@@ -463,13 +464,13 @@ func groupAnnouncementBotOpenID(a *App, chatID string) string {
 }
 
 func groupAnnouncementMarker(botName, botOpenID string) string {
-	nameToken := groupAnnouncementMarkerToken(firstNonEmpty(strings.TrimSpace(botName), "bot"))
-	idToken := groupAnnouncementMarkerToken(firstNonEmpty(strings.TrimSpace(botOpenID), "unknown"))
-	return "feidex-status-region:" + firstNonEmpty(nameToken, "bot") + ":" + firstNonEmpty(idToken, "unknown")
+	nameToken := groupAnnouncementMarkerToken(apputil.FirstNonEmpty(strings.TrimSpace(botName), "bot"))
+	idToken := groupAnnouncementMarkerToken(apputil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown"))
+	return "feidex-status-region:" + apputil.FirstNonEmpty(nameToken, "bot") + ":" + apputil.FirstNonEmpty(idToken, "unknown")
 }
 
 func groupAnnouncementLegacyMarker(frontendID, botOpenID string) string {
-	return "feidex-status-region:" + firstNonEmpty(strings.TrimSpace(frontendID), config.DefaultFrontendID) + ":" + firstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
+	return "feidex-status-region:" + apputil.FirstNonEmpty(strings.TrimSpace(frontendID), config.DefaultFrontendID) + ":" + apputil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
 }
 
 func groupAnnouncementMarkerToken(value string) string {
@@ -500,7 +501,7 @@ func groupAnnouncementBotName(a *App, botOpenID string) string {
 			return name
 		}
 	}
-	return firstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
+	return apputil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
 }
 
 func hashGroupAnnouncementStableContent(content string) string {
@@ -510,7 +511,7 @@ func hashGroupAnnouncementStableContent(content string) string {
 
 func groupAnnouncementMarkerCandidates(status groupAnnouncementStatus) []string {
 	markers := []string{strings.TrimSpace(status.marker)}
-	frontendID := firstNonEmpty(strings.TrimSpace(status.frontendID), config.DefaultFrontendID)
+	frontendID := apputil.FirstNonEmpty(strings.TrimSpace(status.frontendID), config.DefaultFrontendID)
 	markers = append(markers,
 		groupAnnouncementLegacyMarker(frontendID, status.botOpenID),
 		groupAnnouncementLegacyMarker(frontendID, ""),
@@ -529,10 +530,6 @@ func groupAnnouncementMarkerCandidates(status groupAnnouncementStatus) []string 
 		out = append(out, marker)
 	}
 	return out
-}
-
-func findAnnouncementBlockID(blocks []feishu.AnnouncementBlock, markers ...string) string {
-	return strings.TrimSpace(findAnnouncementBlock(blocks, markers...).BlockID)
 }
 
 func findAnnouncementBlockByID(blocks []feishu.AnnouncementBlock, blockID string) feishu.AnnouncementBlock {

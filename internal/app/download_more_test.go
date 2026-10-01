@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -100,7 +101,7 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	workspace := a.cfg.Workspaces[0].Cwd
 	selectedPath := filepath.Join(workspace, "report.txt")
-	payload := pathPickerPayload{
+	payload := appworkspacecmd.PathPickerPayload{
 		Mode:        pathPickerModeFile,
 		Style:       pathPickerStyleDropdown,
 		RootPath:    workspace,

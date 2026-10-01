@@ -597,13 +597,13 @@ func TestHandleCardActionEventChecksAllowList(t *testing.T) {
 }
 
 func TestFetchBotOpenIDHandlesFailuresQuickly(t *testing.T) {
-	transport := http.DefaultTransport
-	http.DefaultTransport = roundTripperFunc(func(*http.Request) (*http.Response, error) {
-		return nil, io.EOF
-	})
-	defer func() { http.DefaultTransport = transport }()
-
-	if got := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotProfile(); got != (botProfile{}) {
+	a := &Adapter{
+		cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"},
+		httpClient: stubHTTPClient(roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return nil, io.EOF
+		})),
+	}
+	if got := a.fetchBotProfile(); got != (botProfile{}) {
 		t.Fatalf("fetchBotProfile() = %+v, want empty on transport error", got)
 	}
 }

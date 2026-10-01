@@ -230,18 +230,6 @@ func readPackageManifest(path string) (string, string, error) {
 	return strings.TrimSpace(payload.Name), strings.TrimSpace(payload.Version), nil
 }
 
-func parseJSONMaybeString(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", fmt.Errorf("empty output")
-	}
-	var out string
-	if err := json.Unmarshal([]byte(raw), &out); err == nil {
-		return out, nil
-	}
-	return strings.Trim(raw, "\""), nil
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {

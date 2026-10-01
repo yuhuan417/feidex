@@ -1,6 +1,9 @@
 package app
 
 import (
+	appbackend "feidex/internal/app/backend"
+	appruntime "feidex/internal/app/runtime"
+
 	"strings"
 	"time"
 
@@ -29,7 +32,7 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 	if err != nil {
 		return nil, "", err
 	}
-	payload := claudeUpgradePendingPayload{
+	payload := appruntime.ClaudeUpgradePendingPayload{
 		CurrentVersion: view.Probe.CurrentVersion,
 		TargetVersion:  view.LatestVersion,
 		Command:        view.Probe.Command,
@@ -51,10 +54,6 @@ func (s upgradeRenderService) prepareClaudeUpgradeCard(sessionKey, ownerUserID s
 	return upgraderender.RenderClaudeUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
 }
 
-func (s upgradeRenderService) renderClaudeUpgradeConfirmCard(sessionKey, requestID string, payload claudeUpgradePendingPayload) map[string]any {
-	return upgraderender.RenderClaudeUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand)
-}
-
 func (s upgradeRenderService) renderClaudeUpgradePreparingCard(sessionKey, body string) map[string]any {
 	return upgraderender.RenderClaudeUpgradePreparingCard(s.app.feishu, body)
 }
@@ -63,11 +62,11 @@ func (s upgradeRenderService) renderClaudeUpgradeFailedCard(sessionKey, errText 
 	return upgraderender.RenderClaudeUpgradeFailedCard(s.app.feishu, sessionKey, errText)
 }
 
-func (s upgradeRenderService) renderClaudeUpgradeOperationCard(sessionKey string, snapshot backendUpgradeSnapshot) map[string]any {
+func (s upgradeRenderService) renderClaudeUpgradeOperationCard(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
 	return upgraderender.RenderClaudeUpgradeOperationCard(s.app.feishu, sessionKey, snapshot)
 }
 
-func (s upgradeRenderService) renderClaudeRestartOperationCard(sessionKey string, snapshot backendRestartSnapshot) map[string]any {
+func (s upgradeRenderService) renderClaudeRestartOperationCard(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
 	return upgraderender.RenderClaudeRestartOperationCard(s.app.feishu, sessionKey, snapshot)
 }
 

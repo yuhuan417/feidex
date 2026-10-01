@@ -1,6 +1,8 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"errors"
 	"strings"
 	"testing"
@@ -72,10 +74,10 @@ func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *
 func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	newAutoRetryService(a).AutoRetryTracker().After = func(time.Duration, func()) delayedTask {
+	appautoretry.NewService(a).AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
 		return &fakeDelayedTask{}
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := appautoretry.NewService(a).UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")

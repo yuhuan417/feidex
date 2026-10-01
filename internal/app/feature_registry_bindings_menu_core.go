@@ -1,6 +1,9 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+	appcommandmatch "feidex/internal/app/commandmatch"
+
 	"strings"
 
 	"feidex/internal/feishu"
@@ -12,7 +15,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 	bindings["menu.root"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"menu": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return sendCommandMenu(a, msg)
 				},
@@ -80,7 +83,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 	bindings["menu.group.backend"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"backend": {
-				Match: matchBackendCommand,
+				Match: appcommandmatch.MatchBackendCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newBackendSelectionService(a).commandBackend(msg, args)
 				},
@@ -105,7 +108,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			case "backend.select":
 				return newBackendSelectionService(s.app).completeBackendSelect(action, sessionKey, actionStringValue(action, "backend"))
 			case "auto_retry.set":
-				return newAutoRetryService(s.app).CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
+				return appautoretry.NewService(s.app).CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
 			default:
 				return nil, nil
 			}

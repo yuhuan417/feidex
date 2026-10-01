@@ -7,16 +7,6 @@ import (
 	"feidex/internal/state"
 )
 
-const serviceTierFast = appservicetiercmd.ServiceTierFast
-
-var normalizeServiceTier = appservicetiercmd.NormalizeServiceTier
-
-var toggleServiceTier = appservicetiercmd.ToggleServiceTier
-
-var renderServiceTierValue = appservicetiercmd.RenderServiceTierValue
-
-var renderServiceTierReplyValue = appservicetiercmd.RenderServiceTierReplyValue
-
 type serviceTierAppAdapter struct{ *App }
 
 func newServiceTierServiceInner(app *App) appservicetiercmd.Service {

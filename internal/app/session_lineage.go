@@ -70,8 +70,6 @@ func clearSessionLiveThread(a *App, sessionKey string) {
 	delete(tracker.threads, strings.TrimSpace(sessionKey))
 }
 
-// Wrappers delegating to sessionctx subpackage
-
 func sessionHasInFlightSubmission(sess *state.Session) bool {
 	return sessionctx.HasInFlightSubmission(sess)
 }
@@ -82,10 +80,6 @@ func clearSessionThreadContext(sess *state.Session) {
 
 func sessionStoreBackendThread(sess *state.Session, backend string) {
 	sessionctx.StoreBackendThread(sess, backend)
-}
-
-func sessionClearBackendThread(sess *state.Session, backend string) {
-	sessionctx.ClearBackendThread(sess, backend)
 }
 
 func setSessionThreadContext(sess *state.Session, workspaceID, threadID, name, preview string) {

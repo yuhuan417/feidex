@@ -6,13 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/turn"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
 )
 
 func TestBuildTurnItemCardPayloadWithWorkspaceUsesClaudeDynamicToolTemplates(t *testing.T) {
 	workspace := t.TempDir()
 
-	readPayload, ok := buildTurnItemCardPayloadWithWorkspace("item-read", map[string]any{
+	readPayload, ok := turnitem.BuildTurnItemCardPayload("item-read", map[string]any{
 		"type":   "dynamic_tool_call",
 		"tool":   "Read",
 		"status": "completed",
@@ -37,7 +39,7 @@ func TestBuildTurnItemCardPayloadWithWorkspaceUsesClaudeDynamicToolTemplates(t *
 		t.Fatalf("expected status line, got: %q", readPayload.SummaryText)
 	}
 
-	mcpPayload, ok := buildTurnItemCardPayloadWithWorkspace("item-mcp", map[string]any{
+	mcpPayload, ok := turnitem.BuildTurnItemCardPayload("item-mcp", map[string]any{
 		"type":   "dynamic_tool_call",
 		"tool":   "mcp__demo_tools__greet",
 		"status": "completed",
@@ -58,7 +60,7 @@ func TestBuildTurnItemCardPayloadWithWorkspaceUsesClaudeDynamicToolTemplates(t *
 		t.Fatalf("expected summarized MCP input, got: %q", mcpPayload.SummaryText)
 	}
 
-	unknownPayload, ok := buildTurnItemCardPayloadWithWorkspace("item-raw", map[string]any{
+	unknownPayload, ok := turnitem.BuildTurnItemCardPayload("item-raw", map[string]any{
 		"type":   "dynamic_tool_call",
 		"tool":   "StrangeTool",
 		"status": "completed",
@@ -78,16 +80,16 @@ func TestBuildTurnItemCardPayloadWithWorkspaceUsesClaudeDynamicToolTemplates(t *
 	if !strings.Contains(unknownPayload.DetailText, `"tool": "StrangeTool"`) || !strings.Contains(unknownPayload.DetailText, `"foo": "bar"`) {
 		t.Fatalf("expected raw JSON detail fallback, got: %q", unknownPayload.DetailText)
 	}
-	meta, body := compactTurnItemCardContent(unknownPayload)
+	meta, body := turnitem.CompactTurnItemCardContent(unknownPayload)
 	if meta != "" || !strings.Contains(body, `"tool": "StrangeTool"`) {
-		t.Fatalf("compactTurnItemCardContent(raw fallback) = %q / %q", meta, body)
+		t.Fatalf("turnitem.CompactTurnItemCardContent(raw fallback) = %q / %q", meta, body)
 	}
 }
 
 func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 	workspace := t.TempDir()
 
-	_, readLines := buildQuietWorkingCardLines("item-read", map[string]any{
+	_, readLines := turn.BuildWorkingCardLines("item-read", map[string]any{
 		"type": "dynamic_tool_call",
 		"tool": "Read",
 		"input": map[string]any{
@@ -98,7 +100,7 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 		t.Fatalf("read progress lines = %#v", readLines)
 	}
 
-	_, bashLines := buildQuietWorkingCardLines("item-bash", map[string]any{
+	_, bashLines := turn.BuildWorkingCardLines("item-bash", map[string]any{
 		"type": "dynamic_tool_call",
 		"tool": "Bash",
 		"input": map[string]any{
@@ -110,7 +112,7 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 		t.Fatalf("bash progress lines = %#v, want nil", bashLines)
 	}
 
-	_, todoLines := buildQuietWorkingCardLines("item-todo", map[string]any{
+	_, todoLines := turn.BuildWorkingCardLines("item-todo", map[string]any{
 		"type": "dynamic_tool_call",
 		"tool": "TodoWrite",
 		"input": map[string]any{
@@ -124,7 +126,7 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 		t.Fatalf("todo progress lines should be disabled once TodoWrite is rendered as a normal card, got %#v", todoLines)
 	}
 
-	_, taskLines := buildQuietWorkingCardLines("item-task", map[string]any{
+	_, taskLines := turn.BuildWorkingCardLines("item-task", map[string]any{
 		"type": "dynamic_tool_call",
 		"tool": "Agent",
 		"input": map[string]any{
@@ -136,7 +138,7 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 		t.Fatalf("task progress lines = %q", joinedTask)
 	}
 
-	_, taskUpdateLines := buildQuietWorkingCardLines("item-task-update", map[string]any{
+	_, taskUpdateLines := turn.BuildWorkingCardLines("item-task-update", map[string]any{
 		"type": "dynamic_tool_call",
 		"tool": "TaskUpdate",
 		"input": map[string]any{
@@ -150,7 +152,7 @@ func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
 		t.Fatalf("task update progress lines = %q", joinedTaskUpdate)
 	}
 
-	_, unknownLines := buildQuietWorkingCardLines("item-unknown", map[string]any{
+	_, unknownLines := turn.BuildWorkingCardLines("item-unknown", map[string]any{
 		"type": "dynamic_tool_call",
 		"tool": "StrangeTool",
 		"input": map[string]any{
@@ -233,8 +235,8 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after initial read = %d, want 1", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("initial card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("initial card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 
 	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
@@ -270,8 +272,8 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after TodoWrite-following task update = %d, want 3", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("expected a fresh working card after TodoWrite, got title %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("expected a fresh working card after TodoWrite, got title %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
 		t.Fatalf("fresh working card body = %q", body)

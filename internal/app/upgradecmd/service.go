@@ -5,6 +5,7 @@ package upgradecmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"feidex/internal/app/appcore"
 	"fmt"
 	"log/slog"
@@ -352,22 +353,22 @@ func (s UpgradeService) CommandUpgrade(msg *feishu.InboundMessage, args []string
 	switch strings.TrimSpace(args[0]) {
 	case "dev":
 		if len(args) != 1 {
-			return fmt.Errorf(UpgradeCommandUsage)
+			return errors.New(UpgradeCommandUsage)
 		}
 		return s.ReplyUpgradeDevCard(msg)
 	case "local":
 		if len(args) != 1 {
-			return fmt.Errorf(UpgradeCommandUsage)
+			return errors.New(UpgradeCommandUsage)
 		}
 		return s.CommandUpgradeLocalPick(msg)
 	case "path":
 		if len(args) < 2 {
-			return fmt.Errorf(UpgradeCommandUsage)
+			return errors.New(UpgradeCommandUsage)
 		}
 		return s.CommandUpgradeLocalPath(msg, strings.Join(args[1:], " "))
 	}
 	if len(args) > 1 {
-		return fmt.Errorf(UpgradeCommandUsage)
+		return errors.New(UpgradeCommandUsage)
 	}
 	targetVersion, err := s.deps.NormalizeUpgradeVersion(args[0])
 	if err != nil {

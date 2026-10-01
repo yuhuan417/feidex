@@ -13,15 +13,9 @@ const claudePlanModePendingKind = "claude_exit_plan_mode"
 
 // Type aliases — exported types from the clauderuntime sub-package.
 type (
-	claudeSessionState       = appclauderuntime.SessionState
-	claudeTurnState          = appclauderuntime.TurnState
-	claudePendingInteraction = appclauderuntime.PendingInteraction
-	claudePendingResponse    = appclauderuntime.PendingResponse
+	claudeSessionState = appclauderuntime.SessionState
+	claudeTurnState    = appclauderuntime.TurnState
 )
-
-// ---------------------------------------------------------------------------
-// Wrapper methods on *claudeRuntime — delegate to the service
-// ---------------------------------------------------------------------------
 
 func (r *claudeRuntime) sessionState(sessionKey string) (*claudeSessionState, error) {
 	return r.service.SessionState(sessionKey)
@@ -95,56 +89,8 @@ func (r *claudeRuntime) UpdateConfig(cfg config.ClaudeConfig) {
 	r.service.UpdateConfig(cfg)
 }
 
-func (r *claudeRuntime) handleSessionError(state *claudeSessionState, event claudecli.ErrorEvent) {
-	r.service.HandleSessionError(state, event)
-}
-
-func (r *claudeRuntime) handleTextEvent(state *claudeSessionState, event claudecli.TextEvent) {
-	r.service.HandleTextEvent(state, event)
-}
-
-// ---------------------------------------------------------------------------
-// Function aliases — clauderuntime helper functions
-// ---------------------------------------------------------------------------
-
-var copyPermissionUpdates = appclauderuntime.CopyPermissionUpdates
-
-var claudeTurnUsageAsThreadUsage = appclauderuntime.TurnUsageAsThreadUsage
-
-var claudeTurnContextUsagePercent = appclauderuntime.TurnContextUsagePercent
-
-var claudeQuestionsAsToolUserInput = appclauderuntime.QuestionsAsToolUserInput
-
-var claudePlanModeBody = appclauderuntime.PlanModeBody
-
-var isClaudeInternalTool = appclauderuntime.IsInternalTool
-
-var isClaudePlanFilePath = appclauderuntime.IsPlanFilePath
-
-var enrichClaudePlanForDisplay = appclauderuntime.EnrichPlanForDisplay
-
-var readClaudePlanText = appclauderuntime.ReadPlanText
-
-var claudePlanFileCandidates = appclauderuntime.PlanFileCandidates
-
-var latestClaudePlanFile = appclauderuntime.LatestPlanFile
-
-var claudePermissionModeValue = appclauderuntime.PermissionModeValue
-
-var safeClaudeSessionPermissionUpdates = appclauderuntime.SafeClaudeSessionPermissionUpdates
-
-var describeClaudeSessionPermissionUpdates = appclauderuntime.DescribeClaudeSessionPermissionUpdates
-
-// ---------------------------------------------------------------------------
-// Standalone functions — kept in app/ for backward compatibility
-// ---------------------------------------------------------------------------
-
 func claudePlanFilePathFromTool(toolName string, input map[string]interface{}) string {
 	return appclauderuntime.PlanFilePathFromTool(toolName, input)
-}
-
-func isFatalClaudeSessionError(state *claudeSessionState, event claudecli.ErrorEvent) bool {
-	return appclauderuntime.IsFatalSessionErrorFromState(state, event)
 }
 
 func (r *claudeRuntime) CanRetryFreshSession(sessionKey string) bool {

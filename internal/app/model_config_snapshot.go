@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/app/modelconfig"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -30,24 +31,24 @@ func modelConfigSnapshot(a *App, sess *state.Session, backend string) state.Mode
 	cfg := a.cfg
 	result := state.ModelConfigSnapshot{Valid: true, Backend: backend}
 	if backend == backendClaude {
-		result.Model = firstNonEmpty(sess.ModelOverride, binding.ModelOverride, profile.ClaudeModel, cfg.Claude.Model)
-		result.Effort = firstNonEmpty(binding.ReasoningEffortOverride, profile.ReasoningEffort, cfg.Claude.Effort)
-		result.SmallModel = firstNonEmpty(sess.SmallModelOverride, binding.SmallModelOverride, profile.ClaudeSmallModel, cfg.Claude.SmallModel)
-		result.SubagentModel = firstNonEmpty(sess.SubagentModelOverride, binding.SubagentModelOverride, profile.ClaudeSubagentModel, cfg.Claude.SubagentModel, result.Model)
+		result.Model = apputil.FirstNonEmpty(sess.ModelOverride, binding.ModelOverride, profile.ClaudeModel, cfg.Claude.Model)
+		result.Effort = apputil.FirstNonEmpty(binding.ReasoningEffortOverride, profile.ReasoningEffort, cfg.Claude.Effort)
+		result.SmallModel = apputil.FirstNonEmpty(sess.SmallModelOverride, binding.SmallModelOverride, profile.ClaudeSmallModel, cfg.Claude.SmallModel)
+		result.SubagentModel = apputil.FirstNonEmpty(sess.SubagentModelOverride, binding.SubagentModelOverride, profile.ClaudeSubagentModel, cfg.Claude.SubagentModel, result.Model)
 		return result
 	}
-	result.Model = firstNonEmpty(sess.ModelOverride, binding.ModelOverride, profile.Model, cfg.Codex.Model)
-	result.Effort = firstNonEmpty(binding.ReasoningEffortOverride, profile.ReasoningEffort, cfg.Codex.ReasoningEffort)
-	result.PlanModel = firstNonEmpty(sess.PlanModelOverride, binding.PlanModelOverride, profile.PlanModel, cfg.Codex.PlanModel, result.Model)
-	result.PlanEffort = firstNonEmpty(sess.PlanReasoningEffortOverride, binding.PlanReasoningEffortOverride, profile.PlanReasoningEffort, cfg.Codex.PlanReasoningEffort)
-	result.ReviewModel = firstNonEmpty(sess.ReviewModelOverride, binding.ReviewModelOverride, profile.ReviewModel, cfg.Codex.ReviewModel, result.Model)
-	result.SubagentModel = firstNonEmpty(sess.SubagentModelOverride, binding.SubagentModelOverride, profile.SubagentModel, cfg.Codex.SubagentModel, result.Model)
-	result.SubagentEffort = firstNonEmpty(sess.SubagentReasoningEffortOverride, binding.SubagentReasoningEffortOverride, profile.SubagentReasoningEffort, cfg.Codex.SubagentReasoningEffort, result.Effort)
+	result.Model = apputil.FirstNonEmpty(sess.ModelOverride, binding.ModelOverride, profile.Model, cfg.Codex.Model)
+	result.Effort = apputil.FirstNonEmpty(binding.ReasoningEffortOverride, profile.ReasoningEffort, cfg.Codex.ReasoningEffort)
+	result.PlanModel = apputil.FirstNonEmpty(sess.PlanModelOverride, binding.PlanModelOverride, profile.PlanModel, cfg.Codex.PlanModel, result.Model)
+	result.PlanEffort = apputil.FirstNonEmpty(sess.PlanReasoningEffortOverride, binding.PlanReasoningEffortOverride, profile.PlanReasoningEffort, cfg.Codex.PlanReasoningEffort)
+	result.ReviewModel = apputil.FirstNonEmpty(sess.ReviewModelOverride, binding.ReviewModelOverride, profile.ReviewModel, cfg.Codex.ReviewModel, result.Model)
+	result.SubagentModel = apputil.FirstNonEmpty(sess.SubagentModelOverride, binding.SubagentModelOverride, profile.SubagentModel, cfg.Codex.SubagentModel, result.Model)
+	result.SubagentEffort = apputil.FirstNonEmpty(sess.SubagentReasoningEffortOverride, binding.SubagentReasoningEffortOverride, profile.SubagentReasoningEffort, cfg.Codex.SubagentReasoningEffort, result.Effort)
 	if sess.ActiveThreadCollaborationMode != nil {
 		result.CollaborationMode = sess.ActiveThreadCollaborationMode.Mode
-		result.PlanEffort = firstNonEmpty(result.PlanEffort, sess.ActiveThreadCollaborationMode.PresetReasoningEffort)
-		result.Model = firstNonEmpty(result.Model, sess.ActiveThreadCollaborationMode.Model)
-		result.PlanModel = firstNonEmpty(result.PlanModel, result.Model)
+		result.PlanEffort = apputil.FirstNonEmpty(result.PlanEffort, sess.ActiveThreadCollaborationMode.PresetReasoningEffort)
+		result.Model = apputil.FirstNonEmpty(result.Model, sess.ActiveThreadCollaborationMode.Model)
+		result.PlanModel = apputil.FirstNonEmpty(result.PlanModel, result.Model)
 	}
 	return result
 }
@@ -79,14 +80,14 @@ func modelConfigStatus(a *App, sessionKey string) string {
 	}
 	desired := modelConfigSnapshot(a, sess, backend)
 	nextModel, nextEffort := modelConfigTurnSettings(desired)
-	notice += "\n下一轮本地启动模型：`" + firstNonEmpty(nextModel, "默认") + "`；推理强度：`" + firstNonEmpty(nextEffort, "默认") + "`。"
+	notice += "\n下一轮本地启动模型：`" + apputil.FirstNonEmpty(nextModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(nextEffort, "默认") + "`。"
 	if sess.ModelConfigError != "" {
 		notice += "\n配置应用失败/待生效：" + sess.ModelConfigError
 	}
 	applied := sess.AppliedModelConfig
 	if applied.Valid && applied.Backend == backend && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		appliedModel, appliedEffort := modelConfigTurnSettings(applied)
-		notice += "\n最近已应用模型：`" + firstNonEmpty(appliedModel, "默认") + "`；推理强度：`" + firstNonEmpty(appliedEffort, "默认") + "`。"
+		notice += "\n最近已应用模型：`" + apputil.FirstNonEmpty(appliedModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(appliedEffort, "默认") + "`。"
 		if desired != applied {
 			notice += "\n已保存配置与当前应用值不同，待对应边界生效。"
 		}
@@ -98,7 +99,7 @@ func modelConfigStatus(a *App, sessionKey string) string {
 
 func modelConfigTurnSettings(snapshot state.ModelConfigSnapshot) (string, string) {
 	if snapshot.Backend == backendCodex && snapshot.CollaborationMode == "plan" {
-		return firstNonEmpty(snapshot.PlanModel, snapshot.Model), snapshot.PlanEffort
+		return apputil.FirstNonEmpty(snapshot.PlanModel, snapshot.Model), snapshot.PlanEffort
 	}
 	return snapshot.Model, snapshot.Effort
 }

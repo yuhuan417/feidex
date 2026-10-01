@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"errors"
 	"strings"
@@ -55,7 +57,7 @@ func TestNotifyingFeishuClientRepliesPermissionCardForMessageTarget(t *testing.T
 			},
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	err := client.AddReaction(context.Background(), "msg-1", "SMILE")
 	if err == nil {
@@ -95,7 +97,7 @@ func TestNotifyingFeishuClientSendsPermissionCardForChatTarget(t *testing.T) {
 			},
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	if _, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{Text: "hello", ChatID: "chat-1"}); err == nil {
 		t.Fatal("expected RewriteLocalFileLinks to return error")
@@ -116,7 +118,7 @@ func TestNotifyingFeishuClientSendsPermissionCardForAnnouncementTarget(t *testin
 			Msg:  "Access denied. One of the following scopes is required: [im:chat.announcement:read].应用尚未开通所需的应用身份权限：[im:chat.announcement:read]，点击链接申请并开通任一权限即可：https://open.feishu.cn/app/cli_a945cd72cafb1cb5/auth?q=im:chat.announcement:read&op_from=openapi&token_type=tenant",
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	if _, err := client.ListAnnouncementBlocks(context.Background(), "chat-1"); err == nil {
 		t.Fatal("expected ListAnnouncementBlocks to return error")
@@ -150,7 +152,7 @@ func TestNotifyingFeishuClientUrgentAppUsesExplicitUserID(t *testing.T) {
 			},
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	if _, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{
 		Text:   "hello",
@@ -183,7 +185,7 @@ func TestNotifyingFeishuClientUrgentAppLooksUpMessageSender(t *testing.T) {
 			},
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	if err := client.AddReaction(context.Background(), "msg-1", "SMILE"); err == nil {
 		t.Fatal("expected AddReaction to return error")
@@ -211,7 +213,7 @@ func TestNotifyingFeishuClientSkipsUrgentAppWithoutUserID(t *testing.T) {
 			},
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	if _, err := client.RewriteLocalFileLinks(context.Background(), feishu.LocalFileLinkRewriteRequest{
 		Text:   "hello",
@@ -238,7 +240,7 @@ func TestNotifyingFeishuClientDeduplicatesRecentPermissionCards(t *testing.T) {
 			},
 		},
 	}
-	client := wrapFeishuClient(base)
+	client := appfeishuwrap.WrapFeishuClient(base)
 
 	if err := client.RemoveReaction(context.Background(), "msg-1", "SMILE"); err == nil {
 		t.Fatal("expected first RemoveReaction to fail")

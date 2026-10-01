@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	appclauderuntime "feidex/internal/app/clauderuntime"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"os"
 	"path/filepath"
 	"strings"
@@ -320,54 +322,6 @@ func (f *fakeClaudeCore) startTurnCallsSnapshot() []fakeClaudeStartTurnCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]fakeClaudeStartTurnCall(nil), f.startTurnCalls...)
-}
-
-func (f *fakeClaudeCore) interruptCallsSnapshot() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]string(nil), f.interruptCalls...)
-}
-
-func (f *fakeClaudeCore) updatedConfigsSnapshot() []config.ClaudeConfig {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]config.ClaudeConfig(nil), f.updatedConfigs...)
-}
-
-func (f *fakeClaudeCore) approvalCallsSnapshot() []fakeClaudeApprovalCall {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]fakeClaudeApprovalCall(nil), f.approvalCalls...)
-}
-
-func (f *fakeClaudeCore) userInputCallsSnapshot() []fakeClaudeUserInputCall {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := make([]fakeClaudeUserInputCall, len(f.userInputCalls))
-	copy(out, f.userInputCalls)
-	for i := range out {
-		if out[i].answers == nil {
-			continue
-		}
-		cp := make(map[string]string, len(out[i].answers))
-		for key, value := range out[i].answers {
-			cp[key] = value
-		}
-		out[i].answers = cp
-	}
-	return out
-}
-
-func (f *fakeClaudeCore) planCallsSnapshot() []fakeClaudePlanCall {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]fakeClaudePlanCall(nil), f.planCalls...)
-}
-
-func (f *fakeClaudeCore) cancelCallsSnapshot() []fakeClaudeCancelCall {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]fakeClaudeCancelCall(nil), f.cancelCalls...)
 }
 
 func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
@@ -1183,15 +1137,15 @@ func TestClaudeQuestionsAsToolUserInputPreservesMultiSelect(t *testing.T) {
 			MultiSelect: true,
 		},
 	}
-	got := claudeQuestionsAsToolUserInput(questions)
+	got := appclauderuntime.QuestionsAsToolUserInput(questions)
 	if len(got) != 1 {
-		t.Fatalf("claudeQuestionsAsToolUserInput() len = %d, want 1", len(got))
+		t.Fatalf("appclauderuntime.QuestionsAsToolUserInput() len = %d, want 1", len(got))
 	}
 	if !got[0].MultiSelect {
-		t.Fatalf("claudeQuestionsAsToolUserInput() = %+v, want multiSelect=true", got[0])
+		t.Fatalf("appclauderuntime.QuestionsAsToolUserInput() = %+v, want multiSelect=true", got[0])
 	}
 	if got[0].IsOther {
-		t.Fatalf("claudeQuestionsAsToolUserInput() = %+v, want isOther=false", got[0])
+		t.Fatalf("appclauderuntime.QuestionsAsToolUserInput() = %+v, want isOther=false", got[0])
 	}
 }
 
@@ -1260,9 +1214,9 @@ func TestReadClaudePlanTextFallsBackToLatestHomePlan(t *testing.T) {
 		t.Fatalf("WriteFile(latestPlan) error = %v", err)
 	}
 
-	got := readClaudePlanText("", "", time.Now().Add(-30*time.Minute))
+	got := appclauderuntime.ReadPlanText("", "", time.Now().Add(-30*time.Minute))
 	if got != "1. inspect\n2. implement\n3. test" {
-		t.Fatalf("readClaudePlanText() = %q", got)
+		t.Fatalf("appclauderuntime.ReadPlanText() = %q", got)
 	}
 }
 
@@ -1383,7 +1337,7 @@ func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 		Kind:        pendingKindReview,
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
-		PayloadJSON: mustJSON(reviewPendingPayload{
+		PayloadJSON: mustJSON(appreviewcmd.ReviewPendingPayload{
 			Mode:         reviewFormModeCustom,
 			Instructions: "focus on backend adapters",
 		}),

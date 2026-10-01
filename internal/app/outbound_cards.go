@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	appcards "feidex/internal/app/cards"
+	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -23,7 +24,7 @@ func (r cardRenderer) prepareCardMarkdown(sub *state.Submission, text string) st
 		return ""
 	}
 	if sub == nil || r.app == nil {
-		return normalizeCardMarkdown(text)
+		return applinkutil.NormalizeCardMarkdown(text)
 	}
 	return prepareSubmissionCardMarkdown(r.app, sub, text)
 }
@@ -39,7 +40,7 @@ func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, su
 func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	card := appcards.NewMarkdownBodyCardWithHeader(title, color, showHeader)
 	if r.app == nil {
-		if content := normalizeCardMarkdown(body); content != "" {
+		if content := applinkutil.NormalizeCardMarkdown(body); content != "" {
 			appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 				"tag":     "markdown",
 				"content": content,

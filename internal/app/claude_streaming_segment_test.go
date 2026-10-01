@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/turn"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 )
@@ -129,8 +130,8 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after first tool = %d, want 1", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("first working card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("first working card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 
 	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "first reply"})
@@ -159,8 +160,8 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	if len(ff.patchedCards) != 0 {
 		t.Fatalf("patched card count after second tool = %d, want 0 because the old working card should be closed", len(ff.patchedCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("second working card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("second working card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
 		t.Fatalf("second working card body = %q", body)
@@ -189,8 +190,8 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after thinking = %d, want 1", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("thinking working card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("thinking working card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 	thinkingBody := cardMarkdownContent(t, ff.replyCards[0])
 	if !strings.Contains(thinkingBody, "思考中...") {
@@ -420,8 +421,8 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count before completion = %d, want 2", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[1]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("thinking card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[1]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("thinking card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 
 	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{

@@ -13,6 +13,14 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+// stubHTTPClient returns an *http.Client whose transport is the given stub.
+// Tests inject it into the Adapter instead of mutating the process-global
+// http.DefaultTransport, which races with adapters that keep background
+// goroutines alive past the end of a test.
+func stubHTTPClient(rt http.RoundTripper) *http.Client {
+	return &http.Client{Transport: rt}
+}
+
 // jsonResponse builds a stub HTTP response for the endpoint preflight.
 func jsonResponse(req *http.Request, body string) *http.Response {
 	return &http.Response{
@@ -24,9 +32,8 @@ func jsonResponse(req *http.Request, body string) *http.Response {
 }
 
 func TestAdapterStartInitializesWithoutBlocking(t *testing.T) {
-	origTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = origTransport })
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/open-apis/auth/v3/tenant_access_token/internal":
 			return jsonResponse(req, `{"code":1}`), nil
@@ -35,8 +42,7 @@ func TestAdapterStartInitializesWithoutBlocking(t *testing.T) {
 		default:
 			return jsonResponse(req, `{"code":999}`), nil
 		}
-	})
-	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
+	}))
 	a.SetHandlers(func(*InboundMessage) {}, func(*CardAction) (*callback.CardActionTriggerResponse, error) {
 		return &callback.CardActionTriggerResponse{}, nil
 	}, func(*MessageRecall) {}, func(*MessageReaction) {})
@@ -60,10 +66,8 @@ func TestAdapterStartInitializesWithoutBlocking(t *testing.T) {
 // itself connects in the background; this only asserts the wiring, since the
 // connection lifecycle now belongs to the SDK.
 func TestAdapterStartSuccessWiresChannelRuntime(t *testing.T) {
-	origTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = origTransport })
-
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/open-apis/auth/v3/tenant_access_token/internal":
 			return jsonResponse(req, `{"code":0,"tenant_access_token":"tenant-token","expire":7200}`), nil
@@ -72,9 +76,7 @@ func TestAdapterStartSuccessWiresChannelRuntime(t *testing.T) {
 		default:
 			return jsonResponse(req, `{"code":0}`), nil
 		}
-	})
-
-	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
+	}))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := a.Start(ctx); err != nil {
@@ -100,33 +102,30 @@ func TestAdapterStartSuccessWiresChannelRuntime(t *testing.T) {
 }
 
 func TestFetchWSEndpointErrors(t *testing.T) {
-	origTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = origTransport })
-
 	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
 
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusServiceUnavailable,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
 			Body:       io.NopCloser(strings.NewReader(`unavailable`)),
 			Request:    req,
 		}, nil
-	})
+	}))
 	if _, err := a.fetchWSEndpoint(context.Background()); err == nil || !strings.Contains(err.Error(), "status=503") {
 		t.Fatalf("fetchWSEndpoint(status error) = %v", err)
 	}
 
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		return jsonResponse(req, `{"code":1,"msg":"busy"}`), nil
-	})
+	}))
 	if _, err := a.fetchWSEndpoint(context.Background()); err == nil || !strings.Contains(err.Error(), "busy") {
 		t.Fatalf("fetchWSEndpoint(system busy) = %v", err)
 	}
 
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		return jsonResponse(req, `{"code":0,"data":{}}`), nil
-	})
+	}))
 	if _, err := a.fetchWSEndpoint(context.Background()); err == nil || !strings.Contains(err.Error(), "empty URL") {
 		t.Fatalf("fetchWSEndpoint(empty url) = %v", err)
 	}
@@ -137,13 +136,10 @@ func TestFetchWSEndpointErrors(t *testing.T) {
 // SDK's defaults with 0 and cause reconnect churn. See
 // docs/oapi-sdk-v3.12.0-upgrade-plan.md 3.5.5.
 func TestFetchWSEndpointParsesClientConfig(t *testing.T) {
-	origTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = origTransport })
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
-		return jsonResponse(req, `{"code":0,"data":{"URL":"wss://example.test/ws","ClientConfig":{"PingInterval":120,"ReconnectInterval":5,"ReconnectCount":-1,"ReconnectNonce":30}}}`), nil
-	})
-
 	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(req, `{"code":0,"data":{"URL":"wss://example.test/ws","ClientConfig":{"PingInterval":120,"ReconnectInterval":5,"ReconnectCount":-1,"ReconnectNonce":30}}}`), nil
+	}))
 	resp, err := a.fetchWSEndpoint(context.Background())
 	if err != nil {
 		t.Fatalf("fetchWSEndpoint() error = %v", err)
@@ -161,13 +157,10 @@ func TestFetchWSEndpointParsesClientConfig(t *testing.T) {
 // is transient and the SDK reconnects through it; failing startup for it would
 // take the whole daemon down.
 func TestValidateWSStartupDoesNotDial(t *testing.T) {
-	origTransport := http.DefaultTransport
-	t.Cleanup(func() { http.DefaultTransport = origTransport })
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
-		return jsonResponse(req, `{"code":0,"data":{"URL":"wss://127.0.0.1:1/never-listened"}}`), nil
-	})
-
 	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(req, `{"code":0,"data":{"URL":"wss://127.0.0.1:1/never-listened"}}`), nil
+	}))
 	if err := a.validateWSStartup(context.Background()); err != nil {
 		t.Fatalf("validateWSStartup() = %v, want nil for an unreachable URL (no dial expected)", err)
 	}

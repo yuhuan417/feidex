@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	appdelivery "feidex/internal/app/delivery"
+	"feidex/internal/app/quietmode"
 	"strings"
 	"time"
 )
@@ -32,7 +33,7 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 	if final {
 		kind = "final_message"
 	}
-	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), kind) {
+	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), kind) {
 		return nil, true
 	}
 

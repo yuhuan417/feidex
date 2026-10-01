@@ -63,11 +63,11 @@ func (d unsupportedDriver) Runtime() RuntimeDriver {
 }
 
 func (d unsupportedDriver) Conversation() ConversationDriver {
-	return unsupportedConversationDriver{rawKind: d.rawKind}
+	return unsupportedConversationDriver(d)
 }
 
 func (d unsupportedDriver) Permission() PermissionDriver {
-	return unsupportedPermissionDriver{rawKind: d.rawKind}
+	return unsupportedPermissionDriver(d)
 }
 
 func (d unsupportedConversationDriver) PrimarySlash() string { return "" }

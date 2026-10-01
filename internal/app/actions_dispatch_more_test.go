@@ -1,11 +1,14 @@
 package app
 
 import (
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"encoding/json"
 	"os"
 	"testing"
 
+	appupgradecmd "feidex/internal/app/upgradecmd"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -168,7 +171,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		Kind:        pathPickerKind,
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(pathPickerPayload{
+		PayloadJSON: mustJSON(appworkspacecmd.PathPickerPayload{
 			Mode:        pathPickerModeDirectory,
 			Style:       pathPickerStyleDropdown,
 			RootPath:    pathRoot,
@@ -183,11 +186,11 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{RootPath: "/", SelectedParentDir: pathRoot}),
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{RootPath: "/", SelectedParentDir: pathRoot}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(workspace clone) error = %v", err)
 	}
-	if err := a.store.UpsertPending(&state.PendingRequest{ID: "upgrade-1", Kind: "upgrade_release", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(upgradePendingPayload{
+	if err := a.store.UpsertPending(&state.PendingRequest{ID: "upgrade-1", Kind: "upgrade_release", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(appupgradecmd.UpgradePendingPayload{
 		TargetVersion:  "v9.9.9",
 		BinaryPath:     "/tmp/feidex",
 		DownloadURL:    "https://download.test/feidex",
@@ -200,7 +203,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		{ActionValue: map[string]any{"action": "menu.model", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.history", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "history.page", "session_key": "sess-1", "page": float64(0)}, UserID: "user-1", ChatID: "chat-1"},
-		{ActionValue: map[string]any{"action": "service_tier.set", "session_key": "sess-1", "thread_id": "thread-1", "service_tier": serviceTierFast}, UserID: "user-1", ChatID: "chat-1"},
+		{ActionValue: map[string]any{"action": "service_tier.set", "session_key": "sess-1", "thread_id": "thread-1", "service_tier": appservicetiercmd.ServiceTierFast}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "menu.upgrade", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1"},
 		{ActionValue: map[string]any{"action": "upgrade.dev", "session_key": "sess-1"}, UserID: "user-1", ChatID: "chat-1", MessageID: "msg-1"},
 		{ActionValue: map[string]any{"action": "quiet.set", "session_key": "sess-1", "mode": "progress"}, UserID: "user-1", ChatID: "chat-1"},

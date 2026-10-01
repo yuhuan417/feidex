@@ -7,6 +7,7 @@ import (
 	appapproval "feidex/internal/app/approval"
 	appbackend "feidex/internal/app/backend"
 	apppendingforms "feidex/internal/app/pendingforms"
+	"feidex/internal/app/quietmode"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -32,7 +33,7 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	router.NoteTurnItemStarted = func(threadID, turnID string, item turnitem.ProtocolItem) {
 		newRuntimeStateService(a).noteTurnItemStartedPayload(threadID, turnID, item)
 		noteStandaloneCompactItemStarted(a, threadID, turnID, item.MergedRaw())
-		if normalizeTurnItemType(item.Type) == "mcp_tool_call" {
+		if turnitem.NormalizeTurnItemType(item.Type) == "mcp_tool_call" {
 			newTurnStreamService(a).updateInFlightTurnItemPayload(a.Context(), threadID, turnID, item.EffectiveID(""), item)
 		}
 	}
@@ -41,7 +42,7 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	}
 	router.UpdateInFlightTurnItem = func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 		snapshot := newRuntimeStateService(a).updateInFlightTurnItemPayload(threadID, turnID, itemID, item.MergedRaw())
-		if quietWorkingCardEnabled(feishuConfig(a)) {
+		if quietmode.WorkingCardEnabled(feishuConfig(a)) {
 			newTurnStreamService(a).updateInFlightTurnItemPayload(ctx, threadID, turnID, itemID, snapshot)
 		}
 	}

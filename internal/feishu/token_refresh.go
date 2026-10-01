@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -127,10 +128,14 @@ func (c *resettableLarkTokenCache) clearTenantAccessTokens(appID string) int {
 // larkcore.NewCache 会把传入的 cache 写进包级全局 tokenManager(client.go:275),
 // 而请求时取用的正是该全局(core/reqtranslator.go:149)。多应用下若某个应用传入
 // 独立 cache,全局会静默指向它,其余应用的 token 读写随之漂移。
-func newFeishuLarkClient(cfg config.FeishuConfig) *lark.Client {
+func newFeishuLarkClient(cfg config.FeishuConfig, httpClient larkcore.HttpClient) *lark.Client {
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
 	return lark.NewClient(cfg.AppID, cfg.AppSecret,
 		lark.WithTokenCache(sharedFeishuTokenCache),
 		lark.WithOpenBaseUrl(cfg.OpenBaseURL()),
+		lark.WithHttpClient(httpClient),
 	)
 }
 

@@ -58,9 +58,8 @@ func (m *systemdManager) Install(cfg Config) error {
 }
 
 func (m *systemdManager) Uninstall() error {
-	if _, err := runSystemctl("--user", "disable", "--now", m.serviceUnitName()); err != nil {
-		// best-effort stop/disable
-	}
+	// best-effort stop/disable; failures are not fatal for uninstall.
+	_, _ = runSystemctl("--user", "disable", "--now", m.serviceUnitName())
 	unitPath := m.unitPath()
 	if err := os.Remove(unitPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove unit file: %w", err)

@@ -17,8 +17,6 @@ import (
 // Type and constant aliases — reviewcmd exported types
 // ---------------------------------------------------------------------------
 
-type reviewPendingPayload = appreviewcmd.ReviewPendingPayload
-
 const (
 	submissionKindReview = appreviewcmd.SubmissionKindReview
 	pendingKindReview    = appreviewcmd.PendingKindReview
@@ -28,7 +26,7 @@ const (
 	reviewFormModeCustom = appreviewcmd.ReviewFormModeCustom
 )
 
-func reviewPendingPayloadFromPending(pending *state.PendingRequest) reviewPendingPayload {
+func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd.ReviewPendingPayload {
 	return appreviewcmd.ReviewPendingPayloadFromPending(pending)
 }
 

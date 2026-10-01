@@ -30,19 +30,6 @@ func toolUserInputFormInputsForTest(_ *testing.T, form map[string]any) map[strin
 	return inputs
 }
 
-func toolUserInputFormSelectsForTest(_ *testing.T, form map[string]any) map[string]map[string]any {
-	elements, _ := form["elements"].([]map[string]any)
-	selects := make(map[string]map[string]any)
-	for _, elem := range elements {
-		if tag, _ := elem["tag"].(string); tag != "select_static" {
-			continue
-		}
-		name, _ := elem["name"].(string)
-		selects[name] = elem
-	}
-	return selects
-}
-
 func toolUserInputFormButtonsForTest(_ *testing.T, form map[string]any) map[string]map[string]any {
 	elements, _ := form["elements"].([]map[string]any)
 	buttons := make(map[string]map[string]any)

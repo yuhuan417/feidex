@@ -12,8 +12,6 @@ import (
 	"feidex/internal/state"
 )
 
-const attachmentsDirName = attachments.AttachmentsDirName
-
 func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
 	if msg == nil || len(msg.Attachments) == 0 {
 		return nil, nil
@@ -26,7 +24,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 		return nil, fmt.Errorf("attachment message is missing message id")
 	}
 
-	dir := sessionAttachmentDir(workspace.Cwd, sessionKey, msg.MessageID)
+	dir := attachments.SessionAttachmentDir(workspace.Cwd, sessionKey, msg.MessageID)
 	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
 	defer cancel()
 
@@ -50,43 +48,3 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 }
 
 // Thin wrappers delegating to attachments sub-package.
-
-var sessionAttachmentDir = attachments.SessionAttachmentDir
-
-var shortHash = attachments.ShortHash
-
-var buildTurnInputs = attachments.BuildTurnInputs
-
-var textInput = attachments.TextInput
-
-var attachmentPrompt = attachments.AttachmentPrompt
-
-var submissionInputPreview = attachments.SubmissionInputPreview
-
-var attachmentPreview = attachments.AttachmentPreview
-
-var normalizeReferencedPath = attachments.NormalizeReferencedPath
-
-var repairMalformedWorkspacePath = attachments.RepairMalformedWorkspacePath
-
-var sanitizeLocalMarkdownLinks = attachments.SanitizeLocalMarkdownLinks
-
-var neutralizeLocalMarkdownLinks = attachments.NeutralizeLocalMarkdownLinks
-
-var rewriteMarkdownLinksForCard = attachments.RewriteMarkdownLinksForCard
-
-var localLinkDisplayTarget = attachments.LocalLinkDisplayTarget
-
-var cleanMarkdownLinkTarget = attachments.CleanMarkdownLinkTarget
-
-var looksLikeLocalPathTarget = attachments.LooksLikeLocalPathTarget
-
-var recoverFilenameFromMalformedLabel = attachments.RecoverFilenameFromMalformedLabel
-
-var isAlphaNum = attachments.IsAlphaNum
-
-var isFileNameLike = attachments.IsFileNameLike
-
-var trimLineReferenceSuffix = attachments.TrimLineReferenceSuffix
-
-var pathWithinWorkspace = attachments.PathWithinWorkspace

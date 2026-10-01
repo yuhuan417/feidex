@@ -11,7 +11,6 @@ var (
 	feishuConfig             = appcore.FeishuConfig
 	replyInThreadEnabled     = appcore.ReplyInThreadEnabled
 	configuredBackend        = appcore.ConfiguredBackend
-	currentRuntimeBackend    = appcore.CurrentRuntimeBackend
 	hasConfiguredBackend     = appcore.HasConfiguredBackend
 	defaultWorkspaceID       = appcore.DefaultWorkspaceID
 	normalizeRuntimeBackend  = appcore.NormalizeRuntimeBackend

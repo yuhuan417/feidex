@@ -43,8 +43,4 @@ func newSkillsService(a *App) *appskillscmd.Service {
 	return s
 }
 
-// skillsService is the type alias for backward compatibility.
-type skillsService = *appskillscmd.Service
-
-// matchSkillsCommand is the alias for the exported command matcher.
-var matchSkillsCommand = appskillscmd.MatchSkillsCommand
+// appskillscmd.MatchSkillsCommand is the alias for the exported command matcher.

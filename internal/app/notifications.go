@@ -91,50 +91,6 @@ func finishSteerSubmission(a *App, submissionID, status string) {
 	}
 }
 
-// finshSteerSubmissionsForThread scans the session's ActiveOperations after
-// a turn completes and finalizes any remaining submissions (which are steer
-// submissions that were part of the same conversation round).
-func finshSteerSubmissionsForThread(a *App, threadID, status string) {
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return
-	}
-	st := a.State()
-	for _, sess := range st.Sessions() {
-		if sess == nil || strings.TrimSpace(sess.ActiveThreadID) != threadID {
-			continue
-		}
-		for _, op := range sess.ActiveOperations {
-			subID := strings.TrimSpace(op.SubmissionID)
-			if subID == "" {
-				continue
-			}
-			sub := st.Submission(subID)
-			if sub == nil || sub.Finalized {
-				continue
-			}
-			switch status {
-			case state.SubmissionStatusCompleted.String():
-				_ = st.FinalizeSubmission(subID, state.SubmissionStatusCompleted.String())
-			case state.SubmissionStatusInterrupted.String():
-				_ = st.FinalizeSubmission(subID, state.SubmissionStatusInterrupted.String())
-			default:
-				_ = st.FinalizeSubmission(subID, state.SubmissionStatusFailed.String())
-			}
-			newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
-			st.UpdateSession(sess.Key, func(s *state.Session) {
-				if s == nil {
-					return
-				}
-				sessionRemoveActiveOperation(s, subID, strings.TrimSpace(op.TurnID))
-				if !sessionHasActiveOperations(s) {
-					s.Status = state.SessionStatusIdle.String()
-				}
-			})
-		}
-	}
-}
-
 func startNextSubmissionAsync(a *App, sessionKey, source string) {
 	newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, source)
 }

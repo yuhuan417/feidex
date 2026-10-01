@@ -45,11 +45,7 @@ func (a *Adapter) ShareLocalFile(ctx context.Context, req SharedFileRequest) (Sh
 	if store == nil {
 		return SharedFileResult{}, fmt.Errorf("drive artifact store is not available")
 	}
-	result, err := store.UploadLocalFile(ctx, ArtifactUploadRequest{
-		LocalPath: req.LocalPath,
-		ChatID:    req.ChatID,
-		UserID:    req.UserID,
-	})
+	result, err := store.UploadLocalFile(ctx, ArtifactUploadRequest(req))
 	if err != nil {
 		return SharedFileResult{}, err
 	}
@@ -87,11 +83,7 @@ func (s *DriveFileSharer) ShareFile(ctx context.Context, req SharedFileRequest) 
 	if s == nil || s.store == nil {
 		return SharedFileResult{}, fmt.Errorf("drive artifact store is not available")
 	}
-	result, err := s.store.UploadLocalFile(ctx, ArtifactUploadRequest{
-		LocalPath: req.LocalPath,
-		ChatID:    req.ChatID,
-		UserID:    req.UserID,
-	})
+	result, err := s.store.UploadLocalFile(ctx, ArtifactUploadRequest(req))
 	if err != nil {
 		return SharedFileResult{}, err
 	}

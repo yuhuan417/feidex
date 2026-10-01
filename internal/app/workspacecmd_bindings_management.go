@@ -12,15 +12,9 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-const workspaceCloneProgressKeepLines = appworkspacecmd.CloneProgressKeepLines
-
-const workspaceClonePatchInterval = appworkspacecmd.ClonePatchInterval
-
-type workspaceCloneTracker = appworkspacecmd.CloneTracker
-
 var workspaceGitClone = appworkspacecmd.GitClone
 
-func newWorkspaceCloneTracker() *workspaceCloneTracker {
+func newWorkspaceCloneTracker() *appworkspacecmd.CloneTracker {
 	return appworkspacecmd.NewCloneTracker()
 }
 

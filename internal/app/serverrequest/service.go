@@ -3,7 +3,6 @@ package serverrequest
 import (
 	"encoding/json"
 
-	"feidex/internal/app/approvalview"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -61,10 +60,4 @@ type BackendAdapter interface {
 }
 
 // Approval view helpers — direct imports, no wrapper vars.
-var (
-	approvalDecisionText   = approvalview.ApprovalDecisionText
-	approvalDecisionDetail = approvalview.ApprovalDecisionDetail
-	approvalDecisionColor  = approvalview.ApprovalDecisionColor
-	approvalBodyText       = approvalview.ApprovalBodyText
-	approvalRequestPayload = approvalview.ApprovalRequestPayload
-)
+var ()

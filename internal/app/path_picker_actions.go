@@ -1,6 +1,8 @@
 package app
 
 import (
+	appupgradecmd "feidex/internal/app/upgradecmd"
+
 	"encoding/json"
 	"os"
 	"strings"
@@ -19,7 +21,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 	appState := a.State()
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := appState.Pending(requestID)
-	if pending == nil || (pending.Kind != appworkspacecmd.PathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != appdebugviewcmd.DownloadFilePendingKind && pending.Kind != upgradeLocalBinaryPendingKind) {
+	if pending == nil || (pending.Kind != appworkspacecmd.PathPickerKind && pending.Kind != "workspace_new" && pending.Kind != "workspace_clone" && pending.Kind != appdebugviewcmd.DownloadFilePendingKind && pending.Kind != appupgradecmd.UpgradeLocalBinaryPendingKind) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "路径选择请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -149,7 +151,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 			return appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), action, pending, payload, selectedPath)
 		}
-		if pending.Kind == upgradeLocalBinaryPendingKind {
+		if pending.Kind == appupgradecmd.UpgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 			return newUpgradeServiceInner(a).CompleteUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)

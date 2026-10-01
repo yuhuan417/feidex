@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"
@@ -38,7 +39,7 @@ func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, t
 
 type turnStreamQuietCardExecutorAdapter struct{ app *App }
 
-func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op quietWorkingCardOp) {
+func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op turn.QuietWorkingCardOp) {
 	executeQuietWorkingCardOp(a.app, ctx, sub, op)
 }
 

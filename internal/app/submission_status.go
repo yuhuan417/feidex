@@ -3,21 +3,17 @@ package app
 import (
 	"strings"
 
-	"feidex/internal/app/apputil"
-	appturnlifecycle "feidex/internal/app/turnlifecycle"
+	"feidex/internal/app/attachments"
+	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
-var turnCompletionTerminalText = appturnlifecycle.TurnCompletionTerminalText
-
 func prepareSubmissionCardMarkdown(a *App, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
-	text = linkifyInlineCodeURLs(text)
+	text = applinkutil.LinkifyInlineCodeURLs(text)
 	if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-		text = neutralizeLocalMarkdownLinks(text, ws.Cwd)
+		text = attachments.NeutralizeLocalMarkdownLinks(text, ws.Cwd)
 	}
-	return normalizeCardMarkdown(text)
+	return applinkutil.NormalizeCardMarkdown(text)
 }
-
-var truncate = apputil.Truncate

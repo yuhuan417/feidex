@@ -1,12 +1,16 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"io"
 	"log/slog"
 	"strings"
 	"testing"
 
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -36,7 +40,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err = newThreadService(a).CommandThreadsNew(&feishu.InboundMessage{
+	err = appthreadmenu.NewService(a).CommandThreadsNew(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -689,7 +693,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 		ActiveThreadWorkspaceID:    "default",
 		ActiveThreadApprovalPolicy: "never",
 		ActiveThreadSandboxMode:    "read-only",
-		ActiveThreadServiceTier:    serviceTierFast,
+		ActiveThreadServiceTier:    appservicetiercmd.ServiceTierFast,
 		Status:                     "idle",
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
@@ -726,8 +730,8 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	if got, _ := gotParams["sandbox"].(string); got != "read-only" {
 		t.Fatalf("fork sandbox = %q, want read-only", got)
 	}
-	if got, _ := gotParams["serviceTier"].(string); got != serviceTierFast {
-		t.Fatalf("fork serviceTier = %q, want %q", got, serviceTierFast)
+	if got, _ := gotParams["serviceTier"].(string); got != appservicetiercmd.ServiceTierFast {
+		t.Fatalf("fork serviceTier = %q, want %q", got, appservicetiercmd.ServiceTierFast)
 	}
 	sess := a.store.GetSession("feishu:chat:chat")
 	if sess == nil || sess.ActiveThreadID != "thread-forked" || sess.ActiveThreadName != "Forked Thread" || sess.Status != "idle" {
@@ -926,7 +930,7 @@ func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 
 func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{cfg: testCodexConfig(), feishu: wrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
+	a := &App{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := newDebugService(a).CompleteMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
@@ -968,7 +972,7 @@ func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 
 func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{cfg: testCodexConfig(), feishu: wrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
+	a := &App{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := newDebugService(a).CompleteMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")

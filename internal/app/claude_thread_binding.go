@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/state"
 )
 
@@ -79,7 +80,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 		sessionEnsureActiveOperations(current)
 		for _, op := range targetOps {
 			sessionUpsertActiveOperation(current, state.SessionActiveOperation{
-				Kind:         firstNonEmpty(strings.TrimSpace(op.Kind), sessionOpKindSubmission),
+				Kind:         apputil.FirstNonEmpty(strings.TrimSpace(op.Kind), sessionOpKindSubmission),
 				SubmissionID: strings.TrimSpace(op.SubmissionID),
 				ThreadID:     threadID,
 				TurnID:       strings.TrimSpace(op.TurnID),

@@ -10,8 +10,6 @@ import (
 	"feidex/internal/state"
 )
 
-type feidexMCPPublication = mcpbridge.Publication
-
 const (
 	feidexMCPServerID       = mcpbridge.ServerID
 	feidexMCPBearerEnvName  = mcpbridge.BearerEnvName
@@ -62,9 +60,9 @@ func stopMCPService(a *App, ctx context.Context) error {
 	return svc.Stop(ctx)
 }
 
-func currentMCPPublication(a *App) feidexMCPPublication {
+func currentMCPPublication(a *App) mcpbridge.Publication {
 	if a == nil || a.mcp == nil {
-		return feidexMCPPublication{}
+		return mcpbridge.Publication{}
 	}
 	return a.mcp.Publication()
 }

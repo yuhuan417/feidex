@@ -8,20 +8,16 @@ import (
 	"feidex/internal/feishu"
 )
 
-func menuGroupSpec(action string) (commandMenuGroupSpec, bool) {
+func menuGroupSpec(action string) (menutypes.MenuGroupSpec, bool) {
 	return appmenuutil.MenuGroupSpec(action)
 }
 
-func menuGroupSpecForBackend(action, backend string) (commandMenuGroupSpec, bool) {
-	return appmenuutil.MenuGroupSpecForBackend(action, backend)
-}
-
-func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
+func menuItemVisibleForBackend(spec menutypes.MenuItemSpec, backend string) bool {
 	backend = normalizeRuntimeBackend(backend)
 	if backend == "" {
 		return menuItemVisibleWithoutBackend(spec)
 	}
-	if spec.Kind == menuItemBack {
+	if spec.Kind == menutypes.MenuItemBack {
 		return true
 	}
 	if strings.TrimSpace(spec.Slash) == "" {
@@ -30,8 +26,8 @@ func menuItemVisibleForBackend(spec commandMenuItemSpec, backend string) bool {
 	return isLocalCommandForBackend(backend, spec.Slash)
 }
 
-func menuItemVisibleWithoutBackend(spec commandMenuItemSpec) bool {
-	if spec.Kind == menuItemBack {
+func menuItemVisibleWithoutBackend(spec menutypes.MenuItemSpec) bool {
+	if spec.Kind == menutypes.MenuItemBack {
 		return true
 	}
 	switch strings.TrimSpace(spec.Action) {
@@ -51,7 +47,7 @@ func menuActionVisibleWithoutBackend(action string) bool {
 	}
 }
 
-func menuItemSpecForAction(action string) (commandMenuItemSpec, bool) {
+func menuItemSpecForAction(action string) (menutypes.MenuItemSpec, bool) {
 	return appmenuutil.MenuItemSpecForAction(action)
 }
 
@@ -80,7 +76,7 @@ func nearestVisibleMenuAction(action, backend string) string {
 		if menuActionVisibleForBackend(action, backend) {
 			return action
 		}
-		node, ok := menuNodes[action]
+		node, ok := menutypes.MenuNodes[action]
 		if !ok {
 			break
 		}
@@ -92,10 +88,10 @@ func nearestVisibleMenuAction(action, backend string) string {
 	return ""
 }
 
-func menuItemsForGroup(action, backend string) []commandMenuItemSpec {
+func menuItemsForGroup(action, backend string) []menutypes.MenuItemSpec {
 	action = strings.TrimSpace(action)
-	items := make([]commandMenuItemSpec, 0, 8)
-	for _, spec := range commandMenuItemSpecs {
+	items := make([]menutypes.MenuItemSpec, 0, 8)
+	for _, spec := range menutypes.MenuItemSpecs {
 		if spec.GroupAction == action && menuItemVisibleForBackend(spec, backend) {
 			items = append(items, spec)
 		}
@@ -108,12 +104,12 @@ func groupHasVisibleMenuItems(action, backend string) bool {
 		return menuActionVisibleWithoutBackend(action)
 	}
 	hasDeclaredItems := false
-	for _, spec := range commandMenuItemSpecs {
+	for _, spec := range menutypes.MenuItemSpecs {
 		if spec.GroupAction != strings.TrimSpace(action) {
 			continue
 		}
 		hasDeclaredItems = true
-		if spec.Kind == menuItemBack {
+		if spec.Kind == menutypes.MenuItemBack {
 			continue
 		}
 		if menuItemVisibleForBackend(spec, backend) {
@@ -147,15 +143,11 @@ func menuGroupVisibleForSession(action, sessionKey string) bool {
 }
 
 func renderGroupMenuButtons(backend, groupAction, sessionKey string) []feishu.Button {
-	return appmenuutil.RenderGroupMenuButtons(groupAction, sessionKey, func(action string) []commandMenuItemSpec {
+	return appmenuutil.RenderGroupMenuButtons(groupAction, sessionKey, func(action string) []menutypes.MenuItemSpec {
 		return menuItemsForGroup(action, backend)
 	})
 }
 
-func renderMenuButtonSpec(spec commandMenuItemSpec, sessionKey string) feishu.Button {
-	return appmenuutil.RenderMenuButtonSpec(spec, sessionKey)
-}
-
-func appendHelpCommands(lines []string, specs []helpCommandSpec) []string {
+func appendHelpCommands(lines []string, specs []menutypes.HelpCommandSpec) []string {
 	return appmenuutil.AppendHelpCommands(lines, specs)
 }

@@ -1,11 +1,15 @@
 package app
 
 import (
+	appmaintenance "feidex/internal/app/maintenance"
+
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"feidex/internal/app/attachments"
+	"feidex/internal/app/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -26,8 +30,8 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	if err := commandQuiet(a, &feishu.InboundMessage{}, []string{"bad"}); err == nil {
 		t.Fatal("expected commandQuiet(invalid arg) to fail")
 	}
-	if quietModeStatusText(config.QuietModeVerbose) != "verbose" || quietModeStatusText(config.QuietModeFinal) != "final" || buttonCount != 0 {
-		t.Fatal("quietModeStatusText() returned unexpected values")
+	if quietmode.StatusText(config.QuietModeVerbose) != "verbose" || quietmode.StatusText(config.QuietModeFinal) != "final" || buttonCount != 0 {
+		t.Fatal("quietmode.StatusText() returned unexpected values")
 	}
 }
 
@@ -44,7 +48,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	}
 
 	workspace := t.TempDir()
-	attachmentsRoot := filepath.Join(workspace, attachmentsDirName, "session")
+	attachmentsRoot := filepath.Join(workspace, attachments.AttachmentsDirName, "session")
 	oldDir := filepath.Join(attachmentsRoot, "old")
 	newDir := filepath.Join(attachmentsRoot, "new")
 	for _, path := range []string{oldDir, newDir} {
@@ -52,7 +56,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 			t.Fatalf("MkdirAll(%s) error = %v", path, err)
 		}
 	}
-	oldTime := time.Now().Add(-attachmentRetention - time.Hour)
+	oldTime := time.Now().Add(-appmaintenance.AttachmentRetention - time.Hour)
 	if err := os.Chtimes(oldDir, oldTime, oldTime); err != nil {
 		t.Fatalf("Chtimes(oldDir) error = %v", err)
 	}
@@ -60,12 +64,12 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = workspace
 	a := &App{cfg: cfg, store: store}
-	newRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup()
+	appmaintenance.NewRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup()
 	if got := a.store.PendingByID("pending"); got == nil || got.Status != "expired" {
 		t.Fatalf("expirePendingRequestsOnStartup() = %+v, want expired request", got)
 	}
 
-	newRuntimeMaintenanceService(a).CleanupExpiredAttachments()
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupExpiredAttachments()
 	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
 		t.Fatalf("expected old attachment dir to be removed, stat err = %v", err)
 	}
@@ -79,7 +83,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	if err := os.Chtimes(oldDir, oldTime, oldTime); err != nil {
 		t.Fatalf("Chtimes(oldDir second) error = %v", err)
 	}
-	newRuntimeMaintenanceService(a).CleanupAttachmentDir(attachmentsRoot)
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupAttachmentDir(attachmentsRoot)
 	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
 		t.Fatalf("cleanupAttachmentDir() should remove old dir, stat err = %v", err)
 	}

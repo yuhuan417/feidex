@@ -1,6 +1,8 @@
 package app
 
 import (
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"fmt"
 	"strings"
@@ -258,7 +260,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		if err != nil {
 			return err
 		}
-		next := toggleServiceTier(profile.ServiceTier)
+		next := appservicetiercmd.ToggleServiceTier(profile.ServiceTier)
 		_, err = updateBotProfile(a, func(p *state.BotProfile) { p.ServiceTier = next })
 		if err != nil {
 			return err
@@ -270,7 +272,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		if value == "off" || value == "default" {
 			value = ""
 		} else {
-			value = normalizeServiceTier(value)
+			value = appservicetiercmd.NormalizeServiceTier(value)
 			if value == "" {
 				return fmt.Errorf("unsupported service tier %q", args[0])
 			}
@@ -380,7 +382,7 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 }
 
 func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, serviceTier string) (*callback.CardActionTriggerResponse, error) {
-	value := normalizeServiceTier(serviceTier)
+	value := appservicetiercmd.NormalizeServiceTier(serviceTier)
 	if strings.EqualFold(strings.TrimSpace(serviceTier), "default") || strings.EqualFold(strings.TrimSpace(serviceTier), "off") {
 		value = ""
 	}

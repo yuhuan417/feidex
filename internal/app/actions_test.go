@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -26,7 +27,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteMenuInterrupt(nil, "sess-1", "turn-old")
+	resp, err := appthreadmenu.NewService(a).CompleteMenuInterrupt(nil, "sess-1", "turn-old")
 	if err != nil {
 		t.Fatalf("completeMenuInterrupt: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
+	resp, err := appthreadmenu.NewService(a).CompleteMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuNew: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
+	resp, err := appthreadmenu.NewService(a).CompleteThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
 	if err != nil {
 		t.Fatalf("completeThreadResume: %v", err)
 	}
@@ -419,7 +420,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").SandboxMode; got != "read-only" {
 		t.Fatalf("persisted sandbox mode = %q, want read-only", got)
 	}
-	resp, err = newWorkspaceService(a).completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
+	_, err = newWorkspaceService(a).completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
 	if err != nil {
 		t.Fatalf("clear workspace sandbox override: %v", err)
 	}
@@ -454,7 +455,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("persisted approval policy = %q, want never", got)
 	}
-	resp, err = newWorkspaceService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
+	_, err = newWorkspaceService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
 	if err != nil {
 		t.Fatalf("clear workspace policy override: %v", err)
 	}
@@ -500,7 +501,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
+	resp, err := appthreadmenu.NewService(a).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
 	if err != nil {
 		t.Fatalf("completeThreadSandboxSet: %v", err)
 	}
@@ -514,7 +515,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 	if got := config.FindWorkspace(a.cfg, "default").SandboxMode; got != "danger-full-access" {
 		t.Fatalf("workspace sandbox should stay default, got %q", got)
 	}
-	resp, err = newThreadService(a).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "")
+	_, err = appthreadmenu.NewService(a).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "")
 	if err != nil {
 		t.Fatalf("clear thread sandbox override: %v", err)
 	}
@@ -540,7 +541,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
+	resp, err := appthreadmenu.NewService(a).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
 	if err != nil {
 		t.Fatalf("completeThreadPolicySet: %v", err)
 	}
@@ -554,7 +555,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 	if got := config.FindWorkspace(a.cfg, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("workspace policy should stay default, got %q", got)
 	}
-	resp, err = newThreadService(a).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "")
+	_, err = appthreadmenu.NewService(a).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "")
 	if err != nil {
 		t.Fatalf("clear thread policy override: %v", err)
 	}

@@ -20,6 +20,7 @@ import (
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	channeltypes "github.com/larksuite/oapi-sdk-go/v3/channel/types"
+	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
@@ -51,8 +52,8 @@ type InboundMessage struct {
 	// MentionedAny or MentionedOpenIDs, both of which stay empty/false; it has
 	// to be read off the text. Group routing treats it separately: every bot
 	// answers it.
-	MentionAll             bool
-	CreatedAt              int64
+	MentionAll bool
+	CreatedAt  int64
 }
 
 // GroupMessagePolicyInput is the app-level context used to decide whether a
@@ -114,6 +115,7 @@ type Adapter struct {
 	clientMu           sync.RWMutex
 	client             *lark.Client
 	clientFactory      func() *lark.Client
+	httpClient         larkcore.HttpClient
 	botProfileMu       sync.Mutex
 	botProfileLastTry  time.Time
 	botOpenID          string
@@ -173,8 +175,9 @@ func New(cfg config.FeishuConfig) *Adapter {
 	}
 	return &Adapter{
 		cfg:           cfg,
-		client:        newFeishuLarkClient(cfg),
-		clientFactory: func() *lark.Client { return newFeishuLarkClient(cfg) },
+		client:        newFeishuLarkClient(cfg, http.DefaultClient),
+		clientFactory: func() *lark.Client { return newFeishuLarkClient(cfg, http.DefaultClient) },
+		httpClient:    http.DefaultClient,
 		allowSet:      allowSet,
 		allowAll:      allowAll,
 		seen:          map[string]time.Time{},
@@ -299,6 +302,15 @@ func (a *Adapter) Start(ctx context.Context) error {
 		a.startChannelRuntime(runCtx)
 	})
 	return a.startErr
+}
+
+// httpClientOr returns the injected HTTP client, falling back to
+// http.DefaultClient for Adapters built as struct literals.
+func (a *Adapter) httpClientOr() larkcore.HttpClient {
+	if a != nil && a.httpClient != nil {
+		return a.httpClient
+	}
+	return http.DefaultClient
 }
 
 func (a *Adapter) Stop() {
@@ -948,9 +960,7 @@ func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) 
 	if len(buttons) > 0 {
 		bodyMap, _ := card["body"].(map[string]any)
 		elements, _ := bodyMap["elements"].([]map[string]any)
-		for _, row := range buildV2ButtonRows(buttons, 1) {
-			elements = append(elements, row)
-		}
+		elements = append(elements, buildV2ButtonRows(buttons, 1)...)
 		bodyMap["elements"] = elements
 	}
 	return card
@@ -2009,7 +2019,7 @@ func (a *Adapter) fetchBotProfile() botProfile {
 		return botProfile{}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := a.httpClientOr().Do(req)
 	if err != nil {
 		return botProfile{}
 	}
@@ -2026,7 +2036,7 @@ func (a *Adapter) fetchBotProfile() botProfile {
 		return botProfile{}
 	}
 	infoReq.Header.Set("Authorization", "Bearer "+tokenResp.TenantAccessToken)
-	infoResp, err := http.DefaultClient.Do(infoReq)
+	infoResp, err := a.httpClientOr().Do(infoReq)
 	if err != nil {
 		return botProfile{}
 	}

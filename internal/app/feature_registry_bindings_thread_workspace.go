@@ -1,9 +1,12 @@
 package app
 
 import (
+	appcommandmatch "feidex/internal/app/commandmatch"
+
 	"fmt"
 	"strings"
 
+	"feidex/internal/app/modelconfig"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
 
@@ -14,7 +17,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.interrupt"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"interrupt": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return appthreadmenu.NewService(a).CommandInterrupt(msg)
 				},
@@ -30,19 +33,19 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.thread"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"fork": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandFork(a, msg, args)
 				},
 			},
 			"new": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return appthreadmenu.NewService(a).CommandThreadsNew(msg)
 				},
 			},
 			"thread": {
-				Match: matchThreadCommand,
+				Match: appcommandmatch.MatchThreadCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return appthreadmenu.NewService(a).CommandThread(msg, args)
 				},
@@ -51,7 +54,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				},
 			},
 			"session": {
-				Match: matchSessionCommand,
+				Match: appcommandmatch.MatchSessionCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return appthreadmenu.NewService(a).CommandSession(msg, args)
 				},
@@ -60,7 +63,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				},
 			},
 			"threads": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if len(args) > 0 {
 						return fmt.Errorf("usage: /threads")
@@ -101,7 +104,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.workspace"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"workspace": {
-				Match: matchWorkspaceCommand,
+				Match: appcommandmatch.MatchWorkspaceCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandWorkspace(msg, args)
@@ -109,7 +112,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return commandWorkspaceProfileAware(a, msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
-					backendClaude: matchClaudeWorkspaceCommand,
+					backendClaude: appcommandmatch.MatchClaudeWorkspaceCommand,
 				},
 			},
 		},
@@ -130,7 +133,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.model"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"model": {
-				Match: matchModelCommand,
+				Match: appcommandmatch.MatchModelCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandModel(msg, args)
@@ -139,12 +142,12 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: func(fields []string) bool {
-						return matchModelCommand(fields) && !(len(fields) >= 2 && strings.TrimSpace(fields[1]) == "plan")
+						return appcommandmatch.MatchModelCommand(fields) && !(len(fields) >= 2 && strings.TrimSpace(fields[1]) == "plan")
 					},
 				},
 			},
 			"effort": {
-				Match: matchEffortCommand,
+				Match: appcommandmatch.MatchEffortCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandEffort(msg, args)
@@ -179,7 +182,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 						"model.aux_config.select_small_model":     "small",
 					}[actionName]
 					value := strings.TrimSpace(action.Option)
-					if value == modelConfigDefaultOptionValue {
+					if value == modelconfig.DefaultOptionValue {
 						value = ""
 					}
 					return svc.completeBindingAuxiliaryModelSet(action, sessionKey, role, value)
@@ -198,7 +201,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return svc.completeBindingModelSet(action, sessionKey, actionStringValue(action, "model_id"))
 				case "model.config.select_model":
 					modelID := strings.TrimSpace(action.Option)
-					if modelID == modelConfigDefaultOptionValue {
+					if modelID == modelconfig.DefaultOptionValue {
 						modelID = ""
 					}
 					return svc.completeBindingModelSet(action, sessionKey, modelID)
@@ -206,7 +209,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return svc.completeBindingEffortSet(action, sessionKey, actionStringValue(action, "reasoning_effort"))
 				case "model.config.select_effort":
 					reasoningEffort := strings.TrimSpace(action.Option)
-					if reasoningEffort == modelConfigDefaultOptionValue {
+					if reasoningEffort == modelconfig.DefaultOptionValue {
 						reasoningEffort = ""
 					}
 					return svc.completeBindingEffortSet(action, sessionKey, reasoningEffort)
@@ -232,7 +235,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 						"model.plan_config.select_effort":         "plan_effort",
 					}[actionName]
 					value := strings.TrimSpace(action.Option)
-					if value == modelConfigDefaultOptionValue {
+					if value == modelconfig.DefaultOptionValue {
 						value = ""
 					}
 					return completeBotProfileAuxiliaryModelSet(s.app, action, role, value)
@@ -240,7 +243,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return completeBotProfileModelSet(s.app, action, actionStringValue(action, "model_id"))
 				case "model.config.select_model":
 					modelID := strings.TrimSpace(action.Option)
-					if modelID == modelConfigDefaultOptionValue {
+					if modelID == modelconfig.DefaultOptionValue {
 						modelID = ""
 					}
 					return completeBotProfileModelSet(s.app, action, modelID)
@@ -248,7 +251,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return completeBotProfileEffortSet(s.app, action, actionStringValue(action, "reasoning_effort"))
 				case "model.config.select_effort":
 					effort := strings.TrimSpace(action.Option)
-					if effort == modelConfigDefaultOptionValue {
+					if effort == modelconfig.DefaultOptionValue {
 						effort = ""
 					}
 					return completeBotProfileEffortSet(s.app, action, effort)
@@ -267,13 +270,13 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			switch actionName {
 			case "model.aux_config.select_review_model":
 				value := strings.TrimSpace(action.Option)
-				if value == modelConfigDefaultOptionValue {
+				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
 				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "review", value)
 			case "model.aux_config.select_subagent_model":
 				value := strings.TrimSpace(action.Option)
-				if value == modelConfigDefaultOptionValue {
+				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
 				if configuredBackend(s.app) == backendClaude {
@@ -282,13 +285,13 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent", value)
 			case "model.aux_config.select_subagent_effort":
 				value := strings.TrimSpace(action.Option)
-				if value == modelConfigDefaultOptionValue {
+				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
 				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent_effort", value)
 			case "model.aux_config.select_small_model":
 				value := strings.TrimSpace(action.Option)
-				if value == modelConfigDefaultOptionValue {
+				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
 				return newModelConfigService(s.app).completeClaudeAuxiliaryModelSet(action, "small", value)
@@ -298,7 +301,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return newBackendConfigurationService(s.app).completeGlobalModelSet(action, actionStringValue(action, "model_id"))
 			case "model.config.select_model":
 				modelID := strings.TrimSpace(action.Option)
-				if modelID == modelConfigDefaultOptionValue {
+				if modelID == modelconfig.DefaultOptionValue {
 					modelID = ""
 				}
 				return newBackendConfigurationService(s.app).completeGlobalModelSet(action, modelID)
@@ -310,7 +313,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 			case "model.config.select_effort":
 				reasoningEffort := strings.TrimSpace(action.Option)
-				if reasoningEffort == modelConfigDefaultOptionValue {
+				if reasoningEffort == modelconfig.DefaultOptionValue {
 					reasoningEffort = ""
 				}
 				return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, reasoningEffort)
@@ -318,7 +321,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return newModelConfigService(s.app).completeCodexPlanModelSet(action, actionStringValue(action, "model_id"))
 			case "model.plan_config.select_model":
 				modelID := strings.TrimSpace(action.Option)
-				if modelID == modelConfigDefaultOptionValue {
+				if modelID == modelconfig.DefaultOptionValue {
 					modelID = ""
 				}
 				return newModelConfigService(s.app).completeCodexPlanModelSet(action, modelID)
@@ -326,7 +329,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return newModelConfigService(s.app).completeCodexPlanReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 			case "model.plan_config.select_effort":
 				reasoningEffort := strings.TrimSpace(action.Option)
-				if reasoningEffort == modelConfigDefaultOptionValue {
+				if reasoningEffort == modelconfig.DefaultOptionValue {
 					reasoningEffort = ""
 				}
 				return newModelConfigService(s.app).completeCodexPlanReasoningEffortSet(action, reasoningEffort)
@@ -339,7 +342,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"fast": {
 				Match: func(fields []string) bool {
-					return exactOrSingleArgCommand(fields, "config", "fast", "default", "off", "toggle")
+					return appcommandmatch.ExactOrSingleArgCommand(fields, "config", "fast", "default", "off", "toggle")
 				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {

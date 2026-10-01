@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -29,7 +30,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "acceptEdits")
+	resp, err := appthreadmenu.NewService(a).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "acceptEdits")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
@@ -117,7 +118,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 		t.Fatalf("session permission card should hide bypassPermissions when disabled: %#v", cardButtonsForTest(card))
 	}
 
-	resp, err := newThreadService(a).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
+	resp, err := appthreadmenu.NewService(a).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
@@ -147,7 +148,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
+	resp, err := appthreadmenu.NewService(a).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}

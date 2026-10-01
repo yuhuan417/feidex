@@ -6,6 +6,7 @@ import (
 
 	appapproval "feidex/internal/app/approval"
 	appclauderuntime "feidex/internal/app/clauderuntime"
+	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -53,7 +54,7 @@ func TestClaudeInteractionPendingSurvivesTurnCleanup(t *testing.T) {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 
-	newRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{
 		ID: subID, SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 
@@ -83,7 +84,7 @@ func TestClaudeApprovalCardAnswerableAfterTurnCleanup(t *testing.T) {
 	a.claude = claude
 	newClaudeInteractionPending(t, a, "claude-approval-2", "command", state.PendingRequestStatusPending.String())
 
-	newRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{
 		ID: "sub-2", SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 

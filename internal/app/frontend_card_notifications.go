@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"log/slog"
 	"strings"
@@ -9,8 +11,6 @@ import (
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
-
-const frontendCardNotificationKindFeishuPermissionIssue = "feishu_permission_issue"
 
 func queueFrontendCardNotification(a *App, note state.FrontendCardNotification) {
 	if a == nil || a.store == nil {
@@ -40,7 +40,7 @@ func flushPendingFrontendCardNotifications(a *App, msg *feishu.InboundMessage) {
 	if len(notes) == 0 {
 		return
 	}
-	target := feishuNotifyTarget{
+	target := appfeishuwrap.NotifyTarget{
 		ChatID: strings.TrimSpace(msg.ChatID),
 		UserID: strings.TrimSpace(msg.UserID),
 	}
@@ -61,7 +61,7 @@ func flushPendingFrontendCardNotifications(a *App, msg *feishu.InboundMessage) {
 	}
 }
 
-func sendFrontendCardNotification(a *App, target feishuNotifyTarget, note state.FrontendCardNotification) error {
+func sendFrontendCardNotification(a *App, target appfeishuwrap.NotifyTarget, note state.FrontendCardNotification) error {
 	if a == nil || a.feishu == nil {
 		return nil
 	}

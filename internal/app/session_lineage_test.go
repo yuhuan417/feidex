@@ -1,6 +1,8 @@
 package app
 
 import (
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"testing"
 
 	"feidex/internal/app/sessionctx"
@@ -128,7 +130,7 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 		ActiveThreadWorkspaceID:    "ws-codex",
 		ActiveThreadApprovalPolicy: "never",
 		ActiveThreadSandboxMode:    "read-only",
-		ActiveThreadServiceTier:    serviceTierFast,
+		ActiveThreadServiceTier:    appservicetiercmd.ServiceTierFast,
 		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
@@ -148,7 +150,7 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 	if sess.WorkspaceID != "ws-codex" || sess.ActiveThreadID != "codex-thread-1" {
 		t.Fatalf("restored session = %+v", sess)
 	}
-	if sess.ActiveThreadSandboxMode != "read-only" || sess.ActiveThreadApprovalPolicy != "never" || sess.ActiveThreadServiceTier != serviceTierFast {
+	if sess.ActiveThreadSandboxMode != "read-only" || sess.ActiveThreadApprovalPolicy != "never" || sess.ActiveThreadServiceTier != appservicetiercmd.ServiceTierFast {
 		t.Fatalf("restored thread defaults = %+v", sess)
 	}
 	if sess.ActiveThreadCollaborationMode == nil || sess.ActiveThreadCollaborationMode.Mode != "plan" || sess.ActiveThreadCollaborationMode.Model != "gpt-5.4" {

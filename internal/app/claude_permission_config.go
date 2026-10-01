@@ -1,6 +1,8 @@
 package app
 
 import (
+	appruntime "feidex/internal/app/runtime"
+
 	"context"
 	"fmt"
 	"log/slog"
@@ -13,10 +15,7 @@ import (
 	"feidex/internal/feishu"
 )
 
-const (
-	claudeSessionCommandUsage   = "/session | /session list [all] | /session new | /session fork | /session resume SESSION_ID | /session permissions [MODE|inherit]"
-	claudeWorkspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace permissions [MODE|inherit]"
-)
+const ()
 
 func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 	if cfg == nil {
@@ -25,23 +24,15 @@ func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 	return cfg.Claude.DangerouslySkipPermissions
 }
 
-func claudePermissionModeOptions(includeBypass bool) []claudePermissionModeOption {
-	options := []claudePermissionModeOption{
+func claudePermissionModeOptions(includeBypass bool) []appruntime.ClaudePermissionModeOption {
+	options := []appruntime.ClaudePermissionModeOption{
 		{Value: string(claudePermissionModeDefault), Label: "default"},
 		{Value: string(claudePermissionModeAcceptEdits), Label: "acceptEdits"},
 	}
 	if includeBypass {
-		options = append(options, claudePermissionModeOption{Value: string(claudePermissionModeBypass), Label: "bypassPermissions"})
+		options = append(options, appruntime.ClaudePermissionModeOption{Value: string(claudePermissionModeBypass), Label: "bypassPermissions"})
 	}
 	return options
-}
-
-func claudePermissionModeLabel(value string) string {
-	value = normalizeClaudePermissionModeValue(value)
-	if value == "" {
-		value = string(claudePermissionModeDefault)
-	}
-	return "`" + value + "`"
 }
 
 func normalizeRequestedClaudePermissionMode(a *App, ctx context.Context, raw string) (string, string, error) {
@@ -56,15 +47,6 @@ func normalizeRequestedClaudePermissionMode(a *App, ctx context.Context, raw str
 		return "", "", fmt.Errorf("当前未启用 `claude.dangerously_skip_permissions`，不能切到 `bypassPermissions`")
 	}
 	return mode, "", nil
-}
-
-func normalizeClaudePermissionOverrideValue(raw string) (string, bool) {
-	switch strings.TrimSpace(raw) {
-	case "", "inherit", "follow", "workspace", "global":
-		return "", true
-	default:
-		return "", false
-	}
 }
 
 func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {

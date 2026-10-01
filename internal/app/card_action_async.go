@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -45,7 +46,7 @@ func completeAsyncCommandAction(
 		case successCardFromText != nil:
 			card = successCardFromText(sessionKey, strings.TrimSpace(text))
 		default:
-			card = failureCard(sessionKey, firstNonEmpty(strings.TrimSpace(text), "命令没有返回卡片"))
+			card = failureCard(sessionKey, apputil.FirstNonEmpty(strings.TrimSpace(text), "命令没有返回卡片"))
 		}
 		patchMaintenanceCard(a, messageID, card, patchWarnMsg,
 			"session_key", sessionKey,
@@ -79,7 +80,7 @@ func completeAsyncRenderedCardAction(
 			if err != nil {
 				errText = err.Error()
 			}
-			card = failureCard(sessionKey, firstNonEmpty(strings.TrimSpace(errText), "操作没有返回卡片"))
+			card = failureCard(sessionKey, apputil.FirstNonEmpty(strings.TrimSpace(errText), "操作没有返回卡片"))
 		}
 		patchMaintenanceCard(a, messageID, card, patchWarnMsg,
 			"session_key", sessionKey,

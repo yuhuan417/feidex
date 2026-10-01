@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 )
 
@@ -108,7 +109,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return nil
 	}
 	sessionKey := makeSessionKey(a, msg)
-	logText := truncate(msg.Text, 160)
+	logText := apputil.Truncate(msg.Text, 160)
 	if a.ServerRequestService().ShouldRedactInboundText(sessionKey, msg.UserID) {
 		logText = "[redacted pending input]"
 	}
@@ -189,8 +190,8 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			slog.Warn("reply steer failed; falling back to queue",
 				"message_id", msg.MessageID,
 				"parent_message_id", msg.ParentMessageID,
-				"thread_id", firstNonEmpty(replyLink.ThreadID, ""),
-				"turn_id", firstNonEmpty(replyLink.TurnID, ""),
+				"thread_id", apputil.FirstNonEmpty(replyLink.ThreadID, ""),
+				"turn_id", apputil.FirstNonEmpty(replyLink.TurnID, ""),
 				"error", err,
 			)
 		}

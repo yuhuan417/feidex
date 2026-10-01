@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"log/slog"
 	"sort"
@@ -437,12 +439,12 @@ func notifyFeishuAppConfigHeal(a *App, color, title, body string) {
 	}
 }
 
-func feishuAppConfigHealTargets(a *App) []feishuNotifyTarget {
+func feishuAppConfigHealTargets(a *App) []appfeishuwrap.NotifyTarget {
 	if a == nil || a.store == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
-	var targets []feishuNotifyTarget
+	var targets []appfeishuwrap.NotifyTarget
 	for _, sess := range a.State().Sessions() {
 		if sess == nil {
 			continue
@@ -461,7 +463,7 @@ func feishuAppConfigHealTargets(a *App) []feishuNotifyTarget {
 			continue
 		}
 		seen[chatID] = struct{}{}
-		targets = append(targets, feishuNotifyTarget{
+		targets = append(targets, appfeishuwrap.NotifyTarget{
 			ChatID: chatID,
 			UserID: strings.TrimSpace(sess.OwnerUserID),
 		})

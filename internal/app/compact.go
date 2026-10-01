@@ -6,82 +6,66 @@ import (
 	"feidex/internal/state"
 )
 
-// ---------------------------------------------------------------------------
-// Type and constant aliases — compact sub-package
-// ---------------------------------------------------------------------------
-
-type compactService = appcompact.Service
-
-var newCompactService = appcompact.NewService
-
 const sessionStatusCompacting = "compacting"
 
 // ---------------------------------------------------------------------------
 // Thin wrappers — canonical logic lives in compact.Service
 // ---------------------------------------------------------------------------
 
-func isContextCompactionItem(item map[string]any) bool {
-	return appcompact.IsContextCompactionItem(item)
-}
-
 func sessionHasActiveWork(sess *state.Session) bool {
 	return appcompact.SessionHasActiveWork(sess)
 }
 
 func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
-	return newCompactService(a).CommandCompact(msg, args)
-}
-
-func compactMenuButtons(sessionKey string, includeRetry bool) []feishu.Button {
-	return appcompact.CompactMenuButtons(sessionKey, includeRetry)
+	return appcompact.NewService(a).CommandCompact(msg, args)
 }
 
 func renderCompactPreparingCard(a *App, sessionKey string) map[string]any {
-	return newCompactService(a).RenderCompactPreparingCard(sessionKey)
+	return appcompact.NewService(a).RenderCompactPreparingCard(sessionKey)
 }
 
 func renderCompactAcceptedCard(a *App, sessionKey string) map[string]any {
-	return newCompactService(a).RenderCompactAcceptedCard(sessionKey)
+	return appcompact.NewService(a).RenderCompactAcceptedCard(sessionKey)
 }
 
 func renderCompactFailedCard(a *App, sessionKey, errText string) map[string]any {
-	return newCompactService(a).RenderCompactFailedCard(sessionKey, errText)
+	return appcompact.NewService(a).RenderCompactFailedCard(sessionKey, errText)
 }
 
 func runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
-	return newCompactService(a).RunMenuCompactAction(sessionKey, action)
+	return appcompact.NewService(a).RunMenuCompactAction(sessionKey, action)
 }
 
 func startThreadCompaction(a *App, sessionKey string) (*state.Session, error) {
-	return newCompactService(a).StartThreadCompaction(sessionKey)
+	return appcompact.NewService(a).StartThreadCompaction(sessionKey)
 }
 
 func bindStandaloneCompactTurn(a *App, threadID, turnID string) bool {
-	return newCompactService(a).BindStandaloneCompactTurn(threadID, turnID)
+	return appcompact.NewService(a).BindStandaloneCompactTurn(threadID, turnID)
 }
 
 func noteStandaloneCompactItemStarted(a *App, threadID, turnID string, item map[string]any) bool {
-	return newCompactService(a).NoteStandaloneCompactItemStarted(threadID, turnID, item)
+	return appcompact.NewService(a).NoteStandaloneCompactItemStarted(threadID, turnID, item)
 }
 
 func completeStandaloneCompactTurn(a *App, threadID, turnID string) bool {
-	return newCompactService(a).CompleteStandaloneCompactTurn(threadID, turnID)
+	return appcompact.NewService(a).CompleteStandaloneCompactTurn(threadID, turnID)
 }
 
 func completeStandaloneCompactItem(a *App, threadID, turnID string, item map[string]any) bool {
-	return newCompactService(a).CompleteStandaloneCompactItem(threadID, turnID, item)
+	return appcompact.NewService(a).CompleteStandaloneCompactItem(threadID, turnID, item)
 }
 
 func finishStandaloneCompactTurn(a *App, threadID, turnID, status string) bool {
-	return newCompactService(a).FinishStandaloneCompactTurn(threadID, turnID, status)
+	return appcompact.NewService(a).FinishStandaloneCompactTurn(threadID, turnID, status)
 }
 
 func failStandaloneCompactTurn(a *App, threadID, turnID, message string) bool {
-	return newCompactService(a).FailStandaloneCompactTurn(threadID, turnID, message)
+	return appcompact.NewService(a).FailStandaloneCompactTurn(threadID, turnID, message)
 }
 
 func restoreStandaloneCompactSession(a *App, sessionKey, threadID, previousStatus string) {
-	newCompactService(a).RestoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
+	appcompact.NewService(a).RestoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
 }
 
 func sendStandaloneCompactResult(a *App, sess *state.Session, status string) {
@@ -89,11 +73,7 @@ func sendStandaloneCompactResult(a *App, sess *state.Session, status string) {
 	if text == "" {
 		return
 	}
-	newCompactService(a).SendSessionTextNotice(sess, text)
-}
-
-func sendSessionTextNotice(a *App, sess *state.Session, text string) {
-	newCompactService(a).SendSessionTextNotice(sess, text)
+	appcompact.NewService(a).SendSessionTextNotice(sess, text)
 }
 
 func standaloneCompactResultText(status string) string {

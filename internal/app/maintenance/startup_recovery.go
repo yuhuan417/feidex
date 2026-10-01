@@ -8,6 +8,7 @@ import (
 	"time"
 
 	appcore "feidex/internal/app/appcore"
+	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -107,7 +108,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
 			continue
 		}
-		if state.NormalizeSessionStatus(firstNonEmpty(sess.Status, state.SessionStatusIdle.String())) != state.SessionStatusIdle {
+		if state.NormalizeSessionStatus(apputil.FirstNonEmpty(sess.Status, state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 			continue
 		}
 		if s.app.MaintenanceSessionHasInFlightSubmission(sess) {
@@ -118,7 +119,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 		}
 
 		sessionKey := strings.TrimSpace(sess.Key)
-		workspaceID := firstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, appcore.DefaultWorkspaceID(s.app))
+		workspaceID := apputil.FirstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, appcore.DefaultWorkspaceID(s.app))
 		ws := config.FindWorkspace(s.app.Config(), workspaceID)
 		if ws == nil {
 			slog.Warn("startup thread recovery dropped unknown workspace lineage",

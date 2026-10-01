@@ -570,17 +570,19 @@ func TestResolveMergeForwardExpandsForwardedMessages(t *testing.T) {
 }
 
 func TestFetchBotOpenIDSuccess(t *testing.T) {
-	origTransport := http.DefaultTransport
-	http.DefaultTransport = adapterRoundTripper{api: &adapterMockAPI{}}
-	defer func() { http.DefaultTransport = origTransport }()
-
 	api := &adapterMockAPI{}
-	http.DefaultTransport = adapterRoundTripper{api: api}
-	if got := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotOpenID(); got != "" {
+	unhandled := &Adapter{
+		cfg:        config.FeishuConfig{AppID: "app", AppSecret: "secret"},
+		httpClient: stubHTTPClient(adapterRoundTripper{api: api}),
+	}
+	if got := unhandled.fetchBotOpenID(); got != "" {
 		t.Fatalf("fetchBotOpenID(unhandled) = %q, want empty without bot info endpoint", got)
 	}
 
-	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	a := &Adapter{
+		cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"},
+	}
+	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/open-apis/auth/v3/tenant_access_token/internal":
 			body := `{"code":0,"tenant_access_token":"tenant-token"}`
@@ -591,11 +593,11 @@ func TestFetchBotOpenIDSuccess(t *testing.T) {
 		default:
 			return &http.Response{StatusCode: http.StatusNotFound, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"code":404}`)), Request: req}, nil
 		}
-	})
-	if got := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotOpenID(); got != "ou_bot" {
+	}))
+	if got := a.fetchBotOpenID(); got != "ou_bot" {
 		t.Fatalf("fetchBotOpenID() = %q, want ou_bot", got)
 	}
-	profile := (&Adapter{cfg: config.FeishuConfig{AppID: "app", AppSecret: "secret"}}).fetchBotProfile()
+	profile := a.fetchBotProfile()
 	if profile.OpenID != "ou_bot" || profile.Name != "luban-feidex" {
 		t.Fatalf("fetchBotProfile() = %+v, want open id and app name", profile)
 	}

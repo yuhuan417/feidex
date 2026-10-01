@@ -14,10 +14,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type goalService = goalcmd.Service
-type goalTracker = goalcmd.Tracker
-type goalAnchor = goalcmd.Anchor
-
 const (
 	goalCommandUsage          = goalcmd.CommandUsage
 	goalMaxObjectiveRunes     = goalcmd.MaxObjectiveRunes
@@ -25,11 +21,7 @@ const (
 	goalContinuationInputText = goalcmd.ContinuationInputText
 )
 
-func newGoalTracker() *goalTracker {
-	return goalcmd.NewTracker()
-}
-
-func goalTrackerForApp(a *App) *goalTracker {
+func goalTrackerForApp(a *App) *goalcmd.Tracker {
 	if a == nil {
 		return nil
 	}
@@ -43,7 +35,7 @@ func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []strin
 	return newGoalService(a).CommandGoal(msg, raw, args)
 }
 
-func newGoalService(a *App) goalService {
+func newGoalService(a *App) goalcmd.Service {
 	return goalcmd.NewService(goalAppAdapter{app: a})
 }
 
@@ -73,7 +65,7 @@ func completeGoalRenderedActionAsync(
 	a *App,
 	action *feishu.CardAction,
 	sessionKey, toastText string,
-	run func(goalService) (*callback.CardActionTriggerResponse, error),
+	run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error),
 ) (*callback.CardActionTriggerResponse, error) {
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
 		return run(newGoalService(a))

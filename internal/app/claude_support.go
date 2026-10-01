@@ -7,24 +7,18 @@ import (
 	"time"
 
 	appapproval "feidex/internal/app/approval"
+	"feidex/internal/app/apputil"
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/claudesupport"
 	"feidex/internal/app/pendingforms"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-// ---------------------------------------------------------------------------
-// Service type and constructor
-// ---------------------------------------------------------------------------
-
-type claudeSupportService = claudesupport.Service
-
-func newClaudeSupportService(a *App) *claudeSupportService {
-	return &claudeSupportService{
+func newClaudeSupportService(a *App) *claudesupport.Service {
+	return &claudesupport.Service{
 		DeliverPendingCard: func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{
 				requestKey:      reqKey,
@@ -66,7 +60,7 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 		PatchCard: func(messageID string, card map[string]any) error {
 			return a.feishu.PatchCard(context.Background(), messageID, card)
 		},
-		PrepareMentionText: prependAttentionMentionMarkdown,
+		PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
 		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
 			return contentCardTitleForSession(a, sessionKey, workspaceID, title)
@@ -88,53 +82,9 @@ func newClaudeSupportService(a *App) *claudeSupportService {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Thin wrappers — pure helper functions (already delegated)
-// ---------------------------------------------------------------------------
-
-func claudeRequestIDStored(requestID string) string {
-	return claudesupport.ClaudeRequestIDStored(requestID)
-}
-
-func claudeApprovalButtons(kind, requestKey, sessionActionLabel string) []feishu.Button {
-	return claudesupport.ClaudeApprovalButtons(kind, requestKey, sessionActionLabel)
-}
-
-func normalizeClaudeSessionPermissionUpdate(update map[string]any) (map[string]any, bool) {
-	return claudesupport.NormalizeClaudeSessionPermissionUpdate(update)
-}
-
-func claudeApprovalResolutionForAction(actionName string) (appruntime.ClaudeApprovalResolution, string) {
-	return claudesupport.ClaudeApprovalResolutionForAction(actionName)
-}
-
-func claudeAnswersFromSelections(payload pendingforms.ToolUserInputPayload, selections map[string]string) (map[string]string, string, error) {
-	return claudesupport.ClaudeAnswersFromSelections(payload, selections)
-}
-
-func parseClaudeToolUserInputResponse(text string, payload pendingforms.ToolUserInputPayload) (map[string]string, string, error) {
-	return claudesupport.ParseClaudeToolUserInputResponse(text, payload)
-}
-
-func claudeQuestionAnswer(raw string, q pendingforms.ToolUserInputQuestion) (string, string, error) {
-	return claudesupport.ClaudeQuestionAnswer(raw, q)
-}
-
-func claudePlanSubmittedBody(pending *state.PendingRequest, feedback string) string {
-	return claudesupport.ClaudePlanSubmittedBody(pending, feedback)
-}
-
 func claudePlanCancelledBody(pending *state.PendingRequest) string {
 	return claudesupport.ClaudePlanCancelledBody(pending)
 }
-
-func claudePlanOriginalBody(pending *state.PendingRequest) string {
-	return claudesupport.ClaudePlanOriginalBody(pending)
-}
-
-// ---------------------------------------------------------------------------
-// Thin wrappers — Service method delegates
-// ---------------------------------------------------------------------------
 
 func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
 	return newClaudeSupportService(a).SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)

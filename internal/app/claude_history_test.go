@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/claudesession"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -144,7 +145,7 @@ func TestRenderHistoryCardClaudeMarksLatestTurnRunningWhenSessionBusy(t *testing
 
 func writeClaudeHistoryFixture(t *testing.T, configDir, cwd, sessionID string, modTime time.Time, lines []string) string {
 	t.Helper()
-	projectDir := filepath.Join(configDir, "projects", sanitizeClaudeProjectDirName(cwd))
+	projectDir := filepath.Join(configDir, "projects", claudesession.SanitizeProjectDirName(cwd))
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) error = %v", projectDir, err)
 	}

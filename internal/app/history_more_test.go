@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	appdelivery "feidex/internal/app/delivery"
+	apphistorycmd "feidex/internal/app/historycmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
@@ -109,7 +110,7 @@ func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 		result.Thread = codexrpc.ThreadReadThread{
 			ID: "thread-1",
 		}
-		for i := 1; i <= historyPageSize+1; i++ {
+		for i := 1; i <= apphistorycmd.HistoryPageSize+1; i++ {
 			result.Thread.Turns = append(result.Thread.Turns, codexrpc.ThreadReadTurn{
 				ID:     fmt.Sprintf("turn-%d", i),
 				Status: "completed",
@@ -128,7 +129,7 @@ func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 		t.Fatalf("renderHistoryCard(page=1) error = %v", err)
 	}
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, fmt.Sprintf("当前页: `%d-%d / %d`", historyPageSize+1, historyPageSize+1, historyPageSize+1)) {
+	if !strings.Contains(body, fmt.Sprintf("当前页: `%d-%d / %d`", apphistorycmd.HistoryPageSize+1, apphistorycmd.HistoryPageSize+1, apphistorycmd.HistoryPageSize+1)) {
 		t.Fatalf("history page body = %q, want second page range", body)
 	}
 	selects := cardSelectStaticForTest(card)
@@ -145,7 +146,7 @@ func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 		t.Fatalf("history page option label = %q, want current turn on second page", label)
 	}
 
-	detail, err := newHistoryService(a).RenderHistoryDetailCard(sessionKey, historyPageSize)
+	detail, err := newHistoryService(a).RenderHistoryDetailCard(sessionKey, apphistorycmd.HistoryPageSize)
 	if err != nil {
 		t.Fatalf("renderHistoryDetailCard(last) error = %v", err)
 	}
@@ -181,7 +182,7 @@ func TestHistoryCardWithConfiguredPageSizeFitsFeishuCardLimits(t *testing.T) {
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
-		ActiveTurnID:   fmt.Sprintf("turn-%d", historyPageSize),
+		ActiveTurnID:   fmt.Sprintf("turn-%d", apphistorycmd.HistoryPageSize),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -194,7 +195,7 @@ func TestHistoryCardWithConfiguredPageSizeFitsFeishuCardLimits(t *testing.T) {
 		result.Thread = codexrpc.ThreadReadThread{
 			ID: "thread-1",
 		}
-		for i := 1; i <= historyPageSize; i++ {
+		for i := 1; i <= apphistorycmd.HistoryPageSize; i++ {
 			result.Thread.Turns = append(result.Thread.Turns, codexrpc.ThreadReadTurn{
 				ID:     fmt.Sprintf("turn-%d", i),
 				Status: "completed",
@@ -216,17 +217,17 @@ func TestHistoryCardWithConfiguredPageSizeFitsFeishuCardLimits(t *testing.T) {
 		t.Fatalf("history card selects = %+v, want 1 select", selects)
 	}
 	options, _ := selects[0]["options"].([]map[string]any)
-	if len(options) != historyPageSize {
-		t.Fatalf("history card options = %d, want %d", len(options), historyPageSize)
+	if len(options) != apphistorycmd.HistoryPageSize {
+		t.Fatalf("history card options = %d, want %d", len(options), apphistorycmd.HistoryPageSize)
 	}
-	if got := appdelivery.CountCardComponentNodes(card); got >= feishuReplyCardMaxComponentCount {
-		t.Fatalf("history card component count = %d, want < %d", got, feishuReplyCardMaxComponentCount)
+	if got := appdelivery.CountCardComponentNodes(card); got >= appdelivery.ReplyCardMaxComponentCount {
+		t.Fatalf("history card component count = %d, want < %d", got, appdelivery.ReplyCardMaxComponentCount)
 	}
 	payload, err := json.Marshal(card)
 	if err != nil {
 		t.Fatalf("Marshal(card) error = %v", err)
 	}
-	if len(payload) > feishuReplyCardMaxPayloadBytes {
-		t.Fatalf("history card payload = %d, want <= %d", len(payload), feishuReplyCardMaxPayloadBytes)
+	if len(payload) > appdelivery.ReplyCardMaxPayloadBytes {
+		t.Fatalf("history card payload = %d, want <= %d", len(payload), appdelivery.ReplyCardMaxPayloadBytes)
 	}
 }

@@ -1,6 +1,9 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"os/exec"
 	"strings"
@@ -135,7 +138,7 @@ func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) 
 	ffA.botOpenID = "bot-a-open"
 	ffA.groupBotCounts = map[string]int{"chat-primary": 1}
 	fb := &fakeFeishuClient{botOpenID: "bot-b-open", groupBotCounts: map[string]int{"chat-primary": 2}}
-	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: wrapFeishuClient(fb)}
+	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: appfeishuwrap.WrapFeishuClient(fb)}
 	configureGroupPrimaryEvents(b)
 
 	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
@@ -684,7 +687,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 		WorkspaceID:             "default",
 		ModelOverride:           "gpt-5-binding",
 		ReasoningEffortOverride: "high",
-		ServiceTierOverride:     serviceTierFast,
+		ServiceTierOverride:     appservicetiercmd.ServiceTierFast,
 		SandboxModeOverride:     "read-only",
 		ApprovalPolicyOverride:  "never",
 		MultiAgentModeOverride:  "proactive",
@@ -753,7 +756,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	if got, _ := threadParams["sandbox"].(string); got != "read-only" {
 		t.Fatalf("thread/start sandbox = %q, want read-only", got)
 	}
-	if got, _ := threadParams["serviceTier"].(string); got != serviceTierFast {
+	if got, _ := threadParams["serviceTier"].(string); got != appservicetiercmd.ServiceTierFast {
 		t.Fatalf("thread/start serviceTier = %q, want fast", got)
 	}
 	if got, _ := turnParams["model"].(string); got != "gpt-5-binding" {
@@ -768,7 +771,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	if got, _ := turnParams["sandboxPolicy"].(map[string]any); got["type"] != "readOnly" {
 		t.Fatalf("turn/start sandboxPolicy = %+v, want readOnly", got)
 	}
-	if got, _ := turnParams["serviceTier"].(string); got != serviceTierFast {
+	if got, _ := turnParams["serviceTier"].(string); got != appservicetiercmd.ServiceTierFast {
 		t.Fatalf("turn/start serviceTier = %q, want fast", got)
 	}
 	if got, _ := turnParams["multiAgentMode"].(string); got != "proactive" {
@@ -1089,7 +1092,7 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 	if binding.WorkspaceID != "server" || binding.ModelOverride != "gpt-binding" || binding.ReasoningEffortOverride != "low" {
 		t.Fatalf("binding command overrides = %+v", binding)
 	}
-	if binding.ServiceTierOverride != serviceTierFast || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" || binding.MultiAgentModeOverride != "proactive" || binding.ClaudePermissionMode != "acceptEdits" {
+	if binding.ServiceTierOverride != appservicetiercmd.ServiceTierFast || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" || binding.MultiAgentModeOverride != "proactive" || binding.ClaudePermissionMode != "acceptEdits" {
 		t.Fatalf("binding runtime overrides = %+v", binding)
 	}
 	if a.cfg.Codex.Model != "gpt-global" || a.cfg.Codex.ReasoningEffort != "medium" {
@@ -1189,7 +1192,7 @@ func TestGroupBindingScopedCardActionsUpdateBindingNotSession(t *testing.T) {
 		{ActionValue: map[string]any{"action": "workspace.use.select", "session_key": sessionKey}, Option: "server", UserID: "user-1", ChatID: "chat-card", MessageID: "card-1"},
 		{ActionValue: map[string]any{"action": "model.config.set_model", "session_key": sessionKey, "model_id": "gpt-card"}, UserID: "user-1", ChatID: "chat-card", MessageID: "card-2"},
 		{ActionValue: map[string]any{"action": "model.config.set_effort", "session_key": sessionKey, "reasoning_effort": "high"}, UserID: "user-1", ChatID: "chat-card", MessageID: "card-3"},
-		{ActionValue: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "service_tier": serviceTierFast}, UserID: "user-1", ChatID: "chat-card", MessageID: "card-4"},
+		{ActionValue: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "service_tier": appservicetiercmd.ServiceTierFast}, UserID: "user-1", ChatID: "chat-card", MessageID: "card-4"},
 		{ActionValue: map[string]any{"action": "workspace.sandbox.set", "session_key": sessionKey, "sandbox_mode": "read-only"}, UserID: "user-1", ChatID: "chat-card", MessageID: "card-5"},
 		{ActionValue: map[string]any{"action": "workspace.policy.set", "session_key": sessionKey, "approval_policy": "never"}, UserID: "user-1", ChatID: "chat-card", MessageID: "card-6"},
 	}
@@ -1203,7 +1206,7 @@ func TestGroupBindingScopedCardActionsUpdateBindingNotSession(t *testing.T) {
 	if binding == nil {
 		t.Fatal("binding disappeared")
 	}
-	if binding.WorkspaceID != "server" || binding.ModelOverride != "gpt-card" || binding.ReasoningEffortOverride != "high" || binding.ServiceTierOverride != serviceTierFast || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" {
+	if binding.WorkspaceID != "server" || binding.ModelOverride != "gpt-card" || binding.ReasoningEffortOverride != "high" || binding.ServiceTierOverride != appservicetiercmd.ServiceTierFast || binding.SandboxModeOverride != "read-only" || binding.ApprovalPolicyOverride != "never" {
 		t.Fatalf("binding after card actions = %+v", binding)
 	}
 	if sess := a.State().Session(sessionKey); sess == nil || sess.WorkspaceID != "default" {

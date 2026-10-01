@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 
-	appcommandmatch "feidex/internal/app/commandmatch"
 	appfeatures "feidex/internal/app/features"
 	"feidex/internal/app/menutypes"
 	"feidex/internal/feishu"
@@ -15,49 +14,15 @@ type localCommandSpec struct {
 	Handle      func(a *App, msg *feishu.InboundMessage, args []string) error
 	HandleRaw   func(a *App, msg *feishu.InboundMessage, raw string, args []string) error
 	HelpGroup   string
-	HelpEntries []helpCommandSpec
+	HelpEntries []menutypes.HelpCommandSpec
 	Backends    map[string]localCommandBackendSpec
 }
 
 type localCommandBackendSpec struct {
 	Match       func(fields []string) bool
 	HideInHelp  bool
-	HelpEntries []helpCommandSpec
+	HelpEntries []menutypes.HelpCommandSpec
 }
-
-var exactCommand = appcommandmatch.ExactCommand
-
-var exactOrSingleArgCommand = appcommandmatch.ExactOrSingleArgCommand
-
-var matchBackendCommand = appcommandmatch.MatchBackendCommand
-
-var commandArgInSet = appcommandmatch.CommandArgInSet
-
-var matchReviewCommand = appcommandmatch.MatchReviewCommand
-
-var matchGoalCommand = appcommandmatch.MatchGoalCommand
-
-var matchHistoryCommand = appcommandmatch.MatchHistoryCommand
-
-var matchModelCommand = appcommandmatch.MatchModelCommand
-
-var matchEffortCommand = appcommandmatch.MatchEffortCommand
-
-var matchThreadCommand = appcommandmatch.MatchThreadCommand
-
-var matchSessionCommand = appcommandmatch.MatchSessionCommand
-
-var matchUpgradeCommand = appcommandmatch.MatchUpgradeCommand
-
-var matchCodexCommand = appcommandmatch.MatchCodexCommand
-
-var matchClaudeCommand = appcommandmatch.MatchClaudeCommand
-
-var matchWorkspaceCommand = appcommandmatch.MatchWorkspaceCommand
-
-var matchClaudeWorkspaceCommand = appcommandmatch.MatchClaudeWorkspaceCommand
-
-var normalizeUpgradeVersion = appcommandmatch.NormalizeUpgradeVersion
 
 func localCommandSpecList() []localCommandSpec {
 	return localCommandSpecsRegistry()
@@ -88,17 +53,17 @@ func (s localCommandSpec) backendPolicy(backend string) localCommandBackendSpec 
 	}
 }
 
-func (s localCommandSpec) helpEntriesForBackend(backend string) []helpCommandSpec {
+func (s localCommandSpec) helpEntriesForBackend(backend string) []menutypes.HelpCommandSpec {
 	backend = normalizeRuntimeBackend(backend)
 	if policy, ok := s.Backends[backend]; ok {
 		if policy.HideInHelp {
 			return nil
 		}
 		if policy.HelpEntries != nil {
-			return append([]helpCommandSpec(nil), policy.HelpEntries...)
+			return append([]menutypes.HelpCommandSpec(nil), policy.HelpEntries...)
 		}
 	}
-	return append([]helpCommandSpec(nil), s.HelpEntries...)
+	return append([]menutypes.HelpCommandSpec(nil), s.HelpEntries...)
 }
 
 func commandHandlesLocallyForBackend(spec *localCommandSpec, backend string, fields []string) bool {
@@ -156,11 +121,11 @@ func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {
 	return strings.Join(lines, "\n")
 }
 
-func groupScopedHelpEntries(entries []helpCommandSpec) []helpCommandSpec {
+func groupScopedHelpEntries(entries []menutypes.HelpCommandSpec) []menutypes.HelpCommandSpec {
 	if len(entries) == 0 {
 		return nil
 	}
-	out := make([]helpCommandSpec, 0, len(entries))
+	out := make([]menutypes.HelpCommandSpec, 0, len(entries))
 	for _, entry := range entries {
 		command := strings.TrimSpace(entry.Command)
 		if command == "" {

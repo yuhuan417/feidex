@@ -1,13 +1,15 @@
 package app
 
 import (
+	appinbounddedup "feidex/internal/app/inbounddedup"
+
 	"context"
 	"testing"
 	"time"
 )
 
 func TestInboundDeduperClaimReleaseAndDone(t *testing.T) {
-	d := &inboundDeduper{
+	d := &appinbounddedup.Deduper{
 		Inflight:     map[string]time.Time{},
 		RecentlyDone: map[string]time.Time{},
 		Retention:    50 * time.Millisecond,
@@ -39,7 +41,7 @@ func TestInboundDeduperClaimReleaseAndDone(t *testing.T) {
 }
 
 func TestInboundDeduperGCAndCap(t *testing.T) {
-	d := &inboundDeduper{
+	d := &appinbounddedup.Deduper{
 		Inflight:     map[string]time.Time{},
 		RecentlyDone: map[string]time.Time{},
 		Retention:    time.Second,

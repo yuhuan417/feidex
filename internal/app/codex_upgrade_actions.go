@@ -1,11 +1,15 @@
 package app
 
 import (
+	appbackend "feidex/internal/app/backend"
+	appruntime "feidex/internal/app/runtime"
+
 	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -70,7 +74,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个升级请求"}}, nil
 	}
-	sessionKey := firstNonEmpty(actionSessionKey(action), pending.SessionKey)
+	sessionKey := apputil.FirstNonEmpty(actionSessionKey(action), pending.SessionKey)
 	if actionName == "codex_upgrade.cancel" {
 		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -88,11 +92,11 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 		}, nil
 	}
 
-	var payload codexUpgradePendingPayload
+	var payload appruntime.CodexUpgradePendingPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级参数损坏"}}, nil
 	}
-	snapshot := backendUpgradeSnapshot{
+	snapshot := appbackend.BackendUpgradeSnapshot{
 		Running:         true,
 		Phase:           "preflight",
 		Message:         "正在校验升级前置条件",
@@ -101,7 +105,7 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 		TargetVersion:   payload.TargetVersion,
 		LatestVersion:   payload.TargetVersion,
 	}
-	if !newMaintenanceStateService(s.app).BeginCodexUpgrade(snapshot) {
+	if !appbackend.NewMaintenanceStateService(s.app).BeginCodexUpgrade(snapshot) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		view, err := newBackendUpgradeService(s.app).loadCodexUpgradeView(ctx, false)
@@ -113,14 +117,14 @@ func (s backendUpgradeService) completeCodexUpgradeAction(action *feishu.CardAct
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "Codex 正在维护中"},
-			Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).CodexUpgradeState())),
+			Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState())),
 		}, nil
 	}
 	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
-	messageID := firstNonEmpty(strings.TrimSpace(action.MessageID), strings.TrimSpace(pending.FeishuMsgID))
+	messageID := apputil.FirstNonEmpty(strings.TrimSpace(action.MessageID), strings.TrimSpace(pending.FeishuMsgID))
 	go newBackendUpgradeService(s.app).runCodexUpgradeOperation(messageID, sessionKey, payload)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "Codex 升级已开始"},
-		Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, newMaintenanceStateService(s.app).CodexUpgradeState())),
+		Card:  rawCard(newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard(sessionKey, appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState())),
 	}, nil
 }

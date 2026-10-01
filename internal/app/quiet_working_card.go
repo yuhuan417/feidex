@@ -9,14 +9,14 @@ import (
 	"feidex/internal/state"
 )
 
-func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *state.Submission, op quietWorkingCardOp) {
+func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *state.Submission, op turn.QuietWorkingCardOp) {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return
 	}
 	if strings.TrimSpace(op.Body) == "" {
 		return
 	}
-	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(a, sub, quietWorkingCardTitle), quietWorkingCardColor, "", op.Body, nil)
+	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(a, sub, turn.QuietWorkingCardTitle), turn.QuietWorkingCardColor, "", op.Body, nil)
 	if strings.TrimSpace(op.MessageID) == "" {
 		if strings.TrimSpace(op.Body) == "" {
 			return
@@ -48,35 +48,4 @@ func commitQuietWorkingCardRender(a *App, turnID, messageID, body string) {
 	newTurnStreamService(a).commitTurnStreamQuietRender(turnID, messageID, body)
 }
 
-// toStreamState converts a turnStream to a turn.StreamState for use with turn package functions.
-func toStreamState(s *turnStream) *turn.StreamState {
-	if s == nil {
-		return nil
-	}
-	return &turn.StreamState{
-		TurnID:       s.TurnID,
-		QuietWorking: s.QuietWorking,
-	}
-}
-
-// prepareQuietWorkingCardUpdateLocked wraps turn.PrepareUpdateLocked for use within the app package.
-func prepareQuietWorkingCardUpdateLocked(stream *turnStream, itemID string, item map[string]any, workspaceCwd string) quietWorkingCardOp {
-	if stream == nil {
-		return turn.PrepareUpdateLocked(nil, itemID, item, workspaceCwd)
-	}
-	ss := toStreamState(stream)
-	op := turn.PrepareUpdateLocked(ss, itemID, item, workspaceCwd)
-	stream.QuietWorking = ss.QuietWorking
-	return op
-}
-
 // prepareQuietWorkingCardBoundaryLocked wraps turn.PrepareBoundaryLocked for use within the app package.
-func prepareQuietWorkingCardBoundaryLocked(stream *turnStream) quietWorkingBoundary {
-	if stream == nil {
-		return turn.PrepareBoundaryLocked(nil)
-	}
-	ss := toStreamState(stream)
-	boundary := turn.PrepareBoundaryLocked(ss)
-	stream.QuietWorking = ss.QuietWorking
-	return boundary
-}

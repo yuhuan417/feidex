@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	appcompact "feidex/internal/app/compact"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -16,7 +17,7 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	a := &App{cfg: cfg}
 	sub := &state.Submission{WorkspaceID: "default"}
 
-	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(nil, sub, "Reply", "green", true, "", nil, false)
+	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.TODO(), sub, "Reply", "green", true, "", nil, false)
 	if got := cardHeaderTitle(t, reply); got != "Reply" {
 		t.Fatalf("reply card title = %q, want Reply", got)
 	}
@@ -69,7 +70,7 @@ func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 		{name: "status", card: renderStatusCard(a, sessionKey)},
 		{name: "quiet", card: renderQuietModeMenuCard(a, sessionKey)},
 		{name: "interrupt", card: renderInterruptPreparingCard(a, sessionKey, "menu.tools")},
-		{name: "compact", card: newCompactService(a).RenderCompactPreparingCard(sessionKey)},
+		{name: "compact", card: appcompact.NewService(a).RenderCompactPreparingCard(sessionKey)},
 		{name: "help", card: renderHelpCard(a, sessionKey)},
 	}
 	for _, tc := range cases {

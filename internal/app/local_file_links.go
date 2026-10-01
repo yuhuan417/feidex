@@ -6,13 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/app/attachments"
 	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
-
-var inlineCodeLocalPreviewTargetRe = applinkutil.InlineCodeLocalPreviewTargetRe
 
 func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submission, text string) string {
 	text = strings.TrimSpace(text)
@@ -23,7 +22,7 @@ func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submissio
 	if ws == nil {
 		return text
 	}
-	normalized := normalizeLocalFilePreviewTargets(text, ws.Cwd)
+	normalized := applinkutil.NormalizeLocalFilePreviewTargets(text, ws.Cwd)
 	rewritten, err := a.feishu.RewriteLocalFileLinks(ctx, feishu.LocalFileLinkRewriteRequest{
 		Text:         normalized,
 		WorkspaceCWD: ws.Cwd,
@@ -43,26 +42,16 @@ func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submissio
 	return rewritten
 }
 
-var normalizeLocalFilePreviewTargets = applinkutil.NormalizeLocalFilePreviewTargets
-
-var linkifyInlineCodeLocalFileRefsLine = applinkutil.LinkifyInlineCodeLocalFileRefsLine
-
-var linkifyInlineCodeURLs = applinkutil.LinkifyInlineCodeURLs
-
-var rangeWithinAny = applinkutil.RangeWithinAny
-
-var escapeMarkdownLinkLabel = applinkutil.EscapeMarkdownLinkLabel
-
 func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)
 	if enablePreview {
-		text = linkifyInlineCodeURLs(text)
+		text = applinkutil.LinkifyInlineCodeURLs(text)
 		if sub != nil {
 			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-				text = neutralizeLocalMarkdownLinks(text, ws.Cwd)
+				text = attachments.NeutralizeLocalMarkdownLinks(text, ws.Cwd)
 			}
 		}
-		return normalizeCardMarkdown(text)
+		return applinkutil.NormalizeCardMarkdown(text)
 	}
 	return cardRendererForApp(a).prepareCardMarkdown(sub, text)
 }

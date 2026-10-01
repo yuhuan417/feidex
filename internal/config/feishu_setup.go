@@ -243,7 +243,7 @@ func runRegistrationFlow(timeout time.Duration, qrImagePath string) (string, str
 	defer cancel()
 
 	result, err := registration.RegisterApp(ctx, &registration.Options{
-		Domain:   accountsBaseURL,
+		Domain: accountsBaseURL,
 		OnQRCode: func(info *registration.QRCodeInfo) {
 			renderRegistrationQR(info, qrImagePath)
 		},

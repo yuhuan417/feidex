@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	applinkutil "feidex/internal/app/linkutil"
+	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
 )
@@ -29,22 +31,22 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 		t.Fatalf("turnitem.BuildLabeledTurnEventText(empty body) = %q", got)
 	}
 
-	meta, body := compactTurnItemCardContent(turnItemCardPayload{
+	meta, body := turnitem.CompactTurnItemCardContent(turnitem.CardPayload{
 		ItemType:    "dynamic_tool_call",
-		SummaryText: "事件[dynamic_tool_call]:\n" + markdownCodeBlock("search") + "\nstatus=completed",
+		SummaryText: "事件[dynamic_tool_call]:\n" + turnitem.MarkdownCodeBlock("search") + "\nstatus=completed",
 		DetailText:  "detail",
 	})
-	if meta != "status=completed" || !strings.Contains(normalizeCardMarkdown(body), "search") {
-		t.Fatalf("compactTurnItemCardContent(dynamic) = %q / %q", meta, body)
+	if meta != "status=completed" || !strings.Contains(applinkutil.NormalizeCardMarkdown(body), "search") {
+		t.Fatalf("turnitem.CompactTurnItemCardContent(dynamic) = %q / %q", meta, body)
 	}
 
-	meta, body = compactTurnItemCardContent(turnItemCardPayload{
+	meta, body = turnitem.CompactTurnItemCardContent(turnitem.CardPayload{
 		ItemType:    "file_change",
 		SummaryText: "文件改动:\nsummary",
 		DetailText:  "detail",
 	})
 	if meta != "" || body != "summary" {
-		t.Fatalf("compactTurnItemCardContent(default) = %q / %q", meta, body)
+		t.Fatalf("turnitem.CompactTurnItemCardContent(default) = %q / %q", meta, body)
 	}
 
 	ff.replyCardErr = errors.New("boom")
@@ -106,8 +108,8 @@ func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 	stream := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"]
 	stream.PendingPlan = "- [in_progress] run"
-	reasoningKey := quietWorkingEntryKey(quietWorkingReasoningKey, 0)
-	stream.QuietWorking = &quietWorkingCard{
+	reasoningKey := turn.EntryKey(turn.QuietWorkingReasoningKey, 0)
+	stream.QuietWorking = &turn.QuietWorkingCard{
 		MessageID:  "reuse-plan",
 		EntryOrder: []string{reasoningKey},
 		Entries:    map[string]string{reasoningKey: "思考中..."},

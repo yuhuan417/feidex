@@ -6,7 +6,6 @@ import (
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/replycontinuation"
 	"feidex/internal/app/sessionctx"
-	"feidex/internal/app/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -94,10 +93,6 @@ func (s replyContinuationService) replyRootTurnLink(msg *feishu.InboundMessage) 
 	return s.inner.ReplyRootTurnLink(msg)
 }
 
-func (s replyContinuationService) messageLinkMatchesCurrentBackend(link *state.MessageLink) bool {
-	return s.inner.MessageLinkMatchesCurrentBackend(link)
-}
-
 func (s replyContinuationService) sessionKeyForInboundMessage(msg *feishu.InboundMessage, link *state.MessageLink) string {
 	return s.inner.SessionKeyForInboundMessage(msg, link)
 }
@@ -126,24 +121,12 @@ func (s replyContinuationService) continueClaudeSessionWithText(sessionKey, text
 	return s.inner.ContinueClaudeSessionWithText(sessionKey, text)
 }
 
-func (s replyContinuationService) buildClaudeContinuationSubmissionFromMessage(msg *feishu.InboundMessage, sessionKey string, sess *state.Session, bindOnlyCurrentRoot bool) (*state.Submission, error) {
-	return s.inner.BuildClaudeContinuationSubmissionFromMessage(msg, sessionKey, sess, bindOnlyCurrentRoot)
-}
-
-func (s replyContinuationService) startClaudeContinuationSubmission(sessionKey string, sub *state.Submission, notifyFailure bool) error {
-	return s.inner.StartClaudeContinuationSubmission(sessionKey, sub, notifyFailure)
-}
-
 func (s replyContinuationService) recordSubmissionSourceLinks(sub *state.Submission) {
 	s.inner.RecordSubmissionSourceLinks(sub)
 }
 
 func (s replyContinuationService) recordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string) {
 	s.inner.RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID)
-}
-
-func (s replyContinuationService) recordTurnMessageLink(messageID, sessionKey, threadID, turnID string) {
-	s.inner.RecordTurnMessageLink(messageID, sessionKey, threadID, turnID)
 }
 
 // Exported wrappers for sub-package interface satisfaction.
@@ -155,9 +138,4 @@ func (s replyContinuationService) RecordRootTurnBinding(rootMessageID, sessionKe
 }
 
 // Re-export staged image helpers for use by other app/ code.
-var (
-	stagedImageAttachments        = submission.StagedImageAttachments
-	stagedImageSourceMessageIDs   = submission.StagedImageSourceMessageIDs
-	stagedImageRootMessageIDs     = submission.StagedImageRootMessageIDs
-	sourceMessageIDsForSubmission = submission.SourceMessageIDs
-)
+var ()

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/app/modelconfig"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -129,22 +130,22 @@ func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
 	}
 	clone := *modelConfigReadCopy(a)
 	if profile := a.State().BotProfile(); profile != nil {
-		clone.Codex.PlanModel = firstNonEmpty(profile.PlanModel, clone.Codex.PlanModel)
-		clone.Codex.PlanReasoningEffort = firstNonEmpty(profile.PlanReasoningEffort, clone.Codex.PlanReasoningEffort)
-		clone.Codex.ReviewModel = firstNonEmpty(profile.ReviewModel, clone.Codex.ReviewModel)
-		clone.Codex.SubagentModel = firstNonEmpty(profile.SubagentModel, clone.Codex.SubagentModel)
-		clone.Codex.SubagentReasoningEffort = firstNonEmpty(profile.SubagentReasoningEffort, clone.Codex.SubagentReasoningEffort)
-		clone.Claude.SmallModel = firstNonEmpty(profile.ClaudeSmallModel, clone.Claude.SmallModel)
-		clone.Claude.SubagentModel = firstNonEmpty(profile.ClaudeSubagentModel, clone.Claude.SubagentModel)
+		clone.Codex.PlanModel = apputil.FirstNonEmpty(profile.PlanModel, clone.Codex.PlanModel)
+		clone.Codex.PlanReasoningEffort = apputil.FirstNonEmpty(profile.PlanReasoningEffort, clone.Codex.PlanReasoningEffort)
+		clone.Codex.ReviewModel = apputil.FirstNonEmpty(profile.ReviewModel, clone.Codex.ReviewModel)
+		clone.Codex.SubagentModel = apputil.FirstNonEmpty(profile.SubagentModel, clone.Codex.SubagentModel)
+		clone.Codex.SubagentReasoningEffort = apputil.FirstNonEmpty(profile.SubagentReasoningEffort, clone.Codex.SubagentReasoningEffort)
+		clone.Claude.SmallModel = apputil.FirstNonEmpty(profile.ClaudeSmallModel, clone.Claude.SmallModel)
+		clone.Claude.SubagentModel = apputil.FirstNonEmpty(profile.ClaudeSubagentModel, clone.Claude.SubagentModel)
 	}
 	if sess := a.State().Session(normalizeSessionKey(a, sessionKey)); sess != nil {
-		clone.Codex.PlanModel = firstNonEmpty(sess.PlanModelOverride, clone.Codex.PlanModel)
-		clone.Codex.PlanReasoningEffort = firstNonEmpty(sess.PlanReasoningEffortOverride, clone.Codex.PlanReasoningEffort)
-		clone.Codex.ReviewModel = firstNonEmpty(sess.ReviewModelOverride, clone.Codex.ReviewModel)
-		clone.Codex.SubagentModel = firstNonEmpty(sess.SubagentModelOverride, clone.Codex.SubagentModel)
-		clone.Codex.SubagentReasoningEffort = firstNonEmpty(sess.SubagentReasoningEffortOverride, clone.Codex.SubagentReasoningEffort)
-		clone.Claude.SmallModel = firstNonEmpty(sess.SmallModelOverride, clone.Claude.SmallModel)
-		clone.Claude.SubagentModel = firstNonEmpty(sess.SubagentModelOverride, clone.Claude.SubagentModel)
+		clone.Codex.PlanModel = apputil.FirstNonEmpty(sess.PlanModelOverride, clone.Codex.PlanModel)
+		clone.Codex.PlanReasoningEffort = apputil.FirstNonEmpty(sess.PlanReasoningEffortOverride, clone.Codex.PlanReasoningEffort)
+		clone.Codex.ReviewModel = apputil.FirstNonEmpty(sess.ReviewModelOverride, clone.Codex.ReviewModel)
+		clone.Codex.SubagentModel = apputil.FirstNonEmpty(sess.SubagentModelOverride, clone.Codex.SubagentModel)
+		clone.Codex.SubagentReasoningEffort = apputil.FirstNonEmpty(sess.SubagentReasoningEffortOverride, clone.Codex.SubagentReasoningEffort)
+		clone.Claude.SmallModel = apputil.FirstNonEmpty(sess.SmallModelOverride, clone.Claude.SmallModel)
+		clone.Claude.SubagentModel = apputil.FirstNonEmpty(sess.SubagentModelOverride, clone.Claude.SubagentModel)
 	}
 	return &clone
 }

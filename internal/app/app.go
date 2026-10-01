@@ -1,6 +1,9 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appinbounddedup "feidex/internal/app/inbounddedup"
+
 	"context"
 	"fmt"
 	"log/slog"
@@ -9,12 +12,16 @@ import (
 	"sync"
 	"time"
 
-	"feidex/internal/app/apputil"
+	"feidex/internal/app/attachments"
+	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/app/backend"
 	"feidex/internal/app/goalcmd"
+	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/serverrequest"
 	appskillscmd "feidex/internal/app/skillscmd"
 	"feidex/internal/app/turnbinding"
+	"feidex/internal/app/turnitem"
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -41,17 +48,13 @@ type App struct {
 	stopping               bool
 	lifecycleCtx           context.Context
 	lifecycleCancel        context.CancelFunc
-	deduper                *inboundDeduper
+	deduper                *appinbounddedup.Deduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
 	asyncRunner            func(func())
 	waitAsync              func()
 	codexRuntimeMu         sync.Mutex
-	codexRecovering        bool
-	codexRecoverySource    CodexClient
-	codexAutoThreadMu      sync.Mutex
-	codexAutoThreading     bool
-	autoRetries            *autoRetryTracker
+	autoRetries            *appautoretry.Tracker
 	frontendRecoveryMu     sync.Mutex
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
@@ -79,10 +82,10 @@ func (a *App) configMutex() *sync.RWMutex {
 // on first access. Each tracker is consumed by exactly one service type.
 type appTrackers struct {
 	turnStreams         *turnStreamTracker
-	turnItems           *turnItemTracker
+	turnItems           *turnitem.Tracker
 	turnBindings        *turnbinding.Tracker
 	submissionStarts    submissionStartTracker
-	workspaceCloneOps   *workspaceCloneTracker
+	workspaceCloneOps   *appworkspacecmd.CloneTracker
 	finalCardPatches    *finalCardPatchTracker
 	pendingSkills       *appskillscmd.PendingSkillTracker
 	groupAnnouncements  *groupAnnouncementTracker
@@ -113,7 +116,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		return nil, fmt.Errorf("nil store")
 	}
 	backend := normalizeRuntimeBackend(frontend.Backend)
-	FeishuClient := wrapFeishuClient(newFeishuClient(frontend.Feishu))
+	FeishuClient := appfeishuwrap.WrapFeishuClient(newFeishuClient(frontend.Feishu))
 	app := &App{
 		cfg:                 cfg,
 		cfgPath:             cfgPath,
@@ -124,12 +127,12 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		feishu:              FeishuClient,
 		started:             time.Now(),
 		lifecycleCtx:        context.Background(),
-		deduper:             newInboundDeduper(),
+		deduper:             appinbounddedup.NewDeduper(),
 		liveThreads:         newLiveThreadTracker(),
-		autoRetries:         newAutoRetryTracker(),
+		autoRetries:         appautoretry.NewTracker(),
 		trackers: appTrackers{
 			turnStreams:        newTurnStreamTracker(),
-			turnItems:          newTurnItemTracker(),
+			turnItems:          turnitem.NewTracker(),
 			workspaceCloneOps:  newWorkspaceCloneTracker(),
 			turnBindings:       turnbinding.NewTracker(store),
 			finalCardPatches:   newFinalCardPatchTracker(),
@@ -178,8 +181,8 @@ func (a *App) Start(ctx context.Context) error {
 		_ = stopMCPService(a, context.Background())
 		return err
 	}
-	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
-	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
+	appmaintenance.NewRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
+	appmaintenance.NewRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
 	scheduleStartupGroupAnnouncementRefreshes(a)
 	go sendStartupReadyNotifications(a)
 	runAsync(a, func() { runFeishuAppConfigHeal(a) })
@@ -347,7 +350,7 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 	}
 	turnParams := map[string]any{
 		"threadId":       threadID,
-		"input":          buildTurnInputs(sub),
+		"input":          attachments.BuildTurnInputs(sub),
 		"cwd":            cwd,
 		"approvalPolicy": approvalPolicy,
 	}
@@ -411,8 +414,6 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 	}
 	return turnResp.Turn.ID, nil
 }
-
-var firstNonEmpty = apputil.FirstNonEmpty
 
 func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {

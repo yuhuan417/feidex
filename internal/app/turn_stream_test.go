@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -31,12 +32,12 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 		WorkspaceID: "default",
 		TurnID:      "turn-1",
 	}
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemType:    "command_execution",
 		Title:       "命令执行",
 		Color:       "blue",
-		SummaryText: "命令执行:\n" + markdownCodeBlock("pwd") + "\nstatus=completed",
-		DetailText:  "命令执行:\n命令:\n" + markdownCodeBlock("$ pwd") + "\n输出:\n" + markdownCodeBlock("/tmp/work"),
+		SummaryText: "命令执行:\n" + turnitem.MarkdownCodeBlock("pwd") + "\nstatus=completed",
+		DetailText:  "命令执行:\n命令:\n" + turnitem.MarkdownCodeBlock("$ pwd") + "\n输出:\n" + turnitem.MarkdownCodeBlock("/tmp/work"),
 	}
 
 	card := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, payload, false)
@@ -72,7 +73,7 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 		WorkspaceID: "default",
 		TurnID:      "turn-1",
 	}
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemType:    "agent_message",
 		Title:       "回复",
 		Color:       "green",
@@ -106,7 +107,7 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 		TurnID:      "turn-1",
 	}
 	longText := strings.Repeat("hello ", 200)
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemType:      "agent_message",
 		Title:         "最终答复",
 		Color:         "green",
@@ -142,12 +143,12 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 		WorkspaceID: "default",
 		TurnID:      "turn-1",
 	}
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemType:    "file_change",
 		Title:       "文件改动",
 		Color:       "orange",
-		SummaryText: "文件改动:\n" + markdownCodeBlock("changed=1\nstatus=completed\ninternal/app/turn_stream.go (modified)"),
-		DetailText:  markdownCodeBlockWithLang("diff", "@@ -1 +1 @@\n-old\n+new"),
+		SummaryText: "文件改动:\n" + turnitem.MarkdownCodeBlock("changed=1\nstatus=completed\ninternal/app/turn_stream.go (modified)"),
+		DetailText:  turnitem.MarkdownCodeBlockWithLang("diff", "@@ -1 +1 @@\n-old\n+new"),
 	}
 
 	card := newOutboundCardService(a).renderTurnItemCard(context.Background(), sub, payload, false)

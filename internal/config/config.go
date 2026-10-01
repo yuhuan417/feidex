@@ -355,15 +355,6 @@ func normalizeFeishuDomain(domain string) (string, error) {
 	}
 }
 
-func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
 func (c *Config) ResolvedFrontends() []ResolvedFrontend {
 	if c == nil {
 		return nil

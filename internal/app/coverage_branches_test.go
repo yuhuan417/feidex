@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"strings"
 	"testing"
@@ -48,9 +50,9 @@ func TestRenderDownloadFailedCard(t *testing.T) {
 
 func TestNotifyingFeishuClientStartAndStop(t *testing.T) {
 	base := &fakeFeishuClient{}
-	client, _ := wrapFeishuClient(base).(*notifyingFeishuClient)
+	client, _ := appfeishuwrap.WrapFeishuClient(base).(*appfeishuwrap.NotifyingFeishuClient)
 	if client == nil {
-		t.Fatal("wrapFeishuClient() should return notifying client")
+		t.Fatal("appfeishuwrap.WrapFeishuClient() should return notifying client")
 	}
 	if err := client.Start(context.Background()); err != nil {
 		t.Fatalf("Start() error = %v", err)

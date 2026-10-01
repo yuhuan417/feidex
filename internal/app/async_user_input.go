@@ -14,11 +14,9 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-const asyncUserInputPendingKind = pendingforms.AsyncUserInputPendingKind
-
 func sendAsyncUserInputCard(a *App, sub *state.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {
 	payload.ThreadID, payload.TurnID = sub.ThreadID, sub.TurnID
-	requestID := asyncUserInputPendingKind + ":" + sub.TurnID + ":" + payload.ItemID
+	requestID := pendingforms.AsyncUserInputPendingKind + ":" + sub.TurnID + ":" + payload.ItemID
 	if pending := a.State().Pending(requestID); pending != nil {
 		return pending.FeishuMsgID
 	}
@@ -30,7 +28,7 @@ func sendAsyncUserInputCard(a *App, sub *state.Submission, payload pendingforms.
 	}
 	card := pendingforms.RenderAsyncUserInputFormCard(requestID, payload, drafts, sub.UserID)
 	if err := deliverPendingCard(a, sub, card, pendingCardDelivery{
-		requestKey: requestID, backend: backendCodex, kind: asyncUserInputPendingKind,
+		requestKey: requestID, backend: backendCodex, kind: pendingforms.AsyncUserInputPendingKind,
 		sessionKey: sub.SessionKey, threadID: sub.ThreadID, turnID: sub.TurnID,
 		itemID: payload.ItemID, ownerUserID: sub.UserID, payloadJSON: mustJSON(payload),
 		linkKind: "user_input_card", nonBlocking: true, reuseMessageID: reuseMessageID,
@@ -58,7 +56,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 	}
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := a.State().Pending(requestID)
-	if pending == nil || pending.Kind != asyncUserInputPendingKind || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending {
+	if pending == nil || pending.Kind != pendingforms.AsyncUserInputPendingKind || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending {
 		return warning("请求已处理或过期")
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {

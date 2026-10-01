@@ -1,6 +1,8 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"context"
 	"os/exec"
 
@@ -56,14 +58,12 @@ func newBackendSelectionService(app *App) backendSelectionService {
 		},
 		Commands: backend.SelectionCommandDeps{
 			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
-				return newAutoRetryService(app).CommandAutoRetry(msg, args)
+				return appautoretry.NewService(app).CommandAutoRetry(msg, args)
 			},
 		},
 	})
 	return s
 }
-
-// --- Callback implementations ---
 
 func availableBackendsForApp(app *App) []backend.AvailableBackend {
 	if app == nil || app.cfg == nil {
@@ -119,14 +119,6 @@ func backendRuntimeReadyForApp(app *App, target string) bool {
 
 // --- Delegation methods (lowercase, preserving app package API) ---
 
-func (s backendSelectionService) availableBackends() []backend.AvailableBackend {
-	return s.inner.AvailableBackends()
-}
-
-func (s backendSelectionService) backendAvailable(target string) bool {
-	return s.inner.BackendAvailable(target)
-}
-
 func (s backendSelectionService) renderBackendSelectionCard(sessionKey, notice string) map[string]any {
 	return s.inner.RenderBackendSelectionCard(sessionKey, notice)
 }
@@ -151,10 +143,6 @@ func (s backendSelectionService) completeBackendSelect(action *feishu.CardAction
 	return s.inner.CompleteBackendSelect(action, sessionKey, target)
 }
 
-func (s backendSelectionService) backendRuntimeReady(target string) bool {
-	return s.inner.BackendRuntimeReady(target)
-}
-
 func (s backendSelectionService) backendSwitchBlockedReason() string {
 	return s.inner.BackendSwitchBlockedReason()
 }
@@ -164,8 +152,4 @@ func (s backendSelectionService) switchBackend(ctx context.Context, target strin
 		return err
 	}
 	return nil
-}
-
-func (s backendSelectionService) setConfiguredBackend(target string) error {
-	return s.inner.SetConfiguredBackend(target)
 }

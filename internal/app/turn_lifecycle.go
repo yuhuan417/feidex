@@ -2,7 +2,6 @@ package app
 
 import (
 	appturnlifecycle "feidex/internal/app/turnlifecycle"
-	"feidex/internal/state"
 )
 
 // turnLifecycleService wraps the exported turnlifecycle.Service to preserve
@@ -21,10 +20,6 @@ func (w *turnLifecycleService) bindPendingSubmissionTurn(threadID, turnID string
 
 func (w *turnLifecycleService) onTurnStartedNotification(threadID, turnID string) {
 	w.inner.OnTurnStartedNotification(threadID, turnID)
-}
-
-func (w *turnLifecycleService) bindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
-	return w.inner.BindPendingSubmissionForTurnCompletion(threadID, turnID)
 }
 
 func (w *turnLifecycleService) finishTurn(threadID, turnID, status string) {

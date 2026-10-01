@@ -20,8 +20,6 @@ const (
 	sessionInflightParallel   sessionInflightMode = appruntime.SessionInflightParallel
 )
 
-type claudePermissionMode = appruntime.ClaudePermissionMode
-
 const (
 	claudePermissionModeDefault     = appruntime.ClaudePermissionModeDefault
 	claudePermissionModeAcceptEdits = appruntime.ClaudePermissionModeAcceptEdits

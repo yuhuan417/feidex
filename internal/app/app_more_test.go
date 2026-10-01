@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	appthreadview "feidex/internal/app/threadview"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +13,17 @@ import (
 	"time"
 
 	appapprovalview "feidex/internal/app/approvalview"
+	"feidex/internal/app/apputil"
+	"feidex/internal/app/attachments"
+	appcompact "feidex/internal/app/compact"
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/pendingforms"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/app/turnbinding"
+	"feidex/internal/app/turnitem"
 	appupgradecmd "feidex/internal/app/upgradecmd"
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -247,22 +256,6 @@ func (f *fakeCodexClient) statusSnapshot() (started bool, closed bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.started, f.closed
-}
-
-func (f *fakeCodexClient) repliesSnapshot() []fakeCodexReply {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := make([]fakeCodexReply, len(f.replies))
-	copy(out, f.replies)
-	return out
-}
-
-func (f *fakeCodexClient) replyErrorsSnapshot() []fakeCodexReplyError {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := make([]fakeCodexReplyError, len(f.replyErrors))
-	copy(out, f.replyErrors)
-	return out
 }
 
 type fakeFeishuClient struct {
@@ -650,12 +643,6 @@ func (f *fakeFeishuClient) replyCardsSnapshot() []map[string]any {
 	return cloneTestCardSlice(f.replyCards)
 }
 
-func (f *fakeFeishuClient) sendCardsSnapshot() []map[string]any {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return cloneTestCardSlice(f.sendCards)
-}
-
 func (f *fakeFeishuClient) patchedCardsSnapshot() []map[string]any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -666,12 +653,6 @@ func (f *fakeFeishuClient) replyTextsSnapshot() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.replyTexts...)
-}
-
-func (f *fakeFeishuClient) replyTextWithIDsSnapshot() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]string(nil), f.replyTextWithIDs...)
 }
 
 func (f *fakeFeishuClient) sharedFileRequestsSnapshot() []feishu.SharedFileRequest {
@@ -888,7 +869,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		cfgPath: cfgPath,
 		store:   store,
 		codex:   fc,
-		feishu:  wrapFeishuClient(ff),
+		feishu:  appfeishuwrap.WrapFeishuClient(ff),
 		started: time.Now(),
 		asyncRunner: func(fn func()) {
 			asyncWG.Add(1)
@@ -973,7 +954,7 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	notifier, ok := app.feishu.(*notifyingFeishuClient)
+	notifier, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient)
 	if app.codex != fc || !ok || notifier.Base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
@@ -989,13 +970,13 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 }
 
 func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
-	a, ff, fc := newTestApp(t)
+	a, _, fc := newTestApp(t)
 	fc.startErr = errors.New("codex start failed")
 	if err := a.Start(context.Background()); err == nil {
 		t.Fatal("expected Start() to fail on codex start error")
 	}
 
-	a, ff, fc = newTestApp(t)
+	a, ff, _ := newTestApp(t)
 	ff.startErr = errors.New("feishu start failed")
 	if err := a.Start(context.Background()); err == nil {
 		t.Fatal("expected Start() to fail on feishu start error")
@@ -1016,11 +997,11 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 	}
 
 	a, _, _ = newTestApp(t)
-	oldAttachmentDir := filepath.Join(a.cfg.Workspaces[0].Cwd, attachmentsDirName, "sess", "old")
+	oldAttachmentDir := filepath.Join(a.cfg.Workspaces[0].Cwd, attachments.AttachmentsDirName, "sess", "old")
 	if err := os.MkdirAll(oldAttachmentDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(oldAttachmentDir) error = %v", err)
 	}
-	oldTime := time.Now().Add(-attachmentRetention - time.Hour)
+	oldTime := time.Now().Add(-appmaintenance.AttachmentRetention - time.Hour)
 	if err := os.Chtimes(oldAttachmentDir, oldTime, oldTime); err != nil {
 		t.Fatalf("Chtimes(oldAttachmentDir) error = %v", err)
 	}
@@ -1323,7 +1304,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 	ff.replyTexts = nil
 	ff.replyCards = nil
-	if err := newThreadService(a).CommandThreads(msg, false); err != nil {
+	if err := appthreadmenu.NewService(a).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(empty) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -1490,7 +1471,7 @@ func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
 		Kind:        "workspace_new",
 		FeishuMsgID: "card-1",
 		SessionKey:  makeSessionKey(a, msg),
-		PayloadJSON: mustJSON(workspaceNewPayload{
+		PayloadJSON: mustJSON(appworkspacecmd.NewPayload{
 			RootPath:    "/",
 			SelectedCWD: existingDir,
 		}),
@@ -1530,7 +1511,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 
 	var gotRepoURL string
 	var gotTargetDir string
-	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		gotRepoURL = repoURL
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
@@ -1773,7 +1754,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
-			return newThreadService(a).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
+			return appthreadmenu.NewService(a).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:chat:chat-1"
@@ -1883,10 +1864,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newWorkspaceService(a).completeWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newThreadService(a).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return appthreadmenu.NewService(a).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newThreadService(a).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
+			return appthreadmenu.NewService(a).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 	} {
 		resp, err := fn()
@@ -2172,7 +2153,7 @@ func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 		{name: "tools", title: cardHeaderTitle(t, renderToolsMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderToolsMenuCard(a, sessionKey))},
 		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a, sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a, sessionKey))},
 		{name: "interrupt", title: cardHeaderTitle(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。")), body: cardMarkdownContent(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。"))},
-		{name: "compact", title: cardHeaderTitle(t, newCompactService(a).RenderCompactPreparingCard(sessionKey)), body: cardMarkdownContent(t, newCompactService(a).RenderCompactPreparingCard(sessionKey))},
+		{name: "compact", title: cardHeaderTitle(t, appcompact.NewService(a).RenderCompactPreparingCard(sessionKey)), body: cardMarkdownContent(t, appcompact.NewService(a).RenderCompactPreparingCard(sessionKey))},
 	}
 	for _, tc := range cases {
 		if !strings.HasPrefix(tc.title, workspacePrefix) {
@@ -2586,7 +2567,7 @@ func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 		t.Fatalf("file cancel reply count = %d, want 1", len(fc.replies))
 	}
 	reply, _ := fc.replies[0].result.(map[string]any)
-	if got := strings.TrimSpace(stringValue(reply["decision"])); got != "cancel" {
+	if got := strings.TrimSpace(turnitem.StringValue(reply["decision"])); got != "cancel" {
 		t.Fatalf("file cancel decision = %q, want cancel", got)
 	}
 	cardData, _ := resp.Card.Data.(map[string]any)
@@ -2925,7 +2906,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	}
 	var pending *state.PendingRequest
 	for _, req := range a.store.AllPendingRequests() {
-		if req.Kind == upgradeLocalBinaryPendingKind {
+		if req.Kind == appupgradecmd.UpgradeLocalBinaryPendingKind {
 			pending = req
 			break
 		}
@@ -2936,7 +2917,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	if pending.FeishuMsgID != "upgrade-local-picker-card" {
 		t.Fatalf("pending FeishuMsgID = %q, want upgrade-local-picker-card", pending.FeishuMsgID)
 	}
-	var payload pathPickerPayload
+	var payload appworkspacecmd.PathPickerPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		t.Fatalf("Unmarshal(local picker payload) error = %v", err)
 	}
@@ -2991,7 +2972,7 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 		if req.Kind != "upgrade_release" {
 			continue
 		}
-		var payload upgradePendingPayload
+		var payload appupgradecmd.UpgradePendingPayload
 		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
 			t.Fatalf("Unmarshal(upgrade payload) error = %v", err)
 		}
@@ -3028,7 +3009,7 @@ func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 		Kind:        "upgrade_release",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(upgradePendingPayload{
+		PayloadJSON: mustJSON(appupgradecmd.UpgradePendingPayload{
 			TargetVersion:  "v0.2.0",
 			BinaryPath:     "/tmp/feidex",
 			DownloadURL:    "https://github.com/example/feidex-linux-amd64",
@@ -3356,8 +3337,8 @@ func TestNotificationHelpers(t *testing.T) {
 	}
 
 	startNextSubmissionAsync(a, "", "test")
-	if got := truncate("  abcdef  ", 3); got != "  …" {
-		t.Fatalf("truncate() = %q, want \"  …\"", got)
+	if got := apputil.Truncate("  abcdef  ", 3); got != "  …" {
+		t.Fatalf("apputil.Truncate() = %q, want \"  …\"", got)
 	}
 	if _, err := a.HandleCardAction(&feishu.CardAction{Name: "unknown"}); err != nil {
 		t.Fatalf("handleCardAction() error = %v", err)
@@ -3983,11 +3964,11 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 		}
 	}
 
-	if got := renderThreadButtonLabel("Very Long Thread Name", "", "id"); got == "" {
-		t.Fatal("renderThreadButtonLabel() should produce a label")
+	if got := appthreadview.RenderThreadButtonLabel("Very Long Thread Name", "", "id"); got == "" {
+		t.Fatal("appthreadview.RenderThreadButtonLabel() should produce a label")
 	}
-	if got := renderThreadListEntry("", "preview text", "id"); !strings.Contains(got, "preview") {
-		t.Fatalf("renderThreadListEntry() = %q, want preview text", got)
+	if got := appthreadview.RenderThreadListEntry("", "preview text", "id"); !strings.Contains(got, "preview") {
+		t.Fatalf("appthreadview.RenderThreadListEntry() = %q, want preview text", got)
 	}
 
 	emptyMsg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-2", ChatType: "group", RootMessageID: "root-2", UserID: "user-2"}
@@ -4022,7 +4003,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)
 	}
-	if err := newThreadService(a).CommandThreadsNew(msg); err != nil {
+	if err := appthreadmenu.NewService(a).CommandThreadsNew(msg); err != nil {
 		t.Fatalf("commandThreadsNew() error = %v", err)
 	}
 }
@@ -4108,7 +4089,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(thread resume) error = %v", err)
 	}
-	resp, err = newThreadService(a).CompleteThreadResume(&feishu.CardAction{
+	resp, err = appthreadmenu.NewService(a).CompleteThreadResume(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"thread_name": "Selected", "thread_preview": "chosen"},
@@ -4152,7 +4133,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset for menu new) error = %v", err)
 	}
-	resp, err = newThreadService(a).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
+	resp, err = appthreadmenu.NewService(a).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuNew() = %#v, %v", resp, err)
 	}
@@ -4426,17 +4407,17 @@ func TestCompleteHistoryDetailShowsInputs(t *testing.T) {
 }
 
 func TestSmallHelperBranches(t *testing.T) {
-	if got := renderThreadButtonLabel("", "", "thread-id-1234567890"); got == "" {
-		t.Fatal("renderThreadButtonLabel(id fallback) should not be empty")
+	if got := appthreadview.RenderThreadButtonLabel("", "", "thread-id-1234567890"); got == "" {
+		t.Fatal("appthreadview.RenderThreadButtonLabel(id fallback) should not be empty")
 	}
-	if got := renderThreadListEntry("name", "preview", "12345678abcdef"); !strings.Contains(got, "name") || !strings.Contains(got, "[12345678]") {
-		t.Fatalf("renderThreadListEntry(name+preview) = %q", got)
+	if got := appthreadview.RenderThreadListEntry("name", "preview", "12345678abcdef"); !strings.Contains(got, "name") || !strings.Contains(got, "[12345678]") {
+		t.Fatalf("appthreadview.RenderThreadListEntry(name+preview) = %q", got)
 	}
-	if got := renderThreadListEntry("", "", "thread-1"); !strings.Contains(got, "thread-1") {
-		t.Fatalf("renderThreadListEntry(id fallback) = %q", got)
+	if got := appthreadview.RenderThreadListEntry("", "", "thread-1"); !strings.Contains(got, "thread-1") {
+		t.Fatalf("appthreadview.RenderThreadListEntry(id fallback) = %q", got)
 	}
-	if got := shortThreadID("12345678abcdef"); got != "12345678" {
-		t.Fatalf("shortThreadID() = %q, want 12345678", got)
+	if got := appthreadview.ShortThreadID("12345678abcdef"); got != "12345678" {
+		t.Fatalf("appthreadview.ShortThreadID() = %q, want 12345678", got)
 	}
 }
 
@@ -4469,7 +4450,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		return nil
 	}
 
-	if err := newThreadService(a).CommandThreads(msg, false); err != nil {
+	if err := appthreadmenu.NewService(a).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(display) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -4603,7 +4584,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 		return nil
 	}
 
-	if err := newThreadService(a).CommandThreads(msg, false); err != nil {
+	if err := appthreadmenu.NewService(a).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(filter) error = %v", err)
 	}
 	if attempts != 3 {
@@ -4650,7 +4631,7 @@ func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newThreadService(a).CompleteThreadResume(&feishu.CardAction{
+	resp, err := appthreadmenu.NewService(a).CompleteThreadResume(&feishu.CardAction{
 		UserID: "user-1",
 		ChatID: "chat-1",
 		ActionValue: map[string]any{

@@ -76,10 +76,6 @@ func NewRecoveryService(state *RecoveryState) RecoveryService {
 	return RecoveryService{State: state}
 }
 
-// ---------------------------------------------------------------------------
-// State accessors
-// ---------------------------------------------------------------------------
-
 // CurrentClient returns the current Codex client (thread-safe).
 func (s RecoveryService) CurrentClient() CodexClient {
 	if s.State == nil {
@@ -155,10 +151,6 @@ func (s RecoveryService) BeginAutoThreadRecoveryScope() func() {
 		s.State.autoThreadMu.Unlock()
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Recovery lifecycle
-// ---------------------------------------------------------------------------
 
 // BeginRecovery marks the start of transport recovery.
 // Returns false if recovery cannot begin.
@@ -283,11 +275,3 @@ func (s RecoveryService) ResumeQueuedSessions() {
 }
 
 // firstNonEmpty returns the first non-empty trimmed string.
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
-}

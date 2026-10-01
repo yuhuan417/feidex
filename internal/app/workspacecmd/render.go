@@ -12,7 +12,6 @@ import (
 	appcards "feidex/internal/app/cards"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // RenderWorkspaceNewCard renders the "new workspace" card.
@@ -106,8 +105,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		}
 		payload.Picker = nil
 	}
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
+	sess := s.GetSession(sessionKey)
 	workspaceID := s.WorkspaceIDForSession(sessionKey, sess)
 	ws := config.FindWorkspace(s.App.Config(), workspaceID)
 	rootPath := appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), s.DefaultWorkspaceCloneRoot(ws))
@@ -612,8 +610,7 @@ func (s *RenderService) RenderWorkspaceWorktreeCanceledCard(sessionKey string, p
 
 // RenderWorkspaceMenuCard renders the workspace management menu card.
 func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]any {
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
+	sess := s.GetSession(sessionKey)
 	currentID := s.WorkspaceIDForSession(sessionKey, sess)
 	currentWS := config.FindWorkspace(s.App.Config(), currentID)
 	currentLabel := "(未配置)"
@@ -713,8 +710,7 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 
 // RenderWorkspaceChooseCard renders the workspace choose card with buttons sorted by recently used.
 func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]any {
-	var sess *state.Session
-	sess = s.GetSession(sessionKey)
+	sess := s.GetSession(sessionKey)
 	currentID := s.WorkspaceIDForSession(sessionKey, sess)
 	var recentIDs []string
 	if sess != nil {

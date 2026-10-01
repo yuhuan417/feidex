@@ -3,15 +3,12 @@ package app
 import (
 	"strings"
 
+	"feidex/internal/app/menutypes"
 	appmenuutil "feidex/internal/app/menuutil"
 )
 
 func menuBreadcrumbLabels(action string) []string {
 	return appmenuutil.MenuBreadcrumbLabels(action)
-}
-
-func menuBreadcrumbLabelsForBackend(action, backend string) []string {
-	return appmenuutil.MenuBreadcrumbLabelsForBackend(action, backend)
 }
 
 func menuCardBody(action, body string) string {
@@ -36,21 +33,13 @@ func menuCardBodyForBackendForSession(a *App, sessionKey, backend, action, body 
 func menuBackAction(action string) string {
 	action = strings.TrimSpace(action)
 	if action != "" {
-		if node, ok := menuNodes[action]; ok {
+		if node, ok := menutypes.MenuNodes[action]; ok {
 			if parent := strings.TrimSpace(node.Parent); parent != "" {
 				return parent
 			}
 		}
 	}
 	return "menu.root"
-}
-
-func menuNodeLabelForBackend(action, label, backend string) string {
-	return appmenuutil.MenuNodeLabelForBackend(action, label, backend)
-}
-
-func submenuLabel(label string) string {
-	return appmenuutil.SubmenuLabel(label)
 }
 
 func commandLabel(label, slash string) string {

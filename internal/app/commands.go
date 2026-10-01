@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	appdebugview "feidex/internal/app/debugview"
 	"feidex/internal/feishu"
 )
@@ -107,10 +108,6 @@ func renderToolsMenuCard(a *App, sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForSession(a, sessionKey, spec.Action, spec.Description), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 
-func renderCurrentBotMenu(a *App, sessionKey string) map[string]any {
-	return renderCurrentBotMenuCard(a, sessionKey)
-}
-
 func renderSessionMenuCard(a *App, sessionKey string) map[string]any {
 	return renderToolsMenuCard(a, sessionKey)
 }
@@ -121,14 +118,14 @@ func renderContextMenuCard(a *App, sessionKey string) map[string]any {
 
 func renderSystemMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
-	backend := firstNonEmpty(configuredBackend(a), "unset")
+	backend := apputil.FirstNonEmpty(configuredBackend(a), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + appdebugview.RenderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForBackendForSession(a, sessionKey, configuredBackend(a), spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 
 func renderBackendMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.backend")
-	backend := firstNonEmpty(configuredBackend(a), "unset")
+	backend := apputil.FirstNonEmpty(configuredBackend(a), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`"
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForBackendForSession(a, sessionKey, configuredBackend(a), spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }

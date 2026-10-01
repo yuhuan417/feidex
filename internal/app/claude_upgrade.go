@@ -1,8 +1,10 @@
 package app
 
 import (
+	"errors"
+	appbackend "feidex/internal/app/backend"
+
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,8 +23,8 @@ type claudeUpgradeView struct {
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
-	Snapshot      backendUpgradeSnapshot
-	Restart       backendRestartSnapshot
+	Snapshot      appbackend.BackendUpgradeSnapshot
+	Restart       appbackend.BackendRestartSnapshot
 }
 
 func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []string) error {
@@ -30,7 +32,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 		return nil
 	}
 	if len(args) > 1 {
-		return fmt.Errorf(claudeUpgradeCommandUsage)
+		return errors.New(claudeUpgradeCommandUsage)
 	}
 	includeLatest := false
 	prepareUpgrade := false
@@ -44,7 +46,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 		case "restart":
 			return newBackendUpgradeService(s.app).startClaudeRestartFromMessage(msg)
 		default:
-			return fmt.Errorf(claudeUpgradeCommandUsage)
+			return errors.New(claudeUpgradeCommandUsage)
 		}
 	}
 	sessionKey := makeSessionKey(s.app, msg)
@@ -83,9 +85,9 @@ func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includ
 	}
 	view := claudeUpgradeView{
 		Probe:      probe,
-		BusyReason: newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(s.app).ClaudeUpgradeState(),
-		Restart:    newMaintenanceStateService(s.app).ClaudeRestartState(),
+		BusyReason: appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
+		Snapshot:   appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeState(),
+		Restart:    appbackend.NewMaintenanceStateService(s.app).ClaudeRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

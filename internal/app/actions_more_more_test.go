@@ -1,10 +1,13 @@
 package app
 
 import (
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"os"
 	"testing"
 
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -101,7 +104,7 @@ func TestActionHelperBranches(t *testing.T) {
 		t.Fatalf("completeHistoryPage() = %#v, %v", resp, err)
 	}
 
-	if resp, err := newMenuActionService(a).completeServiceTierSet(&feishu.CardAction{}, "sess-1", "thread-1", serviceTierFast); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+	if resp, err := newMenuActionService(a).completeServiceTierSet(&feishu.CardAction{}, "sess-1", "thread-1", appservicetiercmd.ServiceTierFast); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeServiceTierSet() = %#v, %v", resp, err)
 	}
 	if resp, err := newMenuActionService(a).completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.tools"}}, "sess-1"); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
@@ -111,7 +114,7 @@ func TestActionHelperBranches(t *testing.T) {
 		t.Fatalf("completeMenuUpgrade() = %#v, %v", resp, err)
 	}
 
-	if resp, err := newThreadService(a).CompleteMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
+	if resp, err := appthreadmenu.NewService(a).CompleteMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
 		t.Fatalf("completeMenuInterrupt() = %#v, %v", resp, err)
 	}
 

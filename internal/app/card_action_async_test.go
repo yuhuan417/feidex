@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/goalcmd"
 	appreview "feidex/internal/app/review"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -132,7 +134,7 @@ func TestCompleteGoalActionReturnsToastOnlyAndPatchesAsync(t *testing.T) {
 			ChatID:      msg.ChatID,
 			MessageID:   msg.MessageID,
 			ActionValue: map[string]any{"session_key": sessionKey, "thread_id": "thread-1"},
-		}, sessionKey, "正在更新 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+		}, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 			return goalSvc.CompleteGoalStatusAction(&feishu.CardAction{
 				UserID:      msg.UserID,
 				ChatID:      msg.ChatID,
@@ -425,7 +427,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newThreadService(a).CompleteMenuInterrupt(&feishu.CardAction{
+	resp, err := appthreadmenu.NewService(a).CompleteMenuInterrupt(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-stop",

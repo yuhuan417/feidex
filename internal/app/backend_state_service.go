@@ -26,10 +26,6 @@ func (s runtimeStateService) finishBackendSwitchState() {
 	s.inner.FinishBackendSwitchState()
 }
 
-func (s runtimeStateService) backendSwitchState() (bool, string) {
-	return s.inner.BackendSwitchState()
-}
-
 func (s runtimeStateService) backendSwitchBlockedReasonForTraffic() string {
 	return s.inner.BackendSwitchBlockedReasonForTraffic()
 }
@@ -69,6 +65,3 @@ func (s runtimeStateService) frontendMessageTrafficCount() int {
 }
 
 // backendDisplayName wraps backend.BackendDisplayName.
-func backendDisplayName(bk string) string {
-	return backend.BackendDisplayName(bk)
-}

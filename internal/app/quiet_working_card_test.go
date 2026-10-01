@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/turn"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
@@ -25,8 +26,8 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("working card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("working card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "思考中...") {
 		t.Fatalf("working card body after reasoning = %q", body)
@@ -84,8 +85,8 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after web search = %d, want 3", len(ff.replyCards))
 	}
-	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, quietWorkingCardTitle) {
-		t.Fatalf("second working card title = %q, want to contain %q", got, quietWorkingCardTitle)
+	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("second working card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Searching the web: `latest golang release`") {
 		t.Fatalf("second working card body = %q", body)

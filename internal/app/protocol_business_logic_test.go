@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/app/turnitem"
 	"feidex/internal/state"
 )
 
@@ -98,21 +99,21 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 			},
 		},
 	})
-	if got := stringValue(mergedRequest["reason"]); got != "need review" {
+	if got := turnitem.StringValue(mergedRequest["reason"]); got != "need review" {
 		t.Fatalf("merged request reason = %q, want need review", got)
 	}
 	if changes, _ := mergedRequest["changes"].([]any); len(changes) != 1 {
 		t.Fatalf("merged request changes = %+v, want started file changes", mergedRequest["changes"])
 	}
 	contextMap, _ := mergedRequest["context"].(map[string]any)
-	if got := stringValue(contextMap["started"]); got != "yes" {
+	if got := turnitem.StringValue(contextMap["started"]); got != "yes" {
 		t.Fatalf("merged request context.started = %q, want yes", got)
 	}
-	if got := stringValue(contextMap["decision"]); got != "pending" {
+	if got := turnitem.StringValue(contextMap["decision"]); got != "pending" {
 		t.Fatalf("merged request context.decision = %q, want pending", got)
 	}
 	nested, _ := contextMap["nested"].(map[string]any)
-	if got := stringValue(nested["a"]); got != "1" || stringValue(nested["b"]) != "2" {
+	if got := turnitem.StringValue(nested["a"]); got != "1" || turnitem.StringValue(nested["b"]) != "2" {
 		t.Fatalf("merged request nested context = %+v, want both started and request keys", nested)
 	}
 
@@ -133,18 +134,18 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 			},
 		},
 	})
-	if got := stringValue(completed["summary"]); got != "done" {
+	if got := turnitem.StringValue(completed["summary"]); got != "done" {
 		t.Fatalf("completed summary = %q, want done", got)
 	}
 	if changes, _ := completed["changes"].([]any); len(changes) != 1 {
 		t.Fatalf("completed changes = %+v, want started file changes preserved", completed["changes"])
 	}
 	completedContext, _ := completed["context"].(map[string]any)
-	if got := stringValue(completedContext["started"]); got != "yes" || stringValue(completedContext["completed"]) != "yes" {
+	if got := turnitem.StringValue(completedContext["started"]); got != "yes" || turnitem.StringValue(completedContext["completed"]) != "yes" {
 		t.Fatalf("completed context = %+v, want started+completed markers", completedContext)
 	}
 	completedNested, _ := completedContext["nested"].(map[string]any)
-	if stringValue(completedNested["a"]) != "1" || stringValue(completedNested["c"]) != "3" {
+	if turnitem.StringValue(completedNested["a"]) != "1" || turnitem.StringValue(completedNested["c"]) != "3" {
 		t.Fatalf("completed nested context = %+v, want merged nested state", completedNested)
 	}
 	if snapshot := newRuntimeStateService(a).turnItemSnapshot("thread-1", "turn-1", "item-1"); snapshot != nil {

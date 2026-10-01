@@ -1,8 +1,10 @@
 package app
 
 import (
+	"errors"
+	appbackend "feidex/internal/app/backend"
+
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -29,8 +31,8 @@ type codexUpgradeView struct {
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
-	Snapshot      backendUpgradeSnapshot
-	Restart       backendRestartSnapshot
+	Snapshot      appbackend.BackendUpgradeSnapshot
+	Restart       appbackend.BackendRestartSnapshot
 }
 
 func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []string) error {
@@ -38,7 +40,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 		return nil
 	}
 	if len(args) > 1 {
-		return fmt.Errorf(codexUpgradeCommandUsage)
+		return errors.New(codexUpgradeCommandUsage)
 	}
 	includeLatest := false
 	prepareUpgrade := false
@@ -52,7 +54,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 		case "restart":
 			return newBackendUpgradeService(s.app).startCodexRestartFromMessage(msg)
 		default:
-			return fmt.Errorf(codexUpgradeCommandUsage)
+			return errors.New(codexUpgradeCommandUsage)
 		}
 	}
 	sessionKey := makeSessionKey(s.app, msg)
@@ -91,9 +93,9 @@ func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, include
 	}
 	view := codexUpgradeView{
 		Probe:      probe,
-		BusyReason: newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(s.app).CodexUpgradeState(),
-		Restart:    newMaintenanceStateService(s.app).CodexRestartState(),
+		BusyReason: appbackend.NewMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
+		Snapshot:   appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState(),
+		Restart:    appbackend.NewMaintenanceStateService(s.app).CodexRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)

@@ -1,6 +1,8 @@
 package app
 
 import (
+	appbackend "feidex/internal/app/backend"
+
 	"context"
 	"log/slog"
 	"strings"
@@ -118,14 +120,14 @@ func (claudeRuntimeFacade) startRuntime(context.Context, *App, *backendRuntimeHa
 }
 
 func (claudeRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && newMaintenanceStateService(a).ClaudeMaintenanceActive()
+	return a != nil && appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceActive()
 }
 
 func (claudeRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 	if a == nil {
 		return nil
 	}
-	return newMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
+	return appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
 }
 
 func (claudeRuntimeFacade) idleMaintenanceBlockedReason() string {

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 	"github.com/larksuite/oapi-sdk-go/v3/channel"
 	channeltypes "github.com/larksuite/oapi-sdk-go/v3/channel/types"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 )
 
 // wsWriteTimeout pins the outbound write timeout. The SDK defaults to 10s;
@@ -84,7 +84,7 @@ func (a *Adapter) fetchWSEndpoint(ctx context.Context) (*larkws.EndpointResp, er
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("locale", "zh")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := a.httpClientOr().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +131,7 @@ func (a *Adapter) startChannelRuntime(ctx context.Context) {
 		larkws.WithEventHandler(dispatcher),
 		larkws.WithDomain(a.cfg.OpenBaseURL()),
 		larkws.WithWriteTimeout(wsWriteTimeout),
+		larkws.WithHttpClient(a.httpClientOr()),
 	)
 
 	// The policy gate must be fully permissive. channel's zero-value policy

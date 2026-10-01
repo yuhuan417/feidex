@@ -1,8 +1,11 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"strings"
 
+	"feidex/internal/app/apputil"
 	"feidex/internal/state"
 )
 
@@ -33,7 +36,7 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessage
 	if newRuntimeStateService(a).frontendMessageTrafficCount() > allowedMessageTraffic {
 		return "当前仍有消息处理中"
 	}
-	autoRetrySvc := newAutoRetryService(a)
+	autoRetrySvc := appautoretry.NewService(a)
 	for _, sess := range a.State().Sessions() {
 		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue
@@ -50,7 +53,7 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessage
 		if len(sess.StagedImages) > 0 {
 			return "当前仍有暂存图片待提交"
 		}
-		if state.NormalizeSessionStatus(firstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
+		if state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
 			return "当前会话还没有完全回到空闲态"
 		}
 	}

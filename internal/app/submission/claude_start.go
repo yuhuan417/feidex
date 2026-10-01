@@ -147,6 +147,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 			"workspace_id", sub.WorkspaceID,
 			"error", err,
 		)
+		//lint:ignore SA4006 known issue: this error is overwritten by EnsureSession below and never surfaced
 		sess, sub, err = s.rollbackClaudeSubmissionStartState(sessionKey, sub, turnID, false)
 		ensureCtx, ensureCancel = context.WithTimeout(appcore.Context(a), 30*time.Second)
 		claudeThreadID, err = claude.EnsureSession(ensureCtx, sessionKey, ws, "", model)

@@ -219,9 +219,7 @@ func renderElicitationInlineFormCard(requestID string, payload ElicitationFormPa
 	})
 	formElements := make([]map[string]any, 0, len(spec.Fields)*3+4)
 	for _, field := range spec.Fields {
-		for _, elem := range renderElicitationFieldElements(field, drafts, requestID) {
-			formElements = append(formElements, elem)
-		}
+		formElements = append(formElements, renderElicitationFieldElements(field, drafts, requestID)...)
 	}
 	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{

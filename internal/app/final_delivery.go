@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"feidex/internal/app/apputil"
 	appdelivery "feidex/internal/app/delivery"
+	"feidex/internal/app/quietmode"
 	"strings"
 
 	appcards "feidex/internal/app/cards"
@@ -21,13 +23,13 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submiss
 	if a == nil || a.feishu == nil || sub == nil {
 		return ""
 	}
-	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
+	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), "final_message") {
 		return ""
 	}
 	triggerMessageID := strings.TrimSpace(sub.TriggerMessageID)
 	inThread := replyInThreadForSubmission(a, sub)
-	fallbackText := appendFooterText(prependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a, sub, sub.TurnID)), footerLines)
-	body := prependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
+	fallbackText := appendFooterText(apputil.PrependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a, sub, sub.TurnID)), footerLines)
+	body := apputil.PrependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
 	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
 	appendReplyCardFooter(card, footerLines)
@@ -73,7 +75,7 @@ func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *state
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), "final_message") {
+	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), "final_message") {
 		return nil
 	}
 	title, color, _, _ := outboundMessageCardMeta("final_message", sub.WorkspaceID)

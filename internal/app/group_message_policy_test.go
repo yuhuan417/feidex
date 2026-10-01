@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"encoding/json"
 	"os"
@@ -24,7 +26,7 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		cfg:        cfg,
 		store:      store,
 		frontendID: "frontend-a",
-		feishu:     wrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-a-open"}),
+		feishu:     appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-a-open"}),
 	}
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-primary",
@@ -119,7 +121,7 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := &App{cfg: cfg, store: store, frontendID: "frontend-b", feishu: wrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})}
+	a := &App{cfg: cfg, store: store, frontendID: "frontend-b", feishu: appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})}
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-client",
 		ChatID:   "chat-1",
@@ -188,7 +190,7 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@unknown hello", MentionedAny: true}) {
 		t.Fatal("adapter policy delivered mention event without current bot mention")
 	}
-	a.feishu = wrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})
+	a.feishu = appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})
 	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b /primary on", MentionedOpenIDs: []string{"bot-b-open"}}) {
 		t.Fatal("adapter policy rejected primary command addressed to the current bot")
 	}
@@ -387,7 +389,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 	origClone := workspaceGitClone
 	defer func() { workspaceGitClone = origClone }()
 	var gotTargetDir string
-	workspaceGitClone = func(_ context.Context, _, targetDir string, _ workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(_ context.Context, _, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}

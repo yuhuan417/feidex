@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"feidex/internal/app/quietmode"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -35,12 +37,12 @@ func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
 
 	for _, tc := range tests {
 		for _, kind := range tc.allowed {
-			if !shouldDeliverTurnKindInQuiet(tc.mode, kind) {
+			if !quietmode.ShouldDeliverTurnKind(tc.mode, kind) {
 				t.Fatalf("expected kind %q to be allowed in quiet mode %q", kind, tc.mode)
 			}
 		}
 		for _, kind := range tc.blocked {
-			if shouldDeliverTurnKindInQuiet(tc.mode, kind) {
+			if quietmode.ShouldDeliverTurnKind(tc.mode, kind) {
 				t.Fatalf("expected kind %q to be blocked in quiet mode %q", kind, tc.mode)
 			}
 		}
@@ -66,7 +68,7 @@ func TestShouldDeliverTurnItemInQuiet(t *testing.T) {
 }
 
 func TestShouldDeliverTurnItemPayloadInQuietSupportsClaudeTodoWrite(t *testing.T) {
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemType:         "dynamic_tool_call",
 		ProtocolItemType: "dynamic_tool_call",
 		ToolName:         "TodoWrite",
@@ -83,7 +85,7 @@ func TestShouldDeliverTurnItemPayloadInQuietSupportsClaudeTodoWrite(t *testing.T
 }
 
 func TestShouldDeliverTurnItemPayloadInQuietSupportsMCPLifecycle(t *testing.T) {
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemType:         "mcp_tool_call",
 		ProtocolItemType: "mcp_tool_call",
 	}
@@ -138,8 +140,8 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 	if err := commandQuiet(a, msg, []string{"normal"}); err != nil {
 		t.Fatalf("commandQuiet(normal) error = %v", err)
 	}
-	if quietMode(feishuConfig(a)) != config.QuietModeNormal {
-		t.Fatalf("expected /quiet normal to set normal mode, got %q", quietMode(feishuConfig(a)))
+	if quietmode.Mode(feishuConfig(a)) != config.QuietModeNormal {
+		t.Fatalf("expected /quiet normal to set normal mode, got %q", quietmode.Mode(feishuConfig(a)))
 	}
 	if len(ff.replyTexts) != 1 {
 		t.Fatalf("reply text count after /quiet normal = %d, want 1", len(ff.replyTexts))
@@ -164,7 +166,7 @@ func TestSendTurnItemCardQuietModes(t *testing.T) {
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
-	agentPayload := turnItemCardPayload{
+	agentPayload := turnitem.CardPayload{
 		ItemID:      "item-1",
 		ItemType:    "agent_message",
 		Title:       "回复",

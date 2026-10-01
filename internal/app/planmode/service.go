@@ -580,10 +580,3 @@ func NormalizeThreadCollaborationMode(mode *state.SessionCollaborationMode) *sta
 	}
 	return &cp
 }
-
-func derefStringPtr(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return strings.TrimSpace(*value)
-}

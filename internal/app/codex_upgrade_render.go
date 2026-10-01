@@ -1,6 +1,9 @@
 package app
 
 import (
+	appbackend "feidex/internal/app/backend"
+	appruntime "feidex/internal/app/runtime"
+
 	"strings"
 	"time"
 
@@ -37,7 +40,7 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 	if err != nil {
 		return nil, "", err
 	}
-	payload := codexUpgradePendingPayload{
+	payload := appruntime.CodexUpgradePendingPayload{
 		CurrentVersion: view.Probe.CurrentVersion,
 		TargetVersion:  view.LatestVersion,
 		Command:        view.Probe.Command,
@@ -59,10 +62,6 @@ func (s upgradeRenderService) prepareCodexUpgradeCard(sessionKey, ownerUserID st
 	return upgraderender.RenderCodexUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
 }
 
-func (s upgradeRenderService) renderCodexUpgradeConfirmCard(sessionKey, requestID string, payload codexUpgradePendingPayload) map[string]any {
-	return upgraderender.RenderCodexUpgradeConfirmCard(s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand)
-}
-
 func (s upgradeRenderService) renderCodexUpgradePreparingCard(sessionKey, body string) map[string]any {
 	return upgraderender.RenderCodexUpgradePreparingCard(s.app.feishu, body)
 }
@@ -71,11 +70,11 @@ func (s upgradeRenderService) renderCodexUpgradeFailedCard(sessionKey, errText s
 	return upgraderender.RenderCodexUpgradeFailedCard(s.app.feishu, sessionKey, errText)
 }
 
-func (s upgradeRenderService) renderCodexUpgradeOperationCard(sessionKey string, snapshot backendUpgradeSnapshot) map[string]any {
+func (s upgradeRenderService) renderCodexUpgradeOperationCard(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
 	return upgraderender.RenderCodexUpgradeOperationCard(s.app.feishu, sessionKey, snapshot)
 }
 
-func (s upgradeRenderService) renderCodexRestartOperationCard(sessionKey string, snapshot backendRestartSnapshot) map[string]any {
+func (s upgradeRenderService) renderCodexRestartOperationCard(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
 	return upgraderender.RenderCodexRestartOperationCard(s.app.feishu, sessionKey, snapshot)
 }
 

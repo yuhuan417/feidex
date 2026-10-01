@@ -2,6 +2,7 @@ package app
 
 import (
 	appbackend "feidex/internal/app/backend"
+	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -116,7 +117,7 @@ func (s backendConfigurationService) backendWorkspaceSwitchBindingFailureNotice(
 	return s.inner.BackendWorkspaceSwitchBindingFailureNotice()
 }
 
-func (s backendConfigurationService) backendWorkspaceSwitchBindingNotice(binding *workspaceThreadBinding) string {
+func (s backendConfigurationService) backendWorkspaceSwitchBindingNotice(binding *appworkspacecmd.ThreadBinding) string {
 	return s.inner.BackendWorkspaceSwitchBindingNotice(binding)
 }
 

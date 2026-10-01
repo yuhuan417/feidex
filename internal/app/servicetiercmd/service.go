@@ -2,6 +2,7 @@ package servicetiercmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -132,12 +133,12 @@ func (s Service) CommandFast(msg *feishu.InboundMessage, args []string) error {
 		return s.toggleServiceTier(msg)
 	}
 	if len(args) > 1 {
-		return fmt.Errorf(commandFastUsage)
+		return errors.New(commandFastUsage)
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "config", "fast", "default", "off", "toggle":
 	default:
-		return fmt.Errorf(commandFastUsage)
+		return errors.New(commandFastUsage)
 	}
 	if msg == nil {
 		return nil

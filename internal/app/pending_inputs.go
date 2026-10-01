@@ -41,14 +41,6 @@ func (s pendingQueueService) discardPendingInputByMessageID(messageID string) bo
 	return s.inner.DiscardPendingInputByMessageID(messageID)
 }
 
-func (s pendingQueueService) discardStagedImageFromSessionSnapshot(snapshot *state.Session, messageID string) bool {
-	return s.inner.DiscardStagedImageFromSessionSnapshot(snapshot, messageID)
-}
-
-func (s pendingQueueService) discardQueuedSubmissionFromSessionSnapshot(snapshot *state.Session, submissionID string, sub *state.Submission) bool {
-	return s.inner.DiscardQueuedSubmissionFromSessionSnapshot(snapshot, submissionID, sub)
-}
-
 // Exported wrapper for sub-package interface satisfaction.
 func (s pendingQueueService) DiscardSessionPendingInputs(sessionKey string) int {
 	return s.discardSessionPendingInputs(sessionKey)
@@ -79,21 +71,10 @@ func (s pendingQueueService) markMessagesQueuedReactions(messageIDs []string) {
 	s.inner.MarkMessagesQueuedReactions(messageIDs)
 }
 
-func (s pendingQueueService) markMessagesTypingReactions(messageIDs []string) {
-	s.inner.MarkMessagesTypingReactions(messageIDs)
-}
-
-func (s pendingQueueService) markMessagesDiscardedReactions(messageIDs []string) {
-	s.inner.MarkMessagesDiscardedReactions(messageIDs)
-}
-
 func (s pendingQueueService) clearMessageProcessingReactions(messageIDs []string) {
 	s.inner.ClearMessageProcessingReactions(messageIDs)
 }
 
 var (
-	uniqueStrings                 = submission.UniqueStrings
-	removeString                  = submission.RemoveString
-	discardStagedImageByMessageID = submission.DiscardStagedImageByMessageID
-	submissionHasSourceMessage    = submission.HasSourceMessage
+	uniqueStrings = submission.UniqueStrings
 )

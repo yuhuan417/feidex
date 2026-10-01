@@ -1,10 +1,13 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"context"
 	"strings"
 
 	appconvbackend "feidex/internal/app/convbackend"
+	appmaintenance "feidex/internal/app/maintenance"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/codexrpc"
@@ -48,22 +51,22 @@ func (a submissionAppAdapter) SubmissionQueueAppState() appsubmission.QueueAppSt
 	return a.app.State()
 }
 func (a submissionAppAdapter) SubmissionQueueSkillResolver() appsubmission.QueueSkillResolver {
-	return sqSkillResolverAdapter{app: a.app}
+	return sqSkillResolverAdapter(a)
 }
 func (a submissionAppAdapter) SubmissionQueueAttachmentResolver() appsubmission.QueueAttachmentResolver {
-	return sqAttachmentResolverFullAdapter{app: a.app}
+	return sqAttachmentResolverFullAdapter(a)
 }
 func (a submissionAppAdapter) SubmissionQueueLiveThread() appsubmission.QueueLiveThreadProvider {
-	return sqLiveThreadAdapter{app: a.app}
+	return sqLiveThreadAdapter(a)
 }
 func (a submissionAppAdapter) SubmissionQueuePendingQueue() appsubmission.QueuePendingQueueProvider {
-	return sqPendingQueueFullAdapter{app: a.app}
+	return sqPendingQueueFullAdapter(a)
 }
 func (a submissionAppAdapter) SubmissionQueueRuntimeState() appsubmission.QueueRuntimeStateProvider {
 	return newRuntimeStateService(a.app)
 }
 func (a submissionAppAdapter) SubmissionQueueRuntimeMaintenance() appsubmission.QueueRuntimeMaintenanceProvider {
-	return newRuntimeMaintenanceService(a.app)
+	return appmaintenance.NewRuntimeMaintenanceService(a.app)
 }
 func (a submissionAppAdapter) SubmissionQueueReplyContinuation() appsubmission.QueueReplyContinuationProvider {
 	return newReplyContinuationService(a.app)
@@ -72,13 +75,13 @@ func (a submissionAppAdapter) SubmissionQueueTurnStream() appsubmission.QueueTur
 	return newTurnStreamService(a.app)
 }
 func (a submissionAppAdapter) SubmissionQueueAutoRetry() appsubmission.QueueAutoRetryProvider {
-	return newAutoRetryService(a.app)
+	return appautoretry.NewService(a.app)
 }
 func (a submissionAppAdapter) SubmissionQueueConversationBackend() appsubmission.QueueConversationBackendProvider {
 	return sqConversationBackendAdapter{facade: conversationBackend(a.app)}
 }
 func (a submissionAppAdapter) SubmissionQueueBackendRuntime() appsubmission.QueueBackendRuntimeProvider {
-	return sqBackendRuntimeFullAdapter{app: a.app}
+	return sqBackendRuntimeFullAdapter(a)
 }
 func (a submissionAppAdapter) SubmissionQueueDefaultWorkspaceID() string {
 	return defaultWorkspaceID(a.app)
@@ -302,7 +305,7 @@ func (a pendingQueueAppAdapter) PendingQueueAppState() appsubmission.PendingQueu
 	return a.app.State()
 }
 func (a pendingQueueAppAdapter) PendingQueueRuntimeMaintenance() appsubmission.PendingQueueRuntimeMaintenanceProvider {
-	return newRuntimeMaintenanceService(a.app)
+	return appmaintenance.NewRuntimeMaintenanceService(a.app)
 }
 func (a pendingQueueAppAdapter) PendingQueueDefaultWorkspaceID() string {
 	return defaultWorkspaceID(a.app)

@@ -183,8 +183,6 @@ func (a *Adapter) createMessage(ctx context.Context, req *larkim.CreateMessageRe
 	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.create", func(client *lark.Client) (*larkim.CreateMessageResp, error) {
 		return client.Im.Message.Create(ctx, req)
 	})
-	if err != nil {
-	}
 	return resp, err
 }
 
@@ -197,7 +195,5 @@ func (a *Adapter) patchMessage(ctx context.Context, messageID string, req *larki
 	resp, err := withFeishuTenantTokenRefreshRetry(ctx, a, "im.message.patch", func(client *lark.Client) (*larkim.PatchMessageResp, error) {
 		return client.Im.Message.Patch(ctx, req)
 	})
-	if err != nil {
-	}
 	return resp, err
 }

@@ -14,7 +14,6 @@ import (
 	appcore "feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	appconvbackend "feidex/internal/app/convbackend"
-	appruntime "feidex/internal/app/runtime"
 	appsessionctx "feidex/internal/app/sessionctx"
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
@@ -25,18 +24,10 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const (
 	ThreadCommandUsage        = "/thread | /thread list [all] | /thread new | /thread fork | /thread resume THREAD_ID | /thread sandbox [MODE] | /thread policy [POLICY] | /thread multiagent [MODE]"
 	ClaudeSessionCommandUsage = "/session | /session list [all] | /session new | /session fork | /session resume SESSION_ID | /session permissions [MODE|inherit]"
 )
-
-// ---------------------------------------------------------------------------
-// App interface — what the service needs from the host application
-// ---------------------------------------------------------------------------
 
 // App defines the interface the thread-menu service requires from the host
 // application. It embeds appcore.AppConfig so that appcore helpers like
@@ -90,10 +81,6 @@ type App interface {
 	RenderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error)
 	ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage) error
 }
-
-// ---------------------------------------------------------------------------
-// Narrow provider interfaces
-// ---------------------------------------------------------------------------
 
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
@@ -151,10 +138,6 @@ type BackendActionProvider interface {
 	CompleteMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error)
 }
 
-// ---------------------------------------------------------------------------
-// Type definitions
-// ---------------------------------------------------------------------------
-
 // ThreadResumeSelection describes a thread resume selection from the UI.
 type ThreadResumeSelection struct {
 	ThreadID string
@@ -165,10 +148,6 @@ type ThreadResumeSelection struct {
 
 // ThreadBinding is an alias for the workspace thread binding type.
 type ThreadBinding = appworkspace.ThreadBinding
-
-// ---------------------------------------------------------------------------
-// Local helpers
-// ---------------------------------------------------------------------------
 
 // uiWarningError is a sentinel error type for UI warning messages.
 type uiWarningError struct{ message string }
@@ -240,8 +219,6 @@ var (
 	SameWorkspaceCWD            = appthreadview.SameWorkspaceCWD
 )
 
-// Pure helpers copied from the app package.
-
 func primaryConversationSlash(backend string) string {
 	return appbackend.DriverForKind(backend).Conversation().PrimarySlash()
 }
@@ -254,63 +231,9 @@ func primaryConversationSummaryLabel(backend string) string {
 	return appbackend.DriverForKind(backend).Conversation().SummaryLabel()
 }
 
-func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) string {
-	return appsessionctx.EffectiveSandboxMode(sess, ws)
-}
-
-func effectiveThreadApprovalPolicy(sess *state.Session, ws *config.Workspace) string {
-	return appsessionctx.EffectiveApprovalPolicy(sess, ws)
-}
-
 func sessionHasInFlightSubmission(sess *state.Session) bool {
 	return appsessionctx.HasInFlightSubmission(sess)
 }
-
-func normalizeClaudePermissionModeValue(value string) string {
-	switch strings.TrimSpace(value) {
-	case "", "default":
-		return string(appruntime.ClaudePermissionModeDefault)
-	case string(appruntime.ClaudePermissionModeAcceptEdits):
-		return string(appruntime.ClaudePermissionModeAcceptEdits)
-	case string(appruntime.ClaudePermissionModeBypass):
-		return string(appruntime.ClaudePermissionModeBypass)
-	case string(appruntime.ClaudePermissionModePlan):
-		return string(appruntime.ClaudePermissionModePlan)
-	default:
-		return strings.TrimSpace(value)
-	}
-}
-
-func normalizeClaudePermissionOverrideValue(raw string) (string, bool) {
-	switch strings.TrimSpace(raw) {
-	case "", "inherit", "follow", "workspace", "global":
-		return "", true
-	default:
-		return "", false
-	}
-}
-
-func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
-		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
-	}
-	if ws != nil && strings.TrimSpace(ws.ClaudePermissionMode) != "" {
-		return normalizeClaudePermissionModeValue(ws.ClaudePermissionMode)
-	}
-	return normalizeClaudePermissionModeValue(cfg.PermissionMode)
-}
-
-func workspaceSandboxOptions() []appworkspace.SettingOption {
-	return appworkspace.SandboxOptions()
-}
-
-func workspaceApprovalPolicyOptions() []appworkspace.SettingOption {
-	return appworkspace.ApprovalPolicyOptions()
-}
-
-// ---------------------------------------------------------------------------
-// Service — manages thread/session menu actions
-// ---------------------------------------------------------------------------
 
 // Service manages thread/session menu actions for a single app instance.
 type Service struct {
@@ -469,10 +392,6 @@ func (s *Service) cancelInterruptSurfaceAutoRetry(sessionKeys []string, activeSe
 	}
 	return canceled
 }
-
-// ---------------------------------------------------------------------------
-// Thread listing and creation
-// ---------------------------------------------------------------------------
 
 // StartFreshThread creates a new workspace thread for the session.
 func (s *Service) StartFreshThread(sessionKey, userID, chatID, chatType string) (int, *ThreadBinding, error) {
@@ -714,10 +633,6 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Interrupt and append
-// ---------------------------------------------------------------------------
-
 // CommandInterrupt handles /stop — interrupts the active turn.
 func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	sessionKey := appcore.MakeSessionKey(s.app, msg)
@@ -759,6 +674,7 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	// For backends with asynchronous interrupt responses (e.g. Claude), clear
 	// stale active operations so the session doesn't get stuck in "queuing".
 	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil {
+		//lint:ignore SA4006 the returned session is unused; only the clearing side effect matters
 		sess = runtime.ClearActiveOperationsAfterInterrupt(targetSessionKey, sess)
 	}
 	reply := "已请求中断当前任务。"
@@ -780,10 +696,6 @@ func (s *Service) CommandAppend(msg *feishu.InboundMessage, text string) error {
 	}
 	return s.app.ThreadMenuConversationBackend().ContinueActiveTurn(sessionKey, text)
 }
-
-// ---------------------------------------------------------------------------
-// Menu rendering
-// ---------------------------------------------------------------------------
 
 // ShowThreadSandboxMenu shows the sandbox configuration menu.
 func (s *Service) ShowThreadSandboxMenu(msg *feishu.InboundMessage) error {
@@ -856,10 +768,6 @@ func (s *Service) RenderThreadMultiAgentMenuCard(sessionKey string) (map[string]
 		FormatMenuBody: s.app.MenuCardBody,
 	})
 }
-
-// ---------------------------------------------------------------------------
-// Card action completers (from thread_feature_actions.go)
-// ---------------------------------------------------------------------------
 
 // CompleteMenuThread handles the "menu.thread" card action.
 func (s *Service) CompleteMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -1026,10 +934,6 @@ func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, th
 	}, nil
 }
 
-// ---------------------------------------------------------------------------
-// Claude session permission mode (from claude_permission_config.go)
-// ---------------------------------------------------------------------------
-
 // CompleteClaudeSessionPermissionModeSet handles the session permission mode
 // card action. The runtime apply is enqueued so the Feishu callback can answer
 // immediately; a failure patches the menu card with a warning.
@@ -1069,10 +973,6 @@ func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardActi
 		},
 	})
 }
-
-// ---------------------------------------------------------------------------
-// Convenience: expose CurrentThreadLabel for callers in the parent package
-// ---------------------------------------------------------------------------
 
 // SessionCurrentThreadLabel returns the current thread label for a session.
 func SessionCurrentThreadLabel(sess *state.Session) string {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/app/turnitem"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -60,7 +61,7 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 			t.Fatalf("unexpected Call method %q", method)
 		}
 		payload, _ := params.(map[string]any)
-		if got := strings.TrimSpace(stringValue(payload["threadId"])); got != "thread-1" {
+		if got := strings.TrimSpace(turnitem.StringValue(payload["threadId"])); got != "thread-1" {
 			t.Fatalf("thread/compact/start threadId = %q", got)
 		}
 		return nil
@@ -240,7 +241,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 			t.Fatalf("unexpected Call method %q", method)
 		}
 		payload, _ := params.(map[string]any)
-		if got := strings.TrimSpace(stringValue(payload["threadId"])); got != "thread-1" {
+		if got := strings.TrimSpace(turnitem.StringValue(payload["threadId"])); got != "thread-1" {
 			t.Fatalf("thread/compact/start threadId = %q", got)
 		}
 		started <- struct{}{}

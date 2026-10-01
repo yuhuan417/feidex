@@ -1,6 +1,8 @@
 package app
 
 import (
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"fmt"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"feidex/internal/app/apputil"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -166,7 +169,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			value = ""
 		}
 		if value != "" {
-			value = normalizeServiceTier(value)
+			value = appservicetiercmd.NormalizeServiceTier(value)
 			if value == "" {
 				return fmt.Errorf("unsupported service tier %q", args[1])
 			}
@@ -239,20 +242,6 @@ func (s bindingService) setPrimaryForMessage(msg *feishu.InboundMessage) error {
 		scheduleGroupAnnouncementStatusRefresh(s.app, updated.ChatID, "primary_updated")
 	}
 	return s.replyBindingUpdated(msg, body)
-}
-
-func (s bindingService) completeMenuBinding(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if action == nil {
-		return nil, nil
-	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace")
-	if _, err := s.ensureBindingForMessage(msg); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开工作区管理"},
-		Card:  rawCard(newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)),
-	}, nil
 }
 
 func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
@@ -414,7 +403,7 @@ func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Work
 	}
 	s.app.cfg.Workspaces = append(s.app.cfg.Workspaces, config.Workspace{
 		ID:             id,
-		Name:           firstNonEmpty(strings.TrimSpace(name), id),
+		Name:           apputil.FirstNonEmpty(strings.TrimSpace(name), id),
 		Cwd:            absCWD,
 		ApprovalPolicy: "never",
 		SandboxMode:    "danger-full-access",
@@ -501,8 +490,8 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		workspaceLine = "workspace: `" + binding.WorkspaceID + "` (配置不存在)"
 	}
 	lines := []string{
-		"frontend: `" + firstNonEmpty(s.app.FrontendID(), "default") + "`",
-		"backend: `" + firstNonEmpty(configuredBackend(s.app), "unset") + "`",
+		"frontend: `" + apputil.FirstNonEmpty(s.app.FrontendID(), "default") + "`",
+		"backend: `" + apputil.FirstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
 		statusLine,
 		"primary: `" + onOffLabel(isGroupPrimary(s.app, binding.ChatType, binding.ChatID)) + "`",
@@ -541,70 +530,12 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	return s.app.feishu.SimpleStatusCard("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
-func (s bindingService) renderBindingWorkspaceChooseCard(sessionKey string, binding *state.AgentBinding) map[string]any {
-	if binding == nil {
-		return s.renderBindingStatusCard(sessionKey, binding)
-	}
-	lines := []string{
-		"为当前 Bot 在本群选择本机已有 workspace。",
-		"当前 workspace: " + renderOptionalBacktick(binding.WorkspaceID),
-		"",
-		"如果这台机器还没有该项目目录，请使用 `@Bot /workspace new WORKSPACE_ID CWD`、`@Bot /workspace new worktree` 或 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]`。",
-	}
-	buttons := make([]feishu.Button, 0, len(s.app.cfg.Workspaces)+1)
-	for _, ws := range s.app.cfg.Workspaces {
-		workspaceID := strings.TrimSpace(ws.ID)
-		if workspaceID == "" {
-			continue
-		}
-		buttonType := "default"
-		label := workspaceID
-		if workspaceID == strings.TrimSpace(binding.WorkspaceID) {
-			buttonType = "primary"
-			label = "当前 · " + label
-		}
-		buttons = append(buttons, feishu.Button{Text: label, Type: buttonType, Value: map[string]any{"action": "workspace.use.existing", "session_key": sessionKey, "workspace_id": workspaceID}})
-	}
-	buttons = append(buttons, groupBindingBackButton(sessionKey))
-	return s.app.feishu.SimpleStatusCard("选择工作区", "blue", menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
-}
-
-func renderCurrentBotMenuCard(a *App, sessionKey string) map[string]any {
-	spec, _ := menuGroupSpec("menu.current_bot")
-	body := spec.Description
-	if chatType, chatID, _, _ := currentBotMenuContext(a, sessionKey); chatType == "group" && chatID != "" {
-		if binding := agentBindingForChat(a, chatType, chatID); binding != nil {
-			body += "\n\n工作区状态: `" + currentBotWorkspaceStatusLabel(a, binding) + "`"
-			body += "\nprimary: `" + onOffLabel(isGroupPrimary(a, chatType, chatID)) + "`"
-			body += "\nworkspace: " + renderOptionalBacktick(binding.WorkspaceID)
-			if !hasGroupPrimaryState(a, chatType, chatID) {
-				body += "\n注意: 还没有完成本群 primary 判断。"
-			}
-		} else {
-			body += "\n\n工作区状态: `工作区未配置`"
-			body += "\nprimary: `" + onOffLabel(isGroupPrimary(a, chatType, chatID)) + "`"
-			body += "\n使用 `/workspace` 选择、创建或 clone 当前 Bot 在本群的工作区。"
-		}
-	}
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForSession(a, sessionKey, spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
-}
-
-func currentBotWorkspaceStatusLabel(a *App, binding *state.AgentBinding) string {
-	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
-		return "工作区未配置"
-	}
-	if config.FindWorkspace(a.cfg, binding.WorkspaceID) == nil {
-		return "工作区不可用"
-	}
-	return "工作区已配置"
-}
-
 func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMessageID, userID string) {
 	chatType, chatID, rootMessageID, userID = parseSessionKeyMeta(sessionKey)
 	if chatType == "" || chatID == "" {
 		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
-		chatType = firstNonEmpty(chatType, inferredChatType)
-		chatID = firstNonEmpty(chatID, inferredChatID)
+		chatType = apputil.FirstNonEmpty(chatType, inferredChatType)
+		chatID = apputil.FirstNonEmpty(chatID, inferredChatID)
 	}
 	return chatType, chatID, rootMessageID, userID
 }

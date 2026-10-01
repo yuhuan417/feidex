@@ -1,6 +1,8 @@
 package app
 
 import (
+	appbackend "feidex/internal/app/backend"
+
 	"context"
 	"log/slog"
 	"strings"
@@ -74,14 +76,14 @@ func (codexRuntimeFacade) startRuntime(ctx context.Context, a *App, handle *back
 }
 
 func (codexRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && newMaintenanceStateService(a).CodexMaintenanceActive()
+	return a != nil && appbackend.NewMaintenanceStateService(a).CodexMaintenanceActive()
 }
 
 func (codexRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
 	if a == nil {
 		return nil
 	}
-	return newMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
+	return appbackend.NewMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
 }
 
 func (codexRuntimeFacade) idleMaintenanceBlockedReason() string {

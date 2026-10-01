@@ -6,12 +6,12 @@ import (
 	"strings"
 )
 
-func (s runtimeStateService) turnItemTracker() *turnItemTracker {
+func (s runtimeStateService) turnItemTracker() *turnitem.Tracker {
 	if s.app == nil {
 		return nil
 	}
 	if s.app.trackers.turnItems == nil {
-		s.app.trackers.turnItems = newTurnItemTracker()
+		s.app.trackers.turnItems = turnitem.NewTracker()
 	}
 	return s.app.trackers.turnItems
 }
@@ -26,7 +26,7 @@ func (s runtimeStateService) noteTurnItemStartedPayload(threadID, turnID string,
 	}
 	newTurnLifecycleService(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
 	itemID := strings.TrimSpace(item.EffectiveID(""))
-	key := turnItemStateKey(turnID, itemID)
+	key := turnitem.StateKey(turnID, itemID)
 	if key == "" {
 		return
 	}
@@ -34,11 +34,11 @@ func (s runtimeStateService) noteTurnItemStartedPayload(threadID, turnID string,
 	tracker.Mu.Lock()
 	defer tracker.Mu.Unlock()
 	if tracker.Items == nil {
-		tracker.Items = map[string]*turnItemState{}
+		tracker.Items = map[string]*turnitem.State{}
 	}
 	state := tracker.Items[key]
 	if state == nil {
-		state = &turnItemState{
+		state = &turnitem.State{
 			ThreadID: strings.TrimSpace(threadID),
 			TurnID:   strings.TrimSpace(turnID),
 			ItemID:   itemID,
@@ -60,7 +60,7 @@ func (s runtimeStateService) turnItemSnapshotPayload(threadID, turnID, itemID st
 	if s.app == nil {
 		return turnitem.ProtocolItem{}
 	}
-	key := turnItemStateKey(turnID, itemID)
+	key := turnitem.StateKey(turnID, itemID)
 	if key == "" {
 		return turnitem.ProtocolItem{}
 	}
@@ -74,7 +74,7 @@ func (s runtimeStateService) turnItemSnapshotPayload(threadID, turnID, itemID st
 	if strings.TrimSpace(threadID) != "" && strings.TrimSpace(state.ThreadID) != "" && strings.TrimSpace(state.ThreadID) != strings.TrimSpace(threadID) {
 		return turnitem.ProtocolItem{}
 	}
-	return turnitem.NewProtocolItemWithID(itemID, mergeJSONMaps(state.Started.MergedRaw(), state.Completed.MergedRaw()))
+	return turnitem.NewProtocolItemWithID(itemID, turnitem.MergeJSONMaps(state.Started.MergedRaw(), state.Completed.MergedRaw()))
 }
 
 func (s runtimeStateService) completeTurnItemState(threadID, turnID, itemID string, item map[string]any) map[string]any {
@@ -86,7 +86,7 @@ func (s runtimeStateService) completeTurnItemStatePayload(threadID, turnID, item
 		return turnitem.ProtocolItem{}
 	}
 	itemID = strings.TrimSpace(item.EffectiveID(itemID))
-	key := turnItemStateKey(turnID, itemID)
+	key := turnitem.StateKey(turnID, itemID)
 	if key == "" {
 		return turnitem.NewProtocolItemWithID(itemID, item.MergedRaw())
 	}
@@ -106,7 +106,7 @@ func (s runtimeStateService) completeTurnItemStatePayload(threadID, turnID, item
 	if state == nil {
 		return completed
 	}
-	return turnitem.NewProtocolItemWithID(itemID, mergeJSONMaps(state.Started.MergedRaw(), completed.MergedRaw()))
+	return turnitem.NewProtocolItemWithID(itemID, turnitem.MergeJSONMaps(state.Started.MergedRaw(), completed.MergedRaw()))
 }
 
 func (s runtimeStateService) clearTurnItemStates(turnID string) {
@@ -132,7 +132,7 @@ func (s runtimeStateService) updateInFlightTurnItemPayload(threadID, turnID, ite
 	if s.app == nil {
 		return turnitem.NewProtocolItemWithID(itemID, overlay)
 	}
-	key := turnItemStateKey(turnID, itemID)
+	key := turnitem.StateKey(turnID, itemID)
 	if key == "" {
 		return turnitem.NewProtocolItemWithID(itemID, overlay)
 	}
@@ -146,16 +146,16 @@ func (s runtimeStateService) updateInFlightTurnItemPayload(threadID, turnID, ite
 	if strings.TrimSpace(threadID) != "" {
 		state.ThreadID = strings.TrimSpace(threadID)
 	}
-	state.Started = turnitem.NewProtocolItemWithID(itemID, mergeJSONMaps(state.Started.MergedRaw(), overlay))
-	return turnitem.NewProtocolItemWithID(itemID, mergeJSONMaps(state.Started.MergedRaw(), state.Completed.MergedRaw()))
+	state.Started = turnitem.NewProtocolItemWithID(itemID, turnitem.MergeJSONMaps(state.Started.MergedRaw(), overlay))
+	return turnitem.NewProtocolItemWithID(itemID, turnitem.MergeJSONMaps(state.Started.MergedRaw(), state.Completed.MergedRaw()))
 }
 
 func (s runtimeStateService) mergeRequestPayloadWithTurnItem(threadID, turnID, itemID string, payload map[string]any) map[string]any {
 	snapshot := s.turnItemSnapshotPayload(threadID, turnID, itemID)
 	if snapshot.Raw == nil && snapshot.ID == "" && snapshot.Type == "" {
-		return cloneJSONMap(payload)
+		return turnitem.CloneJSONMap(payload)
 	}
-	return mergeJSONMaps(snapshot.MergedRaw(), payload)
+	return turnitem.MergeJSONMaps(snapshot.MergedRaw(), payload)
 }
 
 func (s runtimeStateService) mergeApprovalPresentationWithTurnItem(presentation appapproval.Presentation) appapproval.Presentation {

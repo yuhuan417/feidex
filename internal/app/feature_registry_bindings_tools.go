@@ -1,7 +1,11 @@
 package app
 
 import (
+	appcommandmatch "feidex/internal/app/commandmatch"
+	appskillscmd "feidex/internal/app/skillscmd"
+
 	"feidex/internal/app/debugviewcmd"
+	"feidex/internal/app/goalcmd"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -14,7 +18,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.review"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"review": {
-				Match: matchReviewCommand,
+				Match: appcommandmatch.MatchReviewCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, args)
 				},
@@ -52,7 +56,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"quiet": {
 				Match: func(fields []string) bool {
-					return exactOrSingleArgCommand(fields, "config", "verbose", "progress", "normal", "final")
+					return appcommandmatch.ExactOrSingleArgCommand(fields, "config", "verbose", "progress", "normal", "final")
 				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandQuiet(a, msg, args)
@@ -74,7 +78,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"plan": {
 				Match: func(fields []string) bool {
-					return exactOrSingleArgCommand(fields, "on", "off")
+					return appcommandmatch.ExactOrSingleArgCommand(fields, "on", "off")
 				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandPlan(a, msg, args)
@@ -94,7 +98,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["goal"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"goal": {
-				Match: matchGoalCommand,
+				Match: appcommandmatch.MatchGoalCommand,
 				HandleRaw: func(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
 					return commandGoalRaw(a, msg, raw, args)
 				},
@@ -109,31 +113,31 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			case "menu.goal":
 				return completeMenuGoalAsync(s.app, action, sessionKey)
 			case "goal.pause":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusPaused)
 				})
 			case "goal.resume":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusActive)
 				})
 			case "goal.clear":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在清除 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在清除 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalClearAction(action)
 				})
 			case "goal.edit":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在打开 goal 编辑", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在打开 goal 编辑", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalEditAction(action)
 				})
 			case "goal.replace.confirm":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在替换 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在替换 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalReplaceConfirm(action)
 				})
 			case "goal.replace.cancel":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保留当前 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保留当前 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalReplaceCancel(action)
 				})
 			case "goal.edit.submit":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保存 goal", func(goalSvc goalService) (*callback.CardActionTriggerResponse, error) {
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保存 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
 					return goalSvc.CompleteGoalEditSubmit(action)
 				})
 			default:
@@ -144,7 +148,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.compact"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"compact": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandCompact(a, msg, args)
 				},
@@ -160,7 +164,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.download"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"download": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return debugviewcmd.CommandDownload(newDebugViewAppAdapter(a), msg, args)
 				},
@@ -176,7 +180,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.history"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"history": {
-				Match: matchHistoryCommand,
+				Match: appcommandmatch.MatchHistoryCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newHistoryServiceInner(a).CommandHistory(msg, args)
 				},
@@ -205,7 +209,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.skills"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"skills": {
-				Match: matchSkillsCommand,
+				Match: appskillscmd.MatchSkillsCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newSkillsService(a).CommandSkills(msg, args)
 				},
@@ -242,7 +246,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.usage"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"usage": {
-				Match: exactCommand,
+				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newUsageServiceInner(a).CommandUsage(msg, args)
 				},

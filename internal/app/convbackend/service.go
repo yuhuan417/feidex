@@ -14,7 +14,6 @@ import (
 	backendcaps "feidex/internal/app/backendcaps"
 	appcards "feidex/internal/app/cards"
 	menutypes "feidex/internal/app/menutypes"
-	appmodelconfig "feidex/internal/app/modelconfig"
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
@@ -22,10 +21,6 @@ import (
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
-
-// ---------------------------------------------------------------------------
-// App interface — what the service needs from the host application
-// ---------------------------------------------------------------------------
 
 // App defines the interface the convbackend service requires from the host
 // application. It embeds appcore.AppConfig so that appcore helpers like
@@ -43,10 +38,6 @@ type App interface {
 	// ConvBackendWorkspaceConfig returns the narrowed workspace config provider.
 	ConvBackendWorkspaceConfig() WorkspaceConfigProvider
 }
-
-// ---------------------------------------------------------------------------
-// Narrow provider interfaces
-// ---------------------------------------------------------------------------
 
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
@@ -120,10 +111,6 @@ type WorkspaceConfigProvider interface {
 	RenderClaudeUsageBody(app App, sess *state.Session) string
 }
 
-// ---------------------------------------------------------------------------
-// Type definitions
-// ---------------------------------------------------------------------------
-
 // ThreadResumeSelection describes a thread resume selection from the UI.
 type ThreadResumeSelection struct {
 	ThreadID string
@@ -134,10 +121,6 @@ type ThreadResumeSelection struct {
 
 // ThreadBinding is an alias for the workspace thread binding type.
 type ThreadBinding = appworkspace.ThreadBinding
-
-// ---------------------------------------------------------------------------
-// ConversationBackendFacade interface
-// ---------------------------------------------------------------------------
 
 // ConversationBackendFacade defines the interface for conversation backend
 // operations. Implementations are provided for both Codex and Claude backends.
@@ -160,10 +143,6 @@ type ConversationBackendFacade interface {
 	StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
-// ---------------------------------------------------------------------------
-// UI warning error
-// ---------------------------------------------------------------------------
-
 // UIWarningError is a sentinel error type for UI warning messages.
 type UIWarningError struct {
 	message string
@@ -183,10 +162,6 @@ func IsUIWarningError(err error) bool {
 	var target UIWarningError
 	return errors.As(err, &target)
 }
-
-// ---------------------------------------------------------------------------
-// Pure helpers
-// ---------------------------------------------------------------------------
 
 func firstNonEmpty(values ...string) string {
 	return appcore.FirstNonEmpty(values...)
@@ -267,10 +242,6 @@ func claudePermissionModeLabel(value string) string {
 	return "`" + value + "`"
 }
 
-func configuredGlobalModel(cfg *config.Config) string {
-	return appmodelconfig.ConfiguredGlobalModel(cfg)
-}
-
 func sameWorkspaceCWD(a, b string) bool {
 	return appthreadview.SameWorkspaceCWD(a, b)
 }
@@ -310,10 +281,6 @@ func menuCardBodyForBackend(backend, action, body string) string {
 	}
 	return "当前位置：" + breadcrumbs + "\n\n" + body
 }
-
-// ---------------------------------------------------------------------------
-// Card rendering: conversationThreadsCardView
-// ---------------------------------------------------------------------------
 
 // ConversationThreadsCardView holds the data needed to build a conversation
 // threads card.
@@ -362,10 +329,6 @@ func BuildConversationThreadsCard(sessionKey string, view ConversationThreadsCar
 	}
 	return card
 }
-
-// ---------------------------------------------------------------------------
-// Card rendering: RenderCodexThreadsCard
-// ---------------------------------------------------------------------------
 
 // RenderCodexThreadsCard renders the codex threads card for a session.
 func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[string]any, error) {
@@ -488,10 +451,6 @@ func RenderCodexThreadsCard(app App, sessionKey string, includeAll bool) (map[st
 	}), nil
 }
 
-// ---------------------------------------------------------------------------
-// Card rendering: RenderClaudeThreadsCard
-// ---------------------------------------------------------------------------
-
 // RenderClaudeThreadsCardForCurrentBackend renders the claude threads card
 // for the current backend.
 func RenderClaudeThreadsCardForCurrentBackend(app App, sessionKey string, includeAll bool) (map[string]any, error) {
@@ -612,10 +571,6 @@ func RenderClaudeThreadsCard(app App, sessionKey string, sess *state.Session, ws
 	}), nil
 }
 
-// ---------------------------------------------------------------------------
-// Backend capability helpers
-// ---------------------------------------------------------------------------
-
 func primaryConversationMenuLabel(backend string) string {
 	return backendcaps.ForKind(backend).Conversation.MenuLabel
 }
@@ -627,10 +582,6 @@ func primaryConversationCurrentLabel(backend string) string {
 func primaryConversationIDLabel(backend string) string {
 	return backendcaps.ForKind(backend).Conversation.IDLabel
 }
-
-// ---------------------------------------------------------------------------
-// CodexConversationBackend
-// ---------------------------------------------------------------------------
 
 // CodexConversationBackend implements ConversationBackendFacade for the Codex
 // backend. It delegates to the ConversationProvider for operations that need
@@ -707,10 +658,6 @@ func (b *CodexConversationBackend) TryReplyContinuation(msg *feishu.InboundMessa
 func (b *CodexConversationBackend) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return b.app.ConvBackendConversation().StartNextSubmission(b.app, sessionKey, sess, sub, ws, notifyFailure)
 }
-
-// ---------------------------------------------------------------------------
-// ClaudeConversationBackend
-// ---------------------------------------------------------------------------
 
 // ClaudeConversationBackend implements ConversationBackendFacade for the Claude
 // backend. It delegates to the ConversationProvider for operations that need
@@ -790,10 +737,6 @@ func (b *ClaudeConversationBackend) TryReplyContinuation(msg *feishu.InboundMess
 func (b *ClaudeConversationBackend) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return b.app.ConvBackendConversation().StartNextSubmission(b.app, sessionKey, sess, sub, ws, notifyFailure)
 }
-
-// ---------------------------------------------------------------------------
-// Service — manages conversation backend operations
-// ---------------------------------------------------------------------------
 
 // Service manages conversation backend operations for a single app instance.
 type Service struct {

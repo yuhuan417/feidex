@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/app/turn"
 	"testing"
 )
 
@@ -10,8 +11,8 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &quietWorkingCard{}}
-	executeQuietWorkingCardOp(a, context.Background(), sub, quietWorkingCardOp{
+	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &turn.QuietWorkingCard{}}
+	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID: "turn-1",
 		Body:   "Read `quiet_mode.go`",
 	})
@@ -22,8 +23,8 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 		t.Fatalf("commitQuietWorkingCardRender(reply) = %+v", got)
 	}
 
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
-	executeQuietWorkingCardOp(a, context.Background(), sub, quietWorkingCardOp{
+	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
+	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "Update `quiet_mode.go`",
@@ -36,8 +37,8 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	}
 
 	ff.patchCardErr = errors.New("boom")
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &quietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
-	executeQuietWorkingCardOp(a, context.Background(), sub, quietWorkingCardOp{
+	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
+	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "after error",

@@ -9,6 +9,7 @@ import (
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	appdelivery "feidex/internal/app/delivery"
 	apppendingforms "feidex/internal/app/pendingforms"
+	"feidex/internal/app/quietmode"
 	appturn "feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/claudecli"
@@ -153,7 +154,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 				return effectiveBindingClaudePermissionMode(app, sess, ws, cfg)
 			},
 			QuietWorkingCardEnabled: func() bool {
-				return quietWorkingCardEnabled(feishuConfig(app))
+				return quietmode.WorkingCardEnabled(feishuConfig(app))
 			},
 		},
 		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {

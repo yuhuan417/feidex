@@ -1,12 +1,16 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"context"
 	"encoding/json"
 	"log/slog"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	appbackend "feidex/internal/app/backend"
+	appmaintenance "feidex/internal/app/maintenance"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
@@ -86,17 +90,6 @@ func failBackendActiveWork(a *App, backend, scopeSessionKey, scopeThreadID, mess
 	newBackendFailureService(a).FailBackendActiveWork(backend, scopeSessionKey, scopeThreadID, message)
 }
 
-func backendFailureScopeMatches(sess *state.Session, scopeSessionKey, scopeThreadID string) bool {
-	return appbackend.BackendFailureScopeMatches(sess, scopeSessionKey, scopeThreadID)
-}
-
-func resolvePendingRequestsForTerminalFailure(a *App, sessionKey, threadID, turnID string) {
-	if a == nil || a.store == nil {
-		return
-	}
-	newBackendFailureService(a).ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
-}
-
 func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *state.Submission, threadID, turnID, message string) {
 	if a == nil || a.store == nil || sub == nil {
 		return
@@ -158,13 +151,13 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 		},
 		Cards: appbackend.FailureCardDeps{
 			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
-				return newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
+				return appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 			},
 			ReplaceTurnEventCard: func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
 				newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
 			},
 			PrependAttentionMention: func(text, userID string) string {
-				return prependAttentionMentionMarkdown(text, userID)
+				return apputil.PrependAttentionMentionMarkdown(text, userID)
 			},
 			TurnStopAttentionUserID: func(sub *state.Submission, turnID string) string {
 				return turnStopAttentionUserID(a, sub, turnID)
@@ -172,7 +165,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 		},
 		Async: appbackend.FailureAsyncDeps{
 			CleanupSubmissionRuntimeState: func(sub *state.Submission) {
-				newRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
+				appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
 			},
 			ClearSubmissionProcessingReactions: func(sub *state.Submission) {
 				newPendingQueueService(a).clearSubmissionProcessingReactions(sub)

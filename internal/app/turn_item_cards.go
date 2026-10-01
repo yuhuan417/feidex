@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	appdelivery "feidex/internal/app/delivery"
+	"feidex/internal/app/quietmode"
+	"feidex/internal/app/turnitem"
 	"strings"
 	"time"
 
@@ -31,7 +33,7 @@ func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *sta
 	return newOutboundCardService(s.app).sendTurnEventCardWithReuse(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "", reuseMessageID)
 }
 
-func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, reuseMessageID string) string {
+func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -39,25 +41,25 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		return ""
 	}
 	if payload.Title == "" || payload.Color == "" {
-		payload.Title, payload.Color = turnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
+		payload.Title, payload.Color = turnitem.TurnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
-	if quietModeEnabled(feishuConfig(s.app)) && !shouldDeliverTurnItemPayloadInQuiet(quietMode(feishuConfig(s.app)), payload) {
+	if quietmode.Enabled(feishuConfig(s.app)) && !shouldDeliverTurnItemPayloadInQuiet(quietmode.Mode(feishuConfig(s.app)), payload) {
 		return ""
 	}
 	if payload.ItemType == "user_input" && payload.UserInput != nil {
 		return sendAsyncUserInputCard(s.app, sub, *payload.UserInput, reuseMessageID)
 	}
-	kind := turnItemEventKind(payload.ItemType)
+	kind := turnitem.TurnItemEventKind(payload.ItemType)
 	footerLines := []string(nil)
 	if payload.IsFinalAnswer {
 		footerLines = newRuntimeStateService(s.app).turnFinalFooterLines(sub.TurnID, time.Now())
 	}
-	if isReplyTurnItem(payload.ItemType) {
-		body := replyTurnItemCardBody(payload)
+	if turnitem.IsReplyTurnItem(payload.ItemType) {
+		body := turnitem.ReplyTurnItemCardBody(payload)
 		if body == "" {
 			body = payload.DetailText
 		}
-		title := contentCardTitleForSubmission(s.app, sub, replyTurnItemCardTitle(payload))
+		title := contentCardTitleForSubmission(s.app, sub, turnitem.ReplyTurnItemCardTitle(payload))
 		color := payload.Color
 		if !payload.IsFinalAnswer {
 			title, color, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
@@ -144,7 +146,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if quietModeEnabled(feishuConfig(s.app)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(s.app)), kind) {
+	if quietmode.Enabled(feishuConfig(s.app)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(s.app)), kind) {
 		return ""
 	}
 	body = strings.TrimSpace(body)
@@ -167,10 +169,10 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	return id
 }
 
-func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *state.Submission, payload turnItemCardPayload, enablePreview bool) map[string]any {
-	if isReplyTurnItem(payload.ItemType) {
-		return cardRendererForApp(s.app).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.app, sub, replyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, replyTurnItemCardBody(payload), nil, enablePreview)
+func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
+	if turnitem.IsReplyTurnItem(payload.ItemType) {
+		return cardRendererForApp(s.app).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.app, sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
 	}
-	meta, body := compactTurnItemCardContent(payload)
+	meta, body := turnitem.CompactTurnItemCardContent(payload)
 	return cardRendererForApp(s.app).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, payload.Title), payload.Color, meta, body, nil)
 }

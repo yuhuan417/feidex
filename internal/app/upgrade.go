@@ -1,6 +1,8 @@
 package app
 
 import (
+	appcommandmatch "feidex/internal/app/commandmatch"
+
 	"strings"
 
 	appupgradecmd "feidex/internal/app/upgradecmd"
@@ -8,10 +10,6 @@ import (
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 )
-
-type upgradePendingPayload = appupgradecmd.UpgradePendingPayload
-
-const upgradeLocalBinaryPendingKind = appupgradecmd.UpgradeLocalBinaryPendingKind
 
 func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
 	deps := appupgradecmd.UpgradeServiceDeps{
@@ -28,7 +26,7 @@ func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
 			return startDaemonUpgrade(spec)
 		},
 		NormalizeUpgradeVersion: func(raw string) (string, error) {
-			return normalizeUpgradeVersion(raw)
+			return appcommandmatch.NormalizeUpgradeVersion(raw)
 		},
 		RenderSystemMenuCard: func(sessionKey string) map[string]any {
 			return renderSystemMenuCard(app, sessionKey)

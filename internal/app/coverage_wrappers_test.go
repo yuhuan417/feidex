@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"strings"
 	"testing"
@@ -150,8 +152,8 @@ func TestAppStateStoreBranches(t *testing.T) {
 }
 
 func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
-	if got := wrapFeishuClient(nil); got != nil {
-		t.Fatalf("wrapFeishuClient(nil) = %+v, want nil", got)
+	if got := appfeishuwrap.WrapFeishuClient(nil); got != nil {
+		t.Fatalf("appfeishuwrap.WrapFeishuClient(nil) = %+v, want nil", got)
 	}
 
 	base := &fakeFeishuClient{
@@ -165,9 +167,9 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 			{Kind: "file", ResourceKey: "fk-1"},
 		},
 	}
-	client, _ := wrapFeishuClient(base).(*notifyingFeishuClient)
+	client, _ := appfeishuwrap.WrapFeishuClient(base).(*appfeishuwrap.NotifyingFeishuClient)
 	if client == nil {
-		t.Fatal("wrapFeishuClient() should return notifying client")
+		t.Fatal("appfeishuwrap.WrapFeishuClient() should return notifying client")
 	}
 
 	called := false
@@ -228,7 +230,7 @@ func TestNotifyingFeishuClientWrapperDelegates(t *testing.T) {
 	if card := client.SimpleStatusCard("title", "blue", "body", nil); card == nil {
 		t.Fatal("SimpleStatusCard() should delegate")
 	}
-	if key := client.PermissionIssueKey(feishuNotifyTarget{ChatID: "chat-1", MessageID: "msg-1"}, &feishu.PermissionIssue{API: "im.message.create", Code: 1, Message: "denied", LogID: "log-1"}); !strings.Contains(key, "chat-1|msg-1|im.message.create|1|denied|log-1") {
+	if key := client.PermissionIssueKey(appfeishuwrap.NotifyTarget{ChatID: "chat-1", MessageID: "msg-1"}, &feishu.PermissionIssue{API: "im.message.create", Code: 1, Message: "denied", LogID: "log-1"}); !strings.Contains(key, "chat-1|msg-1|im.message.create|1|denied|log-1") {
 		t.Fatalf("PermissionIssueKey() = %q", key)
 	}
 }
@@ -243,7 +245,7 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 		sharedFileResult:         feishu.SharedFileResult{FileName: "name.txt", URL: "https://example.test/file"},
 		mergeForwardText:         "merged",
 	}
-	capture := &commandCaptureClient{Base: base, ReplyMessageID: "reply-1"}
+	capture := &appfeishuwrap.CommandCaptureClient{Base: base, ReplyMessageID: "reply-1"}
 
 	handled := false
 	capture.SetHandlers(func(*feishu.InboundMessage) { handled = true }, nil, nil, nil)

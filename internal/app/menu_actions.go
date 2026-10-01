@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"feidex/internal/app/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -102,10 +103,6 @@ func (s menuActionService) completeMenuQuiet(action *feishu.CardAction, sessionK
 	return completeMenuCommand(s.app, action, sessionKey, "/quiet config", "menu.tools")
 }
 
-func (s menuActionService) completeMenuPlan(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/plan", "menu.tools")
-}
-
 func (s menuActionService) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/usage", "menu.tools")
 }
@@ -120,7 +117,7 @@ func (s menuActionService) completeQuietSet(action *feishu.CardAction, mode conf
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietModeStatusText(mode)},
+		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietmode.StatusText(mode)},
 		Card:  rawCard(renderQuietModeMenuCard(s.app, sessionKey)),
 	}, nil
 }

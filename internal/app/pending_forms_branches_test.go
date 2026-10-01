@@ -6,6 +6,7 @@ import (
 
 	"feidex/internal/app/pendingforms"
 	appreview "feidex/internal/app/review"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -91,7 +92,7 @@ func TestPendingFormCancelPreservesReviewSummary(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(reviewPendingPayload{
+		PayloadJSON: mustJSON(appreviewcmd.ReviewPendingPayload{
 			Mode:        reviewFormModeCommit,
 			CommitSHA:   "1234567890abcdef",
 			CommitTitle: "Fix cancel card rendering",

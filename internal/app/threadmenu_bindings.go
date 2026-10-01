@@ -1,6 +1,8 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"context"
 
 	appbackend "feidex/internal/app/backend"
@@ -125,7 +127,7 @@ func (a *App) MenuCardBodyForBackend(backend, action, body string) string {
 }
 
 func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
-	return newAutoRetryService(a).CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
+	return appautoretry.NewService(a).CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
 }
 
 func (a *App) NormalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error) {

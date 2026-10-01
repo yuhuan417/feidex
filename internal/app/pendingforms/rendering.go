@@ -121,9 +121,7 @@ func renderUserInputFormCard(requestID string, payload ToolUserInputPayload, dra
 	})
 	formElements := make([]map[string]any, 0, len(payload.Questions)+4)
 	for _, q := range payload.Questions {
-		for _, elem := range RenderToolUserInputQuestionElements(q, drafts, requestID) {
-			formElements = append(formElements, elem)
-		}
+		formElements = append(formElements, RenderToolUserInputQuestionElements(q, drafts, requestID)...)
 	}
 	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{

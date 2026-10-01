@@ -1,11 +1,14 @@
 package app
 
 import (
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+
 	"context"
 	"fmt"
 	"strings"
 	"time"
 
+	"feidex/internal/app/apputil"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -23,11 +26,6 @@ func groupBindingScopeActive(a *App, msg *feishu.InboundMessage) bool {
 	return isGroupMessage(msg)
 }
 
-func isGroupSessionKey(sessionKey string) bool {
-	chatType, chatID, _, _ := parseSessionKeyMeta(sessionKey)
-	return chatType == "group" && strings.TrimSpace(chatID) != ""
-}
-
 func sessionKeyChat(sessionKey string) (chatType, chatID string) {
 	chatType, chatID, _, _ = parseSessionKeyMeta(sessionKey)
 	return chatType, chatID
@@ -43,8 +41,8 @@ func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
 				continue
 			}
 			if sess := a.State().Session(key); sess != nil {
-				chatType = firstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
-				chatID = firstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
+				chatType = apputil.FirstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
+				chatID = apputil.FirstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
 			}
 		}
 		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {
@@ -344,7 +342,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		next := toggleServiceTier(binding.ServiceTierOverride)
+		next := appservicetiercmd.ToggleServiceTier(binding.ServiceTierOverride)
 		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = next })
 		if err != nil {
 			return err
@@ -353,18 +351,6 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	default:
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle | /fast config")
 	}
-}
-
-func (s bindingService) completeBindingWorkspaceChoose(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace choose")
-	binding, err := s.ensureBindingForMessage(msg)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "请选择当前 Bot 的 workspace"},
-		Card:  rawCard(s.renderBindingWorkspaceChooseCard(sessionKey, binding)),
-	}, nil
 }
 
 func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessionKey, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -410,7 +396,7 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction, sessionKey, serviceTier string) (*callback.CardActionTriggerResponse, error) {
 	serviceTier = clearableArg(serviceTier)
 	if serviceTier != "" {
-		serviceTier = normalizeServiceTier(serviceTier)
+		serviceTier = appservicetiercmd.NormalizeServiceTier(serviceTier)
 		if serviceTier == "" {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
 		}

@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+	apppathpick "feidex/internal/app/pathpick"
+	appupgradecmd "feidex/internal/app/upgradecmd"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +33,7 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 	if err := os.WriteFile(filePath, []byte("note"), 0o644); err != nil {
 		t.Fatalf("WriteFile(note.txt) error = %v", err)
 	}
-	payload := pathPickerPayload{
+	payload := appworkspacecmd.PathPickerPayload{
 		Mode:        pathPickerModeFile,
 		Style:       pathPickerStyleDropdown,
 		RootPath:    root,
@@ -50,13 +53,13 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 	resp, err := newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-1"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "child", Path: subdir, IsDir: true}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "child", Path: subdir, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("dropdown open dir = %#v, %v", resp, err)
 	}
 	pending := a.store.PendingByID("path-1")
-	var gotPayload pathPickerPayload
+	var gotPayload appworkspacecmd.PathPickerPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &gotPayload); err != nil {
 		t.Fatalf("Unmarshal(payload after dir) error = %v", err)
 	}
@@ -67,7 +70,7 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-1"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "note.txt", Path: filePath, IsDir: false}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "note.txt", Path: filePath, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("dropdown select file = %#v, %v", resp, err)
@@ -102,7 +105,7 @@ func TestPathPickerDirectoryConfirmUsesCurrentPath(t *testing.T) {
 	if err := os.Mkdir(subdir, 0o755); err != nil {
 		t.Fatalf("Mkdir(repo) error = %v", err)
 	}
-	payload := pathPickerPayload{
+	payload := appworkspacecmd.PathPickerPayload{
 		Mode:        pathPickerModeDirectory,
 		Style:       pathPickerStyleDropdown,
 		RootPath:    root,
@@ -154,7 +157,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("MkdirAll(target) error = %v", err)
 	}
 	a.cfg.Workspaces[0].Cwd = current
-	payload := workspaceNewPayload{
+	payload := appworkspacecmd.NewPayload{
 		RootPath:    "/",
 		SelectedCWD: current,
 	}
@@ -178,7 +181,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("completeWorkspaceNewPickDir() = %#v, %v", resp, err)
 	}
 	pending := a.store.PendingByID("workspace-1")
-	gotPayload := workspaceNewPayloadFromPending(pending)
+	gotPayload := appworkspacecmd.NewPayloadFromPending(pending)
 	if gotPayload.Picker == nil || gotPayload.DraftID != "repo" || gotPayload.DraftName != "Repo" {
 		t.Fatalf("workspace payload after pickdir = %+v", gotPayload)
 	}
@@ -186,7 +189,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "new-project", Path: target, IsDir: true}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "new-project", Path: target, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace picker dropdown = %#v, %v", resp, err)
@@ -199,7 +202,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("workspace picker confirm = %#v, %v", resp, err)
 	}
 	pending = a.store.PendingByID("workspace-1")
-	gotPayload = workspaceNewPayloadFromPending(pending)
+	gotPayload = appworkspacecmd.NewPayloadFromPending(pending)
 	if gotPayload.Picker != nil || filepath.Clean(gotPayload.SelectedCWD) != filepath.Clean(target) || gotPayload.DraftID != "repo" || gotPayload.DraftName != "Repo" {
 		t.Fatalf("workspace payload after confirm = %+v", gotPayload)
 	}
@@ -249,7 +252,7 @@ func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceNewPayload{
+		PayloadJSON: mustJSON(appworkspacecmd.NewPayload{
 			RootPath:    "/",
 			SelectedCWD: root,
 		}),
@@ -267,7 +270,7 @@ func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
 	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "Feature Repo", Path: target, IsDir: true}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "Feature Repo", Path: target, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace picker dropdown = %#v, %v", resp, err)
@@ -281,7 +284,7 @@ func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
 	}
 
 	pending := a.store.PendingByID("workspace-suggest-1")
-	gotPayload := workspaceNewPayloadFromPending(pending)
+	gotPayload := appworkspacecmd.NewPayloadFromPending(pending)
 	if gotPayload.DraftID != "feature-repo" || gotPayload.AutoDraftID != "feature-repo" {
 		t.Fatalf("workspace payload after suggest = %+v", gotPayload)
 	}
@@ -303,7 +306,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceNewPayload{
+		PayloadJSON: mustJSON(appworkspacecmd.NewPayload{
 			RootPath:    "/",
 			SelectedCWD: existingDir,
 			DraftID:     "repo",
@@ -342,7 +345,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 func TestWorkspaceFormOrdering(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	newForm := workspaceNewForm(t, newWorkspaceRenderService(a).renderWorkspaceNewCard("sess-1", "req-new", workspaceNewPayload{
+	newForm := workspaceNewForm(t, newWorkspaceRenderService(a).renderWorkspaceNewCard("sess-1", "req-new", appworkspacecmd.NewPayload{
 		RootPath:    "/",
 		SelectedCWD: a.cfg.Workspaces[0].Cwd,
 	}))
@@ -351,7 +354,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 		t.Fatalf("workspace new first form element = %q, want column_set", got)
 	}
 
-	cloneForm := workspaceCloneForm(t, newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+	cloneForm := workspaceCloneForm(t, newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 	}))
@@ -366,7 +369,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 
 func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 		CloneMode:         appworkspacecmd.CloneModeWorkspace,
@@ -394,7 +397,7 @@ func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
 
 func TestWorkspaceCloneFormShowsWorktreeFieldsInWorktreeMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", workspaceClonePayload{
+	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 		CloneMode:         appworkspacecmd.CloneModeWorktree,
@@ -426,7 +429,7 @@ func TestWorkspaceCloneRefreshShowsWorktreeFieldsAndPrefillsDefaults(t *testing.
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{RootPath: "/", SelectedParentDir: parentDir}),
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{RootPath: "/", SelectedParentDir: parentDir}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(workspace-clone-refresh) error = %v", err)
 	}
@@ -450,7 +453,7 @@ func TestWorkspaceCloneRefreshShowsWorktreeFieldsAndPrefillsDefaults(t *testing.
 	if got, _ := inputs["worktree_workspace_id"]["default_value"].(string); got != "repo-feidex-bot" {
 		t.Fatalf("worktree workspace default = %q, want repo-feidex-bot", got)
 	}
-	payload := workspaceClonePayloadFromPending(a.store.PendingByID("workspace-clone-refresh"))
+	payload := appworkspacecmd.ClonePayloadFromPending(a.store.PendingByID("workspace-clone-refresh"))
 	if payload.CloneMode != appworkspacecmd.CloneModeWorktree || payload.WorktreeWorkspaceID != "repo-feidex-bot" || payload.WorktreeDirectoryName != "repo-feidex-bot" || !strings.Contains(payload.WorktreeBranchName, "repo/feidex-bot") {
 		t.Fatalf("workspace clone payload after refresh = %+v", payload)
 	}
@@ -470,7 +473,7 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{RootPath: "/", SelectedParentDir: baseDir}),
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{RootPath: "/", SelectedParentDir: baseDir}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(workspace-clone-prefill) error = %v", err)
 	}
@@ -487,7 +490,7 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 		t.Fatalf("completeWorkspaceClonePickDir(worktree) = %#v, %v", resp, err)
 	}
 	pending := a.store.PendingByID("workspace-clone-prefill")
-	payload := workspaceClonePayloadFromPending(pending)
+	payload := appworkspacecmd.ClonePayloadFromPending(pending)
 	if payload.WorktreeWorkspaceID != "repo-feidex-bot" || payload.WorktreeDirectoryName != "repo-feidex-bot" || !strings.Contains(payload.WorktreeBranchName, "repo/feidex-bot") {
 		t.Fatalf("worktree defaults after pickdir = %+v", payload)
 	}
@@ -495,7 +498,7 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "parents", Path: parentDir, IsDir: true}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "parents", Path: parentDir, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace clone prefill dropdown = %#v, %v", resp, err)
@@ -507,7 +510,7 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace clone prefill confirm = %#v, %v", resp, err)
 	}
-	payload = workspaceClonePayloadFromPending(a.store.PendingByID("workspace-clone-prefill"))
+	payload = appworkspacecmd.ClonePayloadFromPending(a.store.PendingByID("workspace-clone-prefill"))
 	if payload.WorktreeTargetDir != filepath.Join(parentDir, "repo-feidex-bot") {
 		t.Fatalf("worktree target after parent confirm = %+v", payload)
 	}
@@ -539,7 +542,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	})
 	var gotRepoURL string
 	var gotTargetDir string
-	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		gotRepoURL = repoURL
 		gotTargetDir = targetDir
 		close(started)
@@ -570,7 +573,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: baseDir,
 		}),
@@ -590,7 +593,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		t.Fatalf("completeWorkspaceClonePickDir() = %#v, %v", resp, err)
 	}
 	pending := a.store.PendingByID("workspace-clone-1")
-	gotPayload := workspaceClonePayloadFromPending(pending)
+	gotPayload := appworkspacecmd.ClonePayloadFromPending(pending)
 	if gotPayload.Picker == nil || gotPayload.RepoURL != "git@github.com:example/repo.git" || gotPayload.DraftID != "repo-copy" {
 		t.Fatalf("workspace clone payload after pickdir = %+v", gotPayload)
 	}
@@ -598,7 +601,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "parents", Path: parentDir, IsDir: true}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "parents", Path: parentDir, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace clone picker dropdown = %#v, %v", resp, err)
@@ -611,7 +614,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		t.Fatalf("workspace clone picker confirm = %#v, %v", resp, err)
 	}
 	pending = a.store.PendingByID("workspace-clone-1")
-	gotPayload = workspaceClonePayloadFromPending(pending)
+	gotPayload = appworkspacecmd.ClonePayloadFromPending(pending)
 	if gotPayload.Picker != nil || filepath.Clean(gotPayload.SelectedParentDir) != filepath.Clean(parentDir) || gotPayload.RepoURL != "git@github.com:example/repo.git" || gotPayload.DraftID != "repo-copy" {
 		t.Fatalf("workspace clone payload after confirm = %+v", gotPayload)
 	}
@@ -726,7 +729,7 @@ func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 	}()
 
 	var gotCloneTarget string
-	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		if repoURL != "git@github.com:example/repo.git" {
 			t.Fatalf("workspaceGitClone repoURL = %q", repoURL)
 		}
@@ -766,7 +769,7 @@ func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: parentDir,
 		}),
@@ -830,7 +833,7 @@ func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: baseDir,
 			RepoURL:           "git@github.com:example/repo.git",
@@ -866,7 +869,7 @@ func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T
 	foundNewPending := false
 	for _, req := range a.store.AllPendingRequests() {
 		if req != nil && req.Kind == "workspace_new" {
-			payload := workspaceNewPayloadFromPending(req)
+			payload := appworkspacecmd.NewPayloadFromPending(req)
 			if filepath.Clean(payload.SelectedCWD) == filepath.Clean(existingDir) && payload.DraftID == "repo" {
 				foundNewPending = true
 				break
@@ -893,7 +896,7 @@ func TestWorkspaceCloneSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: baseDir,
 			RepoURL:           "git@github.com:example/repo.git",
@@ -942,7 +945,7 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 	origClone := workspaceGitClone
 	defer func() { workspaceGitClone = origClone }()
 
-	workspaceGitClone = func(_ context.Context, _, _ string, _ workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(_ context.Context, _, _ string, _ appworkspacecmd.CloneProgressReporter) error {
 		return context.DeadlineExceeded
 	}
 
@@ -953,7 +956,7 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: parentDir,
 		}),
@@ -1010,7 +1013,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 	origClone := workspaceGitClone
 	defer func() { workspaceGitClone = origClone }()
 
-	workspaceGitClone = func(_ context.Context, _, targetDir string, _ workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(_ context.Context, _, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
 
@@ -1021,7 +1024,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: parentDir,
 		}),
@@ -1081,11 +1084,11 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 	defer func() { workspaceGitClone = origClone }()
 
 	started := make(chan struct{})
-	workspaceGitClone = func(ctx context.Context, _, targetDir string, report workspaceCloneProgressReporter) error {
+	workspaceGitClone = func(ctx context.Context, _, targetDir string, report appworkspacecmd.CloneProgressReporter) error {
 		if report != nil {
 			report("Cloning into '" + filepath.Base(targetDir) + "'...")
 			close(started)
-			time.Sleep(workspaceClonePatchInterval + 20*time.Millisecond)
+			time.Sleep(appworkspacecmd.ClonePatchInterval + 20*time.Millisecond)
 			report("Receiving objects: 42% (42/100)")
 		}
 		<-ctx.Done()
@@ -1099,7 +1102,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(workspaceClonePayload{
+		PayloadJSON: mustJSON(appworkspacecmd.ClonePayload{
 			RootPath:          "/",
 			SelectedParentDir: parentDir,
 		}),
@@ -1188,7 +1191,7 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 		t.Fatalf("commandDownload() error = %v", err)
 	}
 	pending := a.store.AllPendingRequests()
-	if len(pending) != 1 || pending[0].Kind != downloadFilePendingKind {
+	if len(pending) != 1 || pending[0].Kind != appdebugviewcmd.DownloadFilePendingKind {
 		t.Fatalf("download pending requests = %+v", pending)
 	}
 	requestID := pending[0].ID
@@ -1197,7 +1200,7 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": requestID},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: "report.txt", Path: target, IsDir: false}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: "report.txt", Path: target, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("download picker dropdown = %#v, %v", resp, err)
@@ -1277,12 +1280,12 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "upgrade-local-picker",
-		Kind:        upgradeLocalBinaryPendingKind,
+		Kind:        appupgradecmd.UpgradeLocalBinaryPendingKind,
 		SessionKey:  sessionKey,
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(pathPickerPayload{
+		PayloadJSON: mustJSON(appworkspacecmd.PathPickerPayload{
 			Mode:        pathPickerModeFile,
 			Style:       pathPickerStyleDropdown,
 			RootPath:    a.cfg.Workspaces[0].Cwd,
@@ -1296,7 +1299,7 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"request_id": "upgrade-local-picker"},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: filepath.Base(sourcePath), Path: sourcePath, IsDir: false}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: filepath.Base(sourcePath), Path: sourcePath, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("upgrade local dropdown = %#v, %v", resp, err)
@@ -1317,7 +1320,7 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 		if req.Kind != "upgrade_release" {
 			continue
 		}
-		var payload upgradePendingPayload
+		var payload appupgradecmd.UpgradePendingPayload
 		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
 			t.Fatalf("Unmarshal(upgrade local payload) error = %v", err)
 		}
@@ -1337,31 +1340,6 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 	if !found {
 		t.Fatal("expected staged local upgrade request")
 	}
-}
-
-func cardHasTag(card map[string]any, wantTag string) bool {
-	elements := cardElements(card)
-	for _, elem := range elements {
-		if tag, _ := elem["tag"].(string); tag == wantTag {
-			return true
-		}
-		actions, _ := elem["actions"].([]map[string]any)
-		for _, action := range actions {
-			if tag, _ := action["tag"].(string); tag == wantTag {
-				return true
-			}
-		}
-		columns, _ := elem["columns"].([]map[string]any)
-		for _, column := range columns {
-			columnElems, _ := column["elements"].([]map[string]any)
-			for _, child := range columnElems {
-				if tag, _ := child["tag"].(string); tag == wantTag {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 func cardHasButtonText(card map[string]any, want string) bool {

@@ -1,8 +1,11 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+
 	"context"
 
+	appmaintenance "feidex/internal/app/maintenance"
 	appturnlifecycle "feidex/internal/app/turnlifecycle"
 	"feidex/internal/state"
 )
@@ -44,11 +47,11 @@ func (a *App) TurnLifecycleSubmissionDispatch() appturnlifecycle.SubmissionDispa
 }
 
 func (a *App) TurnLifecycleAutoRetry() appturnlifecycle.AutoRetryProvider {
-	return newAutoRetryService(a)
+	return appautoretry.NewService(a)
 }
 
 func (a *App) TurnLifecycleRuntimeMaintenance() appturnlifecycle.RuntimeMaintenanceProvider {
-	return newRuntimeMaintenanceService(a)
+	return appmaintenance.NewRuntimeMaintenanceService(a)
 }
 
 func (a *App) MarkSessionThreadLive(sessionKey, threadID string) {

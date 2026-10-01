@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	appdelivery "feidex/internal/app/delivery"
+	"feidex/internal/app/turnitem"
 	"strings"
 	"testing"
 
@@ -105,7 +106,7 @@ func TestSendTurnItemCardSplitsReplyTables(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1", "card-2"}
 
-	payload := turnItemCardPayload{
+	payload := turnitem.CardPayload{
 		ItemID:   "item-1",
 		ItemType: "agent_message",
 		Title:    "回复",
@@ -168,8 +169,8 @@ func TestSendFinalMessagesWithFooterSplitsLargePayload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Marshal(card[%d]) error = %v", i, err)
 		}
-		if len(payload) > feishuReplyCardMaxPayloadBytes {
-			t.Fatalf("card[%d] payload = %d, want <= %d", i, len(payload), feishuReplyCardMaxPayloadBytes)
+		if len(payload) > appdelivery.ReplyCardMaxPayloadBytes {
+			t.Fatalf("card[%d] payload = %d, want <= %d", i, len(payload), appdelivery.ReplyCardMaxPayloadBytes)
 		}
 	}
 	for i, card := range ff.replyCards[:len(ff.replyCards)-1] {

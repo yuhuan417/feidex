@@ -1,7 +1,11 @@
 package app
 
 import (
+	appturnlifecycle "feidex/internal/app/turnlifecycle"
+
 	appapproval "feidex/internal/app/approval"
+	applinkutil "feidex/internal/app/linkutil"
+	"feidex/internal/app/turnitem"
 	"strings"
 	"testing"
 
@@ -10,19 +14,19 @@ import (
 
 func TestNormalizeCardMarkdownOnlyTrimsWhitespace(t *testing.T) {
 	input := "\n\n```txt\nhello\n```\n\n"
-	got := normalizeCardMarkdown(input)
+	got := applinkutil.NormalizeCardMarkdown(input)
 	want := "```txt\nhello\n```"
 	if got != want {
-		t.Fatalf("normalizeCardMarkdown() should only trim, got: %q", got)
+		t.Fatalf("applinkutil.NormalizeCardMarkdown() should only trim, got: %q", got)
 	}
 }
 
 func TestMarkdownCodeBlockWithLangUsesDynamicOuterFence(t *testing.T) {
-	got := normalizeCardMarkdown("命令:\n" + markdownCodeBlockWithLang("bash", "pwd"))
+	got := applinkutil.NormalizeCardMarkdown("命令:\n" + turnitem.MarkdownCodeBlockWithLang("bash", "pwd"))
 	if !strings.Contains(got, "````bash\npwd\n````") {
 		t.Fatalf("simple content should keep 4-backtick outer fence, got: %q", got)
 	}
-	got = markdownCodeBlockWithLang("", "keep ```` inner")
+	got = turnitem.MarkdownCodeBlockWithLang("", "keep ```` inner")
 	if !strings.HasPrefix(got, "`````\n") || !strings.HasSuffix(got, "\n`````") {
 		t.Fatalf("outer fence should be inner max+1 when inner has 4 backticks, got: %q", got)
 	}
@@ -64,14 +68,14 @@ func TestApprovalButtonsCoverFullDecisionSet(t *testing.T) {
 }
 
 func TestTurnCompletionTerminalTextAlwaysNotifyInterrupted(t *testing.T) {
-	terminalText := turnCompletionTerminalText("interrupted", "")
+	terminalText := appturnlifecycle.TurnCompletionTerminalText("interrupted", "")
 	if terminalText != "任务已中断。" {
 		t.Fatalf("unexpected interrupted terminal text: %q", terminalText)
 	}
 }
 
 func TestTurnCompletionTerminalTextKeepsCompletedSilent(t *testing.T) {
-	terminalText := turnCompletionTerminalText("completed", "")
+	terminalText := appturnlifecycle.TurnCompletionTerminalText("completed", "")
 	if terminalText != "" {
 		t.Fatalf("expected no terminal notice for completed turn, got %q", terminalText)
 	}

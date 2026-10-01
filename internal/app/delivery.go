@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
-	"log/slog"
+	"feidex/internal/app/attachments"
 	appdelivery "feidex/internal/app/delivery"
+	"feidex/internal/app/quietmode"
+	"log/slog"
 	"strings"
 
 	"feidex/internal/config"
@@ -64,14 +66,14 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if quietModeEnabled(feishuConfig(a)) && !shouldDeliverTurnKindInQuiet(quietMode(feishuConfig(a)), kind) {
+	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), kind) {
 		return nil
 	}
 	appState := a.State()
 	enablePreview := strings.TrimSpace(kind) == "final_message"
 	if !enablePreview {
 		if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-			text = neutralizeLocalMarkdownLinks(text, ws.Cwd)
+			text = attachments.NeutralizeLocalMarkdownLinks(text, ws.Cwd)
 		}
 	}
 	text = strings.TrimSpace(text)
@@ -202,12 +204,4 @@ func outboundMessageCardMeta(kind string, workspaceID ...string) (title, color s
 		title = base
 	}
 	return
-}
-
-func prefixWorkspaceTitle(title, workspaceID string) string {
-	ws := strings.TrimSpace(workspaceID)
-	if ws == "" {
-		return title
-	}
-	return "[" + ws + "] " + title
 }

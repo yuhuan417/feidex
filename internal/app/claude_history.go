@@ -17,10 +17,8 @@ import (
 // History service type and constructor
 // ---------------------------------------------------------------------------
 
-type claudeHistoryService = claudesupport.HistoryService
-
-func newClaudeHistoryService(a *App) *claudeHistoryService {
-	return &claudeHistoryService{
+func newClaudeHistoryService(a *App) *claudesupport.HistoryService {
+	return &claudesupport.HistoryService{
 		FetchClaudeSessionTurns: func(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
 			return fetchClaudeCurrentSessionTurns(a, sessionKey)
 		},

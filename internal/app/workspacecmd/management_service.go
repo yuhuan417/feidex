@@ -959,11 +959,7 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 
 // runAsyncThreadBinding runs EnsureWorkspaceThreadBinding asynchronously.
 func (s *ManagementService) runAsyncThreadBinding(sessionKey, workspaceID string, ws *config.Workspace) {
-	runner := s.RunAsync
-	if runner == nil {
-		runner = func(fn func()) { go fn() }
-	}
-	runner(func() {
+	s.RunAsync(func() {
 		sess := s.GetSession(sessionKey)
 		if sess == nil {
 			s.OnAsyncDone()

@@ -7,9 +7,7 @@ import (
 
 // Type aliases preserve the original names within the app package.
 type (
-	finalCardPatchTracker  = appfinalcardpatch.Tracker
-	finalCardPatchState    = appfinalcardpatch.PatchState
-	finalCardPatchSnapshot = appfinalcardpatch.PatchSnapshot
+	finalCardPatchTracker = appfinalcardpatch.Tracker
 )
 
 func newFinalCardPatchTracker() *finalCardPatchTracker {

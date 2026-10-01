@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"feidex/internal/app/apputil"
 	appreview "feidex/internal/app/review"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/serverrequest"
@@ -101,7 +102,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 			return renderApprovalCard(a, "", sub, title, color, body, buttons)
 		},
 		PrepareMentionText: func(text, userID string) string {
-			return prependAttentionMentionMarkdown(text, userID)
+			return apputil.PrependAttentionMentionMarkdown(text, userID)
 		},
 		ReplyCodexError: func(requestID json.RawMessage, code int, message string) {
 			replyCodexError(a, requestID, code, message)

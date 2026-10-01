@@ -1,6 +1,8 @@
 package app
 
 import (
+	apppathpick "feidex/internal/app/pathpick"
+
 	"encoding/json"
 	"errors"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
@@ -93,7 +96,7 @@ func TestUpgradeBranches(t *testing.T) {
 		OwnerUserID: "user-1",
 		SessionKey:  "sess-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(upgradePendingPayload{TargetVersion: "v10.0.0", BinaryPath: "/tmp/feidex", DownloadURL: "https://download.test/bin", ExpectedSHA256: "abc"}),
+		PayloadJSON: mustJSON(appupgradecmd.UpgradePendingPayload{TargetVersion: "v10.0.0", BinaryPath: "/tmp/feidex", DownloadURL: "https://download.test/bin", ExpectedSHA256: "abc"}),
 	}); err != nil {
 		t.Fatalf("UpsertPending(upgrade-start) error = %v", err)
 	}
@@ -119,7 +122,7 @@ func TestUpgradeBranches(t *testing.T) {
 	}
 	var picker *state.PendingRequest
 	for _, req := range a.store.AllPendingRequests() {
-		if req.Kind == upgradeLocalBinaryPendingKind {
+		if req.Kind == appupgradecmd.UpgradeLocalBinaryPendingKind {
 			picker = req
 			break
 		}
@@ -131,7 +134,7 @@ func TestUpgradeBranches(t *testing.T) {
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"request_id": picker.ID},
-		Option:      encodePathPickerOption(pathPickerEntry{Name: filepath.Base(localArtifact), Path: localArtifact, IsDir: false}),
+		Option:      encodePathPickerOption(apppathpick.Entry{Name: filepath.Base(localArtifact), Path: localArtifact, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("local picker dropdown = %#v, %v", resp, err)
@@ -149,7 +152,7 @@ func TestUpgradeBranches(t *testing.T) {
 		if req.Kind != "upgrade_release" || req.ID == "upgrade-start" {
 			continue
 		}
-		var payload upgradePendingPayload
+		var payload appupgradecmd.UpgradePendingPayload
 		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
 			continue
 		}

@@ -1,6 +1,9 @@
 package app
 
 import (
+	appautoretry "feidex/internal/app/autoretry"
+	appbackend "feidex/internal/app/backend"
+
 	"path/filepath"
 	"testing"
 
@@ -50,7 +53,7 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(foreign) error = %v", err)
 				}
-				a.autoRetries = &autoRetryTracker{States: map[string]*autoRetryState{
+				a.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					foreignSessionKey: {
 						SessionKey: foreignSessionKey,
 						ThreadID:   "thread-foreign",
@@ -73,7 +76,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newMaintenanceStateService(a).CodexMaintenanceTracker().Upgrade = backendUpgradeSnapshot{Running: true}
+				appbackend.NewMaintenanceStateService(a).CodexMaintenanceTracker().Upgrade = appbackend.BackendUpgradeSnapshot{Running: true}
 			},
 			want: "当前正在执行 Codex 维护，请稍后再切换 backend",
 		},
@@ -90,7 +93,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "claude maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newMaintenanceStateService(a).ClaudeMaintenanceTracker().Upgrade = backendUpgradeSnapshot{Running: true}
+				appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceTracker().Upgrade = appbackend.BackendUpgradeSnapshot{Running: true}
 			},
 			want: "当前正在执行 Claude 维护，请稍后再切换 backend",
 		},
@@ -176,7 +179,7 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				a.autoRetries = &autoRetryTracker{States: map[string]*autoRetryState{
+				a.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",
@@ -196,7 +199,7 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				a.autoRetries = &autoRetryTracker{States: map[string]*autoRetryState{
+				a.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",

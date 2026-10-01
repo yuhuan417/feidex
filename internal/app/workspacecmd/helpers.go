@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -45,10 +44,6 @@ func sameWorkspaceCWD(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-func defaultWorkspaceCloneRoot(_ *config.Workspace) string {
-	return "/"
-}
-
 func submenuLabel(label string) string {
 	label = strings.TrimSpace(label)
 	if label == "" {
@@ -71,16 +66,6 @@ func commandLabel(label, slash string) string {
 
 func submenuCommandLabel(label, slash string) string {
 	return submenuLabel(commandLabel(label, slash))
-}
-
-func defaultWorkspaceCloneParent(ws *config.Workspace, cfgPath string) string {
-	if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
-		return filepath.Dir(strings.TrimSpace(ws.Cwd))
-	}
-	if strings.TrimSpace(cfgPath) != "" {
-		return filepath.Dir(strings.TrimSpace(cfgPath))
-	}
-	return "."
 }
 
 func selectedWorkspaceIDForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, sess *state.Session) string {
@@ -127,10 +112,6 @@ func workspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string 
 // changed for the given session.
 func WorkspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string {
 	return workspaceSwitchBlockedReason(sess, hasInFlight)
-}
-
-func sessionCanRetargetWorkspace(sess *state.Session, hasInFlight bool) bool {
-	return workspaceSwitchBlockedReason(sess, hasInFlight) == ""
 }
 
 func applyWorkspaceSwitch(s workspaceSwitchSessionService, sessionKey string, sess *state.Session, workspaceID string) error {

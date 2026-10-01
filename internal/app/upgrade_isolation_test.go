@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
@@ -137,7 +138,7 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 		Kind:        "upgrade_release",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(upgradePendingPayload{
+		PayloadJSON: mustJSON(appupgradecmd.UpgradePendingPayload{
 			TargetVersion:  "v0.4.0",
 			BinaryPath:     "/tmp/feidex",
 			DownloadURL:    "https://download.test/bin",
@@ -175,7 +176,7 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 		Kind:        "upgrade_release",
 		OwnerUserID: "user-1",
 		Status:      "pending",
-		PayloadJSON: mustJSON(upgradePendingPayload{
+		PayloadJSON: mustJSON(appupgradecmd.UpgradePendingPayload{
 			TargetVersion:  "local-bin",
 			BinaryPath:     "/tmp/feidex",
 			SourcePath:     "/tmp/staged-local-bin",

@@ -1,6 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	"context"
 	"net/http"
 	"path/filepath"
@@ -22,7 +24,7 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 		cfg:         cfg,
 		store:       store,
 		frontendID:  strings.TrimSpace(frontendID),
-		feishu:      wrapFeishuClient(ff),
+		feishu:      appfeishuwrap.WrapFeishuClient(ff),
 		started:     time.Now(),
 		liveThreads: newLiveThreadTracker(),
 		trackers: appTrackers{

@@ -38,15 +38,6 @@ func completeMaintenanceAsyncAction(a *App,
 	)
 }
 
-func maintenanceFallbackResponse(
-	sessionKey string,
-	cause error,
-	loadStatusCard func(context.Context) (map[string]any, error),
-	failureCard func(sessionKey, errText string) map[string]any,
-) (*callback.CardActionTriggerResponse, error) {
-	return appmaintenance.FallbackResponse(sessionKey, cause, loadStatusCard, failureCard)
-}
-
 func completeMaintenanceRestartRun[S any](
 	a *App,
 	action *feishu.CardAction,
