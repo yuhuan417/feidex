@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/claudeinstall"
+	"feidex/internal/install"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -19,7 +19,7 @@ const (
 )
 
 type claudeUpgradeView struct {
-	Probe         claudeinstall.Probe
+	Probe         install.Probe
 	LatestVersion string
 	LatestError   string
 	BusyReason    string

@@ -6,8 +6,7 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/buildinfo"
-	"feidex/internal/claudeinstall"
-	"feidex/internal/codexinstall"
+	"feidex/internal/install"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -27,13 +26,13 @@ type releaseClient interface {
 }
 
 type codexInstallManager interface {
-	Probe(context.Context) (codexinstall.Probe, error)
+	Probe(context.Context) (install.Probe, error)
 	LatestVersion(context.Context) (string, error)
 	InstallVersion(context.Context, string) error
 }
 
 type claudeInstallManager interface {
-	Probe(context.Context) (claudeinstall.Probe, error)
+	Probe(context.Context) (install.Probe, error)
 	LatestVersion(context.Context) (string, error)
 	InstallVersion(context.Context, string) error
 }
@@ -46,8 +45,8 @@ var (
 	newReleaseClient = func() releaseClient {
 		return release.NewGitHubClient(release.DefaultRepoOwner, release.DefaultRepoName, nil)
 	}
-	newCodexInstallManager  = func(command string) codexInstallManager { return codexinstall.New(command) }
-	newClaudeInstallManager = func(command string) claudeInstallManager { return claudeinstall.New(command) }
+	newCodexInstallManager  = func(command string) codexInstallManager { return install.New(install.Codex(), command) }
+	newClaudeInstallManager = func(command string) claudeInstallManager { return install.New(install.Claude(), command) }
 	runClaudeSmokeTest      = func(a *App, ctx context.Context) error { return newBackendUpgradeService(a).claudeSmokeTest(ctx) }
 	startDaemonUpgrade      = daemon.StartBackgroundUpgrade
 	currentVersion          = buildinfo.CurrentVersion

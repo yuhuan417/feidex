@@ -10,8 +10,7 @@ import (
 
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/backend"
-	"feidex/internal/claudeinstall"
-	"feidex/internal/codexinstall"
+	"feidex/internal/install"
 	"feidex/internal/feishu"
 )
 
@@ -27,7 +26,7 @@ type BackendRestartSnapshot = backend.BackendRestartSnapshot
 
 // ClaudeUpgradeView mirrors the claudeUpgradeView type in the app package.
 type ClaudeUpgradeView struct {
-	Probe         claudeinstall.Probe
+	Probe         install.Probe
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
@@ -37,7 +36,7 @@ type ClaudeUpgradeView struct {
 
 // CodexUpgradeView mirrors the codexUpgradeView type in the app package.
 type CodexUpgradeView struct {
-	Probe         codexinstall.Probe
+	Probe         install.Probe
 	LatestVersion string
 	LatestError   string
 	BusyReason    string
@@ -49,7 +48,7 @@ type CodexUpgradeView struct {
 // Claude rendering helpers
 // ---------------------------------------------------------------------------
 
-func RenderClaudeInstallSource(probe claudeinstall.Probe) string {
+func RenderClaudeInstallSource(probe install.Probe) string {
 	if probe.Supported || strings.TrimSpace(probe.CurrentVersion) != "" {
 		return "Claude CLI"
 	}
@@ -208,7 +207,7 @@ func ClaudeUpgradeStatusButtons(sessionKey string, running bool) []feishu.Button
 // Codex rendering helpers
 // ---------------------------------------------------------------------------
 
-func RenderCodexInstallSource(probe codexinstall.Probe) string {
+func RenderCodexInstallSource(probe install.Probe) string {
 	if probe.Supported || strings.TrimSpace(probe.CurrentVersion) != "" {
 		return "Codex CLI"
 	}

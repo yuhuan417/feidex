@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/codexinstall"
+	"feidex/internal/install"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -27,7 +27,7 @@ const (
 )
 
 type codexUpgradeView struct {
-	Probe         codexinstall.Probe
+	Probe         install.Probe
 	LatestVersion string
 	LatestError   string
 	BusyReason    string

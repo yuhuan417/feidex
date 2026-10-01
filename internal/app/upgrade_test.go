@@ -12,16 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/claudeinstall"
-	"feidex/internal/codexinstall"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/install"
 	appstate "feidex/internal/state"
 )
 
 type fakeCodexInstallManager struct {
-	probe              codexinstall.Probe
+	probe              install.Probe
 	probeErr           error
 	latest             string
 	latestErr          error
@@ -30,7 +29,7 @@ type fakeCodexInstallManager struct {
 	postInstallVersion string
 }
 
-func (f *fakeCodexInstallManager) Probe(context.Context) (codexinstall.Probe, error) {
+func (f *fakeCodexInstallManager) Probe(context.Context) (install.Probe, error) {
 	return f.probe, f.probeErr
 }
 
@@ -54,7 +53,7 @@ func (f *fakeCodexInstallManager) InstallVersion(_ context.Context, version stri
 func TestCommandCodexRendersStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -85,7 +84,7 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -116,7 +115,7 @@ func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
 func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -178,7 +177,7 @@ func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -258,7 +257,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -337,7 +336,7 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -413,7 +412,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -482,7 +481,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	fc.closeErr = os.ErrProcessDone
 	manager := &fakeCodexInstallManager{
-		probe: codexinstall.Probe{
+		probe: install.Probe{
 			Command:        "codex",
 			CommandPath:    "/usr/local/bin/codex",
 			CurrentVersion: "1.0.0",
@@ -715,7 +714,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *te
 }
 
 type fakeClaudeInstallManager struct {
-	probe              claudeinstall.Probe
+	probe              install.Probe
 	probeErr           error
 	latest             string
 	latestErr          error
@@ -724,7 +723,7 @@ type fakeClaudeInstallManager struct {
 	postInstallVersion string
 }
 
-func (f *fakeClaudeInstallManager) Probe(context.Context) (claudeinstall.Probe, error) {
+func (f *fakeClaudeInstallManager) Probe(context.Context) (install.Probe, error) {
 	return f.probe, f.probeErr
 }
 
@@ -748,7 +747,7 @@ func (f *fakeClaudeInstallManager) InstallVersion(_ context.Context, version str
 func TestCommandClaudeRendersStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
@@ -779,7 +778,7 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
@@ -810,7 +809,7 @@ func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
 func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
@@ -878,7 +877,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
@@ -937,7 +936,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
@@ -998,7 +997,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
@@ -1054,7 +1053,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a.claude = claude
 	manager := &fakeClaudeInstallManager{
-		probe: claudeinstall.Probe{
+		probe: install.Probe{
 			Command:        "claude",
 			CommandPath:    "/usr/local/bin/claude",
 			CurrentVersion: "1.0.0",
