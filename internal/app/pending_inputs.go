@@ -21,10 +21,12 @@ type pendingQueueService struct {
 }
 
 func newPendingQueueService(app *App) pendingQueueService {
-	return pendingQueueService{
-		app:   app,
-		inner: newPendingQueueServiceFromApp(app),
-	}
+	return serviceFor(app, "pendingQueueService", func() pendingQueueService {
+		return pendingQueueService{
+			app:   app,
+			inner: newPendingQueueServiceFromApp(app),
+		}
+	})
 }
 
 func (s pendingQueueService) shouldStageInboundImages(msg *feishu.InboundMessage) bool {

@@ -18,14 +18,16 @@ import (
 // ---------------------------------------------------------------------------
 
 func newClaudeHistoryService(a *App) *claudesupport.HistoryService {
-	return &claudesupport.HistoryService{
-		FetchClaudeSessionTurns: func(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
-			return fetchClaudeCurrentSessionTurns(a, sessionKey)
-		},
-		ThreadLabel:  appthreadmenu.SessionCurrentThreadLabel,
-		MenuCardBody: menuCardBody,
-		PageSize:     apphistorycmd.HistoryPageSize,
-	}
+	return serviceFor(a, "claudeHistoryService", func() *claudesupport.HistoryService {
+		return &claudesupport.HistoryService{
+			FetchClaudeSessionTurns: func(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
+				return fetchClaudeCurrentSessionTurns(a, sessionKey)
+			},
+			ThreadLabel:  appthreadmenu.SessionCurrentThreadLabel,
+			MenuCardBody: menuCardBody,
+			PageSize:     apphistorycmd.HistoryPageSize,
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------

@@ -60,6 +60,17 @@
   - 只做入队、存 pending、返回 preparing card
 - 一旦跨过这条边界，后续耗时不再算“同步 ack 风险”，但仍要记录成“重流程，已异步保护”。
 
+### 1.1 服务构造不再是 ack 路径成本
+
+root `internal/app` 里的 service 构造器（`newXxxService(app)`）现在按 `*App`
+记忆化一次，不再每次调用都重建整张接线图。此前 workspace 两个服务每次构造
+分别要 1453ns/95 次分配和 2167ns/131 次分配，现在都是约 16ns/0 次分配。
+
+新增 service 时沿用同一模式即可：构造器只接收 `*App`，通过
+`serviceFor(app, "<key>", func() T { ... })` 返回实例。构造器之间会互相调用，
+所以 `serviceFor` 在锁外执行 `build`；构造器必须是 `*App` 的纯函数，不得在
+构造时快照配置或状态。
+
 ### 2. 命中下列任一条件，就按重路径处理
 
 - 同步执行 `git` 子进程，尤其是 `clone`、`fetch`、`log`、`diff`、`status`、`for-each-ref`。

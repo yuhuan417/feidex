@@ -135,7 +135,9 @@ type planModeAppAdapter struct {
 }
 
 func newPlanModeAppAdapter(a *App) planModeAppAdapter {
-	return planModeAppAdapter{App: a}
+	return serviceFor(a, "planModeAppAdapter", func() planModeAppAdapter {
+		return planModeAppAdapter{App: a}
+	})
 }
 
 func (a planModeAppAdapter) State() planmode.StateProvider {

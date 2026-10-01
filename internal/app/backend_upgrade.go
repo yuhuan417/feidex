@@ -19,7 +19,9 @@ type backendUpgradeService struct {
 }
 
 func newBackendUpgradeService(app *App) backendUpgradeService {
-	return backendUpgradeService{app: app}
+	return serviceFor(app, "backendUpgradeService", func() backendUpgradeService {
+		return backendUpgradeService{app: app}
+	})
 }
 
 // backendUpgradeView is the upgrade snapshot both backends render from.

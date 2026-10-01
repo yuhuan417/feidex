@@ -20,7 +20,9 @@ type finalCardPatchService struct {
 }
 
 func newFinalCardPatchService(app *App) finalCardPatchService {
-	return finalCardPatchService{svc: appfinalcardpatch.NewService(app)}
+	return serviceFor(app, "finalCardPatchService", func() finalCardPatchService {
+		return finalCardPatchService{svc: appfinalcardpatch.NewService(app)}
+	})
 }
 
 func (s finalCardPatchService) registerFinalCardPatchState(messageID string, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) {

@@ -18,75 +18,77 @@ type backendConfigurationService struct {
 }
 
 func newBackendConfigurationService(app *App) backendConfigurationService {
-	inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{
-		App: app,
-		Formatting: appbackend.ConfigurationFormattingDeps{
-			FormatMenuBody: menuCardBody,
-		},
-		Commands: appbackend.ConfigurationCommandDeps{
-			HandleCodexModelCommand: func(msg *feishu.InboundMessage, args []string) error {
-				return newModelConfigService(app).commandCodexModel(msg, args)
+	return serviceFor(app, "backendConfigurationService", func() backendConfigurationService {
+		inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{
+			App: app,
+			Formatting: appbackend.ConfigurationFormattingDeps{
+				FormatMenuBody: menuCardBody,
 			},
-			HandleClaudeModelCommand: func(msg *feishu.InboundMessage, args []string) error {
-				return newModelConfigService(app).commandClaudeModel(msg, args)
+			Commands: appbackend.ConfigurationCommandDeps{
+				HandleCodexModelCommand: func(msg *feishu.InboundMessage, args []string) error {
+					return newModelConfigService(app).commandCodexModel(msg, args)
+				},
+				HandleClaudeModelCommand: func(msg *feishu.InboundMessage, args []string) error {
+					return newModelConfigService(app).commandClaudeModel(msg, args)
+				},
+				HandleWorkspacePermissionCommand: func(msg *feishu.InboundMessage, args []string, sessionKey string) error {
+					return appbackend.DriverForApp(app).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+						Message:    msg,
+						Args:       args[1:],
+						SessionKey: sessionKey,
+						CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
+							return currentWorkspaceForMessage(app, msg)
+						},
+						ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
+							return newWorkspaceConfigService(app).ShowWorkspaceSandboxMenu(msg)
+						},
+						ShowWorkspacePolicyMenu: func(msg *feishu.InboundMessage) error {
+							return newWorkspaceConfigService(app).ShowWorkspacePolicyMenu(msg)
+						},
+						ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
+							return showClaudeWorkspacePermissionMenu(app, msg)
+						},
+						CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
+							return newWorkspaceManagementService(app).CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
+						},
+						CompleteWorkspacePolicySet: func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
+							return newWorkspaceManagementService(app).CompleteWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
+						},
+						CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
+							return newWorkspaceManagementService(app).CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
+						},
+						ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+							return replyCommandActionResponse(app, msg, resp)
+						},
+						CommandActionFromMessage: func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
+							return commandActionFromMessage(msg, actionValue)
+						},
+					})
+				},
 			},
-			HandleWorkspacePermissionCommand: func(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-				return appbackend.DriverForApp(app).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
-					Message:    msg,
-					Args:       args[1:],
-					SessionKey: sessionKey,
-					CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
-						return currentWorkspaceForMessage(app, msg)
-					},
-					ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
-						return newWorkspaceConfigService(app).ShowWorkspaceSandboxMenu(msg)
-					},
-					ShowWorkspacePolicyMenu: func(msg *feishu.InboundMessage) error {
-						return newWorkspaceConfigService(app).ShowWorkspacePolicyMenu(msg)
-					},
-					ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
-						return showClaudeWorkspacePermissionMenu(app, msg)
-					},
-					CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceManagementService(app).CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
-					},
-					CompleteWorkspacePolicySet: func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceManagementService(app).CompleteWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
-					},
-					CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceManagementService(app).CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
-					},
-					ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-						return replyCommandActionResponse(app, msg, resp)
-					},
-					CommandActionFromMessage: func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
-						return commandActionFromMessage(msg, actionValue)
-					},
-				})
+			Claude: appbackend.ConfigurationClaudeDeps{
+				CompleteModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+					return newModelConfigService(app).completeClaudeModelSet(action, modelID)
+				},
+				CompleteModelOptionAdd: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+					return newModelConfigService(app).completeClaudeModelOptionAdd(action)
+				},
+				CompleteModelOptionRemove: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+					return newModelConfigService(app).completeClaudeModelOptionRemove(action)
+				},
+				CompleteEffortSet: func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+					return newModelConfigService(app).completeClaudeEffortSet(action, effort)
+				},
 			},
-		},
-		Claude: appbackend.ConfigurationClaudeDeps{
-			CompleteModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-				return newModelConfigService(app).completeClaudeModelSet(action, modelID)
+			Codex: appbackend.ConfigurationCodexDeps{
+				FetchModelList:                   newModelConfigService(app).fetchModelList,
+				FetchPlanCollaborationModePreset: newModelConfigService(app).fetchPlanCollaborationModePreset,
+				UpdateGlobalModelConfig:          newModelConfigService(app).updateGlobalModelConfig,
+				RenderModelConfigCard:            newModelConfigService(app).renderModelConfigCard,
 			},
-			CompleteModelOptionAdd: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-				return newModelConfigService(app).completeClaudeModelOptionAdd(action)
-			},
-			CompleteModelOptionRemove: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-				return newModelConfigService(app).completeClaudeModelOptionRemove(action)
-			},
-			CompleteEffortSet: func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
-				return newModelConfigService(app).completeClaudeEffortSet(action, effort)
-			},
-		},
-		Codex: appbackend.ConfigurationCodexDeps{
-			FetchModelList:                   newModelConfigService(app).fetchModelList,
-			FetchPlanCollaborationModePreset: newModelConfigService(app).fetchPlanCollaborationModePreset,
-			UpdateGlobalModelConfig:          newModelConfigService(app).updateGlobalModelConfig,
-			RenderModelConfigCard:            newModelConfigService(app).renderModelConfigCard,
-		},
+		})
+		return backendConfigurationService{app: app, inner: inner}
 	})
-	return backendConfigurationService{app: app, inner: inner}
 }
 
 func (s backendConfigurationService) backendWorkspaceCommandUsage() string {

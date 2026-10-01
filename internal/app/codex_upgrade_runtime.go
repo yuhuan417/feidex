@@ -19,35 +19,37 @@ const cliSelfUpdateInstallTarget = "latest"
 // newCodexUpgradeService builds a codexruntime.UpgradeService with
 // all callbacks wired to *App dependencies.
 func newCodexUpgradeService(a *App) appcodexruntime.UpgradeService {
-	return appcodexruntime.UpgradeService{
-		CreateClient: func() appcodexruntime.CodexClient {
-			return newCodexClient(a.cfg.Codex)
-		},
-		ConfigureClient: func(client appcodexruntime.CodexClient) {
-			configureCodexClientRuntime(a, client)
-		},
-		ClientExperimentalAPI: func() bool {
-			return a.cfg.Codex.ExperimentalAPI
-		},
-		IsBackendActive: func() bool {
-			if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
-				return runtime.isActive(a)
-			}
-			return false
-		},
-		SmokeTest: func(ctx context.Context) error {
-			return newCodexUpgradeService(a).CodexSmokeTest(ctx)
-		},
-		CurrentClient: func() appcodexruntime.CodexClient {
-			return currentCodexClient(a)
-		},
-		ReplaceClient: func(next appcodexruntime.CodexClient) appcodexruntime.CodexClient {
-			return replaceCodexClient(a, next)
-		},
-		RecoverFrontendRuntimeState: func() {
-			recoverFrontendRuntimeState(a)
-		},
-	}
+	return serviceFor(a, "codexUpgradeService", func() appcodexruntime.UpgradeService {
+		return appcodexruntime.UpgradeService{
+			CreateClient: func() appcodexruntime.CodexClient {
+				return newCodexClient(a.cfg.Codex)
+			},
+			ConfigureClient: func(client appcodexruntime.CodexClient) {
+				configureCodexClientRuntime(a, client)
+			},
+			ClientExperimentalAPI: func() bool {
+				return a.cfg.Codex.ExperimentalAPI
+			},
+			IsBackendActive: func() bool {
+				if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
+					return runtime.isActive(a)
+				}
+				return false
+			},
+			SmokeTest: func(ctx context.Context) error {
+				return newCodexUpgradeService(a).CodexSmokeTest(ctx)
+			},
+			CurrentClient: func() appcodexruntime.CodexClient {
+				return currentCodexClient(a)
+			},
+			ReplaceClient: func(next appcodexruntime.CodexClient) appcodexruntime.CodexClient {
+				return replaceCodexClient(a, next)
+			},
+			RecoverFrontendRuntimeState: func() {
+				recoverFrontendRuntimeState(a)
+			},
+		}
+	})
 }
 
 func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey string, payload appruntime.BackendUpgradePendingPayload) {

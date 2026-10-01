@@ -24,45 +24,47 @@ type backendSelectionService struct {
 }
 
 func newBackendSelectionService(app *App) backendSelectionService {
-	s := backendSelectionService{app: app}
-	s.inner = backend.NewSelectionService(backend.SelectionDeps{
-		App: app,
-		Runtime: backend.SelectionRuntimeDeps{
-			ListAvailableBackends: func() []backend.AvailableBackend {
-				return availableBackendsForApp(app)
+	return serviceFor(app, "backendSelectionService", func() backendSelectionService {
+		s := backendSelectionService{app: app}
+		s.inner = backend.NewSelectionService(backend.SelectionDeps{
+			App: app,
+			Runtime: backend.SelectionRuntimeDeps{
+				ListAvailableBackends: func() []backend.AvailableBackend {
+					return availableBackendsForApp(app)
+				},
+				PrepareRuntime: func(ctx context.Context, target string) (*backend.BackendRuntimeHandle, error) {
+					return prepareRuntimeForApp(app, ctx, target)
+				},
+				SnapshotRuntime: func() *backend.BackendRuntimeHandle {
+					return snapshotRuntimeForApp(app)
+				},
+				RecoverState: func() {
+					recoverFrontendRuntimeState(app)
+					scheduleAllGroupAnnouncementStatusRefreshes(app, "backend_switched")
+				},
+				IdleBlockedReason: func() string {
+					return frontendIdleBlockedReason(app)
+				},
+				RuntimeReady: func(target string) bool {
+					return backendRuntimeReadyForApp(app, target)
+				},
 			},
-			PrepareRuntime: func(ctx context.Context, target string) (*backend.BackendRuntimeHandle, error) {
-				return prepareRuntimeForApp(app, ctx, target)
+			Render: backend.SelectionRenderDeps{
+				BuildMenuCard: func(sessionKey string) map[string]any {
+					return renderBackendMenuCard(app, sessionKey)
+				},
+				BuildCardBody: func(action, body string) string {
+					return menuCardBody(action, body)
+				},
 			},
-			SnapshotRuntime: func() *backend.BackendRuntimeHandle {
-				return snapshotRuntimeForApp(app)
+			Commands: backend.SelectionCommandDeps{
+				CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
+					return appautoretry.NewService(app).CommandAutoRetry(msg, args)
+				},
 			},
-			RecoverState: func() {
-				recoverFrontendRuntimeState(app)
-				scheduleAllGroupAnnouncementStatusRefreshes(app, "backend_switched")
-			},
-			IdleBlockedReason: func() string {
-				return frontendIdleBlockedReason(app)
-			},
-			RuntimeReady: func(target string) bool {
-				return backendRuntimeReadyForApp(app, target)
-			},
-		},
-		Render: backend.SelectionRenderDeps{
-			BuildMenuCard: func(sessionKey string) map[string]any {
-				return renderBackendMenuCard(app, sessionKey)
-			},
-			BuildCardBody: func(action, body string) string {
-				return menuCardBody(action, body)
-			},
-		},
-		Commands: backend.SelectionCommandDeps{
-			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
-				return appautoretry.NewService(app).CommandAutoRetry(msg, args)
-			},
-		},
+		})
+		return s
 	})
-	return s
 }
 
 func availableBackendsForApp(app *App) []backend.AvailableBackend {

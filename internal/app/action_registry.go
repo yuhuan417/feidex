@@ -17,7 +17,9 @@ type cardActionService struct {
 }
 
 func newCardActionService(app *App) cardActionService {
-	return cardActionService{app: app, handlers: cardActionHandlers()}
+	return serviceFor(app, "cardActionService", func() cardActionService {
+		return cardActionService{app: app, handlers: cardActionHandlers()}
+	})
 }
 
 func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

@@ -66,6 +66,46 @@ type App struct {
 
 	serverRequestSvc *serverrequest.Service
 	trackers         appTrackers
+
+	serviceMu    sync.Mutex
+	serviceCache map[string]any
+}
+
+// serviceFor memoizes per-App service instances. Every service constructor is
+// a pure function of *App: the services hold the *App pointer and read live
+// state through it, so one instance per App is equivalent to one per call.
+//
+// This matters on the Feishu card-action ack path, where handlers used to
+// rebuild the whole wiring graph per call: constructing the workspace services
+// costs 1.5-2.2us and 95-131 allocations each.
+func serviceFor[T any](a *App, name string, build func() T) T {
+	if a == nil {
+		return build()
+	}
+	a.serviceMu.Lock()
+	if a.serviceCache != nil {
+		if cached, ok := a.serviceCache[name]; ok {
+			a.serviceMu.Unlock()
+			return cached.(T)
+		}
+	}
+	a.serviceMu.Unlock()
+
+	// Build outside the lock: these constructors call one another, so holding
+	// the lock here would deadlock. A duplicate build is harmless because they
+	// are pure functions of *App.
+	built := build()
+
+	a.serviceMu.Lock()
+	defer a.serviceMu.Unlock()
+	if a.serviceCache == nil {
+		a.serviceCache = make(map[string]any, 32)
+	}
+	if cached, ok := a.serviceCache[name]; ok {
+		return cached.(T)
+	}
+	a.serviceCache[name] = built
+	return built
 }
 
 func (a *App) configMutex() *sync.RWMutex {

@@ -18,68 +18,70 @@ import (
 )
 
 func newClaudeSupportService(a *App) *claudesupport.Service {
-	return &claudesupport.Service{
-		DeliverPendingCard: func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
-			return deliverPendingCard(a, sub, card, pendingCardDelivery{
-				requestKey:      reqKey,
-				requestIDStored: reqIDStored,
-				backend:         backend,
-				kind:            kind,
-				sessionKey:      sessionKey,
-				threadID:        threadID,
-				turnID:          turnID,
-				itemID:          itemID,
-				ownerUserID:     ownerUserID,
-				payloadJSON:     payloadJSON,
-				waitingStatus:   waitingStatus,
-				linkKind:        linkKind,
-				ttl:             ttl,
-			})
-		},
-		DeliverDetachedPendingCard: func(card map[string]any, target appclauderuntime.InteractionTarget, reqKey, reqIDStored, backend, kind, payloadJSON, linkKind string) error {
-			return deliverDetachedPendingCard(a, detachedCardAnchor(target), card, pendingCardDelivery{
-				requestKey:      reqKey,
-				requestIDStored: reqIDStored,
-				backend:         backend,
-				kind:            kind,
-				sessionKey:      strings.TrimSpace(target.SessionKey),
-				threadID:        strings.TrimSpace(target.ThreadID),
-				turnID:          strings.TrimSpace(target.TurnID),
-				itemID:          reqKey,
-				ownerUserID:     strings.TrimSpace(target.UserID),
-				payloadJSON:     payloadJSON,
-				linkKind:        linkKind,
-			})
-		},
-		RenderApprovalCard: func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-			return renderApprovalCard(a, "", sub, title, color, body, buttons)
-		},
-		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
-			return a.feishu.SimpleStatusCard(title, color, body, buttons)
-		},
-		PatchCard: func(messageID string, card map[string]any) error {
-			return a.feishu.PatchCard(context.Background(), messageID, card)
-		},
-		PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
-		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
-		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
-			return contentCardTitleForSession(a, sessionKey, workspaceID, title)
-		},
-		BackendClaude: backendClaude,
-		ResolvePlanFeedback: func(pendingID, feedback string) error {
-			return a.claude.ResolvePlanFeedback(pendingID, feedback)
-		},
-		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
-			return newRuntimeStateService(a).finalizePendingReply(pending)
-		},
-		CancelPending: func(pending *state.PendingRequest) error {
-			return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
-		},
-		RawCard: rawCard,
-		PendingLookup: func(requestID string) *state.PendingRequest {
-			return a.State().Pending(requestID)
-		},
-	}
+	return serviceFor(a, "claudeSupportService", func() *claudesupport.Service {
+		return &claudesupport.Service{
+			DeliverPendingCard: func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
+				return deliverPendingCard(a, sub, card, pendingCardDelivery{
+					requestKey:      reqKey,
+					requestIDStored: reqIDStored,
+					backend:         backend,
+					kind:            kind,
+					sessionKey:      sessionKey,
+					threadID:        threadID,
+					turnID:          turnID,
+					itemID:          itemID,
+					ownerUserID:     ownerUserID,
+					payloadJSON:     payloadJSON,
+					waitingStatus:   waitingStatus,
+					linkKind:        linkKind,
+					ttl:             ttl,
+				})
+			},
+			DeliverDetachedPendingCard: func(card map[string]any, target appclauderuntime.InteractionTarget, reqKey, reqIDStored, backend, kind, payloadJSON, linkKind string) error {
+				return deliverDetachedPendingCard(a, detachedCardAnchor(target), card, pendingCardDelivery{
+					requestKey:      reqKey,
+					requestIDStored: reqIDStored,
+					backend:         backend,
+					kind:            kind,
+					sessionKey:      strings.TrimSpace(target.SessionKey),
+					threadID:        strings.TrimSpace(target.ThreadID),
+					turnID:          strings.TrimSpace(target.TurnID),
+					itemID:          reqKey,
+					ownerUserID:     strings.TrimSpace(target.UserID),
+					payloadJSON:     payloadJSON,
+					linkKind:        linkKind,
+				})
+			},
+			RenderApprovalCard: func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+				return renderApprovalCard(a, "", sub, title, color, body, buttons)
+			},
+			SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+				return a.feishu.SimpleStatusCard(title, color, body, buttons)
+			},
+			PatchCard: func(messageID string, card map[string]any) error {
+				return a.feishu.PatchCard(context.Background(), messageID, card)
+			},
+			PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
+			RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
+			ContentCardTitle: func(sessionKey, workspaceID, title string) string {
+				return contentCardTitleForSession(a, sessionKey, workspaceID, title)
+			},
+			BackendClaude: backendClaude,
+			ResolvePlanFeedback: func(pendingID, feedback string) error {
+				return a.claude.ResolvePlanFeedback(pendingID, feedback)
+			},
+			FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
+				return newRuntimeStateService(a).finalizePendingReply(pending)
+			},
+			CancelPending: func(pending *state.PendingRequest) error {
+				return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
+			},
+			RawCard: rawCard,
+			PendingLookup: func(requestID string) *state.PendingRequest {
+				return a.State().Pending(requestID)
+			},
+		}
+	})
 }
 
 func claudePlanCancelledBody(pending *state.PendingRequest) string {

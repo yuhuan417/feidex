@@ -9,32 +9,34 @@ import (
 )
 
 func newWorkspaceThreadService(a *App) *appworkspacecmd.ThreadService {
-	st := a.State()
-	return appworkspacecmd.NewThreadService(appworkspacecmd.ThreadServiceDeps{
-		App: a,
-		State: appworkspacecmd.StateDeps{
-			GetSession:  func(key string) *state.Session { return st.Session(key) },
-			SaveSession: func(sess *state.Session) error { return st.SaveSession(sess) },
-		},
-		Threads: appworkspacecmd.ThreadDeps{
-			MarkSessionThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
-		},
-		SessionContext: appworkspacecmd.SessionContextDeps{
-			SessionHasInFlight:     sessionHasInFlightSubmission,
-			SwitchSessionWorkspace: switchSessionWorkspace,
-			ClearSessionThreadCtx:  clearSessionThreadContext,
-			SetSessionThreadCtx:    setSessionThreadContext,
-			SessionResetActiveOps:  sessionResetActiveOperations,
-		},
-		Codex: appworkspacecmd.CodexDeps{
-			RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
-			BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
-				return buildThreadStartParams(a, ws, sess, effectiveModel)
+	return serviceFor(a, "workspaceThreadService", func() *appworkspacecmd.ThreadService {
+		st := a.State()
+		return appworkspacecmd.NewThreadService(appworkspacecmd.ThreadServiceDeps{
+			App: a,
+			State: appworkspacecmd.StateDeps{
+				GetSession:  func(key string) *state.Session { return st.Session(key) },
+				SaveSession: func(sess *state.Session) error { return st.SaveSession(sess) },
 			},
-			BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
-		},
-		Claude: appworkspacecmd.ClaudeDeps{
-			RequireClaudeCore: func() (appcore.ClaudeCore, error) { return a.Claude(), nil },
-		},
+			Threads: appworkspacecmd.ThreadDeps{
+				MarkSessionThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
+			},
+			SessionContext: appworkspacecmd.SessionContextDeps{
+				SessionHasInFlight:     sessionHasInFlightSubmission,
+				SwitchSessionWorkspace: switchSessionWorkspace,
+				ClearSessionThreadCtx:  clearSessionThreadContext,
+				SetSessionThreadCtx:    setSessionThreadContext,
+				SessionResetActiveOps:  sessionResetActiveOperations,
+			},
+			Codex: appworkspacecmd.CodexDeps{
+				RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
+				BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+					return buildThreadStartParams(a, ws, sess, effectiveModel)
+				},
+				BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
+			},
+			Claude: appworkspacecmd.ClaudeDeps{
+				RequireClaudeCore: func() (appcore.ClaudeCore, error) { return a.Claude(), nil },
+			},
+		})
 	})
 }

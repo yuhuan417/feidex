@@ -11,7 +11,9 @@ type turnLifecycleService struct {
 }
 
 func newTurnLifecycleService(app *App) *turnLifecycleService {
-	return &turnLifecycleService{inner: appturnlifecycle.NewService(app)}
+	return serviceFor(app, "turnLifecycleService", func() *turnLifecycleService {
+		return &turnLifecycleService{inner: appturnlifecycle.NewService(app)}
+	})
 }
 
 func (w *turnLifecycleService) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {

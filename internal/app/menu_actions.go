@@ -17,7 +17,9 @@ type menuActionService struct {
 }
 
 func newMenuActionService(app *App) menuActionService {
-	return menuActionService{app: app}
+	return serviceFor(app, "menuActionService", func() menuActionService {
+		return menuActionService{app: app}
+	})
 }
 
 func (s menuActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

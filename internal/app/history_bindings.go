@@ -11,11 +11,15 @@ import (
 type historyAppAdapter struct{ *App }
 
 func newHistoryAppAdapter(app *App) historyAppAdapter {
-	return historyAppAdapter{App: app}
+	return serviceFor(app, "historyAppAdapter", func() historyAppAdapter {
+		return historyAppAdapter{App: app}
+	})
 }
 
 func newHistoryService(app *App) apphistorycmd.Service {
-	return apphistorycmd.NewService(newHistoryAppAdapter(app))
+	return serviceFor(app, "historyService", func() apphistorycmd.Service {
+		return apphistorycmd.NewService(newHistoryAppAdapter(app))
+	})
 }
 
 func (a historyAppAdapter) HistoryFeishu() appcore.FeishuClient {

@@ -14,15 +14,21 @@ import (
 type debugViewAppAdapter struct{ *App }
 
 func newDebugViewAppAdapter(app *App) debugViewAppAdapter {
-	return debugViewAppAdapter{App: app}
+	return serviceFor(app, "debugViewAppAdapter", func() debugViewAppAdapter {
+		return debugViewAppAdapter{App: app}
+	})
 }
 
 func newDebugService(app *App) appdebugviewcmd.DebugService {
-	return appdebugviewcmd.NewDebugService(newDebugViewAppAdapter(app))
+	return serviceFor(app, "debugService", func() appdebugviewcmd.DebugService {
+		return appdebugviewcmd.NewDebugService(newDebugViewAppAdapter(app))
+	})
 }
 
 func newUsageService(app *App) appdebugviewcmd.UsageService {
-	return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
+	return serviceFor(app, "usageService", func() appdebugviewcmd.UsageService {
+		return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
+	})
 }
 
 func (a debugViewAppAdapter) DebugFeishu() appdebugviewcmd.FeishuClient {
