@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"os"
 	"strings"
 	"sync"
@@ -245,7 +246,7 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 		return nil
 	}
 
-	resp, err := completeMenuReviewUncommitted(a, &feishu.CardAction{
+	resp, err := appreviewcmd.CompleteMenuReviewUncommitted(newReviewAppAdapter(a), &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -279,7 +280,7 @@ func TestCompleteMenuReviewBaseReturnsPreparingCardAndPatchesAsync(t *testing.T)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	resp, err := completeMenuReviewBase(a, &feishu.CardAction{
+	resp, err := appreviewcmd.CompleteMenuReviewBase(newReviewAppAdapter(a), &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -312,12 +313,12 @@ func TestCompleteReviewBaseSelectReturnsPreparingCardAndPatchesAsync(t *testing.
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
 
-	resp, err := newReviewFormService(a).completeReviewBaseSelect(&feishu.CardAction{
+	resp, err := newReviewFormServiceInner(a).CompleteReviewBaseSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		MessageID:   pending.FeishuMsgID,
 		ActionValue: map[string]any{"request_id": pending.ID},
@@ -351,7 +352,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
@@ -374,7 +375,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 		return nil
 	}
 
-	resp, err := newReviewFormService(a).completeReviewFormSubmit(&feishu.CardAction{
+	resp, err := newReviewFormServiceInner(a).CompleteReviewFormSubmit(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   pending.FeishuMsgID,

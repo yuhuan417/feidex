@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"strings"
 	"testing"
 
@@ -41,7 +42,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		return nil
 	}
 
-	if err := commandInterrupt(a, msg); err != nil {
+	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {
@@ -123,7 +124,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *
 		RootMessageID: "msg-stop",
 		UserID:        "user-1",
 	}
-	if err := commandInterrupt(a, msg); err != nil {
+	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {

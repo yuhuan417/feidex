@@ -1,6 +1,7 @@
 package app
 
 import (
+	appmodelconfig "feidex/internal/app/modelconfig"
 	"strings"
 
 	"feidex/internal/app/apputil"
@@ -18,7 +19,7 @@ func effectiveCodexModel(a *App, sess *state.Session, ws *config.Workspace) stri
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
 		botProfileModelForApp(a),
-		configuredGlobalModel(a.cfg),
+		appmodelconfig.ConfiguredGlobalModel(a.cfg),
 	)
 }
 

@@ -1,6 +1,7 @@
 package app
 
 import (
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 
 	"context"
@@ -23,18 +24,18 @@ func TestMenuWrapperCardsAndActionUserID(t *testing.T) {
 		t.Fatalf("renderContextMenuCard() body = %q", body)
 	}
 
-	if got := actionUserID(nil); got != "" {
-		t.Fatalf("actionUserID(nil) = %q, want empty", got)
+	if got := appdebugviewcmd.ActionUserID(nil); got != "" {
+		t.Fatalf("appdebugviewcmd.ActionUserID(nil) = %q, want empty", got)
 	}
-	if got := actionUserID(&feishu.CardAction{UserID: " user-1 "}); got != "user-1" {
-		t.Fatalf("actionUserID(trim) = %q, want user-1", got)
+	if got := appdebugviewcmd.ActionUserID(&feishu.CardAction{UserID: " user-1 "}); got != "user-1" {
+		t.Fatalf("appdebugviewcmd.ActionUserID(trim) = %q, want user-1", got)
 	}
 }
 
 func TestRenderDownloadFailedCard(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	card := renderDownloadFailedCard(a, "/workspace/repo/docs/report.txt", "/workspace/repo", " permission denied ")
+	card := appdebugviewcmd.RenderDownloadFailedCard(newDebugViewAppAdapter(a), "/workspace/repo/docs/report.txt", "/workspace/repo", " permission denied ")
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
 		"生成下载链接失败。",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	appreview "feidex/internal/app/review"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,7 +40,7 @@ func TestCommandReviewUncommittedCallsReviewStart(t *testing.T) {
 		return nil
 	}
 
-	if err := commandReview(a, msg, nil); err != nil {
+	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
 	if gotMethod != "review/start" {
@@ -101,7 +102,7 @@ func TestCommandReviewWithoutActiveThreadUsesGenericThreadStart(t *testing.T) {
 		return nil
 	}
 
-	if err := commandReview(a, msg, nil); err != nil {
+	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
 	if len(methods) < 2 || methods[0] != "thread/start" || methods[1] != "review/start" {
@@ -128,7 +129,7 @@ func TestCommandReviewBaseOpensBranchPicker(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := commandReview(a, msg, []string{"base"}); err != nil {
+	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, []string{"base"}); err != nil {
 		t.Fatalf("commandReview(base) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -166,7 +167,7 @@ func TestCommandReviewCommitOpensRecentCommitPicker(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := commandReview(a, msg, []string{"commit"}); err != nil {
+	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, []string{"commit"}); err != nil {
 		t.Fatalf("commandReview(commit) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -197,7 +198,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeCustom); err != nil {
+	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeCustom); err != nil {
 		t.Fatalf("beginReviewForm(custom) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
@@ -215,7 +216,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newReviewFormService(a).completeReviewFormSubmit(&feishu.CardAction{
+	resp, err := newReviewFormServiceInner(a).CompleteReviewFormSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": pending.ID},
 		FormValue:   map[string]any{"instructions": "focus on tests and regressions"},
 		UserID:      msg.UserID,
@@ -325,7 +326,7 @@ func TestReviewTurnStartedNotificationDoesNotOverrideResponseTurnID(t *testing.T
 		return nil
 	}
 
-	if err := commandReview(a, msg, nil); err != nil {
+	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
 	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"persisted-turn-b"}}`))

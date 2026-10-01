@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,22 +18,22 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	selectedPath := filepath.Join(workspace, "report.txt")
 
-	payload, err := newDownloadPathPickerPayload(&a.cfg.Workspaces[0])
+	payload, err := appdebugviewcmd.NewDownloadPathPickerPayload(&a.cfg.Workspaces[0])
 	if err != nil {
-		t.Fatalf("newDownloadPathPickerPayload() error = %v", err)
+		t.Fatalf("appdebugviewcmd.NewDownloadPathPickerPayload() error = %v", err)
 	}
 	if payload.RootPath != workspace || payload.CurrentPath != workspace || payload.Mode != pathPickerModeFile || payload.Style != pathPickerStyleDropdown {
-		t.Fatalf("newDownloadPathPickerPayload() = %+v", payload)
+		t.Fatalf("appdebugviewcmd.NewDownloadPathPickerPayload() = %+v", payload)
 	}
 
-	if got := renderDownloadDisplayPath(selectedPath, workspace); got != "report.txt" {
-		t.Fatalf("renderDownloadDisplayPath(internal) = %q", got)
+	if got := appdebugviewcmd.RenderDownloadDisplayPath(selectedPath, workspace); got != "report.txt" {
+		t.Fatalf("appdebugviewcmd.RenderDownloadDisplayPath(internal) = %q", got)
 	}
-	if got := renderDownloadDisplayPath(filepath.Join(workspace, "..", "outside.txt"), workspace); !filepath.IsAbs(got) {
-		t.Fatalf("renderDownloadDisplayPath(external) = %q", got)
+	if got := appdebugviewcmd.RenderDownloadDisplayPath(filepath.Join(workspace, "..", "outside.txt"), workspace); !filepath.IsAbs(got) {
+		t.Fatalf("appdebugviewcmd.RenderDownloadDisplayPath(external) = %q", got)
 	}
-	if got := renderDownloadDisplayPath("", workspace); got != "-" {
-		t.Fatalf("renderDownloadDisplayPath(empty) = %q", got)
+	if got := appdebugviewcmd.RenderDownloadDisplayPath("", workspace); got != "-" {
+		t.Fatalf("appdebugviewcmd.RenderDownloadDisplayPath(empty) = %q", got)
 	}
 
 	for size, want := range map[int64]string{
@@ -40,8 +41,8 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 		2048:            "2.0 KB",
 		5 * 1024 * 1024: "5.00 MB",
 	} {
-		if got := formatDownloadSize(size); got != want {
-			t.Fatalf("formatDownloadSize(%d) = %q, want %q", size, got, want)
+		if got := appdebugviewcmd.FormatDownloadSize(size); got != want {
+			t.Fatalf("appdebugviewcmd.FormatDownloadSize(%d) = %q, want %q", size, got, want)
 		}
 	}
 
@@ -53,7 +54,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 		URL:       "https://example.test/file",
 		SizeBytes: 2048,
 	}
-	finishDownloadFileShare(a, "download-ok", "msg-ok", payload, selectedPath, workspace, feishu.SharedFileRequest{
+	appdebugviewcmd.FinishDownloadFileShare(newDebugViewAppAdapter(a), "download-ok", "msg-ok", payload, selectedPath, workspace, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    "chat-1",
 		UserID:    "user-1",
@@ -73,7 +74,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 	}
 	ff.shareFileErr = errors.New("share boom")
 	before := len(ff.patchedCards)
-	finishDownloadFileShare(a, "download-fail", "msg-fail", payload, selectedPath, workspace, feishu.SharedFileRequest{
+	appdebugviewcmd.FinishDownloadFileShare(newDebugViewAppAdapter(a), "download-fail", "msg-fail", payload, selectedPath, workspace, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    "chat-1",
 		UserID:    "user-1",
@@ -87,7 +88,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 
 	ff.shareFileErr = nil
 	before = len(ff.patchedCards)
-	finishDownloadFileShare(a, "download-ok", "", payload, selectedPath, workspace, feishu.SharedFileRequest{
+	appdebugviewcmd.FinishDownloadFileShare(newDebugViewAppAdapter(a), "download-ok", "", payload, selectedPath, workspace, feishu.SharedFileRequest{
 		LocalPath: selectedPath,
 		ChatID:    "chat-1",
 		UserID:    "user-1",
@@ -108,12 +109,12 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		CurrentPath: workspace,
 	}
 
-	resp, err := completeDownloadFileConfirm(a, &feishu.CardAction{}, nil, payload, selectedPath)
+	resp, err := appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{}, nil, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "下载请求已过期" {
 		t.Fatalf("completeDownloadFileConfirm(nil pending) = %+v, %v", resp, err)
 	}
 
-	resp, err = completeDownloadFileConfirm(a, &feishu.CardAction{}, &state.PendingRequest{Status: "processing"}, payload, selectedPath)
+	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{}, &state.PendingRequest{Status: "processing"}, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "正在生成下载链接，请稍候" {
 		t.Fatalf("completeDownloadFileConfirm(processing) = %+v, %v", resp, err)
 	}
@@ -136,7 +137,7 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		t.Fatalf("UpsertPending(download-confirm) error = %v", err)
 	}
 	ff.sharedFileResult = feishu.SharedFileResult{FileName: "report.txt", URL: "https://example.test/download"}
-	resp, err = completeDownloadFileConfirm(a, &feishu.CardAction{
+	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{
 		ChatID:    "",
 		UserID:    "",
 		MessageID: "",

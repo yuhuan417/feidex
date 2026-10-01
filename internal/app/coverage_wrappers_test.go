@@ -427,7 +427,7 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	if got := appendFooterText(" body ", []string{" line-1 ", "", "line-2"}); got != "body\nline-1\nline-2" {
 		t.Fatalf("appendFooterText() = %q", got)
 	}
-	if body := cardMarkdownContent(t, newAppUpgradeService(a).renderUpgradeFailedCard("sess-1", " boom ")); !strings.Contains(body, "检查升级信息失败。") || !strings.Contains(body, "错误: boom") {
+	if body := cardMarkdownContent(t, newUpgradeServiceInner(a).RenderUpgradeFailedCard("sess-1", " boom ")); !strings.Contains(body, "检查升级信息失败。") || !strings.Contains(body, "错误: boom") {
 		t.Fatalf("renderUpgradeFailedCard() body = %q", body)
 	}
 

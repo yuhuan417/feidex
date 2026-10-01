@@ -1,6 +1,7 @@
 package app
 
 import (
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
 
@@ -746,27 +747,27 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	a := &App{feishu: ff, cfg: testCodexConfig()}
 	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
-	prev := runtimeLogLevelText()
+	prev := appdebugviewcmd.RuntimeLogLevelText()
 	t.Cleanup(func() {
 		_ = logcontrol.SetName(prev)
-		a.cfg.Log.Level = runtimeLogLevelText()
+		a.cfg.Log.Level = appdebugviewcmd.RuntimeLogLevelText()
 	})
 
 	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	newDebugService(a).SetRuntimeDebug(false)
-	if err := newDebugService(a).CommandDebug(msg, nil); err != nil {
+	newDebugServiceInner(a).SetRuntimeDebug(false)
+	if err := newDebugServiceInner(a).CommandDebug(msg, nil); err != nil {
 		t.Fatalf("CommandDebug(toggle on) error = %v", err)
 	}
-	if got := runtimeLogLevelText(); got != "debug" {
-		t.Fatalf("runtimeLogLevelText() = %q, want debug", got)
+	if got := appdebugviewcmd.RuntimeLogLevelText(); got != "debug" {
+		t.Fatalf("appdebugviewcmd.RuntimeLogLevelText() = %q, want debug", got)
 	}
-	if err := newDebugService(a).CommandDebug(msg, []string{"off"}); err != nil {
+	if err := newDebugServiceInner(a).CommandDebug(msg, []string{"off"}); err != nil {
 		t.Fatalf("commandDebug(off) error = %v", err)
 	}
-	if got := runtimeLogLevelText(); got != "info" {
-		t.Fatalf("runtimeLogLevelText() = %q, want info", got)
+	if got := appdebugviewcmd.RuntimeLogLevelText(); got != "info" {
+		t.Fatalf("appdebugviewcmd.RuntimeLogLevelText() = %q, want info", got)
 	}
-	if err := newDebugService(a).CommandDebug(msg, []string{"bad"}); err == nil {
+	if err := newDebugServiceInner(a).CommandDebug(msg, []string{"bad"}); err == nil {
 		t.Fatal("expected invalid /debug arg to fail")
 	}
 	if len(ff.replyTexts) < 2 || !strings.Contains(ff.replyTexts[0], "`debug`") || !strings.Contains(ff.replyTexts[1], "`info`") {
@@ -872,12 +873,12 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	a := &App{feishu: ff, cfg: testCodexConfig()}
 	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
-	prevLevel := runtimeLogLevelText()
+	prevLevel := appdebugviewcmd.RuntimeLogLevelText()
 	oldLogger := slog.Default()
 	t.Cleanup(func() {
 		slog.SetDefault(oldLogger)
 		_ = logcontrol.SetName(prevLevel)
-		a.cfg.Log.Level = runtimeLogLevelText()
+		a.cfg.Log.Level = appdebugviewcmd.RuntimeLogLevelText()
 	})
 	_ = logcontrol.SetName("debug")
 	logger := slog.New(logcontrol.NewHandler(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: logcontrol.LevelVar()})))
@@ -885,7 +886,7 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	slog.Debug("debug-log-test", "key", "value")
 
 	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := newDebugService(a).CommandDebug(msg, []string{"logs"}); err != nil {
+	if err := newDebugServiceInner(a).CommandDebug(msg, []string{"logs"}); err != nil {
 		t.Fatalf("commandDebug(logs) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -914,7 +915,7 @@ func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
-	if err := newDebugService(a).CommandDebug(msg, []string{"logs"}); err != nil {
+	if err := newDebugServiceInner(a).CommandDebug(msg, []string{"logs"}); err != nil {
 		t.Fatalf("commandDebug(logs blocked) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -933,7 +934,7 @@ func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	a := &App{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
-	resp, err := newDebugService(a).CompleteMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
+	resp, err := newDebugServiceInner(a).CompleteMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuDebugLogs(blocked) error = %v", err)
 	}
@@ -958,7 +959,7 @@ func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
-	if err := newDebugService(a).CommandDebug(msg, nil); err != nil {
+	if err := newDebugServiceInner(a).CommandDebug(msg, nil); err != nil {
 		t.Fatalf("commandDebug(blocked) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -975,7 +976,7 @@ func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	a := &App{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"}
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
-	resp, err := newDebugService(a).CompleteMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
+	resp, err := newDebugServiceInner(a).CompleteMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuDebug(blocked) error = %v", err)
 	}

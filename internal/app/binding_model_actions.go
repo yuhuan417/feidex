@@ -207,12 +207,12 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		effortOptions,
 		effortInitialOption,
 	))
-	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
+	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{
 		Text:  "配置辅助模型",
 		Type:  "default",
 		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey},
 	}}))
-	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
+	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
@@ -314,12 +314,12 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	for _, element := range appmodelconfig.RenderClaudeModelOptionConfigElements(cfg, sessionKey, "menu.model") {
 		cards.AppendMarkdownBodyCardElement(card, element)
 	}
-	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
+	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{
 		Text:  "配置辅助模型",
 		Type:  "default",
 		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey},
 	}}))
-	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{
+	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
@@ -400,7 +400,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**subagent 推理强度**\n未设置时跟随 subagent 模型的默认强度。"})
 		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, apputil.FirstNonEmpty(subagentEffort, appmodelconfig.DefaultOptionValue)))
 	}
-	cards.AppendMarkdownBodyCardElement(card, modelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
+	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
 	return card, nil
 }

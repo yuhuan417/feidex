@@ -878,8 +878,8 @@ func TestModelConfigChunkButtonsHelpers(t *testing.T) {
 		t.Fatalf("modelconfig.ChunkButtons(size<=0) = %#v", rows)
 	}
 
-	row := modelCardActionRow([]feishu.Button{{Text: "Button", Value: map[string]any{"action": "pick"}}})
+	row := modelconfig.ModelCardActionRow([]feishu.Button{{Text: "Button", Value: map[string]any{"action": "pick"}}})
 	if tag, _ := row["tag"].(string); tag != "column_set" {
-		t.Fatalf("modelCardActionRow() = %#v", row)
+		t.Fatalf("modelconfig.ModelCardActionRow() = %#v", row)
 	}
 }

@@ -182,7 +182,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			"history": {
 				Match: appcommandmatch.MatchHistoryCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newHistoryServiceInner(a).CommandHistory(msg, args)
+					return newHistoryService(a).CommandHistory(msg, args)
 				},
 			},
 		},

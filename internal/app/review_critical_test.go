@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	appreview "feidex/internal/app/review"
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"testing"
 
 	"feidex/internal/codexrpc"
@@ -14,7 +15,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	repo, commits := initReviewGitRepoWithCommits(t, a.cfg.Workspaces[0].Cwd)
 
-	resolvedBase, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
+	resolvedBase, err := appreview.NewGitService().ResolveTarget(repo, appreview.TargetSpec{
 		Type:   appreview.TargetBaseBranch,
 		Branch: "main",
 	})
@@ -28,7 +29,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 		t.Fatalf("appreview.SubmissionInputText(base) = %q", got)
 	}
 
-	resolvedCommit, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
+	resolvedCommit, err := appreview.NewGitService().ResolveTarget(repo, appreview.TargetSpec{
 		Type:      appreview.TargetCommit,
 		CommitSHA: commits[1][:8],
 	})
@@ -43,7 +44,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 	}
 
 	writeFile(t, repo+"/main.go", "package main\n\nfunc main() { println(\"dirty\") }\n")
-	resolvedUncommitted, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{Type: appreview.TargetUncommitted})
+	resolvedUncommitted, err := appreview.NewGitService().ResolveTarget(repo, appreview.TargetSpec{Type: appreview.TargetUncommitted})
 	if err != nil {
 		t.Fatalf("resolveReviewTarget(uncommitted) error = %v", err)
 	}
@@ -51,7 +52,7 @@ func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
 		t.Fatalf("resolved uncommitted target = %+v, want uncommitted", resolvedUncommitted)
 	}
 
-	resolvedCustom, err := newReviewGitService(a).resolveReviewTarget(repo, appreview.TargetSpec{
+	resolvedCustom, err := appreview.NewGitService().ResolveTarget(repo, appreview.TargetSpec{
 		Type:         appreview.TargetCustom,
 		Instructions: "focus on regressions",
 	})
@@ -81,7 +82,7 @@ func TestStartSubmissionReviewUsesStoredTargetPayload(t *testing.T) {
 		return nil
 	}
 
-	turnID, err := startSubmissionReview(a, context.Background(), "thread-1", &state.Submission{
+	turnID, err := appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a), context.Background(), "thread-1", &state.Submission{
 		Kind:              submissionKindReview,
 		ReviewTargetType:  appreview.TargetCommit,
 		ReviewCommitSHA:   "abcdef1234567890",
@@ -120,11 +121,11 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	basePending := singleReviewPendingRequest(t, a)
-	resp, err := newReviewFormService(a).completeReviewBaseSelect(&feishu.CardAction{
+	resp, err := newReviewFormServiceInner(a).CompleteReviewBaseSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ActionValue: map[string]any{"request_id": basePending.ID},
 		Option:      "main",
@@ -141,11 +142,11 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	}
 
 	a.store.DeletePending(basePending.ID)
-	if err := newReviewFormService(a).beginReviewForm(msg, reviewFormModeCommit); err != nil {
+	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeCommit); err != nil {
 		t.Fatalf("beginReviewForm(commit) error = %v", err)
 	}
 	commitPending := singleReviewPendingRequest(t, a)
-	resp, err = newReviewFormService(a).completeReviewCommitSelect(&feishu.CardAction{
+	resp, err = newReviewFormServiceInner(a).CompleteReviewCommitSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ActionValue: map[string]any{"request_id": commitPending.ID},
 		Option:      commits[0],

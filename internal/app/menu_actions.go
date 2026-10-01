@@ -139,7 +139,7 @@ func (s menuActionService) completeMenuHistory(action *feishu.CardAction, sessio
 }
 
 func (s menuActionService) completeHistoryPage(action *feishu.CardAction, sessionKey string, page int) (*callback.CardActionTriggerResponse, error) {
-	card, err := newHistoryServiceInner(s.app).RenderHistoryCard(sessionKey, page)
+	card, err := newHistoryService(s.app).RenderHistoryCard(sessionKey, page)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -149,7 +149,7 @@ func (s menuActionService) completeHistoryPage(action *feishu.CardAction, sessio
 }
 
 func (s menuActionService) completeHistoryDetail(action *feishu.CardAction, sessionKey string, index int) (*callback.CardActionTriggerResponse, error) {
-	card, err := newHistoryServiceInner(s.app).RenderHistoryDetailCard(sessionKey, index)
+	card, err := newHistoryService(s.app).RenderHistoryDetailCard(sessionKey, index)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}

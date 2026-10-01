@@ -1203,7 +1203,7 @@ func TestUpgradeBranches(t *testing.T) {
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v9.9.9", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}
-	card, err := newAppUpgradeService(a).renderUpgradeCardForTarget("sess-1", "user-1", "", false)
+	card, err := newUpgradeServiceInner(a).RenderUpgradeCardForTarget("sess-1", "user-1", "", false)
 	if err != nil || card == nil {
 		t.Fatalf("renderUpgradeCard(latest) = %#v, %v", card, err)
 	}
@@ -1216,7 +1216,7 @@ func TestUpgradeBranches(t *testing.T) {
 			},
 		}
 	}
-	card, err = newAppUpgradeService(a).renderUpgradeCardForVersion("sess-1", "user-1", "v1.0.0")
+	card, err = newUpgradeServiceInner(a).RenderUpgradeCardForVersion("sess-1", "user-1", "v1.0.0")
 	if err != nil || card == nil {
 		t.Fatalf("renderUpgradeCardForVersion() = %#v, %v", card, err)
 	}
@@ -1224,7 +1224,7 @@ func TestUpgradeBranches(t *testing.T) {
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: false}}, nil
 	}
-	if _, err := newAppUpgradeService(a).renderUpgradeCardForTarget("sess-1", "user-1", "", false); err == nil {
+	if _, err := newUpgradeServiceInner(a).RenderUpgradeCardForTarget("sess-1", "user-1", "", false); err == nil {
 		t.Fatal("expected renderUpgradeCard() to reject uninstalled daemon")
 	}
 
@@ -1234,19 +1234,19 @@ func TestUpgradeBranches(t *testing.T) {
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v10.0.0", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}
-	if resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "missing"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := newUpgradeServiceInner(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "missing"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(missing) = %#v, %v", resp, err)
 	}
 	if err := a.store.UpsertPending(&appstate.PendingRequest{ID: "upgrade-bad", Kind: "upgrade_release", OwnerUserID: "other", Status: "pending"}); err != nil {
 		t.Fatalf("UpsertPending(upgrade-bad) error = %v", err)
 	}
-	if resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-bad"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := newUpgradeServiceInner(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-bad"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(wrong owner) = %#v, %v", resp, err)
 	}
 	if err := a.store.UpsertPending(&appstate.PendingRequest{ID: "upgrade-json", Kind: "upgrade_release", OwnerUserID: "user-1", Status: "pending", PayloadJSON: "{"}); err != nil {
 		t.Fatalf("UpsertPending(upgrade-json) error = %v", err)
 	}
-	if resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-json"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := newUpgradeServiceInner(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-json"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(bad json) = %#v, %v", resp, err)
 	}
 
@@ -1261,7 +1261,7 @@ func TestUpgradeBranches(t *testing.T) {
 		t.Fatalf("UpsertPending(upgrade-start) error = %v", err)
 	}
 	startDaemonUpgrade = func(daemon.UpgradeSpec) (string, error) { return "", errors.New("boom") }
-	if resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-start"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := newUpgradeServiceInner(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-start"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(start fail) = %#v, %v", resp, err)
 	}
 
@@ -1272,7 +1272,7 @@ func TestUpgradeBranches(t *testing.T) {
 	if err := os.WriteFile(localArtifact, []byte("local-binary"), 0o755); err != nil {
 		t.Fatalf("WriteFile(localArtifact) error = %v", err)
 	}
-	resp, err := newAppUpgradeService(a).completeUpgradeLocalPick(&feishu.CardAction{
+	resp, err := newUpgradeServiceInner(a).CompleteUpgradeLocalPick(&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"session_key": "sess-1"},
@@ -1366,7 +1366,7 @@ func TestUpgradeCommandReturnsCheckOnlyCardOnDarwin(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-darwin", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newAppUpgradeService(a).commandUpgrade(msg, nil); err != nil {
+	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if daemonCalled {

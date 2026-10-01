@@ -198,15 +198,15 @@ func (a convBackendConversationAdapter) MarkThreadLive(app appconvbackend.App, s
 type convBackendWorkspaceConfigAdapter struct{}
 
 func (a convBackendWorkspaceConfigAdapter) HistoryIndexForOrdinal(app appconvbackend.App, sessionKey string, ordinal int) (int, error) {
-	return newHistoryServiceInner(app.(*App)).CodexHistoryIndexForOrdinal(sessionKey, ordinal)
+	return newHistoryService(app.(*App)).CodexHistoryIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexHistoryCard(app appconvbackend.App, sessionKey string, page int) (map[string]any, error) {
-	return newHistoryServiceInner(app.(*App)).RenderCodexHistoryCard(sessionKey, page)
+	return newHistoryService(app.(*App)).RenderCodexHistoryCard(sessionKey, page)
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexHistoryDetailCard(app appconvbackend.App, sessionKey string, index int) (map[string]any, error) {
-	return newHistoryServiceInner(app.(*App)).RenderCodexHistoryDetailCard(sessionKey, index)
+	return newHistoryService(app.(*App)).RenderCodexHistoryDetailCard(sessionKey, index)
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexUsageBody(app appconvbackend.App, sess *state.Session) string {

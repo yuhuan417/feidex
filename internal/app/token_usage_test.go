@@ -36,7 +36,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 		t.Fatal("token usage notification should not send a separate card")
 	}
 
-	card := newUsageService(a).RenderUsageCard(sessionKey)
+	card := newUsageServiceInner(a).RenderUsageCard(sessionKey)
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
 		"累计 token usage (`total`):",
@@ -66,7 +66,7 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	newUsageService(a).RecordClaudeThreadUsage("thread-1", claudecli.TurnUsage{
+	newUsageServiceInner(a).RecordClaudeThreadUsage("thread-1", claudecli.TurnUsage{
 		InputTokens:                   20,
 		CacheCreationTokens:           10,
 		CacheReadTokens:               100,
@@ -79,7 +79,7 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 		CostUSD:                       0.054077,
 	})
 
-	card := newUsageService(a).RenderUsageCard(sessionKey)
+	card := newUsageServiceInner(a).RenderUsageCard(sessionKey)
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
 		"累计 token usage (`modelUsage`):",
@@ -103,10 +103,10 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 func TestCommandUsageAndMenuAction(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := newUsageService(a).CommandUsage(msg, []string{"extra"}); err == nil {
+	if err := newUsageServiceInner(a).CommandUsage(msg, []string{"extra"}); err == nil {
 		t.Fatal("expected commandUsage(args) to fail")
 	}
-	if err := newUsageService(a).CommandUsage(msg, nil); err != nil {
+	if err := newUsageServiceInner(a).CommandUsage(msg, nil); err != nil {
 		t.Fatalf("commandUsage() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {

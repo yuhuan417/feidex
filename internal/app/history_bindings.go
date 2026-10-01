@@ -14,7 +14,7 @@ func newHistoryAppAdapter(app *App) historyAppAdapter {
 	return historyAppAdapter{App: app}
 }
 
-func newHistoryServiceInner(app *App) apphistorycmd.Service {
+func newHistoryService(app *App) apphistorycmd.Service {
 	return apphistorycmd.NewService(newHistoryAppAdapter(app))
 }
 

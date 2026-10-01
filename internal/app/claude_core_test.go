@@ -5,6 +5,7 @@ import (
 	"errors"
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	appreviewcmd "feidex/internal/app/reviewcmd"
+	appthreadmenu "feidex/internal/app/threadmenu"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1169,7 +1170,7 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := commandInterrupt(a, msg); err != nil {
+	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if len(claude.interruptCalls) != 1 || claude.interruptCalls[0] != sessionKey {
@@ -1892,7 +1893,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
 	}
 
-	if err := commandAppend(a, msg, "  append from command  "); err != nil {
+	if err := appthreadmenu.NewService(a).CommandAppend(msg, "  append from command  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
 	if len(claude.startSteerTurnCalls) != 1 || !strings.Contains(claude.startSteerTurnCalls[0].prompt, "append from command") {

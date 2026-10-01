@@ -8,6 +8,7 @@ import (
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/attachments"
 	appcompact "feidex/internal/app/compact"
+	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/pendingforms"
@@ -805,11 +806,11 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Feishu.DebugAllowFrom = []string{"user-1"}
-	prevLevel := runtimeLogLevelText()
+	prevLevel := appdebugviewcmd.RuntimeLogLevelText()
 	t.Cleanup(func() {
 		_ = logcontrol.SetName(prevLevel)
 		if a.cfg != nil {
-			a.cfg.Log.Level = runtimeLogLevelText()
+			a.cfg.Log.Level = appdebugviewcmd.RuntimeLogLevelText()
 		}
 	})
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
@@ -864,7 +865,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("UpsertSession(download) error = %v", err)
 			}
-			return completeMenuDownload(a, &feishu.CardAction{
+			return appdebugviewcmd.CompleteMenuDownload(newDebugViewAppAdapter(a), &feishu.CardAction{
 				UserID:      "user-1",
 				ChatID:      "chat-1",
 				MessageID:   "msg-download",
@@ -926,10 +927,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugService(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
+			return newDebugServiceInner(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugService(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+			return newDebugServiceInner(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
@@ -1814,7 +1815,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newAppUpgradeService(a).commandUpgrade(msg, nil); err != nil {
+	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1872,7 +1873,7 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"v0.3.0"}); err != nil {
+	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, []string{"v0.3.0"}); err != nil {
 		t.Fatalf("commandUpgrade(specified version) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -1906,7 +1907,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	origVersion := currentVersion
 	origGOOS := currentGOOS
 	origGOARCH := currentGOARCH
-	origUpgradeDisplayLocation := upgradeDisplayLocation
+	origUpgradeDisplayLocation := appupgradecmd.DisplayLocation
 	origUpgradecmdDisplayLocation := appupgradecmd.DisplayLocation
 	defer func() {
 		newReleaseClient = origRelease
@@ -1914,7 +1915,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 		currentVersion = origVersion
 		currentGOOS = origGOOS
 		currentGOARCH = origGOARCH
-		upgradeDisplayLocation = origUpgradeDisplayLocation
+		appupgradecmd.DisplayLocation = origUpgradeDisplayLocation
 		appupgradecmd.DisplayLocation = origUpgradecmdDisplayLocation
 	}()
 
@@ -1940,11 +1941,10 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	currentVersion = func() string { return "v0.3.0" }
 	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
-	upgradeDisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
-	appupgradecmd.DisplayLocation = upgradeDisplayLocation
+	appupgradecmd.DisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"dev"}); err != nil {
+	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, []string{"dev"}); err != nil {
 		t.Fatalf("commandUpgrade(dev) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -1993,7 +1993,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newAppUpgradeService(a).commandUpgrade(msg, []string{"local"}); err != nil {
+	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, []string{"local"}); err != nil {
 		t.Fatalf("commandUpgrade(local) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -2125,7 +2125,7 @@ func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 		return "feidex-upgrade-1", nil
 	}
 
-	resp, err := newAppUpgradeService(a).completeUpgradeAction(&feishu.CardAction{
+	resp, err := newUpgradeServiceInner(a).CompleteUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-1"},
 	}, "upgrade.confirm")
@@ -3046,10 +3046,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := showThreadSandboxMenu(a, msg); err != nil {
+	if err := appthreadmenu.NewService(a).ShowThreadSandboxMenu(msg); err != nil {
 		t.Fatalf("showThreadSandboxMenu() error = %v", err)
 	}
-	if err := showThreadPolicyMenu(a, msg); err != nil {
+	if err := appthreadmenu.NewService(a).ShowThreadPolicyMenu(msg); err != nil {
 		t.Fatalf("showThreadPolicyMenu() error = %v", err)
 	}
 	if len(ff.replyCards) < 2 {
@@ -3070,7 +3070,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	emptyMsg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-2", ChatType: "group", RootMessageID: "root-2", UserID: "user-2"}
-	if err := commandAppend(a, emptyMsg, "  more text  "); err == nil {
+	if err := appthreadmenu.NewService(a).CommandAppend(emptyMsg, "  more text  "); err == nil {
 		t.Fatal("expected commandAppend without active session to fail")
 	}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -3088,10 +3088,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 			return nil
 		}
 	}
-	if err := commandAppend(a, msg, "  more text  "); err != nil {
+	if err := appthreadmenu.NewService(a).CommandAppend(msg, "  more text  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
-	if err := commandInterrupt(a, msg); err != nil {
+	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 
