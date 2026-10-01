@@ -21,15 +21,15 @@ import (
 type convBackendConversationAdapter struct{}
 
 func (a convBackendConversationAdapter) ListCodexThreads(app appconvbackend.App, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return newWorkspaceThreadServiceInner(app.(*App)).ListCodexWorkspaceThreads(sessionKey, ws, includeAll)
+	return newWorkspaceThreadService(app.(*App)).ListCodexWorkspaceThreads(sessionKey, ws, includeAll)
 }
 
 func (a convBackendConversationAdapter) EnsureCodexBinding(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
-	return newWorkspaceThreadServiceInner(app.(*App)).EnsureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
+	return newWorkspaceThreadService(app.(*App)).EnsureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (a convBackendConversationAdapter) StartCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
-	return newWorkspaceThreadServiceInner(app.(*App)).StartCodexWorkspaceThread(sessionKey, sess, ws)
+	return newWorkspaceThreadService(app.(*App)).StartCodexWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
@@ -124,11 +124,11 @@ func (a convBackendConversationAdapter) ListClaudeThreads(sessionKey string, ws 
 }
 
 func (a convBackendConversationAdapter) EnsureClaudeBinding(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
-	return newWorkspaceThreadServiceInner(app.(*App)).EnsureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
+	return newWorkspaceThreadService(app.(*App)).EnsureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
 func (a convBackendConversationAdapter) StartClaudeThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
-	return newWorkspaceThreadServiceInner(app.(*App)).StartClaudeWorkspaceThread(sessionKey, sess, ws)
+	return newWorkspaceThreadService(app.(*App)).StartClaudeWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
@@ -210,7 +210,7 @@ func (a convBackendWorkspaceConfigAdapter) RenderCodexHistoryDetailCard(app appc
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderCodexUsageBody(app appconvbackend.App, sess *state.Session) string {
-	return newUsageServiceInner(app.(*App)).RenderCodexUsageBody(sess)
+	return newUsageService(app.(*App)).RenderCodexUsageBody(sess)
 }
 
 func (a convBackendWorkspaceConfigAdapter) HistoryTurnIndexForOrdinal(app appconvbackend.App, sessionKey string, ordinal int) (int, error) {
@@ -226,7 +226,7 @@ func (a convBackendWorkspaceConfigAdapter) RenderClaudeHistoryDetailCard(app app
 }
 
 func (a convBackendWorkspaceConfigAdapter) RenderClaudeUsageBody(app appconvbackend.App, sess *state.Session) string {
-	return newUsageServiceInner(app.(*App)).RenderClaudeUsageBody(sess)
+	return newUsageService(app.(*App)).RenderClaudeUsageBody(sess)
 }
 
 // ---------------------------------------------------------------------------

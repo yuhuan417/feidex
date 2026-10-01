@@ -260,7 +260,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	s.replayPendingBindingMessageAsync(updated)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已设置当前工作区 " + updated.WorkspaceID},
-		Card:  rawCard(newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -298,7 +298,7 @@ func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已解除本群绑定，请重新选择工作区"},
-		Card:  rawCard(newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -424,7 +424,7 @@ func (s bindingService) cloneLocalWorkspace(msg *feishu.InboundMessage, args []s
 	if err != nil {
 		return "", "", err
 	}
-	mgmt := newWorkspaceManagementServiceInner(s.app)
+	mgmt := newWorkspaceManagementService(s.app)
 	if strings.TrimSpace(parentDir) == "" {
 		parentDir = mgmt.DefaultWorkspaceCloneParent(bindingWorkspaceForMessage(s.app, msg))
 	}

@@ -40,7 +40,7 @@ func newReviewAppAdapter(a *App) reviewAppAdapter {
 	return reviewAppAdapter{App: a}
 }
 
-func newReviewFormServiceInner(app *App) appreviewcmd.ReviewFormService {
+func newReviewFormService(app *App) appreviewcmd.ReviewFormService {
 	return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
 }
 

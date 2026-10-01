@@ -95,7 +95,7 @@ func (s menuActionService) completeMenuReview(action *feishu.CardAction, session
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
-		Card:  rawCard(newReviewFormServiceInner(s.app).RenderReviewMenuCard(sessionKey)),
+		Card:  rawCard(newReviewFormService(s.app).RenderReviewMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -185,9 +185,9 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 					"message_id", messageID,
 					"error", err,
 				)
-				card = newUpgradeServiceInner(s.app).RenderUpgradeFailedCard(sessionKey, err.Error())
+				card = newUpgradeService(s.app).RenderUpgradeFailedCard(sessionKey, err.Error())
 			} else if card == nil {
-				card = newUpgradeServiceInner(s.app).RenderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
+				card = newUpgradeService(s.app).RenderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
 			}
 			if err := s.app.feishu.PatchCard(context.Background(), messageID, card); err != nil {
 				slog.Warn("upgrade panel patch failed",
@@ -200,7 +200,7 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 		}()
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在检查可升级版本"},
-			Card:  rawCard(newUpgradeServiceInner(s.app).RenderUpgradePreparingCard(sessionKey)),
+			Card:  rawCard(newUpgradeService(s.app).RenderUpgradePreparingCard(sessionKey)),
 		}, nil
 	}
 	return completeMenuCommand(s.app, action, sessionKey, "/upgrade", "menu.group.system")
@@ -214,9 +214,9 @@ func (s menuActionService) completeUpgradeDev(action *feishu.CardAction) (*callb
 		"/upgrade dev",
 		"menu.group.system",
 		"正在检查开发版升级信息",
-		newUpgradeServiceInner(s.app).RenderUpgradePreparingCard(sessionKey),
+		newUpgradeService(s.app).RenderUpgradePreparingCard(sessionKey),
 		nil,
-		newUpgradeServiceInner(s.app).RenderUpgradeFailedCard,
+		newUpgradeService(s.app).RenderUpgradeFailedCard,
 		"upgrade dev patch failed",
 	)
 }

@@ -43,7 +43,7 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 	if err != nil {
 		return false, err
 	}
-	card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(makeSessionKey(s.app, msg))
+	card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(makeSessionKey(s.app, msg))
 	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return true, err
 }

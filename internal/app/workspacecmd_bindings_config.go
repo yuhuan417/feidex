@@ -12,7 +12,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
+func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
@@ -26,7 +26,7 @@ func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 		},
 		Threads: appworkspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return newWorkspaceThreadServiceInner(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
 		Backend: appworkspacecmd.BackendConfigDeps{
@@ -52,35 +52,35 @@ func newWorkspaceConfigServiceInner(a *App) *appworkspacecmd.ConfigService {
 		},
 		Render: appworkspacecmd.ConfigRenderDeps{
 			RenderMenuCard: func(sessionKey string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
 			},
 			RenderChooseMenuCard: func(sessionKey string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceChooseCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspaceChooseCard(sessionKey)
 			},
 			RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceSandboxMenuCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspaceSandboxMenuCard(sessionKey)
 			},
 			RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspacePolicyMenuCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspacePolicyMenuCard(sessionKey)
 			},
 			RenderMultiAgentMenuCard: func(sessionKey string) (map[string]any, error) {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceMultiAgentMenuCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspaceMultiAgentMenuCard(sessionKey)
 			},
 			RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteMenuCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspaceDeleteMenuCard(sessionKey)
 			},
 			RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+				return newWorkspaceRenderService(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
 			},
 			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
 			},
 		},
 	})
 }
 
 func currentWorkspaceForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
-	return newWorkspaceConfigServiceInner(a).CurrentWorkspaceForMessage(msg)
+	return newWorkspaceConfigService(a).CurrentWorkspaceForMessage(msg)
 }
 
 func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
@@ -92,5 +92,5 @@ func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey str
 }
 
 func commandWorkspace(a *App, msg *feishu.InboundMessage, args []string) error {
-	return newWorkspaceConfigServiceInner(a).CommandWorkspace(msg, args, newWorkspaceManagementServiceInner(a))
+	return newWorkspaceConfigService(a).CommandWorkspace(msg, args, newWorkspaceManagementService(a))
 }

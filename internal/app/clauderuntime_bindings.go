@@ -71,7 +71,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
-				newUsageServiceInner(app).RecordClaudeThreadUsage(threadID, usage)
+				newUsageService(app).RecordClaudeThreadUsage(threadID, usage)
 			},
 			RecordTurnTokenUsage: func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 				newRuntimeStateService(app).recordTurnTokenUsage(threadID, turnID, usage)

@@ -8,7 +8,7 @@ import (
 	"feidex/internal/state"
 )
 
-func newWorkspaceThreadServiceInner(a *App) *appworkspacecmd.ThreadService {
+func newWorkspaceThreadService(a *App) *appworkspacecmd.ThreadService {
 	st := a.State()
 	return appworkspacecmd.NewThreadService(appworkspacecmd.ThreadServiceDeps{
 		App: a,

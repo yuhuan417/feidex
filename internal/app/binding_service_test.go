@@ -125,7 +125,7 @@ func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 	if config.FindWorkspace(a.cfg, "default") == nil {
 		t.Fatal("unbind removed the local workspace configuration")
 	}
-	card := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+	card := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
 	labels := cardButtonLabelsByAction(card)
 	if labels["workspace.delete.menu"] != "" {
 		t.Fatalf("workspace menu exposed delete after unbind: %q", labels["workspace.delete.menu"])
@@ -529,7 +529,7 @@ func TestWorkspaceNewWorktreeDefaultsAreGroupScoped(t *testing.T) {
 
 func TestWorkspaceWorktreeCardExplainsFormFields(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreeCard("feishu:frontend:default:chat:chat-1", "workspace-1", appworkspacecmd.WorktreePayload{
+	card := newWorkspaceRenderService(a).RenderWorkspaceWorktreeCard("feishu:frontend:default:chat:chat-1", "workspace-1", appworkspacecmd.WorktreePayload{
 		BaseWorkspaceID: "default",
 		BranchName:      "work/feidex-bot",
 		WorkspaceID:     "feidex-bot",
@@ -563,7 +563,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-private", MessageID: "msg-private", UserID: "user-1"}
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"new", "worktree"}); err != nil {
 		t.Fatalf("/workspace new worktree(p2p) error = %v", err)
 	}
 	var pending *state.PendingRequest
@@ -577,7 +577,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 		t.Fatalf("missing p2p worktree pending; pending=%+v", a.State().PendingRequests())
 	}
 	payload := appworkspacecmd.WorktreePayloadFromPending(pending)
-	resp, err := newWorkspaceManagementServiceInner(a).CompleteWorkspaceWorktreeSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceWorktreeSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": pending.ID},
 		UserID:      "user-1",
 		ChatID:      "chat-private",
@@ -800,7 +800,7 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("default", "group", "chat-1"), FrontendID: "default", ChatType: "group", ChatID: "chat-1", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	workspaceMenu := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+	workspaceMenu := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
 	menuLabels := cardButtonLabelsByAction(workspaceMenu)
 	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.worktree", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.binding.unbind"} {
 		if got := menuLabels[wantAction]; got == "" {
@@ -1228,7 +1228,7 @@ func TestWorkspaceDeletionBlockedWhenReferencedByLocalBinding(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	err := newWorkspaceConfigServiceInner(a).ValidateWorkspaceDeletion("sess-1", "bound")
+	err := newWorkspaceConfigService(a).ValidateWorkspaceDeletion("sess-1", "bound")
 	if err == nil || !strings.Contains(err.Error(), "当前 Bot 工作区配置") {
 		t.Fatalf("ValidateWorkspaceDeletion(bound) error = %v, want group workspace guard", err)
 	}

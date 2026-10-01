@@ -39,22 +39,22 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 						return currentWorkspaceForMessage(app, msg)
 					},
 					ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
-						return newWorkspaceConfigServiceInner(app).ShowWorkspaceSandboxMenu(msg)
+						return newWorkspaceConfigService(app).ShowWorkspaceSandboxMenu(msg)
 					},
 					ShowWorkspacePolicyMenu: func(msg *feishu.InboundMessage) error {
-						return newWorkspaceConfigServiceInner(app).ShowWorkspacePolicyMenu(msg)
+						return newWorkspaceConfigService(app).ShowWorkspacePolicyMenu(msg)
 					},
 					ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
 						return showClaudeWorkspacePermissionMenu(app, msg)
 					},
 					CompleteWorkspaceSandboxSet: func(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceManagementServiceInner(app).CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
+						return newWorkspaceManagementService(app).CompleteWorkspaceSandboxSet(action, sessionKey, workspaceID, sandboxMode)
 					},
 					CompleteWorkspacePolicySet: func(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceManagementServiceInner(app).CompleteWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
+						return newWorkspaceManagementService(app).CompleteWorkspacePolicySet(action, sessionKey, workspaceID, approvalPolicy)
 					},
 					CompleteWorkspacePermissionModeSet: func(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-						return newWorkspaceManagementServiceInner(app).CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
+						return newWorkspaceManagementService(app).CompleteWorkspacePermissionModeSet(action, sessionKey, workspaceID, rawMode)
 					},
 					ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 						return replyCommandActionResponse(app, msg, resp)

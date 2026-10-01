@@ -123,7 +123,7 @@ func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"sandbox", "read-only"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"sandbox", "read-only"}); err != nil {
 		t.Fatalf("commandWorkspace(sandbox set) error = %v", err)
 	}
 	if got := a.cfg.Workspaces[0].SandboxMode; got != "read-only" {
@@ -136,7 +136,7 @@ func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("workspace sandbox card body = %q", body)
 	}
 
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"policy", "never"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"policy", "never"}); err != nil {
 		t.Fatalf("commandWorkspace(policy set) error = %v", err)
 	}
 	if got := a.cfg.Workspaces[0].ApprovalPolicy; got != "never" {
@@ -172,7 +172,7 @@ func TestCommandWorkspaceDeleteRemovesConfigOnly(t *testing.T) {
 		t.Fatalf("UpsertSession(other) error = %v", err)
 	}
 
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"delete", "alt"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"delete", "alt"}); err != nil {
 		t.Fatalf("commandWorkspace(delete alt) error = %v", err)
 	}
 	if ws := config.FindWorkspace(a.cfg, "alt"); ws != nil {
@@ -203,7 +203,7 @@ func TestCommandWorkspaceDeleteRejectsCurrentWorkspace(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	err := newWorkspaceService(a).commandWorkspace(msg, []string{"delete", "alt"})
+	err := commandWorkspace(a, msg, []string{"delete", "alt"})
 	if err == nil {
 		t.Fatal("expected deleting current workspace to fail")
 	}

@@ -20,7 +20,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 					return appcommandmatch.ExactOrSingleArgCommand(fields, "on", "off", "logs")
 				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newDebugServiceInner(a).CommandDebug(msg, args)
+					return newDebugService(a).CommandDebug(msg, args)
 				},
 			},
 		},
@@ -29,15 +29,15 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.debug.logs" {
 				return nil, false
 			}
-			return newDebugServiceInner(a).RenderDebugLogsCard(sessionKey), true
+			return newDebugService(a).RenderDebugLogsCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.debug":
-				return newDebugServiceInner(s.app).CompleteMenuDebug(action, sessionKey)
+				return newDebugService(s.app).CompleteMenuDebug(action, sessionKey)
 			case "menu.debug.logs":
-				return newDebugServiceInner(s.app).CompleteMenuDebugLogs(action, sessionKey)
+				return newDebugService(s.app).CompleteMenuDebugLogs(action, sessionKey)
 			default:
 				return nil, nil
 			}
@@ -138,7 +138,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			"upgrade": {
 				Match: appcommandmatch.MatchUpgradeCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newUpgradeServiceInner(a).CommandUpgrade(msg, args)
+					return newUpgradeService(a).CommandUpgrade(msg, args)
 				},
 			},
 		},

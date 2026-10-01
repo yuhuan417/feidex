@@ -17,11 +17,11 @@ func newDebugViewAppAdapter(app *App) debugViewAppAdapter {
 	return debugViewAppAdapter{App: app}
 }
 
-func newDebugServiceInner(app *App) appdebugviewcmd.DebugService {
+func newDebugService(app *App) appdebugviewcmd.DebugService {
 	return appdebugviewcmd.NewDebugService(newDebugViewAppAdapter(app))
 }
 
-func newUsageServiceInner(app *App) appdebugviewcmd.UsageService {
+func newUsageService(app *App) appdebugviewcmd.UsageService {
 	return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
 }
 
@@ -122,5 +122,5 @@ type debugWorkspaceRenderAdapter struct {
 }
 
 func (a debugWorkspaceRenderAdapter) RenderPathPickerCard(requestID string, payload appdebugviewcmd.PathPickerPayload) (map[string]any, error) {
-	return newWorkspaceRenderServiceInner(a.app).RenderPathPickerCard(requestID, payload)
+	return newWorkspaceRenderService(a.app).RenderPathPickerCard(requestID, payload)
 }

@@ -74,13 +74,13 @@ var pendingCardActionHandlers = map[string]cardActionHandler{
 		return completeCodexPlanModeExit(s.app, action, codexPlanModeExitStayAction)
 	},
 	"review.base.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newReviewFormServiceInner(s.app).CompleteReviewBaseSelect(action)
+		return newReviewFormService(s.app).CompleteReviewBaseSelect(action)
 	},
 	"review.commit.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newReviewFormServiceInner(s.app).CompleteReviewCommitSelect(action)
+		return newReviewFormService(s.app).CompleteReviewCommitSelect(action)
 	},
 	"review.form.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-		return newReviewFormServiceInner(s.app).CompleteReviewFormSubmit(action)
+		return newReviewFormService(s.app).CompleteReviewFormSubmit(action)
 	},
 	"elicitation_url.accept": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return s.app.ServerRequestService().CompleteElicitationURLAction(action, "elicitation_url.accept")

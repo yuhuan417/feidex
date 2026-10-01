@@ -54,7 +54,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回工作区创建"},
-				Card:  rawCard(newWorkspaceRenderServiceInner(a).RenderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
+				Card:  rawCard(newWorkspaceRenderService(a).RenderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
 			}, nil
 		}
 		if pending.Kind == "workspace_clone" {
@@ -62,7 +62,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已返回从仓库创建"},
-				Card:  rawCard(newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
+				Card:  rawCard(newWorkspaceRenderService(a).RenderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
 		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
@@ -133,17 +133,17 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(workspacePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择目录"},
-				Card:  rawCard(newWorkspaceRenderServiceInner(a).RenderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
+				Card:  rawCard(newWorkspaceRenderService(a).RenderWorkspaceNewCard(pending.SessionKey, requestID, workspacePayload)),
 			}, nil
 		}
 		if pending.Kind == "workspace_clone" {
 			clonePayload.SelectedParentDir = selectedPath
-			clonePayload = newWorkspaceManagementServiceInner(a).DefaultCloneWorktreePayload(clonePayload, selectedPath)
+			clonePayload = newWorkspaceManagementService(a).DefaultCloneWorktreePayload(clonePayload, selectedPath)
 			clonePayload.Picker = nil
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(clonePayload) })
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已选择父目录"},
-				Card:  rawCard(newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
+				Card:  rawCard(newWorkspaceRenderService(a).RenderWorkspaceCloneCard(pending.SessionKey, requestID, clonePayload)),
 			}, nil
 		}
 		if pending.Kind == appdebugviewcmd.DownloadFilePendingKind {
@@ -154,7 +154,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 		if pending.Kind == appupgradecmd.UpgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath
 			_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-			return newUpgradeServiceInner(a).CompleteUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
+			return newUpgradeService(a).CompleteUpgradeLocalBinaryConfirm(action, pending, payload, selectedPath)
 		}
 		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusResolved.String()
@@ -178,7 +178,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 	} else {
 		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	}
-	card, err := newWorkspaceRenderServiceInner(a).RenderPathPickerCard(requestID, payload)
+	card, err := newWorkspaceRenderService(a).RenderPathPickerCard(requestID, payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}

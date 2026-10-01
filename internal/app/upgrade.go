@@ -11,7 +11,7 @@ import (
 	"feidex/internal/feishu"
 )
 
-func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
+func newUpgradeService(app *App) appupgradecmd.UpgradeService {
 	deps := appupgradecmd.UpgradeServiceDeps{
 		CurrentVersion: func() string { return currentVersion() },
 		CurrentGOOS:    func() string { return currentGOOS() },
@@ -53,7 +53,7 @@ func newUpgradeServiceInner(app *App) appupgradecmd.UpgradeService {
 			return config.FindWorkspace(app.cfg, wsID)
 		},
 		RenderPathPickerCardFunc: func(requestID string, payload appupgradecmd.PathPickerPayload) (map[string]any, error) {
-			return newWorkspaceRenderServiceInner(app).RenderPathPickerCard(requestID, payload)
+			return newWorkspaceRenderService(app).RenderPathPickerCard(requestID, payload)
 		},
 		DataDirFunc: func() string {
 			return app.cfg.DataDir

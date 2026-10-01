@@ -9,7 +9,7 @@ import (
 
 type serviceTierAppAdapter struct{ *App }
 
-func newServiceTierServiceInner(app *App) appservicetiercmd.Service {
+func newServiceTierService(app *App) appservicetiercmd.Service {
 	return appservicetiercmd.NewService(serviceTierAppAdapter{App: app})
 }
 
@@ -26,13 +26,13 @@ func (a serviceTierAppAdapter) MenuCardBody(action, body string) string {
 }
 
 func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
-	return newServiceTierServiceInner(a).RenderMenuCard(sessionKey)
+	return newServiceTierService(a).RenderMenuCard(sessionKey)
 }
 
 func setThreadServiceTier(a *App, sessionKey, threadID, serviceTier string) (*state.Session, error) {
-	return newServiceTierServiceInner(a).SetThreadServiceTier(sessionKey, threadID, serviceTier)
+	return newServiceTierService(a).SetThreadServiceTier(sessionKey, threadID, serviceTier)
 }
 
 func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
-	return newServiceTierServiceInner(a).CommandFast(msg, args)
+	return newServiceTierService(a).CommandFast(msg, args)
 }

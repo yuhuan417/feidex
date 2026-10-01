@@ -99,7 +99,7 @@ func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {
 }
 
 func (a *App) ThreadMenuWorkspaceThread() appthreadmenu.WorkspaceThreadProvider {
-	return newWorkspaceThreadServiceInner(a)
+	return newWorkspaceThreadService(a)
 }
 
 func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider {

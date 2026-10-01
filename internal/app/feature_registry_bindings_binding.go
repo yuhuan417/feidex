@@ -45,7 +45,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			if actionName != "menu.current_workspace" {
 				return nil, false
 			}
-			return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey), true
+			return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)

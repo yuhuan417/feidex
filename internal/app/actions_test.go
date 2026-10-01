@@ -115,7 +115,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -279,7 +279,7 @@ func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 		}
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
 		}
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
 	if err != nil {
 		t.Fatalf("completeWorkspaceSandboxSet: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").SandboxMode; got != "read-only" {
 		t.Fatalf("persisted sandbox mode = %q, want read-only", got)
 	}
-	_, err = newWorkspaceService(a).completeWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
+	_, err = newWorkspaceManagementService(a).CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
 	if err != nil {
 		t.Fatalf("clear workspace sandbox override: %v", err)
 	}
@@ -442,7 +442,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
 
-	resp, err := newWorkspaceService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
 	if err != nil {
 		t.Fatalf("completeWorkspacePolicySet: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("persisted approval policy = %q, want never", got)
 	}
-	_, err = newWorkspaceService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
+	_, err = newWorkspaceManagementService(a).CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
 	if err != nil {
 		t.Fatalf("clear workspace policy override: %v", err)
 	}
@@ -477,7 +477,7 @@ func TestCompleteWorkspacePolicySetAcceptsUntrusted(t *testing.T) {
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
 
-	resp, err := newWorkspaceService(a).completeWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
 	if err != nil {
 		t.Fatalf("completeWorkspacePolicySet: %v", err)
 	}
@@ -674,7 +674,7 @@ func TestActionHelperBranches(t *testing.T) {
 	}
 
 	cfgPath := a.cfgPath
-	if _, err := updateWorkspaceDefaults(a, "default", func(w *config.Workspace) { w.Name = "Renamed" }); err != nil {
+	if _, err := newWorkspaceManagementService(a).UpdateWorkspaceDefaults("default", func(w *config.Workspace) { w.Name = "Renamed" }); err != nil {
 		t.Fatalf("updateWorkspaceDefaults() error = %v", err)
 	}
 	loaded, err := config.Load(cfgPath)

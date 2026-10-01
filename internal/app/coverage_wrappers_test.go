@@ -427,7 +427,7 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	if got := appendFooterText(" body ", []string{" line-1 ", "", "line-2"}); got != "body\nline-1\nline-2" {
 		t.Fatalf("appendFooterText() = %q", got)
 	}
-	if body := cardMarkdownContent(t, newUpgradeServiceInner(a).RenderUpgradeFailedCard("sess-1", " boom ")); !strings.Contains(body, "检查升级信息失败。") || !strings.Contains(body, "错误: boom") {
+	if body := cardMarkdownContent(t, newUpgradeService(a).RenderUpgradeFailedCard("sess-1", " boom ")); !strings.Contains(body, "检查升级信息失败。") || !strings.Contains(body, "错误: boom") {
 		t.Fatalf("renderUpgradeFailedCard() body = %q", body)
 	}
 
@@ -438,10 +438,10 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("setSessionThreadDefaults() = %+v", sess)
 	}
 
-	if _, _, _, threadID, err := newWorkspaceConfigService(a).currentThreadForMessage(msg); err != nil || threadID != "thread-1" {
+	if _, _, _, threadID, err := currentThreadForMessage(a, msg); err != nil || threadID != "thread-1" {
 		t.Fatalf("currentThreadForMessage() = %q, %v", threadID, err)
 	}
-	if _, _, _, _, err := newWorkspaceConfigService(&App{cfg: a.cfg, store: a.store}).currentThreadForMessage(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-2", UserID: "user-2"}); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
+	if _, _, _, _, err := currentThreadForMessage(&App{cfg: a.cfg, store: a.store}, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-2", UserID: "user-2"}); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("currentThreadForMessage(no thread) error = %v", err)
 	}
 }

@@ -138,17 +138,17 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	}
 	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) == 0 {
-		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)
+		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
-		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)
+		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "choose":
-		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceChooseCard(sessionKey)
+		card := newWorkspaceRenderService(s.app).RenderWorkspaceChooseCard(sessionKey)
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "use":
@@ -159,10 +159,10 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			if err != nil {
 				return err
 			}
-			return newWorkspaceManagementServiceInner(s.app).BeginWorkspaceWorktree(msg, branchName, workspaceID)
+			return newWorkspaceManagementService(s.app).BeginWorkspaceWorktree(msg, branchName, workspaceID)
 		}
 		if len(args) == 1 {
-			return newWorkspaceManagementServiceInner(s.app).BeginWorkspaceNew(msg)
+			return newWorkspaceManagementService(s.app).BeginWorkspaceNew(msg)
 		}
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /workspace new WORKSPACE_ID CWD")
@@ -199,7 +199,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 		if err := s.unbindGroupWorkspace(sessionKey); err != nil {
 			return err
 		}
-		card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceMenuCard(sessionKey)
+		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
 		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	default:
@@ -208,7 +208,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 }
 
 func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, sessionKey string) error {
-	mgmt := newWorkspaceManagementServiceInner(s.app)
+	mgmt := newWorkspaceManagementService(s.app)
 	requestID, err := mgmt.NextLocalID("workspace")
 	if err != nil {
 		return err
@@ -234,7 +234,7 @@ func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, s
 	}); err != nil {
 		return err
 	}
-	card := newWorkspaceRenderServiceInner(s.app).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
+	card := newWorkspaceRenderService(s.app).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
 	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }

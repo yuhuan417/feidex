@@ -198,7 +198,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeCustom); err != nil {
+	if err := newReviewFormService(a).BeginReviewForm(msg, reviewFormModeCustom); err != nil {
 		t.Fatalf("beginReviewForm(custom) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
@@ -216,7 +216,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newReviewFormServiceInner(a).CompleteReviewFormSubmit(&feishu.CardAction{
+	resp, err := newReviewFormService(a).CompleteReviewFormSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": pending.ID},
 		FormValue:   map[string]any{"instructions": "focus on tests and regressions"},
 		UserID:      msg.UserID,

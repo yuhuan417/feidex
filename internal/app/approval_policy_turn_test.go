@@ -99,7 +99,7 @@ func TestNewThreadInheritsCurrentThreadPermissionOverrides(t *testing.T) {
 		result.Thread.ID = "thread-new"
 		return nil
 	}
-	if _, err := newWorkspaceThreadService(a).startWorkspaceThread(sessionKey, sess, &a.cfg.Workspaces[0]); err != nil {
+	if _, err := newWorkspaceThreadService(a).StartWorkspaceThread(sessionKey, sess, &a.cfg.Workspaces[0]); err != nil {
 		t.Fatalf("startWorkspaceThread() error = %v", err)
 	}
 	if startParams["approvalPolicy"] != "never" || startParams["sandbox"] != "read-only" {

@@ -34,14 +34,14 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 		t.Fatalf("WriteFile(note.txt) error = %v", err)
 	}
 	payload := appworkspacecmd.PathPickerPayload{
-		Mode:        pathPickerModeFile,
-		Style:       pathPickerStyleDropdown,
+		Mode:        appworkspacecmd.PathPickerModeFile,
+		Style:       appworkspacecmd.PathPickerStyleDropdown,
 		RootPath:    root,
 		CurrentPath: root,
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "path-1",
-		Kind:        pathPickerKind,
+		Kind:        appworkspacecmd.PathPickerKind,
 		OwnerUserID: "user-1",
 		Status:      "pending",
 		PayloadJSON: mustJSON(payload),
@@ -50,10 +50,10 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 		t.Fatalf("UpsertPending(path-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err := completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-1"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "child", Path: subdir, IsDir: true}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "child", Path: subdir, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("dropdown open dir = %#v, %v", resp, err)
@@ -67,10 +67,10 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 		t.Fatalf("current path after dir = %q, want %q", gotPayload.CurrentPath, subdir)
 	}
 
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-1"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "note.txt", Path: filePath, IsDir: false}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "note.txt", Path: filePath, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("dropdown select file = %#v, %v", resp, err)
@@ -83,7 +83,7 @@ func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 		t.Fatalf("selected path after file = %q, want %q", gotPayload.SelectedPath, filePath)
 	}
 
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-1"},
 	}, "path_picker.confirm")
@@ -106,14 +106,14 @@ func TestPathPickerDirectoryConfirmUsesCurrentPath(t *testing.T) {
 		t.Fatalf("Mkdir(repo) error = %v", err)
 	}
 	payload := appworkspacecmd.PathPickerPayload{
-		Mode:        pathPickerModeDirectory,
-		Style:       pathPickerStyleDropdown,
+		Mode:        appworkspacecmd.PathPickerModeDirectory,
+		Style:       appworkspacecmd.PathPickerStyleDropdown,
 		RootPath:    root,
 		CurrentPath: root,
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "path-2",
-		Kind:        pathPickerKind,
+		Kind:        appworkspacecmd.PathPickerKind,
 		OwnerUserID: "user-1",
 		Status:      "pending",
 		PayloadJSON: mustJSON(payload),
@@ -122,7 +122,7 @@ func TestPathPickerDirectoryConfirmUsesCurrentPath(t *testing.T) {
 		t.Fatalf("UpsertPending(path-2) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err := completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-2", "path": subdir},
 	}, "path_picker.open")
@@ -130,7 +130,7 @@ func TestPathPickerDirectoryConfirmUsesCurrentPath(t *testing.T) {
 		t.Fatalf("open directory response = %#v, %v", resp, err)
 	}
 
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "path-2"},
 	}, "path_picker.confirm")
@@ -172,7 +172,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceNewPickDir(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceNewPickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
 		FormValue:   map[string]any{"workspace_id": "repo", "workspace_name": "Repo"},
@@ -186,15 +186,15 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("workspace payload after pickdir = %+v", gotPayload)
 	}
 
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "new-project", Path: target, IsDir: true}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "new-project", Path: target, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace picker dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
 	}, "path_picker.confirm")
@@ -225,7 +225,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("workspace_new_submit form_action_type = %q, want submit", got)
 	}
 
-	resp, err = newWorkspaceService(a).completeWorkspaceNewSubmit(&feishu.CardAction{
+	resp, err = newWorkspaceManagementService(a).CompleteWorkspaceNewSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
@@ -260,22 +260,22 @@ func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-suggest-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceNewPickDir(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceNewPickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
 	})
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completeWorkspaceNewPickDir() = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "Feature Repo", Path: target, IsDir: true}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "Feature Repo", Path: target, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace picker dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
 	}, "path_picker.confirm")
@@ -315,7 +315,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-existing-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceNewSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceNewSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-existing-1"},
@@ -345,7 +345,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 func TestWorkspaceFormOrdering(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	newForm := workspaceNewForm(t, newWorkspaceRenderService(a).renderWorkspaceNewCard("sess-1", "req-new", appworkspacecmd.NewPayload{
+	newForm := workspaceNewForm(t, newWorkspaceRenderService(a).RenderWorkspaceNewCard("sess-1", "req-new", appworkspacecmd.NewPayload{
 		RootPath:    "/",
 		SelectedCWD: a.cfg.Workspaces[0].Cwd,
 	}))
@@ -354,7 +354,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 		t.Fatalf("workspace new first form element = %q, want column_set", got)
 	}
 
-	cloneForm := workspaceCloneForm(t, newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
+	cloneForm := workspaceCloneForm(t, newWorkspaceRenderService(a).RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 	}))
@@ -369,7 +369,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 
 func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
+	card := newWorkspaceRenderService(a).RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 		CloneMode:         appworkspacecmd.CloneModeWorkspace,
@@ -397,7 +397,7 @@ func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
 
 func TestWorkspaceCloneFormShowsWorktreeFieldsInWorktreeMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).renderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
+	card := newWorkspaceRenderService(a).RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 		CloneMode:         appworkspacecmd.CloneModeWorktree,
@@ -434,7 +434,7 @@ func TestWorkspaceCloneRefreshShowsWorktreeFieldsAndPrefillsDefaults(t *testing.
 		t.Fatalf("UpsertPending(workspace-clone-refresh) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneRefresh(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneRefresh(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-refresh"},
 		FormValue: map[string]any{
@@ -478,7 +478,7 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-prefill) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceClonePickDir(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceClonePickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
 		FormValue: map[string]any{
@@ -495,15 +495,15 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 		t.Fatalf("worktree defaults after pickdir = %+v", payload)
 	}
 
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "parents", Path: parentDir, IsDir: true}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "parents", Path: parentDir, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace clone prefill dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
 	}, "path_picker.confirm")
@@ -581,7 +581,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceClonePickDir(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceClonePickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
 		FormValue: map[string]any{
@@ -598,15 +598,15 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		t.Fatalf("workspace clone payload after pickdir = %+v", gotPayload)
 	}
 
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "parents", Path: parentDir, IsDir: true}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "parents", Path: parentDir, IsDir: true}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("workspace clone picker dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
 	}, "path_picker.confirm")
@@ -642,7 +642,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	var submitErr error
 	done := make(chan struct{})
 	go func() {
-		submitResp, submitErr = newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+		submitResp, submitErr = newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 			UserID:      "user-1",
 			ChatID:      "chat-1",
 			MessageID:   "msg-1",
@@ -777,7 +777,7 @@ func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-worktree) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -842,7 +842,7 @@ func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T
 		t.Fatalf("UpsertPending(workspace-clone-existing) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-existing"},
@@ -905,7 +905,7 @@ func TestWorkspaceCloneSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-existing-workspace) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-existing-workspace"},
@@ -964,7 +964,7 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-fail) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1032,7 +1032,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 		t.Fatalf("UpsertPending(workspace-clone-manual) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1110,7 +1110,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-cancel) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completeWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1145,7 +1145,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		t.Fatalf("progress body = %q, want streamed git progress", progressBody)
 	}
 
-	cancelResp, err := newWorkspaceService(a).completeWorkspaceCloneCancel(&feishu.CardAction{
+	cancelResp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneCancel(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1196,16 +1196,16 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 	}
 	requestID := pending[0].ID
 
-	resp, err := newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err := completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": requestID},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: "report.txt", Path: target, IsDir: false}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: "report.txt", Path: target, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("download picker dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": requestID},
@@ -1286,8 +1286,8 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 		FeishuMsgID: "msg-1",
 		Status:      "pending",
 		PayloadJSON: mustJSON(appworkspacecmd.PathPickerPayload{
-			Mode:        pathPickerModeFile,
-			Style:       pathPickerStyleDropdown,
+			Mode:        appworkspacecmd.PathPickerModeFile,
+			Style:       appworkspacecmd.PathPickerStyleDropdown,
 			RootPath:    a.cfg.Workspaces[0].Cwd,
 			CurrentPath: a.cfg.Workspaces[0].Cwd,
 		}),
@@ -1295,16 +1295,16 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 		t.Fatalf("UpsertPending(upgrade local picker) error = %v", err)
 	}
 
-	resp, err := newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err := completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"request_id": "upgrade-local-picker"},
-		Option:      encodePathPickerOption(apppathpick.Entry{Name: filepath.Base(sourcePath), Path: sourcePath, IsDir: false}),
+		Option:      apppathpick.EncodeOption(apppathpick.Entry{Name: filepath.Base(sourcePath), Path: sourcePath, IsDir: false}),
 	}, "path_picker.dropdown")
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("upgrade local dropdown = %#v, %v", resp, err)
 	}
-	resp, err = newWorkspaceService(a).completePathPickerAction(&feishu.CardAction{
+	resp, err = completePathPickerAction(a, &feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"request_id": "upgrade-local-picker"},

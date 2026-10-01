@@ -168,12 +168,12 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	pathRoot := t.TempDir()
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "path-1",
-		Kind:        pathPickerKind,
+		Kind:        appworkspacecmd.PathPickerKind,
 		OwnerUserID: "user-1",
 		Status:      "pending",
 		PayloadJSON: mustJSON(appworkspacecmd.PathPickerPayload{
-			Mode:        pathPickerModeDirectory,
-			Style:       pathPickerStyleDropdown,
+			Mode:        appworkspacecmd.PathPickerModeDirectory,
+			Style:       appworkspacecmd.PathPickerStyleDropdown,
 			RootPath:    pathRoot,
 			CurrentPath: pathRoot,
 		}),

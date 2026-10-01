@@ -32,7 +32,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.review" {
 				return nil, false
 			}
-			return newReviewFormServiceInner(a).RenderReviewMenuCard(sessionKey), true
+			return newReviewFormService(a).RenderReviewMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
@@ -248,7 +248,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			"usage": {
 				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newUsageServiceInner(a).CommandUsage(msg, args)
+					return newUsageService(a).CommandUsage(msg, args)
 				},
 			},
 		},

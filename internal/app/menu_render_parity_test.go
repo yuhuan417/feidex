@@ -46,8 +46,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		return fmt.Errorf("unexpected method %q", method)
 	}
 
-	p2pWorkspace := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(p2pKey)
-	groupWorkspace := newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(groupKey)
+	p2pWorkspace := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(p2pKey)
+	groupWorkspace := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(groupKey)
 	p2pThread, err := conversationBackend(a).RenderThreadsCard(p2pKey, false)
 	if err != nil {
 		t.Fatalf("render p2p thread menu: %v", err)

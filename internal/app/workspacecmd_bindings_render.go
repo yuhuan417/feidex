@@ -13,7 +13,7 @@ import (
 	"feidex/internal/state"
 )
 
-func newWorkspaceRenderServiceInner(a *App) *appworkspacecmd.RenderService {
+func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
 		App: a,

@@ -128,7 +128,7 @@ func TestMenuBackControlIsTheFinalAction(t *testing.T) {
 		Status:      state.AgentBindingStatusActive.String(),
 	}
 
-	workspaceCard := newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSuccessCard(sessionKey, "ws-1", "/tmp/ws-1")
+	workspaceCard := newWorkspaceRenderService(a).RenderWorkspaceCloneSuccessCard(sessionKey, "ws-1", "/tmp/ws-1")
 	assertBackControlIsFinal(t, "workspace clone success", buttonLabelsForTest(workspaceCard))
 
 	quietCard := renderQuietModeMenuCard(a, sessionKey)

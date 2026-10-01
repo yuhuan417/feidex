@@ -152,7 +152,7 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 	case "workspace_new", "workspace_clone", "workspace_worktree":
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},
-			Card:  rawCard(newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(pending.SessionKey)),
+			Card:  rawCard(newWorkspaceRenderService(a).RenderWorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	case "review_form":
 		body := reviewCancelledBody(pending)
@@ -210,7 +210,7 @@ func handleRootPendingTextResponse(a *App, msg *feishu.InboundMessage, pending *
 	svc := newPendingInputService(a)
 	switch pending.Kind {
 	case "workspace_new":
-		return newWorkspaceManagementServiceInner(a).CompleteWorkspaceNewText(msg, pending)
+		return newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending)
 	case claudePlanModePendingKind:
 		return svc.completeClaudePlanModeText(msg, pending)
 	default:

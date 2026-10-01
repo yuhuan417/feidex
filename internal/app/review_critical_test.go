@@ -121,11 +121,11 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := newReviewFormService(a).BeginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	basePending := singleReviewPendingRequest(t, a)
-	resp, err := newReviewFormServiceInner(a).CompleteReviewBaseSelect(&feishu.CardAction{
+	resp, err := newReviewFormService(a).CompleteReviewBaseSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ActionValue: map[string]any{"request_id": basePending.ID},
 		Option:      "main",
@@ -142,11 +142,11 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	}
 
 	a.store.DeletePending(basePending.ID)
-	if err := newReviewFormServiceInner(a).BeginReviewForm(msg, reviewFormModeCommit); err != nil {
+	if err := newReviewFormService(a).BeginReviewForm(msg, reviewFormModeCommit); err != nil {
 		t.Fatalf("beginReviewForm(commit) error = %v", err)
 	}
 	commitPending := singleReviewPendingRequest(t, a)
-	resp, err = newReviewFormServiceInner(a).CompleteReviewCommitSelect(&feishu.CardAction{
+	resp, err = newReviewFormService(a).CompleteReviewCommitSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ActionValue: map[string]any{"request_id": commitPending.ID},
 		Option:      commits[0],

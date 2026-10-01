@@ -18,7 +18,7 @@ func newWorkspaceCloneTracker() *appworkspacecmd.CloneTracker {
 	return appworkspacecmd.NewCloneTracker()
 }
 
-func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementService {
+func newWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
@@ -34,12 +34,12 @@ func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementServi
 		},
 		Threads: appworkspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return newWorkspaceThreadServiceInner(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 			MarkSessionThreadLive:  func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
 			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 			StartWorkspaceThread: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return newWorkspaceThreadServiceInner(a).StartWorkspaceThread(sessionKey, sess, ws)
+				return newWorkspaceThreadService(a).StartWorkspaceThread(sessionKey, sess, ws)
 			},
 		},
 		Clone: appworkspacecmd.CloneDeps{
@@ -82,46 +82,46 @@ func newWorkspaceManagementServiceInner(a *App) *appworkspacecmd.ManagementServi
 		},
 		Render: appworkspacecmd.ManagementRenderDeps{
 			RenderNewCard: func(sessionKey, requestID string, payload appworkspacecmd.NewPayload) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceNewCard(sessionKey, requestID, payload)
+				return newWorkspaceRenderService(a).RenderWorkspaceNewCard(sessionKey, requestID, payload)
 			},
 			RenderCloneCard: func(sessionKey, requestID string, payload appworkspacecmd.ClonePayload) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
 			},
 			RenderClonePreparingCard: func(requestID string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
+				return newWorkspaceRenderService(a).RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
 			},
 			RenderCloneSuccessCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir)
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir)
 			},
 			RenderWorktreeCard: func(sessionKey, requestID string, payload appworkspacecmd.WorktreePayload) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreeCard(sessionKey, requestID, payload)
+				return newWorkspaceRenderService(a).RenderWorkspaceWorktreeCard(sessionKey, requestID, payload)
 			},
 			RenderWorktreePreparingCard: func(requestID string, payload appworkspacecmd.WorktreePayload, plan *appworkspacecmd.WorktreePlan, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)
+				return newWorkspaceRenderService(a).RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)
 			},
 			RenderWorktreeSuccessCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreeSuccessCard(sessionKey, workspaceID, targetDir)
+				return newWorkspaceRenderService(a).RenderWorkspaceWorktreeSuccessCard(sessionKey, workspaceID, targetDir)
 			},
 			RenderWorktreeManualHintCard: func(sessionKey, workspaceID, targetDir, errText string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreeManualHintCard(sessionKey, workspaceID, targetDir, errText)
+				return newWorkspaceRenderService(a).RenderWorkspaceWorktreeManualHintCard(sessionKey, workspaceID, targetDir, errText)
 			},
 			RenderWorktreeCanceledCard: func(sessionKey string, payload appworkspacecmd.WorktreePayload, plan *appworkspacecmd.WorktreePlan, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceWorktreeCanceledCard(sessionKey, payload, plan, snapshot)
+				return newWorkspaceRenderService(a).RenderWorkspaceWorktreeCanceledCard(sessionKey, payload, plan, snapshot)
 			},
 			RenderSwitchExistingCard: func(sessionKey, workspaceID, targetDir, notice string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice)
+				return newWorkspaceRenderService(a).RenderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice)
 			},
 			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
 			},
 			RenderCloneManualHintCard: func(sessionKey, workspaceID, targetDir, errText string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText)
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText)
 			},
 			RenderCloneCanceledCard: func(sessionKey string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
 			},
 			RenderMenuCard: func(sessionKey string) map[string]any {
-				return newWorkspaceRenderServiceInner(a).RenderWorkspaceMenuCard(sessionKey)
+				return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
 			},
 		},
 	})

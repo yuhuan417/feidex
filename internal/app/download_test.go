@@ -22,7 +22,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("appdebugviewcmd.NewDownloadPathPickerPayload() error = %v", err)
 	}
-	if payload.RootPath != workspace || payload.CurrentPath != workspace || payload.Mode != pathPickerModeFile || payload.Style != pathPickerStyleDropdown {
+	if payload.RootPath != workspace || payload.CurrentPath != workspace || payload.Mode != appworkspacecmd.PathPickerModeFile || payload.Style != appworkspacecmd.PathPickerStyleDropdown {
 		t.Fatalf("appdebugviewcmd.NewDownloadPathPickerPayload() = %+v", payload)
 	}
 
@@ -103,8 +103,8 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	selectedPath := filepath.Join(workspace, "report.txt")
 	payload := appworkspacecmd.PathPickerPayload{
-		Mode:        pathPickerModeFile,
-		Style:       pathPickerStyleDropdown,
+		Mode:        appworkspacecmd.PathPickerModeFile,
+		Style:       appworkspacecmd.PathPickerStyleDropdown,
 		RootPath:    workspace,
 		CurrentPath: workspace,
 	}

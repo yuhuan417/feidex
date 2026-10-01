@@ -324,7 +324,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"list"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"list"}); err != nil {
 		t.Fatalf("commandWorkspace(list) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -347,7 +347,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 			return nil
 		}
 	}
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"use", "alt"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"use", "alt"}); err != nil {
 		t.Fatalf("commandWorkspace(use) error = %v", err)
 	}
 	sess := a.store.GetSession(makeSessionKey(a, msg))
@@ -359,7 +359,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := newWorkspaceService(a).commandWorkspace(msg, nil); err != nil {
+	if err := commandWorkspace(a, msg, nil); err != nil {
 		t.Fatalf("commandWorkspace(menu) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -370,7 +370,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"sandbox"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"sandbox"}); err != nil {
 		t.Fatalf("commandWorkspace(sandbox) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -378,7 +378,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"policy"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"policy"}); err != nil {
 		t.Fatalf("commandWorkspace(policy) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -386,7 +386,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"new"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"new"}); err != nil {
 		t.Fatalf("commandWorkspace(new) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -437,7 +437,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 		}
 	}
 
-	if err := newPendingInputService(a).completeWorkspaceNewText(msg, pending); err != nil {
+	if err := newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
 	a.waitAsync()
@@ -579,7 +579,7 @@ func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := newPendingInputService(a).completeWorkspaceNewText(msg, pending); err != nil {
+	if err := newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
 	if pending := a.store.PendingByID("req-existing-1"); pending == nil || pending.Status != "resolved" {
@@ -634,7 +634,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	repoURL := "git@github.com:example/repo.git"
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"clone", repoURL}); err != nil {
 		t.Fatalf("commandWorkspace(clone) error = %v", err)
 	}
 	a.waitAsync()
@@ -671,7 +671,7 @@ func TestCommandWorkspaceCloneExistingDirectoryOpensWorkspaceNewCard(t *testing.
 	a.cfg.Workspaces[0].Cwd = currentDir
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
 		t.Fatalf("commandWorkspace(clone existing dir) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -701,7 +701,7 @@ func TestCommandWorkspaceCloneExistingWorkspacePromptsSwitch(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := newWorkspaceService(a).commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+	if err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
 		t.Fatalf("commandWorkspace(clone existing workspace) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -720,7 +720,7 @@ func TestCommandWorkspaceCloneRejectsExistingWorkspaceID(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: t.TempDir()})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
-	err := newWorkspaceService(a).commandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"})
+	err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"})
 	if err == nil {
 		t.Fatal("expected existing workspace id to fail clone")
 	}
@@ -927,10 +927,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugServiceInner(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
+			return newDebugService(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugServiceInner(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+			return newDebugService(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
@@ -942,25 +942,25 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuSkills(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
-			return completeMenuWorkspace(a, action, action.ActionValue["session_key"].(string))
+			return newWorkspaceConfigService(a).CompleteMenuWorkspace(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceService(a).completeWorkspaceNew(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceManagementService(a).CompleteWorkspaceNew(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.delete.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceService(a).completeWorkspaceDeleteMenu(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceConfigService(a).CompleteWorkspaceDeleteMenu(action.ActionValue["session_key"].(string))
 		},
 		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceService(a).completeWorkspaceClone(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceManagementService(a).CompleteWorkspaceClone(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.worktree": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceManagementServiceInner(a).CompleteWorkspaceWorktree(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceManagementService(a).CompleteWorkspaceWorktree(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceService(a).completeWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceManagementService(a).CompleteWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceService(a).completeWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
+			return newWorkspaceManagementService(a).CompleteWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
 			return appthreadmenu.NewService(a).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
@@ -1020,7 +1020,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	workspaceCard := newWorkspaceConfigService(a).renderWorkspaceMenuCard(sessionKey)
+	workspaceCard := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
 	workspaceActions := cardButtonsForTest(workspaceCard)
 	foundBackToMenu := false
 	foundClone := false
@@ -1053,7 +1053,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		t.Fatalf("workspace menu missing delete button: %+v", workspaceActions)
 	}
 
-	sandboxCard, err := newWorkspaceConfigService(a).renderWorkspaceSandboxMenuCard(sessionKey)
+	sandboxCard, err := newWorkspaceRenderService(a).RenderWorkspaceSandboxMenuCard(sessionKey)
 	if err != nil {
 		t.Fatalf("renderWorkspaceSandboxMenuCard() error = %v", err)
 	}
@@ -1089,7 +1089,7 @@ func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := newWorkspaceConfigService(a).renderWorkspaceDeleteMenuCard(sessionKey)
+	card, err := newWorkspaceRenderService(a).RenderWorkspaceDeleteMenuCard(sessionKey)
 	if err != nil {
 		t.Fatalf("renderWorkspaceDeleteMenuCard() error = %v", err)
 	}
@@ -1815,7 +1815,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, nil); err != nil {
+	if err := newUpgradeService(a).CommandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1873,7 +1873,7 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, []string{"v0.3.0"}); err != nil {
+	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"v0.3.0"}); err != nil {
 		t.Fatalf("commandUpgrade(specified version) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -1944,7 +1944,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	appupgradecmd.DisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, []string{"dev"}); err != nil {
+	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"dev"}); err != nil {
 		t.Fatalf("commandUpgrade(dev) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -1993,7 +1993,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeServiceInner(a).CommandUpgrade(msg, []string{"local"}); err != nil {
+	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"local"}); err != nil {
 		t.Fatalf("commandUpgrade(local) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -2125,7 +2125,7 @@ func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 		return "feidex-upgrade-1", nil
 	}
 
-	resp, err := newUpgradeServiceInner(a).CompleteUpgradeAction(&feishu.CardAction{
+	resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-1"},
 	}, "upgrade.confirm")
