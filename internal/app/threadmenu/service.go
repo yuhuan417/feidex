@@ -674,8 +674,9 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	// For backends with asynchronous interrupt responses (e.g. Claude), clear
 	// stale active operations so the session doesn't get stuck in "queuing".
 	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil {
-		//lint:ignore SA4006 the returned session is unused; only the clearing side effect matters
-		sess = runtime.ClearActiveOperationsAfterInterrupt(targetSessionKey, sess)
+		// Only the side effect matters here: the store is updated in place and
+		// this function builds its reply from the local flags above.
+		runtime.ClearActiveOperationsAfterInterrupt(targetSessionKey, sess)
 	}
 	reply := "已请求中断当前任务。"
 	if discarded > 0 {
