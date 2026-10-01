@@ -1110,13 +1110,10 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	)
 	switch messageType {
 	case "text":
-		text = stripBotMention(extractText(msg.Content), msg.Mentions, a.botOpenID)
+		text = stripMentionPlaceholders(extractText(msg.Content), msg.Mentions)
 		if mentionAll {
-			// stripBotMention only removes this bot's own mention, and @所有人
-			// has no mention entry at all — it arrives as a bare "@_all" in the
-			// text. Left in place it stops commands from being recognised: the
-			// router only treats text starting with "/" as a command, and
-			// "@_all /menu" starts with the placeholder instead.
+			// @所有人 has no mention entry at all, so the strip above cannot see
+			// it — it arrives as a bare "@_all" in the text.
 			text = stripMentionAllPlaceholder(text)
 		}
 	case "post":
@@ -1622,14 +1619,26 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
-func stripBotMention(text string, mentions []*larkim.MentionEvent, botOpenID string) string {
+// stripMentionPlaceholders removes every mention placeholder from the text.
+//
+// The platform inserts one placeholder per @-mention — "@_user_1", "@_user_2" —
+// and they are client artifacts rather than user content; the addressed
+// identities travel separately in MentionedOpenIDs. Stripping only this bot's
+// own placeholder (the previous behaviour) left the others behind, so a message
+// addressing two bots reached each of them as "@_user_2 /menu": it never entered
+// the router's command branch, which requires text starting with "/", and the
+// agent saw "@_user_2 hi" instead of "hi".
+//
+// Note this also removes mentions of other people. The placeholder was
+// unreadable to the agent anyway, so the previous text was no more informative,
+// but a message that mentions a third party as content — "ask @someone to
+// confirm" — now reads "ask to confirm".
+func stripMentionPlaceholders(text string, mentions []*larkim.MentionEvent) string {
 	for _, mention := range mentions {
 		if mention == nil || mention.Key == nil {
 			continue
 		}
-		if mention.Id != nil && mention.Id.OpenId != nil && strings.TrimSpace(*mention.Id.OpenId) == strings.TrimSpace(botOpenID) {
-			text = strings.ReplaceAll(text, *mention.Key, "")
-		}
+		text = strings.ReplaceAll(text, *mention.Key, "")
 	}
 	return strings.TrimSpace(text)
 }

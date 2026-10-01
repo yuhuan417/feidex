@@ -440,8 +440,8 @@ func TestAdapterHelperFunctions(t *testing.T) {
 	mentions := []*larkim.MentionEvent{
 		{Key: &mentionKey, Id: &larkim.UserId{OpenId: strPtr("bot-1")}},
 	}
-	if got := stripBotMention("@bot hello", mentions, "bot-1"); got != "hello" {
-		t.Fatalf("stripBotMention() = %q, want hello", got)
+	if got := stripMentionPlaceholders("@bot hello", mentions); got != "hello" {
+		t.Fatalf("stripMentionPlaceholders() = %q, want hello", got)
 	}
 	if !mentioned(mentions, "bot-1") {
 		t.Fatal("mentioned() should find bot open id")
