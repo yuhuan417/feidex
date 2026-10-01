@@ -4,6 +4,7 @@ import (
 	appbackend "feidex/internal/app/backend"
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	appruntime "feidex/internal/app/runtime"
+	"feidex/internal/app/upgraderender"
 
 	"context"
 	"fmt"
@@ -15,14 +16,16 @@ import (
 	"feidex/internal/feishu"
 )
 
-func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey string, payload appruntime.ClaudeUpgradePendingPayload) {
+func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey string, payload appruntime.BackendUpgradePendingPayload) {
 	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	_, update, finalize := maintenanceSnapshotLifecycle(
 		s.app,
 		messageID,
 		sessionKey,
 		"claude upgrade progress patch failed",
-		newUpgradeRenderService(s.app).renderClaudeUpgradeOperationCard,
+		func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
+			return newUpgradeRenderService(s.app).renderUpgradeOperationCard(upgraderender.ClaudeSpec, sessionKey, snapshot)
+		},
 		appbackend.NewMaintenanceStateService(s.app).UpdateClaudeUpgrade,
 		appbackend.NewMaintenanceStateService(s.app).FinishClaudeUpgrade,
 		func(snapshot *appbackend.BackendUpgradeSnapshot, phase, message string) {
@@ -232,7 +235,9 @@ func (s backendUpgradeService) startClaudeRestartFromMessage(msg *feishu.Inbound
 		msg,
 		newBackendUpgradeService(s.app).beginClaudeRestartOperation,
 		newBackendUpgradeService(s.app).runClaudeRestartOperation,
-		newUpgradeRenderService(s.app).renderClaudeRestartOperationCard,
+		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
+			return newUpgradeRenderService(s.app).renderRestartOperationCard(upgraderender.ClaudeSpec, sessionKey, snapshot)
+		},
 		func(message string) {
 			appbackend.NewMaintenanceStateService(s.app).FinishClaudeRestart("failed", message)
 		},
@@ -261,7 +266,9 @@ func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey s
 		messageID,
 		sessionKey,
 		"claude restart progress patch failed",
-		newUpgradeRenderService(s.app).renderClaudeRestartOperationCard,
+		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
+			return newUpgradeRenderService(s.app).renderRestartOperationCard(upgraderender.ClaudeSpec, sessionKey, snapshot)
+		},
 		appbackend.NewMaintenanceStateService(s.app).UpdateClaudeRestart,
 		appbackend.NewMaintenanceStateService(s.app).FinishClaudeRestart,
 		func(snapshot *appbackend.BackendRestartSnapshot, phase, message string) {

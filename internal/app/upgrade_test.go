@@ -216,7 +216,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", appruntime.CodexUpgradePendingPayload{
+	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 		UpdateCommand:  "update",
@@ -295,7 +295,7 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", appruntime.CodexUpgradePendingPayload{
+	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 		UpdateCommand:  "update",
@@ -903,7 +903,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", appruntime.ClaudeUpgradePendingPayload{
+	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "2.1.139",
 		UpdateCommand:  "update",
@@ -964,7 +964,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", appruntime.ClaudeUpgradePendingPayload{
+	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "2.1.139",
 		UpdateCommand:  "update",

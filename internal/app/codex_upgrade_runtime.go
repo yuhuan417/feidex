@@ -3,6 +3,7 @@ package app
 import (
 	appbackend "feidex/internal/app/backend"
 	appruntime "feidex/internal/app/runtime"
+	"feidex/internal/app/upgraderender"
 
 	"context"
 	"strings"
@@ -49,14 +50,16 @@ func newCodexUpgradeService(a *App) appcodexruntime.UpgradeService {
 	}
 }
 
-func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey string, payload appruntime.CodexUpgradePendingPayload) {
+func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey string, payload appruntime.BackendUpgradePendingPayload) {
 	manager := newCodexInstallManager(s.app.cfg.Codex.Command)
 	_, update, finalize := maintenanceSnapshotLifecycle(
 		s.app,
 		messageID,
 		sessionKey,
 		"codex upgrade progress patch failed",
-		newUpgradeRenderService(s.app).renderCodexUpgradeOperationCard,
+		func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
+			return newUpgradeRenderService(s.app).renderUpgradeOperationCard(upgraderender.CodexSpec, sessionKey, snapshot)
+		},
 		appbackend.NewMaintenanceStateService(s.app).UpdateCodexUpgrade,
 		appbackend.NewMaintenanceStateService(s.app).FinishCodexUpgrade,
 		func(snapshot *appbackend.BackendUpgradeSnapshot, phase, message string) {
@@ -153,7 +156,9 @@ func (s backendUpgradeService) startCodexRestartFromMessage(msg *feishu.InboundM
 		msg,
 		newBackendUpgradeService(s.app).beginCodexRestartOperation,
 		newBackendUpgradeService(s.app).runCodexRestartOperation,
-		newUpgradeRenderService(s.app).renderCodexRestartOperationCard,
+		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
+			return newUpgradeRenderService(s.app).renderRestartOperationCard(upgraderender.CodexSpec, sessionKey, snapshot)
+		},
 		func(message string) {
 			appbackend.NewMaintenanceStateService(s.app).FinishCodexRestart("failed", message)
 		},
@@ -182,7 +187,9 @@ func (s backendUpgradeService) runCodexRestartOperation(messageID, sessionKey st
 		messageID,
 		sessionKey,
 		"codex restart progress patch failed",
-		newUpgradeRenderService(s.app).renderCodexRestartOperationCard,
+		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
+			return newUpgradeRenderService(s.app).renderRestartOperationCard(upgraderender.CodexSpec, sessionKey, snapshot)
+		},
 		appbackend.NewMaintenanceStateService(s.app).UpdateCodexRestart,
 		appbackend.NewMaintenanceStateService(s.app).FinishCodexRestart,
 		func(snapshot *appbackend.BackendRestartSnapshot, phase, message string) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	appcommandmatch "feidex/internal/app/commandmatch"
+	"feidex/internal/app/upgraderender"
 
 	"context"
 	"time"
@@ -94,13 +95,13 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if err != nil {
 				return nil, false
 			}
-			return newUpgradeRenderService(a).renderCodexUpgradeStatusCard(sessionKey, view, false), true
+			return newUpgradeRenderService(a).renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, false), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.codex_upgrade" {
 				return nil, nil
 			}
-			return newBackendUpgradeService(s.app).completeMenuCodexUpgrade(action)
+			return newBackendUpgradeService(s.app).completeMenuUpgrade(backendUpgradeCodex, action)
 		},
 	}
 	bindings["menu.claude_upgrade"] = featureBinding{
@@ -123,13 +124,13 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if err != nil {
 				return nil, false
 			}
-			return newUpgradeRenderService(a).renderClaudeUpgradeStatusCard(sessionKey, view, false), true
+			return newUpgradeRenderService(a).renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, false), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.claude_upgrade" {
 				return nil, nil
 			}
-			return newBackendUpgradeService(s.app).completeMenuClaudeUpgrade(action)
+			return newBackendUpgradeService(s.app).completeMenuUpgrade(backendUpgradeClaude, action)
 		},
 	}
 	bindings["menu.upgrade"] = featureBinding{
