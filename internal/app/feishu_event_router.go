@@ -93,14 +93,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			return nil
 		}
 	}
-	if msg.ChatType == "group" && !shouldAcceptGroupMessage(
-		a,
-		msg.ChatID,
-		groupPolicyRootMessageID(msg),
-		msg.ParentMessageID,
-		msg.MentionedSelf,
-		msg.MentionedAny || len(msg.MentionedOpenIDs) > 0,
-	) {
+	if routerDropsGroupMessage(a, msg) {
 		slog.Debug("feishu group message ignored by app group policy",
 			"frontend_id", strings.TrimSpace(a.FrontendID()),
 			"message_id", msg.MessageID,
@@ -206,6 +199,30 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return err
 	}
 	return nil
+}
+
+// routerDropsGroupMessage is the router-level group gate, the second of two.
+//
+// The adapter already decided delivery through shouldDeliverGroupMessageToApp;
+// this one narrows further. The two must agree, and @所有人 is where they can
+// drift apart: that path answers to nobody in particular and is delivered to
+// every bot, so this gate must not apply to it. Without the MentionAll check a
+// non-primary bot passes the adapter and is dropped here.
+func routerDropsGroupMessage(a *App, msg *feishu.InboundMessage) bool {
+	if msg == nil || msg.ChatType != "group" {
+		return false
+	}
+	if msg.MentionAll {
+		return false
+	}
+	return !shouldAcceptGroupMessage(
+		a,
+		msg.ChatID,
+		groupPolicyRootMessageID(msg),
+		msg.ParentMessageID,
+		msg.MentionedSelf,
+		msg.MentionedAny || len(msg.MentionedOpenIDs) > 0,
+	)
 }
 
 func groupPolicyRootMessageID(msg *feishu.InboundMessage) string {

@@ -33,6 +33,12 @@ func shouldDeliverGroupMessageToApp(a *App, input feishu.GroupMessagePolicyInput
 		_, ok := groupPrimaryAssignmentFromPolicyInput(input)
 		return ok
 	}
+	// @所有人 addresses the whole group, so every bot answers it rather than only
+	// the primary one. Without this the message would fall through to
+	// isGroupPrimary below and only the primary bot would reply.
+	if input.MentionAll {
+		return true
+	}
 	if shouldAcceptGroupMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, mentionedSelf, mentionedAny) {
 		return true
 	}
@@ -49,6 +55,12 @@ func groupPrimaryAssignmentFromPolicyInput(input feishu.GroupMessagePolicyInput)
 }
 
 func isGroupPrimaryControlInput(input feishu.GroupMessagePolicyInput) bool {
+	// @所有人 is not a primary assignment. A bare "@_all" looks like a bare bot
+	// mention to parseEmptyBotMentionFromText, but it names nobody, so the
+	// assignment branch would swallow it and no bot would answer at all.
+	if input.MentionAll {
+		return false
+	}
 	return parsePrimaryOnCommandFromText(input.Text) || parseEmptyBotMentionFromText(input.Text)
 }
 

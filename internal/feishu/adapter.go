@@ -43,6 +43,15 @@ type InboundMessage struct {
 	MentionedOpenIDs       []string
 	MentionedAny           bool
 	MentionedSelf          bool
+	// MentionAll marks "@所有人".
+	//
+	// Measured against a live tenant: the platform does NOT put it in
+	// mentions[] — that array arrives empty — and leaves the placeholder
+	// "@_all" in the plain text instead. So this cannot be derived from
+	// MentionedAny or MentionedOpenIDs, both of which stay empty/false; it has
+	// to be read off the text. Group routing treats it separately: every bot
+	// answers it.
+	MentionAll             bool
 	CreatedAt              int64
 }
 
@@ -57,6 +66,7 @@ type GroupMessagePolicyInput struct {
 	MentionedOpenIDs []string
 	MentionedAny     bool
 	MentionedSelf    bool
+	MentionAll       bool
 }
 
 // GroupMessagePolicy decides whether a group message should be delivered to
@@ -1045,6 +1055,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	if messageType == "text" {
 		rawText = extractText(msg.Content)
 	}
+	mentionAll := mentionsAll(msg.Mentions, rawText)
 	synthesizedPrimaryCommand := messageType == "text" && mentionOnlyPrimaryOnCommand(rawText, msg.Mentions, mentionedOpenIDs)
 	effectiveText := rawText
 	if synthesizedPrimaryCommand {
@@ -1062,6 +1073,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 				MentionedOpenIDs: mentionedOpenIDs,
 				MentionedAny:     mentionedAny,
 				MentionedSelf:    mentionedSelf,
+				MentionAll:       mentionAll,
 			}) {
 				return nil
 			}
@@ -1077,6 +1089,7 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 		MentionedOpenIDs: mentionedOpenIDs,
 		MentionedAny:     mentionedAny,
 		MentionedSelf:    mentionedSelf,
+		MentionAll:       mentionAll,
 	}
 	if out.MessageID != "" && a.duplicate(out.MessageID) {
 		slog.Debug("feishu duplicate message ignored", "message_id", out.MessageID)
@@ -1098,6 +1111,14 @@ func (a *Adapter) convertMessage(event *larkim.P2MessageReceiveV1) *InboundMessa
 	switch messageType {
 	case "text":
 		text = stripBotMention(extractText(msg.Content), msg.Mentions, a.botOpenID)
+		if mentionAll {
+			// stripBotMention only removes this bot's own mention, and @所有人
+			// has no mention entry at all — it arrives as a bare "@_all" in the
+			// text. Left in place it stops commands from being recognised: the
+			// router only treats text starting with "/" as a command, and
+			// "@_all /menu" starts with the placeholder instead.
+			text = stripMentionAllPlaceholder(text)
+		}
 	case "post":
 		var ok bool
 		text, attachments, ok = extractPostMessage(msg.Content)
@@ -1662,6 +1683,35 @@ func mentionedOpenIDs(mentions []*larkim.MentionEvent) []string {
 		out = append(out, openID)
 	}
 	return out
+}
+
+// mentionsAll reports whether the message is an "@所有人".
+//
+// The text is the authoritative signal: measured on a live tenant, an @所有人
+// message arrives with an empty mentions[] and the placeholder "@_all" in its
+// text. The mention-key check is kept because the SDK's own channel parser also
+// looks for it; it is inert against the tenants seen so far.
+func mentionsAll(mentions []*larkim.MentionEvent, text string) bool {
+	for _, mention := range mentions {
+		if mention == nil || mention.Key == nil {
+			continue
+		}
+		switch strings.TrimSpace(*mention.Key) {
+		case "@_all", "@all":
+			return true
+		}
+	}
+	return strings.Contains(text, "@_all") || strings.Contains(text, "@all")
+}
+
+// stripMentionAllPlaceholder removes the client-generated @所有人 placeholder.
+// The same markers mentionsAll matches on are removed, so detection and
+// stripping stay in step.
+func stripMentionAllPlaceholder(text string) string {
+	for _, marker := range []string{"@_all", "@all"} {
+		text = strings.ReplaceAll(text, marker, "")
+	}
+	return strings.TrimSpace(text)
 }
 
 func hasMentionEvents(mentions []*larkim.MentionEvent) bool {
