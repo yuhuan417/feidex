@@ -4,9 +4,9 @@
 package submission
 
 import (
-	"feidex/internal/app/apputil"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"strings"
 )
 
@@ -89,7 +89,7 @@ func StagedImageRootMessageIDs(images []conversation.SessionStagedImage) []strin
 	}
 	ids := make([]string, 0, len(images))
 	for _, image := range images {
-		rootID := apputil.FirstNonEmpty(strings.TrimSpace(image.RootMessageID), strings.TrimSpace(image.SourceMessageID))
+		rootID := textutil.FirstNonEmpty(strings.TrimSpace(image.RootMessageID), strings.TrimSpace(image.SourceMessageID))
 		if rootID == "" {
 			continue
 		}

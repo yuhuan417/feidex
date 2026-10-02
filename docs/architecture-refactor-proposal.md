@@ -444,4 +444,6 @@ Codex server request
 - turn lifecycle 编排已迁入 `internal/application/turn`，turn binding tracker 已迁入 `internal/runtime/turnbinding`；旧 `internal/app/turnlifecycle`、`turnbinding`、`usageview` 服务包和 App 生命周期接口已删除。协议 usage 通过 Codex adapter 转换为 domain 值，terminal card 和 usage card 作为 presentation/effect ports 执行。
 - Codex lifecycle notification 解码和 request ID 规范化；app router 暂时只负责把 semantic event 交给现有 turn owner。
 
+- Feishu 展示依赖图整体迁入 `internal/adapter/feishu`（approval/forms/cards/delivery/review/thread/turn item），不保留旧 app 展示包。菜单能力声明迁入 application，backend identity/inflight 迁入 domain，运行时值迁入 runtime；删除 menutypes 和 apputil 转发层。
+
 仍待迁移：conversation 用例编排、完整 submission/turn aggregate、统一 dispatcher、session actor、backend event adapter、Feishu presentation/effect runner，以及旧 serviceFor、宽 App interface 和跨 owner callback 的删除。以上条目完成前不能将整份提案标记为完成。

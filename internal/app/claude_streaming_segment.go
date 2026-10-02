@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	appdelivery "feidex/internal/app/delivery"
-	"feidex/internal/app/quietmode"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/adapter/feishu/quietmode"
 	"strings"
 	"time"
 )

@@ -2,9 +2,9 @@ package clauderuntime
 
 import (
 	"context"
-	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 
@@ -36,14 +36,14 @@ func applyModelSettings(ctx context.Context, client modelSettingsClient, applied
 }
 
 func modelSettingsFromConfig(cfg config.ClaudeConfig, model string) domainmodelconfig.Snapshot {
-	return domainmodelconfig.Snapshot{Valid: true, Backend: "claude", Model: strings.TrimSpace(apputil.FirstNonEmpty(model, cfg.Model)),
+	return domainmodelconfig.Snapshot{Valid: true, Backend: "claude", Model: strings.TrimSpace(textutil.FirstNonEmpty(model, cfg.Model)),
 		Effort: strings.TrimSpace(cfg.Effort), SmallModel: strings.TrimSpace(cfg.SmallModel), SubagentModel: strings.TrimSpace(cfg.SubagentModel)}
 }
 
 func (s *Service) desiredModelSettings(sessionKey string, cfg config.ClaudeConfig, model string) domainmodelconfig.Snapshot {
 	if s.deps.ModelSettings != nil {
 		settings := s.deps.ModelSettings(sessionKey)
-		settings.Model = apputil.FirstNonEmpty(settings.Model, model, cfg.Model)
+		settings.Model = textutil.FirstNonEmpty(settings.Model, model, cfg.Model)
 		return settings
 	}
 	settings := modelSettingsFromConfig(cfg, model)

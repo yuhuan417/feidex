@@ -15,19 +15,19 @@ internal/architecture/       依赖方向与分层架构测试
 internal/app/appcore/       核心组合（client 接口、session key、workspace 选择）
 internal/app/apphistory/    进程历史
 internal/app/appstate/      应用状态 store
-internal/app/approval/      审批卡片文案、按钮、文件摘要
-internal/app/approvalview/  审批视图渲染
+internal/adapter/feishu/approval/      审批卡片文案、按钮、文件摘要
+internal/adapter/feishu/approvalview/  审批视图渲染
 internal/app/autoretry/     自动重试状态
 internal/app/backend/       后端驱动抽象（选择、action、failure、transition）
-internal/app/cards/         飞书卡片构造 helper
+internal/adapter/feishu/cards/         飞书卡片构造 helper
 internal/app/clauderuntime/ Claude 运行时集成
 internal/app/claudesession/ Claude session 生命周期
 internal/app/claudesupport/ Claude 诊断/历史 helper
 internal/app/codexruntime/  Codex 运行时集成
 internal/app/compact/       上下文压缩
 internal/app/convbackend/   会话后端 facade
-internal/app/delivery/      回复卡片分片、markdown 拆分
-internal/app/features/      统一命令/菜单/action 注册
+internal/adapter/feishu/delivery/      回复卡片分片、markdown 拆分
+internal/application/features/         统一命令/菜单/action 注册
 internal/app/feishuwrap/    飞书适配包装器
 internal/app/finalcardpatch/最终卡片 patch 逻辑
 internal/app/historycmd/    历史命令处理
@@ -36,9 +36,9 @@ internal/app/maintenance/   backend-agnostic 升级/维护 workflow
 internal/app/modelconfig/   模型配置卡片与命令入口（迁移中的 adapter）
 internal/domain/modelconfig/ 模型 scope resolution 与 turn snapshot 规则
 internal/app/pathpick/      路径选择器
-internal/app/pendingforms/  待处理表单
+internal/adapter/feishu/pendingforms/  待处理表单
 internal/app/replycontinuation/ 回复接续处理
-internal/app/review/        review target 数据结构
+internal/adapter/feishu/review/        review target 数据结构
 internal/app/reviewcmd/     review 命令处理
 internal/app/serverrequest/ 服务端请求处理
 internal/domain/conversation/ 会话、backend lineage 与活动操作领域状态
@@ -46,15 +46,15 @@ internal/app/skills/        技能管理
 internal/app/skillscmd/     技能命令处理
 internal/app/submission/    submission 队列与生命周期
 internal/app/threadmenu/    thread 菜单渲染
-internal/app/threadview/    thread 视图渲染
-internal/app/turn/          turn 管理
-internal/app/turnbinding/   turn 绑定逻辑
-internal/app/turnitem/      turn item 类型
-internal/app/turnlifecycle/ turn 生命周期协调
+internal/adapter/feishu/threadview/    thread 视图渲染
+internal/adapter/feishu/turn/          turn 管理
+internal/runtime/turnbinding/          turn 绑定逻辑
+internal/adapter/feishu/turnitem/      turn item 类型
+internal/application/turn/ turn 生命周期协调
 internal/app/turnstream/    turn 流处理
 internal/app/upgradecmd/    升级命令处理
 internal/app/upgraderender/ 升级卡片渲染
-internal/app/usageview/     usage 视图渲染
+internal/application/presentation/usageview/ usage 视图渲染
 internal/app/workspace/     workspace payload 与值对象
 internal/app/workspacecmd/  workspace 命令处理
 internal/feishu/            飞书适配层
@@ -80,7 +80,7 @@ config.example.toml         配置样例
 - `frontend` 是运行时隔离边界；backend 选择、session lineage、pending request、message link 和运行时缓存都必须按 frontend 隔离。
 - `internal/domain` 和 `internal/application` 拥有 backend-neutral 产品语义；Codex/Claude 协议细节应收敛在 backend adapter，避免散落到消息、菜单和审批编排里。`internal/app` 只保留迁移期间的入口、组合和协议敏感兼容编排。
 - `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；`internal/claudecli` 只负责 Claude CLI stream-json 协议。不要让它们理解飞书、session 或卡片。
-- 命令与菜单通过 `internal/app/features/` 统一注册，按 backend 自动过滤可用命令。
+- 命令与菜单通过 `internal/application/features/` 统一注册，按 backend 自动过滤可用命令。
 - 依赖方向按长期架构提案和 architecture tests 执行；旧 app package boundary 仅作迁移定位。
 - `internal/feishu` 只负责飞书 SDK、消息/卡片发送、文件分享、链接改写和权限问题转换；不要把业务策略放进适配层。
 - 慢操作必须走"快速 callback ack → 异步执行 → patch card / follow-up"，尤其是 clone、review、upgrade、download 和外部网络请求。

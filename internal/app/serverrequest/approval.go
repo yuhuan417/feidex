@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"strings"
 
-	appapproval "feidex/internal/app/approval"
-	"feidex/internal/app/approvalview"
-	"feidex/internal/app/pendingforms"
+	appapproval "feidex/internal/adapter/feishu/approval"
+	"feidex/internal/adapter/feishu/approvalview"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 

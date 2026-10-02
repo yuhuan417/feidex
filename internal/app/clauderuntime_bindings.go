@@ -7,17 +7,17 @@ import (
 	"log/slog"
 	"time"
 
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
 	appclauderuntime "feidex/internal/app/clauderuntime"
 
-	appdelivery "feidex/internal/app/delivery"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
 
-	apppendingforms "feidex/internal/app/pendingforms"
-	"feidex/internal/app/quietmode"
+	apppendingforms "feidex/internal/adapter/feishu/pendingforms"
+	"feidex/internal/adapter/feishu/quietmode"
 
-	appturn "feidex/internal/app/turn"
-	"feidex/internal/app/turnitem"
+	appturn "feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"

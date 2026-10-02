@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"feidex/internal/app/turn"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/config"
 )
 

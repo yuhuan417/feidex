@@ -4,8 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	appfeatures "feidex/internal/app/features"
-	"feidex/internal/app/menutypes"
+	appfeatures "feidex/internal/application/features"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -102,7 +101,7 @@ func buildLocalCommandSpecs() []localCommandSpec {
 				Handle:      commandBinding.Handle,
 				HandleRaw:   commandBinding.HandleRaw,
 				HelpGroup:   strings.TrimSpace(command.HelpGroup),
-				HelpEntries: append([]menutypes.HelpCommandSpec(nil), command.HelpEntries...),
+				HelpEntries: append([]appfeatures.HelpCommandSpec(nil), command.HelpEntries...),
 				Backends:    buildLocalCommandBackendPolicies(feature, command, commandBinding),
 			}
 			specs = append(specs, spec)
@@ -135,7 +134,7 @@ func buildLocalCommandBackendPolicies(feature appfeatures.Spec, command appfeatu
 		policies[backend] = localCommandBackendSpec{
 			Match:       match,
 			HideInHelp:  metaPolicy.HideInHelp,
-			HelpEntries: append([]menutypes.HelpCommandSpec(nil), metaPolicy.HelpEntries...),
+			HelpEntries: append([]appfeatures.HelpCommandSpec(nil), metaPolicy.HelpEntries...),
 		}
 	}
 	if len(policies) == 0 {

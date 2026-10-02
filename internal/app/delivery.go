@@ -5,8 +5,8 @@ import (
 	"feidex/internal/app/attachments"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appdelivery "feidex/internal/app/delivery"
-	"feidex/internal/app/quietmode"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/state"
 	"log/slog"

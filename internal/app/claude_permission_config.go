@@ -1,7 +1,7 @@
 package app
 
 import (
-	appruntime "feidex/internal/app/runtime"
+	appruntime "feidex/internal/runtime"
 
 	"context"
 	"fmt"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/adapter/feishu/cards"
 	appbackend "feidex/internal/app/backend"
-	"feidex/internal/app/cards"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )

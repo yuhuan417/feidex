@@ -1,9 +1,9 @@
 package app
 
 import (
-	"feidex/internal/app/apputil"
 	"feidex/internal/app/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
@@ -99,12 +99,12 @@ func modelConfigStatus(a *App, sessionKey string) string {
 	}
 	desired := modelConfigSnapshot(a, sess, backend)
 	status := applicationmodelconfig.SessionStatus(backend, sess.ActiveThreadID, desired, sess.AppliedModelConfig, sess.ModelConfigError)
-	notice += "\n下一轮本地启动模型：`" + apputil.FirstNonEmpty(status.NextModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(status.NextEffort, "默认") + "`。"
+	notice += "\n下一轮本地启动模型：`" + textutil.FirstNonEmpty(status.NextModel, "默认") + "`；推理强度：`" + textutil.FirstNonEmpty(status.NextEffort, "默认") + "`。"
 	if status.Error != "" {
 		notice += "\n配置应用失败/待生效：" + status.Error
 	}
 	if status.HasApplied {
-		notice += "\n最近已应用模型：`" + apputil.FirstNonEmpty(status.AppliedModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(status.AppliedEffort, "默认") + "`。"
+		notice += "\n最近已应用模型：`" + textutil.FirstNonEmpty(status.AppliedModel, "默认") + "`；推理强度：`" + textutil.FirstNonEmpty(status.AppliedEffort, "默认") + "`。"
 		if status.Pending {
 			notice += "\n已保存配置与当前应用值不同，待对应边界生效。"
 		}

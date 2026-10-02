@@ -2,24 +2,25 @@ package backend
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"time"
 
+	"feidex/internal/adapter/feishu/cardactions"
+	appdebugview "feidex/internal/adapter/feishu/debugview"
+	appquietmode "feidex/internal/adapter/feishu/quietmode"
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/app/appcore"
-	apputil "feidex/internal/app/apputil"
-	"feidex/internal/app/cardactions"
-	appdebugview "feidex/internal/app/debugview"
 	appmodelconfig "feidex/internal/app/modelconfig"
-	appquietmode "feidex/internal/app/quietmode"
-	appruntime "feidex/internal/app/runtime"
-	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/buildinfo"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	apputil "feidex/internal/formatutil"
+	appruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -82,12 +83,12 @@ func (s ConfigurationService) FormatMenuBody(action, body string) string {
 
 func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, args []string) error {
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		if s.deps.Commands.HandleCodexModelCommand == nil {
 			return fmt.Errorf("Codex model command handler not configured")
 		}
 		return s.deps.Commands.HandleCodexModelCommand(msg, args)
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		if s.deps.Commands.HandleClaudeModelCommand == nil {
 			return fmt.Errorf("Claude model command handler not configured")
 		}
@@ -119,7 +120,7 @@ func (s ConfigurationService) CompleteClaudeEffortSet(action *feishu.CardAction,
 }
 
 func (s ConfigurationService) CompleteClaudeModelOptionAdd(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	if appcore.ConfiguredBackend(s.App) != appruntime.BackendClaude {
+	if appcore.ConfiguredBackend(s.App) != domainbackend.BackendClaude {
 		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
 	}
 	if s.deps.Claude.CompleteModelOptionAdd == nil {
@@ -129,7 +130,7 @@ func (s ConfigurationService) CompleteClaudeModelOptionAdd(action *feishu.CardAc
 }
 
 func (s ConfigurationService) CompleteClaudeModelOptionRemove(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	if appcore.ConfiguredBackend(s.App) != appruntime.BackendClaude {
+	if appcore.ConfiguredBackend(s.App) != domainbackend.BackendClaude {
 		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
 	}
 	if s.deps.Claude.CompleteModelOptionRemove == nil {
@@ -304,9 +305,9 @@ func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *appwo
 // RenderModelMenuCard renders the model menu card for the active backend.
 func (s ConfigurationService) RenderModelMenuCard(sessionKey string) map[string]any {
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		return s.RenderCodexModelMenuCard(sessionKey)
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		return s.RenderClaudeModelMenuCard(sessionKey)
 	default:
 		return s.renderBackendRequiredCard(sessionKey)
@@ -361,9 +362,9 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 // by backend.
 func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		return s.CompleteCodexGlobalModelSet(action, modelID)
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		if s.deps.Claude.CompleteModelSet != nil {
 			return s.CompleteClaudeModelSet(action, modelID)
 		}
@@ -404,9 +405,9 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 // action, dispatching by backend.
 func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		return s.CompleteCodexGlobalReasoningEffortSet(action, reasoningEffort)
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		if s.deps.Claude.CompleteEffortSet != nil {
 			return s.CompleteClaudeEffortSet(action, reasoningEffort)
 		}
@@ -452,9 +453,9 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 // dispatching by backend.
 func (s ConfigurationService) StatusCardBody(sess *conversation.Session) string {
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		return s.RenderCodexStatusBody(sess)
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		return s.RenderClaudeStatusBody(sess)
 	default:
 		return s.backendRequiredStatusBody()

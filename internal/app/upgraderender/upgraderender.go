@@ -4,10 +4,10 @@
 package upgraderender
 
 import (
+	"feidex/internal/textutil"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
 	"feidex/internal/app/backend"
 	"feidex/internal/feishu"
 	"feidex/internal/install"
@@ -83,7 +83,7 @@ func UpgradePhaseText(phase string) string {
 	case "failed":
 		return "failed"
 	default:
-		return apputil.FirstNonEmpty(strings.TrimSpace(phase), "-")
+		return textutil.FirstNonEmpty(strings.TrimSpace(phase), "-")
 	}
 }
 
@@ -96,7 +96,7 @@ func UpgradeResultText(result string) string {
 	case "rollback_failed":
 		return "rollback_failed"
 	default:
-		return apputil.FirstNonEmpty(strings.TrimSpace(result), "-")
+		return textutil.FirstNonEmpty(strings.TrimSpace(result), "-")
 	}
 }
 
@@ -113,7 +113,7 @@ func RestartPhaseText(phase string) string {
 	case "failed":
 		return "failed"
 	default:
-		return apputil.FirstNonEmpty(strings.TrimSpace(phase), "-")
+		return textutil.FirstNonEmpty(strings.TrimSpace(phase), "-")
 	}
 }
 
@@ -124,7 +124,7 @@ func RestartResultText(result string) string {
 	case "failed":
 		return "failed"
 	default:
-		return apputil.FirstNonEmpty(strings.TrimSpace(result), "-")
+		return textutil.FirstNonEmpty(strings.TrimSpace(result), "-")
 	}
 }
 

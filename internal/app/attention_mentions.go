@@ -1,9 +1,9 @@
 package app
 
 import (
-	"feidex/internal/app/apputil"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"strings"
 )
 
@@ -18,7 +18,7 @@ func shouldMentionOnTurnStop(a *App, sub *domainsubmission.Submission, turnID st
 	if a == nil || sub == nil || strings.TrimSpace(sub.UserID) == "" {
 		return false
 	}
-	turnID = apputil.FirstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
+	turnID = textutil.FirstNonEmpty(strings.TrimSpace(turnID), strings.TrimSpace(sub.TurnID))
 	sess := a.State().Session(sub.SessionKey)
 	if sess == nil {
 		return true

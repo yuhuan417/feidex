@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	apputil "feidex/internal/app/apputil"
-	appruntime "feidex/internal/app/runtime"
+	apputil "feidex/internal/formatutil"
+	appruntime "feidex/internal/runtime"
 )
 
 type SessionPermissionUpdateType string

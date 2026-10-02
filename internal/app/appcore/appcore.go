@@ -4,17 +4,17 @@
 package appcore
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"strings"
 	"sync"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
 // NormalizeRuntimeBackend normalizes a backend name to its canonical form.
 func NormalizeRuntimeBackend(value string) string {
-	return appruntime.NormalizeBackend(value)
+	return domainbackend.NormalizeBackend(value)
 }
 
 // AppConfig is the narrow interface that shared helpers use to access

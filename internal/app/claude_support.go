@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	appapproval "feidex/internal/app/approval"
-	"feidex/internal/app/apputil"
+	appapproval "feidex/internal/adapter/feishu/approval"
+	apputil "feidex/internal/formatutil"
 
+	"feidex/internal/adapter/feishu/pendingforms"
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/claudesupport"
-	"feidex/internal/app/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"net"
@@ -14,7 +15,6 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/appstate"
-	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -421,17 +421,17 @@ func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Ti
 }
 
 func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
-	frontendID := apputil.FirstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
+	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
 	botOpenID := groupAnnouncementBotOpenID(a, chatID)
 	botName := groupAnnouncementBotName(a, botOpenID)
 	marker := groupAnnouncementMarker(botName, botOpenID)
 	stableLines := []string{
 		groupAnnouncementDivider,
 		groupAnnouncementField("Bot", botName),
-		groupAnnouncementField("Machine IP", apputil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
+		groupAnnouncementField("Machine IP", textutil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
 		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a, chatID)),
-		groupAnnouncementField("Backend", apputil.FirstNonEmpty(configuredBackend(a), "unset")),
-		groupAnnouncementField("Thread", apputil.FirstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
+		groupAnnouncementField("Backend", textutil.FirstNonEmpty(configuredBackend(a), "unset")),
+		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
 		groupAnnouncementField("Marker", marker),
 	}
 	stableContent := strings.Join(stableLines, "\n")
@@ -465,13 +465,13 @@ func groupAnnouncementBotOpenID(a *App, chatID string) string {
 }
 
 func groupAnnouncementMarker(botName, botOpenID string) string {
-	nameToken := groupAnnouncementMarkerToken(apputil.FirstNonEmpty(strings.TrimSpace(botName), "bot"))
-	idToken := groupAnnouncementMarkerToken(apputil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown"))
-	return "feidex-status-region:" + apputil.FirstNonEmpty(nameToken, "bot") + ":" + apputil.FirstNonEmpty(idToken, "unknown")
+	nameToken := groupAnnouncementMarkerToken(textutil.FirstNonEmpty(strings.TrimSpace(botName), "bot"))
+	idToken := groupAnnouncementMarkerToken(textutil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown"))
+	return "feidex-status-region:" + textutil.FirstNonEmpty(nameToken, "bot") + ":" + textutil.FirstNonEmpty(idToken, "unknown")
 }
 
 func groupAnnouncementLegacyMarker(frontendID, botOpenID string) string {
-	return "feidex-status-region:" + apputil.FirstNonEmpty(strings.TrimSpace(frontendID), config.DefaultFrontendID) + ":" + apputil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
+	return "feidex-status-region:" + textutil.FirstNonEmpty(strings.TrimSpace(frontendID), config.DefaultFrontendID) + ":" + textutil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
 }
 
 func groupAnnouncementMarkerToken(value string) string {
@@ -502,7 +502,7 @@ func groupAnnouncementBotName(a *App, botOpenID string) string {
 			return name
 		}
 	}
-	return apputil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
+	return textutil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
 }
 
 func hashGroupAnnouncementStableContent(content string) string {
@@ -512,7 +512,7 @@ func hashGroupAnnouncementStableContent(content string) string {
 
 func groupAnnouncementMarkerCandidates(status groupAnnouncementStatus) []string {
 	markers := []string{strings.TrimSpace(status.marker)}
-	frontendID := apputil.FirstNonEmpty(strings.TrimSpace(status.frontendID), config.DefaultFrontendID)
+	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(status.frontendID), config.DefaultFrontendID)
 	markers = append(markers,
 		groupAnnouncementLegacyMarker(frontendID, status.botOpenID),
 		groupAnnouncementLegacyMarker(frontendID, ""),

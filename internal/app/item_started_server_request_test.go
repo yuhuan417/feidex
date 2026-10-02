@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 	"fmt"
 	"path/filepath"
 	"strings"

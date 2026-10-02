@@ -16,7 +16,9 @@ func TestInputsAndEffectsAreConcreteTransportIndependentValues(t *testing.T) {
 		Chat:     identity.ChatRef{Type: identity.ChatTypeGroup, ID: "chat-a"},
 		Text:     "ok",
 	}
-	if input == nil || effect == nil {
-		t.Fatal("input/effect marker values must be usable through their contracts")
+	message := input.(MessageReceived)
+	outbound := effect.(SendMessage)
+	if message.Frontend != outbound.Frontend || message.Chat != outbound.Chat || outbound.Text != "ok" {
+		t.Fatal("input/effect values must preserve frontend and chat identity")
 	}
 }

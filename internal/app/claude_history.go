@@ -8,9 +8,9 @@ import (
 	"feidex/internal/app/claudesession"
 	"feidex/internal/app/claudesupport"
 	apphistorycmd "feidex/internal/app/historycmd"
-	appruntime "feidex/internal/app/runtime"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
+	appruntime "feidex/internal/runtime"
 )
 
 // ---------------------------------------------------------------------------

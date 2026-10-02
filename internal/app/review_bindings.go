@@ -7,7 +7,7 @@ import (
 
 	appcore "feidex/internal/app/appcore"
 
-	appreview "feidex/internal/app/review"
+	appreview "feidex/internal/adapter/feishu/review"
 
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/config"

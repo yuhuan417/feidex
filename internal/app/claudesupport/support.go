@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	appapproval "feidex/internal/app/approval"
-	"feidex/internal/app/cardactions"
+	appapproval "feidex/internal/adapter/feishu/approval"
+	"feidex/internal/adapter/feishu/cardactions"
 
+	"feidex/internal/adapter/feishu/pendingforms"
 	appclauderuntime "feidex/internal/app/clauderuntime"
-	"feidex/internal/app/pendingforms"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

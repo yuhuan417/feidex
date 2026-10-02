@@ -4,19 +4,20 @@ package clauderuntime
 
 import (
 	"errors"
+	"feidex/internal/textutil"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	appapproval "feidex/internal/app/approval"
-	apputil "feidex/internal/app/apputil"
-	appdelivery "feidex/internal/app/delivery"
-	apppendingforms "feidex/internal/app/pendingforms"
-	appruntime "feidex/internal/app/runtime"
+	appapproval "feidex/internal/adapter/feishu/approval"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	apppendingforms "feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
+	apputil "feidex/internal/formatutil"
+	appruntime "feidex/internal/runtime"
 )
 
 // CopyPermissionUpdates deep-copies a slice of permission update maps.
@@ -150,7 +151,7 @@ func PlanFilePathFromTool(toolName string, input map[string]interface{}) string 
 	if strings.TrimSpace(toolName) != "Write" {
 		return ""
 	}
-	path := strings.TrimSpace(apputil.FirstNonEmpty(
+	path := strings.TrimSpace(textutil.FirstNonEmpty(
 		apputil.StringValue(input["file_path"]),
 		apputil.StringValue(input["path"]),
 	))
@@ -329,11 +330,11 @@ func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionReq
 	switch strings.TrimSpace(req.ToolName) {
 	case "Bash", "KillShell":
 		presentation.Kind = appapproval.KindCommand
-		presentation.Payload.Request["command"] = strings.TrimSpace(apputil.FirstNonEmpty(apputil.StringValue(req.Input["command"]), apputil.StringValue(req.Input["cmd"])))
+		presentation.Payload.Request["command"] = strings.TrimSpace(textutil.FirstNonEmpty(apputil.StringValue(req.Input["command"]), apputil.StringValue(req.Input["cmd"])))
 		presentation.Body = appapproval.RenderCommandBody(presentation.Payload.Request)
 	case "Write", "Edit", "NotebookEdit":
 		presentation.Kind = appapproval.KindFile
-		path := strings.TrimSpace(apputil.FirstNonEmpty(
+		path := strings.TrimSpace(textutil.FirstNonEmpty(
 			apputil.StringValue(req.Input["file_path"]),
 			apputil.StringValue(req.Input["path"]),
 			apputil.StringValue(req.Input["notebook_path"]),
@@ -351,7 +352,7 @@ func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionReq
 		presentation.Kind = appapproval.KindPermissions
 		presentation.Payload.Permissions = map[string]any{
 			"tool": req.ToolName,
-			"blocked_path": apputil.FirstNonEmpty(func() string {
+			"blocked_path": textutil.FirstNonEmpty(func() string {
 				if req.BlockedPath == nil {
 					return ""
 				}

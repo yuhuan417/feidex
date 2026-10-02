@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/feishu"
 )
 

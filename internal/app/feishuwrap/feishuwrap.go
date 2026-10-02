@@ -4,6 +4,7 @@ package feishuwrap
 
 import (
 	"context"
+	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -336,7 +336,7 @@ func (n *NotifyingFeishuClient) ReplyTextWithID(ctx context.Context, messageID, 
 		capture.Text = strings.TrimSpace(text)
 		capture.Card = nil
 		n.captureMu.Unlock()
-		return apputil.FirstNonEmpty(strings.TrimSpace(capture.ReplyMessageID), strings.TrimSpace(messageID)), nil
+		return textutil.FirstNonEmpty(strings.TrimSpace(capture.ReplyMessageID), strings.TrimSpace(messageID)), nil
 	}
 	n.captureMu.Unlock()
 	id, err := n.Base.ReplyTextWithID(ctx, messageID, text, inThread)
@@ -360,7 +360,7 @@ func (n *NotifyingFeishuClient) ReplyCard(ctx context.Context, messageID string,
 		capture.Card = feishu.CloneCapturedCard(card)
 		capture.Text = ""
 		n.captureMu.Unlock()
-		return apputil.FirstNonEmpty(strings.TrimSpace(capture.ReplyMessageID), strings.TrimSpace(messageID)), nil
+		return textutil.FirstNonEmpty(strings.TrimSpace(capture.ReplyMessageID), strings.TrimSpace(messageID)), nil
 	}
 	n.captureMu.Unlock()
 	id, err := n.Base.ReplyCard(ctx, messageID, card, inThread)

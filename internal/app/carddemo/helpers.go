@@ -3,7 +3,7 @@ package carddemo
 import (
 	"strings"
 
-	appturnitem "feidex/internal/app/turnitem"
+	appturnitem "feidex/internal/adapter/feishu/turnitem"
 )
 
 func NormalizeKind(kind string) string {

@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/textutil"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -280,11 +280,11 @@ func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardA
 	ctx, cancel := context.WithCancel(s.app.Context())
 	op := appworkspacecmd.NewCloneOperation(cancel)
 	mgmt.SetWorkspaceCloneOperation(requestID, op)
-	messageID := apputil.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
+	messageID := textutil.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
 	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusProcessing.String()
 		req.PayloadJSON = mustJSON(payload)
-		req.FeishuMsgID = apputil.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
+		req.FeishuMsgID = textutil.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 	})
 	runAsync(s.app, func() {
@@ -490,11 +490,11 @@ func (s bindingService) completeBindingWorkspaceWorktreeSubmit(action *feishu.Ca
 	ctx, cancel := context.WithCancel(s.app.Context())
 	op := appworkspacecmd.NewCloneOperation(cancel)
 	mgmt.SetWorkspaceCloneOperation(requestID, op)
-	messageID := apputil.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
+	messageID := textutil.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
 	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusProcessing.String()
 		req.PayloadJSON = mustJSON(payload)
-		req.FeishuMsgID = apputil.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
+		req.FeishuMsgID = textutil.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 	})
 	runAsync(s.app, func() {

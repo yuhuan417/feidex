@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/turn"
+	"feidex/internal/adapter/feishu/turn"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"

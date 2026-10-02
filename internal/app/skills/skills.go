@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	appcards "feidex/internal/app/cards"
+	appcards "feidex/internal/adapter/feishu/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )

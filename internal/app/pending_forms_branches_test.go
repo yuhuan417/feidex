@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"feidex/internal/app/pendingforms"
-	appreview "feidex/internal/app/review"
+	"feidex/internal/adapter/feishu/pendingforms"
+	appreview "feidex/internal/adapter/feishu/review"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

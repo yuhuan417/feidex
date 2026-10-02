@@ -1,23 +1,24 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"strings"
 
-	appruntime "feidex/internal/app/runtime"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
 
 const (
-	backendCodex  = appruntime.BackendCodex
-	backendClaude = appruntime.BackendClaude
+	backendCodex  = domainbackend.BackendCodex
+	backendClaude = domainbackend.BackendClaude
 )
 
-type sessionInflightMode = appruntime.SessionInflightMode
+type sessionInflightMode = domainbackend.SessionInflightMode
 
 const (
-	sessionInflightSingle     sessionInflightMode = appruntime.SessionInflightSingle
-	sessionInflightSerialized sessionInflightMode = appruntime.SessionInflightSerialized
-	sessionInflightParallel   sessionInflightMode = appruntime.SessionInflightParallel
+	sessionInflightSingle     sessionInflightMode = domainbackend.SessionInflightSingle
+	sessionInflightSerialized sessionInflightMode = domainbackend.SessionInflightSerialized
+	sessionInflightParallel   sessionInflightMode = domainbackend.SessionInflightParallel
 )
 
 const (
@@ -28,11 +29,11 @@ const (
 )
 
 func sessionInflightModeForBackend(backend string) sessionInflightMode {
-	return appruntime.SessionInflightModeForBackend(backend)
+	return domainbackend.SessionInflightModeForBackend(backend)
 }
 
 func sessionInflightAllowsAdditional(mode sessionInflightMode) bool {
-	return appruntime.SessionInflightAllowsAdditional(mode)
+	return domainbackend.SessionInflightAllowsAdditional(mode)
 }
 
 func setRuntimeBackend(a *App, backend string) {

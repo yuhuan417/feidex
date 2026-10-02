@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

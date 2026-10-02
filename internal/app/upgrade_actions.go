@@ -3,14 +3,14 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/textutil"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
 	appbackend "feidex/internal/app/backend"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/upgraderender"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -164,7 +164,7 @@ func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, ac
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个升级请求"}}, nil
 	}
-	sessionKey := apputil.FirstNonEmpty(actionSessionKey(action), pending.SessionKey)
+	sessionKey := textutil.FirstNonEmpty(actionSessionKey(action), pending.SessionKey)
 	if actionName == h.spec.ActionPrefix+".cancel" {
 		_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -211,7 +211,7 @@ func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, ac
 		}, nil
 	}
 	_ = appState.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
-	messageID := apputil.FirstNonEmpty(strings.TrimSpace(action.MessageID), strings.TrimSpace(pending.FeishuMsgID))
+	messageID := textutil.FirstNonEmpty(strings.TrimSpace(action.MessageID), strings.TrimSpace(pending.FeishuMsgID))
 	go h.runUpgrade(messageID, sessionKey, payload)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: h.spec.Name + " 升级已开始"},

@@ -2,14 +2,14 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/apputil"
 	domainsubmission "feidex/internal/domain/submission"
+	apputil "feidex/internal/formatutil"
 
-	appdelivery "feidex/internal/app/delivery"
-	"feidex/internal/app/quietmode"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/adapter/feishu/quietmode"
 	"strings"
 
-	appcards "feidex/internal/app/cards"
+	appcards "feidex/internal/adapter/feishu/cards"
 )
 
 func sendFinalMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool) []string {

@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	appbackend "feidex/internal/app/backend"
 	apppathpick "feidex/internal/app/pathpick"
-	appruntime "feidex/internal/app/runtime"
 	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/daemon"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/release"
+	appruntime "feidex/internal/runtime"
 
 	"context"
 	"errors"

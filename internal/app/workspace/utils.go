@@ -3,6 +3,7 @@ package workspace
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"net/url"
 	"path"
@@ -11,8 +12,8 @@ import (
 	"strings"
 	"unicode"
 
-	"feidex/internal/app/apputil"
 	"feidex/internal/codexrpc"
+	apputil "feidex/internal/formatutil"
 	"feidex/internal/state"
 )
 
@@ -71,7 +72,7 @@ func CloneRepoName(repoURL string) (string, error) {
 			pathPart = repoURL[idx+1:]
 		}
 	} else if parsed, err := url.Parse(repoURL); err == nil {
-		pathPart = apputil.FirstNonEmpty(strings.TrimSpace(parsed.Path), strings.TrimSpace(parsed.Opaque))
+		pathPart = textutil.FirstNonEmpty(strings.TrimSpace(parsed.Path), strings.TrimSpace(parsed.Opaque))
 	}
 	base := strings.TrimSpace(strings.TrimSuffix(path.Base(strings.TrimSuffix(pathPart, "/")), ".git"))
 	if base == "" || base == "." || base == "/" {
@@ -218,7 +219,7 @@ func SuggestedWorktreeBranch(baseProject, botName, workspaceID string) string {
 
 // NewTakeoverNotice returns the notice text for workspace takeover.
 func NewTakeoverNotice(targetDir string) string {
-	targetDir = apputil.FirstNonEmpty(strings.TrimSpace(targetDir), "-")
+	targetDir = textutil.FirstNonEmpty(strings.TrimSpace(targetDir), "-")
 	return "clone 目标目录已存在，可直接新建工作区接管。\n\n目录已预填为 `" + targetDir + "`，并已带上建议的 `workspace_id`。"
 }
 
@@ -247,7 +248,7 @@ func NewTakeoverPayload(workspaceID, targetDir string) NewPayload {
 // NewTakeoverPayloadWithNotice builds a NewPayload for workspace takeover with custom notice.
 func NewTakeoverPayloadWithNotice(workspaceID, targetDir, notice string) NewPayload {
 	targetDir = strings.TrimSpace(targetDir)
-	suggestedID := apputil.FirstNonEmpty(strings.TrimSpace(workspaceID), SuggestedIDFromDir(targetDir))
+	suggestedID := textutil.FirstNonEmpty(strings.TrimSpace(workspaceID), SuggestedIDFromDir(targetDir))
 	return NewPayload{
 		RootPath:    "/",
 		SelectedCWD: targetDir,

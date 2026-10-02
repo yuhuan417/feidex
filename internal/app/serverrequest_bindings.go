@@ -3,17 +3,17 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"feidex/internal/app/apputil"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	apputil "feidex/internal/formatutil"
 	"log/slog"
 	"strings"
 
-	appreview "feidex/internal/app/review"
+	appreview "feidex/internal/adapter/feishu/review"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/serverrequest"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

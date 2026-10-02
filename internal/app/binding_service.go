@@ -3,6 +3,7 @@ package app
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 
 	"context"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"strings"
 	"unicode"
 
-	"feidex/internal/app/apputil"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -406,7 +406,7 @@ func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Work
 	}
 	s.app.cfg.Workspaces = append(s.app.cfg.Workspaces, config.Workspace{
 		ID:             id,
-		Name:           apputil.FirstNonEmpty(strings.TrimSpace(name), id),
+		Name:           textutil.FirstNonEmpty(strings.TrimSpace(name), id),
 		Cwd:            absCWD,
 		ApprovalPolicy: "never",
 		SandboxMode:    "danger-full-access",
@@ -493,8 +493,8 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		workspaceLine = "workspace: `" + binding.WorkspaceID + "` (配置不存在)"
 	}
 	lines := []string{
-		"frontend: `" + apputil.FirstNonEmpty(s.app.FrontendID(), "default") + "`",
-		"backend: `" + apputil.FirstNonEmpty(configuredBackend(s.app), "unset") + "`",
+		"frontend: `" + textutil.FirstNonEmpty(s.app.FrontendID(), "default") + "`",
+		"backend: `" + textutil.FirstNonEmpty(configuredBackend(s.app), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
 		statusLine,
 		"primary: `" + onOffLabel(isGroupPrimary(s.app, binding.ChatType, binding.ChatID)) + "`",
@@ -537,8 +537,8 @@ func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMes
 	chatType, chatID, rootMessageID, userID = parseSessionKeyMeta(sessionKey)
 	if chatType == "" || chatID == "" {
 		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
-		chatType = apputil.FirstNonEmpty(chatType, inferredChatType)
-		chatID = apputil.FirstNonEmpty(chatID, inferredChatID)
+		chatType = textutil.FirstNonEmpty(chatType, inferredChatType)
+		chatID = textutil.FirstNonEmpty(chatID, inferredChatID)
 	}
 	return chatType, chatID, rootMessageID, userID
 }

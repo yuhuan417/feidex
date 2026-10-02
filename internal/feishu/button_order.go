@@ -1,12 +1,15 @@
 package feishu
 
-import "strings"
+import (
+	"feidex/internal/application/presentation"
+	"strings"
+)
 
 // MenuBackButtonText is the only label a menu control may use when it returns to
 // the previous menu level. Menu cards must not name the destination level
 // instead of the shared label: the breadcrumb already shows where the control
 // leads, and both back-button orderings below match on this exact text.
-const MenuBackButtonText = "返回上一级"
+const MenuBackButtonText = presentation.MenuBackButtonText
 
 // IsMenuBackButtonText reports whether text is the shared menu back label.
 func IsMenuBackButtonText(text string) bool {

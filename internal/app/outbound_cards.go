@@ -5,7 +5,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 
-	appcards "feidex/internal/app/cards"
+	appcards "feidex/internal/adapter/feishu/cards"
 
 	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/feishu"

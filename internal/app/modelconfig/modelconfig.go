@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"feidex/internal/app/cards"
-	"feidex/internal/app/runtime"
+	"feidex/internal/adapter/feishu/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )

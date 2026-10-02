@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/apputil"
 	domainsubmission "feidex/internal/domain/submission"
+	apputil "feidex/internal/formatutil"
 
-	appdelivery "feidex/internal/app/delivery"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
 	"fmt"
 	"strings"
 )

@@ -4,12 +4,11 @@ package autoretry
 import (
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
-	apputil "feidex/internal/app/apputil"
 )
 
 const (
@@ -119,16 +118,16 @@ func RefreshState(state *RetryState, sess *conversation.Session, sub *domainsubm
 		state.ThreadID = strings.TrimSpace(threadID)
 	}
 	if sub != nil {
-		state.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), state.WorkspaceID)
-		state.ChatID = apputil.FirstNonEmpty(strings.TrimSpace(sub.ChatID), state.ChatID)
-		state.TriggerMessageID = apputil.FirstNonEmpty(strings.TrimSpace(sub.TriggerMessageID), state.TriggerMessageID)
+		state.WorkspaceID = textutil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), state.WorkspaceID)
+		state.ChatID = textutil.FirstNonEmpty(strings.TrimSpace(sub.ChatID), state.ChatID)
+		state.TriggerMessageID = textutil.FirstNonEmpty(strings.TrimSpace(sub.TriggerMessageID), state.TriggerMessageID)
 		if len(sub.SourceRootMessageIDs) > 0 {
 			state.SourceRootMessageIDs = append([]string(nil), sub.SourceRootMessageIDs...)
 		}
 	}
 	if sess != nil {
-		state.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), state.WorkspaceID)
-		state.ChatID = apputil.FirstNonEmpty(strings.TrimSpace(sess.ChatID), state.ChatID)
+		state.WorkspaceID = textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), state.WorkspaceID)
+		state.ChatID = textutil.FirstNonEmpty(strings.TrimSpace(sess.ChatID), state.ChatID)
 		if rootMessageID := strings.TrimSpace(sess.RootMessageID); len(state.SourceRootMessageIDs) == 0 && rootMessageID != "" {
 			state.SourceRootMessageIDs = []string{rootMessageID}
 		}

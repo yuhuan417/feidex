@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	appruntime "feidex/internal/app/runtime"
+	appruntime "feidex/internal/runtime"
 )
 
 // BackendKey identifies a backend runtime.

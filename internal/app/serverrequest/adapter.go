@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/app/claudesupport"
-	"feidex/internal/app/pendingforms"
-	appruntime "feidex/internal/app/runtime"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
 

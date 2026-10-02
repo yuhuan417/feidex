@@ -3,6 +3,7 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
@@ -11,13 +12,13 @@ import (
 	"testing"
 
 	appcore "feidex/internal/app/appcore"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/config"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
 
 func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenBackendIsClaude(t *testing.T) {
-	app, session, _ := newTestWorkspaceApp(t, appruntime.BackendClaude)
+	app, session, _ := newTestWorkspaceApp(t, domainbackend.BackendClaude)
 	claude := &testClaudeCore{ensureSessionID: "claude-thread-new"}
 	liveThreadID := ""
 
@@ -60,7 +61,7 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenBackendIsClaude(t *testing
 }
 
 func TestStartWorkspaceThreadReturnsErrorWhenCodexClientMissing(t *testing.T) {
-	app, session, ws := newTestWorkspaceApp(t, appruntime.BackendCodex)
+	app, session, ws := newTestWorkspaceApp(t, domainbackend.BackendCodex)
 	threadSvc := newTestThreadService(app, session, threadServiceOptions{
 		codexErr: errors.New("codex client not initialized"),
 	})

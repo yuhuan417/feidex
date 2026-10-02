@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	appapprovalview "feidex/internal/app/approvalview"
+	appapprovalview "feidex/internal/adapter/feishu/approvalview"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

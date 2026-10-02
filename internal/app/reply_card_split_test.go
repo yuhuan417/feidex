@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
-	appdelivery "feidex/internal/app/delivery"
-	"feidex/internal/app/turnitem"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"

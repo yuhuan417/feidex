@@ -1,9 +1,9 @@
 package app
 
 import (
+	"feidex/internal/textutil"
 	"strings"
 
-	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 )
 
@@ -26,7 +26,7 @@ func interruptStatusButtons(sessionKey, parentAction, targetTurnID string, inclu
 			Value: value,
 		})
 	}
-	backAction := apputil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools")
+	backAction := textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools")
 	buttons = append(buttons, feishu.Button{
 		Text: feishu.MenuBackButtonText,
 		Type: "default",
@@ -42,7 +42,7 @@ func renderInterruptPreparingCard(a *App, sessionKey, parentAction string) map[s
 	return a.feishu.SimpleStatusCard(
 		planModeTitleForSession(a, sessionKey, "中断任务"),
 		"blue",
-		menuCardBodyForSession(a, sessionKey, apputil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), "正在向 Claude 请求中断当前任务，请稍候。\n\n这张卡片会自动刷新。"),
+		menuCardBodyForSession(a, sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), "正在向 Claude 请求中断当前任务，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 	)
 }
@@ -51,7 +51,7 @@ func renderInterruptResultCard(a *App, sessionKey, parentAction, text string) ma
 	return a.feishu.SimpleStatusCard(
 		planModeTitleForSession(a, sessionKey, "中断任务"),
 		"green",
-		menuCardBodyForSession(a, sessionKey, apputil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), apputil.FirstNonEmpty(strings.TrimSpace(text), "已请求中断当前任务。")),
+		menuCardBodyForSession(a, sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), textutil.FirstNonEmpty(strings.TrimSpace(text), "已请求中断当前任务。")),
 		interruptStatusButtons(sessionKey, parentAction, "", false),
 	)
 }
@@ -64,7 +64,7 @@ func renderInterruptFailedCard(a *App, sessionKey, parentAction, targetTurnID, e
 	return a.feishu.SimpleStatusCard(
 		planModeTitleForSession(a, sessionKey, "中断任务"),
 		"orange",
-		menuCardBodyForSession(a, sessionKey, apputil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), body),
+		menuCardBodyForSession(a, sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), body),
 		interruptStatusButtons(sessionKey, parentAction, targetTurnID, true),
 	)
 }

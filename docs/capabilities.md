@@ -14,7 +14,7 @@
 - `internal/app/menu_specs.go`
 - `internal/app/menu_actions.go`
 - `internal/app/conversation_terms.go`
-- `internal/app/features/data.go`
+- `internal/application/features/data.go`
 - `internal/app/feature_registry_bindings_tools.go`
 - `internal/app/action_registry_workspace.go`
 - `internal/app/backendcaps/capability.go`

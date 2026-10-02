@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/quietmode"
+	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 

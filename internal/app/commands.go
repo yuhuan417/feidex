@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/apputil"
-	appdebugview "feidex/internal/app/debugview"
+	appdebugview "feidex/internal/adapter/feishu/debugview"
 	"feidex/internal/feishu"
 )
 
@@ -118,14 +118,14 @@ func renderContextMenuCard(a *App, sessionKey string) map[string]any {
 
 func renderSystemMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
-	backend := apputil.FirstNonEmpty(configuredBackend(a), "unset")
+	backend := textutil.FirstNonEmpty(configuredBackend(a), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + appdebugview.RenderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForBackendForSession(a, sessionKey, configuredBackend(a), spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }
 
 func renderBackendMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.backend")
-	backend := apputil.FirstNonEmpty(configuredBackend(a), "unset")
+	backend := textutil.FirstNonEmpty(configuredBackend(a), "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`"
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForBackendForSession(a, sessionKey, configuredBackend(a), spec.Action, body), renderGroupMenuButtons(configuredBackend(a), spec.Action, sessionKey))
 }

@@ -3,11 +3,11 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
@@ -16,11 +16,11 @@ func forkClaudeActiveConversation(a *App, sessionKey string, sess *conversation.
 	if a == nil || a.claude == nil {
 		return "", fmt.Errorf("claude backend not initialized")
 	}
-	workspaceID := apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
 	model := effectiveClaudeModel(a, sess, ws)
 	currentThreadID := strings.TrimSpace(sess.ActiveThreadID)
-	currentName := apputil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude")
-	currentPreview := apputil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name)
+	currentName := textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude")
+	currentPreview := textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name)
 
 	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
 	defer cancel()
@@ -39,7 +39,7 @@ func forkCodexActiveConversation(a *App, sessionKey string, sess *conversation.S
 	if err != nil {
 		return "", err
 	}
-	workspaceID := apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(ws.ID), defaultWorkspaceID(a))
 	params := map[string]any{
 		"threadId":       strings.TrimSpace(sess.ActiveThreadID),
 		"cwd":            ws.Cwd,

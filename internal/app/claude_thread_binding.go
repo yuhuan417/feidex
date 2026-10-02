@@ -1,9 +1,9 @@
 package app
 
 import (
-	"feidex/internal/app/apputil"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"strings"
 )
 
@@ -80,7 +80,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 		conversation.EnsureActiveOperations(current)
 		for _, op := range targetOps {
 			conversation.UpsertActiveOperation(current, conversation.SessionActiveOperation{
-				Kind:         apputil.FirstNonEmpty(strings.TrimSpace(op.Kind), conversation.OpKindSubmission),
+				Kind:         textutil.FirstNonEmpty(strings.TrimSpace(op.Kind), conversation.OpKindSubmission),
 				SubmissionID: strings.TrimSpace(op.SubmissionID),
 				ThreadID:     threadID,
 				TurnID:       strings.TrimSpace(op.TurnID),

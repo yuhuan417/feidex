@@ -1,9 +1,9 @@
 package app
 
 import (
-	"feidex/internal/app/apputil"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
+	apputil "feidex/internal/formatutil"
 	"strings"
 )
 

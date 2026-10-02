@@ -4,10 +4,10 @@ import (
 	"context"
 	domainsubmission "feidex/internal/domain/submission"
 
-	"feidex/internal/app/apputil"
-	appdelivery "feidex/internal/app/delivery"
-	"feidex/internal/app/quietmode"
-	"feidex/internal/app/turnitem"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/adapter/feishu/quietmode"
+	"feidex/internal/adapter/feishu/turnitem"
+	apputil "feidex/internal/formatutil"
 	"strings"
 	"time"
 )

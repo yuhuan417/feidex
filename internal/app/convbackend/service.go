@@ -14,13 +14,13 @@ import (
 
 	appcore "feidex/internal/app/appcore"
 
-	backendcaps "feidex/internal/app/backendcaps"
+	backendcaps "feidex/internal/application/backendcaps"
 
-	appcards "feidex/internal/app/cards"
+	appcards "feidex/internal/adapter/feishu/cards"
 
-	menutypes "feidex/internal/app/menutypes"
+	menutypes "feidex/internal/application/features"
 
-	appthreadview "feidex/internal/app/threadview"
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
@@ -260,7 +260,7 @@ func menuBreadcrumbLabelsForBackend(action, backend string) []string {
 	}
 	labels := []string{}
 	for i := 0; action != "" && i < 16; i++ {
-		node, ok := menutypes.MenuNodes[action]
+		node, ok := menutypes.MenuNodes()[action]
 		if !ok {
 			break
 		}

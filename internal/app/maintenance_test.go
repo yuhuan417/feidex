@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/app/attachments"
-	"feidex/internal/app/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

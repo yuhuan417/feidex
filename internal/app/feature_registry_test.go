@@ -4,8 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	appfeatures "feidex/internal/app/features"
-	"feidex/internal/app/menutypes"
+	appfeatures "feidex/internal/application/features"
 )
 
 func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
@@ -44,7 +43,7 @@ func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
 			}
 		}
 		for _, item := range spec.MenuItems {
-			if item.Kind == menutypes.MenuItemBack {
+			if item.Kind == appfeatures.MenuItemBack {
 				continue
 			}
 			labels := menuButtonsByGroup[item.GroupAction]

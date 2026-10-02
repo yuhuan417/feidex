@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	appreview "feidex/internal/adapter/feishu/review"
 	"feidex/internal/app/goalcmd"
-	appreview "feidex/internal/app/review"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/daemon"

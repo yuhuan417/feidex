@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"time"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 	appcore "feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	appconvbackend "feidex/internal/app/convbackend"
-	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

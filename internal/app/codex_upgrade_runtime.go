@@ -2,14 +2,14 @@ package app
 
 import (
 	appbackend "feidex/internal/app/backend"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/upgraderender"
+	appruntime "feidex/internal/runtime"
+	"feidex/internal/textutil"
 
 	"context"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
 	appcodexruntime "feidex/internal/app/codexruntime"
 	"feidex/internal/feishu"
 )
@@ -77,12 +77,12 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 		return
 	}
 	if !probe.Supported {
-		finalize("failed", "当前环境不支持 Codex 自升级: "+apputil.FirstNonEmpty(probe.Reason, "unknown"))
+		finalize("failed", "当前环境不支持 Codex 自升级: "+textutil.FirstNonEmpty(probe.Reason, "unknown"))
 		return
 	}
-	previousVersion := apputil.FirstNonEmpty(probe.CurrentVersion, payload.CurrentVersion)
-	targetVersion := apputil.FirstNonEmpty(payload.TargetVersion, "latest")
-	updateCommand := apputil.FirstNonEmpty(probe.UpdateCommand, payload.UpdateCommand, "update")
+	previousVersion := textutil.FirstNonEmpty(probe.CurrentVersion, payload.CurrentVersion)
+	targetVersion := textutil.FirstNonEmpty(payload.TargetVersion, "latest")
+	updateCommand := textutil.FirstNonEmpty(probe.UpdateCommand, payload.UpdateCommand, "update")
 	appbackend.NewMaintenanceStateService(s.app).UpdateCodexUpgrade(func(snapshot *appbackend.BackendUpgradeSnapshot) {
 		snapshot.CurrentVersion = previousVersion
 		snapshot.PreviousVersion = previousVersion
@@ -94,7 +94,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 		return
 	}
 
-	update("installing", "正在运行 Codex 自升级命令 `"+apputil.FirstNonEmpty(probe.Command, "codex")+" "+updateCommand+"`")
+	update("installing", "正在运行 Codex 自升级命令 `"+textutil.FirstNonEmpty(probe.Command, "codex")+" "+updateCommand+"`")
 	ctx, cancel = context.WithTimeout(s.app.Context(), 5*time.Minute)
 	err = manager.InstallVersion(ctx, cliSelfUpdateInstallTarget)
 	cancel()
@@ -108,7 +108,7 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 	cancel()
 	installedVersion := previousVersion
 	if probeErr == nil {
-		installedVersion = apputil.FirstNonEmpty(afterProbe.CurrentVersion, installedVersion)
+		installedVersion = textutil.FirstNonEmpty(afterProbe.CurrentVersion, installedVersion)
 	}
 	if strings.TrimSpace(installedVersion) != "" {
 		appbackend.NewMaintenanceStateService(s.app).UpdateCodexUpgrade(func(snapshot *appbackend.BackendUpgradeSnapshot) {
@@ -138,10 +138,10 @@ func (s backendUpgradeService) runCodexUpgradeOperation(messageID, sessionKey st
 		return
 	}
 	if switched {
-		finalize("success", "Codex 自升级成功，已切换到 `"+apputil.FirstNonEmpty(installedVersion, targetVersion)+"`")
+		finalize("success", "Codex 自升级成功，已切换到 `"+textutil.FirstNonEmpty(installedVersion, targetVersion)+"`")
 		return
 	}
-	finalize("success", "Codex 自升级成功，已验证 `"+apputil.FirstNonEmpty(installedVersion, targetVersion)+"` 可用；当前 frontend 未启用 Codex backend")
+	finalize("success", "Codex 自升级成功，已验证 `"+textutil.FirstNonEmpty(installedVersion, targetVersion)+"` 可用；当前 frontend 未启用 Codex backend")
 }
 
 func (s backendUpgradeService) startVerifiedCodexClient(ctx context.Context) (CodexClient, error) {
@@ -175,7 +175,7 @@ func (s backendUpgradeService) beginCodexRestartOperation() (appbackend.BackendR
 		Running:        true,
 		Phase:          "preflight",
 		Message:        "正在校验重启前置条件",
-		CurrentVersion: apputil.FirstNonEmpty(appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState().CurrentVersion, appbackend.NewMaintenanceStateService(s.app).CodexRestartState().CurrentVersion),
+		CurrentVersion: textutil.FirstNonEmpty(appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState().CurrentVersion, appbackend.NewMaintenanceStateService(s.app).CodexRestartState().CurrentVersion),
 	}
 	if !appbackend.NewMaintenanceStateService(s.app).BeginCodexRestart(snapshot) {
 		return appbackend.BackendRestartSnapshot{}, appbackend.ErrString("Codex 正在维护中，请稍后再试")
@@ -209,7 +209,7 @@ func (s backendUpgradeService) runCodexRestartOperation(messageID, sessionKey st
 		return
 	}
 	appbackend.NewMaintenanceStateService(s.app).UpdateCodexRestart(func(snapshot *appbackend.BackendRestartSnapshot) {
-		snapshot.CurrentVersion = apputil.FirstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
+		snapshot.CurrentVersion = textutil.FirstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
 	})
 	if reason := appbackend.NewMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		finalize("failed", "重启前检查失败: "+reason)

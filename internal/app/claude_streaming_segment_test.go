@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/app/turn"
+	"feidex/internal/adapter/feishu/turn"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 )

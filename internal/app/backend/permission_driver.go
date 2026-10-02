@@ -1,18 +1,19 @@
 package backend
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
+	"feidex/internal/adapter/feishu/cardactions"
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 	appcore "feidex/internal/app/appcore"
-	"feidex/internal/app/cardactions"
-	appruntime "feidex/internal/app/runtime"
-	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -22,12 +23,12 @@ type claudeConversationDriver struct{}
 type codexPermissionDriver struct{}
 type claudePermissionDriver struct{}
 
-func (codexDriver) Kind() string  { return appruntime.BackendCodex }
-func (claudeDriver) Kind() string { return appruntime.BackendClaude }
+func (codexDriver) Kind() string  { return domainbackend.BackendCodex }
+func (claudeDriver) Kind() string { return domainbackend.BackendClaude }
 
 func (codexDriver) Capabilities() CapabilitySet {
 	return CapabilitySet{
-		Kind: appruntime.BackendCodex,
+		Kind: domainbackend.BackendCodex,
 		Conversation: ConversationCapabilities{
 			Slash:        "/thread",
 			Noun:         "线程",
@@ -41,7 +42,7 @@ func (codexDriver) Capabilities() CapabilitySet {
 
 func (claudeDriver) Capabilities() CapabilitySet {
 	return CapabilitySet{
-		Kind: appruntime.BackendClaude,
+		Kind: domainbackend.BackendClaude,
 		Conversation: ConversationCapabilities{
 			Slash:        "/session",
 			Noun:         "会话",

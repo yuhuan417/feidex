@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
 	appbackend "feidex/internal/app/backend"
 
-	apppendingforms "feidex/internal/app/pendingforms"
-	"feidex/internal/app/quietmode"
-	"feidex/internal/app/turnitem"
+	apppendingforms "feidex/internal/adapter/feishu/pendingforms"
+	"feidex/internal/adapter/feishu/quietmode"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"

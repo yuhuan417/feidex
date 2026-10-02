@@ -2,13 +2,13 @@ package claudesession
 
 import (
 	"bufio"
+	"feidex/internal/textutil"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"feidex/internal/app/apputil"
-	appruntime "feidex/internal/app/runtime"
+	appruntime "feidex/internal/runtime"
 )
 
 // FindSessionFile locates a Claude session JSONL file by session ID.
@@ -246,7 +246,7 @@ func historyInputPreview(inputs []string) string {
 		return ""
 	}
 	if len(inputs) == 1 {
-		return apputil.Truncate(inputs[0], 72)
+		return textutil.Truncate(inputs[0], 72)
 	}
-	return apputil.Truncate(inputs[0], 56) + fmt.Sprintf(" 等 %d 条", len(inputs))
+	return textutil.Truncate(inputs[0], 56) + fmt.Sprintf(" 等 %d 条", len(inputs))
 }

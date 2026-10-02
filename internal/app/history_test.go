@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	appdelivery "feidex/internal/app/delivery"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
 	apphistorycmd "feidex/internal/app/historycmd"
 	"feidex/internal/codexrpc"
 )

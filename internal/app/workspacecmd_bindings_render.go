@@ -2,12 +2,12 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/apputil"
 	apppathpick "feidex/internal/app/pathpick"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
@@ -90,7 +90,7 @@ func pendingBindingMessagePreview(pending *state.AgentBindingPendingMessage) str
 	if pending == nil {
 		return ""
 	}
-	preview := apputil.Truncate(strings.TrimSpace(pending.Text), 80)
+	preview := textutil.Truncate(strings.TrimSpace(pending.Text), 80)
 	if preview == "" && len(pending.Attachments) > 0 {
 		preview = fmt.Sprintf("%d 个附件", len(pending.Attachments))
 	}

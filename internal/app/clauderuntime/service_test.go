@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
+	appruntime "feidex/internal/runtime"
 )
 
 func TestWithClaudeModelEnv(t *testing.T) {

@@ -347,7 +347,7 @@ Codex 的标准行为是“清空当前上下文，开一个新的 session/threa
 turn stream / lifecycle:
 
 - `internal/app/turnstream/service.go`
-- `internal/app/turnlifecycle/service.go`
+- `internal/application/turn/service.go`
 
 本地 pending 与卡片动作:
 

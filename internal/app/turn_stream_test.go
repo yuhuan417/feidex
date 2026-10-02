@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"

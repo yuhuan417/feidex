@@ -5,9 +5,9 @@ import (
 
 	"context"
 	"encoding/json"
-	"feidex/internal/app/apputil"
 	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/domain/conversation"
+	apputil "feidex/internal/formatutil"
 	"log/slog"
 	"strings"
 

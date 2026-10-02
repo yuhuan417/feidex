@@ -211,7 +211,7 @@ internal/
 - [internal/codexrpc](/home/yuhuan/feidex/internal/codexrpc) 不应该继续直接暴露到 `internal/app`。
 - Claude backend 最好也有一层“原始协议客户端”和“一层产品 adapter”分离，这样后续协议漂移时影响面更小。
 - [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go) 最终应演进成 backend-neutral router，而不是继续硬编码 Codex 方法名。
-- `internal/app/features/data.go` / `internal/app/feature_registry_bindings.go` 这类能力注册层不是可选装饰，而是防止“最后只剩交集能力”的关键结构。
+- `internal/application/features/data.go` / `internal/app/feature_registry_bindings.go` 这类能力注册层不是可选装饰，而是防止“最后只剩交集能力”的关键结构。
 
 ### backend-neutral 契约
 

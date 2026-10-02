@@ -1,9 +1,9 @@
 package reviewcmd
 
 import (
+	"feidex/internal/textutil"
 	"strings"
 
-	apputil "feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -45,7 +45,7 @@ func renderReviewFailureCard(a App, sessionKey, errText, retryAction string) map
 }
 
 func renderReviewResultCard(a App, sessionKey, text string) map[string]any {
-	return a.ReviewFeishu().SimpleStatusCard("代码审查", "green", a.ReviewMenuCardBody("menu.review", apputil.FirstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
+	return a.ReviewFeishu().SimpleStatusCard("代码审查", "green", a.ReviewMenuCardBody("menu.review", textutil.FirstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
 }
 
 func CompleteMenuReviewUncommitted(a App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

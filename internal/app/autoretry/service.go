@@ -5,14 +5,13 @@ import (
 	"context"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
-
-	apputil "feidex/internal/app/apputil"
 
 	appbackend "feidex/internal/app/backend"
 
@@ -323,7 +322,7 @@ func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, upda
 	if updatedSess == nil || strings.TrimSpace(updatedSess.ActiveThreadID) != threadID || strings.TrimSpace(updatedSess.ActiveThreadID) == "" {
 		return false
 	}
-	sessionStatus := conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), conversation.SessionStatusIdle.String()))
+	sessionStatus := conversation.NormalizeSessionStatus(textutil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), conversation.SessionStatusIdle.String()))
 	if s.app.SessionHasActiveWork(updatedSess) || (sessionStatus != conversation.SessionStatusIdle && sessionStatus != conversation.SessionStatusQueued) {
 		return false
 	}
@@ -421,7 +420,7 @@ func (s Service) RunAutoRetryTimer(sessionKey string, expectedSeq uint64) {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "检测到当前线程已有新任务，自动重试结束。")
 		return
 	}
-	sessionStatus := conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String()))
+	sessionStatus := conversation.NormalizeSessionStatus(textutil.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String()))
 	if sessionStatus != conversation.SessionStatusIdle && sessionStatus != conversation.SessionStatusQueued {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不再处于空闲态。")
 		return
@@ -487,12 +486,12 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.
 	if !s.app.SessionHasLiveThread(sessionKey, snapshot.ThreadID) {
 		return nil, fmt.Errorf("active thread is not live")
 	}
-	workspaceID := apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(snapshot.WorkspaceID), appcore.DefaultWorkspaceID(s.app))
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(snapshot.WorkspaceID), appcore.DefaultWorkspaceID(s.app))
 	ws := config.FindWorkspace(s.app.Config(), workspaceID)
 	if ws == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
-	triggerMessageID := apputil.FirstNonEmpty(strings.TrimSpace(snapshot.TriggerMessageID), strings.TrimSpace(sess.RootMessageID))
+	triggerMessageID := textutil.FirstNonEmpty(strings.TrimSpace(snapshot.TriggerMessageID), strings.TrimSpace(sess.RootMessageID))
 	sourceRootMessageIDs := append([]string(nil), snapshot.SourceRootMessageIDs...)
 	if len(sourceRootMessageIDs) == 0 && strings.TrimSpace(sess.RootMessageID) != "" {
 		sourceRootMessageIDs = []string{strings.TrimSpace(sess.RootMessageID)}
@@ -502,7 +501,7 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.
 		BindingID:            strings.TrimSpace(sess.BindingID),
 		WorkspaceID:          workspaceID,
 		UserID:               strings.TrimSpace(sess.OwnerUserID),
-		ChatID:               apputil.FirstNonEmpty(strings.TrimSpace(sess.ChatID), strings.TrimSpace(snapshot.ChatID)),
+		ChatID:               textutil.FirstNonEmpty(strings.TrimSpace(sess.ChatID), strings.TrimSpace(snapshot.ChatID)),
 		TriggerMessageID:     triggerMessageID,
 		SourceRootMessageIDs: uniqueStrings(sourceRootMessageIDs),
 		InputText:            "继续",
@@ -542,7 +541,7 @@ func (s Service) MarkAutoRetryAttemptStarted(sessionKey string, sub *domainsubmi
 	}
 	st.RetryCount++
 	st.BackoffStep++
-	RefreshState(st, s.app.AppState().Session(sessionKey), sub, apputil.FirstNonEmpty(strings.TrimSpace(sub.ThreadID), st.ThreadID))
+	RefreshState(st, s.app.AppState().Session(sessionKey), sub, textutil.FirstNonEmpty(strings.TrimSpace(sub.ThreadID), st.ThreadID))
 	snapshot = CloneState(st)
 	tracker.Mu.Unlock()
 	s.DeliverAutoRetryCard(snapshot, s.RenderAutoRetryLoopCard(snapshot, "running", "已自动发送“继续”，等待新的任务结果。"))
@@ -590,7 +589,7 @@ func (s Service) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, noti
 	}
 	tracker.Mu.Unlock()
 	if canceled {
-		s.DeliverAutoRetryCard(snapshot, s.RenderAutoRetryLoopCard(snapshot, "stopped", apputil.FirstNonEmpty(strings.TrimSpace(notice), "已停止自动重试。")))
+		s.DeliverAutoRetryCard(snapshot, s.RenderAutoRetryLoopCard(snapshot, "stopped", textutil.FirstNonEmpty(strings.TrimSpace(notice), "已停止自动重试。")))
 	}
 	return canceled
 }
@@ -601,7 +600,7 @@ func (s Service) CancelAllAutoRetry(notice string) int {
 	if s.app == nil {
 		return 0
 	}
-	notice = apputil.FirstNonEmpty(strings.TrimSpace(notice), "已关闭自动重试。")
+	notice = textutil.FirstNonEmpty(strings.TrimSpace(notice), "已关闭自动重试。")
 	type pendingCard struct {
 		snapshot RetryState
 	}
@@ -700,7 +699,7 @@ func (s Service) DeliverAutoRetryCard(snapshot RetryState, card map[string]any) 
 // RenderAutoRetryLoopCard builds the card for the retry loop status display.
 func (s Service) RenderAutoRetryLoopCard(snapshot RetryState, phase, notice string) map[string]any {
 	lines := []string{
-		"当前线程: `" + apputil.FirstNonEmpty(strings.TrimSpace(snapshot.ThreadID), "-") + "`",
+		"当前线程: `" + textutil.FirstNonEmpty(strings.TrimSpace(snapshot.ThreadID), "-") + "`",
 		"累计已重试: `" + fmt.Sprintf("%d", snapshot.RetryCount) + "` 次",
 	}
 	switch strings.TrimSpace(phase) {
@@ -717,8 +716,8 @@ func (s Service) RenderAutoRetryLoopCard(snapshot RetryState, phase, notice stri
 	if text := strings.TrimSpace(notice); text != "" {
 		lines = append([]string{text, ""}, lines...)
 	}
-	failure := apputil.FirstNonEmpty(strings.TrimSpace(snapshot.LastError), "后端未提供具体错误信息。")
-	lines = append(lines, "", "最近一次失败原因:\n"+apputil.Truncate(failure, 2000))
+	failure := textutil.FirstNonEmpty(strings.TrimSpace(snapshot.LastError), "后端未提供具体错误信息。")
+	lines = append(lines, "", "最近一次失败原因:\n"+textutil.Truncate(failure, 2000))
 	lines = append(lines, "", "如需终止，请发送 `/stop`。")
 	color := "blue"
 	switch strings.TrimSpace(phase) {
@@ -738,8 +737,8 @@ func (s Service) RenderAutoRetryLoopCard(snapshot RetryState, phase, notice stri
 func (s Service) RenderAutoRetryConfigCard(sessionKey string) map[string]any {
 	enabled := s.AutoRetryEnabled()
 	lines := []string{
-		"当前 frontend: `" + apputil.FirstNonEmpty(strings.TrimSpace(s.app.FrontendID()), config.DefaultFrontendID) + "`",
-		"当前 backend: `" + apputil.FirstNonEmpty(appcore.ConfiguredBackend(s.app), "unset") + "`",
+		"当前 frontend: `" + textutil.FirstNonEmpty(strings.TrimSpace(s.app.FrontendID()), config.DefaultFrontendID) + "`",
+		"当前 backend: `" + textutil.FirstNonEmpty(appcore.ConfiguredBackend(s.app), "unset") + "`",
 		"开关状态: `" + map[bool]string{true: "on", false: "off"}[enabled] + "`",
 		"",
 		"当 turn 终态为 `failed` 且当前 session 仍保留活动线程时，会按“继续”自动重试。",
@@ -750,7 +749,7 @@ func (s Service) RenderAutoRetryConfigCard(sessionKey string) map[string]any {
 		lines = append(lines,
 			"",
 			"当前 session 正在自动重试中。",
-			"当前线程: `"+apputil.FirstNonEmpty(strings.TrimSpace(snapshot.ThreadID), "-")+"`",
+			"当前线程: `"+textutil.FirstNonEmpty(strings.TrimSpace(snapshot.ThreadID), "-")+"`",
 			"累计已重试: `"+fmt.Sprintf("%d", snapshot.RetryCount)+"` 次",
 		)
 	}

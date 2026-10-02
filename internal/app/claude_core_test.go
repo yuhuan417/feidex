@@ -9,7 +9,7 @@ import (
 
 	appreviewcmd "feidex/internal/app/reviewcmd"
 
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/domain/conversation"
 	"os"
@@ -19,10 +19,10 @@ import (
 	"testing"
 	"time"
 
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
 

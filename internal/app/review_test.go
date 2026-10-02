@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
-	appreview "feidex/internal/app/review"
+	appreview "feidex/internal/adapter/feishu/review"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/domain/conversation"
 	"os"

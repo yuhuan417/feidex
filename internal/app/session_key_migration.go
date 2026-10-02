@@ -1,10 +1,10 @@
 package app
 
 import (
+	"feidex/internal/textutil"
 	"strings"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/apputil"
 )
 
 func canonicalizeStoredSessionKeys(a *App) error {
@@ -24,7 +24,7 @@ func canonicalizeStoredSessionKeys(a *App) error {
 		if chatID == "" {
 			return key
 		}
-		frontendID := apputil.FirstNonEmpty(strings.TrimSpace(parsedFrontendID), strings.TrimSpace(frontendHint))
+		frontendID := textutil.FirstNonEmpty(strings.TrimSpace(parsedFrontendID), strings.TrimSpace(frontendHint))
 		if frontendID == "" && appcore.AllowLegacyFrontendFallback(a) {
 			frontendID = strings.TrimSpace(a.FrontendID())
 		}

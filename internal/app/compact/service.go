@@ -5,15 +5,16 @@ package compact
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"time"
 
+	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	appcore "feidex/internal/app/appcore"
-	apputil "feidex/internal/app/apputil"
-	"feidex/internal/app/turn"
-	"feidex/internal/app/turnitem"
 	"feidex/internal/feishu"
+	apputil "feidex/internal/formatutil"
 )
 
 // SessionStatusCompacting is the session status indicating a compaction is in progress.
@@ -331,7 +332,7 @@ func (s Service) CompleteStandaloneCompactItem(threadID, turnID string, item map
 	if !IsContextCompactionItem(item) {
 		return false
 	}
-	switch normalizeWorkingStatus(apputil.FirstNonEmpty(apputil.StringValue(item["status"]), apputil.StringValue(item["state"]))) {
+	switch normalizeWorkingStatus(textutil.FirstNonEmpty(apputil.StringValue(item["status"]), apputil.StringValue(item["state"]))) {
 	case "", "completed":
 		return s.CompleteStandaloneCompactTurn(threadID, turnID)
 	case "interrupted", "cancelled", "canceled":

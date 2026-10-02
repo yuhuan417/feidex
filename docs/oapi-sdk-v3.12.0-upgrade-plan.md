@@ -637,7 +637,7 @@ SDK 的 `ch.Start(ctx)` 内部自连且**阻塞到连接结束**,不提供"只�
 **实现**:
 
 - `replyTextChunked`(`internal/app/delivery.go`)按 `outbound.SplitWithCodeFences` 切分后逐条发送。选它而非项目自有的切分,是因为它**在代码块边界断开、并在下一段重开同样的语言标记**,正合 agent 输出满是代码块的形态;项目自有的切分是按卡片 payload 字节预算(`ReplyCardMaxPayloadBytes = 20000`),两者轴不同,不冲突。
-- 新增 `ReplyTextMaxBytes = 20000`(`internal/app/delivery/reply_card_split.go`)。**注意这是投递策略而非实测的 API 上限**——`im.message.create` 文本内容的确切限制未经验证,取值与卡片预算同量级以便统一推理。
+- 新增 `ReplyTextMaxBytes = 20000`(`internal/adapter/feishu/delivery/reply_card_split.go`)。**注意这是投递策略而非实测的 API 上限**——`im.message.create` 文本内容的确切限制未经验证,取值与卡片预算同量级以便统一推理。
 - 返回首个已送达消息 id:首段失败则传播错误;后续段失败时,已送达的部分按成功上报并打 `warn`,以免调用方丢掉已发消息的链接记录。
 
 | 工具 | 结论 |

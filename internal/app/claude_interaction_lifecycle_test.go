@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
 	appclauderuntime "feidex/internal/app/clauderuntime"
 

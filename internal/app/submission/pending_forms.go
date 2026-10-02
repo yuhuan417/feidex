@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/state"
 )
 

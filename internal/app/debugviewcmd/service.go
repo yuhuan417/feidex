@@ -7,21 +7,21 @@ import (
 	"encoding/json"
 	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
 
+	appcards "feidex/internal/adapter/feishu/cards"
+	appdebugview "feidex/internal/adapter/feishu/debugview"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	turnitem "feidex/internal/adapter/feishu/turnitem"
 	appcore "feidex/internal/app/appcore"
-	apputil "feidex/internal/app/apputil"
-	appcards "feidex/internal/app/cards"
 	appclauderuntime "feidex/internal/app/clauderuntime"
-	appdebugview "feidex/internal/app/debugview"
-	appdelivery "feidex/internal/app/delivery"
 	apppathpick "feidex/internal/app/pathpick"
 	appthreadmenu "feidex/internal/app/threadmenu"
-	turnitem "feidex/internal/app/turnitem"
 	appworkspace "feidex/internal/app/workspace"
 	appusageview "feidex/internal/application/presentation/usageview"
 	"feidex/internal/claudecli"
@@ -191,7 +191,7 @@ func MustJSON(v any) string {
 
 // FirstNonEmpty returns the first non-empty string.
 func FirstNonEmpty(values ...string) string {
-	return apputil.FirstNonEmpty(values...)
+	return textutil.FirstNonEmpty(values...)
 }
 
 // MarkdownCodeBlockWithLang formats a code block with language tag.

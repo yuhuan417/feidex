@@ -6,7 +6,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 
-	appdelivery "feidex/internal/app/delivery"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
 )
 
 func fitReplyCardChunks(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {

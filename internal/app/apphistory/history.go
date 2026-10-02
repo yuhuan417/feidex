@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"feidex/internal/app/appcore"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/codexrpc"
+	appruntime "feidex/internal/runtime"
 )
 
 // TurnSummary is an alias for the runtime type.

@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
+	"feidex/internal/textutil"
 	"strings"
 
-	"feidex/internal/app/apputil"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/feishu"
 
@@ -70,17 +70,17 @@ func commandMessageFromAction(a *App, action *feishu.CardAction, sessionKey, raw
 		msg.UserID = sessionUserID
 	}
 	if sess := a.State().Session(sessionKey); sess != nil {
-		msg.ChatID = apputil.FirstNonEmpty(msg.ChatID, strings.TrimSpace(sess.ChatID))
-		msg.ChatType = apputil.FirstNonEmpty(msg.ChatType, strings.TrimSpace(sess.ChatType))
-		msg.UserID = apputil.FirstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))
+		msg.ChatID = textutil.FirstNonEmpty(msg.ChatID, strings.TrimSpace(sess.ChatID))
+		msg.ChatType = textutil.FirstNonEmpty(msg.ChatType, strings.TrimSpace(sess.ChatType))
+		msg.UserID = textutil.FirstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))
 	}
 	if msg.ChatType == "" || msg.ChatID == "" {
 		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
-		msg.ChatType = apputil.FirstNonEmpty(msg.ChatType, inferredChatType)
-		msg.ChatID = apputil.FirstNonEmpty(msg.ChatID, inferredChatID)
+		msg.ChatType = textutil.FirstNonEmpty(msg.ChatType, inferredChatType)
+		msg.ChatID = textutil.FirstNonEmpty(msg.ChatID, inferredChatID)
 	}
 	if msg.ChatType == "group" && strings.TrimSpace(msg.RootMessageID) == "" {
-		msg.RootMessageID = apputil.FirstNonEmpty(rootMessageID, msg.MessageID)
+		msg.RootMessageID = textutil.FirstNonEmpty(rootMessageID, msg.MessageID)
 	}
 	return msg
 }
@@ -99,7 +99,7 @@ func runCommandFromCardAction(a *App, action *feishu.CardAction, sessionKey, raw
 }
 
 func completeMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-	parentAction = apputil.FirstNonEmpty(actionStringValue(action, "parent_action"), strings.TrimSpace(parentAction))
+	parentAction = textutil.FirstNonEmpty(actionStringValue(action, "parent_action"), strings.TrimSpace(parentAction))
 	text, card, err := runCommandFromCardAction(a, action, sessionKey, rawCommand)
 	if err != nil {
 		resp := &callback.CardActionTriggerResponse{
@@ -117,7 +117,7 @@ func completeMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawComma
 		}, nil
 	}
 	resp := &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: apputil.FirstNonEmpty(text, "已执行 "+rawCommand)},
+		Toast: &callback.Toast{Type: "success", Content: textutil.FirstNonEmpty(text, "已执行 "+rawCommand)},
 	}
 	if fallback, ok := renderMenuCommandFallback(a, parentAction, sessionKey); ok {
 		resp.Card = rawCard(fallback)

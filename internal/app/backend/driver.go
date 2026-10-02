@@ -1,11 +1,11 @@
 package backend
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/appcore"
-	appruntime "feidex/internal/app/runtime"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -185,10 +185,10 @@ func DriverForApp(app appcore.AppConfig) Driver {
 }
 
 func DriverForKind(kind string) Driver {
-	switch appruntime.NormalizeBackend(kind) {
-	case appruntime.BackendCodex:
+	switch domainbackend.NormalizeBackend(kind) {
+	case domainbackend.BackendCodex:
 		return codexDriver{}
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		return claudeDriver{}
 	default:
 		return unsupportedDriver{rawKind: strings.TrimSpace(kind)}

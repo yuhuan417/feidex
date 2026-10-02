@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/turn"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appturnstream "feidex/internal/app/turnstream"

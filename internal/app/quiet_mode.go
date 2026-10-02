@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"feidex/internal/app/quietmode"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/quietmode"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )

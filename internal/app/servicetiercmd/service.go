@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"strings"
 
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 	appcore "feidex/internal/app/appcore"
-	appruntime "feidex/internal/app/runtime"
-	appthreadview "feidex/internal/app/threadview"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 )
 
 const (

@@ -2,12 +2,12 @@ package backend
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
 	"feidex/internal/app/appcore"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -64,13 +64,13 @@ func (s ActionService) RunMenuCompactAction(action *feishu.CardAction, sessionKe
 		return nil
 	}
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		if s.deps.Commands.CommandMessageFromAction == nil || s.deps.Execution.EnqueueSubmission == nil {
 			return fmt.Errorf("backend compact action not configured")
 		}
 		msg := s.deps.Commands.CommandMessageFromAction(action, sessionKey, "/compact")
 		return s.deps.Execution.EnqueueSubmission(msg)
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		if runner == nil {
 			return fmt.Errorf("compact runner not configured")
 		}
@@ -86,12 +86,12 @@ func (s ActionService) HandleCompactCommand(msg *feishu.InboundMessage, runner C
 		return nil
 	}
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		if s.deps.Execution.EnqueuePassthroughCommand == nil {
 			return fmt.Errorf("passthrough command handler not configured")
 		}
 		return s.deps.Execution.EnqueuePassthroughCommand(msg, "/compact")
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		if runner == nil {
 			return fmt.Errorf("compact runner not configured")
 		}
@@ -111,7 +111,7 @@ func (s ActionService) HandleCompactCommand(msg *feishu.InboundMessage, runner C
 func (s ActionService) CompleteMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	parentAction := actionStringValue(action, "parent_action")
 	switch appcore.ConfiguredBackend(s.App) {
-	case appruntime.BackendClaude:
+	case domainbackend.BackendClaude:
 		if s.deps.Commands.CompleteAsyncCommandAction == nil || s.deps.Render.RenderInterruptPreparingCard == nil || s.deps.Render.RenderInterruptResultCard == nil || s.deps.Render.RenderInterruptFailedCard == nil {
 			return nil, fmt.Errorf("interrupt action not configured")
 		}
@@ -130,7 +130,7 @@ func (s ActionService) CompleteMenuInterrupt(action *feishu.CardAction, sessionK
 			},
 			"interrupt patch failed",
 		)
-	case appruntime.BackendCodex:
+	case domainbackend.BackendCodex:
 		if s.deps.Commands.CompleteMenuCommand == nil {
 			return nil, fmt.Errorf("interrupt action not configured")
 		}

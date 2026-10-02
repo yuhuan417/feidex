@@ -21,8 +21,8 @@ import (
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/serverrequest"
 
+	"feidex/internal/adapter/feishu/turnitem"
 	appskillscmd "feidex/internal/app/skillscmd"
-	"feidex/internal/app/turnitem"
 	"feidex/internal/runtime/turnbinding"
 
 	appworkspacecmd "feidex/internal/app/workspacecmd"

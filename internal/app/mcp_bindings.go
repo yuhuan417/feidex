@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/app/mcpbridge"
-	"feidex/internal/app/turnitem"
 	domainsubmission "feidex/internal/domain/submission"
 	"net/http"
 	"strings"

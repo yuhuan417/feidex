@@ -4,6 +4,7 @@ import (
 	"context"
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/modelconfig"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
@@ -11,8 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	appruntime "feidex/internal/app/runtime"
 
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
@@ -23,7 +22,7 @@ import (
 
 const (
 	CommandUsage = "/plan | /plan on | /plan off"
-	BackendCodex = appruntime.BackendCodex
+	BackendCodex = domainbackend.BackendCodex
 )
 
 type CodexClient interface {

@@ -2,8 +2,8 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 
-	"feidex/internal/app/apputil"
 	appautoretry "feidex/internal/app/autoretry"
 	"strings"
 )
@@ -52,7 +52,7 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessage
 		if len(sess.StagedImages) > 0 {
 			return "当前仍有暂存图片待提交"
 		}
-		if conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
+		if conversation.NormalizeSessionStatus(textutil.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
 			return "当前会话还没有完全回到空闲态"
 		}
 	}

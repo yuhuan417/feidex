@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -42,7 +42,7 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 	if sessionHasActiveWork(sess) {
 		return 0, "", fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
-	workspaceID := apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
 	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
 		return 0, "", fmt.Errorf("workspace %q not found", workspaceID)

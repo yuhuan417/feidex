@@ -9,6 +9,7 @@ import (
 	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"fmt"
@@ -17,17 +18,16 @@ import (
 	"sync"
 	"time"
 
-	appapproval "feidex/internal/app/approval"
-	"feidex/internal/app/apputil"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
-	appdelivery "feidex/internal/app/delivery"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
 
-	apppendingforms "feidex/internal/app/pendingforms"
+	apppendingforms "feidex/internal/adapter/feishu/pendingforms"
 
-	appruntime "feidex/internal/app/runtime"
+	appruntime "feidex/internal/runtime"
 
-	appturn "feidex/internal/app/turn"
-	"feidex/internal/app/turnitem"
+	appturn "feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -882,7 +882,7 @@ func (s *Service) ResolveApproval(requestID string, resolution appruntime.Claude
 		}
 	default:
 		resp.Behavior = claudecli.PermissionDeny
-		resp.Message = apputil.FirstNonEmpty(strings.TrimSpace(resolution.Message), "Declined by user")
+		resp.Message = textutil.FirstNonEmpty(strings.TrimSpace(resolution.Message), "Declined by user")
 		resp.Interrupt = resolution.Interrupt
 	}
 	pending.RespCh <- PendingResponse{Approval: resp}
@@ -927,7 +927,7 @@ func (s *Service) CancelPending(requestID, message string) error {
 	if pending == nil {
 		return fmt.Errorf("pending request %q not found", requestID)
 	}
-	message = apputil.FirstNonEmpty(strings.TrimSpace(message), "cancelled by user")
+	message = textutil.FirstNonEmpty(strings.TrimSpace(message), "cancelled by user")
 	pending.RespCh <- PendingResponse{Err: errors.New(message)}
 	return nil
 }
@@ -1038,7 +1038,7 @@ func (s *Service) startSession(ctx context.Context, sessionKey string, ws *confi
 	state.MCPCleanup = mcpCleanup
 	mcpEnv = withClaudeModelEnv(mcpEnv, model, runtimeCfg.SmallModel, runtimeCfg.SubagentModel)
 	opts := []claudecli.SessionOption{
-		claudecli.WithCLIPath(apputil.FirstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
+		claudecli.WithCLIPath(textutil.FirstNonEmpty(strings.TrimSpace(runtimeCfg.Command), "claude")),
 		claudecli.WithWorkDir(ws.Cwd),
 		claudecli.WithModel(model),
 		claudecli.WithEnv(mcpEnv),
@@ -1424,7 +1424,7 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 		// card.
 		if s.deps.Lookup.GetSession != nil && target.SessionKey != "" {
 			if sess := s.deps.Lookup.GetSession(target.SessionKey); sess != nil {
-				target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), target.WorkspaceID)
+				target.WorkspaceID = textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), target.WorkspaceID)
 				target.ChatID = strings.TrimSpace(sess.ChatID)
 				target.TriggerMessageID = strings.TrimSpace(sess.RootMessageID)
 				target.UserID = strings.TrimSpace(sess.OwnerUserID)
@@ -1725,9 +1725,9 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		resultText := strings.TrimSpace(event.Result)
 		var finalText string
 		if event.Success {
-			finalText = strings.TrimSpace(apputil.FirstNonEmpty(lastAssistantText, resultText))
+			finalText = strings.TrimSpace(textutil.FirstNonEmpty(lastAssistantText, resultText))
 		} else {
-			finalText = strings.TrimSpace(apputil.FirstNonEmpty(resultText, lastAssistantText))
+			finalText = strings.TrimSpace(textutil.FirstNonEmpty(resultText, lastAssistantText))
 		}
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
@@ -1763,7 +1763,7 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 
 	// Handle non-delivered text completion
 	if !deliveredAnyText {
-		finalText := strings.TrimSpace(apputil.FirstNonEmpty(strings.TrimSpace(event.Result), lastAssistantText))
+		finalText := strings.TrimSpace(textutil.FirstNonEmpty(strings.TrimSpace(event.Result), lastAssistantText))
 		if finalText != "" {
 			sub, reuseMessageID := s.prepareQuietWorkingBoundary(threadID, turn.TurnID)
 			if sub != nil {
@@ -1922,7 +1922,7 @@ func (s *Service) interactionTarget(state *SessionState, sessionKey string, sub 
 	}
 	if sub != nil {
 		target.Submission = sub
-		target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), target.WorkspaceID)
+		target.WorkspaceID = textutil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), target.WorkspaceID)
 		target.ChatID = strings.TrimSpace(sub.ChatID)
 		target.TriggerMessageID = strings.TrimSpace(sub.TriggerMessageID)
 		target.UserID = strings.TrimSpace(sub.UserID)
@@ -1930,7 +1930,7 @@ func (s *Service) interactionTarget(state *SessionState, sessionKey string, sub 
 	}
 	if s != nil && s.deps.Lookup.GetSession != nil && target.SessionKey != "" {
 		if sess := s.deps.Lookup.GetSession(target.SessionKey); sess != nil {
-			target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), target.WorkspaceID)
+			target.WorkspaceID = textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), target.WorkspaceID)
 			target.ChatID = strings.TrimSpace(sess.ChatID)
 			target.TriggerMessageID = strings.TrimSpace(sess.RootMessageID)
 			target.UserID = strings.TrimSpace(sess.OwnerUserID)
@@ -1989,7 +1989,7 @@ func (s *Service) interactionTargetForTask(state *SessionState, task BackgroundT
 			if trimmed := strings.TrimSpace(sessionKey); trimmed != "" {
 				target.SessionKey = trimmed
 			}
-			target.WorkspaceID = apputil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), target.WorkspaceID)
+			target.WorkspaceID = textutil.FirstNonEmpty(strings.TrimSpace(sub.WorkspaceID), target.WorkspaceID)
 		}
 	}
 	if state != nil && target.SessionKey == "" {
@@ -2243,7 +2243,7 @@ func (s *Service) HandleExitPlanMode(ctx context.Context, state *SessionState, p
 		return "", fmt.Errorf("no active submission for plan confirmation")
 	}
 
-	workspaceID = apputil.FirstNonEmpty(target.WorkspaceID, workspaceID)
+	workspaceID = textutil.FirstNonEmpty(target.WorkspaceID, workspaceID)
 	workspaceCwdVal := s.WorkspaceCwd(workspaceID)
 	plan = EnrichPlanForDisplay(plan, planFilePath, workspaceCwdVal, startedAt)
 

@@ -3,8 +3,8 @@ package app
 import (
 	"strings"
 
-	"feidex/internal/app/menutypes"
-	appmenuutil "feidex/internal/app/menuutil"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
+	menutypes "feidex/internal/application/features"
 	"feidex/internal/feishu"
 )
 
@@ -76,7 +76,7 @@ func nearestVisibleMenuAction(action, backend string) string {
 		if menuActionVisibleForBackend(action, backend) {
 			return action
 		}
-		node, ok := menutypes.MenuNodes[action]
+		node, ok := menutypes.MenuNodes()[action]
 		if !ok {
 			break
 		}
@@ -91,7 +91,7 @@ func nearestVisibleMenuAction(action, backend string) string {
 func menuItemsForGroup(action, backend string) []menutypes.MenuItemSpec {
 	action = strings.TrimSpace(action)
 	items := make([]menutypes.MenuItemSpec, 0, 8)
-	for _, spec := range menutypes.MenuItemSpecs {
+	for _, spec := range menutypes.MenuItemSpecs() {
 		if spec.GroupAction == action && menuItemVisibleForBackend(spec, backend) {
 			items = append(items, spec)
 		}
@@ -104,7 +104,7 @@ func groupHasVisibleMenuItems(action, backend string) bool {
 		return menuActionVisibleWithoutBackend(action)
 	}
 	hasDeclaredItems := false
-	for _, spec := range menutypes.MenuItemSpecs {
+	for _, spec := range menutypes.MenuItemSpecs() {
 		if spec.GroupAction != strings.TrimSpace(action) {
 			continue
 		}

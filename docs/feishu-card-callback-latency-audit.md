@@ -24,8 +24,8 @@
 - `internal/app/planmode/exit.go`
 - `internal/app/reviewcmd/async_menu.go`
 - `internal/app/reviewcmd/service.go`
-- `internal/app/review/git.go`
-- `internal/app/delivery/download.go`
+- `internal/adapter/feishu/review/git.go`
+- `internal/adapter/feishu/delivery/download.go`
 - `internal/app/path_picker_actions.go`
 - `internal/app/upgradecmd/service.go`
 - `internal/app/backend_maintenance_scaffold.go`

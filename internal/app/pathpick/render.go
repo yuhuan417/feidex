@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	appcards "feidex/internal/app/cards"
+	appcards "feidex/internal/adapter/feishu/cards"
 )
 
 // RenderCard renders the Feishu card for a path picker payload.

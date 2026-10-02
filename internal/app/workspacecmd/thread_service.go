@@ -9,11 +9,11 @@ import (
 	"time"
 
 	codexadapter "feidex/internal/adapter/backend/codex"
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	appclaudesession "feidex/internal/app/claudesession"
 	"feidex/internal/app/modelconfig"
-	appthreadview "feidex/internal/app/threadview"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/state"

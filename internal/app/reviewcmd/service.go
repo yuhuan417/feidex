@@ -8,15 +8,16 @@ import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
 
-	apputil "feidex/internal/app/apputil"
+	apputil "feidex/internal/formatutil"
 
-	appreview "feidex/internal/app/review"
+	appreview "feidex/internal/adapter/feishu/review"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -371,7 +372,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 		ChatID:               msg.ChatID,
 		TriggerMessageID:     msg.MessageID,
 		SourceMessageIDs:     uniqueStrings([]string{msg.MessageID}),
-		SourceRootMessageIDs: uniqueStrings([]string{apputil.FirstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))}),
+		SourceRootMessageIDs: uniqueStrings([]string{textutil.FirstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))}),
 		InputText:            appreview.SubmissionInputText(target),
 		Kind:                 SubmissionKindReview,
 		ReviewTargetType:     strings.TrimSpace(target.Type),

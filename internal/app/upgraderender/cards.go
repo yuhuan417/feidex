@@ -1,11 +1,11 @@
 package upgraderender
 
 import (
+	"feidex/internal/textutil"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
-	appmenuutil "feidex/internal/app/menuutil"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/feishu"
 )
 
@@ -22,8 +22,8 @@ type PendingSaver interface {
 }
 
 func updateCommandText(spec Spec, command, updateCommand string) string {
-	command = apputil.FirstNonEmpty(strings.TrimSpace(command), spec.DefaultCommand)
-	updateCommand = apputil.FirstNonEmpty(strings.TrimSpace(updateCommand), "update")
+	command = textutil.FirstNonEmpty(strings.TrimSpace(command), spec.DefaultCommand)
+	updateCommand = textutil.FirstNonEmpty(strings.TrimSpace(updateCommand), "update")
 	return command + " " + updateCommand
 }
 
@@ -31,11 +31,11 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 	snapshot := view.Snapshot
 	restart := view.Restart
 	lines := []string{
-		"command: `" + apputil.FirstNonEmpty(view.Probe.Command, spec.DefaultCommand) + "`",
-		"解析路径: `" + apputil.FirstNonEmpty(view.Probe.CommandPath, "-") + "`",
+		"command: `" + textutil.FirstNonEmpty(view.Probe.Command, spec.DefaultCommand) + "`",
+		"解析路径: `" + textutil.FirstNonEmpty(view.Probe.CommandPath, "-") + "`",
 		"安装来源: `" + RenderInstallSource(spec, view.Probe) + "`",
 		"自升级命令: `" + updateCommandText(spec, view.Probe.Command, view.Probe.UpdateCommand) + "`",
-		"当前版本: `" + apputil.FirstNonEmpty(view.Probe.CurrentVersion, "-") + "`",
+		"当前版本: `" + textutil.FirstNonEmpty(view.Probe.CurrentVersion, "-") + "`",
 	}
 	if strings.TrimSpace(view.Probe.Reason) != "" {
 		lines = append(lines, "原因: "+strings.TrimSpace(view.Probe.Reason))
@@ -62,7 +62,7 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 		lines = append(lines,
 			"",
 			"当前升级状态: `"+UpgradePhaseText(snapshot.Phase)+"`",
-			"进度: "+apputil.FirstNonEmpty(snapshot.Message, "-"),
+			"进度: "+textutil.FirstNonEmpty(snapshot.Message, "-"),
 		)
 		if !snapshot.StartedAt.IsZero() {
 			lines = append(lines, "开始时间(本机时区): `"+FormatUpgradeTime(snapshot.StartedAt)+"`")
@@ -71,7 +71,7 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 		lines = append(lines,
 			"",
 			"上次结果: `"+UpgradeResultText(snapshot.Result)+"`",
-			"结果摘要: "+apputil.FirstNonEmpty(snapshot.Message, "-"),
+			"结果摘要: "+textutil.FirstNonEmpty(snapshot.Message, "-"),
 		)
 		if !snapshot.UpdatedAt.IsZero() {
 			lines = append(lines, "完成时间(本机时区): `"+FormatUpgradeTime(snapshot.UpdatedAt)+"`")
@@ -81,7 +81,7 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 		lines = append(lines,
 			"",
 			"当前重启状态: `"+RestartPhaseText(restart.Phase)+"`",
-			"重启进度: "+apputil.FirstNonEmpty(restart.Message, "-"),
+			"重启进度: "+textutil.FirstNonEmpty(restart.Message, "-"),
 		)
 		if !restart.StartedAt.IsZero() {
 			lines = append(lines, "重启开始时间(本机时区): `"+FormatUpgradeTime(restart.StartedAt)+"`")
@@ -90,7 +90,7 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 		lines = append(lines,
 			"",
 			"上次重启结果: `"+RestartResultText(restart.Result)+"`",
-			"重启摘要: "+apputil.FirstNonEmpty(restart.Message, "-"),
+			"重启摘要: "+textutil.FirstNonEmpty(restart.Message, "-"),
 		)
 		if !restart.UpdatedAt.IsZero() {
 			lines = append(lines, "重启完成时间(本机时区): `"+FormatUpgradeTime(restart.UpdatedAt)+"`")
@@ -117,8 +117,8 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 
 func RenderUpgradeConfirmCard(spec Spec, r StatusCardRenderer, sessionKey, requestID string, currentVersion, targetVersion, updateCommand string) map[string]any {
 	lines := []string{
-		"当前版本: `" + apputil.FirstNonEmpty(currentVersion, "-") + "`",
-		"目标版本: `" + apputil.FirstNonEmpty(targetVersion, "-") + "`",
+		"当前版本: `" + textutil.FirstNonEmpty(currentVersion, "-") + "`",
+		"目标版本: `" + textutil.FirstNonEmpty(targetVersion, "-") + "`",
 		"升级方式: `" + updateCommandText(spec, spec.DefaultCommand, updateCommand) + "`",
 		"验证方式: `" + spec.SmokeTestLabel + "`",
 		"失败处理: 不自动回滚；验证失败会保留旧 runtime",
@@ -173,10 +173,10 @@ func RenderUpgradeFailedCard(spec Spec, r StatusCardRenderer, sessionKey, errTex
 
 func RenderUpgradeOperationCard(spec Spec, r StatusCardRenderer, sessionKey string, snapshot BackendUpgradeSnapshot) map[string]any {
 	lines := []string{
-		"当前版本: `" + apputil.FirstNonEmpty(snapshot.CurrentVersion, "-") + "`",
-		"目标版本: `" + apputil.FirstNonEmpty(snapshot.TargetVersion, "-") + "`",
+		"当前版本: `" + textutil.FirstNonEmpty(snapshot.CurrentVersion, "-") + "`",
+		"目标版本: `" + textutil.FirstNonEmpty(snapshot.TargetVersion, "-") + "`",
 		"阶段: `" + UpgradePhaseText(snapshot.Phase) + "`",
-		"进度: " + apputil.FirstNonEmpty(snapshot.Message, "-"),
+		"进度: " + textutil.FirstNonEmpty(snapshot.Message, "-"),
 	}
 	if !snapshot.StartedAt.IsZero() {
 		lines = append(lines, "开始时间(本机时区): `"+FormatUpgradeTime(snapshot.StartedAt)+"`")
@@ -210,9 +210,9 @@ func RenderUpgradeOperationCard(spec Spec, r StatusCardRenderer, sessionKey stri
 
 func RenderRestartOperationCard(spec Spec, r StatusCardRenderer, sessionKey string, snapshot BackendRestartSnapshot) map[string]any {
 	lines := []string{
-		"当前版本: `" + apputil.FirstNonEmpty(snapshot.CurrentVersion, "-") + "`",
+		"当前版本: `" + textutil.FirstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"阶段: `" + RestartPhaseText(snapshot.Phase) + "`",
-		"进度: " + apputil.FirstNonEmpty(snapshot.Message, "-"),
+		"进度: " + textutil.FirstNonEmpty(snapshot.Message, "-"),
 	}
 	if !snapshot.StartedAt.IsZero() {
 		lines = append(lines, "开始时间(本机时区): `"+FormatUpgradeTime(snapshot.StartedAt)+"`")

@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/quietmode"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/quietmode"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"

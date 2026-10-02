@@ -2,10 +2,10 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"strings"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/apputil"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -26,7 +26,7 @@ func resolveThreadWorkspaceID(sess *conversation.Session, fallback string) strin
 	if sess == nil {
 		return strings.TrimSpace(fallback)
 	}
-	return apputil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(fallback))
+	return textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(fallback))
 }
 
 func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
@@ -39,13 +39,13 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conv
 		return strings.TrimSpace(binding.WorkspaceID)
 	}
 	if bindOnlyCurrentRoot {
-		return apputil.FirstNonEmpty(
+		return textutil.FirstNonEmpty(
 			resolveThreadWorkspaceID(sess, ""),
 			resolveWorkspaceSelectionForMessage(a, msg, sess),
 			defaultWorkspaceID(a),
 		)
 	}
-	return apputil.FirstNonEmpty(
+	return textutil.FirstNonEmpty(
 		resolveWorkspaceSelectionForMessage(a, msg, sess),
 		strings.TrimSpace(func() string {
 			if sess == nil {

@@ -413,7 +413,7 @@ When a change touches one of these contracts, prefer updating the existing guard
 - Workspace new, clone, and path picker flows: `internal/app/path_picker_test.go`, `internal/app/actions_dispatch_more_test.go`, `internal/app/app_more_test.go`
 - Upgrade and backend maintenance: `internal/app/upgrade_isolation_test.go`, `internal/app/upgrade_more_test.go`, `internal/app/codex_upgrade_test.go`, `internal/app/claude_upgrade_test.go`
 - Backend selection and frontend isolation: `internal/app/backend_selection_test.go`, `internal/app/frontend_idle_test.go`, `internal/app/session_lineage_test.go`
-- Menu rendering and navigation: `internal/app/menuutil/menuutil_test.go`, `internal/app/app_more_test.go`, and the relevant menu or card rendering tests. Verify single-chat and group-chat output together, including the final position of `返回上一级`.
+- Menu rendering and navigation: `internal/adapter/feishu/menuutil/menuutil_test.go`, `internal/app/app_more_test.go`, and the relevant menu or card rendering tests. Verify single-chat and group-chat output together, including the final position of `返回上一级`.
 - Cross-scope menu parity: `internal/app/menu_render_parity_test.go` compares the rendered structure and controls for each common menu family in p2p and group scope.
 - Menu back-control label and position: `internal/app/menu_back_button_contract_test.go` rejects any `返回`-prefixed string literal under `internal/app` (the shared label is referenced as `feishu.MenuBackButtonText`), and renders representative card families to check the back control is the final action.
 

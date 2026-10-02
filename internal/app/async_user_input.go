@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"strings"
 
-	appcards "feidex/internal/app/cards"
-	"feidex/internal/app/pendingforms"
+	appcards "feidex/internal/adapter/feishu/cards"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appreview "feidex/internal/app/review"
+	appreview "feidex/internal/adapter/feishu/review"
 
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/codexrpc"

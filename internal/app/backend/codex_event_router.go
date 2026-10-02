@@ -10,10 +10,10 @@ import (
 
 	codexadapter "feidex/internal/adapter/backend/codex"
 
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
-	apppendingforms "feidex/internal/app/pendingforms"
-	"feidex/internal/app/turnitem"
+	apppendingforms "feidex/internal/adapter/feishu/pendingforms"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/application"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"

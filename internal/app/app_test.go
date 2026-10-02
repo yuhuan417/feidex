@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 
-	appapprovalview "feidex/internal/app/approvalview"
-	"feidex/internal/app/apputil"
+	appapprovalview "feidex/internal/adapter/feishu/approvalview"
 	"feidex/internal/app/attachments"
 
 	appcompact "feidex/internal/app/compact"
@@ -16,13 +16,13 @@ import (
 
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 
+	"feidex/internal/adapter/feishu/pendingforms"
 	appmaintenance "feidex/internal/app/maintenance"
-	"feidex/internal/app/pendingforms"
 
 	appthreadmenu "feidex/internal/app/threadmenu"
 
-	appthreadview "feidex/internal/app/threadview"
-	"feidex/internal/app/turnitem"
+	appthreadview "feidex/internal/adapter/feishu/threadview"
+	"feidex/internal/adapter/feishu/turnitem"
 
 	appupgradecmd "feidex/internal/app/upgradecmd"
 
@@ -2446,8 +2446,8 @@ func TestNotificationHelpers(t *testing.T) {
 	}
 
 	startNextSubmissionAsync(a, "", "test")
-	if got := apputil.Truncate("  abcdef  ", 3); got != "  …" {
-		t.Fatalf("apputil.Truncate() = %q, want \"  …\"", got)
+	if got := textutil.Truncate("  abcdef  ", 3); got != "  …" {
+		t.Fatalf("textutil.Truncate() = %q, want \"  …\"", got)
 	}
 	if _, err := a.HandleCardAction(&feishu.CardAction{Name: "unknown"}); err != nil {
 		t.Fatalf("handleCardAction() error = %v", err)

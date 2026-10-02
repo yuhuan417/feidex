@@ -6,7 +6,7 @@ import (
 
 	"context"
 	"errors"
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

@@ -5,7 +5,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	codexadapter "feidex/internal/adapter/backend/codex"
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 	"log/slog"

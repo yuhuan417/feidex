@@ -3,8 +3,8 @@ package app
 import (
 	"strings"
 
-	"feidex/internal/app/menutypes"
-	appmenuutil "feidex/internal/app/menuutil"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
+	menutypes "feidex/internal/application/features"
 )
 
 func menuBreadcrumbLabels(action string) []string {
@@ -33,7 +33,7 @@ func menuCardBodyForBackendForSession(a *App, sessionKey, backend, action, body 
 func menuBackAction(action string) string {
 	action = strings.TrimSpace(action)
 	if action != "" {
-		if node, ok := menutypes.MenuNodes[action]; ok {
+		if node, ok := menutypes.MenuNodes()[action]; ok {
 			if parent := strings.TrimSpace(node.Parent); parent != "" {
 				return parent
 			}

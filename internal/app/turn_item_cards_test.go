@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"errors"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"

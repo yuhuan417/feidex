@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appturnlifecycle "feidex/internal/application/turn"
@@ -10,10 +10,10 @@ import (
 	"feidex/internal/domain/conversation"
 	"path/filepath"
 
-	appapproval "feidex/internal/app/approval"
+	appapproval "feidex/internal/adapter/feishu/approval"
 
+	"feidex/internal/adapter/feishu/turnitem"
 	applinkutil "feidex/internal/app/linkutil"
-	"feidex/internal/app/turnitem"
 	"feidex/internal/state"
 	"strings"
 	"testing"

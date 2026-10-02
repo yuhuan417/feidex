@@ -3,9 +3,9 @@ package app
 import (
 	appmodelconfig "feidex/internal/app/modelconfig"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"strings"
 
-	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -16,7 +16,7 @@ func effectiveBindingForSession(a *App, sess *conversation.Session) *state.Agent
 
 func effectiveCodexModel(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(
+	return textutil.FirstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
 		botProfileModelForApp(a),
@@ -26,31 +26,31 @@ func effectiveCodexModel(a *App, sess *conversation.Session, ws *config.Workspac
 
 func effectiveCodexPlanModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(
+	return textutil.FirstNonEmpty(
 		sessionPlanModelOverride(sess), bindingPlanModelOverride(binding), botProfilePlanModelForApp(a), strings.TrimSpace(a.cfg.Codex.PlanModel), effectiveCodexModel(a, sess, nil),
 	)
 }
 
 func effectiveCodexPlanReasoningEffort(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(
+	return textutil.FirstNonEmpty(
 		sessionPlanReasoningEffortOverride(sess), bindingPlanReasoningEffortOverride(binding), botProfilePlanReasoningEffortForApp(a), strings.TrimSpace(a.cfg.Codex.PlanReasoningEffort),
 	)
 }
 
 func effectiveCodexReviewModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(sessionReviewModelOverride(sess), bindingReviewModelOverride(binding), botProfileReviewModelForApp(a), strings.TrimSpace(a.cfg.Codex.ReviewModel), effectiveCodexModel(a, sess, nil))
+	return textutil.FirstNonEmpty(sessionReviewModelOverride(sess), bindingReviewModelOverride(binding), botProfileReviewModelForApp(a), strings.TrimSpace(a.cfg.Codex.ReviewModel), effectiveCodexModel(a, sess, nil))
 }
 
 func effectiveCodexSubagentModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileSubagentModelForApp(a), strings.TrimSpace(a.cfg.Codex.SubagentModel), effectiveCodexModel(a, sess, nil))
+	return textutil.FirstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileSubagentModelForApp(a), strings.TrimSpace(a.cfg.Codex.SubagentModel), effectiveCodexModel(a, sess, nil))
 }
 
 func effectiveClaudeModel(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(
+	return textutil.FirstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
 		strings.TrimSpace(bindingModelOverride(binding)),
 		botProfileClaudeModelForApp(a),
@@ -61,14 +61,14 @@ func effectiveClaudeModel(a *App, sess *conversation.Session, ws *config.Workspa
 func effectiveClaudeSmallModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	if profile := effectiveBotProfile(a); profile != nil {
-		return apputil.FirstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(profile.ClaudeSmallModel), strings.TrimSpace(a.cfg.Claude.SmallModel))
+		return textutil.FirstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(profile.ClaudeSmallModel), strings.TrimSpace(a.cfg.Claude.SmallModel))
 	}
-	return apputil.FirstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(a.cfg.Claude.SmallModel))
+	return textutil.FirstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(a.cfg.Claude.SmallModel))
 }
 
 func effectiveClaudeSubagentModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
-	return apputil.FirstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileClaudeSubagentModelForApp(a), strings.TrimSpace(a.cfg.Claude.SubagentModel), effectiveClaudeModel(a, sess, nil))
+	return textutil.FirstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileClaudeSubagentModelForApp(a), strings.TrimSpace(a.cfg.Claude.SubagentModel), effectiveClaudeModel(a, sess, nil))
 }
 
 func effectiveBindingApprovalPolicy(a *App, sess *conversation.Session, ws *config.Workspace) string {

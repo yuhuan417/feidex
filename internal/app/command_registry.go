@@ -3,8 +3,7 @@ package app
 import (
 	"strings"
 
-	appfeatures "feidex/internal/app/features"
-	"feidex/internal/app/menutypes"
+	appfeatures "feidex/internal/application/features"
 	"feidex/internal/feishu"
 )
 
@@ -14,14 +13,14 @@ type localCommandSpec struct {
 	Handle      func(a *App, msg *feishu.InboundMessage, args []string) error
 	HandleRaw   func(a *App, msg *feishu.InboundMessage, raw string, args []string) error
 	HelpGroup   string
-	HelpEntries []menutypes.HelpCommandSpec
+	HelpEntries []appfeatures.HelpCommandSpec
 	Backends    map[string]localCommandBackendSpec
 }
 
 type localCommandBackendSpec struct {
 	Match       func(fields []string) bool
 	HideInHelp  bool
-	HelpEntries []menutypes.HelpCommandSpec
+	HelpEntries []appfeatures.HelpCommandSpec
 }
 
 func localCommandSpecList() []localCommandSpec {
@@ -53,17 +52,17 @@ func (s localCommandSpec) backendPolicy(backend string) localCommandBackendSpec 
 	}
 }
 
-func (s localCommandSpec) helpEntriesForBackend(backend string) []menutypes.HelpCommandSpec {
+func (s localCommandSpec) helpEntriesForBackend(backend string) []appfeatures.HelpCommandSpec {
 	backend = normalizeRuntimeBackend(backend)
 	if policy, ok := s.Backends[backend]; ok {
 		if policy.HideInHelp {
 			return nil
 		}
 		if policy.HelpEntries != nil {
-			return append([]menutypes.HelpCommandSpec(nil), policy.HelpEntries...)
+			return append([]appfeatures.HelpCommandSpec(nil), policy.HelpEntries...)
 		}
 	}
-	return append([]menutypes.HelpCommandSpec(nil), s.HelpEntries...)
+	return append([]appfeatures.HelpCommandSpec(nil), s.HelpEntries...)
 }
 
 func commandHandlesLocallyForBackend(spec *localCommandSpec, backend string, fields []string) bool {
@@ -87,8 +86,8 @@ func renderHelpBodyForSession(a *App, backend, sessionKey string) string {
 
 func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {
 	lines := []string{"命令说明：", ""}
-	intro := make([]menutypes.HelpCommandSpec, 0, 2)
-	sections := map[string][]menutypes.HelpCommandSpec{}
+	intro := make([]appfeatures.HelpCommandSpec, 0, 2)
+	sections := map[string][]appfeatures.HelpCommandSpec{}
 	for _, spec := range localCommandSpecList() {
 		entries := spec.helpEntriesForBackend(backend)
 		if groupScoped {
@@ -105,8 +104,8 @@ func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {
 		sections[group] = append(sections[group], entries...)
 	}
 	if groupScoped {
-		sections["workspace"] = append(sections["workspace"], menutypes.HelpCommandSpec{Command: "@Bot /primary on", Summary: "把被 @ 的 Bot 设为本群 primary，处理未明确 @ 的消息。"})
-		sections["workspace"] = append(sections["workspace"], menutypes.HelpCommandSpec{Command: "/workspace unbind", Summary: "解除当前 Bot 在本群的 workspace 绑定；不会删除本机配置或目录。"})
+		sections["workspace"] = append(sections["workspace"], appfeatures.HelpCommandSpec{Command: "@Bot /primary on", Summary: "把被 @ 的 Bot 设为本群 primary，处理未明确 @ 的消息。"})
+		sections["workspace"] = append(sections["workspace"], appfeatures.HelpCommandSpec{Command: "/workspace unbind", Summary: "解除当前 Bot 在本群的 workspace 绑定；不会删除本机配置或目录。"})
 	}
 	lines = appendHelpCommands(lines, intro)
 	for _, group := range helpGroupOrder {
@@ -121,11 +120,11 @@ func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {
 	return strings.Join(lines, "\n")
 }
 
-func groupScopedHelpEntries(entries []menutypes.HelpCommandSpec) []menutypes.HelpCommandSpec {
+func groupScopedHelpEntries(entries []appfeatures.HelpCommandSpec) []appfeatures.HelpCommandSpec {
 	if len(entries) == 0 {
 		return nil
 	}
-	out := make([]menutypes.HelpCommandSpec, 0, len(entries))
+	out := make([]appfeatures.HelpCommandSpec, 0, len(entries))
 	for _, entry := range entries {
 		command := strings.TrimSpace(entry.Command)
 		if command == "" {

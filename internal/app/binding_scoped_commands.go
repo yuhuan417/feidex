@@ -3,13 +3,13 @@ package app
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 
 	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -42,8 +42,8 @@ func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
 				continue
 			}
 			if sess := a.State().Session(key); sess != nil {
-				chatType = apputil.FirstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
-				chatID = apputil.FirstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
+				chatType = textutil.FirstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
+				chatID = textutil.FirstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
 			}
 		}
 		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {

@@ -7,15 +7,15 @@ import (
 	"context"
 	applicationturn "feidex/internal/application/turn"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"strings"
 	"sync"
 
 	appcore "feidex/internal/app/appcore"
 
-	apputil "feidex/internal/app/apputil"
-	"feidex/internal/app/quietmode"
-	"feidex/internal/app/turn"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/quietmode"
+	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/config"
 )
 
@@ -106,7 +106,7 @@ type QuietCardExecutorProvider interface {
 // ---------------------------------------------------------------------------
 
 var (
-	firstNonEmpty                = apputil.FirstNonEmpty
+	firstNonEmpty                = textutil.FirstNonEmpty
 	stringValue                  = turnitem.StringValue
 	normalizeTurnItemType        = turnitem.NormalizeTurnItemType
 	buildTurnItemCardPayload     = turnitem.BuildTurnItemCardPayload

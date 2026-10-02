@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"feidex/internal/app/turnitem"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"net/http"

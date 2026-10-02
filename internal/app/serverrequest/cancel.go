@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/pendingforms"
+	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 

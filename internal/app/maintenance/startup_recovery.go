@@ -3,13 +3,13 @@ package maintenance
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
-	"feidex/internal/app/apputil"
 	"feidex/internal/config"
 )
 
@@ -108,7 +108,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
 			continue
 		}
-		if conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(sess.Status, conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
+		if conversation.NormalizeSessionStatus(textutil.FirstNonEmpty(sess.Status, conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
 			continue
 		}
 		if s.app.MaintenanceSessionHasInFlightSubmission(sess) {
@@ -119,7 +119,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 		}
 
 		sessionKey := strings.TrimSpace(sess.Key)
-		workspaceID := apputil.FirstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, appcore.DefaultWorkspaceID(s.app))
+		workspaceID := textutil.FirstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, appcore.DefaultWorkspaceID(s.app))
 		ws := config.FindWorkspace(s.app.Config(), workspaceID)
 		if ws == nil {
 			slog.Warn("startup thread recovery dropped unknown workspace lineage",

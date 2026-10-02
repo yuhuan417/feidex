@@ -2,15 +2,15 @@ package claudesupport
 
 import (
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"feidex/internal/app/apputil"
-	appcards "feidex/internal/app/cards"
-	appruntime "feidex/internal/app/runtime"
+	appcards "feidex/internal/adapter/feishu/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
+	appruntime "feidex/internal/runtime"
 )
 
 // ---------- callback types for history dependencies ----------
@@ -70,7 +70,7 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 	}
 	label := s.ThreadLabel(sess)
 	if label == "-" {
-		label = apputil.FirstNonEmpty(derefString(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(derefString(thread.Name), thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前 session: " + label,
@@ -95,13 +95,13 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 	initialOption := ""
 	for idx := start; idx < end; idx++ {
 		turn := turns[idx]
-		turnLabel := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, apputil.FirstNonEmpty(turn.Status, "-"), apputil.FirstNonEmpty(turn.Preview, "-"))
+		turnLabel := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, textutil.FirstNonEmpty(turn.Status, "-"), textutil.FirstNonEmpty(turn.Preview, "-"))
 		if turn.IsCurrent {
 			turnLabel = "当前 · " + turnLabel
 			initialOption = strconv.Itoa(idx)
 		}
 		selectOptions = append(selectOptions, appcards.SelectStaticOption{
-			Text:  apputil.Truncate(turnLabel, 72),
+			Text:  textutil.Truncate(turnLabel, 72),
 			Value: strconv.Itoa(idx),
 		})
 	}
@@ -163,14 +163,14 @@ func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, s
 	turn := turns[index]
 	label := s.ThreadLabel(sess)
 	if label == "-" {
-		label = apputil.FirstNonEmpty(derefString(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(derefString(thread.Name), thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前 session: " + label,
 		"session: `" + thread.ID + "`",
 		fmt.Sprintf("Turn #%d", turn.Ordinal),
-		"turn_id: `" + apputil.FirstNonEmpty(turn.TurnID, fmt.Sprintf("claude-turn-%d", turn.Ordinal)) + "`",
-		"状态: `" + apputil.FirstNonEmpty(turn.Status, "-") + "`",
+		"turn_id: `" + textutil.FirstNonEmpty(turn.TurnID, fmt.Sprintf("claude-turn-%d", turn.Ordinal)) + "`",
+		"状态: `" + textutil.FirstNonEmpty(turn.Status, "-") + "`",
 		fmt.Sprintf("记录数: `%d`", len(turn.Records)),
 		"",
 		"原始记录：",
@@ -179,7 +179,7 @@ func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, s
 		bodyLines = append(bodyLines, "-")
 	} else {
 		for idx, record := range turn.Records {
-			meta := []string{"`" + apputil.FirstNonEmpty(record.EntryType, "-") + "`"}
+			meta := []string{"`" + textutil.FirstNonEmpty(record.EntryType, "-") + "`"}
 			if record.Timestamp != "" {
 				meta = append(meta, "`"+record.Timestamp+"`")
 			}
@@ -198,7 +198,7 @@ func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, s
 				continue
 			}
 			for _, line := range record.Details {
-				bodyLines = append(bodyLines, apputil.Truncate(line, 600))
+				bodyLines = append(bodyLines, textutil.Truncate(line, 600))
 			}
 		}
 	}

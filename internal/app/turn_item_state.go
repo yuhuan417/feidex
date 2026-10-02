@@ -1,8 +1,8 @@
 package app
 
 import (
-	appapproval "feidex/internal/app/approval"
-	"feidex/internal/app/turnitem"
+	appapproval "feidex/internal/adapter/feishu/approval"
+	"feidex/internal/adapter/feishu/turnitem"
 	"strings"
 )
 

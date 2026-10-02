@@ -4,9 +4,9 @@ import (
 	"context"
 
 	appclauderuntime "feidex/internal/app/clauderuntime"
-	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
+	appruntime "feidex/internal/runtime"
 )
 
 const claudePlanModePendingKind = "claude_exit_plan_mode"

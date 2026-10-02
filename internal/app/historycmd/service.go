@@ -6,16 +6,16 @@ package historycmd
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"feidex/internal/adapter/feishu/cardactions"
+	appcards "feidex/internal/adapter/feishu/cards"
 	appcore "feidex/internal/app/appcore"
 	apphistory "feidex/internal/app/apphistory"
-	apputil "feidex/internal/app/apputil"
-	"feidex/internal/app/cardactions"
-	appcards "feidex/internal/app/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
@@ -190,7 +190,7 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 	}
 	label := s.app.HistoryCurrentThreadLabel(sess)
 	if label == "-" {
-		label = apputil.FirstNonEmpty(apphistory.StringPtrValue(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(apphistory.StringPtrValue(thread.Name), thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前线程: " + label,
@@ -217,7 +217,7 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 	initialOption := ""
 	for idx := start; idx < end; idx++ {
 		turn := turns[idx]
-		turnLabel := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, apputil.FirstNonEmpty(turn.Status, "-"), apputil.FirstNonEmpty(turn.InputPreview, "-"))
+		turnLabel := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, textutil.FirstNonEmpty(turn.Status, "-"), textutil.FirstNonEmpty(turn.InputPreview, "-"))
 		if turn.IsCurrent {
 			turnLabel = "当前 · " + turnLabel
 			initialOption = strconv.Itoa(idx)
@@ -274,14 +274,14 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 	turn := turns[index]
 	label := s.app.HistoryCurrentThreadLabel(sess)
 	if label == "-" {
-		label = apputil.FirstNonEmpty(apphistory.StringPtrValue(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(apphistory.StringPtrValue(thread.Name), thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前线程: " + label,
 		"thread: `" + thread.ID + "`",
 		fmt.Sprintf("Turn #%d", turn.Ordinal),
 		"turn_id: `" + turn.TurnID + "`",
-		"状态: `" + apputil.FirstNonEmpty(turn.Status, "-") + "`",
+		"状态: `" + textutil.FirstNonEmpty(turn.Status, "-") + "`",
 	}
 	if turn.ErrorText != "" {
 		bodyLines = append(bodyLines, "错误: "+turn.ErrorText)
@@ -300,7 +300,7 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 		bodyLines = append(bodyLines, "-")
 	} else {
 		for i, output := range turn.Outputs {
-			bodyLines = append(bodyLines, fmt.Sprintf("%d. %s", i+1, apputil.Truncate(output, 600)))
+			bodyLines = append(bodyLines, fmt.Sprintf("%d. %s", i+1, textutil.Truncate(output, 600)))
 		}
 	}
 	buttons := make([]feishu.Button, 0, 3)

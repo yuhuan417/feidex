@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"feidex/internal/app/turn"
+	"feidex/internal/adapter/feishu/turn"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
