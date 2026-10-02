@@ -16,7 +16,18 @@ type StartTurnRequest struct {
 type TurnResult struct{ ID, Status string }
 type ThreadTurns struct {
 	ThreadID string
-	Turns []TurnResult
+	Turns    []TurnResult
+}
+
+type HistoryTurn struct {
+	Ordinal                             int
+	ID, Status, ErrorText, InputPreview string
+	Inputs, Outputs                     []string
+}
+
+type ThreadHistory struct {
+	ID, Name, Preview, Cwd string
+	Turns                  []HistoryTurn
 }
 type ReviewRequest struct {
 	ThreadID string

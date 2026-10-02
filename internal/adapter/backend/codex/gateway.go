@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	codexhistory "feidex/internal/adapter/backend/codex/history"
 	"feidex/internal/application/backendops"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
@@ -51,6 +52,25 @@ func (g Gateway) ReadThreadTurns(ctx context.Context, threadID string) (backendo
 		result.Turns = append(result.Turns, backendops.TurnResult{ID: turn.ID, Status: turn.Status})
 	}
 	return result, err
+}
+
+func (g Gateway) ReadThreadHistory(ctx context.Context, threadID string) (backendops.ThreadHistory, error) {
+	var out codexrpc.ThreadReadResult
+	err := g.call(ctx, "thread/read", map[string]any{"threadId": strings.TrimSpace(threadID), "includeTurns": true}, &out)
+	name := ""
+	if out.Thread.Name != nil {
+		name = strings.TrimSpace(*out.Thread.Name)
+	}
+	summaries := codexhistory.SummarizeThreadHistory(out.Thread.Turns, "")
+	result := backendops.ThreadHistory{ID: out.Thread.ID, Name: name, Preview: out.Thread.Preview, Cwd: out.Thread.Cwd}
+	for _, summary := range summaries {
+		result.Turns = append(result.Turns, backendops.HistoryTurn{Ordinal: summary.Ordinal, ID: summary.TurnID, Status: summary.Status, ErrorText: summary.ErrorText, InputPreview: summary.InputPreview, Inputs: append([]string(nil), summary.Inputs...), Outputs: append([]string(nil), summary.Outputs...)})
+	}
+	return result, err
+}
+
+func (g Gateway) StartCompaction(ctx context.Context, threadID string) error {
+	return g.call(ctx, "thread/compact/start", map[string]any{"threadId": strings.TrimSpace(threadID)}, nil)
 }
 func (g Gateway) ListModels(ctx context.Context, limit int) (modelconfig.ModelListResult, error) {
 	var out modelconfig.ModelListResult

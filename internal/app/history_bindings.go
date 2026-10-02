@@ -1,6 +1,7 @@
 package app
 
 import (
+	codexadapter "feidex/internal/adapter/backend/codex"
 	history "feidex/internal/adapter/feishu/history"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
@@ -9,7 +10,9 @@ import (
 func newHistoryService(app *App) history.Service {
 	return history.NewService(history.Dependencies{
 		Context: app.Context, Feishu: app.feishu, State: app.State(),
-		Codex:         func() (history.CodexClient, error) { return requireCodexClient(app) },
+		Reader: func() (history.ThreadHistoryReader, error) {
+			return codexadapter.Gateway{Client: currentCodexClient(app)}, nil
+		},
 		SessionKey:    func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },
 		ReplyInThread: func(chatType string) bool { return replyInThreadEnabled(app, chatType) },
 		MenuBody:      menuCardBody,

@@ -5,6 +5,7 @@ package history
 
 import (
 	"context"
+	"feidex/internal/application/backendops"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	history "feidex/internal/adapter/backend/codex/history"
 	"feidex/internal/adapter/feishu/cardactions"
 	appcards "feidex/internal/adapter/feishu/cards"
-	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
 
@@ -50,8 +50,8 @@ type ConversationBackendProvider interface {
 
 // CodexClient is the narrow interface for the Codex RPC client used by the
 // history service.
-type CodexClient interface {
-	Call(ctx context.Context, method string, params any, out any) error
+type ThreadHistoryReader interface {
+	ReadThreadHistory(context.Context, string) (backendops.ThreadHistory, error)
 }
 
 type FeishuClient interface {
@@ -62,7 +62,7 @@ type Dependencies struct {
 	Context       func() context.Context
 	Feishu        FeishuClient
 	State         StateProvider
-	Codex         func() (CodexClient, error)
+	Reader        func() (ThreadHistoryReader, error)
 	SessionKey    func(*feishu.InboundMessage) string
 	ReplyInThread func(string) bool
 	MenuBody      func(string, string) string
@@ -177,7 +177,7 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 	}
 	label := s.deps.ThreadLabel(sess)
 	if label == "-" {
-		label = textutil.FirstNonEmpty(history.StringPtrValue(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(thread.Name, thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前线程: " + label,
@@ -261,7 +261,7 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 	turn := turns[index]
 	label := s.deps.ThreadLabel(sess)
 	if label == "-" {
-		label = textutil.FirstNonEmpty(history.StringPtrValue(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(thread.Name, thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前线程: " + label,
@@ -319,30 +319,30 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 
 // FetchCurrentThreadHistory fetches the current thread history from the Codex
 // backend. Returns the session, thread, turn summaries, and any error.
-func (s Service) FetchCurrentThreadHistory(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []history.TurnSummary, error) {
+func (s Service) FetchCurrentThreadHistory(sessionKey string) (*conversation.Session, backendops.ThreadHistory, []history.TurnSummary, error) {
 	store := s.deps.State
 	if store == nil {
-		return nil, nil, nil, fmt.Errorf("store not initialized")
+		return nil, backendops.ThreadHistory{}, nil, fmt.Errorf("store not initialized")
 	}
 	sess := s.deps.State.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
+		return nil, backendops.ThreadHistory{}, nil, fmt.Errorf("当前没有活动线程")
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
-	var result codexrpc.ThreadReadResult
-	client, err := s.deps.Codex()
+	reader, err := s.deps.Reader()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, backendops.ThreadHistory{}, nil, err
 	}
-	if err := client.Call(ctx, "thread/read", map[string]any{
-		"threadId":     strings.TrimSpace(sess.ActiveThreadID),
-		"includeTurns": true,
-	}, &result); err != nil {
-		return nil, nil, nil, err
+	result, err := reader.ReadThreadHistory(ctx, strings.TrimSpace(sess.ActiveThreadID))
+	if err != nil {
+		return nil, backendops.ThreadHistory{}, nil, err
 	}
-	turns := history.SummarizeThreadHistory(result.Thread.Turns, sess.ActiveTurnID)
-	return sess, &result.Thread, turns, nil
+	turns := make([]history.TurnSummary, 0, len(result.Turns))
+	for _, turn := range result.Turns {
+		turns = append(turns, history.TurnSummary{Ordinal: turn.Ordinal, TurnID: turn.ID, Status: turn.Status, ErrorText: turn.ErrorText, InputPreview: turn.InputPreview, Inputs: append([]string(nil), turn.Inputs...), Outputs: append([]string(nil), turn.Outputs...), IsCurrent: strings.TrimSpace(turn.ID) != "" && strings.TrimSpace(turn.ID) == strings.TrimSpace(sess.ActiveTurnID)})
+	}
+	return sess, result, turns, nil
 }
 
 func (s Service) context() context.Context {

@@ -74,6 +74,38 @@ func TestTurnGatewayRejectsEmptyInputBeforeTransportAndPreservesResult(t *testin
 	}
 }
 
+func TestHistoryGatewayConvertsThreadReadIntoSemanticTurns(t *testing.T) {
+	g := Gateway{Client: gatewayRPCFunc(func(_ context.Context, method string, _ any, out any) error {
+		if method != "thread/read" {
+			t.Fatalf("method = %q", method)
+		}
+		name := "Thread"
+		result := out.(*codexrpc.ThreadReadResult)
+		result.Thread = codexrpc.ThreadReadThread{
+			ID: "thread", Name: &name, Preview: "preview", Cwd: "/repo",
+			Turns: []codexrpc.ThreadReadTurn{{
+				ID: "turn-1", Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", Content: json.RawMessage(`[{"type":"text","text":"hello"}]`)},
+					{Type: "agentMessage", Text: "world"},
+				},
+			}},
+		}
+		return nil
+	})}
+	history, err := g.ReadThreadHistory(context.Background(), "thread")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if history.ID != "thread" || history.Name != "Thread" || history.Cwd != "/repo" || len(history.Turns) != 1 {
+		t.Fatalf("history = %+v", history)
+	}
+	turn := history.Turns[0]
+	if turn.Ordinal != 1 || turn.InputPreview != "hello" || len(turn.Inputs) != 1 || turn.Inputs[0] != "hello" || len(turn.Outputs) != 1 || turn.Outputs[0] != "world" {
+		t.Fatalf("turn = %+v", turn)
+	}
+}
+
 type replyRecorder struct {
 	calls   int
 	token   json.RawMessage
