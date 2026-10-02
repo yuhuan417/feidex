@@ -8,9 +8,9 @@ import (
 	"feidex/internal/app/appcore"
 )
 
-// App is the interface that the backend package uses to access *App fields.
-// *App satisfies this via its accessor methods.
-type App interface {
+// Dependencies is the capability set consumed by backend services. The alias
+// below exists only for source compatibility with older composition literals.
+type Dependencies interface {
 	appcore.AppExtended
 
 	// Backend switch state
@@ -27,3 +27,7 @@ type App interface {
 	// Feishu client access
 	Feishu() appcore.FeishuClient
 }
+
+// App is a compatibility name for Dependencies; new code should use
+// Dependencies explicitly.
+type App = Dependencies

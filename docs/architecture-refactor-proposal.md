@@ -475,5 +475,6 @@ Codex server request
 - 保持模型生效、thread 生命周期、pending 状态、菜单顺序与 frontend 隔离契约不变；全量 Go 测试 1215 项通过。
 - workspacecmd 的配置、管理和渲染服务改为显式 workspace capability carrier，删除其宿主 App interface；MCP bridge 改为显式 Dependencies，删除 MCP 宿主 adapter。
 - debugviewcmd、reviewcmd 和 threadmenu 改为 consumer-owned Dependencies，根绑定只负责组装状态、backend、Feishu 和 runtime capability；对应宿主 adapter 已删除。
+- backend capability carrier 的正式名称改为 `Dependencies`；旧 `App` 仅保留为源码兼容别名，后续 permission driver 将继续拆成按能力注入的 ports。
 
 当前剩余：遗留 message/card command 编排，backend dependency carrier 与 permission driver 的宿主动态回查，Claude stream presentation 回调，完整 session event 串行 owner，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
