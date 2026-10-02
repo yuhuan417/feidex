@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/interaction"
 	"strings"
 
 	applifecycle "feidex/internal/app/lifecycle"
@@ -8,7 +9,7 @@ import (
 )
 
 func isServerResolvedPendingKind(kind string) bool {
-	return applifecycle.IsServerResolvedPendingKind(kind)
+	return interaction.IsServerResolvedPendingKind(kind)
 }
 
 func isPendingRequestOpen(req *state.PendingRequest) bool {

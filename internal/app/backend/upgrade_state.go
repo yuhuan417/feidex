@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"feidex/internal/domain/interaction"
 	"strings"
 	"time"
 
@@ -126,7 +127,7 @@ func (s MaintenanceStateService) BlockingPendingCount() int {
 	}
 	count := 0
 	for _, req := range s.App.Store().AllPendingRequests() {
-		if req == nil || !applifecycle.IsServerResolvedPendingKind(req.Kind) || !applifecycle.IsPendingRequestOpen(req) {
+		if req == nil || !interaction.IsServerResolvedPendingKind(req.Kind) || !applifecycle.IsPendingRequestOpen(req) {
 			continue
 		}
 		count++
