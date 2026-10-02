@@ -44,8 +44,8 @@ func NewPendingSkillTracker() *PendingSkillTracker {
 // Service provides skills listing, selection, and pending skill tracking.
 // Callback function fields are injected by the app-layer adapter.
 type Service struct {
-	// FeishuClient returns the Feishu bot client.
-	FeishuClient func() FeishuClient
+	// Outbound returns the semantic messaging capability.
+	Outbound func() Outbound
 	// RequireCodexClient returns the Codex RPC client or an error.
 	RequireCodexClient func() (CodexClient, error)
 	// AppStateSession returns the session for the given key.
@@ -71,9 +71,8 @@ func NewService() *Service {
 	return &Service{}
 }
 
-// FeishuClient is the narrow interface for the Feishu bot client methods
-// used by the skills service.
-type FeishuClient interface {
+// Outbound is the narrow semantic messaging capability used by the skills service.
+type Outbound interface {
 	ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error)
 	ReplyText(ctx context.Context, messageID string, text string, inThread bool) error
 }
@@ -119,7 +118,7 @@ func (s *Service) CommandSkills(msg *feishu.InboundMessage, args []string) error
 	if err != nil {
 		return err
 	}
-	_, err = s.FeishuClient().ReplyCard(context.Background(), msg.MessageID, card, s.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.Outbound().ReplyCard(context.Background(), msg.MessageID, card, s.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
