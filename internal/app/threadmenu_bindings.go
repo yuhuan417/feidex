@@ -14,6 +14,29 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
+	if a == nil {
+		return appthreadmenu.Dependencies{}
+	}
+	return appthreadmenu.Dependencies{
+		ConfigProvider: a, FeishuClient: a.feishu,
+		AppStateFn: a.ThreadMenuAppState, EffectiveSessionKeyFn: a.ThreadMenuEffectiveSessionKey,
+		ConversationBackendFn: a.ThreadMenuConversationBackend, BackendRuntimeFn: a.ThreadMenuBackendRuntime,
+		PendingQueueFn: a.ThreadMenuPendingQueue, WorkspaceThreadFn: a.ThreadMenuWorkspaceThread,
+		WorkspaceConfigFn: a.ThreadMenuWorkspaceConfig, BackendActionsFn: a.ThreadMenuBackendActions,
+		SessionHasActiveWorkFn: sessionHasActiveWork,
+		CancelAutoRetryFn:      a.CancelAutoRetry, LockAutoRetryDispatchFn: a.LockAutoRetryDispatch,
+		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse, CommandForkFn: a.CommandFork,
+		CompleteMenuCommandFn: a.CompleteMenuCommand, ActionStringValueFn: actionStringValue,
+		MenuCardBodyFn: menuCardBody, MenuCardBodyForBackendFn: menuCardBodyForBackend,
+		NormalizeRequestedClaudePermissionModeFn:  a.NormalizeRequestedClaudePermissionMode,
+		ApplyClaudePermissionModeToRuntimeFn:      a.ApplyClaudePermissionModeToRuntime,
+		ApplyClaudePermissionModeToRuntimeAsyncFn: a.ApplyClaudePermissionModeToRuntimeAsync,
+		RenderClaudeSessionPermissionMenuCardFn:   a.RenderClaudeSessionPermissionMenuCard,
+		ShowClaudeSessionPermissionMenuFromAppFn:  a.ShowClaudeSessionPermissionMenuFromApp,
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Provider adapters — satisfy threadmenu narrow interfaces
 // ---------------------------------------------------------------------------

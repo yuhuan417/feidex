@@ -45,7 +45,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err = appthreadmenu.NewService(a).CommandThreadsNew(&feishu.InboundMessage{
+	err = appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreadsNew(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",

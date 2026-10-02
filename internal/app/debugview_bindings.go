@@ -11,10 +11,22 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type debugViewAppAdapter struct{ *App }
-
-func newDebugViewAppAdapter(app *App) debugViewAppAdapter {
-	return debugViewAppAdapter{App: app}
+func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
+	if app == nil {
+		return appdebugviewcmd.Dependencies{}
+	}
+	return appdebugviewcmd.Dependencies{
+		ConfigProvider: app, FeishuClient: app.feishu, StateProvider: app.State(),
+		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
+		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
+		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(app, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(app, v) },
+		CompleteMenuCommandFn: func(a *feishu.CardAction, s, r, p string) (*callback.CardActionTriggerResponse, error) {
+			return completeMenuCommand(app, a, s, r, p)
+		},
+		MenuCardBodyFn: menuCardBody, MenuBreadcrumbLabelsFn: menuBreadcrumbLabels, CommandLabelFn: commandLabel,
+		CurrentThreadLabelFn: appthreadmenu.SessionCurrentThreadLabel, PrimaryConversationMissingLabelFn: primaryConversationMissingLabel,
+		DefaultWorkspaceIDFn: func() string { return defaultWorkspaceID(app) }, ConfigPathFn: func() string { return app.cfgPath },
+	}
 }
 
 func newDebugService(app *App) appdebugviewcmd.DebugService {
@@ -23,70 +35,6 @@ func newDebugService(app *App) appdebugviewcmd.DebugService {
 
 func newUsageService(app *App) appdebugviewcmd.UsageService {
 	return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
-}
-
-func (a debugViewAppAdapter) DebugFeishu() appdebugviewcmd.FeishuClient {
-	return a.feishu
-}
-
-func (a debugViewAppAdapter) DebugAppState() appdebugviewcmd.AppStateProvider {
-	return a.State()
-}
-
-func (a debugViewAppAdapter) DebugRuntimeState() appdebugviewcmd.RuntimeStateProvider {
-	return debugRuntimeStateAdapter{app: a.App}
-}
-
-func (a debugViewAppAdapter) DebugConversationBackend() appdebugviewcmd.ConversationBackendProvider {
-	return debugConversationBackendAdapter{app: a.App}
-}
-
-func (a debugViewAppAdapter) DebugWorkspaceConfig() appdebugviewcmd.WorkspaceConfigProvider {
-	return debugWorkspaceConfigAdapter{app: a.App}
-}
-
-func (a debugViewAppAdapter) DebugWorkspaceRender() appdebugviewcmd.WorkspaceRenderProvider {
-	return debugWorkspaceRenderAdapter{app: a.App}
-}
-
-func (a debugViewAppAdapter) DebugMakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a.App, msg)
-}
-
-func (a debugViewAppAdapter) DebugReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a.App, chatType)
-}
-
-func (a debugViewAppAdapter) DebugCompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(a.App, action, sessionKey, rawCommand, parentAction)
-}
-
-func (a debugViewAppAdapter) DebugMenuCardBody(action, body string) string {
-	return menuCardBody(action, body)
-}
-
-func (a debugViewAppAdapter) DebugMenuBreadcrumbLabels(action string) []string {
-	return menuBreadcrumbLabels(action)
-}
-
-func (a debugViewAppAdapter) DebugCommandLabel(label, slash string) string {
-	return commandLabel(label, slash)
-}
-
-func (a debugViewAppAdapter) DebugCurrentThreadLabel(sess *conversation.Session) string {
-	return appthreadmenu.SessionCurrentThreadLabel(sess)
-}
-
-func (a debugViewAppAdapter) DebugPrimaryConversationMissingLabel(backend string) string {
-	return primaryConversationMissingLabel(backend)
-}
-
-func (a debugViewAppAdapter) DebugDefaultWorkspaceID() string {
-	return defaultWorkspaceID(a.App)
-}
-
-func (a debugViewAppAdapter) DebugConfigPath() string {
-	return a.cfgPath
 }
 
 type debugRuntimeStateAdapter struct {

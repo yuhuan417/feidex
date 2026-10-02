@@ -5,8 +5,6 @@ import (
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appcore "feidex/internal/app/appcore"
-
 	appreview "feidex/internal/adapter/feishu/review"
 
 	appreviewcmd "feidex/internal/app/reviewcmd"
@@ -38,96 +36,34 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd
 // App adapters — satisfy reviewcmd.App without adding feature methods on *App
 // ---------------------------------------------------------------------------
 
-type reviewAppAdapter struct{ *App }
-
-func newReviewAppAdapter(a *App) reviewAppAdapter {
-	return reviewAppAdapter{App: a}
+func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
+	if a == nil {
+		return appreviewcmd.Dependencies{}
+	}
+	return appreviewcmd.Dependencies{
+		ConfigProvider: a, FeishuClient: a.feishu, StateProvider: a.State(),
+		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
+		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexClient(a) },
+		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
+		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
+		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {
+			return commandMessageFromAction(a, x, s, r)
+		},
+		SessionHasActiveWorkFn: sessionHasActiveWork, SessionHasInFlightSubmissionFn: conversation.HasInFlightSubmission,
+		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(a, s) },
+		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { sendSubmissionQueuedNotice(a, c, s) },
+		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { newPendingQueueService(a).markSubmissionQueuedReactions(s) },
+		CompleteAsyncCommandActionFn: func(x *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
+			return completeAsyncCommandAction(a, x, s, r, f, t, p, ok, fail, w)
+		},
+		CompleteAsyncRenderedCardActionFn: func(x *feishu.CardAction, s, t string, p map[string]any, r func() (*callback.CardActionTriggerResponse, error), f func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
+			return completeAsyncRenderedCardAction(a, x, s, t, p, r, f, w)
+		},
+	}
 }
 
 func newReviewFormService(app *App) appreviewcmd.ReviewFormService {
 	return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
-}
-
-func (a reviewAppAdapter) ReviewFeishu() appcore.FeishuClient {
-	return a.feishu
-}
-
-func (a reviewAppAdapter) ReviewAppState() appreviewcmd.AppStateProvider {
-	return a.State()
-}
-
-func (a reviewAppAdapter) ReviewWorkspaceProvider() appreviewcmd.WorkspaceProvider {
-	return reviewWorkspaceProviderAdapter{app: a.App}
-}
-
-func (a reviewAppAdapter) ReviewGitProvider() appreviewcmd.ReviewGitProvider {
-	return reviewGitProviderAdapter{app: a.App}
-}
-
-func (a reviewAppAdapter) ReviewCodexClient() (appreviewcmd.CodexClient, error) {
-	return requireCodexClient(a.App)
-}
-
-func (a reviewAppAdapter) ReviewMakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a.App, msg)
-}
-
-func (a reviewAppAdapter) ReviewReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a.App, chatType)
-}
-
-func (a reviewAppAdapter) ReviewMenuCardBody(action, body string) string {
-	return menuCardBody(action, body)
-}
-
-func (a reviewAppAdapter) ReviewActionStringValue(action *feishu.CardAction, key string) string {
-	return actionStringValue(action, key)
-}
-
-func (a reviewAppAdapter) ReviewCommandMessageFromAction(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
-	return commandMessageFromAction(a.App, action, sessionKey, rawCommand)
-}
-
-func (a reviewAppAdapter) ReviewSessionHasActiveWork(sess *conversation.Session) bool {
-	return sessionHasActiveWork(sess)
-}
-
-func (a reviewAppAdapter) ReviewSessionHasInFlightSubmission(sess *conversation.Session) bool {
-	return conversation.HasInFlightSubmission(sess)
-}
-
-func (a reviewAppAdapter) ReviewStartNextSubmission(sessionKey string) error {
-	return startNextSubmission(a.App, sessionKey)
-}
-
-func (a reviewAppAdapter) ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission) {
-	sendSubmissionQueuedNotice(a.App, ctx, sub)
-}
-
-func (a reviewAppAdapter) ReviewMarkSubmissionQueuedReactions(sub *domainsubmission.Submission) {
-	newPendingQueueService(a.App).markSubmissionQueuedReactions(sub)
-}
-
-func (a reviewAppAdapter) ReviewCompleteAsyncCommandAction(
-	action *feishu.CardAction,
-	sessionKey, rawCommand, fallbackAction, toastText string,
-	preparingCard map[string]any,
-	successCardFromText func(sessionKey, text string) map[string]any,
-	failureCard func(sessionKey, errText string) map[string]any,
-	patchWarnMsg string,
-) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncCommandAction(a.App, action, sessionKey, rawCommand, fallbackAction, toastText, preparingCard, successCardFromText, failureCard, patchWarnMsg)
-}
-
-func (a reviewAppAdapter) ReviewCompleteAsyncRenderedCardAction(
-	action *feishu.CardAction,
-	sessionKey, toastText string,
-	preparingCard map[string]any,
-	run func() (*callback.CardActionTriggerResponse, error),
-	failureCard func(sessionKey, errText string) map[string]any,
-	patchWarnMsg string,
-) (*callback.CardActionTriggerResponse, error) {
-	return completeAsyncRenderedCardAction(a.App, action, sessionKey, toastText, preparingCard, run, failureCard, patchWarnMsg)
 }
 
 // ---------------------------------------------------------------------------

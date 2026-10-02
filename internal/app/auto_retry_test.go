@@ -436,7 +436,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		ChatType:   sess.ChatType,
 		UserID:     sess.OwnerUserID,
 	}
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if len(scheduled) != 1 || !scheduled[0].task.stopped {
@@ -494,7 +494,7 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 		RootMessageID: "cmd-stop-new-root",
 		UserID:        sess.OwnerUserID,
 	}
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if !scheduled[0].task.stopped {
@@ -664,7 +664,7 @@ func TestStopPreventsLateFailureFromRestartingRetry(t *testing.T) {
 						return nil
 					}
 				}
-				if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+				if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 					t.Fatal(err)
 				}
 				if !missingCompletion {
@@ -712,7 +712,7 @@ func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 		t.Fatal("retry not scheduled")
 	}
 	timers[0].fire() // Callback dispatched, but not run yet.
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatal(err)
 	}
 	// A later independent task may fail and create a new loop for the same session.
@@ -727,7 +727,7 @@ func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 	if !retry.HasPendingAutoRetry(key) || timers[1].stopped {
 		t.Fatal("stale callback consumed the new retry")
 	}
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -777,7 +777,7 @@ func TestStopWaitsForRetryStartupAndInterruptsStartedTurn(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 	stopDone := make(chan error, 1)
-	go func() { stopDone <- appthreadmenu.NewService(a).CommandInterrupt(msg) }()
+	go func() { stopDone <- appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg) }()
 	close(release)
 	select {
 	case err := <-stopDone:
@@ -816,7 +816,7 @@ func TestStopDoesNotFinalizeUnconfirmedTurnAfterInterruptError(t *testing.T) {
 		t.Fatalf("unexpected call %s", method)
 		return nil
 	}
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); !errors.Is(err, interruptErr) {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); !errors.Is(err, interruptErr) {
 		t.Fatalf("error = %v", err)
 	}
 	if sess := a.State().Session(key); sess.ActiveTurnID != "turn-1" {

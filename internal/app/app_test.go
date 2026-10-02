@@ -412,7 +412,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 	ff.replyTexts = nil
 	ff.replyCards = nil
-	if err := appthreadmenu.NewService(a).CommandThreads(msg, false); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(empty) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -862,7 +862,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(a).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
+			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:chat:chat-1"
@@ -972,10 +972,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newWorkspaceManagementService(a).CompleteWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(a).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(a).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
+			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 	} {
 		resp, err := fn()
@@ -3055,10 +3055,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := appthreadmenu.NewService(a).ShowThreadSandboxMenu(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).ShowThreadSandboxMenu(msg); err != nil {
 		t.Fatalf("showThreadSandboxMenu() error = %v", err)
 	}
-	if err := appthreadmenu.NewService(a).ShowThreadPolicyMenu(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).ShowThreadPolicyMenu(msg); err != nil {
 		t.Fatalf("showThreadPolicyMenu() error = %v", err)
 	}
 	if len(ff.replyCards) < 2 {
@@ -3079,7 +3079,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	emptyMsg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-2", ChatType: "group", RootMessageID: "root-2", UserID: "user-2"}
-	if err := appthreadmenu.NewService(a).CommandAppend(emptyMsg, "  more text  "); err == nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandAppend(emptyMsg, "  more text  "); err == nil {
 		t.Fatal("expected commandAppend without active session to fail")
 	}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -3097,10 +3097,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 			return nil
 		}
 	}
-	if err := appthreadmenu.NewService(a).CommandAppend(msg, "  more text  "); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandAppend(msg, "  more text  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 
@@ -3110,7 +3110,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)
 	}
-	if err := appthreadmenu.NewService(a).CommandThreadsNew(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreadsNew(msg); err != nil {
 		t.Fatalf("commandThreadsNew() error = %v", err)
 	}
 }
@@ -3196,7 +3196,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(thread resume) error = %v", err)
 	}
-	resp, err = appthreadmenu.NewService(a).CompleteThreadResume(&feishu.CardAction{
+	resp, err = appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"thread_name": "Selected", "thread_preview": "chosen"},
@@ -3240,7 +3240,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset for menu new) error = %v", err)
 	}
-	resp, err = appthreadmenu.NewService(a).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
+	resp, err = appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuNew() = %#v, %v", resp, err)
 	}
@@ -3557,7 +3557,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(a).CommandThreads(msg, false); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(display) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -3691,7 +3691,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(a).CommandThreads(msg, false); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(filter) error = %v", err)
 	}
 	if attempts != 3 {
@@ -3738,7 +3738,7 @@ func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
 		return nil
 	}
 
-	resp, err := appthreadmenu.NewService(a).CompleteThreadResume(&feishu.CardAction{
+	resp, err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{
 		UserID: "user-1",
 		ChatID: "chat-1",
 		ActionValue: map[string]any{

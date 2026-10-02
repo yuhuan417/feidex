@@ -11,6 +11,7 @@ import (
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
@@ -78,66 +79,135 @@ type CodexClient interface {
 	Call(ctx context.Context, method string, params any, out any) error
 }
 
-// App defines the interface the review service requires from the host
-// application. It embeds appcore.AppConfig so that appcore helpers like
-// MakeSessionKey, ReplyInThreadEnabled, etc. can be called directly.
-type App interface {
-	appcore.AppConfig
+// Dependencies is the explicit review capability set assembled by the
+// composition root.
+type Dependencies struct {
+	ConfigProvider                    appcore.AppConfig
+	FeishuClient                      appcore.FeishuClient
+	StateProvider                     AppStateProvider
+	WorkspaceProviderValue            WorkspaceProvider
+	GitProvider                       ReviewGitProvider
+	CodexClientFn                     func() (CodexClient, error)
+	MakeSessionKeyFn                  func(*feishu.InboundMessage) string
+	ReplyInThreadEnabledFn            func(string) bool
+	MenuCardBodyFn                    func(string, string) string
+	ActionStringValueFn               func(*feishu.CardAction, string) string
+	CommandMessageFromActionFn        func(*feishu.CardAction, string, string) *feishu.InboundMessage
+	SessionHasActiveWorkFn            func(*conversation.Session) bool
+	SessionHasInFlightSubmissionFn    func(*conversation.Session) bool
+	StartNextSubmissionFn             func(string) error
+	SendSubmissionQueuedNoticeFn      func(context.Context, *domainsubmission.Submission)
+	MarkSubmissionQueuedReactionsFn   func(*domainsubmission.Submission)
+	CompleteAsyncCommandActionFn      func(*feishu.CardAction, string, string, string, string, map[string]any, func(string, string) map[string]any, func(string, string) map[string]any, string) (*callback.CardActionTriggerResponse, error)
+	CompleteAsyncRenderedCardActionFn func(*feishu.CardAction, string, string, map[string]any, func() (*callback.CardActionTriggerResponse, error), func(string, string) map[string]any, string) (*callback.CardActionTriggerResponse, error)
+}
 
-	// ReviewFeishu returns the Feishu bot client.
-	ReviewFeishu() appcore.FeishuClient
-	// ReviewAppState returns the narrowed app state provider.
-	ReviewAppState() AppStateProvider
-	// ReviewWorkspaceProvider returns the narrowed workspace provider.
-	ReviewWorkspaceProvider() WorkspaceProvider
-	// ReviewGitProvider returns the narrowed git provider.
-	ReviewGitProvider() ReviewGitProvider
-	// ReviewCodexClient returns the current Codex RPC client.
-	ReviewCodexClient() (CodexClient, error)
-	// ReviewMakeSessionKey builds a session key from an inbound message.
-	ReviewMakeSessionKey(msg *feishu.InboundMessage) string
-	// ReviewReplyInThreadEnabled reports whether reply-in-thread is enabled
-	// for the given chat type.
-	ReviewReplyInThreadEnabled(chatType string) bool
-	// ReviewMenuCardBody formats a menu card body with breadcrumb navigation.
-	ReviewMenuCardBody(action, body string) string
-	// ReviewActionStringValue extracts a string value from a card action.
-	ReviewActionStringValue(action *feishu.CardAction, key string) string
-	// ReviewCommandMessageFromAction builds an InboundMessage from a card action.
-	ReviewCommandMessageFromAction(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage
-	// ReviewSessionHasActiveWork reports whether the session has active work.
-	ReviewSessionHasActiveWork(sess *conversation.Session) bool
-	// ReviewSessionHasInFlightSubmission reports whether the session has an
-	// in-flight submission.
-	ReviewSessionHasInFlightSubmission(sess *conversation.Session) bool
-	// ReviewStartNextSubmission starts the next queued submission for the
-	// given session.
-	ReviewStartNextSubmission(sessionKey string) error
-	// ReviewSendSubmissionQueuedNotice sends a queued notice for the submission.
-	ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission)
-	// ReviewMarkSubmissionQueuedReactions marks the submission with queued
-	// reactions.
-	ReviewMarkSubmissionQueuedReactions(sub *domainsubmission.Submission)
-	// ReviewCompleteAsyncCommandAction runs a slash-command-style action
-	// asynchronously and patches the card.
-	ReviewCompleteAsyncCommandAction(
-		action *feishu.CardAction,
-		sessionKey, rawCommand, fallbackAction, toastText string,
-		preparingCard map[string]any,
-		successCardFromText func(sessionKey, text string) map[string]any,
-		failureCard func(sessionKey, errText string) map[string]any,
-		patchWarnMsg string,
-	) (*callback.CardActionTriggerResponse, error)
-	// ReviewCompleteAsyncRenderedCardAction runs an action asynchronously and
-	// patches the card.
-	ReviewCompleteAsyncRenderedCardAction(
-		action *feishu.CardAction,
-		sessionKey, toastText string,
-		preparingCard map[string]any,
-		run func() (*callback.CardActionTriggerResponse, error),
-		failureCard func(sessionKey, errText string) map[string]any,
-		patchWarnMsg string,
-	) (*callback.CardActionTriggerResponse, error)
+func (d Dependencies) Config() *config.Config {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.Config()
+}
+func (d Dependencies) ConfigMu() *sync.RWMutex {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.ConfigMu()
+}
+func (d Dependencies) Backend() string {
+	if d.ConfigProvider == nil {
+		return ""
+	}
+	return d.ConfigProvider.Backend()
+}
+func (d Dependencies) FrontendID() string {
+	if d.ConfigProvider == nil {
+		return ""
+	}
+	return d.ConfigProvider.FrontendID()
+}
+func (d Dependencies) FrontendConfigIndex() int {
+	if d.ConfigProvider == nil {
+		return -1
+	}
+	return d.ConfigProvider.FrontendConfigIndex()
+}
+func (d Dependencies) Store() *state.Store {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.Store()
+}
+func (d Dependencies) ReviewFeishu() appcore.FeishuClient         { return d.FeishuClient }
+func (d Dependencies) ReviewAppState() AppStateProvider           { return d.StateProvider }
+func (d Dependencies) ReviewWorkspaceProvider() WorkspaceProvider { return d.WorkspaceProviderValue }
+func (d Dependencies) ReviewGitProvider() ReviewGitProvider       { return d.GitProvider }
+func (d Dependencies) ReviewCodexClient() (CodexClient, error) {
+	if d.CodexClientFn == nil {
+		return nil, fmt.Errorf("codex client unavailable")
+	}
+	return d.CodexClientFn()
+}
+func (d Dependencies) ReviewMakeSessionKey(m *feishu.InboundMessage) string {
+	if d.MakeSessionKeyFn == nil {
+		return ""
+	}
+	return d.MakeSessionKeyFn(m)
+}
+func (d Dependencies) ReviewReplyInThreadEnabled(v string) bool {
+	return d.ReplyInThreadEnabledFn != nil && d.ReplyInThreadEnabledFn(v)
+}
+func (d Dependencies) ReviewMenuCardBody(a, b string) string {
+	if d.MenuCardBodyFn == nil {
+		return b
+	}
+	return d.MenuCardBodyFn(a, b)
+}
+func (d Dependencies) ReviewActionStringValue(a *feishu.CardAction, k string) string {
+	if d.ActionStringValueFn == nil {
+		return ""
+	}
+	return d.ActionStringValueFn(a, k)
+}
+func (d Dependencies) ReviewCommandMessageFromAction(a *feishu.CardAction, s, r string) *feishu.InboundMessage {
+	if d.CommandMessageFromActionFn == nil {
+		return nil
+	}
+	return d.CommandMessageFromActionFn(a, s, r)
+}
+func (d Dependencies) ReviewSessionHasActiveWork(s *conversation.Session) bool {
+	return d.SessionHasActiveWorkFn != nil && d.SessionHasActiveWorkFn(s)
+}
+func (d Dependencies) ReviewSessionHasInFlightSubmission(s *conversation.Session) bool {
+	return d.SessionHasInFlightSubmissionFn != nil && d.SessionHasInFlightSubmissionFn(s)
+}
+func (d Dependencies) ReviewStartNextSubmission(s string) error {
+	if d.StartNextSubmissionFn == nil {
+		return fmt.Errorf("submission starter unavailable")
+	}
+	return d.StartNextSubmissionFn(s)
+}
+func (d Dependencies) ReviewSendSubmissionQueuedNotice(c context.Context, s *domainsubmission.Submission) {
+	if d.SendSubmissionQueuedNoticeFn != nil {
+		d.SendSubmissionQueuedNoticeFn(c, s)
+	}
+}
+func (d Dependencies) ReviewMarkSubmissionQueuedReactions(s *domainsubmission.Submission) {
+	if d.MarkSubmissionQueuedReactionsFn != nil {
+		d.MarkSubmissionQueuedReactionsFn(s)
+	}
+}
+func (d Dependencies) ReviewCompleteAsyncCommandAction(a *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
+	if d.CompleteAsyncCommandActionFn == nil {
+		return nil, fmt.Errorf("async command unavailable")
+	}
+	return d.CompleteAsyncCommandActionFn(a, s, r, f, t, p, ok, fail, w)
+}
+func (d Dependencies) ReviewCompleteAsyncRenderedCardAction(a *feishu.CardAction, s, t string, p map[string]any, r func() (*callback.CardActionTriggerResponse, error), f func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
+	if d.CompleteAsyncRenderedCardActionFn == nil {
+		return nil, fmt.Errorf("async card action unavailable")
+	}
+	return d.CompleteAsyncRenderedCardActionFn(a, s, t, p, r, f, w)
 }
 
 // ---------------------------------------------------------------------------
@@ -160,12 +230,12 @@ type ReviewPendingPayload struct {
 // ReviewFormService manages review command and form actions for a single app
 // instance.
 type ReviewFormService struct {
-	app App
+	app Dependencies
 }
 
 // NewReviewFormService creates a new review form service bound to the given
 // app.
-func NewReviewFormService(app App) ReviewFormService {
+func NewReviewFormService(app Dependencies) ReviewFormService {
 	return ReviewFormService{app: app}
 }
 
@@ -227,7 +297,7 @@ func ReviewTargetParams(target appreview.TargetSpec) map[string]any {
 // ---------------------------------------------------------------------------
 
 // CommandReview handles the /review command with optional sub-commands.
-func CommandReview(a App, msg *feishu.InboundMessage, args []string) error {
+func CommandReview(a Dependencies, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
@@ -281,7 +351,7 @@ func CommandReview(a App, msg *feishu.InboundMessage, args []string) error {
 // Inline review start
 // ---------------------------------------------------------------------------
 
-func startInlineReviewFromMessage(a App, msg *feishu.InboundMessage, target appreview.TargetSpec) error {
+func startInlineReviewFromMessage(a Dependencies, msg *feishu.InboundMessage, target appreview.TargetSpec) error {
 	confirmation, err := StartInlineReview(a, msg, target)
 	if err != nil {
 		return err
@@ -290,7 +360,7 @@ func startInlineReviewFromMessage(a App, msg *feishu.InboundMessage, target appr
 }
 
 // StartInlineReview starts an inline review for the given target.
-func StartInlineReview(a App, msg *feishu.InboundMessage, target appreview.TargetSpec) (string, error) {
+func StartInlineReview(a Dependencies, msg *feishu.InboundMessage, target appreview.TargetSpec) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("nil message")
 	}
@@ -330,7 +400,7 @@ func StartInlineReview(a App, msg *feishu.InboundMessage, target appreview.Targe
 // ---------------------------------------------------------------------------
 
 // EnqueueReviewSubmission enqueues a review submission for processing.
-func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
+func EnqueueReviewSubmission(a Dependencies, msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
 	if msg == nil {
 		return fmt.Errorf("nil message")
 	}
@@ -409,7 +479,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 // ---------------------------------------------------------------------------
 
 // StartSubmissionReview starts a review for a queued submission.
-func StartSubmissionReview(a App, ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
+func StartSubmissionReview(a Dependencies, ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}

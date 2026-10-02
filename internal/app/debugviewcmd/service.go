@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	appcards "feidex/internal/adapter/feishu/cards"
@@ -95,50 +96,135 @@ type WorkspaceRenderProvider interface {
 }
 
 // ---------------------------------------------------------------------------
-// App interface — what the services require from the host application
+// Dependencies interface — what the services require from the host application
 // ---------------------------------------------------------------------------
 
-// App defines the interface the debugviewcmd services require from the host
-// application. It embeds appcore.AppConfig so that appcore helpers like
-// ConfiguredBackend, DebugAllowFrom, etc. can be called directly.
-type App interface {
-	appcore.AppConfig
+// Dependencies is the explicit debug/usage capability set assembled by the
+// composition root. The service does not depend on the application root.
+type Dependencies struct {
+	ConfigProvider                    appcore.AppConfig
+	FeishuClient                      FeishuClient
+	StateProvider                     AppStateProvider
+	RuntimeStateProvider              RuntimeStateProvider
+	ConversationBackendProvider       ConversationBackendProvider
+	WorkspaceConfigProvider           WorkspaceConfigProvider
+	WorkspaceRenderProvider           WorkspaceRenderProvider
+	MakeSessionKeyFn                  func(*feishu.InboundMessage) string
+	ReplyInThreadEnabledFn            func(string) bool
+	CompleteMenuCommandFn             func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+	MenuCardBodyFn                    func(string, string) string
+	MenuBreadcrumbLabelsFn            func(string) []string
+	CommandLabelFn                    func(string, string) string
+	CurrentThreadLabelFn              func(*conversation.Session) string
+	PrimaryConversationMissingLabelFn func(string) string
+	DefaultWorkspaceIDFn              func() string
+	ConfigPathFn                      func() string
+}
 
-	// DebugFeishu returns the Feishu bot client.
-	DebugFeishu() FeishuClient
-	// DebugAppState returns the narrowed app state provider.
-	DebugAppState() AppStateProvider
-	// DebugRuntimeState returns the narrowed runtime state provider.
-	DebugRuntimeState() RuntimeStateProvider
-	// DebugConversationBackend returns the narrowed conversation backend
-	// provider for usage rendering.
-	DebugConversationBackend() ConversationBackendProvider
-	// DebugWorkspaceConfig returns the narrowed workspace config provider.
-	DebugWorkspaceConfig() WorkspaceConfigProvider
-	// DebugWorkspaceRender returns the narrowed workspace render provider.
-	DebugWorkspaceRender() WorkspaceRenderProvider
-	// DebugMakeSessionKey builds a session key from an inbound message.
-	DebugMakeSessionKey(msg *feishu.InboundMessage) string
-	// DebugReplyInThreadEnabled reports whether reply-in-thread is enabled
-	// for the given chat type.
-	DebugReplyInThreadEnabled(chatType string) bool
-	// DebugCompleteMenuCommand dispatches a menu command from a card action.
-	DebugCompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error)
-	// DebugMenuCardBody formats a menu card body with breadcrumb navigation.
-	DebugMenuCardBody(action, body string) string
-	// DebugMenuBreadcrumbLabels returns breadcrumb labels for a menu action.
-	DebugMenuBreadcrumbLabels(action string) []string
-	// DebugCommandLabel formats a command label with its slash command.
-	DebugCommandLabel(label, slash string) string
-	// DebugCurrentThreadLabel returns the display label for the active thread.
-	DebugCurrentThreadLabel(sess *conversation.Session) string
-	// DebugPrimaryConversationMissingLabel returns the label for a missing
-	// conversation for the given backend.
-	DebugPrimaryConversationMissingLabel(backend string) string
-	// DebugDefaultWorkspaceID returns the default workspace ID.
-	DebugDefaultWorkspaceID() string
-	// DebugConfigPath returns the config file path.
-	DebugConfigPath() string
+func (d Dependencies) Config() *config.Config {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.Config()
+}
+func (d Dependencies) ConfigMu() *sync.RWMutex {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.ConfigMu()
+}
+func (d Dependencies) Backend() string {
+	if d.ConfigProvider == nil {
+		return ""
+	}
+	return d.ConfigProvider.Backend()
+}
+func (d Dependencies) FrontendID() string {
+	if d.ConfigProvider == nil {
+		return ""
+	}
+	return d.ConfigProvider.FrontendID()
+}
+func (d Dependencies) FrontendConfigIndex() int {
+	if d.ConfigProvider == nil {
+		return -1
+	}
+	return d.ConfigProvider.FrontendConfigIndex()
+}
+func (d Dependencies) Store() *state.Store {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.Store()
+}
+func (d Dependencies) DebugFeishu() FeishuClient               { return d.FeishuClient }
+func (d Dependencies) DebugAppState() AppStateProvider         { return d.StateProvider }
+func (d Dependencies) DebugRuntimeState() RuntimeStateProvider { return d.RuntimeStateProvider }
+func (d Dependencies) DebugConversationBackend() ConversationBackendProvider {
+	return d.ConversationBackendProvider
+}
+func (d Dependencies) DebugWorkspaceConfig() WorkspaceConfigProvider {
+	return d.WorkspaceConfigProvider
+}
+func (d Dependencies) DebugWorkspaceRender() WorkspaceRenderProvider {
+	return d.WorkspaceRenderProvider
+}
+func (d Dependencies) DebugMakeSessionKey(m *feishu.InboundMessage) string {
+	if d.MakeSessionKeyFn == nil {
+		return ""
+	}
+	return d.MakeSessionKeyFn(m)
+}
+func (d Dependencies) DebugReplyInThreadEnabled(v string) bool {
+	return d.ReplyInThreadEnabledFn != nil && d.ReplyInThreadEnabledFn(v)
+}
+func (d Dependencies) DebugCompleteMenuCommand(a *feishu.CardAction, s, r, p string) (*callback.CardActionTriggerResponse, error) {
+	if d.CompleteMenuCommandFn == nil {
+		return nil, fmt.Errorf("menu command unavailable")
+	}
+	return d.CompleteMenuCommandFn(a, s, r, p)
+}
+func (d Dependencies) DebugMenuCardBody(a, b string) string {
+	if d.MenuCardBodyFn == nil {
+		return b
+	}
+	return d.MenuCardBodyFn(a, b)
+}
+func (d Dependencies) DebugMenuBreadcrumbLabels(a string) []string {
+	if d.MenuBreadcrumbLabelsFn == nil {
+		return nil
+	}
+	return d.MenuBreadcrumbLabelsFn(a)
+}
+func (d Dependencies) DebugCommandLabel(a, b string) string {
+	if d.CommandLabelFn == nil {
+		return a
+	}
+	return d.CommandLabelFn(a, b)
+}
+func (d Dependencies) DebugCurrentThreadLabel(s *conversation.Session) string {
+	if d.CurrentThreadLabelFn == nil {
+		return ""
+	}
+	return d.CurrentThreadLabelFn(s)
+}
+func (d Dependencies) DebugPrimaryConversationMissingLabel(v string) string {
+	if d.PrimaryConversationMissingLabelFn == nil {
+		return ""
+	}
+	return d.PrimaryConversationMissingLabelFn(v)
+}
+func (d Dependencies) DebugDefaultWorkspaceID() string {
+	if d.DefaultWorkspaceIDFn == nil {
+		return "default"
+	}
+	return d.DefaultWorkspaceIDFn()
+}
+func (d Dependencies) DebugConfigPath() string {
+	if d.ConfigPathFn == nil {
+		return ""
+	}
+	return d.ConfigPathFn()
 }
 
 // ---------------------------------------------------------------------------
@@ -275,18 +361,18 @@ var DebugAllowFrom = appcore.DebugAllowFrom
 
 // DebugService provides debug log viewing and access control.
 type DebugService struct {
-	app App
+	app Dependencies
 }
 
 // NewDebugService creates a new debug service bound to the given app.
-func NewDebugService(app App) DebugService {
+func NewDebugService(app Dependencies) DebugService {
 	return DebugService{app: app}
 }
 
 // SetRuntimeDebug sets the runtime debug log level and updates config.
 func (s DebugService) SetRuntimeDebug(enabled bool) string {
 	level := logcontrol.SetDebug(enabled)
-	if s.app != nil && s.app.Config() != nil {
+	if s.app.ConfigProvider != nil && s.app.Config() != nil {
 		s.app.ConfigMu().Lock()
 		s.app.Config().Log.Level = level
 		s.app.ConfigMu().Unlock()
@@ -345,7 +431,7 @@ func (s DebugService) CompleteMenuDebugLogs(action *feishu.CardAction, sessionKe
 
 // DebugAccessAllowed checks if the given user is allowed to use debug.
 func (s DebugService) DebugAccessAllowed(userID string) bool {
-	if s.app == nil || s.app.Config() == nil {
+	if s.app.ConfigProvider == nil || s.app.Config() == nil {
 		return false
 	}
 	return DebugUserAllowed(userID, DebugAllowFrom(s.app))
@@ -421,11 +507,11 @@ func (s DebugService) RenderDebugLogsCard(sessionKey string) map[string]any {
 
 // UsageService provides token usage display and tracking.
 type UsageService struct {
-	app App
+	app Dependencies
 }
 
 // NewUsageService creates a new usage service bound to the given app.
-func NewUsageService(app App) UsageService {
+func NewUsageService(app Dependencies) UsageService {
 	return UsageService{app: app}
 }
 
@@ -452,7 +538,7 @@ func RenderClaudeThreadUsageCardBody(threadLabel, threadID string, usage turnbin
 
 // RecordClaudeThreadUsage records Claude thread usage from a turn.
 func (s UsageService) RecordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage) {
-	if s.app == nil {
+	if s.app.ConfigProvider == nil {
 		return
 	}
 	threadID = strings.TrimSpace(threadID)
@@ -485,7 +571,7 @@ func (s UsageService) RecordClaudeThreadUsage(threadID string, usage claudecli.T
 
 // CurrentClaudeThreadUsage returns the current Claude thread usage.
 func (s UsageService) CurrentClaudeThreadUsage(threadID string) (turnbindingClaudeSnapshot, bool) {
-	if s.app == nil {
+	if s.app.ConfigProvider == nil {
 		return turnbindingClaudeSnapshot{}, false
 	}
 	threadID = strings.TrimSpace(threadID)
@@ -551,7 +637,7 @@ func (s UsageService) RenderCodexUsageBody(sess *conversation.Session) string {
 // ---------------------------------------------------------------------------
 
 // CommandDownload handles the /download command.
-func CommandDownload(a App, msg *feishu.InboundMessage, args []string) error {
+func CommandDownload(a Dependencies, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /download")
 	}
@@ -590,7 +676,7 @@ func CommandDownload(a App, msg *feishu.InboundMessage, args []string) error {
 }
 
 // CompleteMenuDownload handles the download menu card action.
-func CompleteMenuDownload(a App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func CompleteMenuDownload(a Dependencies, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return a.DebugCompleteMenuCommand(action, sessionKey, "/download", "menu.tools")
 }
 
@@ -609,7 +695,7 @@ func NewDownloadPathPickerPayload(ws *config.Workspace) (PathPickerPayload, erro
 }
 
 // CompleteDownloadFileConfirm handles the download file confirm card action.
-func CompleteDownloadFileConfirm(a App, action *feishu.CardAction, pending *state.PendingRequest, payload PathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
+func CompleteDownloadFileConfirm(a Dependencies, action *feishu.CardAction, pending *state.PendingRequest, payload PathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "下载请求已过期"}}, nil
 	}
@@ -651,7 +737,7 @@ func CompleteDownloadFileConfirm(a App, action *feishu.CardAction, pending *stat
 }
 
 // FinishDownloadFileShare completes the download file sharing workflow.
-func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
+func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payload PathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
 	appState := a.DebugAppState()
 	ctx, cancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
 	defer cancel()
@@ -705,7 +791,7 @@ func FinishDownloadFileShare(a App, requestID, messageID string, payload PathPic
 }
 
 // RenderDownloadPreparingCard renders the download preparing card.
-func RenderDownloadPreparingCard(a App, selectedPath, workspaceCWD string) map[string]any {
+func RenderDownloadPreparingCard(a Dependencies, selectedPath, workspaceCWD string) map[string]any {
 	displayPath := RenderDownloadDisplayPath(selectedPath, workspaceCWD)
 	lines := []string{
 		"正在生成文件下载链接（飞书云盘中转）。",
@@ -719,7 +805,7 @@ func RenderDownloadPreparingCard(a App, selectedPath, workspaceCWD string) map[s
 }
 
 // RenderDownloadReadyCard renders the download ready card.
-func RenderDownloadReadyCard(a App, selectedPath, workspaceCWD string, result feishu.SharedFileResult) map[string]any {
+func RenderDownloadReadyCard(a Dependencies, selectedPath, workspaceCWD string, result feishu.SharedFileResult) map[string]any {
 	displayPath := RenderDownloadDisplayPath(selectedPath, workspaceCWD)
 	lines := []string{
 		"已生成文件下载链接（飞书云盘中转）。",
@@ -737,7 +823,7 @@ func RenderDownloadReadyCard(a App, selectedPath, workspaceCWD string, result fe
 }
 
 // RenderDownloadFailedCard renders the download failed card.
-func RenderDownloadFailedCard(a App, selectedPath, workspaceCWD, errText string) map[string]any {
+func RenderDownloadFailedCard(a Dependencies, selectedPath, workspaceCWD, errText string) map[string]any {
 	displayPath := RenderDownloadDisplayPath(selectedPath, workspaceCWD)
 	lines := []string{
 		"生成下载链接失败。",

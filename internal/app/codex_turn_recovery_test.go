@@ -129,7 +129,7 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(a).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 
