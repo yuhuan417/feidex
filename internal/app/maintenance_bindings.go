@@ -43,7 +43,7 @@ func newStartupRecovery(a *App) maintenance.StartupRecovery {
 			if a.feishu == nil {
 				return nil
 			}
-			return a.feishu.SendText(ctx, id, text)
+			return sendTextEffect(ctx, a, id, text)
 		},
 	})
 }

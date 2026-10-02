@@ -32,7 +32,7 @@ func newCompactionService(a *App) compaction.Service {
 		Gateway: codexadapter.CompactionGateway{Client: currentCodexClient(a)},
 		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
 			if a.feishu != nil && sess.ChatID != "" {
-				_ = a.feishu.SendText(ctx, sess.ChatID, text)
+				_ = sendTextEffect(ctx, a, sess.ChatID, text)
 			}
 		},
 	}

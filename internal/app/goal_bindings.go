@@ -116,7 +116,7 @@ func completeGoalAsyncResult(a *App, action *feishu.CardAction, sessionKey, mess
 	if text == "" || a.feishu == nil {
 		return
 	}
-	if replyErr := a.feishu.ReplyText(context.Background(), messageID, text, goalActionReplyInThread(a, sessionKey)); replyErr != nil {
+	if replyErr := replyTextByAnchorEffect(context.Background(), a, messageID, text, goalActionReplyInThread(a, sessionKey)); replyErr != nil {
 		slog.Warn("goal async text reply failed",
 			"session_key", sessionKey,
 			"message_id", messageID,

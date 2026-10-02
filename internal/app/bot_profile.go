@@ -4,7 +4,6 @@ import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	"feidex/internal/domain/conversation"
 
-	"context"
 	"fmt"
 	"strings"
 
@@ -142,7 +141,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 				}); err != nil {
 					return err
 				}
-				return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 "+role+" model", replyInThreadEnabled(a, msg.ChatType))
+				return replyTextEffect(a, msg, "已更新当前 session 的 "+role+" model")
 			}
 			_, err := updateBotProfile(a, func(profile *state.BotProfile) {
 				if backend == config.RuntimeBackendClaude {
@@ -166,7 +165,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			if err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 "+role+" model", replyInThreadEnabled(a, msg.ChatType))
+			return replyTextEffect(a, msg, "已更新当前 Bot 的 "+role+" model")
 		}
 	}
 	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "effort") && strings.EqualFold(strings.TrimSpace(args[0]), "subagent") && configuredBackend(a) == config.RuntimeBackendCodex {
@@ -179,13 +178,13 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			if err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 subagent reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+			return replyTextEffect(a, msg, "已更新当前 session 的 subagent reasoning effort")
 		}
 		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.SubagentReasoningEffort = value })
 		if err != nil {
 			return err
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 subagent reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+		return replyTextEffect(a, msg, "已更新当前 Bot 的 subagent reasoning effort")
 	}
 	if len(args) == 3 && strings.EqualFold(strings.TrimSpace(args[1]), "effort") && strings.EqualFold(strings.TrimSpace(args[0]), "plan") && configuredBackend(a) == config.RuntimeBackendCodex {
 		if err := ensureSessionModelConfigWritable(a, makeSessionKey(a, msg)); err != nil {
@@ -197,13 +196,13 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			if err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 session 的 Plan reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+			return replyTextEffect(a, msg, "已更新当前 session 的 Plan reasoning effort")
 		}
 		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.PlanReasoningEffort = value })
 		if err != nil {
 			return err
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的 Plan reasoning effort", replyInThreadEnabled(a, msg.ChatType))
+		return replyTextEffect(a, msg, "已更新当前 Bot 的 Plan reasoning effort")
 	}
 	if strings.EqualFold(strings.TrimSpace(args[0]), "set") && len(args) == 2 {
 		if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, args); err != nil {
@@ -266,7 +265,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		if err != nil {
 			return err
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(next), replyInThreadEnabled(a, msg.ChatType))
+		return replyTextEffect(a, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(next))
 	}
 	if len(args) == 1 {
 		value := strings.ToLower(strings.TrimSpace(args[0]))
@@ -282,7 +281,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		if err != nil {
 			return err
 		}
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(value), replyInThreadEnabled(a, msg.ChatType))
+		return replyTextEffect(a, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(value))
 	}
 	return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle")
 }

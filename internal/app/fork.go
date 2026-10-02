@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
@@ -27,7 +26,7 @@ func commandFork(a *App, msg *feishu.InboundMessage, args []string) error {
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return a.feishu.ReplyText(context.Background(), msg.MessageID, reply, replyInThreadEnabled(a, msg.ChatType))
+	return replyTextEffect(a, msg, reply)
 }
 
 func startThreadFork(a *App, sessionKey string) (int, string, error) {
