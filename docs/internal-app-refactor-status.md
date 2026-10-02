@@ -26,6 +26,7 @@
 本轮目标架构迁移新增了三个已落地切片：
 
 - `internal/domain/routing`：primary assignment 解析、scope 不变量和状态转换。
+- `internal/domain/routing`：群消息 delivery policy（mention、reply-chain、primary fallback）纯决策。
 - `internal/application/routing` + `internal/adapter/storage/json`：primary use case、持久化 port 以及 frontend-scoped JSON adapter。
 - `internal/domain/modelconfig`：session、group binding、BotProfile、global 配置的模型优先级解析，以及 Plan/普通轮次的 turn snapshot 选择。
 
