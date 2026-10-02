@@ -6,7 +6,6 @@ package threadmenu
 import (
 	"context"
 	"errors"
-	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"fmt"
@@ -41,7 +40,7 @@ type Dependencies struct {
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
-	FeishuClient                              feishutransport.Client
+	Outbound                                  Outbound
 	AppStateFn                                func() StateProvider
 	EffectiveSessionKeyFn                     func(string) string
 	ConversationBackendFn                     func() ConversationBackendProvider
@@ -65,6 +64,11 @@ type Dependencies struct {
 	ApplyClaudePermissionModeToRuntimeAsyncFn func(string, string, string)
 	RenderClaudeSessionPermissionMenuCardFn   func(string) (map[string]any, error)
 	ShowClaudeSessionPermissionMenuFromAppFn  func(*feishu.InboundMessage) error
+}
+
+type Outbound interface {
+	ReplyText(context.Context, string, string, bool) error
+	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 }
 
 func (d Dependencies) Config() *config.Config {
@@ -103,7 +107,7 @@ func (d Dependencies) Store() *state.Store {
 	}
 	return d.ConfigProvider.Store()
 }
-func (d Dependencies) Feishu() feishutransport.Client { return d.FeishuClient }
+func (d Dependencies) OutboundCapability() Outbound { return d.Outbound }
 func (d Dependencies) ThreadMenuAppState() StateProvider {
 	if d.AppStateFn == nil {
 		return nil
@@ -608,7 +612,7 @@ func (s *Service) CommandThreadsNew(msg *feishu.InboundMessage) error {
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return s.app.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 }
 
 // CommandThreads handles /thread list or /session list.
@@ -621,7 +625,7 @@ func (s *Service) CommandThreads(msg *feishu.InboundMessage, includeAll bool) er
 	if err != nil {
 		return err
 	}
-	_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -758,7 +762,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 				if err != nil {
 					return err
 				}
-				_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+				_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 				return err
 			},
 			CompleteConversationPermissionModeSet: func(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
@@ -800,10 +804,10 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 			if discarded > 0 {
 				reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
 			}
-			return s.app.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 		}
 		if discarded > 0 {
-			return s.app.Feishu().ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 		}
 		return fmt.Errorf("当前没有运行中的任务")
 	}
@@ -826,7 +830,7 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	if canceledRetry {
 		reply += " 当前 session 的自动重试也已停止。"
 	}
-	return s.app.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 }
 
 // CommandAppend handles appending text to the active turn.
@@ -849,7 +853,7 @@ func (s *Service) ShowThreadSandboxMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -873,7 +877,7 @@ func (s *Service) ShowThreadPolicyMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -897,7 +901,7 @@ func (s *Service) ShowThreadMultiAgentMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 

@@ -19,7 +19,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		return appthreadmenu.Dependencies{}
 	}
 	return appthreadmenu.Dependencies{
-		ConfigProvider: a, FeishuClient: a.feishu,
+		ConfigProvider: a, Outbound: threadMenuOutbound{app: a},
 		AppStateFn: a.ThreadMenuAppState, EffectiveSessionKeyFn: a.ThreadMenuEffectiveSessionKey,
 		ConversationBackendFn: a.ThreadMenuConversationBackend, BackendRuntimeFn: a.ThreadMenuBackendRuntime,
 		PendingQueueFn: a.ThreadMenuPendingQueue, WorkspaceThreadFn: a.ThreadMenuWorkspaceThread,
@@ -36,6 +36,16 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		RenderClaudeSessionPermissionMenuCardFn:   a.RenderClaudeSessionPermissionMenuCard,
 		ShowClaudeSessionPermissionMenuFromAppFn:  a.ShowClaudeSessionPermissionMenuFromApp,
 	}
+}
+
+type threadMenuOutbound struct{ app *App }
+
+func (o threadMenuOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
+	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+}
+
+func (o threadMenuOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
 }
 
 func threadMenuService(a *App) *appthreadmenu.Service {
