@@ -2,7 +2,6 @@ package planmode
 
 import (
 	"context"
-	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/modelconfig"
 	"feidex/internal/application/workspace"
@@ -44,7 +43,8 @@ type Dependencies struct {
 	}
 	ContextProvider              interface{ Context() context.Context }
 	StateProvider                StateProvider
-	FeishuClient                 feishutransport.Client
+	Outbound                     Outbound
+	CardRenderer                 CardRenderer
 	CodexClientProvider          func() (CodexClient, error)
 	MakeSessionKeyFn             func(*feishu.InboundMessage) string
 	ReplyInThreadEnabledFn       func(string) bool
@@ -56,6 +56,16 @@ type Dependencies struct {
 	SendLocalTurnFollowupCardFn  func(context.Context, string, map[string]any, bool, *domainsubmission.Submission, string) (string, error)
 	StartNextSubmissionFn        func(string) error
 	StartWorkspaceThreadFn       func(string, *conversation.Session, *config.Workspace) (*appworkspace.ThreadBinding, error)
+}
+
+type Outbound interface {
+	ReplyText(context.Context, string, string, bool) error
+	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+	PatchCard(context.Context, string, map[string]any) error
+}
+
+type CardRenderer interface {
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 
 func (d Dependencies) Config() *config.Config {
@@ -102,8 +112,9 @@ func (d Dependencies) Context() context.Context {
 	}
 	return context.Background()
 }
-func (d Dependencies) State() StateProvider           { return d.StateProvider }
-func (d Dependencies) Feishu() feishutransport.Client { return d.FeishuClient }
+func (d Dependencies) State() StateProvider         { return d.StateProvider }
+func (d Dependencies) OutboundCapability() Outbound { return d.Outbound }
+func (d Dependencies) Renderer() CardRenderer       { return d.CardRenderer }
 func (d Dependencies) CodexClient() (CodexClient, error) {
 	if d.CodexClientProvider == nil {
 		return nil, fmt.Errorf("codex client unavailable")
@@ -212,7 +223,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	case len(args) == 0:
 		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
@@ -223,7 +234,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	case strings.TrimSpace(args[0]) == "off":
 		defaultMode, err := ResolveDefaultCodexCollaborationModeForSession(a, sess)
 		if err != nil {
@@ -234,7 +245,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	default:
 		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
@@ -245,7 +256,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.Feishu().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	}
 }
 

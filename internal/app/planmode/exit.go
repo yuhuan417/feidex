@@ -86,31 +86,31 @@ func ExitPromptCard(a Dependencies, sessionKey, workspaceID, planMarkdown, reque
 	if body == "" {
 		body = "Plan mode has finished."
 	}
-	if a.ConfigProvider == nil || a.Feishu() == nil {
+	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "orange", body, ExitPromptButtons(requestID))
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "orange", body, ExitPromptButtons(requestID))
 }
 
 func ExitSuccessCard(a Dependencies, sessionKey, workspaceID, title, body string) map[string]any {
-	if a.ConfigProvider == nil || a.Feishu() == nil {
+	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, strings.TrimSpace(appcore.FirstNonEmpty(title, ExitPendingTitle))), "green", strings.TrimSpace(body), nil)
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, strings.TrimSpace(appcore.FirstNonEmpty(title, ExitPendingTitle))), "green", strings.TrimSpace(body), nil)
 }
 
 func ExitFailureCard(a Dependencies, sessionKey, workspaceID, body string) map[string]any {
-	if a.ConfigProvider == nil || a.Feishu() == nil {
+	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "red", strings.TrimSpace(appcore.FirstNonEmpty(body, "Unable to process the plan confirmation.")), nil)
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "red", strings.TrimSpace(appcore.FirstNonEmpty(body, "Unable to process the plan confirmation.")), nil)
 }
 
 func ExitExpiredCard(a Dependencies, sessionKey, workspaceID, body string) map[string]any {
-	if a.ConfigProvider == nil || a.Feishu() == nil {
+	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitExpiredTitle), "grey", strings.TrimSpace(appcore.FirstNonEmpty(body, "This confirmation is no longer valid.")), nil)
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitExpiredTitle), "grey", strings.TrimSpace(appcore.FirstNonEmpty(body, "This confirmation is no longer valid.")), nil)
 }
 
 func ExitPendingRequest(a Dependencies, sessionKey string) *state.PendingRequest {
@@ -191,7 +191,7 @@ func InvalidateCodexPlanModeExitArtifactsForSession(a Dependencies, sessionKey, 
 	})
 	if pending.FeishuMsgID != "" {
 		body := appcore.FirstNonEmpty(reason, "This confirmation is no longer valid.")
-		_ = a.Feishu().PatchCard(appcore.Context(a), pending.FeishuMsgID, ExitExpiredCard(a, sessionKey, "", body))
+		_ = a.OutboundCapability().PatchCard(appcore.Context(a), pending.FeishuMsgID, ExitExpiredCard(a, sessionKey, "", body))
 	}
 }
 
@@ -248,7 +248,7 @@ func ProcessCodexPlanModeExitOnTurnCompleted(a Dependencies, sessionKey string, 
 }
 
 func sendCodexPlanModeExitPrompt(a Dependencies, sub *domainsubmission.Submission, planMarkdown, reuseMessageID string) error {
-	if a.ConfigProvider == nil || a.Feishu() == nil || sub == nil {
+	if a.ConfigProvider == nil || a.OutboundCapability() == nil || sub == nil {
 		return fmt.Errorf("plan mode exit prompt unavailable")
 	}
 	requestID, err := a.State().NextLocalID("codex-plan-exit")
@@ -262,12 +262,12 @@ func sendCodexPlanModeExitPrompt(a Dependencies, sub *domainsubmission.Submissio
 	msgID := ""
 	reuseMessageID = strings.TrimSpace(reuseMessageID)
 	if reuseMessageID != "" {
-		if err := a.Feishu().PatchCard(appcore.Context(a), reuseMessageID, card); err == nil {
+		if err := a.OutboundCapability().PatchCard(appcore.Context(a), reuseMessageID, card); err == nil {
 			msgID = reuseMessageID
 		}
 	}
 	if msgID == "" {
-		msgID, err = a.Feishu().ReplyCard(appcore.Context(a), sub.TriggerMessageID, card, a.ReplyInThreadForSubmission(sub))
+		msgID, err = a.OutboundCapability().ReplyCard(appcore.Context(a), sub.TriggerMessageID, card, a.ReplyInThreadForSubmission(sub))
 		if err != nil {
 			return err
 		}
@@ -344,7 +344,7 @@ func CompleteCodexPlanModeExit(a Dependencies, action *feishu.CardAction, action
 }
 
 func sendCodexPlanModeExitFollowupCard(a Dependencies, pending *state.PendingRequest, action *feishu.CardAction, card map[string]any, sub *domainsubmission.Submission) error {
-	if a.ConfigProvider == nil || a.Feishu() == nil || pending == nil || card == nil {
+	if a.ConfigProvider == nil || a.OutboundCapability() == nil || pending == nil || card == nil {
 		return fmt.Errorf("plan mode exit follow-up unavailable")
 	}
 	messageID := strings.TrimSpace(pending.FeishuMsgID)
