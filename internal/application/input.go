@@ -42,6 +42,13 @@ type CardAction struct {
 	Checked     bool
 }
 
+// CardActionResult is the transport-neutral immediate callback response.
+// Feishu adapters convert it to the platform callback envelope.
+type CardActionResult struct {
+	ToastType    string
+	ToastContent string
+}
+
 // BackendEventReceived carries a backend-neutral event emitted by a concrete
 // Codex or Claude adapter.
 type BackendEventReceived struct {

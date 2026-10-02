@@ -2,10 +2,11 @@ package app
 
 import (
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 
+	"feidex/internal/application"
+	appcardaction "feidex/internal/application/cardaction"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -14,39 +15,70 @@ import (
 type cardActionService struct {
 	app      *App
 	handlers map[string]cardActionHandler
+	inner    appcardaction.Service
 }
 
 func newCardActionService(app *App) cardActionService {
-	return cardActionService{app: app, handlers: cardActionHandlers()}
+	handlers := cardActionHandlers()
+	bound := make(map[string]appcardaction.Handler, len(handlers))
+	for name, handler := range handlers {
+		h := handler
+		bound[name] = func(action application.CardAction) (any, error) {
+			response, err := h(cardActionService{app: app, handlers: handlers}, fromApplicationCardAction(action))
+			return response, err
+		}
+	}
+	service := cardActionService{app: app, handlers: handlers}
+	service.inner = appcardaction.NewService(appcardaction.Dependencies{
+		NormalizeSessionKey: func(action *application.CardAction) {
+			converted := fromApplicationCardAction(*action)
+			service.normalizeSessionKey(converted)
+			*action = toApplicationCardAction(converted)
+		},
+		ResolveActionName: resolvedApplicationCardActionName,
+		BlockedReason: func(name string) string {
+			return newRuntimeStateService(app).backendSwitchBlocksCardAction(name)
+		},
+		Handlers: bound,
+	})
+	return service
 }
 
 func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
-	s.normalizeSessionKey(action)
-	name := resolvedCardActionName(action)
-	if reason := newRuntimeStateService(s.app).backendSwitchBlocksCardAction(name); reason != "" {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: reason},
-		}, nil
+	response, err := s.inner.Dispatch(toApplicationCardAction(action))
+	if response == nil {
+		return &callback.CardActionTriggerResponse{}, err
 	}
-	handler := s.handlers[name]
-	if handler == nil {
-		slog.Warn("unknown feishu card action",
-			"name", name,
-			"raw_name", action.Name,
-			"message_id", action.MessageID,
-			"chat_id", action.ChatID,
-			"user_id", action.UserID,
-			"action_value", fmt.Sprintf("%v", action.ActionValue),
-			"form_value", fmt.Sprintf("%v", action.FormValue),
-		)
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: "未知操作"},
-		}, nil
+	if neutral, ok := response.(application.CardActionResult); ok {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: neutral.ToastType, Content: neutral.ToastContent}}, err
 	}
-	return handler(s, action)
+	typed, ok := response.(*callback.CardActionTriggerResponse)
+	if !ok {
+		return nil, fmt.Errorf("invalid card action response %T", response)
+	}
+	return typed, err
+}
+
+func toApplicationCardAction(action *feishu.CardAction) application.CardAction {
+	if action == nil {
+		return application.CardAction{}
+	}
+	return application.CardAction{ActionValue: action.ActionValue, FormValue: action.FormValue, UserID: action.UserID, ChatID: action.ChatID, MessageID: action.MessageID, Name: action.Name, Option: action.Option, InputValue: action.InputValue, Options: action.Options, Checked: action.Checked}
+}
+
+func fromApplicationCardAction(action application.CardAction) *feishu.CardAction {
+	return &feishu.CardAction{ActionValue: action.ActionValue, FormValue: action.FormValue, UserID: action.UserID, ChatID: action.ChatID, MessageID: action.MessageID, Name: action.Name, Option: action.Option, InputValue: action.InputValue, Options: action.Options, Checked: action.Checked}
+}
+
+func resolvedApplicationCardActionName(action application.CardAction) string {
+	name, _ := action.ActionValue["action"].(string)
+	if strings.TrimSpace(name) != "" {
+		return strings.TrimSpace(name)
+	}
+	return strings.TrimSpace(action.Name)
 }
 
 func (s cardActionService) normalizeSessionKey(action *feishu.CardAction) {
@@ -86,17 +118,6 @@ func mergeCardActionHandlerSets(sets ...map[string]cardActionHandler) map[string
 		}
 	}
 	return merged
-}
-
-func resolvedCardActionName(action *feishu.CardAction) string {
-	if action == nil {
-		return ""
-	}
-	name, _ := action.ActionValue["action"].(string)
-	if strings.TrimSpace(name) != "" {
-		return strings.TrimSpace(name)
-	}
-	return strings.TrimSpace(action.Name)
 }
 
 func actionSessionKey(action *feishu.CardAction) string {
