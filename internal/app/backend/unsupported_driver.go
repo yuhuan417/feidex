@@ -91,7 +91,7 @@ func (d unsupportedPermissionDriver) SupportedScopes() []PermissionScope { retur
 
 func (d unsupportedPermissionDriver) WorkspaceCommandUsage() string { return "/backend" }
 
-func (d unsupportedPermissionDriver) AppendWorkspaceSummaryLines(app PermissionApp, lines []string, currentWS *config.Workspace) []string {
+func (d unsupportedPermissionDriver) AppendWorkspaceSummaryLines(app PermissionDependencies, lines []string, currentWS *config.Workspace) []string {
 	return lines
 }
 
@@ -99,7 +99,7 @@ func (d unsupportedPermissionDriver) WorkspaceConfigButtons(sessionKey string) [
 	return nil
 }
 
-func (d unsupportedPermissionDriver) AppendStatusLines(app PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
+func (d unsupportedPermissionDriver) AppendStatusLines(app PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	return lines
 }
 

@@ -51,7 +51,7 @@ type ConversationDriver interface {
 	WorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string
 }
 
-type PermissionApp interface {
+type PermissionDependencies interface {
 	appcore.AppConfig
 	Feishu() appcore.FeishuClient
 }
@@ -91,12 +91,12 @@ type ConversationPermissionCommandRequest struct {
 }
 
 type WorkspacePermissionRenderDeps struct {
-	App            PermissionApp
+	App            PermissionDependencies
 	FormatMenuBody func(action, body string) string
 }
 
 type ConversationPermissionRenderDeps struct {
-	App            PermissionApp
+	App            PermissionDependencies
 	Session        func(sessionKey string) *conversation.Session
 	FormatMenuBody func(action, body string) string
 }
@@ -109,7 +109,7 @@ type WorkspacePermissionUpdateDeps struct {
 }
 
 type WorkspacePermissionModeUpdateDeps struct {
-	App                     PermissionApp
+	App                     PermissionDependencies
 	Session                 func(sessionKey string) *conversation.Session
 	UpdateWorkspaceDefaults func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error)
 	ApplyRuntime            func(sessionKey, mode string) error
@@ -125,7 +125,7 @@ type ConversationPermissionUpdateDeps struct {
 }
 
 type ConversationPermissionModeUpdateDeps struct {
-	App                  PermissionApp
+	App                  PermissionDependencies
 	Session              func(sessionKey string) *conversation.Session
 	SaveSession          func(sess *conversation.Session) error
 	NormalizeRequested   func(raw string) (mode string, warning string, err error)
@@ -136,9 +136,9 @@ type ConversationPermissionModeUpdateDeps struct {
 type PermissionDriver interface {
 	SupportedScopes() []PermissionScope
 	WorkspaceCommandUsage() string
-	AppendWorkspaceSummaryLines(app PermissionApp, lines []string, currentWS *config.Workspace) []string
+	AppendWorkspaceSummaryLines(app PermissionDependencies, lines []string, currentWS *config.Workspace) []string
 	WorkspaceConfigButtons(sessionKey string) []feishu.Button
-	AppendStatusLines(app PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string
+	AppendStatusLines(app PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string
 	HandleWorkspaceCommand(req WorkspacePermissionCommandRequest) error
 	RenderWorkspaceSandboxMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
 	RenderWorkspacePolicyMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)

@@ -121,7 +121,7 @@ func (claudePermissionDriver) WorkspaceCommandUsage() string {
 	return ClaudeWorkspaceCommandUsage
 }
 
-func (codexPermissionDriver) AppendWorkspaceSummaryLines(_ PermissionApp, lines []string, currentWS *config.Workspace) []string {
+func (codexPermissionDriver) AppendWorkspaceSummaryLines(_ PermissionDependencies, lines []string, currentWS *config.Workspace) []string {
 	if currentWS == nil {
 		return lines
 	}
@@ -132,7 +132,7 @@ func (codexPermissionDriver) AppendWorkspaceSummaryLines(_ PermissionApp, lines 
 	)
 }
 
-func (claudePermissionDriver) AppendWorkspaceSummaryLines(app PermissionApp, lines []string, currentWS *config.Workspace) []string {
+func (claudePermissionDriver) AppendWorkspaceSummaryLines(app PermissionDependencies, lines []string, currentWS *config.Workspace) []string {
 	if currentWS == nil || app == nil || app.Config() == nil {
 		return lines
 	}
@@ -176,7 +176,7 @@ func (claudePermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu
 	}}
 }
 
-func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
+func (codexPermissionDriver) AppendStatusLines(_ PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	workspaceSandbox := "-"
 	workspacePolicy := "-"
 	workspaceMultiAgent := "-"
@@ -215,7 +215,7 @@ func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, 
 	)
 }
 
-func (claudePermissionDriver) AppendStatusLines(app PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
+func (claudePermissionDriver) AppendStatusLines(app PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	if app == nil || app.Config() == nil {
 		return lines
 	}
