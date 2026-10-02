@@ -70,26 +70,15 @@ func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID
 	if a == nil || chatType != "group" || chatID == "" {
 		return nil, nil
 	}
-	if primary := groupPrimaryForChat(a, chatType, chatID); primary != nil {
-		return primary, nil
-	}
 	if a.feishu == nil {
 		return nil, fmt.Errorf("feishu client not initialized")
 	}
-	botCount, err := a.feishu.GetGroupBotCount(ctx, chatID)
-	if err != nil {
-		return nil, err
+	initializer := approuting.InitializationService{
+		Repository:    statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID()),
+		BotCount:      a.feishu.GetGroupBotCount,
+		LiveBotOpenID: func() string { return currentLiveBotOpenID(a) },
 	}
-	enabled := false
-	if botCount == 1 {
-		if currentLiveBotOpenID(a) == "" {
-			return nil, fmt.Errorf("bot open_id is required to initialize group primary")
-		}
-		enabled = true
-	}
-	// The group lookup can finish after this frontend has initialized its local
-	// state or processed /primary on. EnsureGroupPrimary preserves that state.
-	result, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).EnsurePrimary(a.FrontendID(), chatType, chatID, enabled)
+	result, err := initializer.Ensure(ctx, a.FrontendID(), chatType, chatID)
 	if err != nil || result == nil {
 		return nil, err
 	}
@@ -100,8 +89,7 @@ func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
 	if a == nil || a.Store() == nil {
 		return nil
 	}
-	repository := statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())
-	primary, err := repository.GetGroupPrimary(a.FrontendID(), chatType, chatID)
+	primary, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).Lookup(a.FrontendID(), chatType, chatID)
 	if err != nil || primary == nil {
 		return nil
 	}
@@ -117,12 +105,19 @@ func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
 }
 
 func hasGroupPrimaryState(a *App, chatType, chatID string) bool {
-	return groupPrimaryForChat(a, chatType, chatID) != nil
+	if a == nil || a.Store() == nil {
+		return false
+	}
+	hasState, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).HasState(a.FrontendID(), chatType, chatID)
+	return err == nil && hasState
 }
 
 func isGroupPrimary(a *App, chatType, chatID string) bool {
-	primary := groupPrimaryForChat(a, chatType, chatID)
-	return primary != nil && primary.Enabled
+	if a == nil || a.Store() == nil {
+		return false
+	}
+	enabled, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).IsPrimary(a.FrontendID(), chatType, chatID)
+	return err == nil && enabled
 }
 
 func currentBotOpenID(a *App) string {
@@ -217,7 +212,13 @@ func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error
 		)
 		return true, nil
 	}
-	if record := groupPrimaryForChat(a, msg.ChatType, msg.ChatID); staleGroupPrimaryAssignment(record, msg) {
+	stale, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).IsStaleAssignment(
+		a.FrontendID(), msg.ChatType, msg.ChatID, domainrouting.AssignmentStamp{MessageID: msg.MessageID, CreatedAt: msg.CreatedAt},
+	)
+	if err != nil {
+		return true, err
+	}
+	if stale {
 		return true, nil
 	}
 	enabled := selfOpenID == assignment.TargetBotOpenID
@@ -226,7 +227,7 @@ func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error
 		// it can acknowledge the assignment.
 		return false, nil
 	}
-	_, err := setGroupPrimaryState(a, msg.ChatType, msg.ChatID, false, msg)
+	_, err = setGroupPrimaryState(a, msg.ChatType, msg.ChatID, false, msg)
 	return true, err
 }
 
@@ -235,18 +236,6 @@ func isGroupPrimaryControlMessage(msg *feishu.InboundMessage) bool {
 		return false
 	}
 	return domainrouting.ParsePrimaryOnCommand(msg.Text) || domainrouting.ParseEmptyBotMention(msg.Text)
-}
-
-func staleGroupPrimaryAssignment(record *state.GroupPrimary, assignment *feishu.InboundMessage) bool {
-	if record == nil || assignment == nil {
-		return false
-	}
-	return domainrouting.StaleAssignment(
-		record.LastAssignmentMessageID,
-		record.LastAssignmentCreatedAt,
-		assignment.MessageID,
-		assignment.CreatedAt,
-	)
 }
 
 func groupPrimaryAssignmentFromMessage(msg *feishu.InboundMessage) (domainrouting.GroupPrimaryAssignment, bool) {
