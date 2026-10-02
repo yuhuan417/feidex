@@ -48,7 +48,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 			if a.feishu == nil {
 				return nil
 			}
-			return a.feishu.PatchCard(context.Background(), messageID, card)
+			return patchCardEffect(context.Background(), a, messageID, card)
 		},
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
 			return contentCardTitleForSession(a, sessionKey, workspaceID, title)

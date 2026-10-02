@@ -80,7 +80,7 @@ func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messag
 		appendReplyCardFooter(card, footerLines)
 		patchCtx, patchCancel := context.WithTimeout(a.Context(), 15*time.Second)
 		defer patchCancel()
-		if err := a.feishu.PatchCard(patchCtx, messageID, card); err != nil {
+		if err := patchCardEffect(patchCtx, a, messageID, card); err != nil {
 			slog.Warn("local file link patch failed",
 				"submission_id", sub.ID,
 				"workspace_id", sub.WorkspaceID,

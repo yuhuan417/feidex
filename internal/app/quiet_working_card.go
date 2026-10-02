@@ -32,7 +32,7 @@ func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmissio
 		commitQuietWorkingCardRender(a, op.TurnID, messageID, op.Body)
 		return
 	}
-	if err := a.feishu.PatchCard(ctx, op.MessageID, card); err != nil {
+	if err := patchCardEffect(ctx, a, op.MessageID, card); err != nil {
 		slog.Warn("patch quiet working card failed",
 			"turn_id", op.TurnID,
 			"message_id", op.MessageID,

@@ -490,5 +490,6 @@ Codex server request
 - backend upgrade 的卡片 renderer 与发送路径改为显式注入 `StatusCardRenderer` 和 outbound port；Claude permission 菜单、交互失效卡以及 help/quiet/status/menu bridge 的用户可见发送统一经过 application effect runner。
 - Claude 后台 Agent 通知与 Claude support 的 pending card patch 也统一经过 effect runner，避免 runtime support carrier 直接调用 Feishu outbound client。
 - bot profile、fork、plan/goal 异步反馈、compaction 通知和 startup maintenance 文本发送已统一经过 effect runner。
+- server request、local file preview 和 quiet working card 的 patch 路径已统一经过 effect runner；需要 Feishu 返回新消息 ID 的卡片发送仍保留专用 outbound port，避免丢失消息链接语义。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
