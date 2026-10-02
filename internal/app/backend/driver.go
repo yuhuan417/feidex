@@ -167,7 +167,7 @@ type Driver interface {
 	Permission() PermissionDriver
 }
 
-func DriverForApp(app appcore.AppConfig) Driver {
+func DriverForConfig(app appcore.AppConfig) Driver {
 	return DriverForKind(appcore.ConfiguredBackend(app))
 }
 

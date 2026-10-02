@@ -258,7 +258,7 @@ func (s ConfigurationService) backendRequiredStatusBody() string {
 // BackendWorkspaceCommandUsage returns the /workspace usage string for the
 // active backend.
 func (s ConfigurationService) BackendWorkspaceCommandUsage() string {
-	return DriverForApp(s.App).Permission().WorkspaceCommandUsage()
+	return DriverForConfig(s.App).Permission().WorkspaceCommandUsage()
 }
 
 // HandleBackendModelCommand dispatches model commands for the active backend.
@@ -275,31 +275,31 @@ func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feish
 // AppendBackendWorkspaceSummaryLines appends backend-specific workspace
 // summary lines to the given slice.
 func (s ConfigurationService) AppendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return DriverForApp(s.App).Permission().AppendWorkspaceSummaryLines(s.App, lines, currentWS)
+	return DriverForConfig(s.App).Permission().AppendWorkspaceSummaryLines(s.App, lines, currentWS)
 }
 
 // BackendWorkspaceConfigButtons returns the workspace configuration buttons
 // for the active backend.
 func (s ConfigurationService) BackendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return DriverForApp(s.App).Permission().WorkspaceConfigButtons(sessionKey)
+	return DriverForConfig(s.App).Permission().WorkspaceConfigButtons(sessionKey)
 }
 
 // BackendWorkspaceSwitchInFlightNotice returns the notice text for a
 // workspace switch that is in flight.
 func (s ConfigurationService) BackendWorkspaceSwitchInFlightNotice() string {
-	return DriverForApp(s.App).Conversation().WorkspaceSwitchInFlightNotice()
+	return DriverForConfig(s.App).Conversation().WorkspaceSwitchInFlightNotice()
 }
 
 // BackendWorkspaceSwitchBindingFailureNotice returns the notice text for a
 // workspace switch binding failure.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingFailureNotice() string {
-	return DriverForApp(s.App).Conversation().WorkspaceSwitchBindingFailureNotice()
+	return DriverForConfig(s.App).Conversation().WorkspaceSwitchBindingFailureNotice()
 }
 
 // BackendWorkspaceSwitchBindingNotice returns the notice text for a
 // workspace switch binding result.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string {
-	return DriverForApp(s.App).Conversation().WorkspaceSwitchBindingNotice(binding)
+	return DriverForConfig(s.App).Conversation().WorkspaceSwitchBindingNotice(binding)
 }
 
 // RenderModelMenuCard renders the model menu card for the active backend.
@@ -498,7 +498,7 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *conversation.Session)
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
 	}
-	lines = DriverForApp(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = DriverForConfig(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
 }
@@ -545,7 +545,7 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) 
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
 	}
-	lines = DriverForApp(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = DriverForConfig(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
 }

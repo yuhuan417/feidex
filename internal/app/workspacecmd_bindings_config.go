@@ -17,7 +17,7 @@ func workspaceCommandApp(a *App) appworkspacecmd.App {
 	if a == nil {
 		return appworkspacecmd.App{}
 	}
-	return appworkspacecmd.App{ConfigProvider: a, FeishuClient: a.feishu, ContextProvider: a, BackendDriver: appbackend.DriverForApp(a)}
+	return appworkspacecmd.App{ConfigProvider: a, FeishuClient: a.feishu, ContextProvider: a, BackendDriver: appbackend.DriverForConfig(a)}
 }
 
 func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {

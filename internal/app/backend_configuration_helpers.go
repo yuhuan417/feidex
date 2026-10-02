@@ -32,7 +32,7 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 				return newModelConfigService(app).commandClaudeModel(msg, args)
 			},
 			HandleWorkspacePermissionCommand: func(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-				return appbackend.DriverForApp(app).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+				return appbackend.DriverForConfig(app).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
 					Message:    msg,
 					Args:       args[1:],
 					SessionKey: sessionKey,

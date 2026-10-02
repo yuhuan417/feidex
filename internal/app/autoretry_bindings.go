@@ -21,7 +21,7 @@ func newAutoRetryService(a *App) retryview.Service {
 		Context: a.Context, Client: a.feishu, MenuBody: menuCardBody,
 		Settings: func() retryview.Settings {
 			cfg := feishuConfig(a)
-			return retryview.Settings{FrontendID: a.FrontendID(), Backend: configuredBackend(a), Title: appbackend.DriverForApp(a).Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}
+			return retryview.Settings{FrontendID: a.FrontendID(), Backend: configuredBackend(a), Title: appbackend.DriverForConfig(a).Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}
 		},
 		SaveEnabled: func(enabled bool) error {
 			if a.cfg == nil {
