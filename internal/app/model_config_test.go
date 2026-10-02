@@ -258,7 +258,7 @@ func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	sessionKey := "feishu:chat:chat"
 
 	resp, err := newModelConfigService(a).completeClaudeModelOptionAdd(&feishu.CardAction{
@@ -434,7 +434,7 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -475,7 +475,7 @@ func TestCompleteClaudeModelSetDefersCurrentSession(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setModelApplied: true}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	resp, err := newModelConfigService(a).completeClaudeModelSet(&feishu.CardAction{
 		ActionValue: map[string]any{
@@ -508,7 +508,7 @@ func TestCompleteClaudeModelSetAllowsMessageTraffic(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	newRuntimeStateService(a).beginFrontendMessageTraffic()
 	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
 
@@ -538,7 +538,7 @@ func TestCompleteClaudeEffortSetDefersCurrentSession(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortApplied: true}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	resp, err := newModelConfigService(a).completeClaudeEffortSet(&feishu.CardAction{
 		ActionValue: map[string]any{
@@ -572,7 +572,7 @@ func TestCompleteClaudeEffortSetDefaultDefersReinitialization(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortErr: claudecli.ErrEffortDefaultHotApplyUnsupported}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	resp, err := newModelConfigService(a).completeClaudeEffortSet(&feishu.CardAction{
 		ActionValue: map[string]any{
@@ -605,7 +605,7 @@ func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "sess-1"
 	sub := seedActiveSubmission(t, a, sessionKey, "claude-thread-1", "claude-turn-1")

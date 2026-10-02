@@ -17,7 +17,7 @@ import (
 func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
 
@@ -58,8 +58,8 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
-	a.claude = &fakeClaudeCore{}
+	setCodex(a, nil)
+	setCompositionClaude(a, &fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -85,8 +85,8 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
-	a.claude = &fakeClaudeCore{}
+	setCodex(a, nil)
+	setCompositionClaude(a, &fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -142,9 +142,9 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: "session-resume-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -187,8 +187,8 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
-	a.claude = &fakeClaudeCore{}
+	setCodex(a, nil)
+	setCompositionClaude(a, &fakeClaudeCore{})
 	altCwd := t.TempDir()
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altCwd, ApprovalPolicy: "never", SandboxMode: "read-only"})
 

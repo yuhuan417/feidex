@@ -34,9 +34,9 @@ const (
 // Interfaces — what the service needs from the host application
 // ---------------------------------------------------------------------------
 
-// AppStateProvider narrows app state access to the session lookup used by
+// StateProvider narrows app state access to the session lookup used by
 // the history service.
-type AppStateProvider interface {
+type StateProvider interface {
 	Session(key string) *conversation.Session
 }
 
@@ -61,7 +61,7 @@ type FeishuClient interface {
 type Dependencies struct {
 	Context       func() context.Context
 	Feishu        FeishuClient
-	State         AppStateProvider
+	State         StateProvider
 	Codex         func() (CodexClient, error)
 	SessionKey    func(*feishu.InboundMessage) string
 	ReplyInThread func(string) bool

@@ -13,30 +13,19 @@ func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
 	if a == nil {
 		return nil
 	}
-	if a.liveThreads != nil {
-		return a.liveThreads
+	ensureCompositionState(a)
+	if a.composition.liveThreads == nil {
+		a.composition.liveThreads = frontendruntime.NewLiveThreads()
 	}
-	if a.composition != nil {
-		if a.composition.liveThreads == nil {
-			a.composition.liveThreads = frontendruntime.NewLiveThreads()
-		}
-		return a.composition.liveThreads
-	}
-	if a.liveThreads == nil {
-		a.liveThreads = frontendruntime.NewLiveThreads()
-	}
-	return a.liveThreads
+	return a.composition.liveThreads
 }
 
 func resetAppLiveThreadTracker(a *App) {
 	if a == nil {
 		return
 	}
-	if a.composition != nil {
-		a.composition.liveThreads = frontendruntime.NewLiveThreads()
-		return
-	}
-	a.liveThreads = frontendruntime.NewLiveThreads()
+	ensureCompositionState(a)
+	a.composition.liveThreads = frontendruntime.NewLiveThreads()
 }
 
 func markSessionThreadLive(a *App, sessionKey, threadID string) {

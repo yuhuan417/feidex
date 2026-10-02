@@ -50,8 +50,6 @@ type App struct {
 	sharedConfigMu         *sync.RWMutex
 	backend                string
 	backendDriver          backend.Driver
-	codex                  CodexClient
-	claude                 ClaudeCore
 	feishu                 FeishuClient
 	started                time.Time
 	frontendRuntime        frontendruntime.FrontendRuntime
@@ -63,9 +61,6 @@ type App struct {
 	backendStateMu         sync.Mutex
 	asyncRunner            func(func())
 	waitAsync              func()
-	codexRuntimeMu         sync.Mutex
-	codexRecovery          *appcodexruntime.RecoveryState
-	autoRetries            *appautoretry.Tracker
 	frontendRecoveryMu     sync.Mutex
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
@@ -74,10 +69,13 @@ type App struct {
 	backendSwitching       bool
 	backendSwitchTarget    string
 	mcp                    *feidexMCPService
-
+	// Deprecated test construction mirrors; production runtime state is owned
+	// by appComposition and accessed through capability accessors.
+	codex       CodexClient
+	claude      ClaudeCore
+	autoRetries *appautoretry.Tracker
 	liveThreads *frontendruntime.LiveThreads
-
-	trackers appTrackers
+	trackers    appTrackers
 }
 
 // appComposition owns lazily constructed application/backend services. Keeping

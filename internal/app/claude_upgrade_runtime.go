@@ -219,11 +219,11 @@ func (s backendUpgradeService) refreshClaudeRuntimeAfterMaintenance(ctx context.
 	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(s.app)) {
 		return false, nil
 	}
-	if s.app.claude == nil {
-		s.app.claude = newClaudeCore(s.app, s.app.cfg.Claude)
+	if currentClaudeCore(s.app) == nil {
+		setCompositionClaude(s.app, newClaudeCore(s.app, s.app.cfg.Claude))
 		return true, nil
 	}
-	if err := s.app.claude.Close(); err != nil {
+	if err := currentClaudeCore(s.app).Close(); err != nil {
 		return false, fmt.Errorf("切换 runtime 失败: %w", err)
 	}
 	return true, nil

@@ -108,7 +108,7 @@ func (a threadMenuBackendActionAdapter) CompleteMenuInterrupt(action *feishu.Car
 // *App methods satisfying threadmenu.App
 // ---------------------------------------------------------------------------
 
-func (a *App) ThreadMenuAppState() appthreadmenu.AppStateProvider {
+func (a *App) ThreadMenuAppState() appthreadmenu.StateProvider {
 	if a == nil {
 		return nil
 	}

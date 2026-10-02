@@ -12,11 +12,11 @@ import (
 func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	a.claude = runtime
+	setCompositionClaude(a, runtime)
 	defer runtime.Close()
 
 	ws := &a.cfg.Workspaces[0]
@@ -72,11 +72,11 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	a.claude = runtime
+	setCompositionClaude(a, runtime)
 	defer runtime.Close()
 
 	ws := &a.cfg.Workspaces[0]

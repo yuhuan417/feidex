@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-type AppStateProvider interface {
+type StateProvider interface {
 	// PendingRequests returns all pending requests in the store.
 	PendingRequests() []*state.PendingRequest
 	// UpdatePending applies a mutation to a pending request by ID.
@@ -40,7 +40,7 @@ type RuntimeStateProvider interface {
 // SubmissionCleanup is the single owner of turn-associated runtime cleanup.
 // Open async questions and Claude control requests retain their reply anchors.
 type SubmissionCleanup struct {
-	Repository AppStateProvider
+	Repository StateProvider
 	Runtime    RuntimeStateProvider
 }
 

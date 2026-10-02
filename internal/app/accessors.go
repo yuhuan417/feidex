@@ -159,26 +159,45 @@ func currentClaudeCore(a *App) ClaudeCore {
 	if a == nil {
 		return nil
 	}
-	if a.claude != nil {
-		return a.claude
+	ensureCompositionState(a)
+	return a.composition.claude
+
+}
+
+func ensureCompositionState(a *App) {
+	if a == nil {
+		return
 	}
-	if a.composition != nil {
-		return a.composition.claude
+	if a.composition == nil {
+		a.composition = &appComposition{}
 	}
-	return nil
+	if a.composition.codex == nil && a.codex != nil {
+		a.composition.codex = a.codex
+	}
+	if a.composition.claude == nil && a.claude != nil {
+		a.composition.claude = a.claude
+	}
+	if a.composition.liveThreads == nil && a.liveThreads != nil {
+		a.composition.liveThreads = a.liveThreads
+	}
+	if a.composition.trackers == nil && legacyTrackersPresent(&a.trackers) {
+		a.composition.trackers = &a.trackers
+	}
+	if a.composition.autoRetries == nil && a.autoRetries != nil {
+		a.composition.autoRetries = a.autoRetries
+	}
+}
+
+func legacyTrackersPresent(t *appTrackers) bool {
+	return t != nil && (t.turnStreams != nil || t.turnItems != nil || t.turnBindings != nil || t.workspaceCloneOps != nil || t.finalCardPatches != nil || t.pendingSkills != nil || t.groupAnnouncements != nil || t.maintenanceTrackers != nil || t.goals != nil)
 }
 
 func setCompositionClaude(a *App, core ClaudeCore) {
 	if a == nil {
 		return
 	}
-	if a.composition != nil {
-		a.composition.claude = core
-		// Keep the old field populated for source-compatible frontend probes
-		// while all production reads go through currentClaudeCore.
-		a.claude = core
-		return
-	}
+	ensureCompositionState(a)
+	a.composition.claude = core
 	a.claude = core
 }
 
@@ -187,28 +206,11 @@ func (a *App) Trackers() *appTrackers {
 	if a == nil {
 		return nil
 	}
-	// Tests and transitional callers may still inject the legacy bundle on a
-	// frontend constructed before composition initialization. Honor that
-	// explicit injection while production frontends use the composition owner.
-	if legacyTrackersPresent(&a.trackers) {
-		return &a.trackers
+	ensureCompositionState(a)
+	if a.composition.trackers == nil {
+		a.composition.trackers = &appTrackers{}
 	}
-	if a.composition != nil {
-		if a.composition.trackers == nil {
-			a.composition.trackers = &appTrackers{}
-		}
-		return a.composition.trackers
-	}
-	return &a.trackers
-}
-
-func legacyTrackersPresent(trackers *appTrackers) bool {
-	if trackers == nil {
-		return false
-	}
-	return trackers.turnStreams != nil || trackers.turnItems != nil || trackers.turnBindings != nil ||
-		trackers.workspaceCloneOps != nil || trackers.finalCardPatches != nil || trackers.pendingSkills != nil ||
-		trackers.groupAnnouncements != nil || trackers.maintenanceTrackers != nil || trackers.goals != nil
+	return a.composition.trackers
 }
 
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {

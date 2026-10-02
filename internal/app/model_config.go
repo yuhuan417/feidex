@@ -33,12 +33,12 @@ func newModelConfigService(app *App) modelConfigService {
 				return app.feishu.ReplyCard(ctx, msgID, card, replyInThread)
 			},
 			UpdateClaudeConfig: func(cfg config.ClaudeConfig) {
-				if app.claude != nil {
-					app.claude.UpdateConfig(cfg)
+				if currentClaudeCore(app) != nil {
+					currentClaudeCore(app).UpdateConfig(cfg)
 				}
 			},
 			IsClaudeAvailable: func() bool {
-				return app.claude != nil
+				return currentClaudeCore(app) != nil
 			},
 			RequireCodexClient: func() (modelconfig.CodexClient, error) {
 				return requireCodexClient(app)

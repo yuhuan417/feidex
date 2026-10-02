@@ -25,8 +25,8 @@ func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *c
 // Narrow provider interfaces
 // ---------------------------------------------------------------------------
 
-// AppStateProvider narrows app state access to the methods used by the service.
-type AppStateProvider interface {
+// StateProvider narrows app state access to the methods used by the service.
+type StateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
 	Submission(id string) *domainsubmission.Submission
@@ -97,7 +97,7 @@ type RuntimeMaintenanceProvider interface {
 // Dependencies are consumer-owned ports. They are fixed at composition time;
 // no service can ask a host App to locate another service for it.
 type Dependencies struct {
-	State         AppStateProvider
+	State         StateProvider
 	Bindings      RuntimeStateProvider
 	Replies       ReplyContinuationProvider
 	Streams       TurnStreamProvider

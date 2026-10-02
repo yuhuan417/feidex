@@ -70,19 +70,11 @@ func (a *App) AutoRetries() *retry.Tracker {
 	if a == nil {
 		return nil
 	}
-	if a.autoRetries != nil {
-		return a.autoRetries
+	ensureCompositionState(a)
+	if a.composition.autoRetries == nil {
+		a.composition.autoRetries = retry.NewTracker()
 	}
-	if a.composition != nil {
-		if a.composition.autoRetries == nil {
-			a.composition.autoRetries = retry.NewTracker()
-		}
-		return a.composition.autoRetries
-	}
-	if a.autoRetries == nil {
-		a.autoRetries = retry.NewTracker()
-	}
-	return a.autoRetries
+	return a.composition.autoRetries
 }
 func (a *App) RunAsync(fn func())                      { runAsync(a, fn) }
 func (a *App) MenuCardBody(action, body string) string { return menuCardBody(action, body) }

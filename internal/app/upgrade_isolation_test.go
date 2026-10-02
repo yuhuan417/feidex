@@ -28,8 +28,8 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 	}()
 
 	a, ff, _ := newTestApp(t)
-	a.codex = nil
-	a.trackers.turnBindings = nil
+	setCodex(a, nil)
+	a.Trackers().turnBindings = nil
 
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{
@@ -83,8 +83,8 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 	}()
 
 	a, ff, _ := newTestApp(t)
-	a.codex = nil
-	a.trackers.turnBindings = nil
+	setCodex(a, nil)
+	a.Trackers().turnBindings = nil
 
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
@@ -130,8 +130,8 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 	defer func() { startDaemonUpgrade = origUpgrade }()
 
 	a, _, _ := newTestApp(t)
-	a.codex = nil
-	a.trackers.turnBindings = nil
+	setCodex(a, nil)
+	a.Trackers().turnBindings = nil
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "upgrade-isolated",

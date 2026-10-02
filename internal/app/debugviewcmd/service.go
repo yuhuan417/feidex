@@ -50,9 +50,9 @@ type FeishuClient interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
-// AppStateProvider narrows app state access to the session and pending
+// StateProvider narrows app state access to the session and pending
 // request operations used by these services.
-type AppStateProvider interface {
+type StateProvider interface {
 	Session(sessionKey string) *conversation.Session
 	NextLocalID(prefix string) (string, error)
 	SavePending(req *state.PendingRequest) error
@@ -104,7 +104,7 @@ type WorkspaceRenderProvider interface {
 type Dependencies struct {
 	ConfigProvider                    appcore.AppConfig
 	FeishuClient                      FeishuClient
-	StateProvider                     AppStateProvider
+	StateProvider                     StateProvider
 	RuntimeStateProvider              RuntimeStateProvider
 	ConversationBackendProvider       ConversationBackendProvider
 	WorkspaceConfigProvider           WorkspaceConfigProvider
@@ -158,7 +158,7 @@ func (d Dependencies) Store() *state.Store {
 	return d.ConfigProvider.Store()
 }
 func (d Dependencies) DebugFeishu() FeishuClient               { return d.FeishuClient }
-func (d Dependencies) DebugAppState() AppStateProvider         { return d.StateProvider }
+func (d Dependencies) DebugAppState() StateProvider            { return d.StateProvider }
 func (d Dependencies) DebugRuntimeState() RuntimeStateProvider { return d.RuntimeStateProvider }
 func (d Dependencies) DebugConversationBackend() ConversationBackendProvider {
 	return d.ConversationBackendProvider

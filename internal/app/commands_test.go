@@ -457,9 +457,9 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 		t.Run(raw, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
 			a.cfg.Feishu.Backend = backendClaude
-			a.codex = nil
+			setCodex(a, nil)
 			claude := &fakeClaudeCore{}
-			a.claude = claude
+			setCompositionClaude(a, claude)
 
 			msg := &feishu.InboundMessage{
 				MessageID: "m-1",
@@ -785,12 +785,12 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Backend = backendClaude
 			a.cfg.Claude.Model = "mimo-v2-pro"
-			a.codex = nil
+			setCodex(a, nil)
 			claude := &fakeClaudeCore{
 				forkSessionID:  "claude-forked",
 				forkSessionSet: true,
 			}
-			a.claude = claude
+			setCompositionClaude(a, claude)
 
 			sessionKey := "feishu:chat:chat"
 			if err := a.store.UpsertSession(&conversation.Session{
@@ -833,12 +833,12 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 	a.cfg.Claude.Model = "mimo-v2-pro"
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{
 		forkSessionID:  "",
 		forkSessionSet: true,
 	}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

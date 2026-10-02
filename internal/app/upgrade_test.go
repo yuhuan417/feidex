@@ -854,7 +854,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.backend = backendClaude
-	a.claude = &fakeClaudeCore{}
+	setCompositionClaude(a, &fakeClaudeCore{})
 	appbackend.NewMaintenanceStateService(a).BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -881,7 +881,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -940,7 +940,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1001,7 +1001,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1057,7 +1057,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1104,7 +1104,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	origSmoke := runClaudeSmokeTest
 	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }

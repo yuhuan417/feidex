@@ -35,7 +35,7 @@ const (
 type Dependencies struct {
 	ConfigProvider                            appcore.AppConfig
 	FeishuClient                              appcore.FeishuClient
-	AppStateFn                                func() AppStateProvider
+	AppStateFn                                func() StateProvider
 	EffectiveSessionKeyFn                     func(string) string
 	ConversationBackendFn                     func() ConversationBackendProvider
 	BackendRuntimeFn                          func() BackendRuntimeProvider
@@ -97,7 +97,7 @@ func (d Dependencies) Store() *state.Store {
 	return d.ConfigProvider.Store()
 }
 func (d Dependencies) Feishu() appcore.FeishuClient { return d.FeishuClient }
-func (d Dependencies) ThreadMenuAppState() AppStateProvider {
+func (d Dependencies) ThreadMenuAppState() StateProvider {
 	if d.AppStateFn == nil {
 		return nil
 	}
@@ -229,8 +229,8 @@ func (d Dependencies) ShowClaudeSessionPermissionMenuFromApp(m *feishu.InboundMe
 	return d.ShowClaudeSessionPermissionMenuFromAppFn(m)
 }
 
-// AppStateProvider narrows app state access to the methods used by the service.
-type AppStateProvider interface {
+// StateProvider narrows app state access to the methods used by the service.
+type StateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
 	SaveSession(sess *conversation.Session) error

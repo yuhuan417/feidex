@@ -17,7 +17,7 @@ import (
 // PendingDependencies contains the repository, cleanup and presentation ports for pending input.
 type PendingDependencies struct {
 	Context            func() context.Context
-	State              PendingQueueAppStateProvider
+	State              PendingQueueStateProvider
 	Maintenance        PendingQueueRuntimeMaintenanceProvider
 	DefaultWorkspaceID func() string
 	AddReaction        func(context.Context, string, string) error
@@ -25,8 +25,8 @@ type PendingDependencies struct {
 	LogSessionState    func(string, string, *conversation.Session)
 }
 
-// PendingQueueAppStateProvider narrows app state access.
-type PendingQueueAppStateProvider interface {
+// PendingQueueStateProvider narrows app state access.
+type PendingQueueStateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
 	Submission(id string) *domainsubmission.Submission

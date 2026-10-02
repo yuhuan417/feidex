@@ -13,10 +13,10 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 	a.backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	a.claude = runtime
+	setCompositionClaude(a, runtime)
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
@@ -93,10 +93,10 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 	a.cfg.Feishu.Backend = backendClaude
 	a.backend = backendClaude
 	a.cfg.Claude.DangerouslySkipPermissions = false
-	a.codex = nil
+	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	a.claude = runtime
+	setCompositionClaude(a, runtime)
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
@@ -131,10 +131,10 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
 	a.backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	a.claude = runtime
+	setCompositionClaude(a, runtime)
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"

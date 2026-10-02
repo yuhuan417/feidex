@@ -32,7 +32,7 @@ type Dependencies struct {
 	Backend                            func() string
 	StartConversation                  func(context.Context, *workspace.Workspace, *conversation.Session, *domainsubmission.Submission, string) (ConversationStarted, error)
 	DeleteTurnArtifacts                func(string)
-	AppState                           QueueAppStateProvider
+	AppState                           QueueStateProvider
 	SkillResolver                      QueueSkillResolver
 	AttachmentResolver                 QueueAttachmentResolver
 	LiveThread                         QueueLiveThreadProvider
@@ -78,8 +78,8 @@ type Dependencies struct {
 // Narrow provider interfaces
 // ---------------------------------------------------------------------------
 
-// QueueAppStateProvider narrows app state access.
-type QueueAppStateProvider interface {
+// QueueStateProvider narrows app state access.
+type QueueStateProvider interface {
 	Session(key string) *conversation.Session
 	Submission(id string) *domainsubmission.Submission
 	SaveSession(sess *conversation.Session) error
@@ -873,7 +873,7 @@ func (s SubmissionQueueService) NextQueuedSessionKey(sessionKey string) string {
 	return ""
 }
 
-func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueAppStateProvider, sess *conversation.Session) bool {
+func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueStateProvider, sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -896,7 +896,7 @@ func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueAppStateProv
 	return autoRetry.HasBlockingAutoRetry(strings.TrimSpace(sess.Key))
 }
 
-func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueAppStateProvider, sess *conversation.Session) bool {
+func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueStateProvider, sess *conversation.Session) bool {
 	groupExecutionKey := serialGroupExecutionKey(sess)
 	if groupExecutionKey == "" {
 		return false
@@ -921,7 +921,7 @@ func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueAppState
 	return false
 }
 
-func nextQueuedSerialSessionKey(appState QueueAppStateProvider, groupExecutionKey string) string {
+func nextQueuedSerialSessionKey(appState QueueStateProvider, groupExecutionKey string) string {
 	groupExecutionKey = strings.TrimSpace(groupExecutionKey)
 	if groupExecutionKey == "" {
 		return ""
@@ -979,7 +979,7 @@ func sessionGroupKeyParts(sessionKey string) (frontendID, chatID string, ok bool
 	return strings.TrimSpace(frontendID), strings.TrimSpace(chatID), true
 }
 
-func queuedHeadSubmission(appState QueueAppStateProvider, sess *conversation.Session) *domainsubmission.Submission {
+func queuedHeadSubmission(appState QueueStateProvider, sess *conversation.Session) *domainsubmission.Submission {
 	if sess == nil || len(sess.Queue) == 0 {
 		return nil
 	}

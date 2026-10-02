@@ -260,7 +260,7 @@ func newPendingQueueTestApp(t *testing.T) *pendingQueueTestApp {
 	return &pendingQueueTestApp{store: store}
 }
 
-func (a *pendingQueueTestApp) PendingQueueAppState() appsubmission.PendingQueueAppStateProvider {
+func (a *pendingQueueTestApp) PendingQueueAppState() appsubmission.PendingQueueStateProvider {
 	return pendingQueueTestState{store: a.store}
 }
 

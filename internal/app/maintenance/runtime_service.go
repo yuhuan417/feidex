@@ -86,7 +86,7 @@ type Dependencies struct {
 	Context           func() context.Context
 	Workspaces        func() []config.Workspace
 	Store             *state.Store
-	Repository        maintenance.AppStateProvider
+	Repository        maintenance.StateProvider
 	Client            Client
 	MenuBody          func(string, string) string
 	QueueNotification func(state.FrontendCardNotification)

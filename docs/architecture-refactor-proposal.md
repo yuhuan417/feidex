@@ -505,5 +505,6 @@ Codex server request
 - backend runtime facade 已改为接收显式 `backendRuntimeContext`，配置、client、维护策略、恢复策略、状态收口和 transport failure 都通过 capability callback 注入；恢复路径避免在持锁期间重新读取 runtime client。
 - message command 的优先级判断已迁入 `application.ClassifyMessageRoute`，统一 pending response、local command、image staging、空消息和普通 submission 的顺序；Feishu router 只执行选中的 adapter/use-case。
 - tracker、live-thread、auto-retry、Codex recovery 和 backend client 的生产 owner 已迁入 `appComposition`；`App` 上保留的字段只作为旧测试/过渡构造的兼容镜像，生产读写经过 composition accessor。
+- application/runtime/adapter 中残留的 `*App` 状态接口已统一改为 capability 语义命名（`StateProvider`、`QueueStateProvider`、`PendingQueueStateProvider`），避免接口名称继续暗示宿主聚合依赖。
 
 四个目标均已完成：message/card command 编排、effect outbound pipeline、backend dependency carrier 收窄和 composition root 瘦身。剩余的 `App` 字段仅为兼容镜像，不作为生产 capability owner；后续新增代码继续禁止直接依赖这些字段。

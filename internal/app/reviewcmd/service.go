@@ -44,9 +44,9 @@ const (
 // Interfaces — what the service needs from the host application
 // ---------------------------------------------------------------------------
 
-// AppStateProvider narrows app state access to the session and submission
+// StateProvider narrows app state access to the session and submission
 // operations used by the review service.
-type AppStateProvider interface {
+type StateProvider interface {
 	Session(key string) *conversation.Session
 	SaveSession(sess *conversation.Session) error
 	CreateSubmission(sub *domainsubmission.Submission) (string, error)
@@ -84,7 +84,7 @@ type CodexClient interface {
 type Dependencies struct {
 	ConfigProvider                    appcore.AppConfig
 	FeishuClient                      appcore.FeishuClient
-	StateProvider                     AppStateProvider
+	StateProvider                     StateProvider
 	WorkspaceProviderValue            WorkspaceProvider
 	GitProvider                       ReviewGitProvider
 	CodexClientFn                     func() (CodexClient, error)
@@ -139,7 +139,7 @@ func (d Dependencies) Store() *state.Store {
 	return d.ConfigProvider.Store()
 }
 func (d Dependencies) ReviewFeishu() appcore.FeishuClient         { return d.FeishuClient }
-func (d Dependencies) ReviewAppState() AppStateProvider           { return d.StateProvider }
+func (d Dependencies) ReviewAppState() StateProvider              { return d.StateProvider }
 func (d Dependencies) ReviewWorkspaceProvider() WorkspaceProvider { return d.WorkspaceProviderValue }
 func (d Dependencies) ReviewGitProvider() ReviewGitProvider       { return d.GitProvider }
 func (d Dependencies) ReviewCodexClient() (CodexClient, error) {

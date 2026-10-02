@@ -411,9 +411,9 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-1", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{

@@ -333,9 +333,9 @@ func (f *fakeClaudeCore) startTurnCallsSnapshot() []fakeClaudeStartTurnCall {
 func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-session-42"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -404,9 +404,9 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -493,7 +493,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{
 		ensureResults: []fakeClaudeEnsureResult{
 			{id: "claude-stale"},
@@ -504,7 +504,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 			nil,
 		},
 	}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -655,9 +655,9 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -787,9 +787,9 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -868,9 +868,9 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	a.feishu = ff
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -912,7 +912,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 
 	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
 
@@ -968,9 +968,9 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	a.feishu = ff
 
 	payload := pendingforms.ToolUserInputPayload{
@@ -1024,9 +1024,9 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	a.feishu = ff
 
 	payload := pendingforms.ToolUserInputPayload{
@@ -1088,9 +1088,9 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	a.feishu = ff
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -1158,9 +1158,9 @@ func TestClaudeQuestionsAsToolUserInputPreservesMultiSelect(t *testing.T) {
 func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	a.feishu = ff
 
 	sessionKey := "feishu:chat:chat"
@@ -1229,9 +1229,9 @@ func TestReadClaudePlanTextFallsBackToLatestHomePlan(t *testing.T) {
 func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -1281,9 +1281,9 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -1334,9 +1334,9 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "review-cancel-1",
@@ -1374,9 +1374,9 @@ func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	targetSessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1462,9 +1462,9 @@ func dumpSessionState(t *testing.T, label string, sess *conversation.Session) {
 func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1692,9 +1692,9 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 
@@ -1785,9 +1785,9 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1854,9 +1854,9 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = backendClaude
-	a.codex = nil
+	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	a.claude = claude
+	setCompositionClaude(a, claude)
 
 	msg := &feishu.InboundMessage{
 		MessageID:     "cmd-msg-1",
