@@ -6,28 +6,36 @@ import (
 	"strings"
 	"time"
 
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/app/upgraderender"
+	"feidex/internal/application"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	"feidex/internal/runtime"
 	"feidex/internal/state"
 )
 
 // backendUpgradeService is the shared entry point for the /claude and /codex
 // upgrade commands.
 type backendUpgradeService struct {
-	app      *App
-	outbound backendUpgradeOutbound
-}
-
-type backendUpgradeOutbound interface {
-	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+	app    *App
+	runner runtime.EffectRunner
 }
 
 func newBackendUpgradeService(app *App) backendUpgradeService {
-	var outbound backendUpgradeOutbound
-	if app != nil {
-		outbound = app.feishu
+	return backendUpgradeService{app: app, runner: newEffectRunner(app)}
+}
+
+func (s backendUpgradeService) replyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	if s.app == nil {
+		return "", errors.New("application is not initialized")
 	}
-	return backendUpgradeService{app: app, outbound: outbound}
+	return s.runner.RunSendCard(ctx, application.SendCard{
+		Frontend:       identity.FrontendID(s.app.FrontendID()),
+		ReplyMessageID: messageID,
+		View:           feishuoutbound.Card(card),
+		InThread:       inThread,
+	})
 }
 
 // backendUpgradeView is the upgrade snapshot both backends render from.
@@ -71,14 +79,14 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	}
 	if !prepareUpgrade {
 		card := newUpgradeRenderService(s.app).renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, includeLatest)
-		_, err = s.outbound.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	card, pendingID, err := newUpgradeRenderService(s.app).prepareUpgradeCard(upgraderender.ClaudeSpec, claudeUpgradePendingKind, "claude-upgrade", sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.outbound.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	msgID, err := s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -167,14 +175,14 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 	}
 	if !prepareUpgrade {
 		card := newUpgradeRenderService(s.app).renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, includeLatest)
-		_, err = s.outbound.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	card, pendingID, err := newUpgradeRenderService(s.app).prepareUpgradeCard(upgraderender.CodexSpec, codexUpgradePendingKind, "codex-upgrade", sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.outbound.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	msgID, err := s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	if err != nil {
 		return err
 	}

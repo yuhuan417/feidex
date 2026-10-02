@@ -97,10 +97,23 @@ func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID
 }
 
 func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
-	if a == nil {
+	if a == nil || a.Store() == nil {
 		return nil
 	}
-	return a.State().GroupPrimary(chatType, chatID)
+	repository := statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())
+	primary, err := repository.GetGroupPrimary(a.FrontendID(), chatType, chatID)
+	if err != nil || primary == nil {
+		return nil
+	}
+	return &state.GroupPrimary{
+		ID:                      statejson.GroupPrimaryID(primary.FrontendID, primary.ChatType, primary.ChatID),
+		FrontendID:              primary.FrontendID,
+		ChatID:                  primary.ChatID,
+		ChatType:                primary.ChatType,
+		Enabled:                 primary.Enabled,
+		LastAssignmentMessageID: primary.LastAssignmentMessageID,
+		LastAssignmentCreatedAt: primary.LastAssignmentCreatedAt,
+	}
 }
 
 func hasGroupPrimaryState(a *App, chatType, chatID string) bool {
