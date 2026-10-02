@@ -80,10 +80,7 @@ type App struct {
 
 	liveThreads *frontendruntime.LiveThreads
 
-	serverRequestSvc *serverrequest.Service
-	trackers         appTrackers
-	dispatcher       *application.Dispatcher
-	effectRunner     *frontendruntime.EffectRunner
+	trackers appTrackers
 }
 
 // appComposition owns lazily constructed application/backend services. Keeping
@@ -93,6 +90,9 @@ type appComposition struct {
 	backendConfig    *backendConfigurationService
 	backendSelection *backendSelectionService
 	backendActions   *backend.ActionService
+	serverRequestSvc *serverrequest.Service
+	dispatcher       *application.Dispatcher
+	effectRunner     *frontendruntime.EffectRunner
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -171,9 +171,9 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 	}
 	app.stateView = appstate.New(app)
 	dispatcher := newInputDispatcher(app)
-	app.dispatcher = &dispatcher
+	app.composition.dispatcher = &dispatcher
 	effectRunner := newEffectRunner(app)
-	app.effectRunner = &effectRunner
+	app.composition.effectRunner = &effectRunner
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
 		return nil, err
 	}

@@ -21,10 +21,13 @@ import (
 
 // ServerRequestService returns the serverrequest.Service for this app.
 func (a *App) ServerRequestService() *serverrequest.Service {
-	if a.serverRequestSvc != nil {
-		return a.serverRequestSvc
+	if a.composition != nil && a.composition.serverRequestSvc != nil {
+		return a.composition.serverRequestSvc
 	}
-	a.serverRequestSvc = &serverrequest.Service{
+	if a.composition == nil {
+		a.composition = &appComposition{}
+	}
+	a.composition.serverRequestSvc = &serverrequest.Service{
 		// State access
 		PendingRequests: func() []*state.PendingRequest { return a.State().PendingRequests() },
 		Pending:         func(id string) *state.PendingRequest { return a.State().Pending(id) },
@@ -116,7 +119,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		BackendCodex:  backendCodex,
 		BackendClaude: backendClaude,
 	}
-	return a.serverRequestSvc
+	return a.composition.serverRequestSvc
 }
 
 // completePendingFormCancelDispatch routes pending_form.cancel to either

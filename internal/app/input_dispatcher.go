@@ -50,8 +50,8 @@ func newInputDispatcher(a *App) application.Dispatcher {
 }
 func dispatchInput(a *App, input application.Input) (application.Result, error) {
 	dispatcher := newInputDispatcher(a)
-	if a != nil && a.dispatcher != nil {
-		dispatcher = *a.dispatcher
+	if a != nil && a.composition != nil && a.composition.dispatcher != nil {
+		dispatcher = *a.composition.dispatcher
 	}
 	var result application.Result
 	var err error
@@ -113,8 +113,8 @@ func dispatchCodexRequest(a *App, req codexrpc.RequestEnvelope) {
 }
 
 func newEffectRunner(a *App) frontendruntime.EffectRunner {
-	if a != nil && a.effectRunner != nil {
-		return *a.effectRunner
+	if a != nil && a.composition != nil && a.composition.effectRunner != nil {
+		return *a.composition.effectRunner
 	}
 	return feishuoutbound.NewEffectRunner(a.feishu)
 }
