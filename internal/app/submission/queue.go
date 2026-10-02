@@ -16,6 +16,7 @@ import (
 	"feidex/internal/app/sessionctx"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -86,7 +87,7 @@ type agentBindingByIDResolver interface {
 // Optional for narrow queue hosts; the production adapter captures all model
 // fields together, after dequeue and before any backend I/O.
 type modelConfigResolver interface {
-	SubmissionQueueResolveModelConfig(*state.Session, *state.Submission) state.ModelConfigSnapshot
+	SubmissionQueueResolveModelConfig(*state.Session, *state.Submission) domainmodelconfig.Snapshot
 }
 
 type codexConfigResolver interface {

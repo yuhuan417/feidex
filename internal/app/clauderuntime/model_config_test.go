@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
 
@@ -30,8 +31,8 @@ func (c *recordingModelClient) SetEffort(_ context.Context, value string) error 
 }
 
 func TestModelConfigAcknowledgmentStopsOnFailure(t *testing.T) {
-	old := state.ModelConfigSnapshot{Model: "old", Effort: "low"}
-	next := state.ModelConfigSnapshot{Model: "new", Effort: "high"}
+	old := domainmodelconfig.Snapshot{Model: "old", Effort: "low"}
+	next := domainmodelconfig.Snapshot{Model: "new", Effort: "high"}
 	for _, fail := range []string{"", "model", "effort"} {
 		t.Run(fail, func(t *testing.T) {
 			client := &recordingModelClient{fail: fail}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -162,7 +163,7 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *st
 	sess.ActiveThreadSandboxMode = ""
 	sess.ActiveClaudePermissionMode = ""
 	sess.ActiveThreadCollaborationMode = nil
-	sess.AppliedModelConfig = state.CodexResumedThreadConfig(params.Model, params.Config)
+	sess.AppliedModelConfig = codexadapter.ResumedThreadConfig(params.Model, params.Config)
 	sess.ModelConfigError = ""
 	if deps.SetThreadContext != nil {
 		deps.SetThreadContext(
@@ -408,7 +409,7 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 	err := client.Call(resumeCtx, "thread/resume", resumeParams.Map(), &resumeResp)
 	resumeCancel()
 	if err == nil {
-		sess.AppliedModelConfig = state.CodexResumedThreadConfig(resumeParams.Model, resumeParams.Config)
+		sess.AppliedModelConfig = codexadapter.ResumedThreadConfig(resumeParams.Model, resumeParams.Config)
 		sess.ModelConfigError = ""
 		if deps.SetThreadContext != nil {
 			deps.SetThreadContext(sess,

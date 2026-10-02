@@ -1,10 +1,10 @@
 package app
 
 import (
-	"feidex/internal/domain/interaction"
 	"strings"
 
 	applifecycle "feidex/internal/app/lifecycle"
+	"feidex/internal/domain/interaction"
 	"feidex/internal/state"
 )
 

@@ -12,7 +12,7 @@ import (
 
 // Resolve from one config, binding and profile revision. Callers must not hold
 // ConfigMu; writers of profiles/bindings use the same lock.
-func modelConfigSnapshot(a *App, sess *state.Session, backend string) state.ModelConfigSnapshot {
+func modelConfigSnapshot(a *App, sess *state.Session, backend string) domainmodelconfig.Snapshot {
 	store := a.State() // Construct the frontend-scoped facade before ConfigMu.
 	a.ConfigMu().RLock()
 	defer a.ConfigMu().RUnlock()
@@ -66,19 +66,10 @@ func modelConfigSnapshot(a *App, sess *state.Session, backend string) state.Mode
 			PresetEffort: sess.ActiveThreadCollaborationMode.PresetReasoningEffort,
 		}
 	}
-	return stateSnapshotFromDomain(domainmodelconfig.Resolve(backend, sources))
+	return domainmodelconfig.Resolve(backend, sources)
 }
 
-func stateSnapshotFromDomain(snapshot domainmodelconfig.Snapshot) state.ModelConfigSnapshot {
-	return state.ModelConfigSnapshot{
-		Valid: snapshot.Valid, Backend: snapshot.Backend, Model: snapshot.Model, Effort: snapshot.Effort,
-		PlanModel: snapshot.PlanModel, PlanEffort: snapshot.PlanEffort, ReviewModel: snapshot.ReviewModel,
-		SubagentModel: snapshot.SubagentModel, SubagentEffort: snapshot.SubagentEffort,
-		SmallModel: snapshot.SmallModel, CollaborationMode: snapshot.CollaborationMode,
-	}
-}
-
-func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *state.Session, sub *state.Submission) state.ModelConfigSnapshot {
+func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *state.Session, sub *state.Submission) domainmodelconfig.Snapshot {
 	if sess != nil && sub != nil && sub.BindingID != "" {
 		cp := *sess
 		cp.BindingID = sub.BindingID
@@ -122,13 +113,8 @@ func modelConfigStatus(a *App, sessionKey string) string {
 	return notice
 }
 
-func modelConfigTurnSettings(snapshot state.ModelConfigSnapshot) (string, string) {
-	model, effort := domainmodelconfig.TurnSettings(domainmodelconfig.Snapshot{
-		Backend: snapshot.Backend, Model: snapshot.Model, Effort: snapshot.Effort,
-		PlanModel: snapshot.PlanModel, PlanEffort: snapshot.PlanEffort,
-		CollaborationMode: snapshot.CollaborationMode,
-	})
-	return apputil.FirstNonEmpty(model, ""), effort
+func modelConfigTurnSettings(snapshot domainmodelconfig.Snapshot) (string, string) {
+	return domainmodelconfig.TurnSettings(snapshot)
 }
 
 func modelConfigReadCopy(a *App) *config.Config {

@@ -12,17 +12,17 @@ const (
 // Snapshot is the model configuration captured at a safe turn boundary.
 // It is deliberately independent of persistence and backend protocol types.
 type Snapshot struct {
-	Valid             bool
-	Backend           string
-	Model             string
-	Effort            string
-	PlanModel         string
-	PlanEffort        string
-	ReviewModel       string
-	SubagentModel     string
-	SubagentEffort    string
-	SmallModel        string
-	CollaborationMode string
+	Valid             bool   `json:"valid,omitempty"`
+	Backend           string `json:"backend,omitempty"`
+	Model             string `json:"model,omitempty"`
+	Effort            string `json:"effort,omitempty"`
+	PlanModel         string `json:"plan_model,omitempty"`
+	PlanEffort        string `json:"plan_effort,omitempty"`
+	ReviewModel       string `json:"review_model,omitempty"`
+	SubagentModel     string `json:"subagent_model,omitempty"`
+	SubagentEffort    string `json:"subagent_effort,omitempty"`
+	SmallModel        string `json:"small_model,omitempty"`
+	CollaborationMode string `json:"collaboration_mode,omitempty"`
 }
 
 // Sources contains the values available at each configuration scope. The

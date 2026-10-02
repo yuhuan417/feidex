@@ -7,6 +7,7 @@ import (
 	"feidex/internal/app/apputil"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/config"
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
 
@@ -16,7 +17,7 @@ func ClearThreadContext(sess *state.Session) {
 	if sess == nil {
 		return
 	}
-	sess.AppliedModelConfig = state.ModelConfigSnapshot{}
+	sess.AppliedModelConfig = domainmodelconfig.Snapshot{}
 	sess.ModelConfigError = ""
 	sess.ActiveThreadID = ""
 	sess.ActiveThreadWorkspaceID = ""

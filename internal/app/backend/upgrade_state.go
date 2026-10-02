@@ -1,13 +1,13 @@
 package backend
 
 import (
-	"feidex/internal/domain/interaction"
 	"strings"
 	"time"
 
 	"feidex/internal/app/appcore"
 	applifecycle "feidex/internal/app/lifecycle"
 	appsessionctx "feidex/internal/app/sessionctx"
+	"feidex/internal/domain/interaction"
 	"feidex/internal/state"
 )
 

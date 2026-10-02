@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/app/appcore"
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -55,7 +56,7 @@ type SessionState struct {
 	Mu                          sync.Mutex
 	SessionID                   string
 	Model                       string
-	AppliedModelConfig          state.ModelConfigSnapshot
+	AppliedModelConfig          domainmodelconfig.Snapshot
 	PreserveResumeOnFailure     bool
 	AuxiliarySmallModel         string
 	AuxiliarySubagentModel      string
@@ -238,8 +239,8 @@ type Deps struct {
 	Permission             PermissionDeps
 	PrepareClaudeMCPConfig func(sessionKey string) (configPath string, env []string, cleanup func(), err error)
 	AuxiliaryModels        func(sessionKey string) (smallModel, subagentModel string)
-	ModelSettings          func(sessionKey string) state.ModelConfigSnapshot
-	ModelSettingsApplied   func(sessionKey string, settings state.ModelConfigSnapshot)
+	ModelSettings          func(sessionKey string) domainmodelconfig.Snapshot
+	ModelSettingsApplied   func(sessionKey string, settings domainmodelconfig.Snapshot)
 }
 
 // Service provides Claude CLI session management. All exported methods

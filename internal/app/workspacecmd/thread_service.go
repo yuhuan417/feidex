@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	appclaudesession "feidex/internal/app/claudesession"
@@ -204,7 +205,7 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 		appcore.FirstNonEmpty(strings.TrimSpace(result.Thread.Name), strings.TrimSpace(entry.Name)),
 		appcore.FirstNonEmpty(strings.TrimSpace(result.Thread.Preview), strings.TrimSpace(entry.Preview)),
 	)
-	sess.AppliedModelConfig = state.CodexResumedThreadConfig(params.Model, params.Config)
+	sess.AppliedModelConfig = codexadapter.ResumedThreadConfig(params.Model, params.Config)
 	s.SessionResetActiveOps(sess)
 	sess.Status = state.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {

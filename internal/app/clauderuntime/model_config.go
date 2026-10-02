@@ -7,6 +7,7 @@ import (
 
 	"feidex/internal/app/apputil"
 	"feidex/internal/config"
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
 
@@ -17,7 +18,7 @@ type modelSettingsClient interface {
 
 // Acknowledgments precede publishing the applied snapshot. On a partial
 // failure the old snapshot is retained and the complete change is retried.
-func applyModelSettings(ctx context.Context, client modelSettingsClient, applied, desired state.ModelConfigSnapshot) error {
+func applyModelSettings(ctx context.Context, client modelSettingsClient, applied, desired domainmodelconfig.Snapshot) error {
 	if client == nil {
 		return fmt.Errorf("Claude session unavailable")
 	}
@@ -34,12 +35,12 @@ func applyModelSettings(ctx context.Context, client modelSettingsClient, applied
 	return nil
 }
 
-func modelSettingsFromConfig(cfg config.ClaudeConfig, model string) state.ModelConfigSnapshot {
-	return state.ModelConfigSnapshot{Valid: true, Backend: "claude", Model: strings.TrimSpace(apputil.FirstNonEmpty(model, cfg.Model)),
+func modelSettingsFromConfig(cfg config.ClaudeConfig, model string) domainmodelconfig.Snapshot {
+	return domainmodelconfig.Snapshot{Valid: true, Backend: "claude", Model: strings.TrimSpace(apputil.FirstNonEmpty(model, cfg.Model)),
 		Effort: strings.TrimSpace(cfg.Effort), SmallModel: strings.TrimSpace(cfg.SmallModel), SubagentModel: strings.TrimSpace(cfg.SubagentModel)}
 }
 
-func (s *Service) desiredModelSettings(sessionKey string, cfg config.ClaudeConfig, model string) state.ModelConfigSnapshot {
+func (s *Service) desiredModelSettings(sessionKey string, cfg config.ClaudeConfig, model string) domainmodelconfig.Snapshot {
 	if s.deps.ModelSettings != nil {
 		settings := s.deps.ModelSettings(sessionKey)
 		settings.Model = apputil.FirstNonEmpty(settings.Model, model, cfg.Model)
@@ -52,7 +53,7 @@ func (s *Service) desiredModelSettings(sessionKey string, cfg config.ClaudeConfi
 	return settings
 }
 
-func (s *Service) noteModelSettingsApplied(current *SessionState, desired state.ModelConfigSnapshot) {
+func (s *Service) noteModelSettingsApplied(current *SessionState, desired domainmodelconfig.Snapshot) {
 	current.Mu.Lock()
 	current.AppliedModelConfig = desired
 	current.Model = desired.Model
