@@ -25,6 +25,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -43,11 +44,7 @@ type App struct {
 	claude                 ClaudeCore
 	feishu                 FeishuClient
 	started                time.Time
-	lifecycleMu            sync.Mutex
-	asyncWG                sync.WaitGroup
-	stopping               bool
-	lifecycleCtx           context.Context
-	lifecycleCancel        context.CancelFunc
+	frontendRuntime        frontendruntime.FrontendRuntime
 	deduper                *appinbounddedup.Deduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
@@ -166,7 +163,6 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		backend:             backend,
 		feishu:              FeishuClient,
 		started:             time.Now(),
-		lifecycleCtx:        context.Background(),
 		deduper:             appinbounddedup.NewDeduper(),
 		liveThreads:         newLiveThreadTracker(),
 		autoRetries:         appautoretry.NewTracker(),
@@ -204,11 +200,11 @@ func (a *App) Start(ctx context.Context) error {
 	a.beginLifecycle(ctx)
 	ctx = a.Context()
 	if err := startMCPService(a, ctx); err != nil {
-		a.lifecycleCancel()
+		a.frontendRuntime.Cancel()
 		return err
 	}
 	if err := startBackend(a, ctx); err != nil {
-		a.lifecycleCancel()
+		a.frontendRuntime.Cancel()
 		_ = stopMCPService(a, context.Background())
 		return err
 	}
@@ -216,7 +212,7 @@ func (a *App) Start(ctx context.Context) error {
 	recoverSharedRuntimeState(a)
 	recoverFrontendRuntimeState(a)
 	if err := startFrontend(a, ctx); err != nil {
-		a.lifecycleCancel()
+		a.frontendRuntime.Cancel()
 		_ = currentBackendRuntimeHandle(a).close()
 		_ = stopMCPService(a, context.Background())
 		return err
@@ -230,39 +226,21 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) beginLifecycle(ctx context.Context) {
-	a.lifecycleMu.Lock()
-	defer a.lifecycleMu.Unlock()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if a.lifecycleCancel != nil {
-		a.lifecycleCancel()
-	}
-	a.lifecycleCtx, a.lifecycleCancel = context.WithCancel(ctx)
-	a.stopping = false
+	a.frontendRuntime.Begin(ctx)
 }
 
 func (a *App) Stop(ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	a.lifecycleMu.Lock()
-	a.stopping = true
-	if a.lifecycleCancel != nil {
-		a.lifecycleCancel()
-	}
-	a.lifecycleMu.Unlock()
+	a.frontendRuntime.Cancel()
 	if a.feishu != nil {
 		a.feishu.Stop()
 	}
 	backendErr := currentBackendRuntimeHandle(a).close()
 	mcpErr := stopMCPService(a, ctx)
-	done := make(chan struct{})
-	go func() { a.asyncWG.Wait(); close(done) }()
-	select {
-	case <-done:
-	case <-ctx.Done():
-		return ctx.Err()
+	if err := a.frontendRuntime.Wait(ctx); err != nil {
+		return err
 	}
 	if backendErr != nil {
 		return backendErr
@@ -276,34 +254,18 @@ func (a *App) Context() context.Context {
 	if a == nil {
 		return context.Background()
 	}
-	a.lifecycleMu.Lock()
-	defer a.lifecycleMu.Unlock()
-	if a.lifecycleCtx == nil {
-		return context.Background()
-	}
-	return a.lifecycleCtx
+	return a.frontendRuntime.Context()
 }
 
 func runAsync(a *App, fn func()) {
 	if fn == nil {
 		return
 	}
-	if a != nil {
-		a.lifecycleMu.Lock()
-		if a.stopping || (a.lifecycleCtx != nil && a.lifecycleCtx.Err() != nil) {
-			a.lifecycleMu.Unlock()
-			return
-		}
-		a.asyncWG.Add(1)
-		a.lifecycleMu.Unlock()
-		original := fn
-		fn = func() { defer a.asyncWG.Done(); original() }
-	}
-	if a != nil && a.asyncRunner != nil {
-		a.asyncRunner(fn)
+	if a == nil {
+		go fn()
 		return
 	}
-	go fn()
+	a.frontendRuntime.Run(fn, a.asyncRunner)
 }
 
 func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {

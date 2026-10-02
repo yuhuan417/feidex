@@ -51,13 +51,13 @@ func (s *Service) Start(ctx context.Context) error {
 	for _, app := range s.apps {
 		app.beginLifecycle(ctx)
 		if err := startMCPService(app, app.Context()); err != nil {
-			app.lifecycleCancel()
+			app.frontendRuntime.Cancel()
 			_ = stopApps(ctx, started)
 			return err
 		}
 		started = append(started, app)
 		if err := startBackend(app, app.Context()); err != nil {
-			app.lifecycleCancel()
+			app.frontendRuntime.Cancel()
 			_ = stopApps(ctx, started)
 			return err
 		}
