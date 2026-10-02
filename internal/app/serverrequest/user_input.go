@@ -2,6 +2,7 @@ package serverrequest
 
 import (
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"log/slog"
 	"strings"
 
@@ -152,7 +153,7 @@ func (s *Service) SendUserInputFormCard(requestID json.RawMessage, payload ToolU
 		s.ReplyCodexError(requestID, -32602, "no active session for request_user_input")
 		return
 	}
-	requestKey := requestIDKey(requestID)
+	requestKey := codexadapter.RequestIDKey(requestID)
 	card := pendingforms.RenderToolUserInputFormCard(requestKey, payload, ToolUserInputFormDrafts{}, sub.UserID)
 	err := s.DeliverPendingCard(sub, card, PendingCardDelivery{
 		RequestKey:      requestKey,

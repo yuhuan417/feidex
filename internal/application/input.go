@@ -70,5 +70,14 @@ type BackendEvent struct {
 	ThreadID  string
 	TurnID    string
 	RequestID string
+	Status    string
+	Message   string
 	Payload   any
 }
+
+const (
+	EventTurnStarted     = "turn_started"
+	EventTurnCompleted   = "turn_completed"
+	EventTurnError       = "turn_error"
+	EventRequestResolved = "request_resolved"
+)

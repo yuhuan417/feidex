@@ -2,6 +2,7 @@ package serverrequest
 
 import (
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"log/slog"
 	"strings"
 
@@ -154,7 +155,7 @@ func (s *Service) SendApprovalCardPresentation(requestID json.RawMessage, presen
 		s.ReplyCodexError(requestID, -32602, "no active session for approval")
 		return
 	}
-	requestKey := requestIDKey(requestID)
+	requestKey := codexadapter.RequestIDKey(requestID)
 	kind := presentation.Kind
 	if kind == "" {
 		kind = appapproval.NormalizeKind(sub.Kind)
@@ -223,14 +224,14 @@ func (s *Service) SendUserInputCard(requestID json.RawMessage, payload ToolUserI
 			Type: "default",
 			Value: map[string]any{
 				"action":      "user_input.answer",
-				"request_id":  requestIDKey(requestID),
+				"request_id":  codexadapter.RequestIDKey(requestID),
 				"question_id": q.ID,
 				"answer":      opt.Label,
 			},
 		})
 	}
 	card := s.SimpleStatusCard("需要补充输入", "orange", s.PrepareMentionText(pendingforms.RenderToolUserInputQuickBody(q), sub.UserID), buttons)
-	requestKey := requestIDKey(requestID)
+	requestKey := codexadapter.RequestIDKey(requestID)
 	err := s.DeliverPendingCard(sub, card, PendingCardDelivery{
 		RequestKey:      requestKey,
 		RequestIDStored: requestIDStored(requestID),

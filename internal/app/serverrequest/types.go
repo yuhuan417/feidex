@@ -62,18 +62,6 @@ func mustJSON(v any) string {
 	return string(b)
 }
 
-func requestIDKey(raw json.RawMessage) string {
-	raw = json.RawMessage(strings.TrimSpace(string(raw)))
-	if len(raw) == 0 {
-		return ""
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err == nil {
-		return strings.TrimSpace(value)
-	}
-	return strings.TrimSpace(string(raw))
-}
-
 func requestIDStored(raw json.RawMessage) string {
 	return strings.TrimSpace(string(raw))
 }

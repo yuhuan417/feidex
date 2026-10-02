@@ -2,6 +2,7 @@ package serverrequest
 
 import (
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"log/slog"
 	"strings"
 
@@ -19,7 +20,7 @@ func (s *Service) SendElicitationFormCard(requestID json.RawMessage, payload Eli
 		s.ReplyCodexError(requestID, -32602, "no active session for elicitation")
 		return
 	}
-	requestKey := requestIDKey(requestID)
+	requestKey := codexadapter.RequestIDKey(requestID)
 	card := pendingforms.RenderElicitationRequestCard(requestKey, payload, pendingforms.FormDrafts{}, sub.UserID).Card
 	err := s.DeliverPendingCard(sub, card, PendingCardDelivery{
 		RequestKey:      requestKey,
@@ -86,7 +87,7 @@ func (s *Service) SendElicitationURLCard(requestID json.RawMessage, payload Elic
 		s.ReplyCodexError(requestID, -32602, "no active session for elicitation")
 		return
 	}
-	requestKey := requestIDKey(requestID)
+	requestKey := codexadapter.RequestIDKey(requestID)
 	body := payload.Message
 	if strings.TrimSpace(payload.URL) != "" {
 		body += "\n\n打开链接：<" + payload.URL + ">"

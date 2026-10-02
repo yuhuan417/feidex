@@ -2,17 +2,18 @@ package serverrequest
 
 import (
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"testing"
 
 	"feidex/internal/state"
 )
 
 func TestRequestIDHelpers(t *testing.T) {
-	if got := requestIDKey(json.RawMessage(` "req-1" `)); got != "req-1" {
-		t.Fatalf("requestIDKey(json string) = %q, want req-1", got)
+	if got := codexadapter.RequestIDKey(json.RawMessage(` "req-1" `)); got != "req-1" {
+		t.Fatalf("codexadapter.RequestIDKey(json string) = %q, want req-1", got)
 	}
-	if got := requestIDKey(json.RawMessage(`req-2`)); got != "req-2" {
-		t.Fatalf("requestIDKey(raw) = %q, want req-2", got)
+	if got := codexadapter.RequestIDKey(json.RawMessage(`req-2`)); got != "req-2" {
+		t.Fatalf("codexadapter.RequestIDKey(raw) = %q, want req-2", got)
 	}
 	if got := requestIDRaw(" req-3 "); string(got) != `"req-3"` {
 		t.Fatalf("requestIDRaw() = %q, want quoted req-3", string(got))

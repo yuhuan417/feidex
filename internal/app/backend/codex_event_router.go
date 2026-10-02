@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"strings"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	appapproval "feidex/internal/app/approval"
 	apppendingforms "feidex/internal/app/pendingforms"
 	"feidex/internal/app/turnitem"
+	"feidex/internal/application"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
@@ -109,6 +111,12 @@ func NewCodexEventRouter() *CodexEventRouter {
 // HandleNotification dispatches a Codex notification by method.
 func (r *CodexEventRouter) HandleNotification(method string, params json.RawMessage) {
 	slog.Debug("codex notification", "method", method)
+	if event, handled, err := codexadapter.DecodeLifecycle(method, params); handled {
+		if err == nil {
+			r.handleLifecycleEvent(event)
+		}
+		return
+	}
 	switch method {
 	case "item/started":
 		r.handleItemStarted(params)
@@ -118,20 +126,12 @@ func (r *CodexEventRouter) HandleNotification(method string, params json.RawMess
 		r.handleMCPToolCallProgress(params)
 	case "turn/plan/updated":
 		r.handleTurnPlanUpdated(params)
-	case "turn/started":
-		r.handleTurnStarted(params)
-	case "turn/completed":
-		r.handleTurnCompleted(params)
 	case "thread/tokenUsage/updated":
 		r.handleThreadTokenUsageUpdated(params)
 	case "thread/goal/updated":
 		r.handleThreadGoalUpdated(params)
 	case "thread/goal/cleared":
 		r.handleThreadGoalCleared(params)
-	case "error":
-		r.handleError(params)
-	case "serverRequest/resolved":
-		r.handleServerRequestResolved(params)
 	}
 }
 
@@ -236,49 +236,6 @@ func (r *CodexEventRouter) handleTurnPlanUpdated(params json.RawMessage) {
 	}
 }
 
-func (r *CodexEventRouter) handleTurnStarted(params json.RawMessage) {
-	var p struct {
-		ThreadID string `json:"threadId"`
-		TurnID   string `json:"turnId"`
-		Turn     struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
-		} `json:"turn"`
-	}
-	if json.Unmarshal(params, &p) != nil {
-		return
-	}
-	turnID := strings.TrimSpace(firstNonEmpty(p.Turn.ID, p.TurnID))
-	if turnID != "" && r.OnTurnStarted != nil {
-		r.OnTurnStarted(p.ThreadID, turnID)
-	}
-}
-
-func (r *CodexEventRouter) handleTurnCompleted(params json.RawMessage) {
-	var p struct {
-		ThreadID string `json:"threadId"`
-		Turn     struct {
-			ID     string                        `json:"id"`
-			Status string                        `json:"status"`
-			Error  *codexrpc.ThreadReadTurnError `json:"error"`
-		} `json:"turn"`
-	}
-	if json.Unmarshal(params, &p) != nil {
-		return
-	}
-	slog.Debug("turn completed",
-		"thread_id", p.ThreadID,
-		"turn_id", p.Turn.ID,
-		"status", p.Turn.Status,
-	)
-	if message := p.Turn.Error.DisplayText(); message != "" && r.RecordTurnError != nil {
-		r.RecordTurnError(p.ThreadID, p.Turn.ID, message)
-	}
-	if r.OnTurnCompleted != nil {
-		r.OnTurnCompleted(p.ThreadID, p.Turn.ID, p.Turn.Status)
-	}
-}
-
 func (r *CodexEventRouter) handleThreadTokenUsageUpdated(params json.RawMessage) {
 	var p codexrpc.ThreadTokenUsageUpdatedNotification
 	if json.Unmarshal(params, &p) != nil {
@@ -309,49 +266,41 @@ func (r *CodexEventRouter) handleThreadGoalCleared(params json.RawMessage) {
 	}
 }
 
-func (r *CodexEventRouter) handleError(params json.RawMessage) {
-	var p struct {
-		ThreadID string                       `json:"threadId"`
-		TurnID   string                       `json:"turnId"`
-		Error    codexrpc.ThreadReadTurnError `json:"error"`
-	}
-	if json.Unmarshal(params, &p) != nil {
-		return
-	}
-	message := p.Error.DisplayText()
-	slog.Error("codex turn error",
-		"thread_id", p.ThreadID,
-		"turn_id", p.TurnID,
-		"message", message,
-	)
-	if r.FailStandaloneCompactTurn != nil && r.FailStandaloneCompactTurn(p.ThreadID, p.TurnID, message) {
-		return
-	}
-	if r.RecordTurnError != nil {
-		r.RecordTurnError(p.ThreadID, p.TurnID, message)
-	}
-	if r.UpdateSubmissionByTurn != nil {
-		r.UpdateSubmissionByTurn(p.ThreadID, p.TurnID, func(sub *state.Submission) {
-			sub.Status = state.SubmissionStatusFailed.String()
-		})
-	}
-}
-
-func (r *CodexEventRouter) handleServerRequestResolved(params json.RawMessage) {
-	var p struct {
-		ThreadID  string          `json:"threadId"`
-		RequestID json.RawMessage `json:"requestId"`
-	}
-	if json.Unmarshal(params, &p) != nil {
-		return
-	}
-	reqID := RequestIDKey(p.RequestID)
-	var pending *state.PendingRequest
-	if r.ResolveServerPendingRequest != nil {
-		pending = r.ResolveServerPendingRequest(reqID)
-	}
-	if r.ResumeSubmissionAfterRequest != nil {
-		r.ResumeSubmissionAfterRequest(pending)
+// handleLifecycleEvent consumes semantic values; protocol decoding belongs to
+// the Codex adapter. Legacy callbacks remain until the turn owner is migrated.
+func (r *CodexEventRouter) handleLifecycleEvent(event application.BackendEvent) {
+	switch event.Kind {
+	case application.EventTurnStarted:
+		if event.TurnID != "" && r.OnTurnStarted != nil {
+			r.OnTurnStarted(event.ThreadID, event.TurnID)
+		}
+	case application.EventTurnCompleted:
+		slog.Debug("turn completed", "thread_id", event.ThreadID, "turn_id", event.TurnID, "status", event.Status)
+		if event.Message != "" && r.RecordTurnError != nil {
+			r.RecordTurnError(event.ThreadID, event.TurnID, event.Message)
+		}
+		if r.OnTurnCompleted != nil {
+			r.OnTurnCompleted(event.ThreadID, event.TurnID, event.Status)
+		}
+	case application.EventTurnError:
+		slog.Error("codex turn error", "thread_id", event.ThreadID, "turn_id", event.TurnID, "message", event.Message)
+		if r.FailStandaloneCompactTurn != nil && r.FailStandaloneCompactTurn(event.ThreadID, event.TurnID, event.Message) {
+			return
+		}
+		if r.RecordTurnError != nil {
+			r.RecordTurnError(event.ThreadID, event.TurnID, event.Message)
+		}
+		if r.UpdateSubmissionByTurn != nil {
+			r.UpdateSubmissionByTurn(event.ThreadID, event.TurnID, func(sub *state.Submission) { sub.Status = state.SubmissionStatusFailed.String() })
+		}
+	case application.EventRequestResolved:
+		var pending *state.PendingRequest
+		if r.ResolveServerPendingRequest != nil {
+			pending = r.ResolveServerPendingRequest(event.RequestID)
+		}
+		if r.ResumeSubmissionAfterRequest != nil {
+			r.ResumeSubmissionAfterRequest(pending)
+		}
 	}
 }
 
@@ -507,23 +456,6 @@ func (r *CodexEventRouter) replyError(requestID json.RawMessage, code int, messa
 	if r.ReplyCodexError != nil {
 		r.ReplyCodexError(requestID, code, message)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Pure helpers
-// ---------------------------------------------------------------------------
-
-// RequestIDKey extracts a string key from a JSON raw message request ID.
-func RequestIDKey(raw json.RawMessage) string {
-	raw = json.RawMessage(strings.TrimSpace(string(raw)))
-	if len(raw) == 0 {
-		return ""
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err == nil {
-		return strings.TrimSpace(value)
-	}
-	return strings.TrimSpace(string(raw))
 }
 
 // stringValue extracts a string from an any value.
