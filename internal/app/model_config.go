@@ -27,10 +27,10 @@ func newModelConfigService(app *App) modelConfigService {
 			GetCfgPath:  func() string { return app.cfgPath },
 			GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
 			ReplyText: func(ctx context.Context, msgID string, text string, replyInThread bool) error {
-				return app.feishu.ReplyText(ctx, msgID, text, replyInThread)
+				return replyTextByAnchorEffect(ctx, app, msgID, text, replyInThread)
 			},
 			ReplyCard: func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error) {
-				return app.feishu.ReplyCard(ctx, msgID, card, replyInThread)
+				return replyCardWithIDEffect(ctx, app, msgID, card, replyInThread)
 			},
 			UpdateClaudeConfig: func(cfg config.ClaudeConfig) {
 				if currentClaudeCore(app) != nil {
