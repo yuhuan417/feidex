@@ -45,7 +45,7 @@ type SelectionRenderDeps struct {
 	BuildStatusCard func(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
-type SelectionTransportDeps struct {
+type SelectionEffectDeps struct {
 	ReplyCard func(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error)
 	SendCard  func(ctx context.Context, chatID string, card map[string]any) (string, error)
 	PatchCard func(ctx context.Context, messageID string, card map[string]any) error
@@ -56,12 +56,12 @@ type SelectionCommandDeps struct {
 }
 
 type SelectionDeps struct {
-	App       SelectionSource
-	Switch    *RuntimeStateService
-	Runtime   SelectionRuntimeDeps
-	Render    SelectionRenderDeps
-	Transport SelectionTransportDeps
-	Commands  SelectionCommandDeps
+	App      SelectionSource
+	Switch   *RuntimeStateService
+	Runtime  SelectionRuntimeDeps
+	Render   SelectionRenderDeps
+	Effects  SelectionEffectDeps
+	Commands SelectionCommandDeps
 }
 
 // SelectionService manages backend selection, switching, and configuration
@@ -219,17 +219,17 @@ func (s SelectionService) ReplyBackendSelectionCard(msg *feishu.InboundMessage, 
 	}
 	card := s.RenderBackendSelectionCard(sessionKey, appcore.FirstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
 	if msg != nil && strings.TrimSpace(msg.MessageID) != "" {
-		if s.deps.Transport.ReplyCard == nil {
+		if s.deps.Effects.ReplyCard == nil {
 			return fmt.Errorf("backend card reply not configured")
 		}
-		_, err := s.deps.Transport.ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		_, err := s.deps.Effects.ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 		return err
 	}
 	if msg != nil && strings.TrimSpace(msg.ChatID) != "" {
-		if s.deps.Transport.SendCard == nil {
+		if s.deps.Effects.SendCard == nil {
 			return fmt.Errorf("backend card send not configured")
 		}
-		_, err := s.deps.Transport.SendCard(appcore.Context(s.App), msg.ChatID, card)
+		_, err := s.deps.Effects.SendCard(appcore.Context(s.App), msg.ChatID, card)
 		return err
 	}
 	return fmt.Errorf("backend not configured")
@@ -313,11 +313,11 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 				"error", err,
 			)
 		}
-		if s.deps.Transport.PatchCard == nil {
+		if s.deps.Effects.PatchCard == nil {
 			slog.Warn("backend switch patch unavailable", "message_id", messageID)
 			return
 		}
-		if patchErr := s.deps.Transport.PatchCard(appcore.Context(s.App), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
+		if patchErr := s.deps.Effects.PatchCard(appcore.Context(s.App), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
 			slog.Warn("backend switch patch failed",
 				"frontend_id", s.App.FrontendID(),
 				"target_backend", target,

@@ -538,6 +538,7 @@ Codex server request
 - 群 primary 的查询、启用判断和 assignment 过期判断也由 routing application service 承担，`internal/app` 不再直接读取 primary repository 来做状态决策。
 - backend upgrade status/confirmation cards now enter the semantic `SendCard` effect runner; upgrade policy and maintenance state remain runtime/application capabilities.
 - Codex history `thread/read` and compaction `thread/compact/start` now go through the shared Codex gateway and semantic backend operation values; Feishu history rendering no longer calls the raw RPC client directly.
+- backend selection now consumes an explicit effect capability for reply/send/patch cards; its composition adapter routes all three operations through the semantic effect runner.
 
 当前完成标准：新增能力需声明 domain owner、application use case、consumer-owned ports、effects、adapter、协议状态机影响及 frontend/chat/session scope；新增业务代码不得以 `*App` 作为跨模块能力容器。现有 `internal/app` 仍包含 Feishu 入口和历史编排，后续新增代码不得扩大该层；其余迁移应按同一边界继续收敛。
 
