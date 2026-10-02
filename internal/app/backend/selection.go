@@ -2,10 +2,11 @@ package backend
 
 import (
 	"context"
+	configadapter "feidex/internal/adapter/config"
+	"feidex/internal/application/backendconfig"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"strings"
 
 	"feidex/internal/app/appcore"
@@ -445,22 +446,5 @@ func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target str
 
 // SetConfiguredBackend persists the target backend to config.
 func (s SelectionService) SetConfiguredBackend(target string) error {
-	if s.App == nil || s.App.Config() == nil {
-		return fmt.Errorf("nil config")
-	}
-	target = NormalizeRuntimeBackend(target)
-	s.App.ConfigMu().Lock()
-	defer s.App.ConfigMu().Unlock()
-	cfg := appcore.FeishuConfigUnlocked(s.App)
-	if cfg == nil {
-		return fmt.Errorf("frontend config not found")
-	}
-	cfg.Backend = target
-	if err := s.App.Config().Normalize(filepath.Dir(s.App.ConfigPath())); err != nil {
-		return err
-	}
-	if strings.TrimSpace(s.App.ConfigPath()) == "" {
-		return nil
-	}
-	return config.Save(s.App.ConfigPath(), s.App.Config())
+	return (backendconfig.Service{Repository: configadapter.NewBackendRepository(s.App)}).SetBackend(target)
 }

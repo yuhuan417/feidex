@@ -545,5 +545,5 @@ Codex server request
 - `internal/app` 仍直接编排群绑定、workspace 管理、模型/Profile 命令、thread menu、debug、review 和 upgrade runtime；这些服务虽然大多已经有 Dependencies 结构，但仍由 app 负责组装和触发，尚未全部成为独立 application use case。
 - Feishu outbound 已有 EffectClient，但 app 子服务仍保留大量 `ReplyText`/`ReplyCard` 端口调用；这些调用经过 proxy 执行 effect，却还没有统一改成 application 返回 semantic effects。
 - `internal/application` 的 `CardAction`、backend event 和 interaction payload 仍保留部分 `map[string]any`/`any`，完整的 semantic presentation model 尚未覆盖所有菜单、表单和协议 item。
-- workspace 的创建、默认值更新、删除和群绑定创建已迁移到 workspace application configuration use case 与 config storage adapter；workspace 的查询展示、部分 backend maintenance、history/recovery 和 runtime 配置读路径仍保留在 transitional app。
+- workspace 的创建、默认值更新、删除和群绑定创建已迁移到 workspace application configuration use case 与 config storage adapter；backend selection 的配置写入也已迁移到 backend configuration use case；workspace 查询展示、部分 backend maintenance、history/recovery 和 runtime 配置读路径仍保留在 transitional app。
 - architecture guard 已能阻止跨层 import、具体 `App` 能力字段和旧宽接口回归，但还没有对所有 service callback 环和同步 outbound 做完整静态约束。
