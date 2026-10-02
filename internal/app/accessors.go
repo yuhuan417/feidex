@@ -192,7 +192,9 @@ func (a *App) invalidateBackendConfigurationService() {
 		return
 	}
 	a.backendConfigMu.Lock()
-	a.backendConfig = nil
+	if a.composition != nil {
+		a.composition.backendConfig = nil
+	}
 	a.backendConfigMu.Unlock()
 }
 

@@ -13,11 +13,14 @@ func newBackendActionService(app *App) appbackend.ActionService {
 	if app != nil {
 		app.backendConfigMu.Lock()
 		defer app.backendConfigMu.Unlock()
-		if app.backendActions != nil {
-			return *app.backendActions
+		if app.composition != nil && app.composition.backendActions != nil {
+			return *app.composition.backendActions
 		}
 		service := buildBackendActionService(app)
-		app.backendActions = &service
+		if app.composition == nil {
+			app.composition = &appComposition{}
+		}
+		app.composition.backendActions = &service
 		return service
 	}
 	return buildBackendActionService(nil)

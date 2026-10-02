@@ -25,11 +25,14 @@ func newBackendSelectionService(app *App) backendSelectionService {
 	if app != nil {
 		app.backendConfigMu.Lock()
 		defer app.backendConfigMu.Unlock()
-		if app.backendSelection != nil {
-			return *app.backendSelection
+		if app.composition != nil && app.composition.backendSelection != nil {
+			return *app.composition.backendSelection
 		}
 		service := buildBackendSelectionService(app)
-		app.backendSelection = &service
+		if app.composition == nil {
+			app.composition = &appComposition{}
+		}
+		app.composition.backendSelection = &service
 		return service
 	}
 	return buildBackendSelectionService(nil)

@@ -60,9 +60,7 @@ type App struct {
 	threadMenuMu           sync.Mutex
 	threadMenu             *appthreadmenu.Service
 	backendConfigMu        sync.Mutex
-	backendConfig          *backendConfigurationService
-	backendSelection       *backendSelectionService
-	backendActions         *backend.ActionService
+	composition            *appComposition
 	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
@@ -86,6 +84,15 @@ type App struct {
 	trackers         appTrackers
 	dispatcher       *application.Dispatcher
 	effectRunner     *frontendruntime.EffectRunner
+}
+
+// appComposition owns lazily constructed application/backend services. Keeping
+// these bindings together prevents the frontend aggregate from becoming a
+// second service registry while preserving one cache per frontend runtime.
+type appComposition struct {
+	backendConfig    *backendConfigurationService
+	backendSelection *backendSelectionService
+	backendActions   *backend.ActionService
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -145,6 +152,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
 		backendDriver:       backendDriverForKind(backend),
+		composition:         &appComposition{},
 		feishu:              FeishuClient,
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),
