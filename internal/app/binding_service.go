@@ -1,7 +1,9 @@
 package app
 
 import (
+	configadapter "feidex/internal/adapter/config"
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 
@@ -40,8 +42,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 	}
 	if len(args) == 0 || strings.EqualFold(args[0], "status") {
 		card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), binding)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
-		return err
+		return replyCardEffect(s.app, msg, card)
 	}
 	if err := ensureSessionModelConfigWritable(s.app, makeSessionKey(s.app, msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
 		return err
@@ -341,12 +342,7 @@ func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Work
 	if err := os.MkdirAll(absCWD, 0o755); err != nil {
 		return nil, err
 	}
-	s.app.configMutex().Lock()
-	defer s.app.configMutex().Unlock()
-	if config.FindWorkspace(s.app.cfg, id) != nil {
-		return nil, fmt.Errorf("workspace %q 已存在", id)
-	}
-	s.app.cfg.Workspaces = append(s.app.cfg.Workspaces, config.Workspace{
+	return (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.app)}).Create(config.Workspace{
 		ID:             id,
 		Name:           textutil.FirstNonEmpty(strings.TrimSpace(name), id),
 		Cwd:            absCWD,
@@ -354,13 +350,6 @@ func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Work
 		SandboxMode:    "danger-full-access",
 		MultiAgentMode: "explicitRequestOnly",
 	})
-	if err := s.app.cfg.Normalize(filepath.Dir(s.app.cfgPath)); err != nil {
-		return nil, err
-	}
-	if err := config.Save(s.app.cfgPath, s.app.cfg); err != nil {
-		return nil, err
-	}
-	return config.FindWorkspace(s.app.cfg, id), nil
 }
 
 func (s bindingService) cloneLocalWorkspace(msg *feishu.InboundMessage, args []string) (string, string, error) {
@@ -414,8 +403,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 	if strings.TrimSpace(body) != "" {
 		card = s.app.feishu.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
 	}
-	_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
-	return err
+	return replyCardEffect(s.app, msg, card)
 }
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
