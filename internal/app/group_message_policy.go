@@ -1,11 +1,19 @@
 package app
 
 import (
+	"feidex/internal/application"
 	"strings"
 
 	domainrouting "feidex/internal/domain/routing"
 	"feidex/internal/feishu"
 )
+
+func groupPolicyRootMessageID(msg *feishu.InboundMessage) string {
+	if msg == nil {
+		return ""
+	}
+	return application.GroupPolicyRootMessageID(msg.MessageID, msg.RootMessageID, msg.ParentMessageID)
+}
 
 type groupMessagePolicyConfigurer interface {
 	SetGroupMessagePolicy(feishu.GroupMessagePolicy)

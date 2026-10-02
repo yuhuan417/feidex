@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/application"
 	"feidex/internal/textutil"
 	"log/slog"
 	"strings"
@@ -101,7 +102,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 			"message_id", msg.MessageID,
 			"chat_id", msg.ChatID,
 			"root_message_id", msg.RootMessageID,
-			"policy_root_message_id", groupPolicyRootMessageID(msg),
+			"policy_root_message_id", application.GroupPolicyRootMessageID(msg.MessageID, msg.RootMessageID, msg.ParentMessageID),
 			"parent_message_id", msg.ParentMessageID,
 			"mentioned_self", msg.MentionedSelf,
 			"mention_count", len(msg.MentionedOpenIDs),
@@ -220,25 +221,11 @@ func routerDropsGroupMessage(a *App, msg *feishu.InboundMessage) bool {
 	return !shouldAcceptGroupMessage(
 		a,
 		msg.ChatID,
-		groupPolicyRootMessageID(msg),
+		application.GroupPolicyRootMessageID(msg.MessageID, msg.RootMessageID, msg.ParentMessageID),
 		msg.ParentMessageID,
 		msg.MentionedSelf,
 		msg.MentionedAny || len(msg.MentionedOpenIDs) > 0,
 	)
-}
-
-func groupPolicyRootMessageID(msg *feishu.InboundMessage) string {
-	if msg == nil {
-		return ""
-	}
-	rootMessageID := strings.TrimSpace(msg.RootMessageID)
-	if rootMessageID == "" {
-		return ""
-	}
-	if strings.TrimSpace(msg.ParentMessageID) == "" && rootMessageID == strings.TrimSpace(msg.MessageID) {
-		return ""
-	}
-	return rootMessageID
 }
 
 func (r *feishuEventRouter) handleRecall(recall *feishu.MessageRecall) {
