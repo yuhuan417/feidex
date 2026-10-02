@@ -8,7 +8,7 @@ import (
 
 // GroupAnnouncementBlock returns this frontend's announcement block record for one group.
 func (s *Store) GroupAnnouncementBlock(chatType, chatID string) *state.GroupAnnouncementBlock {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
 	records := s.GroupAnnouncementBlocksForChat(chatType, chatID)
@@ -20,22 +20,22 @@ func (s *Store) GroupAnnouncementBlock(chatType, chatID string) *state.GroupAnno
 
 // GroupAnnouncementBlocksForChat returns this frontend's announcement block records for one chat.
 func (s *Store) GroupAnnouncementBlocksForChat(chatType, chatID string) []*state.GroupAnnouncementBlock {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	return s.Store.GroupAnnouncementBlocksByChat(s.FrontendID, chatType, chatID)
+	return s.stateStore().GroupAnnouncementBlocksByChat(s.scopeFrontendID(), chatType, chatID)
 }
 
 // SaveGroupAnnouncementBlock persists an announcement block record in the current frontend scope.
 func (s *Store) SaveGroupAnnouncementBlock(record *state.GroupAnnouncementBlock) error {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
 	if record != nil && strings.TrimSpace(record.ID) == "" {
 		record = cloneGroupAnnouncementBlockForSave(record)
-		record.ID = DefaultGroupAnnouncementBlockID(s.FrontendID, record.ChatType, record.ChatID)
+		record.ID = DefaultGroupAnnouncementBlockID(s.scopeFrontendID(), record.ChatType, record.ChatID)
 	}
-	return s.Store.UpsertScopedGroupAnnouncementBlock(s.FrontendID, record)
+	return s.stateStore().UpsertScopedGroupAnnouncementBlock(s.scopeFrontendID(), record)
 }
 
 // DefaultGroupAnnouncementBlockID is the stable state key for one frontend in one group chat.

@@ -3,14 +3,13 @@ package appstate
 import (
 	"testing"
 
-	"feidex/internal/app/appcore"
 	"feidex/internal/state"
 )
 
 func TestAgentBindingFrontendScope(t *testing.T) {
 	store := newTestStateStore(t)
-	frontendA := &Store{AppStateFacade: appcore.AppStateFacade{Store: store, FrontendID: "frontend-a"}}
-	frontendB := &Store{AppStateFacade: appcore.AppStateFacade{Store: store, FrontendID: "frontend-b"}}
+	frontendA := NewScoped(store, "frontend-a", "", false)
+	frontendB := NewScoped(store, "frontend-b", "", false)
 
 	if err := frontendA.SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-a",
@@ -40,11 +39,7 @@ func TestAgentBindingFrontendScope(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertAgentBinding(legacy) error = %v", err)
 	}
-	legacyFrontend := &Store{AppStateFacade: appcore.AppStateFacade{
-		Store:          store,
-		FrontendID:     "frontend-a",
-		LegacyFallback: true,
-	}}
+	legacyFrontend := NewScoped(store, "frontend-a", "", true)
 	if got := legacyFrontend.AgentBinding("binding-b"); got == nil || got.FrontendID != "" {
 		t.Fatalf("legacy fallback binding = %+v", got)
 	}

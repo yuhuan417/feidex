@@ -4,7 +4,6 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
-	"feidex/internal/app/appcore"
 	"feidex/internal/app/appstate"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/domain/conversation"
@@ -70,7 +69,7 @@ func TestAppStateStoreBranches(t *testing.T) {
 
 	a, _, _ := newTestApp(t)
 	facade := a.State()
-	if facade == nil || facade.Store != a.store {
+	if facade == nil || facade.StateStore() != a.store {
 		t.Fatalf(".State() = %+v", facade)
 	}
 	if err := facade.SaveSession(&conversation.Session{Key: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID}); err != nil {
@@ -341,12 +340,7 @@ func TestCommandCaptureClientWrapperDelegates(t *testing.T) {
 
 func TestAppStateStoreScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	facade := &appstate.Store{
-		AppStateFacade: appcore.AppStateFacade{
-			Store:      a.store,
-			FrontendID: "frontend-a",
-		},
-	}
+	facade := appstate.NewScoped(a.store, "frontend-a", "", false)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{FrontendID: "frontend-a", ID: "req-1", Status: "pending"}); err != nil {
 		t.Fatalf("UpsertPending(frontend-a) error = %v", err)

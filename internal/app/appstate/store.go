@@ -3,15 +3,19 @@
 package appstate
 
 import (
-	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/appcore"
+	"feidex/internal/domain/conversation"
+	"feidex/internal/state"
 )
 
 // Store provides frontend-scoped access to state.Store.
 type Store struct {
-	appcore.AppStateFacade
+	store          *state.Store
+	frontendID     string
+	backend        string
+	legacyFallback bool
 }
 
 // New creates a frontend-scoped Store from an app config host.
@@ -19,7 +23,86 @@ func New(a appcore.AppConfig) *Store {
 	if a == nil {
 		return nil
 	}
-	return &Store{AppStateFacade: *appcore.NewAppState(a)}
+	return NewScoped(
+		a.Store(),
+		a.FrontendID(),
+		appcore.ConfiguredBackend(a),
+		appcore.AllowLegacyFrontendFallback(a),
+	)
+}
+
+// NewScoped creates a frontend-scoped state gateway from explicit runtime
+// dependencies. Keeping construction here makes the scope visible at the
+// composition root and avoids a second app-level state facade.
+func NewScoped(store *state.Store, frontendID, backend string, legacyFallback bool) *Store {
+	return &Store{
+		store:          store,
+		frontendID:     strings.TrimSpace(frontendID),
+		backend:        appcore.NormalizeRuntimeBackend(backend),
+		legacyFallback: legacyFallback,
+	}
+}
+
+func (s *Store) stateStore() *state.Store {
+	if s == nil {
+		return nil
+	}
+	if s.store != nil {
+		return s.store
+	}
+	return s.store
+}
+
+// StateStore exposes the persistence port to adapters that need to compose a
+// lower-level repository. Domain and application code should prefer the
+// scoped methods on Store.
+func (s *Store) StateStore() *state.Store { return s.stateStore() }
+
+// FrontendID returns the frontend scope owned by this gateway.
+func (s *Store) FrontendID() string { return s.scopeFrontendID() }
+
+// Backend returns the normalized backend scope owned by this gateway.
+func (s *Store) Backend() string { return s.scopeBackend() }
+
+// LegacyFallbackEnabled reports whether unscoped legacy records are visible.
+func (s *Store) LegacyFallbackEnabled() bool { return s.scopeLegacyFallback() }
+
+func (s *Store) scopeFrontendID() string {
+	if s == nil {
+		return ""
+	}
+	if s.frontendID != "" {
+		return s.frontendID
+	}
+	return s.frontendID
+}
+
+func (s *Store) scopeBackend() string {
+	if s == nil {
+		return ""
+	}
+	if s.backend != "" {
+		return s.backend
+	}
+	return s.backend
+}
+
+func (s *Store) scopeLegacyFallback() bool {
+	if s == nil {
+		return false
+	}
+	if s.legacyFallback {
+		return true
+	}
+	return s.legacyFallback
+}
+
+func (s *Store) matchesFrontend(frontendID string) bool {
+	frontendID = strings.TrimSpace(frontendID)
+	if frontendID == strings.TrimSpace(s.scopeFrontendID()) {
+		return true
+	}
+	return frontendID == "" && s.scopeLegacyFallback()
 }
 
 func cloneSession(sess *conversation.Session) *conversation.Session {
@@ -28,24 +111,24 @@ func cloneSession(sess *conversation.Session) *conversation.Session {
 
 // Session returns a session by key.
 func (s *Store) Session(key string) *conversation.Session {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
 	resolved := s.resolveSessionKey(key)
-	return s.Store.GetSession(resolved)
+	return s.stateStore().GetSession(resolved)
 }
 
 // Sessions returns all sessions.
 func (s *Store) Sessions() []*conversation.Session {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	return s.Store.AllSessions()
+	return s.stateStore().AllSessions()
 }
 
 // SaveSession persists a session snapshot.
 func (s *Store) SaveSession(sess *conversation.Session) error {
-	if s == nil || s.Store == nil || sess == nil {
+	if s == nil || s.stateStore() == nil || sess == nil {
 		return nil
 	}
 	cp := cloneSession(sess)
@@ -53,24 +136,24 @@ func (s *Store) SaveSession(sess *conversation.Session) error {
 		return nil
 	}
 	cp.Key = s.canonicalSessionKey(cp.Key)
-	if s.Backend != "" {
-		conversation.StoreBackendThread(cp, s.Backend)
+	if s.scopeBackend() != "" {
+		conversation.StoreBackendThread(cp, s.scopeBackend())
 	}
-	return s.Store.UpsertSession(cp)
+	return s.stateStore().UpsertSession(cp)
 }
 
 // UpdateSession mutates and persists a session.
 func (s *Store) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil, nil
 	}
-	return s.Store.UpdateSession(s.resolveSessionKey(key), func(sess *conversation.Session) {
+	return s.stateStore().UpdateSession(s.resolveSessionKey(key), func(sess *conversation.Session) {
 		if mutate != nil {
 			mutate(sess)
 		}
 		sess.Key = s.canonicalSessionKey(sess.Key)
-		if s.Backend != "" {
-			conversation.StoreBackendThread(sess, s.Backend)
+		if s.scopeBackend() != "" {
+			conversation.StoreBackendThread(sess, s.scopeBackend())
 		}
 	})
 }
@@ -81,34 +164,34 @@ func (s *Store) canonicalSessionKey(key string) string {
 		return key
 	}
 	frontendID, _, _, _, _ := appcore.ParseSessionKey(key)
-	if frontendID == "" && s.LegacyFallback {
-		frontendID = strings.TrimSpace(s.FrontendID)
+	if frontendID == "" && s.scopeLegacyFallback() {
+		frontendID = strings.TrimSpace(s.scopeFrontendID())
 	}
 	return appcore.CanonicalSessionKey(frontendID, key)
 }
 
 func (s *Store) resolveSessionKey(key string) string {
 	key = strings.TrimSpace(key)
-	if key == "" || s == nil || s.Store == nil {
+	if key == "" || s == nil || s.stateStore() == nil {
 		return key
 	}
 	canonical := s.canonicalSessionKey(key)
 	if canonical != "" && canonical != key {
-		if sess := s.Store.GetSession(canonical); sess != nil {
+		if sess := s.stateStore().GetSession(canonical); sess != nil {
 			return canonical
 		}
-		if sess := s.Store.GetSession(key); sess != nil {
+		if sess := s.stateStore().GetSession(key); sess != nil {
 			return s.promoteSessionAlias(sess, canonical)
 		}
-	} else if sess := s.Store.GetSession(key); sess != nil {
+	} else if sess := s.stateStore().GetSession(key); sess != nil {
 		return key
 	}
 	if canonical != "" && canonical != key {
-		if sess := s.Store.GetSession(canonical); sess != nil {
+		if sess := s.stateStore().GetSession(canonical); sess != nil {
 			return canonical
 		}
 	}
-	for _, sess := range s.Store.AllSessions() {
+	for _, sess := range s.stateStore().AllSessions() {
 		if sess == nil || strings.Contains(strings.TrimSpace(sess.Key), ":workspace:") || strings.Contains(strings.TrimSpace(sess.Key), ":pending:") {
 			continue
 		}
@@ -121,7 +204,7 @@ func (s *Store) resolveSessionKey(key string) string {
 
 func (s *Store) promoteSessionAlias(sess *conversation.Session, canonical string) string {
 	canonical = strings.TrimSpace(canonical)
-	if sess == nil || canonical == "" || s == nil || s.Store == nil {
+	if sess == nil || canonical == "" || s == nil || s.stateStore() == nil {
 		return canonical
 	}
 	cp := cloneSession(sess)
@@ -129,7 +212,7 @@ func (s *Store) promoteSessionAlias(sess *conversation.Session, canonical string
 		return canonical
 	}
 	cp.Key = canonical
-	_ = s.Store.UpsertSession(cp)
+	_ = s.stateStore().UpsertSession(cp)
 	return canonical
 }
 

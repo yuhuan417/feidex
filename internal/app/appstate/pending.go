@@ -9,33 +9,33 @@ import (
 
 // Pending returns a frontend-scoped pending request by id.
 func (s *Store) Pending(id string) *state.PendingRequest {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil
 	}
-	if req := s.Store.PendingByScopedID(s.FrontendID, id); req != nil {
+	if req := s.stateStore().PendingByScopedID(s.scopeFrontendID(), id); req != nil {
 		return req
 	}
-	if s.LegacyFallback && s.FrontendID != "" {
-		return s.Store.PendingByID(id)
+	if s.scopeLegacyFallback() && s.scopeFrontendID() != "" {
+		return s.stateStore().PendingByID(id)
 	}
 	return nil
 }
 
 // SavePending persists a pending request scoped to the current frontend.
 func (s *Store) SavePending(req *state.PendingRequest) error {
-	if s == nil || s.Store == nil || req == nil {
+	if s == nil || s.stateStore() == nil || req == nil {
 		return nil
 	}
 	cp := *req
 	if strings.TrimSpace(cp.FrontendID) == "" {
-		cp.FrontendID = s.FrontendID
+		cp.FrontendID = s.scopeFrontendID()
 	}
 	if strings.TrimSpace(cp.Backend) == "" {
-		cp.Backend = s.Backend
+		cp.Backend = s.scopeBackend()
 	}
 	// Group conversations have shared permissions: pending cards and forms
 	// may be completed by any real member. Keep p2p ownership restrictions.
@@ -46,9 +46,9 @@ func (s *Store) SavePending(req *state.PendingRequest) error {
 		_, parsedChatType, chatID, _, _ := appcore.ParseSessionKey(cp.SessionKey)
 		chatType = parsedChatType
 		if chatType == "" && chatID != "" {
-			if bindings := s.Store.AgentBindingsByChat(s.FrontendID, "group", chatID); len(bindings) > 0 {
+			if bindings := s.stateStore().AgentBindingsByChat(s.scopeFrontendID(), "group", chatID); len(bindings) > 0 {
 				chatType = "group"
-			} else if primaries := s.Store.GroupPrimariesByChat(s.FrontendID, "group", chatID); len(primaries) > 0 {
+			} else if primaries := s.stateStore().GroupPrimariesByChat(s.scopeFrontendID(), "group", chatID); len(primaries) > 0 {
 				chatType = "group"
 			}
 		}
@@ -56,18 +56,18 @@ func (s *Store) SavePending(req *state.PendingRequest) error {
 	if strings.EqualFold(strings.TrimSpace(chatType), "group") {
 		cp.OwnerUserID = ""
 	}
-	return s.Store.UpsertPending(&cp)
+	return s.stateStore().UpsertPending(&cp)
 }
 
 // PendingRequests returns all pending requests visible to this frontend.
 func (s *Store) PendingRequests() []*state.PendingRequest {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	all := s.Store.AllPendingRequests()
+	all := s.stateStore().AllPendingRequests()
 	out := make([]*state.PendingRequest, 0, len(all))
 	for _, req := range all {
-		if req == nil || !s.MatchesFrontend(req.FrontendID) {
+		if req == nil || !s.matchesFrontend(req.FrontendID) {
 			continue
 		}
 		out = append(out, req)
@@ -77,18 +77,18 @@ func (s *Store) PendingRequests() []*state.PendingRequest {
 
 // UpdatePending mutates a frontend-scoped pending request.
 func (s *Store) UpdatePending(id string, mutate func(*state.PendingRequest)) error {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil
 	}
-	err := s.Store.UpdateScopedPending(s.FrontendID, id, mutate)
-	if err == nil || !s.LegacyFallback || s.FrontendID == "" {
+	err := s.stateStore().UpdateScopedPending(s.scopeFrontendID(), id, mutate)
+	if err == nil || !s.scopeLegacyFallback() || s.scopeFrontendID() == "" {
 		return err
 	}
-	return s.Store.UpdatePending(id, mutate)
+	return s.stateStore().UpdatePending(id, mutate)
 }
 
 // ResolvePending marks a pending request resolved and returns the snapshot.
@@ -99,11 +99,11 @@ func (s *Store) ResolvePending(id string) *state.PendingRequest {
 
 // DeletePendingRequests deletes frontend-scoped pending requests matching fn.
 func (s *Store) DeletePendingRequests(match func(*state.PendingRequest) bool) {
-	if s == nil || s.Store == nil || match == nil {
+	if s == nil || s.stateStore() == nil || match == nil {
 		return
 	}
-	s.Store.DeletePendingRequests(func(req *state.PendingRequest) bool {
-		if req == nil || !s.MatchesFrontend(req.FrontendID) {
+	s.stateStore().DeletePendingRequests(func(req *state.PendingRequest) bool {
+		if req == nil || !s.matchesFrontend(req.FrontendID) {
 			return false
 		}
 		return match(req)

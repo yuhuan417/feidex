@@ -7,34 +7,34 @@ import (
 
 // CreateSubmission stores a new submission.
 func (s *Store) CreateSubmission(sub *domainsubmission.Submission) (string, error) {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return "", nil
 	}
-	return s.Store.CreateSubmission(sub)
+	return s.stateStore().CreateSubmission(sub)
 }
 
 // DeleteSubmission removes a submission by id.
 func (s *Store) DeleteSubmission(id string) {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return
 	}
-	s.Store.DeleteSubmission(strings.TrimSpace(id))
+	s.stateStore().DeleteSubmission(strings.TrimSpace(id))
 }
 
 // Submission returns a submission by id.
 func (s *Store) Submission(id string) *domainsubmission.Submission {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	return s.Store.GetSubmission(strings.TrimSpace(id))
+	return s.stateStore().GetSubmission(strings.TrimSpace(id))
 }
 
 // UpdateSubmission mutates an existing submission.
 func (s *Store) UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	return s.Store.UpdateSubmission(strings.TrimSpace(id), mutate)
+	return s.stateStore().UpdateSubmission(strings.TrimSpace(id), mutate)
 }
 
 // SetSubmissionStatus updates a submission status.
@@ -60,16 +60,16 @@ func (s *Store) FinalizeSubmission(id, status string) error {
 
 // QueueSubmission appends a submission to a session queue.
 func (s *Store) QueueSubmission(sessionKey, submissionID string) error {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	return s.Store.QueueSubmission(strings.TrimSpace(sessionKey), strings.TrimSpace(submissionID))
+	return s.stateStore().QueueSubmission(strings.TrimSpace(sessionKey), strings.TrimSpace(submissionID))
 }
 
 // DequeueSubmission pops the next queued submission.
 func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
-	if s == nil || s.Store == nil {
+	if s == nil || s.stateStore() == nil {
 		return "", nil
 	}
-	return s.Store.DequeueSubmission(strings.TrimSpace(sessionKey))
+	return s.stateStore().DequeueSubmission(strings.TrimSpace(sessionKey))
 }

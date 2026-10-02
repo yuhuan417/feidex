@@ -623,9 +623,9 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 			seen[chatID] = struct{}{}
 		}
 	}
-	if st.Store != nil {
+	if st.StateStore() != nil {
 		frontendID := strings.TrimSpace(a.FrontendID())
-		for _, record := range st.Store.AllGroupAnnouncementBlocks() {
+		for _, record := range st.StateStore().AllGroupAnnouncementBlocks() {
 			if record == nil || strings.TrimSpace(record.FrontendID) != frontendID || strings.TrimSpace(record.ChatID) == "" {
 				continue
 			}
