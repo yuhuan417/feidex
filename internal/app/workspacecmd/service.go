@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"feidex/internal/app/appcore"
+	appbackend "feidex/internal/app/backend"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -95,6 +96,7 @@ type App struct {
 	ConfigProvider  appcore.AppExtended
 	FeishuClient    appcore.FeishuClient
 	ContextProvider interface{ Context() context.Context }
+	BackendDriver   appbackend.Driver
 }
 
 func (a App) Config() *config.Config {
@@ -152,6 +154,12 @@ func (a App) Context() context.Context {
 		}
 	}
 	return context.Background()
+}
+func (a App) PermissionDriver() appbackend.PermissionDriver {
+	if a.BackendDriver == nil {
+		return nil
+	}
+	return a.BackendDriver.Permission()
 }
 
 // ---------------------------------------------------------------------------

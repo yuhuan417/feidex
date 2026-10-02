@@ -887,7 +887,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 
 // CompleteWorkspaceSandboxSet handles sandbox mode setting.
 func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode, appbackend.WorkspacePermissionUpdateDeps{
+	return s.App.PermissionDriver().CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode, appbackend.WorkspacePermissionUpdateDeps{
 		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
@@ -896,7 +896,7 @@ func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardActio
 
 // CompleteWorkspacePolicySet handles approval policy setting.
 func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy, appbackend.WorkspacePermissionUpdateDeps{
+	return s.App.PermissionDriver().CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy, appbackend.WorkspacePermissionUpdateDeps{
 		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
@@ -905,7 +905,7 @@ func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction
 
 // CompleteWorkspaceMultiAgentSet handles multi-agent mode setting.
 func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAction, sessionKey, workspaceID, mode string) (*callback.CardActionTriggerResponse, error) {
-	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode, appbackend.WorkspacePermissionUpdateDeps{
+	return s.App.PermissionDriver().CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode, appbackend.WorkspacePermissionUpdateDeps{
 		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
@@ -914,13 +914,13 @@ func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAc
 }
 
 func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	return appbackend.DriverForApp(s.App).Permission().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
+	return s.App.PermissionDriver().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
 		App:                     s.App,
 		Session:                 s.GetSession,
 		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
 		ApplyRuntime:            func(sessionKey, mode string) error { return nil },
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
-			return appbackend.DriverForApp(s.App).Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+			return s.App.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
 				App:            s.App,
 				FormatMenuBody: s.FormatMenuBody,
 			})
@@ -1736,7 +1736,7 @@ func validateWorktreeDirectoryName(name string) error {
 
 // renderSandboxMenuCard is a helper that re-renders the sandbox menu card.
 func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	return appbackend.DriverForApp(s.App).Permission().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+	return s.App.PermissionDriver().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
 		App:            s.App,
 		FormatMenuBody: s.FormatMenuBody,
 	})
@@ -1744,7 +1744,7 @@ func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string
 
 // renderPolicyMenuCard is a helper that re-renders the policy menu card.
 func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]any, error) {
-	return appbackend.DriverForApp(s.App).Permission().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+	return s.App.PermissionDriver().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
 		App:            s.App,
 		FormatMenuBody: s.FormatMenuBody,
 	})
@@ -1752,7 +1752,7 @@ func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]
 
 // renderMultiAgentMenuCard is a helper that re-renders the multi-agent menu card.
 func (s *ManagementService) renderMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
-	return appbackend.DriverForApp(s.App).Permission().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+	return s.App.PermissionDriver().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
 		App:            s.App,
 		FormatMenuBody: s.FormatMenuBody,
 	})

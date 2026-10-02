@@ -43,6 +43,7 @@ type Dependencies struct {
 	WorkspaceThreadFn                         func() WorkspaceThreadProvider
 	WorkspaceConfigFn                         func() WorkspaceConfigProvider
 	BackendActionsFn                          func() BackendActionProvider
+	BackendDriver                             appbackend.Driver
 	SessionHasActiveWorkFn                    func(*conversation.Session) bool
 	CancelAutoRetryFn                         func(string, bool, string) bool
 	LockAutoRetryDispatchFn                   func(string) func()
@@ -143,6 +144,12 @@ func (d Dependencies) ThreadMenuBackendActions() BackendActionProvider {
 		return nil
 	}
 	return d.BackendActionsFn()
+}
+func (d Dependencies) PermissionDriver() appbackend.PermissionDriver {
+	if d.BackendDriver == nil {
+		return nil
+	}
+	return d.BackendDriver.Permission()
 }
 func (d Dependencies) SessionHasActiveWork(s *conversation.Session) bool {
 	return d.SessionHasActiveWorkFn != nil && d.SessionHasActiveWorkFn(s)
@@ -653,7 +660,7 @@ func (s *Service) CommandThread(msg *feishu.InboundMessage, args []string) error
 		}
 		return s.app.ReplyCommandActionResponse(msg, resp)
 	case "sandbox", "policy", "multiagent":
-		return appbackend.DriverForApp(s.app).Permission().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
+		return s.app.PermissionDriver().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
@@ -728,7 +735,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 		}
 		return s.app.ReplyCommandActionResponse(msg, resp)
 	case "permissions":
-		return appbackend.DriverForApp(s.app).Permission().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
+		return s.app.PermissionDriver().HandleConversationCommand(appbackend.ConversationPermissionCommandRequest{
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
@@ -736,7 +743,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 				return s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
 			},
 			ShowConversationPermissionModeMenu: func(msg *feishu.InboundMessage) error {
-				card, err := appbackend.DriverForApp(s.app).Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+				card, err := s.app.PermissionDriver().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 					App:            s.app,
 					Session:        s.app.ThreadMenuAppState().Session,
 					FormatMenuBody: s.app.MenuCardBody,
@@ -842,7 +849,7 @@ func (s *Service) ShowThreadSandboxMenu(msg *feishu.InboundMessage) error {
 // RenderThreadSandboxMenuCard renders the sandbox configuration menu card.
 func (s *Service) RenderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	return appbackend.DriverForApp(s.app).Permission().RenderConversationSandboxMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+	return s.app.PermissionDriver().RenderConversationSandboxMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 		App:            s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
@@ -866,7 +873,7 @@ func (s *Service) ShowThreadPolicyMenu(msg *feishu.InboundMessage) error {
 // RenderThreadPolicyMenuCard renders the policy configuration menu card.
 func (s *Service) RenderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	return appbackend.DriverForApp(s.app).Permission().RenderConversationPolicyMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+	return s.app.PermissionDriver().RenderConversationPolicyMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 		App:            s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
@@ -890,7 +897,7 @@ func (s *Service) ShowThreadMultiAgentMenu(msg *feishu.InboundMessage) error {
 // RenderThreadMultiAgentMenuCard renders the multi-agent mode configuration menu card.
 func (s *Service) RenderThreadMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	return appbackend.DriverForApp(s.app).Permission().RenderConversationMultiAgentMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+	return s.app.PermissionDriver().RenderConversationMultiAgentMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 		App:            s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
@@ -963,7 +970,7 @@ func (s *Service) CompleteClaudeSessionPermissionMenu(action *feishu.CardAction,
 // CompleteThreadSandboxSet handles the "thread.sandbox.set" card action.
 func (s *Service) CompleteThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	return appbackend.DriverForApp(s.app).Permission().CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode, appbackend.ConversationPermissionUpdateDeps{
+	return s.app.PermissionDriver().CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode, appbackend.ConversationPermissionUpdateDeps{
 		Session:     s.app.ThreadMenuAppState().Session,
 		SaveSession: s.app.ThreadMenuAppState().SaveSession,
 		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
@@ -978,7 +985,7 @@ func (s *Service) CompleteThreadSandboxSet(action *feishu.CardAction, sessionKey
 // CompleteThreadPolicySet handles the "thread.policy.set" card action.
 func (s *Service) CompleteThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	return appbackend.DriverForApp(s.app).Permission().CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy, appbackend.ConversationPermissionUpdateDeps{
+	return s.app.PermissionDriver().CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy, appbackend.ConversationPermissionUpdateDeps{
 		Session:     s.app.ThreadMenuAppState().Session,
 		SaveSession: s.app.ThreadMenuAppState().SaveSession,
 		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
@@ -993,7 +1000,7 @@ func (s *Service) CompleteThreadPolicySet(action *feishu.CardAction, sessionKey,
 // CompleteThreadMultiAgentSet handles the "thread.multiagent.set" card action.
 func (s *Service) CompleteThreadMultiAgentSet(action *feishu.CardAction, sessionKey, threadID, mode string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	return appbackend.DriverForApp(s.app).Permission().CompleteConversationMultiAgentSet(sessionKey, threadID, mode, appbackend.ConversationPermissionUpdateDeps{
+	return s.app.PermissionDriver().CompleteConversationMultiAgentSet(sessionKey, threadID, mode, appbackend.ConversationPermissionUpdateDeps{
 		Session:     s.app.ThreadMenuAppState().Session,
 		SaveSession: s.app.ThreadMenuAppState().SaveSession,
 		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
@@ -1084,7 +1091,7 @@ func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardActi
 			return nil
 		}
 	}
-	return appbackend.DriverForApp(s.app).Permission().CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode, appbackend.ConversationPermissionModeUpdateDeps{
+	return s.app.PermissionDriver().CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode, appbackend.ConversationPermissionModeUpdateDeps{
 		App:         s.app,
 		Session:     s.app.ThreadMenuAppState().Session,
 		SaveSession: s.app.ThreadMenuAppState().SaveSession,
@@ -1093,7 +1100,7 @@ func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardActi
 		},
 		ApplyRuntime: applyRuntime,
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
-			return appbackend.DriverForApp(s.app).Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
+			return s.app.PermissionDriver().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 				App:            s.app,
 				Session:        s.app.ThreadMenuAppState().Session,
 				FormatMenuBody: s.app.MenuCardBody,

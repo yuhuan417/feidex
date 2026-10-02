@@ -81,7 +81,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
 	if args[0] == "permissions" || args[0] == "sandbox" || args[0] == "policy" || args[0] == "multiagent" {
-		return appbackend.DriverForApp(s.App).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+		return s.App.PermissionDriver().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
@@ -95,7 +95,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 				return s.ShowWorkspacePolicyMenu(msg)
 			},
 			ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
-				card, err := appbackend.DriverForApp(s.App).Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+				card, err := s.App.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
 					App:            s.App,
 					FormatMenuBody: s.FormatMenuBody,
 				})

@@ -24,6 +24,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		ConversationBackendFn: a.ThreadMenuConversationBackend, BackendRuntimeFn: a.ThreadMenuBackendRuntime,
 		PendingQueueFn: a.ThreadMenuPendingQueue, WorkspaceThreadFn: a.ThreadMenuWorkspaceThread,
 		WorkspaceConfigFn: a.ThreadMenuWorkspaceConfig, BackendActionsFn: a.ThreadMenuBackendActions,
+		BackendDriver:          appbackend.DriverForApp(a),
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		CancelAutoRetryFn:      a.CancelAutoRetry, LockAutoRetryDispatchFn: a.LockAutoRetryDispatch,
 		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse, CommandForkFn: a.CommandFork,
