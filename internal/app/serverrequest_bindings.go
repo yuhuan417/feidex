@@ -68,10 +68,10 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 				}
 				return serverrequest.NewCodexAdapter(client, backend)
 			case backendClaude:
-				if a.claude == nil {
+				if currentClaudeCore(a) == nil {
 					return serverrequest.NewUnsupportedAdapter(backend)
 				}
-				return serverrequest.NewClaudeAdapter(claudeReplyClientShim{claude: a.claude}, backend)
+				return serverrequest.NewClaudeAdapter(claudeReplyClientShim{claude: currentClaudeCore(a)}, backend)
 			default:
 				return serverrequest.NewUnsupportedAdapter(backend)
 			}

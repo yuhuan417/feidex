@@ -69,7 +69,7 @@ func newClaudeSupportService(a *App) *claudesupport.Service {
 		},
 		BackendClaude: backendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {
-			return a.claude.ResolvePlanFeedback(pendingID, feedback)
+			return currentClaudeCore(a).ResolvePlanFeedback(pendingID, feedback)
 		},
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
 			return newRuntimeStateService(a).finalizePendingReply(pending)

@@ -15,6 +15,14 @@ func recoveryState(a *App) *appcodexruntime.RecoveryState {
 	if a == nil {
 		return nil
 	}
+	if a.composition != nil {
+		a.composition.mu.Lock()
+		defer a.composition.mu.Unlock()
+		if a.composition.codexRecovery == nil {
+			a.composition.codexRecovery = appcodexruntime.NewRecoveryState()
+		}
+		return a.composition.codexRecovery
+	}
 	a.codexRuntimeMu.Lock()
 	defer a.codexRuntimeMu.Unlock()
 	if a.codexRecovery == nil {
@@ -35,7 +43,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 		},
 		IsBackendActive: func() bool {
 			if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
-				return runtime.isActive(a)
+				return runtime.isActive(backendRuntimeContextForApp(a))
 			}
 			return false
 		},
@@ -73,6 +81,12 @@ func getCodex(a *App) CodexClient {
 	if a == nil {
 		return nil
 	}
+	if a.codex != nil {
+		return a.codex
+	}
+	if a.composition != nil {
+		return a.composition.codex
+	}
 	a.codexRuntimeMu.Lock()
 	defer a.codexRuntimeMu.Unlock()
 	return a.codex
@@ -80,6 +94,13 @@ func getCodex(a *App) CodexClient {
 
 func setCodex(a *App, c CodexClient) {
 	if a == nil {
+		return
+	}
+	if a.composition != nil {
+		a.composition.codex = c
+		// Compatibility mirror for callers that inspect the transitional App
+		// field; runtime code reads through getCodex/currentCodexClient.
+		a.codex = c
 		return
 	}
 	a.codexRuntimeMu.Lock()

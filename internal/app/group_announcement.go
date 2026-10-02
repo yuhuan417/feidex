@@ -53,10 +53,10 @@ func newGroupAnnouncementTracker() *groupAnnouncementTracker {
 }
 
 func scheduleGroupAnnouncementStatusRefresh(a *App, chatID, reason string) {
-	if a == nil || a.trackers.groupAnnouncements == nil {
+	if a == nil || a.Trackers() == nil || a.Trackers().groupAnnouncements == nil {
 		return
 	}
-	a.trackers.groupAnnouncements.Schedule(a, chatID, reason)
+	a.Trackers().groupAnnouncements.Schedule(a, chatID, reason)
 }
 
 // markGroupAnnouncementBotAbsent records that Feishu reports the app is no

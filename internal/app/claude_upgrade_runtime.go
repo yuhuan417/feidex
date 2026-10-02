@@ -216,7 +216,7 @@ func (s backendUpgradeService) refreshClaudeRuntimeAfterMaintenance(ctx context.
 	if err := runClaudeSmokeTest(s.app, ctx); err != nil {
 		return false, err
 	}
-	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(s.app) {
+	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(s.app)) {
 		return false, nil
 	}
 	if s.app.claude == nil {

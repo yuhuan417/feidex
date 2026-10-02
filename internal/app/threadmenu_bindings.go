@@ -86,14 +86,14 @@ func (a threadMenuBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(s
 	if a.runtime == nil {
 		return sess
 	}
-	return a.runtime.reconcileCompletedTurnFromFinalOutput(a.app, sessionKey, sess)
+	return a.runtime.reconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
 }
 
 func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a.runtime == nil {
 		return sess
 	}
-	return a.runtime.clearActiveOperationsAfterInterrupt(a.app, sessionKey, sess)
+	return a.runtime.clearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(a.app), sessionKey, sess)
 }
 
 type threadMenuBackendActionAdapter struct {

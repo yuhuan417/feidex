@@ -16,7 +16,7 @@ import (
 func newConversationService(a *App) *conversation.Service {
 	s := &conversation.Service{Context: a.Context(), Backend: configuredBackend(a), Repository: a.State(), Live: sqLiveThreadAdapter{app: a}}
 	if s.Backend == backendClaude {
-		s.Gateway = claudeadapter.ConversationGateway{Client: a.claude, Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}
+		s.Gateway = claudeadapter.ConversationGateway{Client: currentClaudeCore(a), Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}
 		s.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveClaudeModel(a, sess, ws) }
 	} else {
 		s.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveCodexModel(a, sess, ws) }

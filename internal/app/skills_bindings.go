@@ -30,10 +30,11 @@ func newSkillsService(a *App) *appskillscmd.Service {
 		if a == nil {
 			return nil
 		}
-		if a.trackers.pendingSkills == nil {
-			a.trackers.pendingSkills = appskillscmd.NewPendingSkillTracker()
+		trackers := a.Trackers()
+		if trackers.pendingSkills == nil {
+			trackers.pendingSkills = appskillscmd.NewPendingSkillTracker()
 		}
-		return a.trackers.pendingSkills
+		return trackers.pendingSkills
 	}
 	s.MakeSessionKey = func(msg *feishu.InboundMessage) string {
 		return makeSessionKey(a, msg)

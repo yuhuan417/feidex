@@ -35,3 +35,54 @@ type Attachment struct {
 	ResourceKey     string
 	SourceMessageID string
 }
+
+// MessageRouteInput contains the facts an inbound adapter has already
+// resolved for a message. The application owns the ordering of these facts;
+// Feishu handlers only perform the selected effect.
+type MessageRouteInput struct {
+	ExpandedMergeForward bool
+	TextEmpty            bool
+	HasAttachments       bool
+	StartsCommand        bool
+	LocalCommand         bool
+	PendingServerText    bool
+	PendingRootText      bool
+	StageImages          bool
+	ReplyLink            bool
+}
+
+type MessageRoute uint8
+
+const (
+	MessageRouteNoop MessageRoute = iota
+	MessageRoutePendingServerText
+	MessageRoutePendingRootText
+	MessageRouteLocalCommand
+	MessageRouteStageImages
+	MessageRouteSteerOrQueue
+)
+
+// ClassifyMessageRoute centralizes the inbound message precedence rules.
+// Pending answers and local commands must win over normal submission; image
+// staging happens before empty-message filtering; a reply link is eligible
+// for steer and otherwise falls through to the normal queue.
+func ClassifyMessageRoute(input MessageRouteInput) MessageRoute {
+	if !input.ExpandedMergeForward && !input.StartsCommand && !input.HasAttachments {
+		if input.PendingServerText {
+			return MessageRoutePendingServerText
+		}
+		if input.PendingRootText {
+			return MessageRoutePendingRootText
+		}
+	}
+	if !input.ExpandedMergeForward && input.StartsCommand && input.LocalCommand {
+		return MessageRouteLocalCommand
+	}
+	if input.StageImages {
+		return MessageRouteStageImages
+	}
+	if input.TextEmpty && !input.HasAttachments {
+		return MessageRouteNoop
+	}
+	return MessageRouteSteerOrQueue
+}

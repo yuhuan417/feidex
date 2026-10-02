@@ -51,7 +51,7 @@ func newAutoRetryService(a *App) retryview.Service {
 		Enabled: func() bool { return view.Settings().Enabled },
 		Recovering: func() bool {
 			runtime := backendRuntime(a)
-			return runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(a)
+			return runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a))
 		},
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
 		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
@@ -69,6 +69,15 @@ func newAutoRetryService(a *App) retryview.Service {
 func (a *App) AutoRetries() *retry.Tracker {
 	if a == nil {
 		return nil
+	}
+	if a.autoRetries != nil {
+		return a.autoRetries
+	}
+	if a.composition != nil {
+		if a.composition.autoRetries == nil {
+			a.composition.autoRetries = retry.NewTracker()
+		}
+		return a.composition.autoRetries
 	}
 	if a.autoRetries == nil {
 		a.autoRetries = retry.NewTracker()

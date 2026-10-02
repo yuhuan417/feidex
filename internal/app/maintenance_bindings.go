@@ -5,7 +5,6 @@ import (
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
-	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/runtime/maintenance"
 	"feidex/internal/state"
 )
@@ -21,13 +20,13 @@ func newStartupRecovery(a *App) maintenance.StartupRecovery {
 		Context: a.Context, Repository: a.State(), RecoveryMu: &a.frontendRecoveryMu,
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
 		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
-		ResetLiveThreads:   func() { a.liveThreads = frontendruntime.NewLiveThreads() },
+		ResetLiveThreads:   func() { resetAppLiveThreadTracker(a) },
 		ClearLiveThread:    func(key string) { clearSessionLiveThread(a, key) },
 		BelongsToFrontend:  func(key string) bool { return sessionBelongsToFrontend(a, key) },
 		BackendConfigured:  func() bool { return hasConfiguredBackend(a) },
 		BeginRecovery: func() func() {
 			if runtime := backendRuntime(a); runtime != nil {
-				return runtime.beginStartupRecoveryScope(a)
+				return runtime.beginStartupRecoveryScope(backendRuntimeContextForApp(a))
 			}
 			return func() {}
 		},

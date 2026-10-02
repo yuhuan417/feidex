@@ -146,7 +146,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 			},
 			BackendRuntimeHandleTransportFailure: func(backend, sessionKey, threadID string, err error) {
 				if runtime := backendRuntimeForKind(backend); runtime != nil {
-					runtime.handleTransportFailure(a, sessionKey, threadID, err)
+					runtime.handleTransportFailure(backendRuntimeContextForApp(a), sessionKey, threadID, err)
 				}
 			},
 		},

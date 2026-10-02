@@ -116,19 +116,19 @@ type sqBackendRuntimeFullAdapter struct{ app *App }
 
 func (a sqBackendRuntimeFullAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.reconcileCompletedTurnFromFinalOutput(a.app, sessionKey, sess)
+		return runtime.reconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
 	}
 	return sess
 }
 func (a sqBackendRuntimeFullAdapter) DropThreadLineageAfterStartFailure(err error) bool {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.dropThreadLineageAfterStartFailure(a.app, err)
+		return runtime.dropThreadLineageAfterStartFailure(backendRuntimeContextForApp(a.app), err)
 	}
 	return false
 }
 func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.deferQueuedSubmissionsDuringRecovery(a.app)
+		return runtime.deferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.app))
 	}
 	return false
 }
@@ -220,10 +220,10 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 			runAsync(a, fn)
 		},
 		TryBeginStart: func(sessionKey string) bool {
-			return a.trackers.submissionStarts.TryBegin(sessionKey)
+			return a.Trackers().submissionStarts.TryBegin(sessionKey)
 		},
 		FinishStart: func(sessionKey string) bool {
-			return a.trackers.submissionStarts.Finish(sessionKey)
+			return a.Trackers().submissionStarts.Finish(sessionKey)
 		},
 		LogSessionState: func(event, sessionKey string, sess *conversation.Session) {
 			logSessionState(event, sessionKey, sess)
@@ -264,10 +264,10 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		ClaudePrompt: claudeadapter.BuildPrompt,
 		Backend:      func() string { return configuredBackend(a) },
 		ClaudeClient: func() appsubmission.QueueClaudeClient {
-			if a.claude == nil {
+			if currentClaudeCore(a) == nil {
 				return nil
 			}
-			return claudeClientAdapter{claude: a.claude}
+			return claudeClientAdapter{claude: currentClaudeCore(a)}
 		},
 		ConfiguredClaudeModel: func() string {
 			a.ConfigMu().RLock()

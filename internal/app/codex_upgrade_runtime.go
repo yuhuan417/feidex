@@ -31,7 +31,7 @@ func newCodexUpgradeService(a *App) appcodexruntime.UpgradeService {
 		},
 		IsBackendActive: func() bool {
 			if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
-				return runtime.isActive(a)
+				return runtime.isActive(backendRuntimeContextForApp(a))
 			}
 			return false
 		},

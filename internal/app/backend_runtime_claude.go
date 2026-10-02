@@ -4,8 +4,8 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/domain/conversation"
+	"fmt"
 	"log/slog"
 	"strings"
 )
@@ -16,27 +16,27 @@ func (claudeRuntimeFacade) kind() string { return backendClaude }
 
 func (claudeRuntimeFacade) displayName() string { return "Claude" }
 
-func (claudeRuntimeFacade) configuredCommand(a *App) string {
-	if a == nil || a.cfg == nil {
+func (claudeRuntimeFacade) configuredCommand(ctx backendRuntimeContext) string {
+	if ctx.cfg == nil {
 		return ""
 	}
-	return strings.TrimSpace(a.cfg.Claude.Command)
+	return strings.TrimSpace(ctx.cfg.Claude.Command)
 }
 
-func (claudeRuntimeFacade) isActive(a *App) bool {
-	return a != nil && configuredBackend(a) == backendClaude
+func (claudeRuntimeFacade) isActive(ctx backendRuntimeContext) bool {
+	return ctx.backend == backendClaude
 }
 
-func (claudeRuntimeFacade) runtimeReady(a *App) bool {
-	return a != nil && a.claude != nil
+func (claudeRuntimeFacade) runtimeReady(ctx backendRuntimeContext) bool {
+	return ctx.claude != nil
 }
 
-func (claudeRuntimeFacade) beginStartupRecoveryScope(*App) func() {
+func (claudeRuntimeFacade) beginStartupRecoveryScope(backendRuntimeContext) func() {
 	return func() {}
 }
 
-func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
-	if a == nil || sess == nil {
+func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(ctx backendRuntimeContext, sessionKey string, sess *conversation.Session) *conversation.Session {
+	if ctx.claude == nil || sess == nil {
 		return sess
 	}
 	if !conversation.HasInFlightSubmission(sess) {
@@ -47,7 +47,7 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 	if turnID == "" || threadID == "" {
 		return sess
 	}
-	if a.claude == nil || !a.claude.SessionStopped(sessionKey) {
+	if !ctx.claude.SessionStopped(sessionKey) {
 		return sess
 	}
 	slog.Warn("reconciling missed Claude turn completion",
@@ -55,11 +55,13 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 		"thread_id", threadID,
 		"turn_id", turnID,
 	)
-	finishTurn(a, threadID, turnID, "completed")
-	return a.State().Session(sessionKey)
+	if ctx.reconcileClaudeCompletedTurn != nil {
+		return ctx.reconcileClaudeCompletedTurn(sessionKey, sess)
+	}
+	return sess
 }
 
-func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
+func clearClaudeActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a == nil || sess == nil {
 		return sess
 	}
@@ -100,29 +102,43 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 	return updatedSess
 }
 
-func (claudeRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
-	if a == nil {
+func (claudeRuntimeFacade) clearActiveOperationsAfterInterruptContext(ctx backendRuntimeContext, sessionKey string, sess *conversation.Session) *conversation.Session {
+	if ctx.clearActiveOperations == nil {
+		return sess
+	}
+	return ctx.clearActiveOperations(sessionKey, sess)
+}
+
+// clearActiveOperationsAfterInterrupt keeps the old in-package helper shape
+// for legacy tests and callers; production bindings use the explicit runtime
+// context method above.
+func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
+	return clearClaudeActiveOperationsAfterInterrupt(a, sessionKey, sess)
+}
+
+func (claudeRuntimeFacade) buildRuntime(ctx backendRuntimeContext) *backendRuntimeHandle {
+	if ctx.newClaudeCore == nil {
 		return &backendRuntimeHandle{backend: backendClaude}
 	}
 	return &backendRuntimeHandle{
 		backend: backendClaude,
-		claude:  newClaudeCore(a, a.cfg.Claude),
+		claude:  ctx.newClaudeCore(),
 	}
 }
 
-func (claudeRuntimeFacade) startRuntime(context.Context, *App, *backendRuntimeHandle) error {
+func (claudeRuntimeFacade) startRuntime(context.Context, backendRuntimeContext, *backendRuntimeHandle) error {
 	return nil
 }
 
-func (claudeRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceActive()
+func (claudeRuntimeFacade) maintenanceActive(ctx backendRuntimeContext) bool {
+	return ctx.claudeMaintenanceActive != nil && ctx.claudeMaintenanceActive()
 }
 
-func (claudeRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
-	if a == nil {
+func (claudeRuntimeFacade) maintenanceBlocksCommand(ctx backendRuntimeContext, raw string) error {
+	if ctx.maintenanceBlocksCommand == nil {
 		return nil
 	}
-	return appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
+	return ctx.maintenanceBlocksCommand(raw)
 }
 
 func (claudeRuntimeFacade) idleMaintenanceBlockedReason() string {
@@ -133,11 +149,11 @@ func (claudeRuntimeFacade) resolvesPendingLocally(string) bool {
 	return true
 }
 
-func (claudeRuntimeFacade) deferQueuedSubmissionsDuringRecovery(*App) bool {
+func (claudeRuntimeFacade) deferQueuedSubmissionsDuringRecovery(backendRuntimeContext) bool {
 	return false
 }
 
-func (claudeRuntimeFacade) dropThreadLineageAfterStartFailure(*App, error) bool {
+func (claudeRuntimeFacade) dropThreadLineageAfterStartFailure(backendRuntimeContext, error) bool {
 	return false
 }
 
@@ -145,8 +161,8 @@ func (claudeRuntimeFacade) failsStandaloneCompaction() bool {
 	return false
 }
 
-func (claudeRuntimeFacade) handleTransportFailure(a *App, sessionKey, threadID string, err error) {
-	if a == nil {
+func (claudeRuntimeFacade) handleTransportFailure(ctx backendRuntimeContext, sessionKey, threadID string, err error) {
+	if ctx.handleTransportFailure == nil {
 		return
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
@@ -163,5 +179,5 @@ func (claudeRuntimeFacade) handleTransportFailure(a *App, sessionKey, threadID s
 		"thread_id", threadID,
 		"error", err,
 	)
-	failBackendActiveWork(a, backendClaude, sessionKey, threadID, message)
+	ctx.handleTransportFailure(sessionKey, threadID, fmt.Errorf("%s", message))
 }

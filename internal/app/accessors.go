@@ -69,10 +69,7 @@ func (a *App) BackendDriver() appbackend.Driver {
 
 // Claude returns the Claude core client.
 func (a *App) Claude() ClaudeCore {
-	if a == nil {
-		return nil
-	}
-	return a.claude
+	return currentClaudeCore(a)
 }
 
 // Codex returns the Codex client.
@@ -158,12 +155,60 @@ func (a *App) BackendRuntime() backendRuntimeFacade {
 	return backendRuntime(a)
 }
 
+func currentClaudeCore(a *App) ClaudeCore {
+	if a == nil {
+		return nil
+	}
+	if a.claude != nil {
+		return a.claude
+	}
+	if a.composition != nil {
+		return a.composition.claude
+	}
+	return nil
+}
+
+func setCompositionClaude(a *App, core ClaudeCore) {
+	if a == nil {
+		return
+	}
+	if a.composition != nil {
+		a.composition.claude = core
+		// Keep the old field populated for source-compatible frontend probes
+		// while all production reads go through currentClaudeCore.
+		a.claude = core
+		return
+	}
+	a.claude = core
+}
+
 // Trackers returns the per-service runtime tracker bundle.
 func (a *App) Trackers() *appTrackers {
 	if a == nil {
 		return nil
 	}
+	// Tests and transitional callers may still inject the legacy bundle on a
+	// frontend constructed before composition initialization. Honor that
+	// explicit injection while production frontends use the composition owner.
+	if legacyTrackersPresent(&a.trackers) {
+		return &a.trackers
+	}
+	if a.composition != nil {
+		if a.composition.trackers == nil {
+			a.composition.trackers = &appTrackers{}
+		}
+		return a.composition.trackers
+	}
 	return &a.trackers
+}
+
+func legacyTrackersPresent(trackers *appTrackers) bool {
+	if trackers == nil {
+		return false
+	}
+	return trackers.turnStreams != nil || trackers.turnItems != nil || trackers.turnBindings != nil ||
+		trackers.workspaceCloneOps != nil || trackers.finalCardPatches != nil || trackers.pendingSkills != nil ||
+		trackers.groupAnnouncements != nil || trackers.maintenanceTrackers != nil || trackers.goals != nil
 }
 
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
@@ -290,8 +335,9 @@ func (a *App) MaintenanceTrackers() appbackend.TrackerMap {
 	if a == nil {
 		return nil
 	}
-	if a.trackers.maintenanceTrackers == nil {
-		a.trackers.maintenanceTrackers = make(appbackend.TrackerMap)
+	trackers := a.Trackers()
+	if trackers.maintenanceTrackers == nil {
+		trackers.maintenanceTrackers = make(appbackend.TrackerMap)
 	}
-	return a.trackers.maintenanceTrackers
+	return trackers.maintenanceTrackers
 }

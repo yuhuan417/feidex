@@ -14,10 +14,11 @@ func (s runtimeStateService) turnBindingTracker() *turnbinding.Tracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.trackers.turnBindings == nil {
-		s.app.trackers.turnBindings = turnbinding.NewTracker(s.app.store)
+	trackers := s.app.Trackers()
+	if trackers.turnBindings == nil {
+		trackers.turnBindings = turnbinding.NewTracker(s.app.store)
 	}
-	return s.app.trackers.turnBindings
+	return trackers.turnBindings
 }
 
 func (s runtimeStateService) notePendingTurnBinding(threadID, sessionKey, submissionID string) {

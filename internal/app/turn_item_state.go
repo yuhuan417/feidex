@@ -10,10 +10,11 @@ func (s runtimeStateService) turnItemTracker() *turnitem.Tracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.trackers.turnItems == nil {
-		s.app.trackers.turnItems = turnitem.NewTracker()
+	trackers := s.app.Trackers()
+	if trackers.turnItems == nil {
+		trackers.turnItems = turnitem.NewTracker()
 	}
-	return s.app.trackers.turnItems
+	return trackers.turnItems
 }
 
 func (s runtimeStateService) noteTurnItemStarted(threadID, turnID string, item map[string]any) {

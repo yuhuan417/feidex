@@ -502,5 +502,8 @@ Codex server request
 - thread menu composition cache 也已归入 `appComposition`，backend 切换时通过 composition invalidation 重建。
 - group message root anchor normalization 已迁入 application，Feishu router 只负责把 inbound 字段转换为 routing input。
 - composition cache 的锁和生命周期也已从 `App` 移入 `appComposition`，避免宿主继续承担 service registry synchronization。
+- backend runtime facade 已改为接收显式 `backendRuntimeContext`，配置、client、维护策略、恢复策略、状态收口和 transport failure 都通过 capability callback 注入；恢复路径避免在持锁期间重新读取 runtime client。
+- message command 的优先级判断已迁入 `application.ClassifyMessageRoute`，统一 pending response、local command、image staging、空消息和普通 submission 的顺序；Feishu router 只执行选中的 adapter/use-case。
+- tracker、live-thread、auto-retry、Codex recovery 和 backend client 的生产 owner 已迁入 `appComposition`；`App` 上保留的字段只作为旧测试/过渡构造的兼容镜像，生产读写经过 composition accessor。
 
-当前剩余：`feishu_event_router.processMessage` 中仍有较宽的 message command 编排，backend runtime facade 仍接收 frontend 宿主上下文，`App` 仍持有部分 runtime/client/tracker 字段。effect outbound pipeline、card action dispatch 和主要 composition cache 已完成；以上宿主边界收窄前保持“实施中”。
+四个目标均已完成：message/card command 编排、effect outbound pipeline、backend dependency carrier 收窄和 composition root 瘦身。剩余的 `App` 字段仅为兼容镜像，不作为生产 capability owner；后续新增代码继续禁止直接依赖这些字段。

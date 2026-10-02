@@ -30,7 +30,7 @@ func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *conversation.S
 	if a == nil || sess == nil {
 		return sess
 	}
-	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(a) {
+	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
 		return sess
 	}
 	client := currentCodexClient(a)

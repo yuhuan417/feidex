@@ -27,7 +27,7 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 		return newUIWarningError(reason)
 	}
 	if runtime := backendRuntime(a); runtime != nil {
-		if err := runtime.maintenanceBlocksCommand(a, raw); err != nil {
+		if err := runtime.maintenanceBlocksCommand(backendRuntimeContextForApp(a), raw); err != nil {
 			return err
 		}
 	}

@@ -84,7 +84,15 @@ type App struct {
 // these bindings together prevents the frontend aggregate from becoming a
 // second service registry while preserving one cache per frontend runtime.
 type appComposition struct {
-	mu               sync.Mutex
+	mu sync.Mutex
+	// Runtime-owned state lives here so App remains the frontend entrypoint
+	// rather than a registry of mutable service state.
+	codex            CodexClient
+	claude           ClaudeCore
+	trackers         *appTrackers
+	liveThreads      *frontendruntime.LiveThreads
+	autoRetries      *appautoretry.Tracker
+	codexRecovery    *appcodexruntime.RecoveryState
 	threadMenu       *appthreadmenu.Service
 	backendConfig    *backendConfigurationService
 	backendSelection *backendSelectionService
@@ -155,18 +163,18 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		feishu:              FeishuClient,
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),
-		liveThreads:         frontendruntime.NewLiveThreads(),
 		sessionActors:       frontendruntime.NewSessionActors(),
-		autoRetries:         appautoretry.NewTracker(),
-		trackers: appTrackers{
-			turnStreams:        newTurnStreamTracker(),
-			turnItems:          turnitem.NewTracker(),
-			workspaceCloneOps:  newWorkspaceCloneTracker(),
-			turnBindings:       turnbinding.NewTracker(store),
-			finalCardPatches:   newFinalCardPatchTracker(),
-			pendingSkills:      appskillscmd.NewPendingSkillTracker(),
-			groupAnnouncements: newGroupAnnouncementTracker(),
-		},
+	}
+	app.composition.liveThreads = frontendruntime.NewLiveThreads()
+	app.composition.autoRetries = appautoretry.NewTracker()
+	app.composition.trackers = &appTrackers{
+		turnStreams:        newTurnStreamTracker(),
+		turnItems:          turnitem.NewTracker(),
+		workspaceCloneOps:  newWorkspaceCloneTracker(),
+		turnBindings:       turnbinding.NewTracker(store),
+		finalCardPatches:   newFinalCardPatchTracker(),
+		pendingSkills:      appskillscmd.NewPendingSkillTracker(),
+		groupAnnouncements: newGroupAnnouncementTracker(),
 	}
 	app.stateView = appstate.New(app)
 	dispatcher := newInputDispatcher(app)

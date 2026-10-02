@@ -137,10 +137,11 @@ func workspaceCloneSetOp(a *App) func(string, *appworkspacecmd.CloneOperation) {
 		if requestID == "" || op == nil {
 			return
 		}
-		tracker := a.trackers.workspaceCloneOps
+		trackers := a.Trackers()
+		tracker := trackers.workspaceCloneOps
 		if tracker == nil {
 			tracker = newWorkspaceCloneTracker()
-			a.trackers.workspaceCloneOps = tracker
+			trackers.workspaceCloneOps = tracker
 		}
 		tracker.Mu.Lock()
 		defer tracker.Mu.Unlock()
@@ -159,7 +160,7 @@ func workspaceCloneGetOp(a *App) func(string) *appworkspacecmd.CloneOperation {
 		if a == nil {
 			return nil
 		}
-		tracker := a.trackers.workspaceCloneOps
+		tracker := a.Trackers().workspaceCloneOps
 		if tracker == nil {
 			return nil
 		}
@@ -174,7 +175,7 @@ func workspaceCloneClearOp(a *App) func(string) {
 		if a == nil {
 			return
 		}
-		tracker := a.trackers.workspaceCloneOps
+		tracker := a.Trackers().workspaceCloneOps
 		if tracker == nil {
 			return
 		}

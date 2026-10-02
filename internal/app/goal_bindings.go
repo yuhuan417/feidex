@@ -24,10 +24,11 @@ func goalTrackerForApp(a *App) *goalcmd.Tracker {
 	if a == nil {
 		return nil
 	}
-	if a.trackers.goals == nil {
-		a.trackers.goals = goalcmd.NewTracker()
+	trackers := a.Trackers()
+	if trackers.goals == nil {
+		trackers.goals = goalcmd.NewTracker()
 	}
-	return a.trackers.goals
+	return trackers.goals
 }
 
 func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []string) error {

@@ -139,33 +139,32 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		}
 		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
 	}
-	if !msg.ExpandedMergeForward && !strings.HasPrefix(strings.TrimSpace(msg.Text), "/") && len(msg.Attachments) == 0 {
-		if pending := a.ServerRequestService().PendingTextRequest(sessionKey, msg.UserID); pending != nil {
-			if err := a.ServerRequestService().HandlePendingTextResponse(msg, pending); err != nil {
-				return err
-			}
-			return nil
-		}
-		if pending := rootPendingTextRequest(a, sessionKey, msg.UserID); pending != nil {
-			if err := handleRootPendingTextResponse(a, msg, pending); err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-	if !msg.ExpandedMergeForward && strings.HasPrefix(strings.TrimSpace(msg.Text), "/") {
-		if isLocalCommandForMessage(configuredBackend(a), msg, strings.TrimSpace(msg.Text)) {
-			if err := handleCommand(a, msg, strings.TrimSpace(msg.Text)); err != nil {
-				return err
-			}
-			return nil
-		}
+	trimmedText := strings.TrimSpace(msg.Text)
+	startsCommand := strings.HasPrefix(trimmedText, "/")
+	serverPending := a.ServerRequestService().PendingTextRequest(sessionKey, msg.UserID)
+	rootPending := rootPendingTextRequest(a, sessionKey, msg.UserID)
+	initialRoute := application.ClassifyMessageRoute(application.MessageRouteInput{
+		ExpandedMergeForward: msg.ExpandedMergeForward,
+		TextEmpty:            trimmedText == "",
+		HasAttachments:       len(msg.Attachments) > 0,
+		StartsCommand:        startsCommand,
+		LocalCommand:         isLocalCommandForMessage(configuredBackend(a), msg, trimmedText),
+		PendingServerText:    serverPending != nil,
+		PendingRootText:      rootPending != nil,
+	})
+	switch initialRoute {
+	case application.MessageRoutePendingServerText:
+		return a.ServerRequestService().HandlePendingTextResponse(msg, serverPending)
+	case application.MessageRoutePendingRootText:
+		return handleRootPendingTextResponse(a, msg, rootPending)
+	case application.MessageRouteLocalCommand:
+		return handleCommand(a, msg, trimmedText)
 	}
 	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
 		return newUIWarningError(reason)
 	}
 	if runtime := backendRuntime(a); runtime != nil {
-		if err := runtime.maintenanceBlocksCommand(a, ""); err != nil {
+		if err := runtime.maintenanceBlocksCommand(backendRuntimeContextForApp(a), ""); err != nil {
 			return err
 		}
 	}
@@ -176,13 +175,20 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		targetSessionKey = rcs.SessionKeyForInboundMessage(msg, replyLink)
 	}
 	pqs := newPendingQueueService(a)
-	if pqs.shouldStageInboundImages(msg) {
+	route := application.ClassifyMessageRoute(application.MessageRouteInput{
+		ExpandedMergeForward: msg.ExpandedMergeForward,
+		TextEmpty:            trimmedText == "",
+		HasAttachments:       len(msg.Attachments) > 0,
+		StartsCommand:        startsCommand,
+		StageImages:          pqs.shouldStageInboundImages(msg),
+	})
+	if route == application.MessageRouteStageImages {
 		if err := pqs.stageInboundImagesForSession(msg, makeSessionKey(a, msg)); err != nil {
 			return err
 		}
 		return nil
 	}
-	if strings.TrimSpace(msg.Text) == "" && len(msg.Attachments) == 0 {
+	if route == application.MessageRouteNoop {
 		return nil
 	}
 	if replyLink != nil {

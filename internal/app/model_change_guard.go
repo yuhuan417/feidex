@@ -12,7 +12,7 @@ func modelConfigBlockedReason(a *App) string {
 		return reason
 	}
 	for _, runtime := range backendRuntimeFacades() {
-		if runtime.maintenanceActive(a) {
+		if runtime.maintenanceActive(backendRuntimeContextForApp(a)) {
 			return runtime.idleMaintenanceBlockedReason()
 		}
 	}

@@ -52,10 +52,10 @@ func normalizeRequestedClaudePermissionMode(a *App, ctx context.Context, raw str
 }
 
 func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
-	if a == nil || a.claude == nil {
+	if a == nil || currentClaudeCore(a) == nil {
 		return nil
 	}
-	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(a) {
+	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
 		return nil
 	}
 	sess := a.State().Session(sessionKey)
@@ -64,7 +64,7 @@ func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return a.claude.SetPermissionMode(ctx, sessionKey, mode)
+	return currentClaudeCore(a).SetPermissionMode(ctx, sessionKey, mode)
 }
 
 // applyClaudePermissionModeToRuntimeAsync applies the stored permission mode

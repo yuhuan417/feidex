@@ -1,10 +1,10 @@
 package app
 
 import (
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/domain/conversation"
 
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 )
@@ -15,69 +15,74 @@ func (codexRuntimeFacade) kind() string { return backendCodex }
 
 func (codexRuntimeFacade) displayName() string { return "Codex" }
 
-func (codexRuntimeFacade) configuredCommand(a *App) string {
-	if a == nil || a.cfg == nil {
+func (codexRuntimeFacade) configuredCommand(ctx backendRuntimeContext) string {
+	if ctx.cfg == nil {
 		return ""
 	}
-	return strings.TrimSpace(a.cfg.Codex.Command)
+	return strings.TrimSpace(ctx.cfg.Codex.Command)
 }
 
-func (codexRuntimeFacade) isActive(a *App) bool {
-	return a != nil && configuredBackend(a) == backendCodex
+func (codexRuntimeFacade) isActive(ctx backendRuntimeContext) bool {
+	return ctx.backend == backendCodex
 }
 
-func (codexRuntimeFacade) runtimeReady(a *App) bool {
-	return a != nil && currentCodexClient(a) != nil
+func (codexRuntimeFacade) runtimeReady(ctx backendRuntimeContext) bool {
+	return ctx.codex != nil
 }
 
-func (codexRuntimeFacade) beginStartupRecoveryScope(a *App) func() {
-	if a == nil {
+func (codexRuntimeFacade) beginStartupRecoveryScope(ctx backendRuntimeContext) func() {
+	if ctx.beginStartupRecoveryScope == nil {
 		return func() {}
 	}
-	return beginCodexAutoThreadRecoveryScope(a)
+	return ctx.beginStartupRecoveryScope()
 }
 
-func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
-	if a == nil {
+func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(ctx backendRuntimeContext, sessionKey string, sess *conversation.Session) *conversation.Session {
+	if ctx.reconcileCompletedTurn == nil {
 		return sess
 	}
-	return reconcileCompletedCodexTurnFromFinalOutput(a, sessionKey, sess)
+	return ctx.reconcileCompletedTurn(sessionKey, sess)
 }
 
-func (codexRuntimeFacade) clearActiveOperationsAfterInterrupt(_ *App, _ string, sess *conversation.Session) *conversation.Session {
+func (codexRuntimeFacade) clearActiveOperationsAfterInterruptContext(_ backendRuntimeContext, _ string, sess *conversation.Session) *conversation.Session {
 	// Codex handles interrupt lifecycle asynchronously via turn/completed
 	// notifications, so we don't clear active operations here.
 	return sess
 }
 
-func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {
-	if a == nil {
+func (codexRuntimeFacade) buildRuntime(ctx backendRuntimeContext) *backendRuntimeHandle {
+	if ctx.buildCodexClient == nil {
 		return &backendRuntimeHandle{backend: backendCodex}
 	}
-	client := newCodexClient(a.cfg.Codex)
-	configureCodexClientRuntime(a, client)
+	client := ctx.buildCodexClient()
+	if ctx.configureCodexClient != nil {
+		ctx.configureCodexClient(client)
+	}
 	return &backendRuntimeHandle{
 		backend: backendCodex,
 		codex:   client,
 	}
 }
 
-func (codexRuntimeFacade) startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error {
-	if a == nil || handle == nil || handle.codex == nil {
+func (codexRuntimeFacade) startRuntime(ctx context.Context, runtimeCtx backendRuntimeContext, handle *backendRuntimeHandle) error {
+	if handle == nil || handle.codex == nil {
 		return nil
 	}
-	return handle.codex.Start(ctx, a.cfg.Codex.ExperimentalAPI)
-}
-
-func (codexRuntimeFacade) maintenanceActive(a *App) bool {
-	return a != nil && appbackend.NewMaintenanceStateService(a).CodexMaintenanceActive()
-}
-
-func (codexRuntimeFacade) maintenanceBlocksCommand(a *App, raw string) error {
-	if a == nil {
+	if runtimeCtx.startCodex == nil {
 		return nil
 	}
-	return appbackend.NewMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
+	return runtimeCtx.startCodex(ctx, handle.codex)
+}
+
+func (codexRuntimeFacade) maintenanceActive(ctx backendRuntimeContext) bool {
+	return ctx.codexMaintenanceActive != nil && ctx.codexMaintenanceActive()
+}
+
+func (codexRuntimeFacade) maintenanceBlocksCommand(ctx backendRuntimeContext, raw string) error {
+	if ctx.maintenanceBlocksCommand == nil {
+		return nil
+	}
+	return ctx.maintenanceBlocksCommand(raw)
 }
 
 func (codexRuntimeFacade) idleMaintenanceBlockedReason() string {
@@ -88,38 +93,20 @@ func (codexRuntimeFacade) resolvesPendingLocally(kind string) bool {
 	return !isServerResolvedPendingKind(kind)
 }
 
-func (codexRuntimeFacade) deferQueuedSubmissionsDuringRecovery(a *App) bool {
-	return a != nil && codexRuntimeRecovering(a)
+func (codexRuntimeFacade) deferQueuedSubmissionsDuringRecovery(ctx backendRuntimeContext) bool {
+	return ctx.deferQueuedSubmissionsRecovery != nil && ctx.deferQueuedSubmissionsRecovery()
 }
 
-func (codexRuntimeFacade) dropThreadLineageAfterStartFailure(a *App, err error) bool {
-	if a == nil || err == nil {
-		return false
-	}
-	if codexRuntimeRecovering(a) {
-		return true
-	}
-	text := strings.ToLower(strings.TrimSpace(err.Error()))
-	switch {
-	case strings.Contains(text, "codex client not initialized"):
-		return true
-	case strings.Contains(text, "codex app-server read failed"):
-		return true
-	case strings.Contains(text, "codex app-server stdin write failed"):
-		return true
-	case strings.Contains(text, "codex app-server process exited"):
-		return true
-	default:
-		return false
-	}
+func (codexRuntimeFacade) dropThreadLineageAfterStartFailure(ctx backendRuntimeContext, err error) bool {
+	return err != nil && ctx.dropThreadLineageAfterFailure != nil && ctx.dropThreadLineageAfterFailure(err)
 }
 
 func (codexRuntimeFacade) failsStandaloneCompaction() bool {
 	return true
 }
 
-func (codexRuntimeFacade) handleTransportFailure(a *App, _, _ string, err error) {
-	if a == nil {
+func (codexRuntimeFacade) handleTransportFailure(ctx backendRuntimeContext, sessionKey, threadID string, err error) {
+	if ctx.handleTransportFailure == nil {
 		return
 	}
 	message := "Codex 后端异常退出。"
@@ -127,10 +114,8 @@ func (codexRuntimeFacade) handleTransportFailure(a *App, _, _ string, err error)
 		message = "Codex 后端异常退出：" + detail
 	}
 	slog.Error("codex backend transport failed",
-		"frontend_id", a.frontendID,
+		"frontend_id", ctx.frontendID,
 		"error", err,
 	)
-	runAsync(a, func() {
-		failBackendActiveWork(a, backendCodex, "", "", message)
-	})
+	ctx.handleTransportFailure(sessionKey, threadID, fmt.Errorf("%s", message))
 }

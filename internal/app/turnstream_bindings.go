@@ -69,11 +69,12 @@ func (p claudeTurnStreamPort) MarkTurnStreamFinal(turnID string) {
 }
 
 func newTurnPresentation(a *App) appturnstream.Service {
-	if a.trackers.turnStreams == nil {
-		a.trackers.turnStreams = appturnstream.NewTracker()
+	trackers := a.Trackers()
+	if trackers.turnStreams == nil {
+		trackers.turnStreams = appturnstream.NewTracker()
 	}
 	return appturnstream.NewService(appturnstream.Dependencies{
-		Tracker: a.trackers.turnStreams, Finder: turnStreamSubmissionFinderAdapter{app: a}, Lifecycle: turnStreamTurnLifecycleAdapter{app: a}, Runtime: newRuntimeStateService(a),
+		Tracker: trackers.turnStreams, Finder: turnStreamSubmissionFinderAdapter{app: a}, Lifecycle: turnStreamTurnLifecycleAdapter{app: a}, Runtime: newRuntimeStateService(a),
 		Outbound: turnStreamOutboundCardAdapter{app: a}, Quiet: turnStreamQuietCardExecutorAdapter{app: a},
 		SendStartedNotice: func(ctx context.Context, sub *domainsubmission.Submission) { sendSubmissionStartedNotice(a, ctx, sub) },
 		WorkspaceCwd: func(id string) string {

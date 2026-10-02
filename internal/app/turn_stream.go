@@ -40,10 +40,11 @@ func (s turnStreamService) turnStreamTracker() *turnStreamTracker {
 	if s.app == nil {
 		return nil
 	}
-	if s.app.trackers.turnStreams == nil {
-		s.app.trackers.turnStreams = newTurnStreamTracker()
+	trackers := s.app.Trackers()
+	if trackers.turnStreams == nil {
+		trackers.turnStreams = newTurnStreamTracker()
 	}
-	return s.app.trackers.turnStreams
+	return trackers.turnStreams
 }
 
 // noteTurnStarted records that a turn has started, sending the submission
