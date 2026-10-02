@@ -2,11 +2,12 @@ package app
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -68,21 +69,11 @@ func updateQuietMode(a *App, mode config.QuietMode) error {
 	if a == nil || a.cfg == nil {
 		return fmt.Errorf("nil config")
 	}
-	a.configMutex().Lock()
-	defer a.configMutex().Unlock()
-	cfg := feishuConfigUnlocked(a)
-	if cfg == nil {
-		return fmt.Errorf("nil feishu config")
-	}
 	normalized, err := config.ParseQuietMode(mode)
 	if err != nil {
 		return err
 	}
-	cfg.Quiet = normalized
-	if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
-		return err
-	}
-	return config.Save(a.cfgPath, a.cfg)
+	return (runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}).SetQuietMode(normalized.String())
 }
 
 func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {

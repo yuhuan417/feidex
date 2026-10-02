@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	configadapter "feidex/internal/adapter/config"
 	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/textutil"
 	"sync"
@@ -23,10 +24,10 @@ func newModelConfigService(app *App) modelConfigService {
 	return modelConfigService{
 		app: app,
 		inner: modelconfig.ModelConfigService{
-			Backend:     func() string { return configuredBackend(app) },
-			GetConfig:   func() *config.Config { return app.cfg },
-			GetCfgPath:  func() string { return app.cfgPath },
-			GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
+			Backend:      func() string { return configuredBackend(app) },
+			ConfigWriter: configadapter.NewDocumentRepository(app),
+			GetConfig:    func() *config.Config { return app.cfg },
+			GetConfigMu:  func() *sync.RWMutex { return app.ConfigMu() },
 			ReplyText: func(ctx context.Context, msgID string, text string, replyInThread bool) error {
 				return replyTextByAnchorEffect(ctx, app, msgID, text, replyInThread)
 			},

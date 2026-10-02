@@ -1,6 +1,7 @@
 package app
 
 import (
+	configadapter "feidex/internal/adapter/config"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
@@ -16,7 +17,7 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 		return appdebugviewcmd.Dependencies{}
 	}
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: app, FeishuClient: app.feishu, StateProvider: app.State(),
+		ConfigProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), FeishuClient: app.feishu, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(app, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(app, v) },

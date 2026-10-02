@@ -4,7 +4,6 @@ import (
 	"context"
 	catalog "feidex/internal/domain/modelconfig"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -158,9 +157,13 @@ func CommandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string
 // are injected by the app-layer constructor to avoid importing app/.
 type ModelConfigService struct {
 	Backend func() string
+	// ConfigWriter owns normalization, persistence and publication of config
+	// mutations. Read callbacks remain separate for card rendering snapshots.
+	ConfigWriter interface {
+		UpdateConfig(func(*config.Config) error) error
+	}
 	// Config access callbacks.
 	GetConfig   func() *config.Config
-	GetCfgPath  func() string
 	GetConfigMu func() *sync.RWMutex
 
 	// Feishu client callbacks.
@@ -766,63 +769,41 @@ func (s ModelConfigService) CompleteCodexAuxiliaryModelSet(action *feishu.CardAc
 
 // UpdateGlobalModelConfig persists a Codex config mutation.
 func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result catalog.ModelListResult) error {
-	cfg := s.GetConfig()
-	if cfg == nil {
-		return fmt.Errorf("nil config")
-	}
-	mu := s.GetConfigMu()
 	if err := s.ensureModelConfigWritable(); err != nil {
 		return err
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	live := cfg
-	cfg = config.Clone(cfg)
-	mutate(&cfg.Codex)
-	cfg.Codex.Model = strings.TrimSpace(cfg.Codex.Model)
-	cfg.Codex.ReasoningEffort = strings.TrimSpace(cfg.Codex.ReasoningEffort)
-	cfg.Codex.PlanModel = strings.TrimSpace(cfg.Codex.PlanModel)
-	cfg.Codex.PlanReasoningEffort = strings.TrimSpace(cfg.Codex.PlanReasoningEffort)
-	selectedModel := FindModelEntry(result, cfg.Codex.Model)
-	if !ModelSupportsEffort(selectedModel, cfg.Codex.ReasoningEffort) {
-		cfg.Codex.ReasoningEffort = ""
+	if s.ConfigWriter == nil {
+		return fmt.Errorf("configuration writer unavailable")
 	}
-	selectedPlanModel, _ := EffectivePlanConfiguredModelAndEffort(cfg, result, nil)
-	if !ModelSupportsEffort(selectedPlanModel, cfg.Codex.PlanReasoningEffort) {
-		cfg.Codex.PlanReasoningEffort = ""
-	}
-	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
-		return err
-	}
-	if err := config.Save(s.GetCfgPath(), cfg); err != nil {
-		return err
-	}
-	publishCodexModelConfig(&live.Codex, cfg.Codex)
-	return nil
+	return s.ConfigWriter.UpdateConfig(func(cfg *config.Config) error {
+		mutate(&cfg.Codex)
+		cfg.Codex.Model = strings.TrimSpace(cfg.Codex.Model)
+		cfg.Codex.ReasoningEffort = strings.TrimSpace(cfg.Codex.ReasoningEffort)
+		cfg.Codex.PlanModel = strings.TrimSpace(cfg.Codex.PlanModel)
+		cfg.Codex.PlanReasoningEffort = strings.TrimSpace(cfg.Codex.PlanReasoningEffort)
+		selectedModel := FindModelEntry(result, cfg.Codex.Model)
+		if !ModelSupportsEffort(selectedModel, cfg.Codex.ReasoningEffort) {
+			cfg.Codex.ReasoningEffort = ""
+		}
+		selectedPlanModel, _ := EffectivePlanConfiguredModelAndEffort(cfg, result, nil)
+		if !ModelSupportsEffort(selectedPlanModel, cfg.Codex.PlanReasoningEffort) {
+			cfg.Codex.PlanReasoningEffort = ""
+		}
+		return nil
+	})
 }
 
 func (s ModelConfigService) UpdateGlobalAuxiliaryConfig(mutate func(*config.CodexConfig)) error {
-	cfg := s.GetConfig()
-	if cfg == nil {
-		return fmt.Errorf("nil config")
-	}
 	if err := s.ensureModelConfigWritable(); err != nil {
 		return err
 	}
-	mu := s.GetConfigMu()
-	mu.Lock()
-	defer mu.Unlock()
-	live := cfg
-	cfg = config.Clone(cfg)
-	mutate(&cfg.Codex)
-	if err := cfg.Normalize(filepath.Dir(s.GetCfgPath())); err != nil {
-		return err
+	if s.ConfigWriter == nil {
+		return fmt.Errorf("configuration writer unavailable")
 	}
-	if err := config.Save(s.GetCfgPath(), cfg); err != nil {
-		return err
-	}
-	publishCodexModelConfig(&live.Codex, cfg.Codex)
-	return nil
+	return s.ConfigWriter.UpdateConfig(func(cfg *config.Config) error {
+		mutate(&cfg.Codex)
+		return nil
+	})
 }
 
 // CompleteCodexPlanModelSet handles the plan-mode model selection card action.
@@ -1253,57 +1234,32 @@ func (s ModelConfigService) UpdateClaudeAuxiliaryConfig(mutate func(*config.Clau
 // does not affect the active runtime model, so it is allowed while the frontend
 // is busy.
 func (s ModelConfigService) UpdateClaudeModelOptionsConfig(mutate func(*config.ClaudeConfig)) error {
-	cfg := s.GetConfig()
-	if cfg == nil {
-		return fmt.Errorf("nil config")
+	if s.ConfigWriter == nil {
+		return fmt.Errorf("configuration writer unavailable")
 	}
-	cfgPath := s.GetCfgPath()
-	if strings.TrimSpace(cfgPath) == "" {
-		return fmt.Errorf("missing config path")
-	}
-	mu := s.GetConfigMu()
-	mu.Lock()
-	defer mu.Unlock()
-	live := cfg
-	cfg = config.Clone(cfg)
-	mutate(&cfg.Claude)
-	if err := cfg.Normalize(filepath.Dir(cfgPath)); err != nil {
-		return err
-	}
-	if err := config.Save(cfgPath, cfg); err != nil {
-		return err
-	}
-	publishClaudeModelConfig(&live.Claude, cfg.Claude)
-	return nil
+	return s.ConfigWriter.UpdateConfig(func(cfg *config.Config) error {
+		mutate(&cfg.Claude)
+		return nil
+	})
 }
 
 func (s ModelConfigService) updateClaudeModelConfig(mutate func(*config.ClaudeConfig), ignoreCurrentMessage bool) error {
-	cfg := s.GetConfig()
-	if cfg == nil {
-		return fmt.Errorf("nil config")
-	}
-	cfgPath := s.GetCfgPath()
-	if strings.TrimSpace(cfgPath) == "" {
-		return fmt.Errorf("missing config path")
-	}
 	if err := s.ensureModelConfigWritable(); err != nil {
 		return err
 	}
-	mu := s.GetConfigMu()
-	mu.Lock()
-	defer mu.Unlock()
-	live := cfg
-	cfg = config.Clone(cfg)
-	mutate(&cfg.Claude)
-	if err := cfg.Normalize(filepath.Dir(cfgPath)); err != nil {
+	if s.ConfigWriter == nil {
+		return fmt.Errorf("configuration writer unavailable")
+	}
+	var next config.ClaudeConfig
+	if err := s.ConfigWriter.UpdateConfig(func(cfg *config.Config) error {
+		mutate(&cfg.Claude)
+		next = cfg.Claude
+		return nil
+	}); err != nil {
 		return err
 	}
-	if err := config.Save(cfgPath, cfg); err != nil {
-		return err
-	}
-	publishClaudeModelConfig(&live.Claude, cfg.Claude)
 	if s.IsClaudeAvailable() {
-		s.UpdateClaudeConfig(cfg.Claude)
+		s.UpdateClaudeConfig(next)
 	}
 	return nil
 }
@@ -1502,18 +1458,6 @@ func (s ModelConfigService) CommandEffort(msg *feishu.InboundMessage, args []str
 	default:
 		return fmt.Errorf("usage: %s", EffortCommandUsage)
 	}
-}
-
-// Publish only model fields: unrelated runtime settings remain immutable to
-// readers that do not participate in the model configuration lock.
-func publishCodexModelConfig(live *config.CodexConfig, next config.CodexConfig) {
-	live.Model, live.ReasoningEffort = next.Model, next.ReasoningEffort
-	live.PlanModel, live.PlanReasoningEffort = next.PlanModel, next.PlanReasoningEffort
-	live.ReviewModel, live.SubagentModel, live.SubagentReasoningEffort = next.ReviewModel, next.SubagentModel, next.SubagentReasoningEffort
-}
-func publishClaudeModelConfig(live *config.ClaudeConfig, next config.ClaudeConfig) {
-	live.Model, live.Effort = next.Model, next.Effort
-	live.SmallModel, live.SubagentModel, live.ModelOptions = next.SmallModel, next.SubagentModel, next.ModelOptions
 }
 
 func (s ModelConfigService) configSnapshot() *config.Config {

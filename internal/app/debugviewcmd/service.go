@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
@@ -112,6 +113,7 @@ type Dependencies struct {
 	FeishuClient                      FeishuClient
 	StateProvider                     StateProvider
 	RuntimeStateProvider              RuntimeStateProvider
+	RuntimeConfigRepository           runtimeconfig.Repository
 	ConversationBackendProvider       ConversationBackendProvider
 	WorkspaceConfigProvider           WorkspaceConfigProvider
 	WorkspaceRenderProvider           WorkspaceRenderProvider
@@ -163,9 +165,10 @@ func (d Dependencies) Store() *state.Store {
 	}
 	return d.ConfigProvider.Store()
 }
-func (d Dependencies) DebugFeishu() FeishuClient               { return d.FeishuClient }
-func (d Dependencies) DebugAppState() StateProvider            { return d.StateProvider }
-func (d Dependencies) DebugRuntimeState() RuntimeStateProvider { return d.RuntimeStateProvider }
+func (d Dependencies) DebugFeishu() FeishuClient                    { return d.FeishuClient }
+func (d Dependencies) DebugAppState() StateProvider                 { return d.StateProvider }
+func (d Dependencies) DebugRuntimeState() RuntimeStateProvider      { return d.RuntimeStateProvider }
+func (d Dependencies) DebugRuntimeConfig() runtimeconfig.Repository { return d.RuntimeConfigRepository }
 func (d Dependencies) DebugConversationBackend() ConversationBackendProvider {
 	return d.ConversationBackendProvider
 }
@@ -378,10 +381,10 @@ func NewDebugService(app Dependencies) DebugService {
 // SetRuntimeDebug sets the runtime debug log level and updates config.
 func (s DebugService) SetRuntimeDebug(enabled bool) string {
 	level := logcontrol.SetDebug(enabled)
-	if s.app.ConfigProvider != nil && s.app.Config() != nil {
-		s.app.ConfigMu().Lock()
-		s.app.Config().Log.Level = level
-		s.app.ConfigMu().Unlock()
+	if repository := s.app.DebugRuntimeConfig(); repository != nil {
+		if err := (runtimeconfig.Service{Repository: repository}).SetLogLevel(level); err != nil {
+			slog.Warn("persist runtime debug level failed", "error", err)
+		}
 	}
 	return level
 }
