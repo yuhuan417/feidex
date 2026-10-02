@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"feidex/internal/app/modelconfig"
-	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -19,7 +18,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"interrupt": {
 				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-					return appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg)
+					return threadMenuService(a).CommandInterrupt(msg)
 				},
 			},
 		},
@@ -27,7 +26,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			if actionName != "menu.interrupt" {
 				return nil, nil
 			}
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
+			return threadMenuService(s.app).CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
 		},
 	}
 	bindings["menu.thread"] = featureBinding{
@@ -41,13 +40,13 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"new": {
 				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-					return appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreadsNew(msg)
+					return threadMenuService(a).CommandThreadsNew(msg)
 				},
 			},
 			"thread": {
 				Match: appcommandmatch.MatchThreadCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThread(msg, args)
+					return threadMenuService(a).CommandThread(msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: nil,
@@ -56,7 +55,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"session": {
 				Match: appcommandmatch.MatchSessionCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandSession(msg, args)
+					return threadMenuService(a).CommandSession(msg, args)
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendCodex: nil,
@@ -68,7 +67,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if len(args) > 0 {
 						return fmt.Errorf("usage: /threads")
 					}
-					return appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThread(msg, []string{"list"})
+					return threadMenuService(a).CommandThread(msg, []string{"list"})
 				},
 				Backends: map[string]func(fields []string) bool{
 					backendClaude: nil,
@@ -91,9 +90,9 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.thread":
-				return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteMenuThread(action, sessionKey)
+				return threadMenuService(s.app).CompleteMenuThread(action, sessionKey)
 			case "menu.new":
-				return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteMenuNew(action, sessionKey)
+				return threadMenuService(s.app).CompleteMenuNew(action, sessionKey)
 			case "menu.fork":
 				return completeMenuFork(s.app, action, sessionKey)
 			default:

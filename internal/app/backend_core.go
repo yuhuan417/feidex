@@ -44,6 +44,7 @@ func setRuntimeBackend(a *App, backend string) {
 	defer a.configMutex().Unlock()
 	a.backend = normalizeRuntimeBackend(backend)
 	a.backendDriver = backendDriverForKind(a.backend)
+	a.invalidateThreadMenuService()
 	if a.stateView != nil {
 		a.stateView.SetBackend(a.backend)
 	}

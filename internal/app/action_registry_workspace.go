@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -144,31 +143,31 @@ func workspaceCardActionHandlers() map[string]cardActionHandler {
 			return newWorkspaceManagementService(s.app).CompleteWorkspaceMultiAgentSet(action, actionSessionKey(action), actionStringValue(action, "workspace_id"), actionStringValue(action, "multi_agent_mode"))
 		},
 		"thread.sandbox.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadSandboxMenu(action, actionSessionKey(action))
+			return threadMenuService(s.app).CompleteThreadSandboxMenu(action, actionSessionKey(action))
 		},
 		"thread.policy.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadPolicyMenu(action, actionSessionKey(action))
+			return threadMenuService(s.app).CompleteThreadPolicyMenu(action, actionSessionKey(action))
 		},
 		"thread.permission_mode.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteClaudeSessionPermissionMenu(action, actionSessionKey(action))
+			return threadMenuService(s.app).CompleteClaudeSessionPermissionMenu(action, actionSessionKey(action))
 		},
 		"thread.sandbox.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadSandboxSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "sandbox_mode"))
+			return threadMenuService(s.app).CompleteThreadSandboxSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "sandbox_mode"))
 		},
 		"thread.policy.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
+			return threadMenuService(s.app).CompleteThreadPolicySet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "approval_policy"))
 		},
 		"thread.multiagent.menu": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadMultiAgentMenu(action, actionSessionKey(action))
+			return threadMenuService(s.app).CompleteThreadMultiAgentMenu(action, actionSessionKey(action))
 		},
 		"thread.multiagent.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadMultiAgentSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "multi_agent_mode"))
+			return threadMenuService(s.app).CompleteThreadMultiAgentSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "multi_agent_mode"))
 		},
 		"thread.permission_mode.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))
+			return threadMenuService(s.app).CompleteClaudeSessionPermissionModeSet(action, actionSessionKey(action), actionStringValue(action, "thread_id"), actionStringValue(action, "mode"))
 		},
 		"thread.resume.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(newThreadMenuDependencies(s.app)).CompleteThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
+			return threadMenuService(s.app).CompleteThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 		},
 		"path_picker.dropdown": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completePathPickerAction(s.app, action, "path_picker.dropdown")

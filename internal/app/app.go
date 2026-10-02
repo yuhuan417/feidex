@@ -28,6 +28,7 @@ import (
 	appskillscmd "feidex/internal/app/skillscmd"
 	"feidex/internal/runtime/turnbinding"
 
+	appthreadmenu "feidex/internal/app/threadmenu"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -56,6 +57,8 @@ type App struct {
 	frontendRuntime        frontendruntime.FrontendRuntime
 	stateMu                sync.Mutex
 	stateView              *appstate.Store
+	threadMenuMu           sync.Mutex
+	threadMenu             *appthreadmenu.Service
 	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex

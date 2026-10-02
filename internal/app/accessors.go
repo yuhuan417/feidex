@@ -178,6 +178,15 @@ func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
 	return a.sessionActors
 }
 
+func (a *App) invalidateThreadMenuService() {
+	if a == nil {
+		return
+	}
+	a.threadMenuMu.Lock()
+	a.threadMenu = nil
+	a.threadMenuMu.Unlock()
+}
+
 // ConfigMu returns the config read-write mutex.
 func (a *App) ConfigMu() *sync.RWMutex {
 	if a == nil {
@@ -203,6 +212,7 @@ func (a *App) SetBackend(backend string) {
 	defer a.configMutex().Unlock()
 	a.backend = appcore.NormalizeRuntimeBackend(backend)
 	a.backendDriver = appbackend.DriverForKind(a.backend)
+	a.invalidateThreadMenuService()
 	if a.stateView != nil {
 		a.stateView.SetBackend(a.backend)
 	}

@@ -38,6 +38,18 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 	}
 }
 
+func threadMenuService(a *App) *appthreadmenu.Service {
+	if a == nil {
+		return appthreadmenu.NewService(appthreadmenu.Dependencies{})
+	}
+	a.threadMenuMu.Lock()
+	defer a.threadMenuMu.Unlock()
+	if a.threadMenu == nil {
+		a.threadMenu = appthreadmenu.NewService(newThreadMenuDependencies(a))
+	}
+	return a.threadMenu
+}
+
 // ---------------------------------------------------------------------------
 // Provider adapters — satisfy threadmenu narrow interfaces
 // ---------------------------------------------------------------------------
